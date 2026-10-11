@@ -354,8 +354,9 @@ def log_dir():
 #                                              reds at first_seen.tip (the merge that registered it), never again
 #   enrolled {by, rate, census, date}          a STANDING entry (the lead's explicit `defect enrol`, with a measured
 #                                              rate and the census): the contention class
-# PENDING entries: BATCH-GATE-1 writes testing/defects.pending/<id>.json (one entry each); this reader ingests them
-# with the registry (one namespace, the same shape).
+# ONE FILE (RUNNER-A1): the attribution's registrations (gate-scope.py _register) are entries of this file too, and a
+# SIGHTING of an open entry is appended to that entry's `sightings` list — its `recheck` stays the lead's. The pending
+# directory (testing/defects.pending/<id>.json, <id>.recheck.json) is gone with its reader.
 # Read by the verdict door (`real:<id>` must name an entry whose `rows` hold the row), by the push tier and
 # the stage-close judge (KNOWN RED), and by gate-report.py. THE CONTENTION CLASS IS ITS SUBSET `kind:
 # nondeterminism`, state open (there is no separate file: contention.json is gone, forward only). Written
@@ -369,16 +370,6 @@ _DATE = re.compile(r"^\d{4}-\d\d-\d\d$")
 
 def defects_file():
     return os.environ.get("JAH_DEFECTS_FILE") or os.path.join(workspace_root(), "testing", "defects.json")
-
-
-# A SIGHTING OF AN OPEN ENTRY (gate-scope's _register, item 15) is <pending>/<id>.recheck.json — {id, sightings: [...]},
-# never a rewrite of the (tracked) entry: defects_load attaches the sightings to the entry (`sightings`, in memory, for the
-# reader) and never reads the file as an entry; the entry's `recheck` stays the lead's.
-RECHECK_SUFFIX = ".recheck.json"
-
-
-def defects_pending_dir():
-    return os.path.join(os.path.dirname(defects_file()), "defects.pending")
 
 
 def recheck_past(e, today=None):
@@ -437,18 +428,16 @@ def defects_quarantine_dir():
     return os.path.join(os.path.dirname(defects_file()), "defects.quarantine")
 
 
-def _quarantine(name, entry, why, src=None, log=sys.stderr):
-    """A malformed entry or pending file is QUARANTINED, never silent and never fatal to the rest: a pending file is
-    MOVED to testing/defects.quarantine/ (the registry file's own bad entry is COPIED there — the tracked file is the
-    lead's to edit), its reason in a `<name>.why` sidecar, and `REGISTRY: <file> quarantined: <why>` printed."""
+def _quarantine(name, entry, why, log=sys.stderr):
+    """A malformed entry is QUARANTINED, never silent and never fatal to the rest: COPIED to testing/defects.quarantine/
+    (the tracked registry is the lead's to edit), its reason in a `<name>.why` sidecar, and `REGISTRY: <name>
+    quarantined: <why>` printed."""
     q = defects_quarantine_dir()
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:80] or "entry"
     try:
         os.makedirs(q, exist_ok=True)
         dest = os.path.join(q, safe if safe.endswith(".json") else safe + ".json")
-        if src:
-            os.replace(src, dest)
-        elif not os.path.exists(dest):
+        if not os.path.exists(dest):
             with open(dest, "w") as f:
                 json.dump(entry, f, indent=1, sort_keys=True)
         with open(dest[:-5] + ".why", "w") as f:
@@ -456,7 +445,7 @@ def _quarantine(name, entry, why, src=None, log=sys.stderr):
     except OSError as e:
         why += f" (and it could not be quarantined: {e})"
     if log is not None:
-        log.write(f"REGISTRY: {src or name} quarantined: {why}\n")
+        log.write(f"REGISTRY: {name} quarantined: {why}\n")
         log.flush()
 
 
@@ -475,8 +464,9 @@ def defects_quarantined():
 
 def defects_load(log=sys.stderr):
     """({id: entry}, None) — or (None, why) when the registry FILE itself cannot be read. A malformed entry (or a
-    malformed / unreadable pending file, or a duplicate id) is QUARANTINED (_quarantine) and the rest loads — one bad
-    file never disables the door; every quarantined file is printed as a REGISTRY finding on each load."""
+    duplicate id) is QUARANTINED (_quarantine) and the rest loads — one bad entry never disables the door; every
+    quarantined entry is printed as a REGISTRY finding on each load. ONE FILE: an entry's `sightings` (the
+    attribution's later sightings of it) are part of it."""
     path = defects_file()
     try:
         d = json.load(open(path))
@@ -485,42 +475,16 @@ def defects_load(log=sys.stderr):
     lst = d.get("defects") if isinstance(d, dict) else None
     if not isinstance(lst, list):
         return None, f"the defect registry {path} has no `defects` list"
-    items = [(e, None) for e in lst]
-    rechecks = []
-    pend = defects_pending_dir()
-    if os.path.isdir(pend):
-        for f in sorted(os.listdir(pend)):
-            if not f.endswith(".json"): continue
-            fp = os.path.join(pend, f)
-            if f.endswith(RECHECK_SUFFIX):
-                try:
-                    rc_ = json.load(open(fp))
-                    if not isinstance(rc_, dict) or not isinstance(rc_.get("sightings"), list): raise ValueError
-                    rechecks.append((rc_, fp))
-                except (OSError, ValueError) as e:
-                    _quarantine(f, None, f"an unreadable recheck file ({e.__class__.__name__})", src=fp, log=log)
-                continue
-            try:
-                items.append((json.load(open(fp)), fp))
-            except (OSError, ValueError) as e:
-                _quarantine(f, None, f"unreadable ({e.__class__.__name__})", src=fp, log=log)
     out = {}
-    for k, (e, src) in enumerate(items):
+    for k, e in enumerate(lst):
         probs = _defect_problems(e)
         name = (e.get("id") if isinstance(e, dict) else None) or f"entry-{k}"
         if not probs and name in out: probs = ["a duplicate id"]
+        if not probs and not isinstance(e.get("sightings", []), list): probs = ["sightings is not a list"]
         if probs:
-            _quarantine(os.path.basename(src) if src else f"{name}", e,
-                        f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", src=src, log=log)
+            _quarantine(name, e, f"{name}: {', '.join(probs)} (TESTING_V3 §1.5's shape)", log=log)
             continue
         out[name] = e
-    for rc_, fp in rechecks:
-        e = out.get(rc_.get("id"))
-        if e is None:
-            if log is not None:
-                log.write(f"REGISTRY: FINDING — {os.path.basename(fp)} names no loaded entry ({rc_.get('id')})\n")
-            continue
-        e["sightings"] = list(e.get("sightings") or []) + rc_["sightings"]
     q = defects_quarantined()
     if q and log is not None:
         log.write(f"REGISTRY: FINDING — {len(q)} quarantined entr{'y' if len(q) == 1 else 'ies'} in "

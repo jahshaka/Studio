@@ -712,7 +712,8 @@ def registry_id_cases(E):
     registered with lowercase, dots and no number reaches the registry lookup. RED ON BASE (b0a3b1f3c): the pattern
     ([A-Z…]-<n>) matched nothing in `real:A2-defect-scripting.e2e.clip_ref`, so the verdict was prose and refused.
     (2) The attribution's ids are ONE scheme, <BATCH>-<ROW-UPPER>-<n>, and an OPEN entry of the same kind for the row is
-    REUSED (the new sighting a recheck), never a second entry. RED ON BASE: `B2-defect-<row>` beside `A2-defect-<row>`."""
+    REUSED (the new sighting appended to the entry — RUNNER-A1: one file), never a second entry. RED ON BASE:
+    `B2-defect-<row>` beside `A2-defect-<row>`."""
     m = E.cgc.DEFECT_ID.search("real:A2-defect-scripting.e2e.clip_ref the fixture's red")
     check(m and m.group(1) == "A2-defect-scripting.e2e.clip_ref", "real:<any token> is parsed whole (%s)" % (m and m.group(1)))
     ok, why, _ = E.cgc._real(m, "scripting.e2e.clip_ref", [], [], {}, [], [])
@@ -723,38 +724,43 @@ def registry_id_cases(E):
     check(not ok and "registered for ['other.row']" in why, "...a registered id reaches the entry's own checks (%s)" % why[:70])
     gs = E.cgc.load_gs()
     d = tempfile.mkdtemp(dir=E.scratch)
-    old = {k: os.environ.get(k) for k in ("JAH_DEFECTS_FILE", "JAH_DEFECTS_PENDING_DIR")}
-    os.environ["JAH_DEFECTS_FILE"] = os.path.join(d, "defects.json")
-    os.environ.pop("JAH_DEFECTS_PENDING_DIR", None)
-    json.dump({"defects": []}, open(os.environ["JAH_DEFECTS_FILE"], "w"))
+    old = {k: os.environ.get(k) for k in ("JAH_DEFECTS_FILE",)}
+    os.environ["JAH_DEFECTS_FILE"] = regf = os.path.join(d, "defects.json")
+    json.dump({"defects": []}, open(regf, "w"))
+
+    def rid(w):
+        """`<id> (new) in <file>` -> ("new", id); `a sighting of <id> in <file>` -> ("sighting", id)."""
+        m_ = re.match(r"^(?:a sighting of (\S+)|(\S+) \(new\)) in ", w or "")
+        return (("sighting", m_.group(1)) if m_.group(1) else ("new", m_.group(2))) if m_ else (None, w)
+
+    def entries():
+        return {e["id"]: e for e in json.load(open(regf))["defects"]}
     try:
         rec_ = {"tip": {"fork": "f" * 40}, "run": "20261010T100000-" + "a" * 9}
-        p1 = gs._register("A2", "defect", "scripting.e2e.clip_ref", "a" * 40, rec_, "red on d-build")
-        b1 = open(p1, "rb").read()
-        p2 = gs._register("B2", "defect", "scripting.e2e.clip_ref", "b" * 40, dict(rec_, run="20261010T120000-" + "b" * 9),
-                          "red on d-build again")
-        p3 = gs._register("B2", "defect", "pool.editor_view", "b" * 40, rec_, "another row")
-        pend = os.path.join(d, "defects.pending")
-        files = sorted(os.listdir(pend))
-        rc1 = json.load(open(p2))
-        check(os.path.basename(p1) == "A2-SCRIPTING-E2E-CLIP-REF-1.json"
-              and os.path.basename(p2) == "A2-SCRIPTING-E2E-CLIP-REF-1.recheck.json"
-              and files == ["A2-SCRIPTING-E2E-CLIP-REF-1.json", "A2-SCRIPTING-E2E-CLIP-REF-1.recheck.json",
-                            "B2-POOL-EDITOR-VIEW-1.json"]
-              and [r["batch"] for r in rc1.get("sightings", [])] == ["B2"] and os.path.basename(p3).startswith("B2-POOL"),
-              "the attribution's ids are <BATCH>-<ROW-UPPER>-<n>, and an open entry for the row is reused — the new "
-              "sighting a RECHECK FILE, never a second entry (%s)" % files)
-        # TESTING-CLEANUP-2B item 15 (2): REUSE NEVER REWRITES AN ENTRY (the pending entry and testing/defects.json are
-        # both tracked; a sighting that moved `recheck` forward stood in for the re-verdict the door demands). RED ON
-        # 74740b0de: the entry was re-serialised with rechecks[] and a later recheck.
-        check(open(p1, "rb").read() == b1, "...the reused PENDING entry's bytes are untouched (its recheck the lead's)")
+        p1 = rid(gs._register("A2", "defect", "scripting.e2e.clip_ref", "a" * 40, rec_, "red on d-build"))
+        e1 = {k: v for k, v in entries()["A2-SCRIPTING-E2E-CLIP-REF-1"].items()}
+        p2 = rid(gs._register("B2", "defect", "scripting.e2e.clip_ref", "b" * 40,
+                              dict(rec_, run="20261010T120000-" + "b" * 9), "red on d-build again"))
+        p3 = rid(gs._register("B2", "defect", "pool.editor_view", "b" * 40, rec_, "another row"))
+        ents = entries()
+        check(p1 == ("new", "A2-SCRIPTING-E2E-CLIP-REF-1") and p2 == ("sighting", "A2-SCRIPTING-E2E-CLIP-REF-1")
+              and p3 == ("new", "B2-POOL-EDITOR-VIEW-1") and sorted(ents) == ["A2-SCRIPTING-E2E-CLIP-REF-1", "B2-POOL-EDITOR-VIEW-1"]
+              and [r["batch"] for r in ents["A2-SCRIPTING-E2E-CLIP-REF-1"].get("sightings", [])] == ["B2"]
+              and not os.path.exists(os.path.join(d, "defects.pending")),
+              "the attribution's ids are <BATCH>-<ROW-UPPER>-<n> IN THE ONE REGISTRY (no pending directory), and an open "
+              "entry for the row is reused — the new sighting appended to its `sightings`, never a second entry (%s)"
+              % sorted(ents))
+        # TESTING-CLEANUP-2B item 15 (2): REUSE NEVER MOVES AN ENTRY'S OWN FIELDS (a sighting that moved `recheck` forward
+        # stood in for the re-verdict the door demands); RUNNER-A1: the sighting is part of the entry now, nothing else moves
+        check({k: v for k, v in ents["A2-SCRIPTING-E2E-CLIP-REF-1"].items() if k != "sightings"} == e1,
+              "...the reused entry's own fields are untouched (its recheck the lead's); only `sightings` grew")
         got, why = E.rl.defects_load()
         check(got is not None and "A2-SCRIPTING-E2E-CLIP-REF-1" in got
               and [x["batch"] for x in got["A2-SCRIPTING-E2E-CLIP-REF-1"].get("sightings", [])] == ["B2"]
-              and not any(k.endswith(".recheck") for k in got) and not os.path.isdir(os.path.join(d, "defects.quarantine")),
-              "...the reader loads the entry with the recheck file's sightings attached, never the file as an entry (%s)" % why)
-        # registry-sourced reuse: an OPEN entry in defects.json PAST its recheck — the sighting is a recheck file, the
-        # tracked registry's bytes unchanged, and the entry is still past its date (the door still wants the re-verdict)
+              and not os.path.isdir(os.path.join(d, "defects.quarantine")),
+              "...the reader loads the entry with its sightings, nothing quarantined (%s)" % why)
+        # registry reuse of an OPEN entry PAST its recheck: the sighting is appended, the entry still past its date (the
+        # door still wants the re-verdict)
         regd = {"defects": [
             {"id": "SC1-OLD-ROW-1", "rows": ["old.row"], "kind": "defect", "cause": "c", "state": "open",
              "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2026-01-01",
@@ -765,52 +771,53 @@ def registry_id_cases(E):
             {"id": "SC1-RET-ROW-1", "rows": ["ret.row"], "kind": "defect", "cause": "c", "state": "retired",
              "found_by": "gate", "first_seen": {"tip": "e" * 40, "pin": "f" * 40, "run": "20260101T000000-" + "e" * 9}, "recheck": "2099-01-01",
              "expires": "2099-01-01"}]}
-        json.dump(regd, open(os.environ["JAH_DEFECTS_FILE"], "w"), indent=1)
-        rb = open(os.environ["JAH_DEFECTS_FILE"], "rb").read()
-        p4 = gs._register("C3", "defect", "old.row", "c" * 40, rec_, "seen again")
-        check(os.path.basename(p4) == "SC1-OLD-ROW-1.recheck.json"
-              and open(os.environ["JAH_DEFECTS_FILE"], "rb").read() == rb,
-              "a registry-sourced reuse writes <id>.recheck.json and leaves the tracked defects.json byte-identical (%s)"
-              % os.path.basename(p4))
+        json.dump(regd, open(regf, "w"), indent=1)
+        p4 = rid(gs._register("C3", "defect", "old.row", "c" * 40, rec_, "seen again"))
+        ents = entries()
+        check(p4 == ("sighting", "SC1-OLD-ROW-1") and ents["SC1-OLD-ROW-1"]["recheck"] == "2026-01-01"
+              and len(ents["SC1-OLD-ROW-1"]["sightings"]) == 1
+              and [ents[k] for k in ("SC1-FIXED-ROW-1", "SC1-RET-ROW-1")] == regd["defects"][1:],
+              "a registry reuse appends the sighting to the entry; its recheck and every other entry unchanged (%s)" % (p4,))
         got, _ = E.rl.defects_load()
         check(got and E.rl.recheck_past(got["SC1-OLD-ROW-1"]) and len(got["SC1-OLD-ROW-1"].get("sightings", [])) == 1,
               "...and the entry stays PAST its recheck: a sighting never stands in for the lead's re-verdict")
-        p5 = gs._register("C3", "defect", "old.row", "c" * 40, rec_, "and again")
-        check(p5 == p4 and len(json.load(open(p5))["sightings"]) == 2, "a second sighting APPENDS to the same recheck file")
+        p5 = rid(gs._register("C3", "defect", "old.row", "c" * 40, rec_, "and again"))
+        check(p5 == p4 and len(entries()["SC1-OLD-ROW-1"]["sightings"]) == 2, "a second sighting APPENDS to the same entry")
         # fixed / retired: never reused — a new sighting is a NEW finding
-        p6 = gs._register("C3", "defect", "fixed.row", "c" * 40, rec_, "back")
-        p7 = gs._register("C3", "defect", "ret.row", "c" * 40, rec_, "back")
-        check(os.path.basename(p6) == "C3-FIXED-ROW-1.json" and os.path.basename(p7) == "C3-RET-ROW-1.json",
-              "a FIXED or RETIRED entry is never reused: a new entry each (%s, %s)"
-              % (os.path.basename(p6), os.path.basename(p7)))
+        p6 = rid(gs._register("C3", "defect", "fixed.row", "c" * 40, rec_, "back"))
+        p7 = rid(gs._register("C3", "defect", "ret.row", "c" * 40, rec_, "back"))
+        check(p6 == ("new", "C3-FIXED-ROW-1") and p7 == ("new", "C3-RET-ROW-1"),
+              "a FIXED or RETIRED entry is never reused: a new entry each (%s, %s)" % (p6, p7))
         # the -2 increment: the -1 of the stem exists but is not reusable (another kind) -> -2
-        p8 = gs._register("C3", "combination", "fixed.row", "c" * 40, rec_, "a combination")
-        check(os.path.basename(p8) == "C3-FIXED-ROW-2.json", "the next free number of the stem: -2 (%s)" % os.path.basename(p8))
+        p8 = rid(gs._register("C3", "combination", "fixed.row", "c" * 40, rec_, "a combination"))
+        check(p8 == ("new", "C3-FIXED-ROW-2"), "the next free number of the stem: -2 (%s)" % (p8,))
         # NOT REPRODUCED is never reused: two sightings, two single-use entries
-        n1 = gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"])
-        n2 = gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"])
-        check(os.path.basename(n1) == "C3-ND-ROW-1.json" and os.path.basename(n2) == "C3-ND-ROW-2.json"
-              and json.load(open(n2)).get("uses") == 1,
-              "a NOT REPRODUCED entry is never reused (single-use): %s, %s" % (os.path.basename(n1), os.path.basename(n2)))
-        # (4) THE NUMBERING LOCK: eight registrations of one new row at once (eight processes) take eight
-        # DIFFERENT numbers... of one entry: the first registers it, the other seven are its recheck sightings
+        n1 = rid(gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"]))
+        n2 = rid(gs._register("C3", "nondeterminism", "nd.row", "c" * 40, rec_, "flake", suspects=["l1"]))
+        check(n1 == ("new", "C3-ND-ROW-1") and n2 == ("new", "C3-ND-ROW-2") and entries()["C3-ND-ROW-2"].get("uses") == 1,
+              "a NOT REPRODUCED entry is never reused (single-use): %s, %s" % (n1, n2))
+        got, why = E.rl.defects_load()
+        check(got is not None and len(got) == 8 and not os.path.isdir(os.path.join(d, "defects.quarantine")),
+              "every registration LOADS through the door's reader, none quarantined (%d, %s)" % (len(got or {}), why))
+        # (4) THE NUMBERING LOCK: eight registrations of one new row at once (eight processes) take ONE number: the
+        # first registers it, the other seven are its sightings; no write lost (one file, read-modify-write under the lock)
         code = ("import importlib.util,sys; sp=importlib.util.spec_from_file_location('gsx', sys.argv[1]); "
                 "g=importlib.util.module_from_spec(sp); sp.loader.exec_module(g); "
                 "print(g._register('D4', sys.argv[2], 'race.row', 'd'*40, {}, 'race'))")
         gsp = os.path.join(E.source, "scripts", "gate-scope.py")
         ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "defect"], stdout=subprocess.PIPE, text=True)
               for _ in range(8)]
-        outs = [os.path.basename(p_.communicate()[0].strip()) for p_ in ps]
-        rcd = json.load(open(os.path.join(pend, "D4-RACE-ROW-1.recheck.json")))
-        check(sorted(outs).count("D4-RACE-ROW-1.json") == 1 and outs.count("D4-RACE-ROW-1.recheck.json") == 7
-              and len(rcd["sightings"]) == 7 and not os.path.exists(os.path.join(pend, "D4-RACE-ROW-2.json")),
+        outs = [rid(p_.communicate()[0].strip()) for p_ in ps]
+        ents = entries()
+        check(outs.count(("new", "D4-RACE-ROW-1")) == 1 and outs.count(("sighting", "D4-RACE-ROW-1")) == 7
+              and len(ents["D4-RACE-ROW-1"].get("sightings", [])) == 7 and "D4-RACE-ROW-2" not in ents,
               "eight registrations at once: ONE entry and seven sightings, no second number, no lost write (%s)"
               % sorted(set(outs)))
         ps = [subprocess.Popen([sys.executable, "-c", code, gsp, "nondeterminism"], stdout=subprocess.PIPE, text=True)
               for _ in range(6)]
-        outs = sorted(os.path.basename(p_.communicate()[0].strip()) for p_ in ps)
-        check(outs == ["D4-RACE-ROW-%d.json" % k for k in (2, 3, 4, 5, 6, 7)],
-              "six single-use registrations at once take six DIFFERENT numbers (%s)" % outs)
+        outs = sorted(rid(p_.communicate()[0].strip())[1] for p_ in ps)
+        check(outs == ["D4-RACE-ROW-%d" % k for k in (2, 3, 4, 5, 6, 7)] and all(k in entries() for k in outs),
+              "six single-use registrations at once take six DIFFERENT numbers, every one in the file (%s)" % outs)
     finally:
         for k, v in old.items():
             if v is None: os.environ.pop(k, None)
@@ -988,29 +995,22 @@ def case_contention_shape(E):
     d, _ = E.rl.defects_load(log=None)
     check(d is not None and "DUP-1" in d and d["DUP-1"]["rows"] == ["x"] and "GOOD-1" in d,
           "a duplicate id: the second is quarantined, the first and the rest load")
-    # BATCH-GATE-1's pending entries (testing/defects.pending/<id>.json): ingested; a bad one MOVED to quarantine
+    # RUNNER-A1: ONE REGISTRY — a defects.pending/ directory beside it is no source any more (its reader is deleted):
+    # an entry there is never loaded; a malformed `sightings` on an entry is quarantined like any malformed field
     shutil.rmtree(q(), ignore_errors=True)
-    E.registry([good, NONDET])
-    pend = E.rl.defects_pending_dir()
+    E.registry([good, NONDET, dict(defect("SIGHT-1", ["api.contract"]), sightings="not a list")])
+    pend = os.path.join(os.path.dirname(os.environ["JAH_DEFECTS_FILE"]), "defects.pending")
     os.makedirs(pend, exist_ok=True)
     json.dump(defect("PENDING-1", ["api.contract"]), open(os.path.join(pend, "PENDING-1.json"), "w"))
-    json.dump(defect("PENDING-2", ["api.contract"], kind="flake"), open(os.path.join(pend, "PENDING-2.json"), "w"))
-    open(os.path.join(pend, "PENDING-3.json"), "w").write("{ not json")
-    json.dump(defect("GOOD-1", ["api.contract"]), open(os.path.join(pend, "PENDING-4.json"), "w"))
     import io
     buf = io.StringIO()
     d, _ = E.rl.defects_load(log=buf)
-    left = sorted(os.listdir(pend))
-    qd = sorted(os.listdir(q()))
-    check(d is not None and "PENDING-1" in d and "GOOD-1" in d and d["GOOD-1"]["rows"] == ["photon.view"]
-          and "PENDING-2" not in d, "a good pending entry is ingested; a bad one, an unreadable one and a colliding id are "
-          "not (%s)" % sorted(d or {}))
-    check(left == ["PENDING-1.json"] and {"PENDING-2.json", "PENDING-3.json", "PENDING-4.json"} <= set(qd)
-          and "REGISTRY: " in buf.getvalue() and "FINDING" in buf.getvalue(),
-          "...the bad pending files are MOVED to defects.quarantine/ with their .why, printed, and a FINDING line (%s / %s)"
-          % (left, qd))
-    check(len(E.rl.defects_quarantined()) == 3, "defects_quarantined() lists them for the lead's status (%d)"
-          % len(E.rl.defects_quarantined()))
+    check(d is not None and "PENDING-1" not in d and "GOOD-1" in d and "SIGHT-1" not in d
+          and not hasattr(E.rl, "defects_pending_dir"),
+          "one registry: a stray defects.pending/ entry is never read (the reader is gone); a malformed `sightings` is "
+          "quarantined (%s)" % sorted(d or {}))
+    check(any("SIGHT-1" in f for f, _ in E.rl.defects_quarantined()) and "REGISTRY: " in buf.getvalue(),
+          "...the bad entry COPIED to defects.quarantine/ with its .why, printed (%s)" % E.rl.defects_quarantined())
     shutil.rmtree(pend); shutil.rmtree(q(), ignore_errors=True)
     path = os.path.join(E.scratch, "broken.json")
     open(path, "w").write("{ not json")

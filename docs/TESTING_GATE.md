@@ -468,20 +468,18 @@ not register is ABSENT there and never blames it. Per row, IN THIS ORDER:
    (kind `combination`): the batch is REFUSED;
 6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`): it passes the verdict door with
    its solos recorded — a contention-class row by its 3/3 at the candidate tip, any other by `--verdict`.
-Findings 2, 5 and 6 are REGISTERED, never only printed: one `<workspace>/testing/defects.pending/<id>.json`
-each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
+Findings 2, 5 and 6 are REGISTERED, never only printed: one entry of THE ONE REGISTRY `<workspace>/testing/defects.json`
+(RUNNER-A1: the pending directory is gone) each in TESTING_V3_SPEC §1.5's FULL schema (`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open,
 found_by: gate, recheck, expires}` — recheck a DATE: the next day for NOT REPRODUCED, +7 days for a
-defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`), which VERDICT-1's registry
-(`testing/defects.json`) ingests — its reader quarantines a malformed entry (it never reaches the door), and
-gate.batch loads every pending file through it. **ONE ENTRY PER ROW AND KIND, AND A SIGHTING NEVER REWRITES IT**
-(TESTING-CLEANUP-2B items 14-15): ids are `<BATCH>-<ROW-UPPER>-<n>` (n the next free number of the stem); a row that
-already has an OPEN entry of the kind (registry or pending) gets no second entry — the new sighting is appended to
-`testing/defects.pending/<id>.recheck.json` (`{id, sightings: [{tip, pin, run, batch, cause, date, recheck_proposed}]}`)
-and the entry itself — `testing/defects.json` and the pending files are TRACKED — is never re-serialised: its `recheck`
-stays the lead's, so a sighting never stands in for the re-verdict the door demands of an entry past its date. The reader
-attaches the sightings to the entry (`sightings`), never reads the file as an entry. Never reused: a NOT REPRODUCED entry
-(single-use at its batch) and a fixed or retired one (a new sighting is a new finding). Registrations hold the pending
-directory's flock across the scan, the numbering and the write: two attributions at once never take one number. Exit codes: 3 a
+defect; NOT REPRODUCED also `uses: 1, suspects: [the batch's lanes], census`) — VERDICT-1's reader quarantines a
+malformed entry (it never reaches the door), and gate.batch loads every registered entry through it. **ONE ENTRY PER ROW
+AND KIND, AND A SIGHTING NEVER MOVES ITS FIELDS** (TESTING-CLEANUP-2B items 14-15): ids are `<BATCH>-<ROW-UPPER>-<n>` (n
+the next free number of the stem); a row that already has an OPEN entry of the kind gets no second entry — the new
+sighting is appended to the entry's `sightings` (`[{tip, pin, run, batch, cause, date, recheck_proposed}]`) and nothing
+else of it moves: its `recheck` stays the lead's, so a sighting never stands in for the re-verdict the door demands of an
+entry past its date. Never reused: a NOT REPRODUCED entry (single-use at its batch) and a fixed or retired one (a new
+sighting is a new finding). Registrations hold the registry directory's flock across the read, the numbering and the
+write (`lane.sh defect` takes the same lock): two writers at once never take one number nor lose an entry. Exit codes: 3 a
 combination defect, else 7 an INCOMPLETE or aborted attribution, else 5 a d-build defect, else 0; 4 an
 unusable tree, 64 usage. Every commit the batch tooling writes (the candidate's merges, the regenerated
 SCRIPTING.md) is authored jahshaka by the script itself, and batch-land runs check-trailers on the
@@ -558,9 +556,9 @@ AT the old tip. Forward only: schema-2 records; the historic cases are `scripts/
 (`gate_runlog.defects_load()`).** `{"defects": [{id, rows, kind: defect|nondeterminism|selector|box|combination,
 cause, first_seen {tip, pin, run}, state: open | {fixed: {tip}} | retired, recheck: YYYY-MM-DD, found_by:
 read|gate|owner|lane}]}`; a `nondeterminism` entry is single-use (`uses: 1, suspects, census`) or `enrolled {by, rate,
-census, date}` by the lead. BATCH-GATE-1's pending entries (`testing/defects.pending/<id>.json`) are read with it. The
-malformed entry or pending file is QUARANTINED (moved / copied to `testing/defects.quarantine/` with a `.why`, printed as
-`REGISTRY: <file> quarantined: <why>`, a finding until fixed) and the rest loads; only an unreadable registry FILE
+census, date}` by the lead; an entry may carry the attribution's `sightings`. ONE FILE (RUNNER-A1: the attribution
+writes its entries here; `testing/defects.pending/` and its reader are deleted). A malformed entry is QUARANTINED (copied
+to `testing/defects.quarantine/` with a `.why`, printed as `REGISTRY: <id> quarantined: <why>`, a finding until fixed) and the rest loads; only an unreadable registry FILE
 leaves the judge unusable (exit 2). The contention class is
 the enrolled nondeterminism subset; `contention.json` is gone.
 

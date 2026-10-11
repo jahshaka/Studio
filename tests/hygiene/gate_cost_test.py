@@ -581,7 +581,7 @@ def main(source, build):
     code, out = gs_main(files + ["--run"])
     check(code == 137 and "GATE ABORTED: ctest was killed" in out and len(calls) == 1,
           "a ctest killed under the gate (137) ends it there: no timing phase, no target step (F4; exit %r)" % code)
-    # a finding registered while the whole-card drain had timed out carries `fallback` (the pending-defect file).
+    # a finding registered while the whole-card drain had timed out carries `fallback` (its registry entry).
     # RED ON BASE (1ceb5cde9, measured): _register takes no fallback (TypeError); the judge called the timing
     # row's fallback record green.
     reg_dir = os.path.join(scratch, "registry")
@@ -593,8 +593,11 @@ def main(source, build):
     finally:
         if old_df is None: os.environ.pop("JAH_DEFECTS_FILE", None)
         else: os.environ["JAH_DEFECTS_FILE"] = old_df
-    check(json.load(open(pth)).get("fallback") == "drain-timeout" and "fallback" not in json.load(open(pth2)),
-          "a pending-defect file carries `fallback` when its runs had no whole-card hold, and only then")
+    ents = {e["id"]: e for e in json.load(open(os.path.join(reg_dir, "defects.json")))["defects"]}
+    id1, id2 = pth.split(" ", 1)[0], pth2.split(" ", 1)[0]
+    check(ents.get(id1, {}).get("fallback") == "drain-timeout" and id2 in ents and "fallback" not in ents[id2],
+          "a registered entry (the one registry, RUNNER-A1) carries `fallback` when its runs had no whole-card hold, "
+          "and only then (%s, %s)" % (pth, pth2))
     # the judge: a MEASURING row's record with a fallback is not evidence — the row re-runs; any other row's is
     tim = {"suite": "time.card", "arm": None, "verdict": "PASS", "ts": "2026-10-10T01:00:00+02:00",
            "labels": ["timing"], "fallback": "drain-timeout"}

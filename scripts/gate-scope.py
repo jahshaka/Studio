@@ -2195,7 +2195,7 @@ def attribute(row_args, lane_specs, tag, times, tier, candidate=None, controls=N
       5. red at the candidate and green on every lane = a COMBINATION DEFECT (kind `combination`, registered):
          the batch is REFUSED;
       6. green at the candidate too = NOT REPRODUCED (kind `nondeterminism`, registered): the verdict door.
-    Every registered finding is written as <workspace>/testing/defects.pending/<id>.json in TESTING_V3_SPEC §1.5's
+    Every registered finding is an entry of <workspace>/testing/defects.json (the one registry) in TESTING_V3_SPEC §1.5's
     FULL schema (recheck, expires; uses/suspects/census for NOT REPRODUCED) — VERDICT-1's reader QUARANTINES a
     malformed entry (it never reaches the door). Returns 0 (no defect, complete), 3 (a combination defect), 7 (an
     INCOMPLETE or aborted attribution), 5 (a d-build defect only), 4 (a tree is unusable), 64 (usage)."""
@@ -2400,39 +2400,41 @@ def _hold_state(vt, env, tier, lane, rng):
 
 
 def _register(tag, kind, row, tip, rec, cause, suspects=None, fallback=None):
-    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): <registry dir>/defects.pending/<id>.json — the
-    registry dir is that of testing/defects.json (JAH_DEFECTS_FILE moves it; JAH_DEFECTS_PENDING_DIR moves the
-    pending dir alone), in the FULL schema VERDICT-1's reader requires (it QUARANTINES a malformed entry — the finding
-    would never reach the door): {id, rows, kind, cause, first_seen {tip, pin, run}, state: open, found_by: gate, recheck (a DATE: the
-    next day — the next batch — for NOT REPRODUCED, +7 days for a combination / d-build defect), expires (= recheck)},
-    and for NOT REPRODUCED the single-use fields {uses: 1, suspects: [the batch's lanes], census: {from the record}}.
-    A finding made while the whole-card drain had timed out carries `fallback` (GATE-COST-2: the reader sees the
-    runs were not under one whole-card hold). A sighting of a row that already has an OPEN entry of the kind is a
-    RECHECK FILE, <pending>/<id>.recheck.json (item 15) — never a rewrite of the entry. Returns the path written.
-    ONE REGISTRATION AT A TIME (item 15): the pending dir's flock is held across the scan, the numbering and the write,
-    so two attributions at once never take one number (nor both miss each other's entry)."""
+    """A finding REGISTERED, never printed only (TESTING_V3_SPEC §1.5): an entry of THE ONE REGISTRY, testing/defects.json
+    (JAH_DEFECTS_FILE moves it; RUNNER-A1: the pending directory is gone), in the FULL schema VERDICT-1's reader requires
+    (it QUARANTINES a malformed entry — the finding would never reach the door): {id, rows, kind, cause, first_seen {tip,
+    pin, run}, state: open, found_by: gate, recheck (a DATE: the next day — the next batch — for NOT REPRODUCED, +7 days for
+    a combination / d-build defect), expires (= recheck)}, and for NOT REPRODUCED the single-use fields {uses: 1,
+    suspects: [the batch's lanes], census: {from the record}}. A finding made while the whole-card drain had timed out
+    carries `fallback` (GATE-COST-2: the reader sees the runs were not under one whole-card hold). A sighting of a row that
+    already has an OPEN entry of the kind is APPENDED to that entry's `sightings` (item 15) — its other fields, `recheck`
+    first, stay as the lead wrote them. Returns what was written: `<id> (new) in <file>` | `a sighting of <id> in <file>`.
+    ONE REGISTRATION AT A TIME (item 15): the registry directory's flock is held across the read, the numbering and the
+    write (the lead's `lane.sh defect` verbs take the same lock), so two writers never take one number nor lose an entry."""
     import fcntl
     reg = os.environ.get("JAH_DEFECTS_FILE") or os.path.join(gate_runlog.workspace_root(), "testing", "defects.json")
-    d = os.environ.get("JAH_DEFECTS_PENDING_DIR") or os.path.join(os.path.dirname(reg), "defects.pending")
+    d = os.path.dirname(os.path.abspath(reg))
     os.makedirs(d, exist_ok=True)
     lk = os.open(d, os.O_RDONLY)                # the DIRECTORY's flock: no lock file lands in the tracked dir
     try:
         fcntl.flock(lk, fcntl.LOCK_EX)
-        return _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback)
+        return _register_locked(reg, tag, kind, row, tip, rec, cause, suspects, fallback)
     finally:
         os.close(lk)                            # the close releases the flock
 
 
 def _write_json(path, doc):
-    """Whole or not at all: a reader never sees half a file (tmp + rename in the same dir)."""
+    """Whole or not at all: a reader never sees half a file (tmp + rename in the same dir). The registry's own layout
+    (indent 1, the keys in the order the lead and the tools wrote them — lane.sh's writer), so a registration is a
+    diff of the entries it touched, never a re-sort of the file."""
     tmp = path + ".tmp-%d" % os.getpid()
     with open(tmp, "w") as f:
-        json.dump(doc, f, indent=1, sort_keys=True)
+        json.dump(doc, f, indent=1)
         f.write("\n")
     os.replace(tmp, path)
 
 
-def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback):
+def _register_locked(reg, tag, kind, row, tip, rec, cause, suspects, fallback):
     import datetime as _dt
     rec = rec or {}
     t = rec.get("tip") or {}
@@ -2442,44 +2444,34 @@ def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback
             "date": today.isoformat()}
     if fallback:
         seen["fallback"] = fallback
-    # ONE ENTRY PER ROW AND KIND (item 14): an OPEN entry of this kind for this row — in the registry or pending — is
-    # REUSED, never a second entry (batch B2 registered B2-defect-* duplicates of the A2 entries)
-    known = []
     try:
-        for e in (json.load(open(reg)).get("defects") or []):
-            known.append(e)
-    except (OSError, ValueError, AttributeError):
-        pass
-    for fn in sorted(os.listdir(d)):
-        if fn.endswith(".json") and not fn.endswith(gate_runlog.RECHECK_SUFFIX):
-            try: known.append(json.load(open(os.path.join(d, fn))))
-            except (OSError, ValueError): pass
-    # REUSE NEVER REWRITES THE ENTRY (item 15): both testing/defects.json and the pending entries are TRACKED, and a
-    # sighting that moved `recheck` forward would silently stand in for the re-verdict the door (`_real`) demands of an
-    # entry past its date. The sighting goes to <pending>/<id>.recheck.json (appended, the entry's own bytes and its
-    # `recheck` untouched — the lead re-verdicts); the reader attaches the file's sightings to the entry.
-    # Never reused: a NOT REPRODUCED entry (single-use at its batch by design — uses: 1 at first_seen.tip — it could
-    # not clear the new batch's red), and a fixed or retired one (state != open: a new sighting is a NEW finding).
+        doc = json.load(open(reg))
+        if not isinstance(doc, dict) or not isinstance(doc.get("defects"), list):
+            raise ValueError
+    except OSError:
+        doc = {"defects": []}
+    except ValueError:
+        raise SystemExit(f"gate-scope: the defect registry {reg} is unreadable — the finding cannot be registered "
+                         f"(fix the file; nothing was written)")
+    known = doc["defects"]
+    # ONE ENTRY PER ROW AND KIND (item 14): an OPEN entry of this kind for this row is REUSED, never a second entry
+    # (batch B2 registered B2-defect-* duplicates of the A2 entries). The sighting is appended to it; its `recheck` is
+    # untouched (a sighting that moved it forward would silently stand in for the re-verdict the door demands of an
+    # entry past its date — the lead re-verdicts). Never reused: a NOT REPRODUCED entry (single-use at its batch by
+    # design — uses: 1 at first_seen.tip — it could not clear the new batch's red), and a fixed or retired one (state !=
+    # open: a new sighting is a NEW finding).
     for e in ([] if kind == "nondeterminism" else known):
         if (isinstance(e, dict) and e.get("kind") == kind and row in (e.get("rows") or [])
                 and gate_runlog.defect_state(e) == "open" and e.get("id")):
-            rp = os.path.join(d, e["id"] + gate_runlog.RECHECK_SUFFIX)
-            try:
-                doc = json.load(open(rp))
-                if not isinstance(doc, dict) or not isinstance(doc.get("sightings"), list):
-                    raise ValueError
-            except (OSError, ValueError):
-                doc = {"id": e["id"], "sightings": []}
-            doc["id"] = e["id"]
-            doc["sightings"].append(dict(seen, recheck_proposed=recheck))
-            _write_json(rp, doc)
-            return rp
+            e["sightings"] = list(e.get("sightings") or []) + [dict(seen, recheck_proposed=recheck)]
+            _write_json(reg, doc)
+            return f"a sighting of {e['id']} in {reg}"
     # THE ID SCHEME (item 14): <BATCH>-<ROW, upper, every non-alnum a dash>-<n> — e.g. A2-SCRIPTING-E2E-CLIP-REF-1,
     # n the next free number for that prefix: one scheme the lead reads (the kind is the entry's field, not its name)
     stem = re.sub(r"[^A-Z0-9]+", "-", f"{tag}-{row}".upper()).strip("-")
     used = {e.get("id") for e in known if isinstance(e, dict)}
     n = 1
-    while f"{stem}-{n}" in used or os.path.exists(os.path.join(d, f"{stem}-{n}.json")):
+    while f"{stem}-{n}" in used:
         n += 1
     did = f"{stem}-{n}"
     entry = {"id": did, "rows": [row], "kind": kind, "cause": cause,
@@ -2491,9 +2483,9 @@ def _register_locked(d, reg, tag, kind, row, tip, rec, cause, suspects, fallback
                      census=box.get("census") if isinstance(box.get("census"), dict) else dict(box))
     if fallback:
         entry["fallback"] = fallback
-    path = os.path.join(d, did + ".json")
-    _write_json(path, entry)
-    return path
+    known.append(entry)
+    _write_json(reg, doc)
+    return f"{did} (new) in {reg}"
 
 
 class _AttributionAborted(Exception):

@@ -439,7 +439,11 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     runs = os.path.join(scratch, "runs"); vdir = os.path.join(scratch, "vram")
     reg = os.path.join(scratch, "registry"); os.makedirs(reg)
     json.dump({"defects": []}, open(os.path.join(reg, "defects.json"), "w"))
-    pend = os.path.join(reg, "defects.pending")      # next to the registry, as VERDICT-1's reader looks for it
+    regf = os.path.join(reg, "defects.json")         # THE ONE REGISTRY (RUNNER-A1): the attribution writes its entries here
+
+    def reg_entries(f=regf):
+        try: return {e["id"]: e for e in json.load(open(f))["defects"]}
+        except (OSError, ValueError, KeyError): return {}
     # JAH_VRAM_WAIT=5: the admission bound of this test's PRIVATE token universe — row.noadmit's NOADMIT is under
     # test; never a guess at how long the box takes
     aenv = dict(os.environ, JAH_RUN_LOG_DIR=runs, JAH_VRAM_DIR=vdir, JAH_VRAM_TOKENS="3", JAH_VRAM_WAIT="5",
@@ -493,17 +497,16 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     check("=> row.flake: NOT REPRODUCED" in aout, "row.flake: green everywhere -> NOT REPRODUCED (the verdict door)")
     check("=> row.ctl: INCOMPLETE — a CONTROL" in aout and "row.ctl | lane-h | 3/3 red" in aout,
           "row.ctl: the control NOADMIT while lane-h is red -> INCOMPLETE, nobody named (the baseline first)")
-    pending = {}
-    for f in sorted(os.listdir(pend)) if os.path.isdir(pend) else []:
-        pending[f] = json.load(open(os.path.join(pend, f)))
+    pending = reg_entries()
     kinds = {e["rows"][0]: e["kind"] for e in pending.values()}
     # TESTING-CLEANUP-2B item 14: the attribution names its entries <BATCH>-<ROW-UPPER>-<n> (red on base: <tag>-<kind>-<row>)
     check(all(re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)*-\d+", e["id"]) for e in pending.values()),
           "the registered ids are one scheme, <BATCH>-<ROW-UPPER>-<n> (%s)" % sorted(e["id"] for e in pending.values()))
-    check(kinds == {"row.combo": "combination", "row.base": "defect", "row.flake": "nondeterminism"},
-          "REGISTERED, not printed: one testing/defects.pending/<id>.json per finding (%s)" % kinds)
+    check(kinds == {"row.combo": "combination", "row.base": "defect", "row.flake": "nondeterminism"}
+          and not os.path.exists(os.path.join(reg, "defects.pending")),
+          "REGISTERED, not printed: one entry of testing/defects.json per finding, no pending directory (%s)" % kinds)
     base_keys = {"id", "rows", "kind", "cause", "first_seen", "state", "found_by", "recheck", "expires"}
-    check(all(set(e) == (base_keys | ({"uses", "suspects", "census"} if e["kind"] == "nondeterminism" else set()))
+    check(all(set(e) - {"sightings"} == (base_keys | ({"uses", "suspects", "census"} if e["kind"] == "nondeterminism" else set()))
               and e["state"] == "open" and e["found_by"] == "gate" and set(e["first_seen"]) == {"tip", "pin", "run"}
               and all(e["first_seen"].values()) and len(e["recheck"]) == 10 for e in pending.values()),
           "...each in the FULL §1.5 schema: state open, found_by gate, first_seen {tip, pin, run}, recheck/expires dates; "
@@ -524,7 +527,7 @@ def run(source, scripts, merge, scratch, rl, build_dir):
             if old is None: os.environ.pop("JAH_DEFECTS_FILE", None)
             else: os.environ["JAH_DEFECTS_FILE"] = old
         check(got is not None and set(got) == set(e["id"] for e in pending.values()),
-              "...and every pending file LOADS through VERDICT-1's defects_load (%s)" % (why or sorted(got or {})))
+              "...and every registered entry LOADS through VERDICT-1's defects_load (%s)" % (why or sorted(got or {})))
     check(all(e["first_seen"]["tip"] == (s4[0] if e["kind"] == "defect" else sc4) for e in pending.values()),
           "...first seen at the candidate (a d-build defect: at d-build's tip)")
     check("row.base | CONTROL rc-base | 3/3 red" in aout and "=> row.base: D-BUILD DEFECT" in aout
@@ -632,8 +635,7 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     yruns = sorted((r for r in yrecs if not r.get("kind")), key=lambda r: r.get("ts") or "")
     fbs = [r.get("fallback") for r in yruns]
     k_ = fbs.index("drain-timeout") if "drain-timeout" in fbs else -1
-    ypend = [json.load(open(os.path.join(yreg, "defects.pending", f))) for f in
-             (sorted(os.listdir(os.path.join(yreg, "defects.pending"))) if os.path.isdir(os.path.join(yreg, "defects.pending")) else [])]
+    ypend = list(reg_entries(os.path.join(yreg, "defects.json")).values())
     check("YIELDING" in aout_y and k_ > 0 and all(f is None for f in fbs[:k_]) and all(f == "drain-timeout" for f in fbs[k_:])
           and len([r for r in yrecs if r.get("kind") == "drain-timeout"]) == 1,
           "--attribute: the re-hold after a yield decides the runs after it — %d unstamped, then %d stamped, one "
@@ -648,11 +650,10 @@ def run(source, scripts, merge, scratch, rl, build_dir):
     # TESTING-CLEANUP-2C (the lead's item 4): A SECOND ATTRIBUTION OF THE SAME RED REUSES THE OPEN ENTRY — batch C2's
     # attribution registered C2-defect-<row> beside the open A2 entries of the same rows. The re-run above (row.base
     # alone, the same registry) writes a sighting on the first run's entry, never a second entry.
-    pf_ = sorted(os.listdir(pend))
-    base_ids = [f for f in pf_ if "ROW-BASE" in f]
-    check(base_ids == ["T4-ROW-BASE-1.json", "T4-ROW-BASE-1.recheck.json"]
-          and json.load(open(os.path.join(pend, "T4-ROW-BASE-1.recheck.json")))["sightings"][0]["batch"] == "t4",
-          "a second attribution of row.base's d-build defect REUSES the open entry: a recheck sighting, no second entry "
+    ents_ = reg_entries()
+    base_ids = sorted(k for k in ents_ if "ROW-BASE" in k)
+    check(base_ids == ["T4-ROW-BASE-1"] and (ents_["T4-ROW-BASE-1"].get("sightings") or [{}])[0].get("batch") == "t4",
+          "a second attribution of row.base's d-build defect REUSES the open entry: a sighting on it, no second entry "
           "(%s)" % base_ids)
     git(lanes4["lane-i"][0], "commit", "-q", "--allow-empty", "-m", "lane-i moved on")
     p = subprocess.run([sys.executable, os.path.join(scripts, "gate-scope.py")] + args, capture_output=True,
