@@ -100,6 +100,7 @@ jah_tsan_blocked(import.shutdown)
 # driver. import.async is eligible but QUARANTINED (L3 — every imported asset
 # leaks its AssetNodeObject and the mesh subtree under it: 21 KB in 248
 # allocations here, from two imports).
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES, LSAN-L3-IMPORT-ASSET-NODE (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(import.async)
 
 # ---------------------------------------------------------------------------

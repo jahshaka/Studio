@@ -330,6 +330,7 @@ jah_pool_arm(doc_assets blend_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settin
 # library/graph own raw pointers and nothing has a destructor; 88 KB in one
 # run of baker_parity — plus L1 underneath).
 jah_lsan_lane(shadergraph.fuzzy_search shadergraph.selection)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES, LSAN-L4-MATERIAL-NODE-LIBRARY (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(shadergraph.pbr_evaluator shadergraph.node_regressions
                  shadergraph.baker_parity shadergraph.bake_output
                  shadergraph.panel_migration)

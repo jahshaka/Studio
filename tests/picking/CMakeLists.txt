@@ -42,6 +42,7 @@ set_tests_properties(picking.fov_cap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 # The leak lane (scripts/sanitize.sh lsan): document picking allocates the
 # triangle/BVH scratch per pick.
 # QUARANTINED (L2 LightNode::shadowMap — 12 bytes, the suite's only leak).
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L2-LIGHTNODE-SHADOWMAP (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(picking.document)
 
 # picking.trimesh_index — THE PICKING MESH'S SPATIAL INDEX GIVES THE BRUTE-FORCE

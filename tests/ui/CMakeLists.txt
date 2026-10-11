@@ -169,6 +169,7 @@ endif()
 # materials' worth). Its other leak, one QProxyStyle per slider row, was
 # this lane's first fix (hfloatsliderwidget.cpp).
 jah_lsan_lane(ui.property_anim ui.media_lazy)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(ui.material_panel)
 
 # ui.light_channels — the lighting-channel checkbox row. Eight boxes over a
@@ -1481,6 +1482,8 @@ set_tests_properties(ui.column_law PROPERTIES
     ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.column_law)   # spawns the app
 
 # ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
@@ -1505,6 +1508,8 @@ set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
     TIMEOUT 480 LABELS "ui")
 jah_tsan_blocked(ui.space_docks)   # spawns the app
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.space_docks)   # spawns the app
 
 # ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
@@ -1528,6 +1533,8 @@ set_tests_properties(ui.window_minimum PROPERTIES
     ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
 jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.window_minimum)   # spawns the app
 
 # ui.shot_aspect — plan item 15 / platform audit C2b.2: an offscreen shot is a
@@ -1556,6 +1563,8 @@ set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
     TIMEOUT 240 LABELS "ui")
 jah_tsan_blocked(ui.material_drag)   # spawns the app
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.material_drag)   # spawns the app
 
 add_executable(test_shot_aspect test_shot_aspect.cpp)
@@ -1574,6 +1583,8 @@ set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
 jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.shot_aspect)   # spawns the app
 
 # ---------------------------------------------------------------------------

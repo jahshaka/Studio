@@ -46,3 +46,10 @@ leak:drmGetVersion
 # can reach the 2.0 symbol — modern glibc headers only bind the current one —
 # so this can never hide a leak of ours. One per condvar in that plugin.
 leak:__pthread_cond_broadcast_2_0
+
+# The box's coreutils are uutils (Rust, /usr/lib/cargo/bin/coreutils; Ubuntu 26.04) — verified 2026-10-11
+# (RUNNER-A7A): under the lane's process-wide preload, every `dirname` / `mktemp` a row's shell runs reports
+# 43,224 bytes in 68 allocations of the multicall binary's own exit-time state, so every row whose fixture runs
+# tests/support/fresh_home.sh failed its FIXTURE before the row ever started. A module we do not compile;
+# matched by its path, so it can never hide an allocation of ours.
+leak:/usr/lib/cargo/bin/coreutils

@@ -297,6 +297,7 @@ jah_no_display(importer.animation)
 # importer.fbx is clean; importer.security is QUARANTINED (L3 — every
 # imported asset leaks its AssetNodeObject and the mesh subtree under it).
 jah_lsan_lane(importer.fbx)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L3-IMPORT-ASSET-NODE (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(importer.security)
 
 # MATERIAL-IMPORT suite (the GLB material defects of 2026-09-08): the glTF

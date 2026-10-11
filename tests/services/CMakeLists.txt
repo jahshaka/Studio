@@ -178,6 +178,7 @@ jah_tsan_lane(services.memory)
 # services.memory is QUARANTINED (L2 LightNode::shadowMap — 24 bytes, its
 # only leak; the registry ownership it actually tests is clean).
 jah_lsan_lane(services.core)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L2-LIGHTNODE-SHADOWMAP (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(services.memory)
 
 # ---------------------------------------------------------------------------

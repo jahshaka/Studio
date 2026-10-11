@@ -104,6 +104,7 @@ set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscree
 # export.raw is clean; the other two are QUARANTINED (L1 iris::Material
 # properties, and export.web additionally L2).
 jah_lsan_lane(export.raw)
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
 jah_lsan_blocked(export.web export.walkers)
 
 # ---------------------------------------------------------------------------

@@ -509,6 +509,8 @@ set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "scripting")
 jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
 # (STUDIO-D1 fix round; services/uithreadwait.h). Arm 1, in-process: an MCP
@@ -543,6 +545,8 @@ set_tests_properties(scripting.e2e.pump_defer PROPERTIES
     ENVIRONMENT "HOME=${_pumpdefer_home};JAHSHAKA_DATA_ROOT=${_pumpdefer_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "scripting")
 jah_tsan_blocked(scripting.e2e.pump_defer)   # spawns the app
+# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
+# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(scripting.e2e.pump_defer)   # spawns the app
 # THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
 # World panel's VR section as a verb: `world.vr` reads and writes six document
