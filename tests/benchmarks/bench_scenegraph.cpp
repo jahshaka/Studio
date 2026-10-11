@@ -28,7 +28,19 @@
 //                                never free (audit F1: the mirror pushes every
 //                                node's transform and visibility every frame,
 //                                unconditionally) — which is the point.
-//   b.idle_sync                  the sync half of that tick.
+//   b.idle_sync                  the sync half of that tick. Measured AFTER the
+//                                mirror's static settle has drained: a settle
+//                                in flight is warm-up, not steady state.
+//   s.settle_slice               the settle itself, its OWN series: every sync
+//                                that ran a settle slice while the scene went
+//                                from all-dynamic (a') back to settled, as
+//                                percentiles + max, bounded by kSettleSliceMaxMs
+//                                (not by the cv/rcv bars — a settle is a
+//                                transient, not a steady state).
+//   s.settle_render              the render after each slice (reported, unbounded).
+//   u.unsettled_render           the COST OF NOT SETTLING: renderOneFrame alone
+//                                with every node dynamic (after a'), beside the
+//                                settled render (b.idle_tick - b.idle_sync).
 //   b.render_stats               the engine's own RenderStats after ~90 idle
 //                                frames (frameMs/p95/draws/batches/triangles).
 //                                READ `draws` AS OGRE MEANS IT: with the Hlms
@@ -183,6 +195,12 @@ static constexpr double kRcvMax = 0.25;   // 1.4826*MAD / median  (quiet-box wor
 // (c) and (d) alternate direction between iterations and get the fewest samples
 // (a single 50k reparent is ~5 s), so both of their bounds carry more headroom.
 static constexpr double kCvMaxReparent  = 1.00;
+// THE SETTLE SLICE'S OWN BOUND (MIRROR-SETTLE-1 fix round 1): a sync that runs
+// a slice of the static settle may cost at most 0.5 ms — 3 % of a 16.7 ms
+// frame — at every scale. SceneMirror::kStaticSettleNodesPerSync is derived
+// from it (scenemirror.h). The one millisecond bound in this file, and it is
+// a bound on the walk's slice, never on the scene's steady state.
+static constexpr double kSettleSliceMaxMs = 0.5;
 static constexpr double kRcvMaxReparent = 0.35;
 
 // THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance) — ARMED by the v1 lane
@@ -1037,16 +1055,99 @@ int main(int argc, char **argv)
             addMetric("a.transform_update_all", n, st["a.transform_update_all"]);
         }
 
-        // (b) work per tick with NOTHING edited. Long enough (>= 90 frames) that
-        // Ogre's rolling FrameStats window describes idle frames and not the
-        // edit loops above.
+        // (u) THE COST OF NOT SETTLING. (a') moved EVERY node, and moving a
+        // static node demotes it (rule 4): the whole scene is SCENE_DYNAMIC
+        // now, and Ogre updates every dynamic node's transform and bounds every
+        // frame. Render alone (no sync, so the settle does not advance) — the
+        // number the settle's speed is worth.
         {
-            // Metric (a') above moved EVERY node, and moving a static node
-            // demotes it (rule 4) — so the static population has to be put
-            // back before the idle measurement, or (b) would measure a fully
-            // dynamic scene and report the win as zero.
-            const size_t remarked = applyStaticTags(s);
-            gCounters["static.nodes_idle." + std::to_string(n)] = double(remarked);
+            size_t dyn = 0;
+            for (const iris::SceneNodePtr &x : s.all) if (!x->isStaticInGraph()) ++dyn;
+            std::vector<double> r;
+            for (int i = 0; i < 5; ++i) engine->renderOneFrame();
+            for (int i = 0; i < (quick ? 20 : 60); ++i) {
+                const auto t0 = Clock::now();
+                engine->renderOneFrame();
+                r.push_back(msSince(t0));
+            }
+            const Stats us = computeStats(r);
+            std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f dynamic=%zu\n",
+                        "u.unsettled_render", n, us.n, us.median, dyn);
+            gCounters["u.unsettled_render." + std::to_string(n) + ".median_ms"] = us.median;
+            gCounters["u.unsettled_render." + std::to_string(n) + ".dynamic"] = double(dyn);
+        }
+
+        // (s) THE SETTLE, DRAINED AND MEASURED AS ITS OWN SERIES. The mirror
+        // re-promotes the scene once every node has been quiet for
+        // kStaticSettleFrames syncs, kStaticSettleNodesPerSync visits a sync.
+        // A suite warms up before it measures: (b) starts after this.
+        {
+            // `renders`: the frame AFTER each slice — the promotions it made
+            // reach Ogre's static update there (notifyStaticDirty), so the
+            // settle's whole price is the slice plus that render. Reported,
+            // not bounded: the bound is the slice's (the mirror's own work).
+            std::vector<double> slices, renders;
+            int syncs = 0, worstAt = -1, over1 = 0;
+            quint32 worstVisits = 0;
+            double worstMs = -1.0;
+            for (; syncs < 200000 && mirror.staticSettleInProgress(); ++syncs) {
+                const auto t0 = Clock::now();
+                mirror.sync();
+                const double ms = msSince(t0);
+                const bool slice = mirror.staticSettleVisits() > 0;
+                if (slice) {
+                    if (ms > worstMs) {
+                        worstMs = ms;
+                        worstAt = int(slices.size());
+                        worstVisits = mirror.staticSettleVisits();
+                    }
+                    if (ms > 1.0) ++over1;
+                    slices.push_back(ms);
+                }
+                const auto t1 = Clock::now();
+                engine->renderOneFrame();
+                if (slice) renders.push_back(msSince(t1));
+            }
+            {
+                std::vector<double> rs = renders;
+                std::sort(rs.begin(), rs.end());
+                std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p99_ms=%9.3f max_ms=%9.3f\n",
+                            "s.settle_render", n, rs.size(), percentile(rs, 0.5), percentile(rs, 0.99),
+                            rs.empty() ? 0.0 : rs.back());
+                gCounters["s.settle_render." + std::to_string(n) + ".median_ms"] = percentile(rs, 0.5);
+                gCounters["s.settle_render." + std::to_string(n) + ".max_ms"] = rs.empty() ? 0.0 : rs.back();
+            }
+            std::vector<double> sorted = slices;
+            std::sort(sorted.begin(), sorted.end());
+            const double med = percentile(sorted, 0.5), p95 = percentile(sorted, 0.95),
+                         p99 = percentile(sorted, 0.99), mx = sorted.empty() ? 0.0 : sorted.back();
+            std::printf("BENCH %-28s scale=%-6d n=%-4zu median_ms=%9.3f p95_ms=%9.3f p99_ms=%9.3f "
+                        "max_ms=%9.3f syncs=%d budget=%u worst_at=%d/%zu worst_visits=%u over_1ms=%d\n",
+                        "s.settle_slice", n, slices.size(), med, p95, p99, mx, syncs,
+                        SceneMirror::kStaticSettleNodesPerSync, worstAt, slices.size(), worstVisits, over1);
+            const std::string k = "s.settle_slice." + std::to_string(n);
+            gCounters[k + ".median_ms"] = med;
+            gCounters[k + ".p99_ms"] = p99;
+            gCounters[k + ".max_ms"] = mx;
+            gCounters[k + ".slices"] = double(slices.size());
+            gCounters[k + ".syncs"] = double(syncs);
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "s.settle_slice@%d drained (%d syncs)", n, syncs);
+            CHECK(!mirror.staticSettleInProgress() && !slices.empty(), buf);
+            if (!smoke) {
+                std::snprintf(buf, sizeof buf, "s.settle_slice@%d worst slice %.3f ms <= %.1f ms", n, mx,
+                              kSettleSliceMaxMs);
+                CHECK(mx <= kSettleSliceMaxMs, buf);
+            }
+        }
+
+        // (b) work per tick with NOTHING edited, on the SETTLED scene. Long
+        // enough (>= 90 frames) that Ogre's rolling FrameStats window describes
+        // idle frames and not the edit loops above.
+        {
+            size_t settledStatic = 0;
+            for (const iris::SceneNodePtr &x : s.all) if (x->isStaticInGraph()) ++settledStatic;
+            gCounters["static.nodes_idle." + std::to_string(n)] = double(settledStatic);
             const LoopBudget bIdle{ 5, 90, quick ? 90 : 400, quick ? 400.0 : 2000.0 };
             auto st = runLoop(bIdle, [&](int, Recorder &rec) {
                 const auto t0 = Clock::now();
@@ -1058,6 +1159,9 @@ int main(int argc, char **argv)
             });
             addMetric("b.idle_sync", n, st["b.idle_sync"]);
             addMetric("b.idle_tick", n, st["b.idle_tick"]);
+            // The settled render, for (u)'s comparison: the idle tick minus its sync.
+            gCounters["b.settled_render." + std::to_string(n) + ".median_ms"] =
+                st["b.idle_tick"].median - st["b.idle_sync"].median;
 
             RenderStats rs;
             if (engine->renderStats(rs)) {
