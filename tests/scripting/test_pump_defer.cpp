@@ -70,7 +70,7 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QFileInfo>
 #include <QNetworkReply>
-#include <atomic>
+#include <QSemaphore>
 
 using namespace mcpharness;
 
@@ -108,36 +108,47 @@ static void deferralArm()
     QNetworkReply *reply = net.post(request, QJsonDocument(QJsonObject{
         { "jsonrpc", "2.0" }, { "id", 1 }, { "method", "ping" } }).toJson(QJsonDocument::Compact));
 
-    std::atomic<bool> release { false };
-    bool deferredSeen = false, answeredInside = false, inOperationSeen = false;
+    // THE CEILINGS ARE COUNTS OF PUMP TURNS, backstops that ATTRIBUTE (the release is an event): a
+    // turn is one processEvents(…, 20 ms) plus UiThreadWait's 2 ms sleep (uithreadwait.h), so
+    // 2,000 turns are >= 4 s and <= ~44 s — far past the 4-5 turns the request takes, far inside
+    // the row's TIMEOUT 300. A server that neither defers nor answers, or an operation end that
+    // never posts the deferred drain, ends the arm with a FAIL line saying what was seen.
+    const long kTurnCeiling = 2000;
+    QSemaphore go;   // the worker's wait: released once, by the tick (no spin)
+    bool released = false, deferredSeen = false, answeredInside = false, inOperationSeen = false;
     long ticks = 0;
-    const long kTickCeiling = 2000000;   // a COUNT: a server that neither defers nor answers ends the arm red
-    UiThreadWait::run([&release]() {
-        while (!release.load()) QThread::yieldCurrentThread();
-    }, UiThreadWait::Pump::Events, [&]() {
-        if (release.load()) return;
+    UiThreadWait::run([&go]() { go.acquire(); }, UiThreadWait::Pump::Events, [&]() {
+        if (released) return;
         ++ticks;
         inOperationSeen = inOperationSeen || UiThreadWait::inOperation();
         if (!UiThreadWait::deferredWork().empty()) deferredSeen = true;
         if (reply->isFinished()) answeredInside = true;
-        if (deferredSeen || answeredInside || ticks >= kTickCeiling) release.store(true);
+        if (deferredSeen || answeredInside || ticks >= kTurnCeiling) { released = true; go.release(); }
     });
     const bool finishedAtEnd = reply->isFinished();
-    // The operation ended: the deferred drain is POSTED now (uithreadwait.h).
-    if (!reply->isFinished()) {
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
+    // The operation ended: the deferred drain is POSTED now (uithreadwait.h) — the same counted turns.
+    long afterTurns = 0;
+    while (!reply->isFinished() && afterTurns < kTurnCeiling) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (!reply->isFinished()) QThread::msleep(2);
+        ++afterTurns;
     }
-    const QJsonObject answer = QJsonDocument::fromJson(reply->readAll()).object();
-    std::printf("info: arm 1: %ld tick(s) in the operation; deferred work queued: %s; answered inside the "
-                "pump: %s; answer: %s\n", ticks, deferredSeen ? "yes" : "no", answeredInside ? "YES" : "no",
+    const bool answered = reply->isFinished();
+    const QJsonObject answer = answered ? QJsonDocument::fromJson(reply->readAll()).object() : QJsonObject();
+    std::printf("info: arm 1: %ld turn(s) in the operation, %ld after it; deferred work queued: %s; answered "
+                "inside the pump: %s; answered at all: %s; answer: %s\n", ticks, afterTurns,
+                deferredSeen ? "yes" : "no", answeredInside ? "YES" : "no", answered ? "yes" : "NO",
                 QJsonDocument(answer).toJson(QJsonDocument::Compact).constData());
+    CHECK(ticks < kTurnCeiling,
+          qPrintable(QStringLiteral("arm 1: the request was seen inside the operation within %1 turns "
+                                    "(deferred: %2, answered inside: %3)").arg(kTurnCeiling)
+                         .arg(deferredSeen ? "yes" : "no", answeredInside ? "yes" : "no")));
     CHECK(inOperationSeen, "arm 1: the tick ran inside the UI-thread operation");
     CHECK(deferredSeen && !answeredInside && !finishedAtEnd,
           "arm 1: the MCP request that arrived in the operation's pump was DEFERRED, not answered inside it");
-    CHECK(answer.value("id").toInt() == 1 && answer.contains("result"),
-          "arm 1: the request was answered (the ping's result)");
+    CHECK(answered && answer.value("id").toInt() == 1 && answer.contains("result"),
+          qPrintable(QStringLiteral("arm 1: the request was answered (the ping's result; %1 turn(s) after "
+                                    "the operation, ceiling %2)").arg(afterTurns).arg(kTurnCeiling)));
     reply->deleteLater();
     server.stop();
 }
