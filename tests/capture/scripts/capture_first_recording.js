@@ -60,14 +60,14 @@ if (first.hardwareBackend === "cuda")
            "on the NVIDIA adapter the encoder is NVENC: " + first.encoder);
 // THE ENCODER PROBE (the real 585 ms): made by THIS first click (never at boot, never by a project
 // open/create), and cheap because the backend is named — the first click costs well under 50 ms.
-// THE PROBE BAR IS TWO FRAMES AT 60 Hz = 33 ms (it was 20 ms; measured by the lane; the bound accepted by
-// the lead at the read, 2026-10-10 15:0x). Measured IN THE
-// SLOT (gate slot + GPU lock, quiet box, 843c3a127): 22.78 / 21.01 / 23.00 ms, median 22.78 (admitted
-// earlier: 19.55 / 20.35) — the named backend's own construction, nothing checked. The probe is paid ONCE
-// per session, on the first click; the honest bound for a once-per-session cost is a frame, and one frame
-// (16.7 ms) is already passed, so the bar is the next whole frame — not a moved-to-pass number: the
-// 731 ms unnamed check it replaced fails it twenty times over, and the 50 ms click bar below is unchanged.
-timingBar(first.probeMs < 33, "Qt's encoder probe on the first click: " + first.probeMs.toFixed(2) + " ms");
+// THE PROBE BAR IS 4 ms (DBUILD-FIX-1; the lead's decision from the lane's table, 2026-10-11). The
+// encoder backend's libraries are resident before the click (videorecorder.cpp preloadEncoderBackend:
+// the FFmpeg plugin dlopen-ed once per process on a pool thread), so the mechanism left in the probe is
+// the backend's own construction: lane max 1.01 ms under 17 compiles (n=20 in the slot, median 0.66).
+// x the worst stretch on record (3.5: the end gate's 69.68 ms / the base's 20 ms quiet median) = 3.5 ms,
+// rounded up to the next whole ms = 4. A lost preload (>= 20 ms, the dlopen back on the click) fails it
+// five times over. The 50 ms click bar below is unchanged.
+timingBar(first.probeMs < 4, "Qt's encoder probe on the first click: " + first.probeMs.toFixed(2) + " ms");
 timingBar(first.startMs < 50, "the first record click after an open costs under 50 ms of UI time: " +
           first.startMs.toFixed(1) + " ms");
 assert(capture.stop({ wait: true, timeoutMs: 30000 }) !== null && capture.status().state === "done", "finished");

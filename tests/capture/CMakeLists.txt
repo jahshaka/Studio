@@ -42,8 +42,9 @@ jah_add_pool(capture TIER document   LABELS scripting capture)
 
 # capture.first_recording.timing / capture.offline_unique.timing — THE RECORDER'S MILLISECOND BARS
 # (TESTING-CLEANUP-2 P10f; tests/support/timingbars.h's rule): the first click's 50 ms and the
-# encoder probe's 33 ms (two frames; measured by the lane; the bound accepted by the lead at the
-# read, 2026-10-10 15:0x; the slot numbers in the script), and the readback ring's
+# encoder probe's 4 ms (DBUILD-FIX-1: the backend's construction with its libraries preloaded,
+# lane max 1.01 ms x the worst stretch on record 3.5, rounded up; the lead's decision 2026-10-11;
+# the derivation in the script), and the readback ring's
 # 100 ms worst UI-thread wait, ARMED in a
 # jah_timing_script copy of each arm's script, each its own process on its own wiped home (warm
 # caches, like the pool), on the quiet box under the GPU-timing lock. The pool's arms keep every
