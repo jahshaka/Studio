@@ -508,6 +508,12 @@ def integration_line(cwd=None):
     return line
 
 
+# THE WHOLE RANGE (RUNNER-A2): a SERVING asks "does anything in A..C reach the row" — every change between the record and
+# the tip, forward merges included — never "what is the lane's own change". ci_gate_check's serving sets this around its
+# selections; with it own_base answers the merge-base, whatever merges the range holds.
+WHOLE_RANGES = False
+
+
 def own_base(base, tip, cwd=None):
     """THE LANE'S OWN DIFF (TEST-SELECTOR-1 T1; audit ARCH_AUDIT_2026-09-30 testing-tooling T1).
 
@@ -526,7 +532,7 @@ def own_base(base, tip, cwd=None):
     is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
     seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
     cwd = cwd or ROOT
-    key = (base, tip, cwd)
+    key = (base, tip, cwd, WHOLE_RANGES)
     if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
     b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
         _git_try(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd)
@@ -536,6 +542,8 @@ def own_base(base, tip, cwd=None):
         _OWN_BASE_CACHE[key] = (b, []); return _OWN_BASE_CACHE[key]
     mb = _git_try(["merge-base", b, t], cwd) or b
     own, fwd = mb, []
+    if WHOLE_RANGES:
+        _OWN_BASE_CACHE[key] = (own, []); return _OWN_BASE_CACHE[key]
     for line in (_git_try(["rev-list", "--first-parent", "--merges", "--parents", f"{mb}..{t}"], cwd) or "").splitlines():
         shas = line.split()
         if len(shas) < 3: continue

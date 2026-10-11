@@ -1237,9 +1237,11 @@ set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;f
     check(len(dr.get("data_hash") or "") == 64 and "data_hash" not in (dr.get("nulls") or {}),
           "...the DATA HASH of the file its command names (dat.sh; the absent output it writes is not data)")
     gn = ga.get("nulls") or {}
-    check(ga.get("data_hash") is None and "names no data file" in gn.get("data_hash", "")
+    import gate_graph as gg_
+    check(ga.get("data_hash") == gg_.EMPTY_DATA_HASH and "data_hash" not in gn
           and ga.get("tip", {}).get("built") and "built_from" not in gn and "no DISPLAY" in gn.get("display", ""),
-          "...a field that cannot be known is null WITH ITS REASON in `nulls` (gpu.a: %s)" % gn)
+          "...a row naming no data file hashes the EMPTY set (known, RUNNER-A2); a field that cannot be known is null "
+          "WITH ITS REASON in `nulls` (gpu.a: %s)" % gn)
     # P12: THE TREE ROOT IS STRIPPED — the same toy configured at another path keys the same; its data moving re-keys
     # (two FRESH copies of the toy — earlier sections rewrite the first toy's CMakeLists)
     facts = []

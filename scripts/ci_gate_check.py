@@ -16,19 +16,17 @@ in part, every selected arm — must have been run there, and THE FLAKE LAW deci
   a run). One solo PASS no longer erases a red (the audit's L2: gi.field_scroll PASS/FAIL/PASS
   beside a sibling was accepted).
 
-THE FIX ROUND RE-USES WHAT IT CANNOT REACH (GATE-SPEED-1 item 1; TESTING_GATE §3b made mechanical —
-the owner, 2026-09-11: "no double checking"). A row with no record at the tip takes the NEWEST record
-of that row at an earlier commit A OF THE LANE (its own commits in base..tip: not the integration
-line a forward merge carried in), provided
-  (a) the scoped selection of A..tip — the same selector, the same reach — does NOT include the row
-      (a pool's arm: does not include that arm), and
-  (b) the fork pin is the same at A and at the tip, and A..tip neither falls back nor is the tier by
-      rule (a pin change invalidates every earlier record: §7b rule 4 stays);
-and that newest record decides: green re-uses it; red (with no verdict, or a contention red without
-its 3/3) refuses — a later red blocks the older green. A row the fix reaches needs its record at the tip, as before.
-Every row prints the commit its record came from. Before this lane the key was the EXACT tip, so
-every fix round re-ran the lane's whole selection: 45.9 % of all suite-time since 09-28 (the
-gate-speed audit's R1). A miss is a selector defect, which is already the law's answer.
+A GREEN HOLDS UNTIL A CHANGE REACHES THE ROW (RUNNER-A2; TESTING_RUNNER_SPEC v2.1 rule 2 — GATE-SPEED-1's fix-round
+re-use made general: across merges, across tiers, with no integration-line exclusion). A row with no run at the tip
+takes the NEWEST record of that row at ANY ANCESTOR A of the tip holding one (serve_key, THE ONE PREDICATE — `runner.sh
+select` serves with it too), provided the WHOLE range A..tip (forward merges included) does not reach the row (a pin
+move reaches every row that reaches the fork by the graph; a fallback, the tier by rule or an unreadable range reaches
+everything), the fork pin is equal or the row does not reach the fork, the record's declaration and data hashes equal
+the build's at the tip (a null is unknown: never equal — a record before schema 3 serves nothing), its build was clean,
+its tier admissible (a lane-tool record only when it carries seconds, the census, labels and the Xid read), and the row
+is neither MEASURING nor a REGISTERED NONDETERMINISM. That newest record decides: green serves; red refuses until
+answered there. `--universe tier` (the runner's judge) asks EVERY merge-tier row this way, not only the range's scoped
+rows; a measuring row the range does not reach is not asked. Every row prints the commit its record came from.
 
 THE BATCH'S VERDICT COVERS THE BATCH'S RANGE (TESTING-CLEANUP-2D item 1): a verdict is per ROW per RANGE — the
 verdict records at the TIP are in scope for the same row's reds at every earlier commit of the range the judge reads
@@ -111,13 +109,18 @@ def records_by_tip(pins):
             t = r.get("tip") or {}
             sha = t.get("studio")
             if sha not in out or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
-            if not r.get("kind") and gate_runlog.stale_build(t): continue   # a RUN of another build (GATE-COST-2 #8, F4)
+            if r.get("kind") in (None, "self-audit") and gate_runlog.stale_build(t): continue   # a RUN of another build (GATE-COST-2 #8, F4)
             # the engine that ran must be the one the tip PINS (F1): a record from a tree whose
             # irisgl was checked out elsewhere tested other code
             if pins[sha] and t.get("irisgl") != pins[sha]: continue
-            # N5: a lane-tool record (tier `lane`) never answers a row for the judge — the batch / push gate must run
-            # it (lane_records reads them for the carried reds; a red is a red wherever it ran)
-            if r.get("tier") == "lane": continue
+            # A LANE-TOOL RECORD ANSWERS WHEN IT IS COMPLETE (RUNNER-A2; N5's blanket exclusion deleted): a builder's
+            # record that carries seconds, the census, the labels and the Xid read (A1's complete self-audit record;
+            # A5's queue writes lane-test's rows the same) is a run like a gate's; one without them stays out (it
+            # still carries its reds: lane_records)
+            if r.get("tier") == "lane" and not complete_lane(r): continue
+            # a SERVING record (`kind: served`, runner.sh select) is the select's written evidence, never a run: the judge
+            # serves through the same predicate itself (serve_key)
+            if r.get("kind") == "served": continue
             if r.get("kind") == "abort":
                 ABORTS.setdefault(sha, []).append(r); continue
             out[sha].setdefault((r.get("suite"), r.get("arm")), []).append(r)
@@ -126,6 +129,13 @@ def records_by_tip(pins):
             v.sort(key=lambda r: r.get("ts") or "")
     return out
 
+
+
+def complete_lane(r):
+    """A lane-tier record that may answer a row: it carries seconds, the census, its labels and the Xid read."""
+    b = r.get("box") if isinstance(r.get("box"), dict) else {}
+    return (r.get("seconds") is not None and isinstance(b.get("census"), dict) and isinstance(r.get("labels"), list)
+            and "xid" in r)
 
 
 def lane_records(lanes, skip):
@@ -554,12 +564,12 @@ def _git(args, cwd):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def lane_commits(gs, base, tip_sha):
-    """The lane's OWN earlier commits, newest first: base..tip without the tip, minus the integration
-    line (a d-build commit a forward merge carried in is not a commit of this lane)."""
-    line = gs.integration_line()
+def range_commits(gs, base, tip_sha):
+    """The range's earlier commits, newest first: base..tip without the tip — EVERY one (RUNNER-A2: the integration-line
+    exclusion is deleted; a d-build commit a forward merge carried in is a commit like any other, and its records are
+    evidence like any other)."""
     revs = _git(["rev-list", "--topo-order", f"{base}..{tip_sha}"], gs.ROOT).split()
-    return [c for c in revs if c != tip_sha and c not in line]
+    return [c for c in revs if c != tip_sha]
 
 
 _FORK_PINS = {}
@@ -642,24 +652,18 @@ class Reach:
         self.inv0 = gs.load_inventory(build)
         self.cache = {}
 
-    def of(self, a, a_fork):
-        """What <a>..<the tip> reaches — for RE-USE: anything unreadable reaches everything (no re-use across it)."""
-        if a_fork and a_fork == self.tip_fork:
-            return self.between(a, self.tip, unreadable=Reach.ALL)
-        return Reach.ALL
-
-    def between(self, a, b, unreadable=ALL):
+    def between(self, a, b, unreadable=ALL, fork_rows=None):
         """What the scoped selection of <a>..<b> reaches: a set of keys, or ALL (a fork pin change, a fallback, the
         tier by rule). `unreadable`: the answer for a range the selector cannot read or that selects nothing —
         ALL for re-use (the safe side there), an empty set for PROVING a fix (the safe side there)."""
-        ck = (a, b, unreadable is Reach.ALL)          # the same range answers differently per caller's safe side
+        ck = (a, b, unreadable is Reach.ALL, fork_rows is not None, self.gs.WHOLE_RANGES)   # per caller's safe side
         if ck in self.cache: return self.cache[ck]
         rng = f"{a}..{b}"
         reach = unreadable
         try:
             S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
                                inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
-            if S.full_tier or S.fork_bump:
+            if S.full_tier or (S.fork_bump and fork_rows is None):
                 reach = Reach.ALL
             elif S.fallback:
                 # ROUND 4: a fallback is a path NO rule owns — for re-use that is ALL (no re-use across it); for PROVING
@@ -681,6 +685,9 @@ class Reach:
                 # EVERY side: for re-use, for a travelling base proof, and for PROVING a fix (every arm with it)
                 for n in getattr(S, "stage_close_left", None) or {}:
                     reach |= {(n, None), (n, "*")}
+                # A PIN MOVE, FOR SERVING (RUNNER-A2, rule 3): every row that reaches the fork by the graph, every arm
+                if S.fork_bump and fork_rows is not None:
+                    reach |= {(n, None) for n in fork_rows} | {(n, "*") for n in fork_rows}
         except SystemExit:
             reach = unreadable
         self.cache[ck] = reach
@@ -712,6 +719,161 @@ class Prover:
         return Reach.reaches(self.reach_fn().between(red_sha, pass_sha, unreadable=set()), key)
 
 
+# ---- THE KEY: A GREEN HOLDS UNTIL A CHANGE REACHES THE ROW (RUNNER-A2; TESTING_RUNNER_SPEC v2.1 rule 2, §3.2) ---------
+# ONE PREDICATE, used by `runner.sh select` (the merge run's row set) and by the judge (a row with no run at the tip):
+# the newest record of the row at an ANCESTOR A of the tip C answers the row at C when
+#   * the WHOLE range A..C (forward merges included — gate-scope.WHOLE_RANGES) does not reach the row: the scoped
+#     selector's reach (the graph, the symbols, the area rules); a pin move reaches every row that reaches the fork by the
+#     graph (FORK_ROWS) on top; a fallback, the tier by rule or an unreadable range reaches everything;
+#   * the record is admissible (a run of a gating tier; a lane-tool record only when complete), its BUILT_FROM clean
+#     (records_by_tip drops a stale or dirty build), from irisgl at A's own pin;
+#   * the fork pin at A equals C's, or the row does not reach the fork;
+#   * the row's DECLARATION and DATA hashes in the record equal the build's at C (gate_graph: root-stripped) — a null
+#     on either side is UNKNOWN and never equal (a record before schema 3 serves nothing);
+#   * the row is not MEASURING (timing / quiet-box / perf: a measurement is never served) and not a REGISTERED
+#     NONDETERMINISM (an open `nondeterminism` entry: its green is not a fact);
+# then that record's state is the row's at C — green serves; a red stays red until a change reaches it. Candidates are
+# the tip's ancestors that hold records, newest first; the newest one holding a run of the row decides (an older A
+# lies behind a range that holds the newer one's).
+SERVE_SELECTIONS_MAX = 40      # selections one serving pass may compute (a range each; ~1 s each on a cached graph)
+
+
+def fork_rows(gs, build, graph, inv):
+    """{row} that REACH THE FORK by the graph: a row whose executables (or the app, for an app row) depend on any file
+    of irisgl/thirdparty/ogre-next (the checkout's media, the install's headers and libraries) — what a pin move reaches
+    (rule 3)."""
+    if graph is None:
+        return set(inv)
+    fe = set()
+    for n in list(graph.rev):
+        if "/irisgl/thirdparty/ogre-next" in n:
+            fe |= graph.reach(n)
+    app = os.path.normpath(os.path.join(build, "bin", "Jahshaka"))
+    return {n for n, t in inv.items() if (t.get("exes") or set()) & fe or (t.get("kind") == "app" and app in fe)}
+
+
+class Server:
+    """THE KEY, as one object per tip: the facts at C (the build's rows: labels, declaration, data hash), the fork rows,
+    the registered nondeterminism, and the selections A..C (cached)."""
+
+    def __init__(self, gs, build, tip_sha, tip_fork, defects, reach):
+        self.gs, self.build, self.tip, self.tip_fork, self.reach = gs, build, tip_sha, tip_fork, reach
+        self.facts, self.config, _ = gate_runlog.row_facts(build)
+        self.inv = reach.inv0
+        gs.classify_rows(self.inv, reach.graph, build)
+        self.fork = fork_rows(gs, build, reach.graph, self.inv)
+        self.nondet = {}
+        for e in (defects or {}).values():
+            if e.get("kind") == "nondeterminism" and gate_runlog.defect_state(e) == "open":
+                for r in e.get("rows") or []:
+                    self.nondet.setdefault(r, e["id"])
+        self.sel = {}           # A -> the reach of A..C (a set of keys, or Reach.ALL)
+        self.computed = 0
+
+    def row_never(self, key):
+        """Why the row is never served whatever its records (None when it may be)."""
+        n = key[0]
+        labels = set((self.inv.get(n) or {}).get("labels") or ())
+        if labels & MEASURING:
+            return f"MEASURING ({'/'.join(sorted(labels & MEASURING))}): a measurement is never served"
+        if n in self.nondet or (key[1] and key[1] in self.nondet):
+            return f"a REGISTERED NONDETERMINISM ({self.nondet.get(n) or self.nondet.get(key[1])}): its green is not a fact"
+        return None
+
+    def record_why_not(self, key, r, a_fork):
+        """Why record r at A cannot stand for the row at C, the selection aside (None when it can)."""
+        if r.get("tier") == "target" or r.get("gating") is False:
+            return f"a non-gating record (tier {r.get('tier')})"
+        if r.get("fallback") and set(r.get("labels") or ()) & MEASURING:
+            return "a measurement under a fallback"
+        if key[0] in self.fork and (not a_fork or a_fork != self.tip_fork):
+            return f"the fork pin moved ({(a_fork or '?')[:9]} -> {(self.tip_fork or '?')[:9]}) and the row reaches the fork"
+        f = self.facts.get(key[0])
+        if f is None:
+            return "the row is not in the build's ctest inventory"
+        d = (r.get("declaration") or {}).get("hash") if isinstance(r.get("declaration"), dict) else None
+        if not d:
+            return "its record carries no declaration (unknown is never equal: a record before schema 3)"
+        if d != (f.get("declaration") or {}).get("hash"):
+            return "its DECLARATION changed since the record"
+        if not r.get("data_hash") or not f.get("data_hash"):
+            return "a data hash is unknown (never equal)"
+        if r["data_hash"] != f["data_hash"]:
+            return "its DATA changed since the record"
+        return None
+
+    def reach_of(self, a):
+        """The reach of the WHOLE range A..C, for serving (cached; the budget spent: ALL)."""
+        if a in self.sel:
+            return self.sel[a]
+        if self.computed >= SERVE_SELECTIONS_MAX:
+            return Reach.ALL
+        if subprocess.run(["git", "diff", "--quiet", a, self.tip], cwd=self.gs.ROOT).returncode == 0:
+            self.sel[a] = set()          # the same tree (a merge that changed nothing): nothing reaches anything
+            return self.sel[a]
+        self.computed += 1
+        old = self.gs.WHOLE_RANGES
+        self.gs.WHOLE_RANGES = True
+        try:
+            r = self.reach.between(a, self.tip, unreadable=Reach.ALL, fork_rows=self.fork)
+        finally:
+            self.gs.WHOLE_RANGES = old
+        self.sel[a] = r
+        return r
+
+
+def serve_key(key, server, cands, got, judge_at):
+    """THE PREDICATE applied: ("served", A, state, why) | ("red", A, why) | ("unserved", why) for one row at the tip.
+    `cands`: [(A, A's fork pin)] newest first; `got`: records_by_tip's {A: {key: [records]}}; `judge_at(key, recs)` ->
+    (state, why) of the records at A (the flake law, the door)."""
+    never = server.row_never(key)
+    if never:
+        return ("unserved", never)
+    first_why = None
+    for a, a_fork in cands:
+        recs = [r for r in got.get(a, {}).get(key, []) if r.get("kind") != "verdict"]
+        runs = [r for r in recs if r.get("verdict") not in NEVER_RAN]
+        if not runs:
+            continue
+        newest = max(runs, key=_when)
+        why = server.record_why_not(key, newest, a_fork)
+        if why:
+            return ("unserved", f"{a[:9]}'s record: {why}")
+        reach = server.reach_of(a)
+        if Reach.reaches(reach, key):
+            return ("unserved", (f"{a[:9]}..{server.tip[:9]} reaches it" if reach is not Reach.ALL else
+                                 f"{a[:9]}..{server.tip[:9]} reaches everything (a fallback, the tier by rule, an "
+                                 f"unreadable range, or the selection budget spent)"))
+        st, swhy = judge_at(key, got[a].get(key, []))
+        if st in PASSING:
+            return ("served", a, st, f"served from {a[:9]} ({newest.get('tier')}, {newest.get('run') or '-'}; "
+                                     f"{a[:9]}..{server.tip[:9]} does not reach it)" + (f"; {swhy}" if swhy else ""))
+        if st == "red":
+            return ("red", a, f"red at {a[:9]}, and {a[:9]}..{server.tip[:9]} does not reach it (answer it there): {swhy}")
+        first_why = first_why or f"{a[:9]}: {st} ({swhy})"
+    return ("unserved", first_why or "no record of it at any ancestor of the tip")
+
+
+def candidates(gs, tip_sha, pins_of=None):
+    """[(A, A's irisgl pin, A's fork pin)] — every ANCESTOR of the tip (not the tip) holding a record in the run log,
+    newest first (topological), and the irisgl pin its records must carry."""
+    have = set()
+    d = gate_runlog.log_dir()
+    if os.path.isdir(d):
+        rx = re.compile(r'"studio": "([0-9a-f]{40})"')
+        for f in os.listdir(d):
+            if f.endswith(".jsonl"):
+                with open(os.path.join(d, f), errors="replace") as fh:
+                    have |= set(rx.findall(fh.read()))
+    have.discard(tip_sha)
+    out = []
+    for c in _git(["rev-list", "--topo-order", tip_sha], gs.ROOT).split():
+        if c in have:
+            ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
+            out.append((c, ig or None, fork_pin(gs, ig)))
+    return out
+
+
 def record_verdicts(pairs, tip_sha, pin):
     """[(key, text)] -> one VERDICT record per row, stamped now."""
     now = datetime.datetime.now().astimezone()
@@ -738,9 +900,27 @@ def stage_close_rows(gs, build):
     return [(n, None) for n in sorted(inv) if inv[n]["labels"] & gs.STAGE_CLOSE_LABELS]
 
 
-def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_close=False):
+def tier_need(gs, S, need):
+    """THE TIER AS THE UNIVERSE (RUNNER-A2): the scoped keys plus EVERY other row of the merge tier (not stage-close,
+    not a target, not quiet-box) — each answered at the tip or SERVED (rule 2). A MEASURING row the change does not
+    reach is not asked (a measurement is never served; it runs when reached, at a stage close, at a ship)."""
+    inv, have = S.inv, set(need)
+    sel = {k[0] for k in need}
+    out = list(need)
+    for n in sorted(inv):
+        if inv[n]["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS):
+            continue
+        if (n, None) in have or ((inv[n]["labels"] & MEASURING) and n not in sel):
+            continue
+        out.append((n, None))
+    return out
+
+
+def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_close=False, universe="selection"):
     """(ok, reasons) for a range. `verdicts`: {row or pool.arm: text} recorded for those rows first
-    (per row, timestamped; a row that is not red now is refused as a verdict, said out loud). `mode`:
+    (per row, timestamped; a row that is not red now is refused as a verdict, said out loud). `universe`: "selection"
+    (the range's scoped rows, ci_gate_check's own default) | "tier" (every merge-tier row — the runner's judge: what the
+    range reaches must have run, the rest is SERVED or refused; RUNNER-A2). `mode`:
     merge (a KNOWN RED passes) | push | stage-close (a KNOWN RED refuses: never push on a red). `lane`:
     the lane whose own records carry their open reds to this tip (default: the lane named by the tip's
     own records, else the tip's branch name)."""
@@ -767,17 +947,30 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     else:
         S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True)
         need, what = needed_rows(gs, S)
+        if universe == "tier" and not (S.fallback or S.full_tier or S.fork_bump):
+            need, what = tier_need(gs, S, need), f"the merge tier ({what} at the tip, every other row served or run)"
     pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
     label = lambda k: f"{k[0]}{' :: ' + k[1] if k[1] else ''}"
-    # THE LANE'S EARLIER COMMITS and the pins they ran on (records at each are read in one pass)
-    earlier = lane_commits(gs, base_sha, tip_sha)
+    # THE RANGE'S EARLIER COMMITS, and EVERY ANCESTOR of the tip holding records (the serving candidates, RUNNER-A2), with
+    # the pins they ran on (records at each are read in one pass)
+    earlier = range_commits(gs, base_sha, tip_sha)
+    cands = candidates(gs, tip_sha)
     pins = {tip_sha: pin or None}
+    for c, ig, _ in cands:
+        pins[c] = ig
     for c in earlier:
-        pins[c] = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT) or None
+        if c not in pins:
+            pins[c] = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT) or None
     # THE BASE (the door's `real:<id> pre-existing` reads the red reproduced there by a recorded solo)
     if base_sha not in pins:
         pins[base_sha] = _git(["rev-parse", f"{base_sha}:irisgl"], gs.ROOT) or None
     reach = None
+    server_ = []
+
+    def get_server():
+        if not server_:
+            server_.append(Server(gs, build, tip_sha, fork_pin(gs, pin), defects, get_reach()))
+        return server_[0]
 
     def get_reach():
         nonlocal reach
@@ -872,26 +1065,17 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                         why = (f"an OPEN red at {c[:9]} that {c[:9]}..{tip_sha[:9]} does not reach — the green at the "
                                f"tip does not answer it (a verdict does; --solo 3/3 for the contention class): {cwhy}")
                         break
-            if st == "missing" and have_earlier:
-                if reach is None:
-                    reach = Reach(gs, build, tip_sha, tip_fork)
-                for c in have_earlier:
-                    r = reach.of(c, fork_pin(gs, pins[c]))
-                    if Reach.reaches(r, k):
-                        why += (f"; {c[:9]}..{tip_sha[:9]} reaches it" if r is not Reach.ALL else
-                                f"; no re-use across {c[:9]} (a fork pin change, a fallback or the tier by rule "
-                                f"in {c[:9]}..{tip_sha[:9]})")
-                        break
-                    recs = got[c].get(k, [])
-                    if not recs: continue
-                    cst, cwhy = judge(k, with_batch_verdicts(recs, k, got), defects, **ctx)
-                    if cst == "missing": continue
-                    st, src = cst, c
-                    why = (f"re-used from {c[:9]} ({c[:9]}..{tip_sha[:9]} does not reach it)"
-                           + (f"; {cwhy}" if cwhy else "")) if cst in PASSING else \
-                          (f"red at {c[:9]}, the newest run of it on the lane ({c[:9]}..{tip_sha[:9]} does not reach "
-                           f"it; answer it there): {cwhy}")
-                    break
+            if st == "missing" and cands:
+                # THE KEY (RUNNER-A2): the newest record of the row at an ancestor A whose WHOLE range A..tip does not
+                # reach it answers it — served when green, red until answered (serve_key; the one predicate select uses)
+                sv = serve_key(k, get_server(), [(c, f) for c, _, f in cands], got,
+                               lambda kk, recs: judge(kk, with_batch_verdicts(recs, kk, got), defects, **ctx))
+                if sv[0] == "served":
+                    st, src, why = sv[2], sv[1], sv[3]
+                elif sv[0] == "red":
+                    st, src, why = "red", sv[1], sv[2]
+                else:
+                    why += f"; not served: {sv[1]}"
             st, why = dropped(k, st, why, src)
             out[k] = (st, why, src)
         resolve_not_run(out, got[tip_sha], lambda pk: judge(pk, got[tip_sha].get(pk, []), defects,
@@ -991,7 +1175,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         if st in PASSING and src != tip_sha: reused[src] = reused.get(src, 0) + 1
     reasons = []
     if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]} "
-                               f"(nor a re-usable one earlier on the lane): {missing[:8]}")
+                               f"(nor one SERVED from an ancestor: rule 2): {missing[:8]}")
     for r in red[:20]: reasons.append("RED " + r)
     for (t, k), why in sorted(carried.items())[:20]:
         reasons.append(f"OPEN RED carried from {t[:9]}: {label(k)} — {why}")
@@ -1000,9 +1184,71 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         if known: reasons.append(f"KNOWN RED (a merge passes them; a push or a stage close does not): "
                                  f"{[label(k) for k in known][:8]}")
         reasons.append(f"{what}: {len(need)} row(s) green — {at_tip} at {tip_sha[:9]}"
-                       + "".join(f", {n} re-used from {c[:9]}" for c, n in reused.items())
+                       + "".join(f", {n} served from {c[:9]}" for c, n in reused.items())
                        + (f"; cleared by the law: {cleared[:6]}" if cleared else ""))
     return not (missing or red or carried), reasons
+
+
+def plan(rng, build, gs=None, named=()):
+    """THE MERGE RUN'S ROW SET (RUNNER-A2; `runner.sh select`): {run: {key: reason}, served: {key: {sha, run, tier, ts,
+    state, why}}, tip, base, what, selected: [the scoped selection's keys], universe: n}. The universe is the merge tier
+    (tier_need); a row is RUN when the range B..C reaches it (gate-scope's selection: the graph, the symbols, the area
+    rules; a pin move every fork-reaching row), when the lane's brief names it (`named`), or when it cannot be SERVED —
+    serve_key, the judge's own predicate, from the tip's ancestors (never C itself: a record there is a run, not a
+    serving)."""
+    gs = gs or load_gs()
+    defects, problem = gate_runlog.defects_load()
+    if defects is None:
+        raise SystemExit(f"select: {problem}")
+    base, tip = rng.split("..", 1)
+    tip_sha = _git(["rev-parse", tip], gs.ROOT)
+    base_sha = _git(["rev-parse", base], gs.ROOT)
+    if not tip_sha or not base_sha:
+        raise SystemExit(f"select: cannot resolve {rng}")
+    S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True)
+    pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
+    reach = Reach(gs, build, tip_sha, fork_pin(gs, pin))
+    server = Server(gs, build, tip_sha, fork_pin(gs, pin), defects, reach)
+    scoped, what = needed_rows(gs, S)
+    if S.fork_bump and not (S.fallback or S.full_tier):
+        # rule 3: a pin move runs what the change's own paths reach AND every row that reaches the fork — not the tier
+        sel = set(S.selected) | server.fork
+        scoped = [(n, None) for n in sorted(sel) if n in S.inv
+                  and not (S.inv[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS | gs.STAGE_CLOSE_LABELS))]
+        what = f"the pin move ({len(server.fork)} rows reach the fork by the graph) + the change's own reach"
+    universe = tier_need(gs, S, list(scoped)) if not (S.fallback or S.full_tier) else list(scoped)
+    cands = candidates(gs, tip_sha)
+    pins = {c: ig for c, ig, _ in cands}
+    got = records_by_tip(pins)
+    run, served = {}, {}
+    sel_keys = set(scoped)
+    reasons = {n: r for n, r in (S.selected or {}).items()}
+    for k in universe:
+        if k in sel_keys:
+            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
+                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
+            continue
+        if k[0] in named:
+            run[k] = "named by the lane's brief"
+            continue
+        sv = serve_key(k, server, [(c, f) for c, _, f in cands], got,
+                       lambda kk, recs: judge(kk, recs, defects, tip_sha=tip_sha))
+        if sv[0] == "served":
+            a = sv[1]
+            newest = max((r for r in got[a].get(k, []) if r.get("kind") != "verdict"
+                          and r.get("verdict") not in NEVER_RAN), key=_when)
+            served[k] = {"sha": a, "run": newest.get("run"), "tier": newest.get("tier"), "ts": newest.get("ts"),
+                         "state": sv[2], "why": sv[3]}
+        else:
+            run[k] = sv[-1]
+    in_u = {k[0] for k in universe}
+    left = sorted(n for n, t in S.inv.items() if n not in in_u and (t["labels"] & MEASURING)
+                  and not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS)))
+    measuring = sorted(n for n in in_u if S.inv.get(n, {}).get("labels", set()) & MEASURING)
+    return {"tip": tip_sha, "base": base_sha, "irisgl": pin, "fork": fork_pin(gs, pin), "what": what,
+            "measuring_run": measuring, "measuring_left": left, "fork_rows": sorted(server.fork),
+            "selected": sorted(sel_keys, key=str), "universe": len(universe), "run": run, "served": served,
+            "selections": server.computed}
 
 
 def main():
@@ -1016,6 +1262,12 @@ def main():
     ap.add_argument("--mode", default=None, choices=MODES,
                     help="merge: a KNOWN RED passes; push / stage-close: it refuses (never push on a red)")
     ap.add_argument("--lane", default=None, help="the lane whose own records carry open reds to the tip")
+    ap.add_argument("--universe", default="selection", choices=("selection", "tier"),
+                    help="selection: the range's scoped rows (default); tier: every merge-tier row, at the tip or SERVED "
+                         "by rule 2 (the runner's judge, RUNNER-A2)")
+    ap.add_argument("--plan", action="store_true",
+                    help="print the merge run's row set as JSON (`runner.sh select`): run (with reasons) and served")
+    ap.add_argument("--named", action="append", default=[], help="(--plan) a row the lane's brief names: always run")
     # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form merge-dbuild-lane.sh
     # builds) both record EVERY verdict — with nargs="+" alone a repeated flag kept only the last one
     ap.add_argument("--verdict", nargs="+", action="extend", default=None, metavar="ROW=TEXT",
@@ -1031,11 +1283,18 @@ def main():
             k, v = pair.split("=", 1)
             verdicts[k.strip()] = v.strip()
     gs = load_gs()
+    if a.plan:
+        out = plan(a.range, gs.resolve_build(a.build), gs, named=set(a.named))
+        lab = lambda k: k[0] + (f" :: {k[1]}" if k[1] else "")
+        print(json.dumps(dict(out, run={lab(k): v for k, v in out["run"].items()},
+                              served={lab(k): v for k, v in out["served"].items()},
+                              selected=[lab(k) for k in out["selected"]]), sort_keys=True))
+        sys.exit(0)
     mode = a.mode or ("stage-close" if a.stage_close else "merge")
     if a.stage_close and mode == "merge":
         ap.error("--stage-close judges a push or a stage close: --mode push|stage-close, never merge")
     ok, reasons = check(a.range, gs.resolve_build(a.build), gs, verdicts=verdicts, mode=mode, lane=a.lane,
-                        stage_close=a.stage_close)
+                        stage_close=a.stage_close, universe=a.universe)
     if ok is None:
         for r in reasons: print("ci-gate-check: UNUSABLE — " + r)
         sys.exit(2)
