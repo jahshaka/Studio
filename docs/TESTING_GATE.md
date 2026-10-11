@@ -316,7 +316,14 @@ RUNNER-A1; `kind: trend-step {row, target, delta}` written by the gate's trend a
 names. SCHEMA 3 (RUNNER-A1): every row/arm record also carries the build's `config` (its CMakeCache: type, generator,
 compiler, linker, options, a hash), the row's `declaration` (`{labels, timeout, tokens, run_serial, hash}` — the hash
 over every ctest property but COST and the command line, the tree root and the build dir as `<root>`/`<build>`), its
-`data_hash` (the files its command names, read where the build is) and `nulls` `{field: why}` for each it could not know.
+`data_hash` (its DATA SET — RUNNER-A2B, gate_graph.data_set: the files its command names, the source directories it
+names WALKED, and the sets its CMake declares in the `JAH_DATA` test property: `engine-media` (irisgl/engine/media, every
+rendering row by its class), `library-template` (app/content + app/templates, every app row), `samples` / `samples/<name>`
+(scenes/), `fixtures/<tests dir>` (tests/<dir>/fixtures, by directory), `NONE` (reads nothing) — tests/CMakeLists.txt's
+`_jah_data` and `jah_data_pass`; a row with no file and no declaration has UNKNOWN data: null, never served) and `nulls`
+`{field: why}` for each it could not know. THE DATA EDGES SELECT: a touched path under a row's data set selects the row
+(`<path>: a data edge`), in a tooling-only diff too, and a path only data edges own is no fallback. `scripts/lead/runner.sh
+data-audit` prints every row's data set and the UNKNOWN list.
 A row's record: verdict (PASS | FAIL | CRASH | TIMEOUT | NOTRUN |
 NOADMIT | OOM | LOST, §4b), retries, wall seconds, a target's value, the selection reason, the
 tree's three shas, `lanes` (the LIST of lanes the gated tree carries — a batch candidate's every

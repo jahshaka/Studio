@@ -42,7 +42,8 @@ foreach(SAMPLE IN LISTS _samples)
     jah_gpu_row(samples.cleanstart.${_slug} CLASS app TIER document
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_${_slug}.js
-             WORKING_DIRECTORY ${_home}/run)
+             WORKING_DIRECTORY ${_home}/run
+             DATA "samples/${SAMPLE}")
     # HOME is the whole point: a virgin one per sample. The suite needs a
     # reachable display like every other engine-up e2e (offscreen rendering
     # still connects to the X server at plugin load).

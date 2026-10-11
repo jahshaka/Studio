@@ -658,19 +658,111 @@ def _is_elf(path):
         return False
 
 
-EMPTY_DATA_HASH = _sha256(b"")
+# THE DATA EDGES (RUNNER-A2B; TESTING_RUNNER_SPEC v2.1 rule 2 "the row's data … unchanged"): every row's DATA SET — the files
+# it reads beside its executable — from three sources, in this order of truth:
+#   argument  a regular file on its command line (or `--opt=<path>`) inside the tree or the build: scripts, fixtures,
+#             configured copies (not an ELF the build linked: BUILT_FROM keys the artefact; not an output it writes; not a
+#             wrapper of the HARNESS — HARNESS_DIRS: scripts/, tests/support/ — which never makes a row's data known);
+#   walked    a DIRECTORY argument inside the source tree, walked (every regular file, the VCS and cache dirs pruned) —
+#             never the tree root itself (a lint's whole-tree argument: the selector's source rules own those rows) and
+#             never a build dir;
+#   declared  the IMPLICIT sets the row's CMake declares in its JAH_DATA test property (tests/CMakeLists.txt: the `DATA`
+#             clause of jah_gpu_row / jah_gpu_exclusive_test / jah_add_pool, and the families' pass): `engine-media`,
+#             `library-template`, `samples/<name>`, `fixtures/<tests dir>`, or `NONE` (a row that reads nothing).
+# A row whose set is EMPTY is known ONLY when its CMake says DATA NONE; otherwise its data is UNKNOWN (null, never served:
+# rule 2 — unknown is never equal). A named source file that is absent, an unknown set name or a missing set path is
+# unknown too, with its reason.
+DATA_PROPERTY = "JAH_DATA"
+DATA_SETS = {                                  # a named set -> the source-tree paths it reads (the app resolves them
+    "engine-media": ("irisgl/engine/media",),  # from beside its binary: CopyResources / the engine's media staging)
+    "library-template": ("app/content", "app/templates"),
+    "samples": ("scenes",),                    # every shipped sample (scenes/ beside the binary); samples/<name>: one
+}
+# THE HARNESS IS NOT DATA (the lead's read of RUNNER-A2B): a command-line path under these source-tree dirs is a wrapper of
+# the harness (scripts/gpu-admit.sh, scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
+# a row's data known; the row's set is its real data arguments, its walked directories and its declared families only.
+HARNESS_DIRS = ("scripts/", "tests/support/")
+DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
+DATA_WALK_MAX = 20000                          # files one walked directory may hold before it is UNKNOWN (said, never cut)
 
 
-def data_hash(test, roots, _memo=None):
-    """(sha256 | None, why | None, [the files hashed, root-stripped]) of THE DATA A ROW NAMES: every regular file on its
-    command line (an argument, or the value of `--opt=<path>`) inside the tree or the build — scripts, fixtures, samples,
-    configured copies — read where the build is NOW. Not data: an executable the build linked (ELF: BUILT_FROM keys the
-    artefact), a directory (named, never walked), a path outside the tree (the system's /usr/bin/bash), an absent path
-    in the build (an output the row writes). A command that names no data file hashes the EMPTY set (EMPTY_DATA_HASH:
-    known, not unknown). Absent = None with the reason: a named source-tree file that is not there."""
+def data_set_paths(name, cur_root):
+    """([tree-relative paths], why | None) of one declared set name."""
+    if name in DATA_SETS:
+        return list(DATA_SETS[name]), None
+    if name.startswith("samples/") and len(name) > 8:
+        n = name[len("samples/"):]
+        for cand in (f"scenes/{n}", f"scenes/{n}.zip", f"tests/samples/data/{n}"):
+            if cur_root and os.path.exists(os.path.join(cur_root, cand)):
+                return [cand], None
+        return [], f"sample '{n}' is in neither scenes/ nor tests/samples/data/"
+    if name.startswith("fixtures/") and len(name) > 9:
+        return [f"tests/{name[len('fixtures/'):]}/fixtures"], None
+    return [], f"'{name}' is not a data set (engine-media, library-template, samples/<name>, fixtures/<dir>, NONE)"
+
+
+def _walk(path, memo):
+    """{rel-to-path: sha256} of every regular file under `path` (pruned), cached; None when over DATA_WALK_MAX."""
+    key = ("walk", path)
+    if key in memo:
+        return memo[key]
+    out, n = {}, 0
+    for dp, dns, fns in os.walk(path):
+        dns[:] = sorted(d for d in dns if d not in DATA_PRUNE)
+        for f in fns:
+            p = os.path.join(dp, f)
+            if not os.path.isfile(p) or os.path.islink(p):
+                continue
+            n += 1
+            if n > DATA_WALK_MAX:
+                memo[key] = None
+                return None
+            if p not in memo:
+                with open(p, "rb") as fh:
+                    memo[p] = _sha256(fh.read())
+            out[os.path.relpath(p, path)] = memo[p]
+    memo[key] = out
+    return out
+
+
+def data_set(test, roots, _memo=None):
+    """THE ROW'S DATA SET: {hash | None, why | None, files {tree-or-build rel: sha}, sources {rel: argument|walked|
+    declared}, dirs [tree-relative dir/file prefixes a change under which reaches the row], declared [names], none bool,
+    bytes}."""
     memo = {} if _memo is None else _memo
     cur = {"<root>": (roots or {}).get("cur_root"), "<build>": (roots or {}).get("cur_build")}
-    named, missing = {}, []
+    files, sources, dirs, problems = {}, {}, [], []
+    props = {p["name"]: p["value"] for p in test.get("properties", [])}
+    raw = props.get(DATA_PROPERTY)
+    declared = [x.strip() for x in (raw if isinstance(raw, list) else str(raw or "").split(";")) if x.strip()]
+    none = "NONE" in declared
+    declared = [x for x in declared if x != "NONE"]
+
+    def add_tree_path(rel_tree, source):
+        """A tree-relative file or directory of the source tree: hashed (a directory walked)."""
+        root = cur["<root>"]
+        if not root:
+            problems.append(f"no source root to read {rel_tree}")
+            return
+        p = os.path.join(root, rel_tree)
+        if os.path.isdir(p):
+            w = _walk(p, memo)
+            if w is None:
+                problems.append(f"{rel_tree} holds more than {DATA_WALK_MAX} files")
+                return
+            for k, v in w.items():
+                files[f"<root>/{rel_tree}/{k}"] = v
+                sources[f"<root>/{rel_tree}/{k}"] = source
+            dirs.append(rel_tree)
+        elif os.path.isfile(p):
+            if p not in memo:
+                with open(p, "rb") as fh:
+                    memo[p] = _sha256(fh.read())
+            files[f"<root>/{rel_tree}"] = memo[p]
+            sources[f"<root>/{rel_tree}"] = source
+            dirs.append(rel_tree)
+        else:
+            problems.append(f"{rel_tree} is absent")
     for a in test.get("command") or []:
         for part in [a] + ([a.split("=", 1)[1]] if a.startswith("-") and "=" in a else []):
             if not part.startswith("/"):
@@ -682,25 +774,66 @@ def data_hash(test, roots, _memo=None):
             if not cur[tok]:
                 continue
             path = cur[tok] + rel[len(tok):]
+            if tok == "<root>" and rel[len("<root>/"):].startswith(HARNESS_DIRS):
+                continue                     # a harness wrapper: never data
             if os.path.isdir(path):
+                # a DIRECTORY ARGUMENT: walked when it is a source dir (never the tree root, never a build dir)
+                if tok == "<root>" and rel not in ("<root>", "<root>/") and not any(
+                        seg in DATA_PRUNE for seg in rel.split("/")[1:]):
+                    add_tree_path(rel[len("<root>/"):].rstrip("/"), "walked")
                 continue
             if not os.path.isfile(path):
-                # an absent path in the BUILD is what the row writes (its home, its picture), never its data; an
-                # absent path in the source tree is a real absence
                 if tok == "<root>":
-                    missing.append(rel)
+                    problems.append(f"{rel} is absent")
                 continue
             if path not in memo:
                 memo[path] = None if _is_elf(path) else _sha256(open(path, "rb").read())
             if memo[path] is not None:
-                named[rel] = memo[path]
-    if missing:
-        return None, "named file(s) absent where the build is now: " + ", ".join(sorted(set(missing))[:4]), []
-    # NO DATA FILE IS A KNOWN ANSWER (RUNNER-A2): the hash of the empty set — a null would read "unknown", and an unknown
-    # data hash never lets a green serve (rule 2), so a row whose command names only its artefact could never be served
-    if not named:
-        return EMPTY_DATA_HASH, None, []
-    return _sha256("".join(f"{k}\0{v}\n" for k, v in sorted(named.items())).encode()), None, sorted(named)
+                files[rel] = memo[path]
+                sources[rel] = "argument"
+                if tok == "<root>":
+                    dirs.append(rel[len("<root>/"):])
+    for name in declared:
+        paths, why = data_set_paths(name, cur["<root>"])
+        if why:
+            problems.append(why)
+        for p in paths:
+            add_tree_path(p, "declared")
+    size = 0
+    for k in files:
+        tok = "<build>" if k.startswith("<build>") else "<root>"
+        try:
+            size += os.path.getsize((cur[tok] or "") + k[len(tok):])
+        except OSError:
+            pass
+    out = {"files": files, "sources": sources, "dirs": sorted(set(dirs)), "declared": declared + (["NONE"] if none else []),
+           "none": none, "bytes": size}
+    if problems:
+        out.update(hash=None, why="; ".join(sorted(set(problems)))[:300])
+    elif not files and not none:
+        out.update(hash=None, why="UNDECLARED: it names no data and its CMake declares none (DATA NONE when it reads "
+                                  "nothing, else the sets it reads)")
+    else:
+        out.update(hash=_sha256("".join(f"{k}\0{v}\n" for k, v in sorted(files.items())).encode()), why=None)
+    return out
+
+
+def data_hash(test, roots, _memo=None):
+    """(sha256 | None, why | None, [the files hashed]) — data_set's answer (the record's `data_hash`)."""
+    d = data_set(test, roots, _memo)
+    return d["hash"], d["why"], sorted(d["files"])
+
+
+def data_rows(facts, paths):
+    """{row: the first touched path that reaches it through its DATA EDGES} — a touched tree path under a row's data
+    dirs/files (row_facts' `data_dirs`)."""
+    out = {}
+    for n, f in (facts or {}).items():
+        for p in paths:
+            if any(p == d or p.startswith(d + "/") for d in f.get("data_dirs") or ()):
+                out[n] = p
+                break
+    return out
 
 
 def build_config(build, cache=None):
@@ -724,8 +857,24 @@ def build_config(build, cache=None):
     return cfg, None
 
 
-def row_facts(build):
-    """({row: {labels, declaration, data_hash, data_why}}, roots) for every ctest row of <build> (its inventory:
+_DECLARED_FROM = {}
+
+
+def declared_from(build):
+    """{row: JAH_DATA value | None} of another build's inventory (cached) — the declarations of a newer tree."""
+    key = os.path.abspath(build)
+    if key not in _DECLARED_FROM:
+        import json as _json
+        raw, _ = ctest_inventory(build)
+        _DECLARED_FROM[key] = {t["name"]: next((p["value"] for p in t.get("properties", [])
+                                                if p.get("name") == DATA_PROPERTY), None)
+                               for t in _json.loads(raw or "{}").get("tests", [])}
+    return _DECLARED_FROM[key]
+
+
+def row_facts(build, data_from=None):
+    """({row: {labels, declaration, data_hash, data_why, data_dirs, data_declared, data_count, data_sources}}, roots) for
+    every ctest row of <build> (its inventory:
     ctest_inventory, cached per build state), or ({}, None) when the build has none."""
     import json as _json
     cache = _cache_entries(build)
@@ -735,12 +884,23 @@ def row_facts(build):
         tests = _json.loads(raw or "{}").get("tests", [])
     except (OSError, ValueError):
         return {}, roots
+    if data_from is None and os.environ.get("JAH_DATA_DECLARED_FROM"):
+        # THE DECLARATIONS OF A NEWER TREE laid over this build's commands (a replay on a build configured before its
+        # tree declared its data: runner_select_test, data-audit's AFTER)
+        data_from = declared_from(os.environ["JAH_DATA_DECLARED_FROM"])
     memo, out = {}, {}
     for t in tests:
+        if data_from is not None and t.get("name") in data_from:
+            # (the audit's AFTER: another inventory's JAH_DATA declarations laid over this build's commands)
+            t = dict(t, properties=[p for p in t.get("properties", []) if p.get("name") != DATA_PROPERTY]
+                     + ([{"name": DATA_PROPERTY, "value": data_from[t["name"]]}] if data_from[t["name"]] else []))
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
-        h, why, _ = data_hash(t, roots, memo)
+        d = data_set(t, roots, memo)
         out[t["name"]] = {"labels": props.get("LABELS", []) or [], "declaration": declaration(t, roots),
-                          "data_hash": h, "data_why": why}
+                          "data_hash": d["hash"], "data_why": d["why"], "data_dirs": d["dirs"],
+                          "data_declared": d["declared"], "data_count": len(d["files"]), "data_bytes": d["bytes"],
+                          "data_sources": {k: sum(1 for v in d["sources"].values() if v == k)
+                                           for k in ("argument", "walked", "declared")}}
     return out, roots
 
 

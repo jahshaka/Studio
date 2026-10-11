@@ -418,8 +418,29 @@ function(_jah_timing_label _row)
     list(REMOVE_DUPLICATES _l)
     set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
+# THE DATA EDGES (RUNNER-A2B; scripts/gate_graph.py data_set): every row's JAH_DATA test property names the data sets it
+# reads beside its executable — `engine-media` (irisgl/engine/media: what every RENDERING row resolves from beside its
+# binary), `library-template` (app/content + app/templates: what an APP row's library starts from), `samples` (scenes/)
+# or `samples/<name>` (one sample), `fixtures/<tests dir>` (tests/<dir>/fixtures), or `NONE` (a row that reads nothing).
+# Declared ONCE per family: the row macros by CLASS (_jah_data: rendering classes -> engine-media; app/vr/headless ->
+# library-template), their `DATA` clause for what a row adds, and jah_data_pass (the end of this file) by directory.
+# A row that names no data file and declares nothing has UNKNOWN data: the runner never serves its green (rule 2).
+function(_jah_data _row _class)
+    set(_d ${ARGN})
+    if(_class MATCHES "^(app|selftest|engine|vr)$")
+        list(APPEND _d engine-media)
+    endif()
+    if(_class MATCHES "^(app|vr|headless)$")
+        list(APPEND _d library-template)
+    endif()
+    if(_d)
+        list(REMOVE_DUPLICATES _d)
+        set_property(TEST ${_row} APPEND PROPERTY JAH_DATA ${_d})
+    endif()
+endfunction()
+
 # jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"] [TEST_WINDOW]] [TOKENS <k>]
-#             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
+#             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
 # CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
 # World Mode with only the named features on, and an app row's tokens are the declaration's.
 # add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
@@ -428,7 +449,7 @@ endfunction()
 # $<TARGET_FILE:...>. A pool is not registered here: run_pool.py (jah_add_pool) takes its tokens ONCE for the
 # pool's whole run and every app process it starts inherits them (TESTING-CLEANUP-2B F-C1: the unit is the pool).
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -459,6 +480,7 @@ function(jah_gpu_row _row)
     # the label carries the class (`<row>:<class>`): source.gpu_rows_closure checks an app-spawning
     # row declared an app-sized class
     add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
+    _jah_data(${_row} ${G_CLASS} ${G_DATA})
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
     if(_declared)
         _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
@@ -474,7 +496,7 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
@@ -506,6 +528,7 @@ function(jah_gpu_exclusive_test)
     # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two timing rows of ONE gate
     # never start together, so the second does not sit in a slot waiting on the admission.
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
+    _jah_data(${G_NAME} ${G_CLASS} ${G_DATA})
     set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
@@ -558,6 +581,8 @@ function(jah_fresh_home_fixture row fixture home)
     endif()
     add_test(NAME ${row} COMMAND sh "${JAH_FRESH_HOME}" ${_flags} ${F_ARGS} "${home}" ${_then})
     set_tests_properties(${row} PROPERTIES FIXTURES_SETUP ${fixture} TIMEOUT 60)
+    # a home WIPE reads no data (fresh_home.sh is the harness, never data): DATA NONE (RUNNER-A2B)
+    set_property(TEST ${row} APPEND PROPERTY JAH_DATA NONE)
     if(F_LABELS)
         set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
     endif()
@@ -672,7 +697,7 @@ function(jah_pool_arm pool arm script secs)
 endfunction()
 
 function(jah_add_pool pool)
-    cmake_parse_arguments(P "HEADLESS;TEST_WINDOW" "BASELINE;CLASS;TIER;NEEDS_WHY" "NEEDS;LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    cmake_parse_arguments(P "HEADLESS;TEST_WINDOW" "BASELINE;CLASS;TIER;NEEDS_WHY" "NEEDS;LABELS;ENV;LAUNCHER;APP_ARGS;PROPS;DATA" ${ARGN})
     get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
     if(NOT _arms)
         message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
@@ -748,6 +773,11 @@ function(jah_add_pool pool)
         COST ${_cost})
     if(P_PROPS)
         set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
+    endif()
+    if(P_HEADLESS)
+        _jah_data(pool.${pool} headless ${P_DATA})
+    else()
+        _jah_data(pool.${pool} ${P_CLASS} ${P_DATA})
     endif()
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER "${_tier}")
@@ -1009,3 +1039,37 @@ function(jah_scope_path_defines _dir)
     endforeach()
 endfunction()
 jah_scope_path_defines("${CMAKE_CURRENT_SOURCE_DIR}")
+
+# THE DATA FAMILIES BY DIRECTORY (RUNNER-A2B; the macros' block above says what JAH_DATA is): every row registered under
+# tests/<dir>/ whose directory holds a fixtures/ reads it (fixtures/<dir>); the directories whose tests open the shipped
+# samples through their compiled-in source path (JAHSHAKA_TEST_SOURCE_DIR "/scenes/…", a script's scenes/ path) read
+# `samples`; the lint rows of tests/hygiene read the source tree through the selector's own rules and NOTHING else (NONE,
+# unless their directory gave them a set). Needs CMake 3.28's TEST DIRECTORY scope.
+set(JAH_DATA_SAMPLE_DIRS archiveasync openasync perf threading scripting meshbake)
+set(JAH_DATA_NONE_DIRS hygiene)
+function(jah_data_pass _dir)
+    file(RELATIVE_PATH _rel "${CMAKE_CURRENT_SOURCE_DIR}" "${_dir}")
+    string(REGEX MATCH "^[^/]+" _top "${_rel}")
+    get_property(_tests DIRECTORY "${_dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        set(_add)
+        if(_rel AND EXISTS "${_dir}/fixtures")
+            list(APPEND _add "fixtures/${_rel}")
+        endif()
+        if(_top IN_LIST JAH_DATA_SAMPLE_DIRS)
+            list(APPEND _add samples)
+        endif()
+        get_property(_has TEST ${_t} DIRECTORY "${_dir}" PROPERTY JAH_DATA)
+        if(NOT _has AND NOT _add AND _top IN_LIST JAH_DATA_NONE_DIRS)
+            set(_add NONE)
+        endif()
+        if(_add)
+            set_property(TEST ${_t} DIRECTORY "${_dir}" APPEND PROPERTY JAH_DATA ${_add})
+        endif()
+    endforeach()
+    get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_sub IN LISTS _subs)
+        jah_data_pass("${_sub}")
+    endforeach()
+endfunction()
+jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
