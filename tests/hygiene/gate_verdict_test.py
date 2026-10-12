@@ -865,6 +865,18 @@ def case_carried_red(E):
     check(rc == 1 and "Traceback" not in out and out.count("OPEN RED carried from aaaaaaaaa: test_engine") >= 2,
           "item 10: a row carried with one of its arms -> both OPEN REDs listed, the row before its arm, no crash (%d%s)"
           % (rc, "; " + out.strip().splitlines()[-1][:120] if "Traceback" in out else ""))
+    # RUNNER-FIX-4 item 14: a row OUTSIDE THE MERGE TIER by this build's labels (a photon-target row: red by design) recorded
+    # red under tier `lane` at the lane's other tip is NEVER carried to a merge (the tier the record names does not decide)
+    inv = E.cgc.load_gs().load_inventory(E.build)
+    tgt_row = next((n for n, t in sorted(inv.items()) if "photon-target" in t["labels"]), None)
+    check(bool(tgt_row), "item 14: this build has a photon-target row (%s)" % tgt_row)
+    if tgt_row:
+        E.fresh()
+        E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+        E.put([tgt_row], "FAIL", "2026-01-01T09:00:00", tip=A, tier="lane")
+        rc, out = E.run()
+        check(rc == 0 and "OPEN RED" not in out, "item 14: %s (photon-target) red under tier lane at the lane's other tip is "
+              "not carried to the merge (%d)" % (tgt_row, rc))
     # ...and the runner's own `kind: attribution` record of the lane (verdict None) is NO RUN: never a red, never carried
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
