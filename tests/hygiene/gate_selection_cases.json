@@ -124,14 +124,14 @@
    "must": [
     "document.reader_defaults",
     "scripting.e2e.sky_swap_transient",
-    "gi_verbs.gi_status",
+    "gi_verbs_b.gather_default",
     "sky.aerial_perspective"
    ],
    "env": [
     "gi.rt_reflect_cost"
    ],
    "note": "reader_defaults + sky_swap_transient the lane's (fixed); gi.gather_default deterministic red on an 8-bit bar the fog moved (fixture re-authored in part 3)",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (gi_verbs.gi_status -> gi_verbs_b.gather_default)"
   },
   {
    "lane": "FOG-ATMO-1 (merge, fork pin cd5eae355)",
@@ -140,7 +140,7 @@
    "evidence": "spikes/fog-atmo-1/gate-scope-fix3.log",
    "must": [
     "api.contract",
-    "gi_verbs.gi_status"
+    "gi_verbs_b.gather_default"
    ],
    "env": [
     "app.engine_selftest_validation",
@@ -149,7 +149,7 @@
    ],
    "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier)",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (gi_verbs.gi_status -> gi_verbs_b.gather_default)"
   },
   {
    "lane": "VIEWS-DEPTH-1",
@@ -269,15 +269,15 @@
    "range": "bd5d5a8df..78cd55d26",
    "evidence": "testing/runs/2026-09-28-scoped-fallback-78cd55d26.jsonl",
    "must": [
-    "editor_view.engine_arms",
-    "pool.editor_view"
+    "editor_view_c.render_stats",
+    "pool.editor_view_c"
    ],
    "env": [
     "devprocess.vram_admit"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.render_stats -> editor_view.engine_arms (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.render_stats -> editor_view.engine_arms (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (editor_view.engine_arms -> editor_view_c.render_stats, pool.editor_view -> pool.editor_view_c)"
   },
   {
    "lane": "ATOM-SHADOWS-1 (scoped-fallback gate at 8969d1c49)",
@@ -348,7 +348,8 @@
    "evidence": "testing/runs/2026-09-28-scoped-fallback-e6a71d0df.jsonl",
    "must": [
     "atom.dag_bound",
-    "editor_view.engine_arms",
+    "editor_view_b.full_surface",
+    "editor_view_c.render_stats",
     "gi.boot_textures",
     "gi.card_lighting_indirect",
     "gi.cards_mover_shadow",
@@ -374,13 +375,15 @@
     "gi.volume_edge",
     "gi.volume_edge_spec_target",
     "gi.voxel_coverage",
-    "gi_verbs.gi_status",
+    "gi_verbs_stage.offscreen_contract",
+    "gi_verbs_stage.pcc_budget",
     "gi.ambient",
-    "pool.editor_view",
-    "pool.gi_verbs",
-    "pool.world_light",
+    "pool.editor_view_b",
+    "pool.editor_view_c",
+    "pool.gi_verbs_stage",
+    "pool.world_light_stage",
     "vr.grab_maths",
-    "world_light.sun_light",
+    "world_light_stage.screenshot_grades",
     "threading.staging_race"
    ],
    "env": [
@@ -389,7 +392,7 @@
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: atom.occlusion_exact_app -> atom.dag_bound, photon.view -> gi.ambient, samples.cleanstart.Mirror_Room/Showroom/Showroom_2 + samples.session -> dropped (every samples row is stage-close), threading.newproject_stall -> threading.staging_race, vr.eye_grade + vr.session -> vr.grab_maths (the batches delete these rows or move them to stage-close, which this range does not reach by their own subject; the same subsystem's kept row stands in); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.full_surface -> editor_view.engine_arms; editor_view.render_stats -> editor_view.engine_arms; gi_verbs.offscreen_contract -> gi_verbs.gi_status; gi_verbs.pcc_budget -> gi_verbs.gi_status; world_light.screenshot_grades -> world_light.sun_light (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: atom.occlusion_exact_app -> atom.dag_bound, photon.view -> gi.ambient, samples.cleanstart.Mirror_Room/Showroom/Showroom_2 + samples.session -> dropped (every samples row is stage-close), threading.newproject_stall -> threading.staging_race, vr.eye_grade + vr.session -> vr.grab_maths (the batches delete these rows or move them to stage-close, which this range does not reach by their own subject; the same subsystem's kept row stands in); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.full_surface -> editor_view.engine_arms; editor_view.render_stats -> editor_view.engine_arms; gi_verbs.offscreen_contract -> gi_verbs.gi_status; gi_verbs.pcc_budget -> gi_verbs.gi_status; world_light.screenshot_grades -> world_light.sun_light (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (editor_view.engine_arms -> editor_view_b.full_surface/editor_view_c.render_stats, pool.editor_view -> pool.editor_view_b/pool.editor_view_c, gi_verbs.gi_status -> gi_verbs_stage.offscreen_contract/gi_verbs_stage.pcc_budget, pool.gi_verbs -> pool.gi_verbs_stage, world_light.sun_light -> world_light_stage.screenshot_grades, pool.world_light -> pool.world_light_stage)"
   },
   {
    "lane": "D7-ENGINE-FIXES-1 (scoped-fallback gate at f811f0989)",
@@ -437,15 +440,15 @@
    "must": [
     "gi.hit_planar",
     "gi.reflect_mover",
-    "pool.world_sky",
-    "world_sky.world_rows_follow"
+    "pool.world_sky_b",
+    "world_sky_b.clouds_2d"
    ],
    "env": [
     "app.watchdog_stall"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): world_sky.clouds_2d -> world_sky.world_rows_follow (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): world_sky.clouds_2d -> world_sky.world_rows_follow (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (world_sky.world_rows_follow -> world_sky_b.clouds_2d, pool.world_sky -> pool.world_sky_b)"
   },
   {
    "lane": "D8-PHOTON-DEBTS-1 (scoped-tier gate at 383b6f47a)",
@@ -467,8 +470,8 @@
     "gi.card_view",
     "gi.ddgi_ambient",
     "gi.reflect_mover",
-    "pool.world_sky",
-    "world_sky.default_ground"
+    "pool.world_sky_b",
+    "world_sky_b.clouds_2d"
    ],
    "env": [
     "commands.undo_clear_cost",
@@ -477,7 +480,7 @@
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: atom.occlusion_exact_app -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): world_sky.clouds_2d -> world_sky.default_ground (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: atom.occlusion_exact_app -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): world_sky.clouds_2d -> world_sky.default_ground (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (world_sky.default_ground -> world_sky_b.clouds_2d, pool.world_sky -> pool.world_sky_b)"
   },
   {
    "lane": "D11-LIBRARY-SCALE (scoped-tier gate at 53b9044f0)",
@@ -559,31 +562,30 @@
     "avatar_anim.skinning",
     "doc.static_semantics",
     "editor.new_scene",
-    "editor_view.engine_arms",
+    "editor_view_b.editor_controls",
     "gi_movers.dirty_mirror",
     "gi_movers.mobility_play",
-    "gi_verbs.gi_status",
     "mcp.e2e",
     "player.fixed_clock",
     "pool.atom",
     "pool.avatar_anim",
     "pool.doc",
     "pool.editor",
-    "pool.editor_view",
+    "pool.editor_view_b",
     "pool.gi_movers",
-    "pool.gi_verbs",
     "pool.player",
     "pool.world_sky",
+    "pool.world_sky_b",
     "scripting.e2e.one_asset",
     "scripting.e2e.shipped_assets",
-    "world_sky.world_rows_follow",
+    "world_sky_b.clouds_2d",
     "world_sky.default_ground"
    ],
    "env": [
     "commands.undo_clear_cost"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.editor_controls -> editor_view.engine_arms; gi_verbs.contact_band -> gi_verbs.gi_status; world_sky.clouds_2d -> world_sky.world_rows_follow (an arm that stays in its pool in both trees)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.editor_controls -> editor_view.engine_arms; gi_verbs.contact_band -> gi_verbs.gi_status; world_sky.clouds_2d -> world_sky.world_rows_follow (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (editor_view.engine_arms -> editor_view_b.editor_controls, pool.editor_view -> pool.editor_view_b, world_sky.world_rows_follow -> world_sky_b.clouds_2d, pool.world_sky -> pool.world_sky + pool.world_sky_b; gi_verbs.gi_status and pool.gi_verbs dropped (contact_band is a stage-close arm now, in pool.gi_verbs_stage, which this range does not reach))"
   },
   {
    "lane": "CONTACT-OCCLUSION-1 (scoped-fallback gate at d8e3f7b89)",
