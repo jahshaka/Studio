@@ -2,11 +2,18 @@
 """The archive's own invariants (samples.archive_fidelity.*; TESTING-SPEED-B2 — no reference picture).
 
 usage: archive_invariants.py counts <archive.zip>          prints "<assets> <objects>", exit 1 if it does not close
-       archive_invariants.py same <shipped.zip> <again.zip>  exit 1 unless both close and hold the same assets
+       archive_invariants.py same <first.zip> <second.zip>   exit 1 unless both close and hold the same assets
+       archive_invariants.py holes <frame.png>                exit 1 unless the tornado's funnel is see-through
 
 THE CLOSURE: every dependency guid an asset names is an asset of the same manifest, and every file an asset
 lists (its oid) is a member of the zip under objects/. The OBJECTS are the distinct oids the manifest lists.
-THE SAME ASSETS: the two manifests' (name, type) multisets are equal, and so are their object counts.
+THE SAME ASSETS: the two manifests' (name, type) multisets are equal, and so are their object counts — used for the
+FIXED POINT (the archive this build exports, imported and exported again, is the same archive), never against the
+shipped zip (a legitimate exporter change must not red the row).
+THE HOLES: the sample's named failure is a funnel that lost its cut-out and opens SOLID. On the frame from the
+sample's own camera (800x600, a pinned shader time), inside the funnel's envelope (its warm-or-white pixels in the
+window x 230..580; 4 % below its top to 22 % above its bottom), the fraction of pixels that are NOT funnel — the
+holes the cut-out punches — must be above zero. No reference picture: the bar is the property, not an old still.
 """
 import collections
 import json
@@ -34,7 +41,45 @@ def read(path):
     return assets, oids, bad
 
 
+XW0, XW1 = 230, 580
+
+
+def torn(p):
+    r, g, b = p
+    return (r - b > 30) or min(p) > 200
+
+
+def see_through(path):
+    from PIL import Image
+    im = Image.open(path).convert("RGB").resize((800, 600))
+    W, H = im.size
+    px = im.load()
+    mask = [[XW0 <= x < XW1 and torn(px[x, y]) for x in range(W)] for y in range(H)]
+    rows = [y for y in range(H) if sum(mask[y]) > 8]
+    if not rows:
+        return 0.0, 0
+    top, bot = rows[0], rows[-1]
+    span = bot - top
+    env = gap = 0
+    for y in range(top + int(0.04 * span), bot - int(0.22 * span)):
+        xs = [x for x in range(W) if mask[y][x]]
+        if len(xs) < 5:
+            continue
+        env += xs[-1] - xs[0] + 1
+        gap += sum(1 for x in range(xs[0], xs[-1] + 1) if not mask[y][x])
+    return (gap / env if env else 0.0), env
+
+
 def main(argv):
+    if len(argv) == 3 and argv[1] == "holes":
+        frac, env = see_through(argv[2])
+        if env == 0:
+            print("FAIL: no funnel in the frame %s" % argv[2])
+            return 1
+        ok = frac > 0.0
+        print("%s: the funnel is see-through: %.4f of its %d envelope pixels are holes (bar > 0)"
+              % ("ok" if ok else "FAIL", frac, env))
+        return 0 if ok else 1
     if len(argv) == 3 and argv[1] == "counts":
         assets, oids, bad = read(argv[2])
         if bad:
@@ -46,21 +91,21 @@ def main(argv):
         a1, o1, b1 = read(argv[2])
         a2, o2, b2 = read(argv[3])
         ok = True
-        for tag, b in (("shipped", b1), ("re-exported", b2)):
+        for tag, b in (("first", b1), ("second", b2)):
             for x in b:
                 print("FAIL: the %s archive does not close: %s" % (tag, x))
                 ok = False
         k1 = collections.Counter((a["name"], a["type"]) for a in a1)
         k2 = collections.Counter((a["name"], a["type"]) for a in a2)
         if k1 != k2:
-            print("FAIL: the re-exported archive's assets differ: only shipped %s, only re-exported %s"
+            print("FAIL: the archive is no fixed point: only in the first export %s, only in the second %s"
                   % (sorted((k1 - k2).elements()), sorted((k2 - k1).elements())))
             ok = False
         if len(o1) != len(o2):
-            print("FAIL: objects %d shipped, %d re-exported" % (len(o1), len(o2)))
+            print("FAIL: objects %d in the first export, %d in the second" % (len(o1), len(o2)))
             ok = False
         if ok:
-            print("ok: the re-exported archive closes and holds the shipped archive's %d assets and %d objects"
+            print("ok: a fixed point: exported, imported and exported again, the archive closes with the same %d assets and %d objects"
                   % (len(a1), len(o1)))
         return 0 if ok else 1
     print(__doc__)

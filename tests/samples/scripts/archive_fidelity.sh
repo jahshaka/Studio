@@ -9,8 +9,10 @@
 #   2. THE MEMBER COUNT (the app): the import brings in exactly the manifest's assets.
 #   3. THE LIVE MATERIALS (the app): every layer re-emits its pieces from its graph with an EMPTY piece cache and
 #      the shells keep their baked cut-out map — after the import, and again after a close and a REOPEN.
-#   4. THE ROUND TRIP (the app, then here): the project exported again carries the same assets and objects,
-#      and its own manifest passes the same closure, asset for asset (name and type) the shipped one.
+#   4. THE HOLES (the app's frame, judged here): the funnel is see-through from the sample's own camera — the row's
+#      named failure is a sample that lost its cut-out and opens with no holes. No reference picture.
+#   5. THE FIXED POINT (the app, then here): the project exported, imported and exported again is the same archive
+#      — both exports close and hold the same assets (name and type) and objects. Never held against the shipped zip.
 # usage: archive_fidelity.sh <app> <script.js.in> <archive.zip> <workdir> <invariants.py>
 set -u
 APP="$1"; SCRIPT_IN="$2"; ZIP="$3"; WORK="$4"; INV="$5"
@@ -20,13 +22,17 @@ DATA="$HOME_DIR/.local/share/Jahshaka"
 COUNTS=$(python3 "$INV" counts "$ZIP") || { echo "FAIL: the shipped archive's closure: $COUNTS"; exit 1; }
 echo "archive_fidelity: the shipped archive closes ($COUNTS)"
 set -- $COUNTS   # "<assets> <objects>"
-sed -e "s#@ZIP@#$ZIP#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@REEXPORT@#$WORK/reexport.zip#g" \
+sed -e "s#@ZIP@#$ZIP#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@REEXPORT@#$WORK/reexport.zip#g" -e "s#@REEXPORT2@#$WORK/reexport2.zip#g" \
+    -e "s#@FRAME@#$WORK/funnel.png#g" \
     -e "s#@ASSETS@#$1#g" -e "s#@OBJECTS@#$2#g" "$SCRIPT_IN" > "$WORK/run.js"
 ( cd "$(dirname "$APP")" && env HOME="$HOME_DIR" XDG_CACHE_HOME="$HOME_DIR/.cache" \
       timeout -k 10 400 "$APP" --data-root "$DATA" --script "$WORK/run.js" > "$WORK/app.log" 2>&1 )
 rc=$?
 grep -E '^ok:|assert failed|archive_fidelity' "$WORK/app.log"
-if [ $rc -ne 0 ] || ! grep -q 'archive_fidelity: reopened' "$WORK/app.log"; then
-    echo "FAIL: the app exited $rc before the reopen (log: $WORK/app.log)"; tail -5 "$WORK/app.log"; exit 1
+if [ $rc -ne 0 ] || ! grep -q 'archive_fidelity: fixed point written' "$WORK/app.log"; then
+    echo "FAIL: the app exited $rc before the fixed point (log: $WORK/app.log)"; tail -5 "$WORK/app.log"; exit 1
 fi
-python3 "$INV" same "$ZIP" "$WORK/reexport.zip"
+fail=0
+python3 "$INV" holes "$WORK/funnel.png" || fail=1
+python3 "$INV" same "$WORK/reexport.zip" "$WORK/reexport2.zip" || fail=1
+exit $fail

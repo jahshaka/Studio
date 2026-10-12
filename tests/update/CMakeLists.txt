@@ -23,3 +23,11 @@ jah_gpu_exclusive_test(NAME app.update_check.timing CLASS none RUN_TIMEOUT 60 CO
 set_tests_properties(app.update_check.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "app;stage-close;quiet-box")
 jah_no_display(app.update_check app.update_check.timing)
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. 0 = the row renders none.
+if(TEST app.update_check.timing)
+    set_property(TEST app.update_check.timing PROPERTY JAHSHAKA_TEST_FRAMES 0)
+endif()

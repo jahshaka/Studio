@@ -170,7 +170,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # fixed sleeps between them, and a loaded box stretches every one of
         # them. 600 s against a ~40 s measured run.
         # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(app.input_keys PROPERTIES
+        set_tests_properties(app.input_keys PROPERTIES
             ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
             LABELS "app;stage-close")
@@ -202,7 +202,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # of synthesised gestures with fixed sleeps between them, every one of
         # which a loaded box stretches. 400 s against a ~50 s measured run.
         # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(app.play_select PROPERTIES
+        set_tests_properties(app.play_select PROPERTIES
             ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
             LABELS "app;stage-close")
     else()
@@ -296,4 +296,10 @@ if(TEST app.startup_quiet)
 endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)
+endif()
+if(TEST app.input_keys)
+    set_property(TEST app.input_keys PROPERTY JAHSHAKA_TEST_FRAMES 2751)
+endif()
+if(TEST app.play_select)
+    set_property(TEST app.play_select PROPERTY JAHSHAKA_TEST_FRAMES 1787)
 endif()
