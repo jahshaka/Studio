@@ -293,6 +293,83 @@ def speed_cases(source, build):
         check(lr[0] not in S.selected, "23. ...and no broad token (every engine fixture, the picture set) takes it")
     else:
         print("  (23: this build registers no tests/lanes row)")
+    # 25. (fix round item 11) OgreScene.cpp / OgreView.cpp BY THE FUNCTION: every top-level function named in its map; a
+    # mapped edit reaches its map's rows; an UNNAMED function reaches every engine fixture + the picture set, NOT the app rows
+    for cp, m_ in gs.CORE_FUNCTION_MAPS.items():
+        lines_ = gs.gate_graph.strip_cxx(open(os.path.join(source, cp), errors="replace").read())
+        outer_ = set(gs.gate_graph._outer_scopes(lines_)) - {None}
+        check(not (outer_ - set(m_)), "25. every top-level function of %s is named in its map (%d; unnamed: %s)"
+              % (os.path.basename(cp), len(outer_), sorted(outer_ - set(m_))[:6]))
+    vp = "irisgl/engine/src/OgreView.cpp"
+    va = open(os.path.join(source, vp), errors="replace").read()
+    nd = re.search(r"void OgreView::updateParticles\([^)]*\)[^{]*\{\n", va)
+    if nd:
+        S = sel([vp], revs=fake({vp: (va, va.replace(nd.group(0), nd.group(0) + "    (void)0x5a; // tsa\n", 1))}))
+        check(of(S, "particles") and not of(S, "gi") and not of(S, "hdr") and len(S.selected) < 80,
+              "25. an edit inside OgreView::updateParticles -> the particles rows only (%d rows)" % len(S.selected))
+    tail_ = va + "\nstatic int tsaUnnamedProbe() { return 0x5a; }\n"
+    S = sel([vp], revs=fake({vp: (va, tail_)}))
+    apps = [n for n in S.selected if inv0[n]["app"] and not inv0[n].get("picture") and not inv0[n].get("picture_arms")]
+    pics = [n for n, t in inv0.items() if t.get("picture")]
+    check(all(p in S.selected for p in pics) and len(S.selected) > 200 and not apps,
+          "25. an UNNAMED function of OgreView.cpp -> every engine fixture + the picture set (%d rows), no other app row "
+          "(%s)" % (len(S.selected), apps[:4]))
+    # 26. (fix round items 3, 5) src/viewport/ reaches the picture set; a Jahshaka Hlms PIECE reaches Atom besides its
+    # line; the fork's Hlms Pbs/Common lines reach Atom
+    S = sel(["src/viewport/enginerenderdriver.cpp"])
+    check(all(p in S.selected for p in pics), "26. src/viewport/ -> the whole picture set (%d of %d)"
+          % (sum(p in S.selected for p in pics), len(pics)))
+    S = sel(["irisgl/engine/media/Hlms/Jahshaka/JahFog_piece_vs_piece_ps.any"])
+    check(of(S, "sky") and [n for n in S.selected if n.startswith("engine.atom_")] and of(S, "atom"),
+          "26. a Jahshaka Hlms piece (JahFog_piece_*) -> its line (sky) + atom + engine.atom_ (HlmsAtom compiles it)")
+    check(all(t_ in (fork_tok(f_) or []) for f_ in ("Components/Hlms/Pbs/src/OgreHlmsPbs.cpp",
+                                                    "Samples/Media/Hlms/Pbs/Any/Main/800.PixelShader_piece_ps.any")
+              for t_ in ("atom", "engine.atom_")),
+          "26. the fork's Hlms Pbs/Common lines reach atom + engine.atom_")
+    # 27. THE PRICE RULE (the lead, B4's read): --record-times never overwrites a HAND (solo median) price; the run log's
+    # median is written only from records that ran ALONE (the census: no other ctest; the ctest at -j1), never a gate's
+    import tempfile as _tf
+    tdir = _tf.mkdtemp(prefix="price-rule-")
+    try:
+        runs_ = os.path.join(tdir, "runs"); os.makedirs(runs_)
+        base_ = os.path.join(tdir, "baseline.json"); json.dump({"quiet_load_max": 5.0}, open(base_, "w"))
+        tf = os.path.join(tdir, "gate-times.txt")
+        open(tf, "w").write("# header\napi.contract 3.00  solo median n=4 (the lead, 2026-10-12)\n")
+        recs = []
+        def rec(row, sec, jobs, oc):
+            return {"suite": row, "arm": None, "verdict": "PASS", "seconds": sec, "ts": "2026-10-12T12:00:00+02:00",
+                    "box": {"jobs": jobs, "load_mean": 0.5,
+                            "census": {"other_ctests": oc, "builds": 0, "gpu_competitors": []}}}
+        recs += [rec("api.contract", 30.0, 1, 0)] * 3          # solo records of a HAND-priced row: the hand price stays
+        recs += [rec("app.help_exits", 0.5, 1, 0)] * 3         # solo records, no hand price: written solo-quiet
+        recs += [rec("app.cli_options", 70.0, 4, 0)] * 3       # a gate's runs beside siblings (-j4): never a price
+        recs += [rec("app.first_launch", 9.0, 1, 2)] * 3       # another ctest on the box: never a price
+        with open(os.path.join(runs_, "2026-10-12-x.jsonl"), "w") as f:
+            f.writelines(json.dumps(r_) + "\n" for r_ in recs)
+        env_keep = {k: os.environ.get(k) for k in ("JAH_RUN_LOG_DIR", "JAH_BOX_BASELINE")}
+        os.environ["JAH_RUN_LOG_DIR"], os.environ["JAH_BOX_BASELINE"] = runs_, base_
+        tf_keep = gs.TIMES_FILE
+        gs.TIMES_FILE = tf
+        try:
+            import io, contextlib
+            with contextlib.redirect_stdout(io.StringIO()):
+                gs.record_times(build)
+            got = gs.parse_times(tf)
+        finally:
+            gs.TIMES_FILE = tf_keep
+            for k, v in env_keep.items():
+                if v is None: os.environ.pop(k, None)
+                else: os.environ[k] = v
+        check(got.get("api.contract") == (3.0, "solo median n=4 (the lead, 2026-10-12)"),
+              "27. --record-times leaves a solo-median (hand) line untouched (%s)" % (got.get("api.contract"),))
+        check((got.get("app.help_exits") or (0, ""))[1].startswith("solo-quiet n=3"),
+              "27. ...writes the run log's median from records that ran ALONE (%s)" % (got.get("app.help_exits"),))
+        check("app.cli_options" not in got and "app.first_launch" not in got,
+              "27. ...and never from a gate's runs beside siblings (-j4) or with another ctest on the box (%s %s)"
+              % (got.get("app.cli_options"), got.get("app.first_launch")))
+    finally:
+        import shutil as _sh
+        _sh.rmtree(tdir, ignore_errors=True)
     # 24. a fallback is its directory's subsystem, never the tier
     S = sel(["tests/gi/tsa_new_dir/input.bin"])
     gi_rows = [n for n, t in inv0.items() if t["dir"] == "gi"]

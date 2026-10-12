@@ -1780,6 +1780,53 @@ def _row_output(build, run_id, row, text):
         return None
 
 
+RENDER_EXT = (".png", ".xwd", ".ppm", ".jpg", ".exr")
+
+
+def _wipe_renders(build, since, run_id, red):
+    """THE RENDERS OUTSIDE THE HOMES (TESTING-SPEED-A fix round; item 7's wipe): every image a row wrote under
+    <build>/tests/<dir>/ (its working directory: a fixture's shots, a script's out files) during THIS run — after the run,
+    when no row of it still writes or reads (a row's own end would race the rows beside it in the same directory). An
+    all-green run DELETES them; a run with a red MOVES them to <build>/tests/.evidence/output/<run>/renders/<dir>/ (the
+    red's evidence beside its output). Homes (fresh_home.sh's), .evidence and .shadercache are not walked. Returns a
+    one-line summary, or "" when the run wrote none."""
+    if not build:
+        return ""
+    td = os.path.join(build, "tests")
+    if not os.path.isdir(td):
+        return ""
+    found = []
+    for root, dirs, files in os.walk(td):
+        rel = os.path.relpath(root, td)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "CMakeFiles" and "home" not in d and depth < 2]
+        for f in files:
+            if f.lower().endswith(RENDER_EXT):
+                p = os.path.join(root, f)
+                try:
+                    if os.path.getmtime(p) >= since:
+                        found.append(p)
+                except OSError:
+                    pass
+    if not found:
+        return ""
+    dest = os.path.join(td, ".evidence", "output", re.sub(r"[^A-Za-z0-9._-]", "_", str(run_id)), "renders")
+    n = 0
+    for p in found:
+        try:
+            if red:
+                d = os.path.join(dest, os.path.relpath(os.path.dirname(p), td))
+                os.makedirs(d, exist_ok=True)
+                os.replace(p, os.path.join(d, os.path.basename(p)))
+            else:
+                os.remove(p)
+            n += 1
+        except OSError:
+            pass
+    return (f"{n} image(s) this run wrote under {td} moved to the red's evidence ({dest})" if red else
+            f"{n} image(s) this run wrote under {td} deleted (an all-green run keeps no render)")
+
+
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
               labels=None, echo=True, env=None, exclude=None, whole_card=None, root=None, fallback=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and append
@@ -1815,6 +1862,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         R.say(ABORTED); R.sampler.stop()
         return DISPLAY_LOST
     scratch = tempfile.mkdtemp(prefix="gate-rows-")
+    t_renders = time.time()
 
     def listfile(name, rows):
         path = os.path.join(scratch, name)
@@ -1909,6 +1957,9 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
             except OSError: pass
         import shutil
         shutil.rmtree(scratch, ignore_errors=True)
+    moved_r = _wipe_renders(getattr(R, "build", None), t_renders, R.run_id, bool(reds or held or R.dead))
+    if moved_r and echo:
+        print(f"renders: {moved_r}")
     if R.path and echo:
         print(f"\nrun log: {R.recorded} record(s) -> {R.path}")
     if R.dead:

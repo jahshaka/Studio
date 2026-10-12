@@ -1325,6 +1325,58 @@ ESTIMATE_LIMIT_S = 900
 PASS_ORDER = ("named", "picture", "measuring", "rest")
 
 
+def known_red(rng, row, gs=None):
+    """THE EARLY STOP'S KNOWN-RED PREDICATE (TESTING-SPEED-A fix round, item 1): (known, why) for a row red at the range's
+    tip. The merge run stops early on THE LANE'S red only — never on a red the registry already names: KNOWN when an
+    open registry entry (testing/defects.json: not retired, not past its recheck) names the row AND either the nearest
+    ancestor of the base (the base itself first) that holds a run of the row holds only reds, each tip red's signature
+    (verdict class, masked failLine) among them (the door's own _sig), or NO ancestor holds a run of it at all (a NEW row
+    declared red by design: the door and the lead decide, never the early stop). Never "the record at exactly the base":
+    a base without its own run of the row looks to the nearest ancestor that has one. The door (judge) stays the
+    verdict: this only says whether the early stop may refuse."""
+    gs = gs or load_gs()
+    defects, problem = gate_runlog.defects_load()
+    if defects is None:
+        return False, f"{problem}: no registry, nothing is known"
+    ents = [e for e in defects.values() if row in (e.get("rows") or []) and gate_runlog.defect_state(e) != "retired"
+            and not gate_runlog.recheck_past(e)]
+    if not ents:
+        return False, f"no open registry entry names {row}"
+    ids = ", ".join(sorted(str(e.get("id")) for e in ents))
+    base, tip = rng.split("..", 1)
+    tip_sha, base_sha = _git(["rev-parse", tip], gs.ROOT), _git(["rev-parse", base], gs.ROOT)
+    if not tip_sha or not base_sha:
+        return False, f"cannot resolve {rng}"
+    cands = [(c, ig) for c, ig, _ in candidates(gs, base_sha)]          # the base first, then its ancestors, newest first
+    pins = {tip_sha: _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT) or None}
+    for c, ig in cands:
+        pins.setdefault(c, ig)
+    got = records_by_tip(pins)
+    key = (row, None)
+    runs = lambda recs: [r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN]
+    reds = [r for r in runs(got[tip_sha].get(key, [])) if r.get("verdict") != "PASS"]
+    if not reds:
+        return False, f"no red record of {row} at {tip_sha[:9]}"
+    at = next((c for c, _ in cands if runs(got[c].get(key, []))), None)
+    if at is None:
+        return True, (f"registered ({ids}) and no ancestor of the base holds a run of {row} (a new row): the door "
+                      f"decides, not the early stop")
+    sig = lambda r: (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
+    there = runs(got[at][key])
+    base_reds = [r for r in there if r.get("verdict") != "PASS"]
+    if not base_reds:
+        return False, f"registered ({ids}) but {at[:9]} (the nearest ancestor of the base with a run) is green: the lane's red"
+    if len(base_reds) < len(there):
+        return False, (f"registered ({ids}) but {at[:9]} holds {len(there) - len(base_reds)} green beside "
+                       f"{len(base_reds)} red: nondeterminism there, not one known red")
+    odd = [r for r in reds if sig(r) not in {sig(b) for b in base_reds}]
+    if odd:
+        o = odd[-1]
+        return False, (f"registered ({ids}) but the tip's {o.get('verdict')} "
+                       f"'{masked(o.get('failLine') or o.get('status'))[:60]}' is not {at[:9]}'s red")
+    return True, f"KNOWN RED ({ids}): the same red at {at[:9]}, the nearest ancestor of the base holding a run of {row}"
+
+
 def passes(gs, inv, run_rows, named, arm_subsets=None, costs=None):
     """THE PASSES (TESTING-SPEED-A item 3; SPECS/TESTING_SPEED_SPEC.md §2 A5): the run rows in the order a red is found
     soonest — [the lane's named rows] -> [the PICTURE set] -> [the measuring rows, -j1 on the whole card] -> [the rest];
@@ -1366,8 +1418,12 @@ def passes(gs, inv, run_rows, named, arm_subsets=None, costs=None):
         for klass, rs, jobs, whole in groups:
             ser = sum(cost(n) for n in rs)
             wall = max(ser / max(1, jobs), max(cost(n) for n in rs))
+            # THE POOLS' ARMS (fix round item 4): a pool the change reaches by some arms runs THOSE arms — the batch carries
+            # JAH_POOL_ARMS (`<pool>.<arm>,...`; a pool absent from it runs every arm), as its estimate prices it
+            pa = ",".join(f"{(inv.get(n) or {}).get('pool') or n.split('.', 1)[-1]}.{a}" for n in rs
+                          for a in arm_subsets.get(n, ()))
             batches.append({"class": klass, "rows": rs, "jobs": jobs, "whole": whole, "serial_s": round(ser, 1),
-                            "wall_s": round(wall, 1)})
+                            "wall_s": round(wall, 1), "pool_arms": pa})
         out.append({"name": name, "batches": batches, "rows": rows,
                     "serial_s": round(sum(b["serial_s"] for b in batches), 1),
                     "wall_s": round(sum(b["wall_s"] for b in batches), 1)})
@@ -1459,6 +1515,9 @@ def main():
                          "default universe is the range's REACH + the --named rows (TESTING-SPEED-A item 1)")
     ap.add_argument("--plan", action="store_true",
                     help="print the merge run's row set as JSON (`runner.sh select`): run (with reasons) and served")
+    ap.add_argument("--known-red", default=None, metavar="ROW",
+                    help="print {row, known, why} as JSON: is the row's red at the tip a KNOWN red (known_red: the "
+                         "registry + the nearest ancestor of the base holding a run) — the merge run's early stop asks")
     ap.add_argument("--named", action="append", default=[], help="a row the lane's brief names: in the universe (run "
                     "by --plan unless served at the tip; asked by the judge)")
     # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form the runner
@@ -1467,6 +1526,10 @@ def main():
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
                          "then re-check; it clears only the reds logged before it (repeatable)")
     a = ap.parse_args()
+    if a.known_red:
+        k, why = known_red(a.range, a.known_red, load_gs())
+        print(json.dumps({"row": a.known_red, "known": k, "why": why}))
+        sys.exit(0)
     verdicts = None
     if a.verdict:
         verdicts = {}

@@ -84,10 +84,20 @@ if [ "$rc" = 0 ]; then
         [ -d "$shared" ] && theirs=$(du -sk "$shared" 2>/dev/null | cut -f1)
         if [ "${mine:-0}" -gt "${theirs:-0}" ]; then
             rm -f "$home/$cache_rel/cache.lock"
-            nxt="$(mktemp -d "$tests_dir/.shadercache-next.XXXXXX")" && rmdir "$nxt" \
-                && mv "$home/$cache_rel" "$nxt" \
-                && { [ ! -d "$shared" ] || mv "$shared" "$nxt.old"; } \
-                && mv "$nxt" "$shared" && rm -rf "$nxt.old" || true
+            # THE PROMOTION UNDER THE TREE'S CACHE LOCK, EXCLUSIVE (fix round item 7): no --warm links from a cache half
+            # swapped, two promotions never interleave, and the swap's leftovers (a .shadercache-next.* of a run that died
+            # mid-swap) go under the same lock; a lock not had in 60 s = no promotion (the run stays green)
+            (
+                flock -w 60 9 || exit 0
+                for o in "$tests_dir"/.shadercache-next.*; do [ -e "$o" ] && rm -rf "$o"; done
+                theirs=0; [ -d "$shared" ] && theirs=$(du -sk "$shared" 2>/dev/null | cut -f1)
+                [ "${mine:-0}" -gt "${theirs:-0}" ] || exit 0
+                nxt="$tests_dir/.shadercache-next.$$"
+                mv "$home/$cache_rel" "$nxt" \
+                    && { [ ! -d "$shared" ] || mv "$shared" "$nxt.old"; } \
+                    && mv "$nxt" "$shared" && rm -rf "$nxt.old"
+                exit 0
+            ) 9>"$tests_dir/.shadercache.lock" || true
         fi
     fi
     rm -rf "$home"
@@ -131,10 +141,18 @@ mkdir -p "$home/run"
 if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     # THE SHARED CACHE, LINKED (never the writer's lock: a linked lock would be one flock for every home)
     mkdir -p "$home/$cache_rel"
-    ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
-        mkdir -p "$home/$cache_rel/$(dirname "$f")"
-        ln "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$shared/$f" "$home/$cache_rel/$f"
-    done
+    # THE LINK PASS UNDER THE CACHE LOCK, SHARED (fix round item 7): many --warm homes link at once, a promotion waits for
+    # them and they for it — never a half-swapped cache; a lock not had in 60 s or a file gone = a colder cache, never a
+    # failed run
+    (
+        flock -s -w 60 9 || exit 0
+        [ -d "$shared" ] || exit 0
+        ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+            mkdir -p "$home/$cache_rel/$(dirname "$f")"
+            ln "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || true
+        done
+        exit 0
+    ) 9>"$tests_dir/.shadercache.lock" || true
 fi
 
 old_ifs="$IFS"; IFS='

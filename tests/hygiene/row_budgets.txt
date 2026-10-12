@@ -1,5 +1,5 @@
 # THE ROWS' FATES AND BUDGETS (TESTING-SPEED-A item 7; source.row_budget) — copied from the lead's classification
-# SPECS/TESTING_SPEED_ROWS.md (2026-10-12; the owner's review SPECS/TESTING_SPEED_KEEP.md): <row> <class> <fate> <budget s|->.
+# SPECS/TESTING_SPEED_ROWS.md (2026-10-12, with the B2-B4 preflights' corrections of 20:4x-20:5x; the owner's review SPECS/TESTING_SPEED_KEEP.md): <row> <class> <fate> <budget s|->.
 # A KEPT row (KEEP, KEEP:rewrite, or a row this file does not name) whose scripts/gate-times.txt price exceeds its budget
 # — its own (a KEEP:rewrite line) or its class's (fixture/other 10 s, app 60 s) — is a RED OF THE ROW, never a widened
 # budget. MOVE:stage-close / THROW / SETUP / TOOLING rows are Part B's to move, delete or follow (TESTING-SPEED-B); each
@@ -49,8 +49,8 @@ assets.cas fixture KEEP -
 assets.metadata fixture KEEP -
 assets.paths fixture KEEP -
 assets.torn_write fixture KEEP -
-atom.lod_switch app THROW -
-atom.coverage_trace fixture THROW -
+atom.lod_switch app MOVE:stage-close -
+atom.coverage_trace fixture KEEP:rewrite 20
 atom.occlusion_exact_app app THROW -
 atom.cluster_crack fixture MOVE:stage-close -
 atom.decode_exact fixture KEEP:rewrite 20
@@ -67,7 +67,7 @@ atom.lod_switch.fixture setup SETUP -
 atom.occlusion_exact_app.fresh_home setup SETUP -
 audio.peaks fixture KEEP -
 avatar.responsive.timing app MOVE:stage-close -
-avatar.responsive app THROW -
+avatar.responsive app KEEP -
 avatar.preview fixture KEEP -
 avatar.locomotion_mirror fixture KEEP -
 avatar.movement fixture KEEP -
@@ -173,7 +173,7 @@ gi.chain_converge_scenes app MOVE:stage-close -
 gi.field_alias fixture MOVE:stage-close -
 gi.reflect_lod_pop fixture THROW -
 gi.gather_cards fixture KEEP:rewrite 10
-gi.speckle fixture KEEP:rewrite 10
+gi.speckle fixture KEEP:rewrite 20
 gi.pcc_mirror.ray_tier app MOVE:stage-close -
 gi.one_writer app MOVE:stage-close -
 gi.voxel_coverage fixture KEEP:rewrite 20
@@ -397,7 +397,7 @@ mirror.dirty_equals_full fixture KEEP -
 open.crash_soak app MOVE:stage-close -
 open.responsive.timing app MOVE:stage-close -
 open.responsive app THROW -
-open.frames app MOVE:stage-close -
+open.frames app KEEP:rewrite 40
 open.responsive.fresh_home setup SETUP -
 open.responsive.timing.fresh_home setup SETUP -
 open.frames.fresh_home setup SETUP -
@@ -561,11 +561,11 @@ services.looks fixture KEEP -
 services.ogre_samples fixture KEEP -
 settings.store fixture KEEP -
 shader.sample_opens_quiet app MOVE:stage-close -
-shader.async_soak app THROW -
+shader.async_soak app MOVE:stage-close -
 shader.live_compiles app MOVE:stage-close -
-shader.async_after_open app THROW -
+shader.async_after_open app KEEP:rewrite 30
 shadercache.container_asan fixture MOVE:stage-close -
-shadercache.app app KEEP:rewrite 40
+shadercache.app app KEEP:rewrite 60
 shadercache.container fixture KEEP:rewrite 20
 shadercache.engine_pipelines fixture KEEP -
 shadercache.warmup_pass fixture KEEP -
@@ -583,8 +583,8 @@ shadergraph.asset_widget_db fixture KEEP -
 shadergraph.fuzzy_search fixture KEEP -
 shadow.cutout_caster.churn app MOVE:stage-close -
 shadow.two_sided_caster.churn app MOVE:stage-close -
-shadow.cutout_caster app MOVE:stage-close -
-shadow.two_sided_caster app MOVE:stage-close -
+shadow.cutout_caster app KEEP:rewrite 60
+shadow.two_sided_caster app KEEP:rewrite 60
 shadow.atom_parity fixture KEEP -
 shadow.caster_first_frame fixture KEEP -
 shadow.atom_cut fixture KEEP -
@@ -644,7 +644,7 @@ ssr.rings fixture KEEP -
 test_engine fixture KEEP:rewrite 20
 test_engine_asan fixture MOVE:stage-close -
 test_engine_recreate fixture KEEP -
-theme.sheets app KEEP:rewrite 10
+theme.sheets app KEEP:rewrite 60
 theme.manager fixture KEEP -
 theme.no_raw_sheets other KEEP -
 theme.style_contracts fixture KEEP -

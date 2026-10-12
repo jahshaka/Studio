@@ -273,6 +273,76 @@ def main(source, build):
           "each suite's record carries the box sampled at ITS start (%s)"
           % {k: v.get("other_ctests") for k, v in recs.items()})
 
+    # ---- FIX ROUND item 1: THE EARLY STOP'S KNOWN-RED PREDICATE (--known-red) -------------------------------------
+    # a registered row red at the tip AND red at the nearest ancestor of the base holding a run -> known; the base green ->
+    # the lane's; no run anywhere (a NEW row, red by design) -> known (the door decides); no registry entry -> the lane's
+    def kr(row):
+        rc_, out_ = run(RANGE, "--known-red", row)
+        try:
+            return json.loads(out_.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return {"known": None, "why": out_[-200:]}
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is True and "the same red at" in j["why"], "--known-red: registered + the same red at the base -> "
+          "KNOWN (the early stop does not refuse it) (%s)" % j["why"][:90])
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "PASS", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is False and "green" in j["why"], "--known-red: registered but the base GREEN -> the lane's red (%s)"
+          % j["why"][:90])
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    j = kr(rows[0])
+    check(j["known"] is True and "new row" in j["why"], "--known-red: registered and no ancestor holds a run (a NEW row "
+          "red by design: source.row_budget at its own merge) -> known, the door decides (%s)" % j["why"][:90])
+    empty = os.path.join(scratch, "defects-empty.json")
+    json.dump({"defects": []}, open(empty, "w"))
+    fresh(empty, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is False and "no open registry entry" in j["why"], "--known-red: no registry entry -> never known, "
+          "whatever the base holds (%s)" % j["why"][:90])
+    # ---- FIX ROUND item 4: a batch carries its pools' arms (JAH_POOL_ARMS) --------------------------------------------
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    import ci_gate_check as cgc_mod
+
+    class _GS:
+        GATE_JOBS = {"fixture": 8, "app": 4, "measuring": 1}
+
+        @staticmethod
+        def load_costs():
+            return {}
+    inv_ = {"pool.toy": {"labels": set(), "kind": "app", "pool": "toy", "arms": {"a1": 1, "a2": 1}},
+            "x.fixture": {"labels": set(), "kind": "fixture"}}
+    ps_ = cgc_mod.passes(_GS, inv_, ["pool.toy", "x.fixture"], [], {"pool.toy": ["a2"]})
+    pa_ = {b["class"]: b["pool_arms"] for p_ in ps_ for b in p_["batches"]}
+    check(pa_.get("app") == "toy.a2" and pa_.get("fixture") == "", "passes(): the app batch carries JAH_POOL_ARMS=toy.a2 "
+          "(the one arm the change reaches), the fixture batch none (%s)" % pa_)
+
+    # ---- FIX ROUND: THE RENDERS OUTSIDE THE HOMES, wiped after the run (gate_runlog._wipe_renders) ---------------------
+    import time as _t
+    wb = os.path.join(scratch, "wipe-build"); wt = os.path.join(wb, "tests", "gi")
+    os.makedirs(os.path.join(wt, "e2e-home-x")); os.makedirs(os.path.join(wb, "tests", ".evidence"))
+    old = os.path.join(wt, "reference.png"); open(old, "w").close(); os.utime(old, (1, 1))
+    t0_ = _t.time() - 1
+    for f in ("shot.png", "frame.ppm", "e2e-home-x/in_home.png"):
+        open(os.path.join(wt, f), "w").close()
+    msg = gate_runlog._wipe_renders(wb, t0_, "run-green", False)
+    check(not os.path.exists(os.path.join(wt, "shot.png")) and not os.path.exists(os.path.join(wt, "frame.ppm"))
+          and os.path.exists(old) and os.path.exists(os.path.join(wt, "e2e-home-x", "in_home.png")) and "deleted" in msg,
+          "renders: an all-green run DELETES the images it wrote under build/tests/<dir>/ (not an older input, not a home's: "
+          "fresh_home owns those) (%s)" % msg)
+    open(os.path.join(wt, "shot.png"), "w").close()
+    msg = gate_runlog._wipe_renders(wb, t0_, "run-red", True)
+    check(os.path.isfile(os.path.join(wb, "tests", ".evidence", "output", "run-red", "renders", "gi", "shot.png"))
+          and not os.path.exists(os.path.join(wt, "shot.png")) and os.path.exists(old),
+          "renders: a run with a red MOVES them to .evidence/output/<run>/renders/<dir>/ (%s)" % msg)
+
     subprocess.run(["rm", "-rf", scratch])
     if FAILURES:
         print("gate.ci_check: FAILED (%d)" % len(FAILURES)); return 1

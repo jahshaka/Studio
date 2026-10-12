@@ -91,11 +91,12 @@
     "gi.gather_nest"
    ],
    "env": [
+    "vr.session_undithered",
     "threading.newproject_stall",
     "gi.field_scroll"
    ],
    "note": "gi.gather_nest REAL (the ray tier's pass-scoped registrations reached the planar mirrors)",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive, vr.session_undithered)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete dropped (open.responsive)"
   },
   {
    "lane": "ATOM-OCCLUSION-1",
@@ -316,12 +317,12 @@
    "range": "ebbea3b02..c2758618a",
    "evidence": "testing/runs/2026-09-28-scoped-fallback-c2758618a.jsonl",
    "must": [
-    "vr.grab_maths"
+    "vr.session_undithered"
    ],
    "env": [],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: vr.session_undithered -> vr.grab_maths (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
   },
   {
    "lane": "D3-HIT-SHADE-2 (scoped-fallback gate at db6d1c2a5)",
@@ -954,15 +955,26 @@
    ]
   },
   {
-   "case": "T3 a changed jah_gpu_row whose row name is a loop variable (vr.${_arm}) resolves through ctest's backtrace (4 fallbacks before)",
+   "case": "T3 a changed line of a VR row's registration (vr.session_undithered) selects that row",
    "file": "tests/vr/CMakeLists.txt",
-   "old": "                     \"${_vr_warm_script}\"\n",
-   "new": "                     \"${_vr_warm_script}\" --frames 2\n",
+   "old": "    ENVIRONMENT \"${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home\")\n",
+   "new": "    ENVIRONMENT \"${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home;JAH_TSA_PROBE=1\")\n",
    "must": [
-    "vr.warmup",
-    "vr.warmup_control"
+    "vr.session_undithered"
    ],
-   "own_subject": "TESTING-SPEED-A: kept on vr.warmup / vr.warmup_control ON PURPOSE — they move to stage-close (batch 4) and stay registered; this hunk is in their OWN test dir, so it proves the own-subject arm: a lane that edits a stage-close row's files still selects it"
+   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 4: vr.warmup / vr.warmup_control carry stage-close in B4's tree — the case moves to vr.session_undithered, a VR row that stays in the merge tier; its loop-variable proof moves to T3b (gi.gather_${_arm}, kept rows)"
+  },
+  {
+   "case": "T3b a changed jah_gpu_row whose row name is a loop variable (gi.gather_${_arm}) resolves through ctest's backtrace",
+   "file": "tests/gi/CMakeLists.txt",
+   "old": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm}\n",
+   "new": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm} --tsa\n",
+   "must": [
+    "gi.gather_plane",
+    "gi.gather_deterministic",
+    "gi.gather_cards"
+   ],
+   "rewritten_by": "TESTING-SPEED-A fix round: T3's loop-variable proof on kept rows (gi.gather_plane / _deterministic / _cards)"
   },
   {
    "case": "T3 a changed line inside jah_scale_row's body reaches every row registered through it (6 fallbacks before)",

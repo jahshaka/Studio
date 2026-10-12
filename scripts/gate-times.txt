@@ -1,8 +1,13 @@
 # suite seconds source — THE PRICE OF EVERY TIER ROW (TESTING-CLEANUP-2B item 6; scripts/gate-scope.py "THE PRICES").
 # One line per row of the MERGE and STAGE-CLOSE tiers (and per pool ARM, <pool>::<arm>): <row> <seconds> <source>.
-# The source is NAMED: "quiet n=K" = the median of the row's PASS runs with no sibling ctest (>= 3 of them) — THE
-# price; "all n=K" = fewer quiet runs, the median of every PASS run; "fixture" = a home wipe; any other text = a
-# hand price and where it came from. Read from testing/runs + testing/runs-archive since 2026-10-01 13:10 (before
+# THE PRICE RULE (the lead, TESTING-SPEED-B4's read, 2026-10-12): a row's price is THE ROW'S OWN COST — its solo median,
+# admitted, the card otherwise quiet — never a median of gate runs beside siblings (that measured the box: four app rows
+# priced 70/50/37/31 s under contention ran 20/18/11/11 s alone). A HAND price (a "solo median" line, any source text
+# below that is not one of the run log's) is NEVER overwritten by --record-times; the run log's median is written only
+# for a row with no hand price, and only from records that ran alone ("solo-quiet n=K": >= 3 PASS records whose census
+# shows no other ctest, no build, no GPU competitor, the load under the box's figure, and no gate sibling — the row's
+# ctest at -j1); a census that cannot tell writes nothing. "quiet n=K" / "all n=K" = older run-log prices (kept until a
+# solo-quiet or hand price replaces them); "fixture" = a home wipe. Read from testing/runs + testing/runs-archive since 2026-10-01 13:10 (before
 # GATE-SPEED-1's L2 a record's seconds held its admission wait). Re-price: scripts/gate-scope.sh --record-times
 # [--build <dir>]; the self-check: --price-check (source.testing_rules R2 fails an unpriced tier row).
 api.contract 3.65  quiet n=58

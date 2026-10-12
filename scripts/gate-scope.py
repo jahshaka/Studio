@@ -134,6 +134,10 @@ ENGINE_SUBSYSTEMS = [
     (r"^(src/)?$", ["*engine-fixtures"], "the engine directory as a whole"),
 ]
 
+# A JAHSHAKA HLMS PIECE reaches Atom besides its first line (HlmsAtom compiles the Jahshaka Hlms library; fix round item 5)
+PIECE_RX = r"^media/Hlms/.*_piece"
+PIECE_TOKENS = ["atom", "engine.atom_"]
+
 # OgreEngine.cpp BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4): gate_graph.enclosing_functions names the TOP-LEVEL
 # function (or class) of each changed line — out of lambdas and local structs, `init` returning `init` — and this map
 # says what it reaches. EVERY function of OgreEngine.cpp is named (the lead reads the map at the read); a name the map
@@ -184,19 +188,76 @@ OGRE_ENGINE_FUNCTIONS = {
 # no keyword names, or a line at namespace scope, reaches everything that renders (_ALL), said.
 CORE_BY_FUNCTION = ("src/OgreScene.cpp", "src/OgreView.cpp")
 _BY_FUNCTION = {"irisgl/engine/src/OgreEngine.cpp"} | {"irisgl/engine/" + f for f in CORE_BY_FUNCTION}
-FUNCTION_KEYWORDS = [
-    (r"Shadow|Caster", ["shadow", "lights"]),
-    (r"Light|Ambient", ["lights", "shadow"]),
-    (r"Gi$|Gi[A-Z]|Card|Cascade|Vct|Voxel|Probe|Photon|SurfaceCache|Environment|RayTracing|rayEnvironment", ["gi"]),
-    (r"Envmap|Reflection|Ssr", ["ssr", "rtreflect", "mirror", "planar"]),
-    (r"Particle", ["particles"]),
-    (r"Skelet|Skin|Bone|Anim", ["skeletal", "avatar"]),
-    (r"Vr", ["vr"]),
-    (r"Exposure|PostFx|postFx|Letterbox|Pip|pip|Tonemap|chain|Chain|ClearColour|LensShift", ["hdr", "looks", "*picture"]),
-    (r"Lod|Hzb|Atom|Occlusion|incompleteDraws|gpuSlot", ["engine", "atom", "scale"]),
-    (r"Overlay|overlay|Helper|Backdrop", ["engine", "gizmo"]),
-    (r"Hlms|Shaders|asyncShaders", ["shadercache", "threading"]),
-]
+# OgreScene.cpp AND OgreView.cpp BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4; fix round item 11): every top-level
+# function of each file is NAMED (as OgreEngine.cpp's are — the lead reads the maps at the read); a name a map does not
+# know, or a namespace-scope line, reaches every engine fixture + the picture set (_CORE: the scene and the view are what
+# every engine fixture and picture row draw through) — NOT the app rows (*vulkan-scripts: the frame loop's own reach).
+_CORE = ["*engine-fixtures", "*picture"]
+_CHAIN = ["hdr", "looks", "ssr", "defaults", "*picture"]
+_REFL = ["ssr", "rtreflect", "mirror", "planar"]
+_NODES = ["engine", "mirror", "pieces", "atom"]
+OGRE_SCENE_FUNCTIONS = {
+    **{f: _CORE for f in ("OgreScene", "~OgreScene", "destroy", "sceneManager", "nativeSceneManager")},
+    "name": ["engine"],
+    **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
+                                         "setNodeCastShadow", "nodeCastShadow", "setLight", "removeLight", "ogreLight",
+                                         "nodeOfLight")},
+    **{f: ["lights", "gi", "*picture"] for f in ("setAmbient", "setAmbientSh", "applyAmbientSh")},
+    **{f: ["gi", "sky", "lights"] for f in ("applyVctEnvironment", "applyCascadeEnvironment", "rayEnvironment",
+                                            "noteEnvironmentChanged", "setEnvironmentLight")},
+    **{f: _REFL for f in ("refreshEnvmapScale", "hasAuthoredReflectionMap", "envmapScaleForPass")},
+    **{f: _NODES for f in ("removeNode", "createNode", "adoptNode", "setNodeParent", "setNodeTransform", "registryNode",
+                           "releaseNode", "node", "track", "nodeWorldPose", "itemVisibilityFlags",
+                           "applyNodeVisibilityFlags", "inheritedShown", "applyShownSubtree", "setNodeVisible",
+                           "setNodeVisibleUnder", "setNodeVisibleImpl")},
+    "particleVisibilityBits": ["particles", "engine"],
+    **{f: ["gi", "atom", "engine"] for f in ("writeIsSceneMovement", "setNodeMovable", "nodeMovable", "mobilityStatus")},
+    **{f: ["engine", "gizmo"] for f in ("setNodeHelper", "nodeHelper", "setNodeBackdrop", "nodeBackdrop")},
+    **{f: ["vr"] for f in ("setNodeVrHelper", "nodeVrHelper", "setVrProxyNodes", "vrProxyNodes", "setVrRayNodes",
+                           "vrRayNodes", "setVrHandBoneNodes", "vrHandBoneNodes")},
+    **{f: ["engine", "pieces", "perf"] for f in ("detachItem", "itemCount", "addObjectCounts")},
+    "dropSkeletonFollowers": ["skeletal", "avatar"],
+    **{f: ["gi", "rtreflect", "shadow"] for f in ("rayTracingResolved", "setRayTracing")},
+    **{f: ["gi"] for f in ("walkCardLights", "updateSurfaceCache", "cardEligible", "cardColumnKey", "readCardTexel",
+                           "readCardAt", "dumpCardAtlas")},
+    "gpuSlotChanged": ["atom", "engine", "scale"],
+    "query": ["engine", "picking"],
+}
+OGRE_VIEW_FUNCTIONS = {
+    **{f: _CORE for f in ("OgreView", "~OgreView", "setScene", "detachScene", "attachWorkspace", "detachWorkspace",
+                          "rebuildWorkspaceDef", "rebuildDetachedWorkspaceDef", "destroy", "createRtt", "passPreExecute",
+                          "workspacePreUpdate", "workspacePosUpdate", "syncGlobalsListener", "applyPendingResize",
+                          "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "setCamera",
+                          "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground",
+                          "readPixels", "readPixelsHdr")},
+    **{f: ["engine"] for f in ("name", "scene", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
+                               "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
+                               "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",
+                               "attachBlankWorkspace", "detachBlankWorkspace")},
+    **{f: _CHAIN for f in ("orthoPostFxAdapted", "chainDesc", "writeLiveClearColour", "applyFixedExposure",
+                           "pipTonemapEffective", "pipAllowed", "setPip", "pip", "syncPip", "pipGeneration",
+                           "pipTexFactors", "destroyPip", "applyLetterboxAndPip", "applyPip", "setPostFx", "postFx",
+                           "resetExposureHistory", "seedExposureHistory", "measuredExposureScale", "destroyBlankChain",
+                           "applyLensShift", "applyLetterbox", "readChainTexture", "chainLocal", "chainTexture")},
+    **{f: ["atom", "engine", "scale"] for f in ("hzbLevelsFor", "finishAtomOcclusion", "setLodHysteresisOffscreen",
+                                                "incompleteDraws", "sceneShapeMoved")},
+    **{f: ["engine", "gizmo"] for f in ("overlaysAllowed", "setOverlay", "overlay", "setHelpersVisible")},
+    **{f: ["vr"] for f in ("setVrHelpersVisible", "setStereo", "setHiddenAreaMask")},
+    "setVrSsrOverride": ["vr"] + _REFL,
+    **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
+    **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "dropWorkspaceForShadowRebuild",
+                                         "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},
+    "readReflectionHdr": _REFL,
+    "updateParticles": ["particles"],
+    "updateGi": ["gi"],
+    **{f: ["shadercache", "threading"] for f in ("setAsyncShaders", "asyncShaders", "computeHlms", "warmUpShaders")},
+    **{f: ["capture", "engine"] for f in ("requestFrameCapture", "excludeFromCapture", "capturesWith",
+                                          "ensureCaptureWorkspace", "beginFrameCapture", "downloadLayer0", "mapTicket",
+                                          "recordFrameCapture", "frameCaptureState", "takeFrameCapture",
+                                          "destroyCaptureWorkspace", "releaseFrameCapture")},
+}
+CORE_FUNCTION_MAPS = {"irisgl/engine/src/OgreScene.cpp": OGRE_SCENE_FUNCTIONS,
+                      "irisgl/engine/src/OgreView.cpp": OGRE_VIEW_FUNCTIONS}
 
 # THE FORK BY COMPONENT (TESTING-SPEED-A item 4): a pin move selects by what the FORK DIFF's files reach — each changed
 # fork file takes the FIRST line that matches it (specific -> generic). Every top-level directory of
@@ -208,7 +269,9 @@ FORK_COMPONENTS = [
      r".*\.(hlsl|metal)$)", "none"),
     (r"^Samples/Media/(VCT|Compute/Algorithms/IrradianceFields|Compute/Tools)/", ["gi"]),
     (r"^Samples/Media/Compute/Algorithms/IBL/", ["gi", "sky"]),
-    (r"^Samples/Media/Hlms/(Common|Pbs)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture"]),
+    # (+ atom / engine.atom_: HlmsAtom compiles the Pbs/Common library too — fix round item 5, audit F2)
+    (r"^Samples/Media/Hlms/(Common|Pbs)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture", "atom",
+                                            "engine.atom_"]),
     (r"^Samples/Media/Hlms/Unlit/", ["engine", "*picture"]),
     (r"^Samples/Media/2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/", ["hdr", "looks", "*picture"]),
     (r"^Samples/Media/packs/DebugPack\.zip$", ["engine"]),
@@ -220,7 +283,8 @@ FORK_COMPONENTS = [
     (r"^OgreMain/(src|include)/Compositor/", ["*engine-fixtures", "*picture"]),
     (r"^OgreMain/", ["*engine-fixtures"]),
     (r"^Components/Hlms/Pbs/(src|include)/(Vct|IrradianceField)", ["gi"]),
-    (r"^Components/Hlms/(Pbs|Common)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture"]),
+    (r"^Components/Hlms/(Pbs|Common)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture", "atom",
+                                         "engine.atom_"]),
     (r"^Components/Hlms/Unlit/", ["engine", "*picture"]),
     (r"^Components/Atmosphere/", ["sky"]),
     (r"^Components/PlanarReflections/", ["ssr", "rtreflect", "mirror", "planar"]),
@@ -347,7 +411,9 @@ AREA_RULES = [
     (r"^src/services/", ["services", "*headless-scripts"], []),
     (r"^src/(data|io|commands)/", ["document", "commands", "reopen", "export", "samples", "assetpaths",
                                    "assetmigrate", "services", "*headless-scripts"], ["project", "scene", "node"]),
-    (r"^src/viewport/", ["app", "input", "gizmo", "picking", "cameras", "sockets", "ui",
+    # (+ *picture: the render driver and the screenshot grades draw what every picture row compares; the hashes do not
+    # cover viewport code — fix round item 3)
+    (r"^src/viewport/", ["app", "input", "gizmo", "picking", "cameras", "sockets", "ui", "*picture",
                          # the render driver, the frame monitor host, the screenshot grades and the
                          # VR pacing live here (GATE-SCOPE-2, 2026-09-17)
                          "perf", "hdr", "vr", "player", "thumbnails",
@@ -1053,10 +1119,23 @@ def parse_times(path=None):
     return out
 
 
+LOG_SOURCES = ("solo-quiet n=", "quiet n=", "all n=", "fixture")    # the sources record_times writes; any other = a HAND price
+
+
+def solo_quiet(r, load_max=None):
+    """THE PRICE RULE (the lead, TESTING-SPEED-B4's read): a record prices its row only when it ran ALONE — the census
+    shows no other ctest, no build, no GPU competitor, the load under the box's figure (gate_runlog.quiet) AND no gate
+    sibling (its ctest ran at -j1: box.jobs == 1). A census that cannot tell is no price."""
+    if not gate_runlog.quiet(r, load_max)[0]:
+        return False
+    return ((r or {}).get("box") or {}).get("jobs") == 1
+
+
 def run_log_prices(since=PRICE_SINCE):
-    """row -> (median PASS seconds, 'quiet n=<k>' | 'all n=<k>') over the run log and its archive since `since`.
-    The quiet median when >= gate_runlog.QUIET_MIN quiet runs exist (gate_runlog.quiet: no sibling ctest, no build, no
-    GPU competitor, the load under the box's figure), else every run's."""
+    """row -> (median PASS seconds, 'solo-quiet n=<k>') over the run log and its archive since `since` — ONLY from the
+    records that ran alone (solo_quiet), and only when >= gate_runlog.QUIET_MIN of them exist; a row without them has
+    no run-log price (a median of gate runs beside siblings measures the box, not the row: four app rows priced
+    70/50/37/31 s under contention ran 20/18/11/11 s alone)."""
     import glob, statistics
     d = gate_runlog.log_dir()
     files = glob.glob(os.path.join(d, "*.jsonl")) + glob.glob(os.path.join(os.path.dirname(d), "runs-archive", "**",
@@ -1071,14 +1150,12 @@ def run_log_prices(since=PRICE_SINCE):
             if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or gate_runlog.instant(r.get("ts")) < since_at:
                 continue
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            acc[k].append((r["seconds"], gate_runlog.quiet(r, lm)[0]))
+            acc[k].append((r["seconds"], solo_quiet(r, lm)))
     out = {}
     for k, v in acc.items():
         q = [x for x, qt in v if qt]
         if len(q) >= gate_runlog.QUIET_MIN:
-            out[k] = (statistics.median(q), f"quiet n={len(q)}")
-        else:
-            out[k] = (statistics.median([x for x, _ in v]), f"all n={len(v)}")
+            out[k] = (statistics.median(q), f"solo-quiet n={len(q)}")
     return out
 
 
@@ -1101,15 +1178,19 @@ def record_times(build):
     old = parse_times()
     rows = tier_rows(inv)
     out, kinds = {}, collections.Counter()
+    hand = lambda v: bool(str(v[1] or "").strip()) and not str(v[1]).startswith(LOG_SOURCES)
     for n in rows:
-        if n in log:
+        if n in old and hand(old[n]):
+            # A HAND PRICE ("solo median ...", a measurement with its why) IS NEVER OVERWRITTEN by the run log
+            out[n] = old[n]; kinds["hand"] += 1
+        elif n in log:
             out[n] = log[n]; kinds[log[n][1].split()[0]] += 1
         elif n in old:
             out[n] = old[n]; kinds["kept"] += 1
         elif inv[n].get("fixture_setup"):
             out[n] = (0.01, "fixture (a home wipe; no PASS record)"); kinds["fixture"] += 1
     # a pool's ARMS keep their own prices (`<pool>::<arm>`: a partial pool's estimate sums them)
-    for k, v in list(log.items()) + [kv for kv in old.items() if kv[0] not in log]:
+    for k, v in list(log.items()) + [kv for kv in old.items() if kv[0] not in log or hand(kv[1])]:
         r_, _, arm = k.partition("::")
         if arm and r_ in inv and arm in inv[r_]["arms"]:
             out[k] = v; kinds["arm"] += 1
@@ -1138,9 +1219,14 @@ def load_costs():
     """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
     quiet median where >= 3 records ran on a quiet box, gate_runlog.quiet). COST_SOURCE says which."""
     costs = {}
-    for n, (sec, _src) in parse_times().items():
+    pt = parse_times()
+    for n, (sec, _src) in pt.items():
         costs[n] = sec; COST_SOURCE[n] = "file"
     costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
+    # THE PRICE RULE: a HAND price (a row's own solo median, measured alone) beats the run log's median of gate runs
+    for n, (sec, src) in pt.items():
+        if str(src or "").strip() and not str(src).startswith(LOG_SOURCES):
+            costs[n] = sec; COST_SOURCE[n] = "file"
     return costs
 
 
@@ -1476,7 +1562,14 @@ class Selection:
             return None
         for pat, toks, what in hit:
             self.expand(toks, [], f"{why}: subsystem {what}")
-        return "subsystem " + " + ".join(f"{what} -> {' '.join(toks) or 'its CMake commands'}" for _, toks, what in hit)
+        extra = ""
+        if re.match(PIECE_RX, rel):
+            # A JAHSHAKA HLMS PIECE IS ALSO ATOM'S (fix round item 5; the PHOTON-HIT-SHADE-1 / audit F2 miss): HlmsAtom
+            # compiles the Jahshaka Hlms library, so every *_piece* medium reaches the atom decode's rows whatever line
+            # named it first
+            self.expand(PIECE_TOKENS, [], f"{why}: a Jahshaka Hlms piece (HlmsAtom compiles the library)")
+            extra = " + the piece's atom decode -> " + " ".join(PIECE_TOKENS)
+        return "subsystem " + " + ".join(f"{what} -> {' '.join(toks) or 'its CMake commands'}" for _, toks, what in hit) + extra
 
     def ogre_engine(self, p, tag, notes, depth=0):
         """irisgl/engine/src/OgreEngine.cpp BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4): the enclosing top-level
@@ -1503,23 +1596,26 @@ class Selection:
         else:
             a, b = self.revs.texts(p) if self.revs.base else (None, None)
             if a is None or b is None:
-                self.expand(_ALL, [], f"{tag}: OgreEngine.cpp with no diff to read")
-                notes.append("OgreEngine.cpp, no diff to read → everything that renders")
+                core_ = p in CORE_FUNCTION_MAPS
+                self.expand(_CORE if core_ else _ALL, [], f"{tag}: {os.path.basename(p)} with no diff to read")
+                notes.append(f"{os.path.basename(p)}, no diff to read → "
+                             + ("every engine fixture + the picture set" if core_ else "everything that renders"))
                 return
             fns = gate_graph.enclosing_functions(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
         if not fns:
             notes.append("comments/whitespace only → nothing reached")
             return
-        by_keyword = p != "irisgl/engine/src/OgreEngine.cpp"
+        core = CORE_FUNCTION_MAPS.get(p)
+        fmap, mapname = (core, os.path.basename(p)[:-4].replace("Ogre", "OGRE_").upper() + "_FUNCTIONS") if core else \
+            (OGRE_ENGINE_FUNCTIONS, "OGRE_ENGINE_FUNCTIONS")
         for fn in sorted(fns, key=lambda x: (x is None, x or "")):
-            if by_keyword:
-                toks = sorted({t for rx, ts in FUNCTION_KEYWORDS if fn and re.search(rx, fn) for t in ts}) or None
-            else:
-                toks = OGRE_ENGINE_FUNCTIONS.get(fn)
+            toks = fmap.get(fn)
             if toks is None:
-                toks = _ALL
-                what = ("a namespace-scope line" if fn is None else f"{fn}() is named by no line of "
-                        f"{'FUNCTION_KEYWORDS' if by_keyword else 'OGRE_ENGINE_FUNCTIONS'}") + " → everything that renders"
+                # the core's unnamed reach: OgreEngine.cpp's is everything that renders (_ALL, the app rows too);
+                # OgreScene/OgreView's every engine fixture + the picture set (_CORE), never the app rows
+                toks = _CORE if core else _ALL
+                what = ("a namespace-scope line" if fn is None else f"{fn}() is named by no line of {mapname}") + \
+                    (" → every engine fixture + the picture set" if core else " → everything that renders")
             else:
                 what = f"{fn}() -> {' '.join(toks)}"
             self.expand(toks, [], f"{tag}: {what}")
