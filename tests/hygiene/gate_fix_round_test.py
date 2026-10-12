@@ -95,9 +95,10 @@ def main(source, build):
     # gate records of THIS build's rows: they carry this build's facts, as gate_runlog.run_ctest stamps them.
     facts, _, _ = gate_runlog.row_facts(build)
 
-    def put(keys, verdict, ts, at):
+    def put(keys, verdict, ts, at, lanes=None):
         s = revs.get(at, at)
         gate_runlog.append_records([{"schema": 3, "suite": k[0], "arm": k[1], "verdict": verdict, "ts": ts, "retry": False,
+                                     **({"lanes": lanes} if lanes else {}),
                                      "declaration": (facts.get(k[0]) or {}).get("declaration"),
                                      "data_hash": (facts.get(k[0]) or {}).get("data_hash"),
                                      "tip": {"studio": s, "studio_dirty": False, "irisgl": pin(s),
@@ -221,6 +222,48 @@ def main(source, build):
         rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the same red on the base")
         if rc: print("\n".join(l for l in out.splitlines() if "REFUSED" in l or "OPEN" in l)[:1500])
         check(rc == 0, "...the same red reproduced on the base (KNOWN RED) answers it at %s (%d)" % (A, rc))
+
+    # ---- 4c. RULE 2 AT THE MERGE OVER A REBASE (RUNNER-FIX-4 item 2) ------------------------------------------------
+    # the lane was REBASED: its builder records sit at X, a commit with B's tree on ANOTHER parent (the pre-rebase twin —
+    # never an ancestor of the candidate); the candidate C = B + a tooling-only file. The door's plan with the lane named
+    # serves the rows the TREE DIFF X..C does not reach from X's records; without the lane (the old door) none from X.
+    genv = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
+                GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com")
+
+    def ctree(tree, parent, msg):
+        return subprocess.run(["git", "commit-tree", tree, "-p", parent, "-m", msg], cwd=source, env=genv,
+                              capture_output=True, text=True).stdout.strip()
+    btree = sha(f"{B}^{{tree}}")
+    X = ctree(btree, revs[T0], "fix-round test: the pre-rebase twin of B (B's tree, another parent)")
+    blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=source, input="a tool note\n", capture_output=True,
+                          text=True).stdout.strip()
+    ienv = dict(genv, GIT_INDEX_FILE=os.path.join(scratch, "c-index"))
+    subprocess.run(["git", "read-tree", btree], cwd=source, env=ienv, check=True)
+    subprocess.run(["git", "update-index", "--add", "--cacheinfo", f"100644,{blob},scripts/fix_round_rebase_note.txt"],
+                   cwd=source, env=ienv, check=True)
+    ctree_sha = subprocess.run(["git", "write-tree"], cwd=source, env=ienv, capture_output=True, text=True).stdout.strip()
+    C = ctree(ctree_sha, revs[B], "fix-round test: the candidate, B + a tooling note")
+    fresh()
+    put(lane_need, "PASS", "2026-01-01T10:00:00", X, lanes=["lane-rb"])
+
+    def plan_from(extra):
+        p = subprocess.run([sys.executable, os.path.join(scripts, "ci_gate_check.py"), f"{revs[BASE]}..{C}", "--build", build,
+                            "--plan"] + extra, capture_output=True, text=True, env=dict(os.environ), cwd=source)
+        try:
+            d = json.loads(p.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return -1, p.stdout[-300:] + p.stderr[-300:]
+        return sum(1 for v in d["served"].values() if v.get("sha") == X), ""
+    n_lane, err = plan_from(["--lane", "lane-rb"])
+    n_none, _ = plan_from([])
+    check(n_lane > 0 and n_none == 0, "item 2: a REBASED lane's records at its pre-rebase twin X serve the rows X..C's tree "
+          "diff does not reach — %d served from X with the lane named, %d without (the old door) %s" % (n_lane, n_none, err))
+    # ...and an ANCESTOR holding records too (T0, X's parent: T0..C reaches the whole lane) never hides the twin — the
+    # twin is asked right after the tip, before the ancestors (serve_key stops at the first candidate with a record)
+    put(lane_need, "PASS", "2026-01-01T09:00:00", T0)
+    n_lane2, err2 = plan_from(["--lane", "lane-rb"])
+    check(n_lane2 == n_lane, "item 2: ...with the lane's records at the ancestor T0 too (T0..C reaches the lane), X still "
+          "serves the same %d rows (got %d) %s" % (n_lane, n_lane2, err2))
 
     # ---- 5. the targets never set the exit code ------------------------------------------------------
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))
