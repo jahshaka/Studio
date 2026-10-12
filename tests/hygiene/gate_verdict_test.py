@@ -855,6 +855,23 @@ def case_carried_red(E):
     rc, _ = E.run()
     check(rc == 0, "a schema-1 (historic) red is not carried: forward only, gate-report.py --carried reports those (%d)"
           % rc)
+    # RUNNER-FIX-4 item 10 (the judge crashed on VOXEL-READOUT-1's fourth fire): a POOL row carried with one of its ARMS
+    # (keys (row, None) and (row, "pool.x")) — sorted() compared None with a str; the judge must order them and refuse
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A)
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=A, arm="pool.x")
+    rc, out = E.run()
+    check(rc == 1 and "Traceback" not in out and out.count("OPEN RED carried from aaaaaaaaa: test_engine") >= 2,
+          "item 10: a row carried with one of its arms -> both OPEN REDs listed, the row before its arm, no crash (%d%s)"
+          % (rc, "; " + out.strip().splitlines()[-1][:120] if "Traceback" in out else ""))
+    # ...and the runner's own `kind: attribution` record of the lane (verdict None) is NO RUN: never a red, never carried
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put(["test_engine"], None, "2026-01-01T09:00:00", tip=A, kind="attribution", **{"class": "NOT REPRODUCED"})
+    rc, out = E.run()
+    check(rc == 0 and "OPEN RED" not in out and "None and not" not in out,
+          "item 10: the runner's `kind: attribution` record of the lane is no run: not carried as a red (%d)" % rc)
 
 
 def case_contention_shape(E):

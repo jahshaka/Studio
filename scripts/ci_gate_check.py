@@ -93,6 +93,15 @@ def load_gs():
 
 
 ABORTS = {}        # {tip: [kind: abort records]} — read with the records (their droppedRed rows need 3/3 solo)
+# A RUN IS A RECORD OF KIND None (a gate's row or arm) OR `self-audit` (RUNNER-FIX-4 item 10): `verdict` and `abort` records are
+# read for what they are; every other kind the tools write — the runner's `attribution`, `scan-verdict`, `recheck`,
+# `served`, `hash`, `push` — is NO RUN: its verdict is None, and VOXEL-READOUT-1's attribution records were judged as
+# reds ("None and not in the contention class") and carried to its next merge
+RUN_KINDS = (None, "self-audit")
+
+
+def is_run(r):
+    return r.get("kind") in RUN_KINDS
 
 
 def records_by_tip(pins):
@@ -119,11 +128,11 @@ def records_by_tip(pins):
             # A5's queue writes lane-test's rows the same) is a run like a gate's; one without them stays out (it
             # still carries its reds: lane_records)
             if r.get("tier") == "lane" and not complete_lane(r): continue
-            # a SERVING record (`kind: served`, runner.sh select) is the select's written evidence, never a run: the judge
-            # serves through the same predicate itself (serve_key)
-            if r.get("kind") == "served": continue
             if r.get("kind") == "abort":
                 ABORTS.setdefault(sha, []).append(r); continue
+            # a SERVING record (`kind: served`, runner.sh select) is the select's written evidence, never a run: the judge
+            # serves through the same predicate itself (serve_key); nor is any other kind of the tools (is_run)
+            if r.get("kind") != "verdict" and not is_run(r): continue
             out[sha].setdefault((r.get("suite"), r.get("arm")), []).append(r)
     for recs in out.values():
         for v in recs.values():
@@ -157,6 +166,7 @@ def lane_records(lanes, skip):
             if not sha or sha in skip or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
             if r.get("kind") == "verdict":
                 verdicts.setdefault(sha, []).append(r); continue
+            if not is_run(r): continue          # the runner's attribution / served / hash ... records are no runs (item 10)
             if (r.get("schema") or 1) < 2 or r.get("gating") is False or r.get("tier") == "target": continue
             if gate_runlog.own_lane(r) not in lanes: continue
             out.setdefault(sha, {}).setdefault((r.get("suite"), r.get("arm")), []).append(r)
@@ -1123,6 +1133,13 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
 
     carried = {}
     judged = judge_all()
+
+    def carried_order(item):
+        """THE ORDER OF THE CARRIED REDS (RUNNER-FIX-4 item 10): (tip, row, arm) with a row's own record (arm None) before
+        its arms — a key's arm is None or a str, and a pool row carried with one of its arms (VOXEL-READOUT-1's fourth
+        fire) made sorted() compare None with a str: the judge crashed and every merge stopped."""
+        (t, k), _why = item
+        return (t, k[0] or "", k[1] is not None, k[1] or "")
     if verdicts:
         pairs, unknown = {}, []
         for name, text in verdicts.items():
@@ -1152,7 +1169,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     known = [k for k in need if judged[k][0] == "known"]
     for k in known:
         print(f"KNOWN RED {label(k)}: {judged[k][1]}" + ("" if mode == "merge" else f" — a {mode} refuses it (never push on a red)"))
-    for (t, k), why in sorted(carried.items()):
+    for (t, k), why in sorted(carried.items(), key=carried_order):
         print(f"OPEN RED carried from {t[:9]}: {label(k)} — {why}")
         if why.startswith("VERDICT REFUSED: "):
             print(f"VERDICT REFUSED {label(k)}: {why[len('VERDICT REFUSED: '):]}")
@@ -1183,7 +1200,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     if missing: reasons.append(f"{len(missing)} of {len(need)} row(s) of {what} have no record at {tip_sha[:9]} "
                                f"(nor one SERVED from an ancestor: rule 2): {missing[:8]}")
     for r in red[:20]: reasons.append("RED " + r)
-    for (t, k), why in sorted(carried.items())[:20]:
+    for (t, k), why in sorted(carried.items(), key=carried_order)[:20]:
         reasons.append(f"OPEN RED carried from {t[:9]}: {label(k)} — {why}")
     if not (missing or red or carried):
         at_tip = len(need) - sum(reused.values())
