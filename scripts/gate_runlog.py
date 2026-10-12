@@ -586,6 +586,25 @@ PREBUILD_MAX_EDGES = 50
 MEASURING = frozenset({"timing", "quiet-box", "perf"})
 
 
+# INSTANTS, NEVER ISO TEXT (RUNNER-AUDIT-FIX-2 F20): a record's `ts` carries its offset, and the offset changes at the DST
+# switch (2026-10-25 02:30+02:00 is BEFORE 02:10+01:00) — "newest" compares instants. ONE helper: the door
+# (ci_gate_check), this file's own readers and the lead's runner (the card queue's law()) use it.
+EARLIEST = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+
+def instant(ts):
+    """A record's `ts` as an aware UTC instant; a ts without an offset is local time; a missing or unparsable one is
+    EARLIEST (it sorts first: never "the newest")."""
+    try:
+        t = datetime.datetime.fromisoformat(ts or "")
+    except (TypeError, ValueError):
+        return EARLIEST
+    try:
+        return (t if t.tzinfo else t.astimezone()).astimezone(datetime.timezone.utc)
+    except (OverflowError, ValueError):
+        return EARLIEST
+
+
 def live_ninja():
     """The live ninja builds on the box (/proc comm, never a name match on a command line)."""
     n = 0
@@ -1380,7 +1399,7 @@ def dropped_red(shas):
             except ValueError: continue
             if r.get("kind") == "abort" and (r.get("tip") or {}).get("studio") == shas["studio"]:
                 for n in r.get("droppedRed") or []:
-                    out[n] = max(out.get(n, ""), r.get("ts") or "")
+                    out[n] = max(out.get(n, ""), r.get("ts") or "", key=instant)
     return out
 
 
@@ -1441,7 +1460,7 @@ def owed_solos(shas=None):
             if is_solo(r) and not r.get("kind") and r.get("suite") in owed and r.get("arm") is None \
                     and r.get("verdict") not in ("NOADMIT", "NOTRUN") \
                     and (r.get("tip") or {}).get("studio") == shas["studio"]:
-                if (r.get("ts") or "") > owed[r["suite"]]:
+                if instant(r.get("ts")) > instant(owed[r["suite"]]):
                     after[r["suite"]] = after.get(r["suite"], 0) + 1
     return sorted(n for n in owed if after.get(n, 0) < SOLO_OWED)
 
@@ -2107,11 +2126,11 @@ def trend_series(days=30, suites=None):
                 continue
             key = (r["suite"], tkey, _condition(r))
             e = acc.setdefault(key, {}).setdefault(tip, {"ts": r.get("ts") or "", "lane": "+".join(r.get("lanes") or []) or "?", "v": []})
-            e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
+            e["ts"] = min(e["ts"], r.get("ts") or e["ts"], key=instant)
             e["v"].append(v)
     out = {}
     for key, tips in acc.items():
-        rows = sorted(((e["ts"], t, e["lane"], statistics.median(e["v"]), len(e["v"])) for t, e in tips.items()))
+        rows = sorted(((e["ts"], t, e["lane"], statistics.median(e["v"]), len(e["v"])) for t, e in tips.items()), key=lambda x: (instant(x[0]),) + x[1:])
         out[key] = rows
     return out
 
@@ -2266,11 +2285,11 @@ def promotions(days=30, tip=None):
             if "bar none" in line:
                 continue
             e = acc.setdefault((r["suite"], k), {}).setdefault(t, {"ts": r.get("ts") or "", "green": True})
-            e["ts"] = min(e["ts"], r.get("ts") or e["ts"])
+            e["ts"] = min(e["ts"], r.get("ts") or e["ts"], key=instant)
             e["green"] &= bool(_MET.search(line.strip())) or r.get("verdict") == "PASS"
     out = []
     for key, tips in sorted(acc.items()):
-        last = sorted(tips.items(), key=lambda x: x[1]["ts"])[-PROMOTE_AFTER:]
+        last = sorted(tips.items(), key=lambda x: instant(x[1]["ts"]))[-PROMOTE_AFTER:]
         if len(last) == PROMOTE_AFTER and all(e["green"] for _, e in last) \
                 and (not tip or last[-1][0].startswith(tip[:9])):
             out.append(key)

@@ -127,7 +127,7 @@ def records_by_tip(pins):
             out[sha].setdefault((r.get("suite"), r.get("arm")), []).append(r)
     for recs in out.values():
         for v in recs.values():
-            v.sort(key=lambda r: r.get("ts") or "")
+            v.sort(key=lambda r: gate_runlog.instant(r.get("ts")))     # instants, never the ISO text (F20)
     return out
 
 
@@ -168,13 +168,8 @@ def lane_records(lanes, skip):
 
 
 def _when(r):
-    """A record's time, comparable across the log's two spellings (with and without an offset)."""
-    ts = r.get("ts") or ""
-    try:
-        t = datetime.datetime.fromisoformat(ts)
-    except ValueError:
-        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
-    return t if t.tzinfo else t.astimezone()
+    """A record's time as an instant (gate_runlog.instant, the ONE helper: offsets and DST compare right)."""
+    return gate_runlog.instant(r.get("ts"))
 
 
 NEVER_RAN = ("NOADMIT", "NOTRUN")
