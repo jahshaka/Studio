@@ -45,6 +45,18 @@
 // "Roughness Cutoff" row now drives the screen-space march as well as the
 // traced ray, and closing it has to shrink the marched footprint. See the block
 // comment there.
+//
+// BLOOM IS OFF FOR THE WHOLE SCRIPT (lane BLOOM-1). "Everything except the
+// reflections is the same frame" holds only for what stays where it is drawn,
+// and bloom does not: it spreads every difference spatially. SSR legitimately
+// changes the sphere's face-on middle (outside the band), and the isotropic
+// mip-ladder bloom (six half-size copies, from half the view down to a
+// sixty-fourth) carries that change's glow out across the limb - measured with
+// bloom on, 21 % of the band moved by 10/255, a halo of a legitimate
+// difference and not the stippled ghost. The band, the floor and the cutoff
+// footprint must see the COMPOSITE, not its glow, so bloom is pinned off before
+// the first shot and handed back at the end. The grade stays "viewport": every
+// other stage of the chain is still in the picture.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -69,6 +81,11 @@ editor.select(null);
 editor.setOverlays({ lightWires: false });
 editor.gameView(true);          // no editor furniture in the picture
 editor.frame(180);
+
+// Bloom off for every shot below (see BLOOM IS OFF in the header).
+var bloomOff = world.override({ id: "bloom", value: 0 });
+assert(bloomOff && bloomOff.value === 0, "bloom is pinned off for the measurement");
+editor.frame(60);
 
 var W = 1600, H = 900;
 // The limb band in pixels at this size: x 390..530, y 240..450. Sampled on a
@@ -228,6 +245,7 @@ var tight = footprint("cutoff 5 % (the row's minimum)", allTight, allOff);
 
 world.clearOverride({ id: "reflectionRoughnessCutoff" });
 world.clearOverride({ id: "ssr" });
+world.clearOverride({ id: "bloom" });
 
 // THE TWO ENDS OF THE ROW, and the row's own physics as the assertion: closing
 // the cutoff can only take surfaces OUT of the marched set, so the footprint at
