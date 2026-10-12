@@ -385,7 +385,7 @@ AREA_RULES = [
     (r"^src/services/worldmodes\.", ["hdr", "ssr", "looks", "*picture"], []),
     (r"^src/services/(looks|worldmodes|sunlink|planarreflectors|gibounds|lightbindings|iesprofile|sceneextents)",
      ["services", "looks", "planar", "lights", "gi"], ["world", "scene", "node"]),
-    # THE THREADED ARCHIVER (D6B-GATE-SHAPE; audit S1): projectarchiver.cpp is the threaded archiver's
+    # THE THREADED ARCHIVER (D6B-GATE-SHAPE; audit S1): projectarchiver.cpp is archive.responsive's
     # subject, and the generic project rule below never named tests/archiveasync.
     (r"^src/services/projectarchiv",
      ["archiveasync", "services", "app", "apppaths", "openasync", "export", "hygiene"],

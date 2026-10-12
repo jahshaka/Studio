@@ -702,9 +702,9 @@
     "src/services/projectarchiver.cpp"
    ],
    "must": [
-    "open.frames"
+    "archive.responsive"
    ],
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B batch 2: archive.responsive is deleted and meshbake.archive_bakes moves to stage-close — open.frames (the archiver rule's openasync directory, kept) stands in"
+   "restored_by": "TESTING-SPEED-A fix round 3: archive.responsive is KEPT (the archiver's only merge-tier guard; SPECS/TESTING_SPEED_ROWS.md at 5db89728) — the original row restored"
   },
   {
    "case": "S1 avatar assets",

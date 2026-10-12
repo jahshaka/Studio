@@ -4,7 +4,7 @@
 The merge runs what a change reaches, in minutes — so a KEPT row is a seconds-long guard of a named behaviour: its
 measured price (scripts/gate-times.txt, the quiet median) is held against a BUDGET — the row's own (a KEEP:rewrite line of
 tests/hygiene/row_budgets.txt, the lead's ROWS table) or its class's: a fixture (CLASS engine|selftest, a CPU row) 10 s, an
-app row or a pool 60 s (the class read from the row's admission label `<row>:<class>`, a pool's `pool` label). A row over
+app row 60 s, a pool 60 s OF ARMS (the sum of its <pool>::<arm> prices, the boot on top) (the class read from the row's admission label `<row>:<class>`, a pool's `pool` label). A row over
 its budget is A RED OF THE ROW — cut its frames, split it, or move it to the stage close — never a widened budget.
 
 RED BY DESIGN ON THE BASE (0beeac4d3) until TESTING-SPEED-B lands Part B: the 45 KEEP:rewrite rows of the ROWS table are
@@ -82,7 +82,14 @@ def over(rows, budgets, prices):
         if fate in NOT_KEPT:
             continue
         b = own if own is not None else BUDGET.get(klass, 10.0)
-        p = prices.get(name)
+        if "pool" in labels:
+            # THE POOL RULE (the lead, batch 2's read): a pool's budget is 60 s OF ARMS — the sum of its `<pool>::<arm>`
+            # price lines, the boot on top; never the whole row (pool.capture: 71.8 s whole, 51 s of arms: green). A pool
+            # with no arm price is not judged here (its arms are priced by --record-times)
+            arms = [v for k, v in prices.items() if k.startswith(name + "::")]
+            p = round(sum(arms), 2) if arms else None
+        else:
+            p = prices.get(name)
         if p is not None and p > b:
             out.append((name, p, b, fate))
     return sorted(out)
@@ -96,6 +103,11 @@ def main(source, build):
     check([x[0] for x in got] == ["a", "n", "r"], "a fixture over 10 s, an app row over 60 s and a rewrite row over its "
           "own 20 s are red; a row Part B moves and a stage-close row are not (%s)" % got)
     check(not over([("r", "app", [])], b, {"r": 19}), "a rewrite row inside its own budget is green")
+    pr = {"pool.p": 71.8, "pool.p::a": 30.0, "pool.p::b": 21.0, "pool.q": 40.0, "pool.q::a": 45.0, "pool.q::b": 20.0}
+    got = over([("pool.p", "app", ["pool"]), ("pool.q", "app", ["pool"])], {}, pr)
+    check([x[0] for x in got] == ["pool.q"] and got[0][1] == 65.0,
+          "THE POOL RULE: a pool is judged by the SUM OF ITS ARMS against 60 s, never the whole row — pool.p (71.8 s whole, "
+          "51 s of arms) green, pool.q (40 s whole, 65 s of arms) red (%s)" % got)
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_graph
     raw, rc = gate_graph.ctest_inventory(build)
@@ -125,8 +137,41 @@ def main(source, build):
     return 0
 
 
+BUDGET_RX = re.compile(r"(?:<=|\u2264|\bbudget)\s*(\d+(?:\.\d+)?)\s*s\b")
+ROW_RX = re.compile(r"\|\s*([A-Za-z0-9_.:\-]+)\s*\|\s*(\w+)\s*\|\s*[\d.]+\s*\|\s*([A-Za-z:\-]+)\s*\|(.*)\|\s*$")
+
+
+def generate(rows_md):
+    """row_budgets.txt FROM THE ROWS TABLE (the lead, batch 2's read: the table is the one source of budgets; this file is
+    generated, never hand-kept): `<row> <class> <fate> <budget s|->` per table row, the budget the LAST `<= N s` /
+    `budget N s` of a KEEP or KEEP:rewrite row's reason, `-` otherwise (its class's)."""
+    out, seen = [], set()
+    for line in open(rows_md, errors="replace"):
+        m = ROW_RX.match(line)
+        if not m or m.group(1) in seen or m.group(1) in ("row", "---"):
+            continue
+        name, klass, fate, why = m.groups()
+        seen.add(name)
+        b = "-"
+        if fate.startswith("KEEP"):
+            nums = BUDGET_RX.findall(why)
+            if nums:
+                b = ("%g" % float(nums[-1]))
+        out.append(f"{name} {klass} {fate} {b}")
+    return out
+
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(line_buffering=True)
+    if sys.argv[1:2] == ["--generate"]:
+        # row_budget.py --generate <SPECS/TESTING_SPEED_ROWS.md> <tests/hygiene/row_budgets.txt>: the header kept
+        dst = sys.argv[3]
+        head = [l.rstrip("\n") for l in open(dst) if l.startswith("#")] if os.path.exists(dst) else []
+        body = generate(sys.argv[2])
+        open(dst, "w").write("\n".join(head + body) + "\n")
+        print("row_budgets: %d rows from %s (%d with their own budget)" % (len(body), sys.argv[2],
+                                                                          sum(1 for l in body if not l.endswith(" -"))))
+        sys.exit(0)
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)

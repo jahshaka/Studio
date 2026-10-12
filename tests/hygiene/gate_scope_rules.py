@@ -593,9 +593,8 @@ def main(source, build):
     for path, suites in (
             ("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
             ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
-            # (TESTING-SPEED-A for TESTING-SPEED-B batch 2: archive.responsive is deleted, meshbake.archive_bakes moves to
-            # stage-close — the archiver rule's openasync row, kept)
-            ("src/services/projectarchiver.cpp", ("open.frames",)),
+            # (archive.responsive is KEPT: the archiver's only merge-tier guard — SPECS/TESTING_SPEED_ROWS.md at 5db89728)
+            ("src/services/projectarchiver.cpp", ("archive.responsive",)),
             ("src/services/avatarassets.cpp", ("avatar.responsive",)),
             ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",)),
             ("src/modules/avatar/avatarmodule.cpp", ("avatar.responsive",))):
@@ -607,7 +606,8 @@ def main(source, build):
         chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
         for suite in suites:
             if suite not in inventory:
-                print("  (skip: %s is not registered in this build)" % suite)
+                # A MISSING ROW IS A RED, never a skip (fix round 3): the subject's guard must exist in the build
+                check(False, "%s's guard %s is registered in this build (it is not)" % (path, suite))
                 continue
             check(code == 0 and not doc.get("fallback") and suite in chosen,
                   "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
