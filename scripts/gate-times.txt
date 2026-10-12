@@ -821,7 +821,7 @@ ssr.edge 1.92  quiet n=40
 ssr.engine 5.82  quiet n=39
 ssr.engine_asan 19.66  quiet n=39
 ssr.rings 1.73  quiet n=38
-test_engine 28.20  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=4 lane runs, box loaded (load 6-24)
+test_engine 15.91  TESTING-SPEED-B3 tip 2026-10-12: the frame-counted exposure waits, the lowest of n=2 runs (load 6)
 test_engine_asan 71.07  quiet n=40
 test_engine_recreate 4.18  quiet n=44
 testing_speed_a.boot_profile 70.00  TESTING-SPEED-A: two engine selftests (the lane's own row)

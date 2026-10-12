@@ -47,10 +47,10 @@ endfunction()
 jahshaka_engine_test(test_engine)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
 # declared 120 was below the policy, honest only with the +900 s widening (now deleted).
-# budget 20 s (the lead's): 96 cases, 2,550 frames — 28.2 s at load 6, 30.4 s at load 10 at the tip (42-51 s loaded at
-# the base; 39 s quiet): measured_exposure converges to where the value stops moving, the heavy-frame case builds its
-# ~640 M triangles a frame from a 2.5 M shell (TESTING-SPEED-B3). STILL OVER: ~8.7 s of the rest are the cases' WALL-CLOCK
-# auto-exposure waits (renderFor: the chain adapts per second) under pixel bars — reported, not cut.
+# budget 20 s: the measurement (TESTING-SPEED-B3) — 96 cases, 2,882 frames, 15.9-16.1 s at load 6 (42-51 s loaded at the
+# base; 39 s quiet): every auto-exposure wait is FRAMES now (settleExposure: rendered until the measured exposure stops
+# moving — 192 frames to converge measured_exposure's chain — in place of wall-clock renderFor seconds with an 8 ms sleep
+# a frame), and the heavy-frame case builds its ~640 M triangles a frame from a 2.5 M shell.
 set_tests_properties(test_engine PROPERTIES TIMEOUT 240)
 target_link_libraries(test_engine PRIVATE JahshakaEngine)
 
@@ -308,8 +308,8 @@ foreach(_row_frames
         "engine.oom_is_not_loss=20"   # counted from the source (it _exits: no meter report)
         "engine.window=65"
         "meshbake.shadow_vao_alias=3"
-        "test_engine=2550"
-        "test_engine_asan=2550"   # its plain twin's (the ASan runtime refuses the frame meter)
+        "test_engine=2882"
+        "test_engine_asan=2882"   # its plain twin's (the ASan runtime refuses the frame meter)
         "test_engine_recreate=48"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

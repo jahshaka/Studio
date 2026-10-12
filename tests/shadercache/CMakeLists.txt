@@ -118,9 +118,10 @@ set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shaderc
 # frames, the pending count up then back to 0, the settled picture the warm launch's.
 # THE COLD LAUNCH STARTS FROM THE STARTUP SEED (TESTING-SPEED-B3, the lead's verdict: the subject is the open's
 # background compile, not the startup build): test_async_after_open.cpp's header. Its seed lives beside the home
-# (e2e-async-after-open-seed/), made by the row when missing or stale. 1,325 frames: 75 s quiet before; at the tip
-# 33.1 s (load 6) / 34.8-36 s (load 10) — OVER the 30 s budget, so by the lead's rule (2026-10-12) it MOVES to the
-# stage close (the merge tier's async-compile neighbours: shadercache.engine_pipelines, shadercache.warmup).
+# (e2e-async-after-open-seed/), made by the row when missing or stale. budget 40 s: the measurement — 1,325 frames,
+# 33.1 s (load 6) / 34.8-36 s (load 10) at the tip (75 s quiet before). KEPT IN THE MERGE TIER over the 30 s rule (the
+# lead, 2026-10-12): the background-compile guard is reached only when the shader service changes, and it is guarded
+# nowhere else in the merge tier.
 add_executable(test_async_after_open test_async_after_open.cpp)
 set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -130,7 +131,7 @@ target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.async_after_open CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache;stage-close")
+set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache")
 
 # shader.sample_opens_quiet (ASYNC-SHADERS-1): every shipped sample opened on a cold cache with the
 # background compiler on; after each open's window, 0 UI-thread compiles (the sentry). STAGE-CLOSE
@@ -148,7 +149,8 @@ set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "s
 
 # shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
-# STAGE-CLOSE (TESTING-SPEED-B3): the soak is the ship's, beside shader.async_after_open.
+# STAGE-CLOSE (TESTING-SPEED-B3): the soak is the ship's; shader.async_after_open is the merge tier's guard of
+# the background compile.
 add_executable(test_async_soak test_async_soak.cpp)
 set_target_properties(test_async_soak PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

@@ -11,10 +11,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <chrono>
 #include <functional>
 #include <memory>
-#include <thread>
 #include <string>
 #include <set>
 #include <vector>
@@ -140,16 +138,25 @@ void aim(View *v) {
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
 void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
-/// Renders for REAL time. HDR auto-exposure adapts at a fixed rate per SECOND
-/// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast))), so
-/// a burst of back-to-back frames barely moves it however many there are — only
-/// wall-clock does. Anything asserting an exposure CHANGE has to spend it.
-void renderFor(Engine *e, double seconds) {
-    const auto start = std::chrono::steady_clock::now();
-    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
-        e->renderOneFrame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+/// Renders until a view's auto-exposure STOPS MOVING, in FRAMES (TESTING-SPEED-B3; trap 7: the engine has no wall
+/// clock, frames never clocks). The adaptation is a first-order filter at the engine's fixed 1/60 s
+/// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast)) = 2.284 % of the gap a frame; OgreChain.cpp's
+/// R32_FLOAT note), so it is the frame count that converges it, never the seconds that pass — this replaced a
+/// wall-clock loop (seconds of frames with an 8 ms sleep each). Reads View::measuredExposureScale() every 8 frames
+/// and returns at the first two reads within 0.1 % of each other (a view with no meter reads 0 twice: nothing adapts,
+/// so nothing is waited for), bounded at 600 frames (10 s of the engine's time). Returns the frames rendered.
+int settleExposure(Engine *e, View *v, int maxFrames = 600) {
+    float prev = -1.0f;
+    int frames = 0;
+    while (frames < maxFrames) {
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        frames += 8;
+        const float now = v->measuredExposureScale();
+        if (frames >= 16 && prev >= 0.0f && std::fabs(now - prev) <= 0.001f * std::max(prev, 1e-6f)) return frames;
+        prev = now;
     }
+    std::printf("    the exposure still moved after %d frames\n", frames);
+    return frames;
 }
 
 // ---------------------------------------------------------------------------
@@ -5033,7 +5040,7 @@ void hdr_tonemap_and_exposure() {
     v->setPostFx(fxDesc);
     CHECK_MSG(v->workspaceGeneration() >= 2u, "enabling HDR rebuilds the chain: %u",
               v->workspaceGeneration());
-    renderFor(fx.e, 1.2);   // auto-exposure adapts per SECOND, not per frame
+    settleExposure(fx.e, v);   // the auto-exposure converged, in frames
     if (!fx.e->lastError().empty())
         std::printf("    lastError after HDR enable: %s\n", fx.e->lastError().c_str());
     Image hdr; REQUIRE(v->readPixels(hdr));
@@ -5055,7 +5062,7 @@ void hdr_tonemap_and_exposure() {
     CHECK_MSG(v->workspaceGeneration() == gen,
               "exposure is a uniform, not a graph change: %u -> %u", gen,
               v->workspaceGeneration());
-    renderFor(fx.e, 1.5);
+    settleExposure(fx.e, v);
     Image bright; REQUIRE(v->readPixels(bright));
     const Px brightCube = centre(bright);
     const int lumHdr = (hdrCube.r + hdrCube.g + hdrCube.b) / 3;
@@ -5157,10 +5164,9 @@ void fixed_exposure_tonemap() {
               gSat, gLit, rawSat, rawLit);
     CHECK_MSG(gMax < 255, "and the brightest channel rolls off short of white: %d", gMax);
 
-    // 3. DETERMINISTIC. The automatic chain adapts against WALL CLOCK time
-    // (renderFor exists precisely because of that), so a second read after real
-    // time has passed would move. The fixed form must not move by one bit.
-    renderFor(fx.e, 0.6);
+    // 3. DETERMINISTIC. The automatic chain adapts frame by frame, so a second read
+    // 36 frames later would move. The fixed form must not move by one bit.
+    render(fx.e, 36);
     Image again; REQUIRE(v->readPixels(again));
     bool identical = again.width == graded.width && again.height == graded.height &&
                      again.rgba == graded.rgba;
@@ -5200,23 +5206,6 @@ void fixed_exposure_tonemap() {
 /// FIVE THINGS, four of which are the documented ways to get 0 back — a
 /// readback of a texture nobody has written is the reflection_map class of
 /// defect (CLAUDE.md), where "finite and positive" happily passes garbage.
-/// Renders until the view's measured exposure stops moving: reads 0.1 s of frames apart (renderFor: the
-/// adaptation runs per SECOND) until two agree within 0.1 % with a value, bounded by the four seconds the case
-/// used to wait unconditionally (TESTING-SPEED-B3).
-static void renderUntilExposureSettles(Engine *e, View *v) {
-    float prev = -1.0f;
-    for (int i = 0; i < 40; ++i) {
-        renderFor(e, 0.1);
-        const float now = v->measuredExposureScale();
-        if (now > 0.0f && prev > 0.0f && std::fabs(now - prev) <= 0.001f * prev) {
-            std::printf("    the measured exposure stopped moving after %.1f s: %f\n", 0.1 * (i + 1), double(now));
-            return;
-        }
-        prev = now;
-    }
-    std::printf("    the measured exposure still moved after 4.0 s\n");
-}
-
 void measured_exposure_is_readable_and_refuses_to_guess() {
     Fixture fx;
     View *v = fx.view("measured-exp-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
@@ -5252,11 +5241,11 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
               "a freshly built chain that has drawn nothing measures nothing: %f",
               double(v->measuredExposureScale()));
 
-    // 3. CONVERGED. Read until the value stops moving (TESTING-SPEED-B3: it was four
-    //    seconds of frames, 0.25^4 of the way there, read once); the value is the
+    // 3. CONVERGED. Rendered until the value stops moving, in frames (TESTING-SPEED-B3:
+    //    it was four wall-clock seconds, read once); the value is the
     //    tonemapper's own multiplier, so it must be a plausible positive number
     //    rather than merely non-zero.
-    renderUntilExposureSettles(fx.e, v);
+    std::printf("    the measured exposure stopped moving after %d frames\n", settleExposure(fx.e, v));
     const float measured = v->measuredExposureScale();
     std::printf("    measured exposure scale after convergence: %f\n", double(measured));
     CHECK_MSG(measured > 0.0f && std::isfinite(measured),
@@ -5281,7 +5270,7 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
               double(v->measuredExposureScale()));
-    renderUntilExposureSettles(fx.e, v);
+    std::printf("    ...after the rebuild: stopped moving after %d frames\n", settleExposure(fx.e, v));
     CHECK_MSG(v->measuredExposureScale() > 0.0f,
               "...and it reports again once the NEW graph has drawn: %f",
               double(v->measuredExposureScale()));
@@ -5293,7 +5282,7 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     fxDesc.tonemapFixed  = true;
     fxDesc.exposureScale = 0.0f;
     v->setPostFx(fxDesc);
-    renderFor(fx.e, 1.0);
+    render(fx.e, 60);   // a second of the engine's frames: a meter, if there were one, would have reported
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "the fixed grade has no measurement to report: %f",
               double(v->measuredExposureScale()));
@@ -5312,7 +5301,7 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     CHECK_MSG(pinned.rgba != card.rgba,
               "a pinned exposureScale grades differently from the grey card it replaces");
     // And it is still deterministic: it is a constant by the time it gets here.
-    renderFor(fx.e, 0.5);
+    render(fx.e, 30);
     Image pinnedAgain; REQUIRE(v->readPixels(pinnedAgain));
     CHECK_MSG(pinnedAgain.rgba == pinned.rgba,
               "a pinned exposureScale is time-independent, like the card");
@@ -5346,12 +5335,12 @@ void bloom_bleeds_bright_areas() {
     fxDesc.hdr = true;
     fxDesc.bloom = false;
     v->setPostFx(fxDesc);
-    renderFor(fx.e, 0.8); Image noBloom; REQUIRE(v->readPixels(noBloom));
+    settleExposure(fx.e, v); Image noBloom; REQUIRE(v->readPixels(noBloom));
 
     fxDesc.bloom = true;
     fxDesc.bloomThreshold = 1.0f;
     v->setPostFx(fxDesc);
-    renderFor(fx.e, 0.8); Image withBloom; REQUIRE(v->readPixels(withBloom));
+    settleExposure(fx.e, v); Image withBloom; REQUIRE(v->readPixels(withBloom));
 
     // A ring of background pixels well outside the cube's silhouette.
     auto haze = [](const Image &i) {
@@ -5584,7 +5573,7 @@ void postfx_epic_shape_with_msaa() {
     // lastError is STICKY across the whole process (nothing clears it), so the
     // question is whether THIS sequence added one, not whether it is empty.
     const std::string errBefore = fx.e->lastError();
-    renderFor(fx.e, 1.0);
+    settleExposure(fx.e, v);
     Image img; REQUIRE(v->readPixels(img));
     const Px c = centre(img);
     std::printf("    epic + 4x MSAA centre: %d %d %d\n", c.r, c.g, c.b);
@@ -5597,7 +5586,7 @@ void postfx_epic_shape_with_msaa() {
     // preset recompile is the part that has to survive being combined.
     fxDesc.smaaPreset = 1;
     v->setPostFx(fxDesc);
-    renderFor(fx.e, 0.6);
+    settleExposure(fx.e, v);
     REQUIRE(v->readPixels(img));
     const Px c2 = centre(img);
     std::printf("    + SMAA centre: %d %d %d\n", c2.r, c2.g, c2.b);
@@ -5730,7 +5719,7 @@ void sky_stays_smooth_under_the_post_chain() {
 
     auto check = [&](const char *name, const PostFxDesc &desc, bool settle) {
         v->setPostFx(desc);
-        if (settle) renderFor(fx.e, 0.7);   // auto-exposure adapts per second
+        if (settle) settleExposure(fx.e, v);   // the auto-exposure converged, in frames
         else        render(fx.e, 4);
         Image img;
         if (!v->readPixels(img)) { CHECK_MSG(false, "readPixels failed for %s", name); return 0; }
