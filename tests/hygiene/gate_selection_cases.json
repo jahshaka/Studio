@@ -761,12 +761,12 @@
     "src/services/vrworld.cpp"
    ],
    "must": [
-    "vr_session.verbs_session"
+    "vr_noruntime.vr_verbs"
    ],
    "must_not": [
     "vr.grab_maths"
    ],
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B batch 4: vr.session moves to stage-close; vr.grab_maths (compiled, kept) stands in"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B batch 4: vr.session moves to stage-close; vr.grab_maths (compiled, kept) stands in. TESTING-SPEED-B4: pool.vr_session moved to stage-close, so the must row is the merge-tier VR verbs arm vr_noruntime.vr_verbs (tests/scripting: the vr.* verbs without a runtime) instead of vr_session.verbs_session"
   },
   {
    "case": "the graph's precision: the bake is not in a document-only executable",
