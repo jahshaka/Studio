@@ -10,10 +10,10 @@
 // permutation. `multithreadedShaderCompilation === true` below is the only
 // assertion in the whole gate that goes red for it.
 //
-// RUN TWICE, from two ctest entries against two virgin HOMEs:
-//   threading.mode          the default worker counts (parallel compile)
-//   threading.mode_serial   JAHSHAKA_SCENE_THREADS=1 (serial compile)
-// and threading.mode_pixels byte-compares the PNG each one writes. Serial and
+// RUN TWICE by ONE ctest row (threading.mode: tests/threading/pair.sh), in two
+// virgin HOMEs: first the default worker counts (parallel compile), then
+// JAHSHAKA_SCENE_THREADS=1 (serial compile), and the row byte-compares the PNG
+// each half writes. Serial and
 // parallel compilation must produce IDENTICAL images: threading may change when
 // a shader is built and on which thread, never what it computes. That is the
 // real correctness claim of P1, and it is cheap.

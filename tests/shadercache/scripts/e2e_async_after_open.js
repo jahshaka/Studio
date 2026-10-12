@@ -7,14 +7,18 @@
 function st() { return app.asyncShaders(); }
 function live() { return app.shaderCache().liveCompiles; }
 var r = { phases: [], frames: [] };
+r.startup = app.shaderCache();   // what the startup build compiled (0 when the seed served it: the driver reads it)
 app.setAsyncShaders(true);
 // ONE NAME PER LAUNCH: the warm launch shares the cold one's home (that is its shader cache) and so its
 // library, and a library refuses a second project of the same name — the fixed name made the warm
 // launch die at this line, "both launches reported" red 3/3 (A2-defect-shader.async_after_open).
 project.create("async after open " + (OUTDIR.indexOf("/warm") >= 0 ? "warm" : "cold"), { template: "basic" });
-editor.frame(120);
+// COUNTED (TESTING-SPEED-B3): the open's own compiles are waited out by app.waitForAsyncShaders() and the
+// 60 frames after it — the two fixed 120-frame waits before them are 10 frames each now (the sphere's
+// add needs a frame to reach the engine; the waiter does the rest). Both launches run the same frames.
+editor.frame(10);
 var sphere = scene.addPrimitive("Sphere", { position: [0, 1, 0] });
-editor.frame(120);
+editor.frame(10);
 app.waitForAsyncShaders();
 editor.frame(60);
 r.ready = st();

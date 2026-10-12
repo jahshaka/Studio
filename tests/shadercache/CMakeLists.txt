@@ -26,6 +26,8 @@ jah_gpu_row(shadercache.container CLASS engine COMMAND test_shader_cache
 # log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=5 — gate
 # records 49.2 / 48.3 / 70.1 / 52.3 / 87.7 s (10-10 04:20 - 12:37; load 7-25, 0-4 builds beside them); median 52.3 ->
 # 6x = 320; slot-era worst 87.7 (a scoped gate, 4 builds, load 25.2) -> TIMEOUT 320 (was 720).
+# budget 60 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — 11 cases, ~51 engine
+# create/destroy cycles (the corruption cases: every attack on every file) are the subject; 52 s quiet, 47-77 s loaded.
 set_tests_properties(shadercache.container PROPERTIES TIMEOUT 320 LABELS "shadercache")
 # A pipeline the engine builds lazily reaches the disk (PIPELINE-CACHE-1 fix round):
 # three engine processes against one directory, the driver's own disk cache off so
@@ -72,8 +74,13 @@ endif()
 
 # The application-level contract: the verbs, --clear-shader-cache, and the
 # owner's rule that the startup shader build happens behind the launch screen.
-# Spawns the REAL binary three times into a scratch HOME (the import.shutdown /
-# open.responsive pattern) and reads app.shaderCache() from its output.
+# Spawns the REAL binary into a scratch HOME (the import.shutdown pattern) and reads
+# app.shaderCache() from its output. TWO ROWS (TESTING-SPEED-B3; one row of five launches before):
+#   shadercache.app        three launches — cold, warm (the steady state's compiled == 0 is its bar:
+#                          the first warm launch IS the steady state since WARMUPSET-2), cleared.
+#   shadercache.app.churn  `--churn`, stage-close, its own home: a seeding cold launch, then the save
+#                          under churn (the SMOKE-ENGINE-1 crash: the pass-cache delta < 8 across 300 sky
+#                          captures, the capacity >= 8192), unchanged.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 add_executable(test_shader_cache_app test_shader_cache_app.cpp)
 set_target_properties(test_shader_cache_app PROPERTIES CXX_STANDARD 17
@@ -84,7 +91,11 @@ target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shadercache.app CLASS app TIER document   COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# budget 60 s: the measurement — three launches, 976 frames: 42.8-60.8 s loaded at the tip (cold 33-35, warm 4.6, cleared 19).
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
+jah_gpu_row(shadercache.app.churn CLASS app TIER document   COMMAND test_shader_cache_app --churn
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.churn PROPERTIES TIMEOUT 600 LABELS "shadercache;stage-close")
 
 # shader.live_compiles (SHADER-WARM-2): after the splash, nothing compiles on the UI
 # thread outside a compile window — a create/open in flight or a compile dialog
@@ -100,11 +111,16 @@ target_compile_definitions(test_live_compiles PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.live_compiles CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_live_compiles
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache")
+set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache;stage-close")
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
 # frames, the pending count up then back to 0, the settled picture the warm launch's.
+# THE COLD LAUNCH STARTS FROM THE STARTUP SEED (TESTING-SPEED-B3, the lead's verdict: the subject is the open's
+# background compile, not the startup build): test_async_after_open.cpp's header. Its seed lives beside the home
+# (e2e-async-after-open-seed/), made by the row when missing or stale. 1,325 frames: 75 s quiet before; at the tip
+# 33.1 s (load 6) / 34.8-36 s (load 10) — OVER the 30 s budget, so by the lead's rule (2026-10-12) it MOVES to the
+# stage close (the merge tier's async-compile neighbours: shadercache.engine_pipelines, shadercache.warmup).
 add_executable(test_async_after_open test_async_after_open.cpp)
 set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -114,10 +130,11 @@ target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.async_after_open CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache")
+set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache;stage-close")
 
 # shader.sample_opens_quiet (ASYNC-SHADERS-1): every shipped sample opened on a cold cache with the
-# background compiler on; after each open's window, 0 UI-thread compiles (the sentry).
+# background compiler on; after each open's window, 0 UI-thread compiles (the sentry). STAGE-CLOSE
+# (TESTING-SPEED-B3): one cold launch opening every sample is the ship's property, with the owner's smoke.
 add_executable(test_sample_opens_quiet test_sample_opens_quiet.cpp)
 set_target_properties(test_sample_opens_quiet PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -127,10 +144,11 @@ target_compile_definitions(test_sample_opens_quiet PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.sample_opens_quiet CLASS app TIER document   COMMAND test_sample_opens_quiet
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache")
+set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache;stage-close")
 
 # shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
+# STAGE-CLOSE (TESTING-SPEED-B3): the soak is the ship's, beside shader.async_after_open.
 add_executable(test_async_soak test_async_soak.cpp)
 set_target_properties(test_async_soak PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -140,7 +158,7 @@ target_compile_definitions(test_async_soak PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.async_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_soak
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache")
+set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache;stage-close")
 
 # The per-scene PSO precache (SHADER_CACHE_SPEC.md §5), asserted by COUNTING
 # COMPILES: after View::warmUpShaders() the first real frame must compile
@@ -174,3 +192,27 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 set_tests_properties(shadercache.warmup_pass PROPERTIES
     ENVIRONMENT "JAHSHAKA_WARMUP_PASS=1"
     TIMEOUT 120 LABELS "shadercache")
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "shader.async_after_open=1325"
+        "shader.async_soak=1738"
+        "shader.live_compiles=3088"
+        "shader.sample_opens_quiet=8366"
+        "shadercache.app=976"
+        "shadercache.app.churn=1320"
+        "shadercache.container=136"
+        "shadercache.container_asan=136"   # its plain twin's, an upper bound (the corruption cases only)
+        "shadercache.engine_pipelines=180"
+        "shadercache.warmup=17"
+        "shadercache.warmup_pass=17"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

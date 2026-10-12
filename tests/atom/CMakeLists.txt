@@ -26,6 +26,8 @@ jah_gpu_row(atom.dolly_gate CLASS engine COMMAND test_atom_dolly_gate
 # 153 poses, each rendering one 1024x1024 frame and downloading it, plus the
 # warm-up: comfortably inside 300 s on the rig (measured ~40 s) and with room
 # for a contended one.
+# budget 30 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — two walks x 153 steps at 1024^2,
+# a readback each, ARE the subject (554 frames; 28 s quiet, 34.7-42 s loaded; spikes/testing-speed-b3/profile.txt).
 set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 240 LABELS "engine")
 
 # ---------------------------------------------------------------------------
@@ -195,6 +197,8 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(engine.atom_parity CLASS engine COMMAND test_atom_parity
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # 220 cells in 20 arms, each read until stable, plus a material destroyed mid-grid.
+    # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — the 20 arms are the subject
+    # (580 frames; 37 s quiet, 42-53 s loaded; spikes/testing-speed-b3/profile.txt).
     set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
     # ...its quick arm (one row, the destroyed material included) UNDER THE LAYER.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
@@ -210,6 +214,8 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # and the screen decode, against the same view through stock PBS (the split's
     # measurement door shut); the ids against the CPU raster; the split's stat; the
     # buckets. ATOM_DRAW_QUICK=1 runs the direct arm alone (a diagnosis switch).
+    # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — the arms are the subject
+    # (624 frames; 36 s quiet, 35.6-47 s loaded).
     add_executable(test_atom_draw test_atom_draw.cpp)
     jah_atom_engine_target(test_atom_draw)
     target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -232,9 +238,10 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
     # identical worlds in lockstep, one with the occlusion and one frustum-only, every
     # frame's id image compared word for word over a still pose, a walk past a wall, a
-    # camera cut, a turn, a letterboxed and an orthographic view. The script half
-    # (tests/atom/scripts/atom_occlusion.js) proves the same on the default scene and
-    # Showroom 2 through the app.
+    # camera cut, a turn, a letterboxed and an orthographic view. (Its app half,
+    # atom.occlusion_exact_app — Showroom 2 imported, three poses, the shaded picture
+    # with the occlusion on and off — is deleted by TESTING-SPEED-B3: this row guards the
+    # id images word for word; what went is only the final shaded picture through the app.)
     add_executable(test_atom_occlusion test_atom_occlusion.cpp)
     jah_atom_engine_target(test_atom_occlusion)
     jah_gpu_row(atom.occlusion_exact CLASS engine COMMAND test_atom_occlusion
@@ -356,7 +363,7 @@ jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 12)
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
 configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
-jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
+jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting;stage-close")
 # The stand-in is written on the CPU (an .obj), so the fixture boots no Vulkan (GATE-ADMIT-1: no VRAM tokens).
 jah_no_display(atom.lod_switch.fixture)
 jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
@@ -365,30 +372,13 @@ jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
          WORKING_DIRECTORY ${_lod_switch_home}/run)
 # The stand-in's bake (~25 k triangles: chain + DAG + SDF + cards) and the slow zoom's two
 # 60-shot walks (ATOM-CLUSTER-CUT, ~100 s of the 234 s measured solo) are the run.
+# STAGE-CLOSE (TESTING-SPEED-B3, the ROWS table): a whole-scene measurement (the viewport rules, the
+# Levels ramp, the slow zoom's no-band) guarded nowhere else — the ship's run, never the merge's; the
+# band's own fixture is engine.lod_hysteresis.
 set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+    TIMEOUT 1560 LABELS "scripting;stage-close"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
-
-# ---------------------------------------------------------------------------
-# atom.occlusion_exact_app — THE ID PASS'S OCCLUSION IS EXACT IN THE PRODUCT (ATOM-OCCLUSION-1,
-# the script half of atom.occlusion_exact): the default scene and Showroom 2 at three
-# poses, the 'triangles' Atom view (the id image, painted) and the ordinary picture with
-# the occlusion on and with world.setAtomOcclusion(false), pixel for pixel. An app run on
-# the rig's display; a FRESH home per run (the sample is imported).
-set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
-configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
-set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
-jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
-jah_gpu_row(atom.occlusion_exact_app CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
-         WORKING_DIRECTORY ${_occl_home}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 1020 = 6 x the run log's quiet median 169.9 s (40 quiet PASS runs since 2026-10-01, worst 366.2 s);
-# declared 480 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(atom.occlusion_exact_app PROPERTIES
-    FIXTURES_REQUIRED atomOcclusionHome
-    TIMEOUT 1020 LABELS "scripting"
-    ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")
 
 # atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh
 # REFUSES a card that names a LOD level past the chain (a baked mesh with its chain stripped
@@ -402,3 +392,34 @@ jah_gpu_row(atom.dag_chain_validate CLASS engine COMMAND test_atom_dag_chain
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.dag_chain_validate PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "engine")
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "atom.cluster_crack=1153"
+        "atom.cluster_cut=0"
+        "atom.dag_chain_validate=372"
+        "atom.dolly_gate=554"
+        "atom.lod_switch=27651"
+        "atom.occlusion_exact=348"
+        "atom.two_sided=378"
+        "atom.words_still=223"
+        "engine.atom_draw=624"
+        "engine.atom_negative_control_validation=123"
+        "engine.atom_negative_control_validation_lavapipe=123"
+        "engine.atom_parity=580"
+        "engine.atom_parity_validation=40"
+        "engine.tlas_compute=46"
+        "shadow.atom_cut=80"
+        "shadow.atom_parity=111"
+        "shadow.caster_first_frame=12"
+        "shadow.stock_lod=71"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

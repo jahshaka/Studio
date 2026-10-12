@@ -542,10 +542,13 @@ int main()
     std::printf("\n== the ray level's 2x hysteresis ==\n");
     {
         GpuSceneStatus st0 = scene->gpuSceneStatus();
-        // A minute of a camera flying in and out, at the engine's fixed 1/60 s.
-        for (int f = 0; f < 3600; ++f) {
-            const float t = float(f) / 3600.0f;
-            const float z = 20.0f + 120.0f * (0.5f - 0.5f * std::cos(t * 6.2831853f * 4.0f));
+        // A camera flying in and out, at the engine's fixed 1/60 s: ONE dolly cycle of 900 frames
+        // (TESTING-SPEED-B3: it flew four identical cycles, 3,600 frames, for a per-frame ratio
+        // that one cycle at the same speed measures the same way).
+        const int kDollyFrames = 900;
+        for (int f = 0; f < kDollyFrames; ++f) {
+            const float t = float(f) / float(kDollyFrames);
+            const float z = 20.0f + 120.0f * (0.5f - 0.5f * std::cos(t * 6.2831853f));
             enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, z), Vec3(0.0f, 0.0f, -20.0f));
             e->renderOneFrame();
         }
@@ -553,15 +556,15 @@ int main()
         const unsigned long long evals = st1.rayLevelEvals - st0.rayLevelEvals;
         const unsigned long long refits = st1.rayLevelRefits - st0.rayLevelRefits;
         const unsigned long long walks = st1.rayLevelWalks - st0.rayLevelWalks;
-        std::printf("   3,600 frames (one minute at 1/60 s), %u instances, four dolly cycles:\n"
+        std::printf("   %d frames (one dolly cycle at 1/60 s), %u instances:\n"
                     "   %llu walks, %llu re-evaluations, %llu REFITS\n",
-                    st1.slotCount, walks, evals, refits);
+                    kDollyFrames, st1.slotCount, walks, evals, refits);
         CHECK(walks > 0ull, "the pass ran while the camera moved");
         CHECK(refits <= evals, "a refit is a re-evaluation whose answer changed");
         // The claim the design makes is that the band keeps refits RARE — far
         // below one per instance per frame, which is what a rule without
         // hysteresis would cost on a dolly.
-        const double perFrame = double(refits) / 3600.0;
+        const double perFrame = double(refits) / double(kDollyFrames);
         std::printf("   = %.2f refits per frame, %.5f per instance per frame\n", perFrame,
                     perFrame / double(std::max(1u, st1.slotCount)));
         CHECK(perFrame < double(st1.slotCount) * 0.01,

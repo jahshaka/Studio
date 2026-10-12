@@ -25,6 +25,8 @@ target_link_libraries(test_gpu_cull PRIVATE JahshakaEngine)
 add_dependencies(test_gpu_cull JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_cull CLASS engine COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# budget 10 s: the measurement (TESTING-SPEED-B3): one dolly cycle (900 frames) for four identical ones — 916 frames,
+# 8.7 s at load 6, 13.2 s at load 10 at the tip (57-68 s loaded at the base).
 set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
 # engine.gpu_cull.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
@@ -114,3 +116,22 @@ add_dependencies(test_voxel_reader_parity JahshakaEngineMedia)
 jah_gpu_row(engine.voxel_reader_parity CLASS engine COMMAND test_voxel_reader_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "chain.hzb=68"
+        "chain.hzb.timing=68"   # chain.hzb's (the same binary)
+        "engine.gpu_cull=916"
+        "engine.gpu_cull.timing=916"   # engine.gpu_cull's (the same binary)
+        "engine.lod_rule_parity=12"
+        "engine.voxel_reader_parity=17"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

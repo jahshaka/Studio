@@ -34,29 +34,11 @@ target_compile_definitions(test_open_responsive PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 
-set(_open_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open)
-file(MAKE_DIRECTORY ${_open_home}/run)
-# THE PUSH ROW ASSERTS THE COUNTS, THE STAGE-CLOSE ROW THE MILLISECONDS (lane D6B-GATE-SHAPE;
-# audit §5, verdict FIX-TIME): open.responsive runs every count, structure and ledger
-# assertion and prints each UI-gap / frame / watchdog reading — the cold and per-sample ceilings
-# and the exit budget too, since GATE-SPEED-1 (39 of its 41 reds on disk were the cold
-# ceiling read on a loaded box); open.responsive.timing
-# (below) is the same binary with JAHSHAKA_TIMING_BARS=1 — the bars armed, on a quiet box,
-# under the GPU-timing lock. The push row measures no time, so it left the lock.
-jah_gpu_row(open.responsive CLASS app TIER epic NEEDS photon COMMAND test_open_responsive
-         WORKING_DIRECTORY ${_open_home}/run)
-# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
-# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): COLD, n=5 — four gate
-# records (scoped-tier/smoke, 04:16-11:23: 138.0 / 125.4 / 233.1 / 147.4 s; load 8-23, 0-4 builds beside them) and this
-# lane's first solo run in its home (208.6 s, 14:18, load 22.7 with 7 builds on the box); median 147.4 -> 6x = 890;
-# slot-era worst 233.1 -> TIMEOUT 890 (was 1740, 6x a contended -j4 worst). Its two warm repeats (79.8 s, a sibling
-# ctest beside them) are not the sample.
-set_tests_properties(open.responsive PROPERTIES
-    ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    # 890 — the item-7 note above the row.
-    TIMEOUT 890 LABELS "openasync")
-# open.responsive.timing — the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
-# Its own home, so the stage-close run and a lane's push-row run never share a library.
+# ONE ROW, AT THE STAGE CLOSE (TESTING-SPEED-B3): open.responsive.timing below is the suite — every
+# count, structure and ledger assertion AND the millisecond bars armed (JAHSHAKA_TIMING_BARS=1), on a quiet
+# box under the GPU-timing lock. Its push-tier twin `open.responsive` (the same binary in a second home,
+# the bars only printed: 147 s a merge) is deleted; the merge tier's openasync guard is open.frames.
+# open.responsive.timing — the counts and the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
 # TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
@@ -76,7 +58,7 @@ set_tests_properties(open.responsive.timing PROPERTIES
 # WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
 # while proving no race; read the race reports, not the verdict.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked(open.responsive open.responsive.timing)   # spawns the app: see jah_tsan_blocked
+jah_tsan_blocked(open.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1).
 #
@@ -94,6 +76,8 @@ file(MAKE_DIRECTORY ${_frames_home}/run)
 jah_gpu_row(open.frames CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js
          WORKING_DIRECTORY ${_frames_home}/run)
+# budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12): 539 frames, ~23-25 s with the WARM
+# home it runs in (a cold home's startup build is 40 s of its own: that is not this row's shape).
 # TIMEOUT 300: three opens of the dragon sample plus two archive imports, cold
 # (the home is not wiped between runs, so only the first is a cold bake).
 set_tests_properties(open.frames PROPERTIES
@@ -129,15 +113,27 @@ jah_tsan_blocked(open.crash_soak)
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
-if(TEST open.responsive)
-    jah_fresh_home_fixture(open.responsive.fresh_home openResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open" WARM LABELS "openasync")
-    set_property(TEST open.responsive APPEND PROPERTY FIXTURES_REQUIRED openResponsiveFreshHome)
-endif()
 if(TEST open.responsive.timing)
-    jah_fresh_home_fixture(open.responsive.timing.fresh_home openResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing" WARM LABELS "openasync")
+    jah_fresh_home_fixture(open.responsive.timing.fresh_home openResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing" WARM LABELS "openasync;stage-close")
     set_property(TEST open.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED openResponsiveTimingFreshHome)
 endif()
 if(TEST open.frames)
     jah_fresh_home_fixture(open.frames.fresh_home openFramesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames" WARM LABELS "openasync")
     set_property(TEST open.frames APPEND PROPERTY FIXTURES_REQUIRED openFramesFreshHome)
 endif()
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "open.crash_soak=5946"
+        "open.frames=539"
+        "open.responsive.timing=2342"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

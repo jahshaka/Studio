@@ -1105,12 +1105,18 @@ static int decodeExactMain()
         env.view->setBackground(bgA);
         // SETTLED: the 200 textures landed (a datablock still baking is PENDING and
         // drawn by PBS; every landing re-routes items) and the frames after it.
+        // COUNTED, NOT A FLOOR (TESTING-SPEED-B3): the loop leaves at the first frame past
+        // 30 with nothing pending — it held a 300-frame floor in each shape (602 of the
+        // row's ~1,800 frames; measured: nothing was pending at frame 31 in either shape),
+        // and the fixed 120-frame stills after it (here and before HOLES) are gone too:
+        // still() below reads every 16 frames until two reads are the same bytes — the
+        // count of frames to where the picture stops moving.
         int settle = 0;
         for (; settle < 3000; ++settle) {
             frame(env, 1);
-            if (settle > 300 && env.scene->atomDrawStatus().pending == 0u) break;
+            if (settle > 30 && env.scene->atomDrawStatus().pending == 0u) break;
         }
-        pathStill(env, 120);
+        pathStill(env, 2);
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         bool prepassRan = false, decodeRan = false;
         {
@@ -1145,7 +1151,7 @@ static int decodeExactMain()
     worldmodes::setRowValue(env.doc, QStringLiteral("bloom"), 0);
     worldmodes::setRowValue(env.doc, QStringLiteral("smaa"), 0);
     worldmodes::setRowValue(env.doc, QStringLiteral("ssao"), 0);
-    pathStill(env, 120);
+    pathStill(env, 2);
     auto follow = [&](const char *what, std::vector<bool> &mask) {
         Image pb, pm;
         env.view->setBackground(bgA);

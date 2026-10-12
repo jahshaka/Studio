@@ -77,7 +77,9 @@ using namespace mcpharness;
 /// grid and leaves one tile per project, the ledgers, the quit — and PRINTS each
 /// millisecond reading; `open.responsive.timing` (stage-close, quiet box, the GPU lock)
 /// runs the same binary with the bars armed. A bar that reds only on a loaded box is
-/// read there, never widened here.
+/// read there, never widened here. (TESTING-SPEED-B3: the push-tier row is deleted —
+/// `open.responsive.timing` is the one row, at the stage close, asserting both; without
+/// JAHSHAKA_TIMING_BARS a hand run still asserts the counts and prints the milliseconds.)
 static const bool gTimingBars = jahtest::timingBarsArmed();
 #define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("open.responsive", cond, msg)
 

@@ -39,154 +39,50 @@ set_tests_properties(threading.staging_race PROPERTIES
 # raced on.
 jah_tsan_lane(threading.staging_race)
 
-# threading.mode / .mode_serial / .mode_pixels (gate G1-c) — the mode-2 smoke.
+# threading.mode (gate G1-c) and threading.gi_resolve — THE TWO COMPILE PAIRS, ONE ROW EACH
+# (TESTING-SPEED-B3; they were three ctest entries each: the parallel half, the _serial half and a
+# _pixels byte compare between their fixtures).
 #
-# THREE ctest entries for ONE subject, because the subject is a COMPARISON: the
-# same scene opened once with the editor scene's real worker pool and once with
-# it pinned to a single thread, and the claim is that threaded and serial shader
-# compilation produce IDENTICAL pixels. The script's header explains what it
-# asserts and why Matcaps; what belongs here is why it is wired this way.
-#
-#   * TWO VIRGIN HOMEs, one per run. Both halves must COMPILE, and a shared HOME
-#     would leave the second run reading the first one's shader cache — turning
-#     the "it really compiled" assertion into a no-op and, worse, making the
-#     serial half not serial-compile at all.
-#   * ENGINE UP (no --headless): the whole subject is shader compilation during
-#     a rendered frame.
-#   * RESOURCE_LOCK threading on both halves (GATE-SPEED-1; RUN_SERIAL until then).
-#     They are not timing gates: their claim is a BYTE compare of two pictures, which
-#     a loaded box cannot move. What must not happen is the four compile halves of
-#     this file (these two and the gi_resolve pair) opening a project at Epic all at
-#     once — the lock keeps them single-file among themselves, while RUN_SERIAL
-#     stopped the WHOLE gate for each of them (1.2 min per tier in the gate-speed
-#     audit's replay). VERDICT (the law for dropping RUN_SERIAL): the family ran 3x
-#     solo and 3x under a -j4 load, green, Xid 0 — spikes/gate-speed-1/.
-#     The COST starts the chain early so it overlaps the gate instead of ending it.
-#   * The pixel compare is `cmake -E compare_files` on the two PNGs — byte for
-#     byte, no tolerance. Anything else would be a different claim.
-# THE threading FAMILY'S COST (GATE-SPEED-1; the serial families, tests/CMakeLists.txt): above
-# every measured row and below the monado / gi_chain chains, so the four-row chain starts early.
+# The subject is a COMPARISON: the same scene opened once with the editor scene's real worker pool and
+# once with it pinned to a single thread (JAHSHAKA_SCENE_THREADS=1, read once at scene creation:
+# src/bridge/sceneworkerthreads.h), and the claim is that threaded and serial shader compilation produce
+# IDENTICAL pixels. tests/threading/pair.sh runs BOTH halves in sequence in one row:
+#   * TWO VIRGIN HOMEs, one per half (fresh_home.sh, the one wipe). Both halves must COMPILE, and a
+#     shared HOME would leave the second reading the first one's shader cache — turning the "it really
+#     compiled" assertion into a no-op and the serial half into no serial compile at all.
+#   * ENGINE UP (no --headless): the whole subject is shader compilation during a rendered frame.
+#   * BOTH HALVES EVERY RUN, nothing stored: the gi_resolve defect (COLDGI) showed in the SERIAL half,
+#     and a stored hash of either half would be a frozen picture against forward-building.
+#   * the compare is `cmp` on the two 640x360 PNGs — byte for byte, no tolerance.
+# STAGE-CLOSE (the ROWS table: a pair of Epic opens compiling cold is the ship's guard; the merge tier's
+# probe of the mode-2 flag is the lead's follow-up). RESOURCE_LOCK threading: the two pair rows never
+# compile beside each other (GATE-SPEED-1's verdict, spikes/gate-speed-1/); the COST starts the chain early.
 set(JAH_COST_THREADING 80000)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(mode.js.in ${CMAKE_CURRENT_BINARY_DIR}/mode.js @ONLY)
-
-set(_thr_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_mode)
-set(_thr_home_ser ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_mode_serial)
-
-# The one fresh-home wipe (tests/support/fresh_home.sh, jah_fresh_home_fixture).
-jah_fresh_home_fixture(threading.freshhome.mode threading_home_mode "${_thr_home_par}" LABELS "threading")
-
-jah_fresh_home_fixture(threading.freshhome.mode_serial threading_home_mode_serial "${_thr_home_ser}" LABELS "threading")
-
-jah_gpu_row(threading.mode CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
-         WORKING_DIRECTORY ${_thr_home_par}/run)
-set_tests_properties(threading.mode PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_par};JAHSHAKA_DATA_ROOT=${_thr_home_par}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED threading_home_mode
-    FIXTURES_SETUP threading_shot_parallel
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 300)
-
-# JAHSHAKA_SCENE_THREADS is the PRIMARY tier's measurement escape hatch
-# (src/bridge/sceneworkerthreads.h:52-56) — pinning it to 1 gives the editor
-# scene one worker, which is exactly the condition under which Ogre takes the
-# serial compile branch (OgreRenderQueue.cpp:388 needs > 1).
-jah_gpu_row(threading.mode_serial CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/mode.js
-         WORKING_DIRECTORY ${_thr_home_ser}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 330 = 6 x the run log's quiet median 54.2 s (50 quiet PASS runs since 2026-10-01, worst 141.6 s);
-# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(threading.mode_serial PROPERTIES
-    ENVIRONMENT "HOME=${_thr_home_ser};JAHSHAKA_DATA_ROOT=${_thr_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
-    FIXTURES_REQUIRED threading_home_mode_serial
-    FIXTURES_SETUP threading_shot_serial
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 330)
-
-add_test(NAME threading.mode_pixels
-         COMMAND ${CMAKE_COMMAND} -E compare_files
-                 ${_thr_home_par}/run/threading_mode.png
-                 ${_thr_home_ser}/run/threading_mode.png)
-set_tests_properties(threading.mode_pixels PROPERTIES
-    FIXTURES_REQUIRED "threading_shot_parallel;threading_shot_serial"
-    LABELS "threading" TIMEOUT 60)
-
-# threading.gi_resolve / .gi_resolve_serial / .gi_resolve_pixels — THE COLD-COMPILE
-# GUARD FOR THE GI RE-SOLVE (PHOTON_SPEC.md §7 E1 "ITEM 0"; ledger §373).
-#
-# Same three-entry shape and the same reasons as the trio above (two virgin HOMEs
-# so both halves really compile; engine up; the threading lock; a byte compare with no
-# tolerance). What it adds is the one frame threading.mode does not exercise: a
-# `world.refreshGi()` issued EXACTLY ONE rendered frame after the compile burst.
-# The script's header explains the defect and what "wrong" looks like.
-#
-# WHAT IT CAUGHT, AND WHAT FIXED IT (Ogre fork 1bccc3f93+a98e2b0af (was 0041)). The defect was NOT in the
-# irradiance field where the search started: VctVoxelizer's VCT/AabbCalculator compute
-# dispatch was handed a foreign uniform texel buffer for `inMeshBuffer` — Vulkan core
-# validation, "requires UINT component type, but bound descriptor format is
-# VK_FORMAT_R32G32_SFLOAT", VUID-vkCmdDispatch-format-07753 — because HlmsManager's
-# descriptor-set cache is keyed on a raw BufferPacked* and the voxelizer's new mesh
-# table had been handed the ADDRESS of the irradiance field's destroyed
-# integration-taps buffer. Every mesh AABB then came back as the sentinel and the
-# voxelization wrote ZERO voxels: centre pixel 54,36,1 parallel against 46,32,1
-# serial. fork 1bccc3f93+a98e2b0af (was 0041) gives BufferPacked a creation serial that the descriptor slots
-# carry and compare, so a recycled address can never be mistaken for the dead buffer.
-# Both halves now read 54,36,1 and the PNGs are byte-identical.
 configure_file(gi_resolve.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js @ONLY)
-
-set(_gir_home_par ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve)
-set(_gir_home_ser ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_gi_resolve_serial)
-
-jah_fresh_home_fixture(threading.freshhome.gi_resolve threading_home_gi_resolve "${_gir_home_par}" LABELS "threading")
-
-jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_resolve_serial "${_gir_home_ser}" LABELS "threading")
-
-# RESOURCE_LOCK threading on both halves (threading.gi_resolve and threading.gi_resolve_serial),
-# for the mode pair's reason and verdict above: each opens a project at Epic and compiles a few
-# dozen shaders (not a timing gate) — never beside another compile half of this file.
-jah_gpu_row(threading.gi_resolve CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
-         WORKING_DIRECTORY ${_gir_home_par}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 250 = 6 x the run log's quiet median 41.0 s (50 quiet PASS runs since 2026-10-01, worst 185.6 s);
-# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(threading.gi_resolve PROPERTIES
-    ENVIRONMENT "HOME=${_gir_home_par};JAHSHAKA_DATA_ROOT=${_gir_home_par}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED threading_home_gi_resolve
-    FIXTURES_SETUP threading_shot_gi_parallel
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 250)
-
-jah_gpu_row(threading.gi_resolve_serial CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
-         WORKING_DIRECTORY ${_gir_home_ser}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 310 = 6 x the run log's quiet median 51.5 s (49 quiet PASS runs since 2026-10-01, worst 131.3 s);
-# declared 240 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(threading.gi_resolve_serial PROPERTIES
-    ENVIRONMENT "HOME=${_gir_home_ser};JAHSHAKA_DATA_ROOT=${_gir_home_ser}/.local/share/Jahshaka;JAHSHAKA_SCENE_THREADS=1"
-    FIXTURES_REQUIRED threading_home_gi_resolve_serial
-    FIXTURES_SETUP threading_shot_gi_serial
-    LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING} TIMEOUT 310)
-
-add_test(NAME threading.gi_resolve_pixels
-         COMMAND ${CMAKE_COMMAND} -E compare_files
-                 ${_gir_home_par}/run/threading_gi_resolve.png
-                 ${_gir_home_ser}/run/threading_gi_resolve.png)
-set_tests_properties(threading.gi_resolve_pixels PROPERTIES
-    FIXTURES_REQUIRED "threading_shot_gi_parallel;threading_shot_gi_serial"
-    LABELS "threading" TIMEOUT 60)
-
+# FRAMES: each half boots, opens Matcaps at Epic and renders a handful of frames before its shot; the
+# figure is both halves' (measured: spikes/testing-speed-b3/profile.txt).
+foreach(_pair mode gi_resolve)
+    jah_gpu_row(threading.${_pair} CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+             COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/pair.sh "${JAH_FRESH_HOME}"
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_BINARY_DIR}/${_pair}.js
+                     ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_${_pair}
+                     ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_${_pair}_serial
+                     threading_${_pair}.png
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(threading.${_pair} PROPERTIES
+        LABELS "threading;stage-close" RESOURCE_LOCK threading COST ${JAH_COST_THREADING})
+endforeach()
+# TIMEOUTs: the two halves' old quiet medians summed, x 6 (mode 47 + 54 s, gi_resolve 41 + 52 s).
+set_tests_properties(threading.mode PROPERTIES TIMEOUT 610)
+set_tests_properties(threading.gi_resolve PROPERTIES TIMEOUT 560)
+# The gi_resolve script's own header carries the defect it guards (the one frame threading.mode does not
+# exercise: world.refreshGi() EXACTLY ONE rendered frame after the compile burst) and what fixed it
+# (Ogre fork 1bccc3f93+a98e2b0af: BufferPacked's creation serial in the descriptor slots).
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked(threading.gi_resolve threading.gi_resolve_serial)
-
-# The race lane again: all three of these drive the REAL Jahshaka binary, which
-# cannot start under GCC 15's libtsan at all (jah_tsan_blocked in
-# tests/CMakeLists.txt documents the upstream sanitizer bug). They are eligible
-# on subject and quarantined on toolchain — threading.staging_race is the member
-# that actually carries this program's coverage in the lane.
-# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked(threading.mode threading.mode_serial)
+# — the real binary cannot start under GCC 15's libtsan; threading.staging_race carries the lane's coverage.
+jah_tsan_blocked(threading.mode threading.gi_resolve)
 
 # threading.import_soak / threading.newproject_stall — THE TWO HANGS
 # (defect wave 2026-09-08; the mechanisms are in the scripts' own headers).
@@ -202,6 +98,9 @@ jah_tsan_blocked(threading.mode threading.mode_serial)
 # RUN_SERIAL on both: newproject_stall asserts a wall-clock budget, and
 # import_soak's iteration budget is a hang detector that four concurrent
 # Vulkan apps would turn into a flake.
+# STAGE-CLOSE (TESTING-SPEED-B3, the ROWS table): the soak, the stall's count row and the watchdog are
+# whole-process soaks of a fixed hang — the ship's run; their fresh homes and the two log inspectors
+# follow them (an inspector left in the merge tier would pull its parent back in through its fixture).
 configure_file(import_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js @ONLY)
 configure_file(texture_wait_watchdog.js.in ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js @ONLY)
 configure_file(newproject_stall.js.in ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js @ONLY)
@@ -209,7 +108,7 @@ configure_file(newproject_stall.js.in ${CMAKE_CURRENT_BINARY_DIR}/newproject_sta
 set(_thr_home_soak ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_import_soak)
 set(_thr_home_stall ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_stall)
 
-jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading;stage-close")
 
 # NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09) and not in the threading lock either.
 # The four compile halves above hold `RESOURCE_LOCK threading` (four Epic opens compiling
@@ -224,9 +123,9 @@ jah_gpu_row(threading.import_soak CLASS app TIER low NEEDS NONE NEEDS_WHY "the i
 set_tests_properties(threading.import_soak PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_soak};JAHSHAKA_DATA_ROOT=${_thr_home_soak}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_import_soak
-    LABELS "threading" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
+    LABELS "threading;stage-close" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
 
-jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading;stage-close")
 
 # The push row: the counts, no lock (its millisecond bar is the .timing twin's, below).
 jah_gpu_row(threading.newproject_stall CLASS app TIER epic NEEDS photon bloom ssao smaa planar
@@ -237,7 +136,7 @@ set_tests_properties(threading.newproject_stall PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall};JAHSHAKA_DATA_ROOT=${_thr_home_stall}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall
     TIMEOUT 300   # the lock's RUN_TIMEOUT kept (measured 16.6-45.7 s solo: 6x = 275)
-    LABELS "threading")
+    LABELS "threading;stage-close")
 
 # threading.newproject_stall.timing — the first create's 1000 ms bar, stage-close (TESTING-DEBTS-1 T10,
 # D6B-GATE-SHAPE's pattern): the push row above keeps the counts (GI armed, restored, no
@@ -267,7 +166,7 @@ set_tests_properties(threading.newproject_stall.timing PROPERTIES
 # would never end.
 set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_watchdog)
 
-jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading")
+jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading;stage-close")
 
 jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -276,7 +175,7 @@ jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
 set_tests_properties(threading.texture_wait_watchdog PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_wd};JAHSHAKA_DATA_ROOT=${_thr_home_wd}/.local/share/Jahshaka;JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
     FIXTURES_REQUIRED threading_home_texture_wait_watchdog
-    LABELS "threading" TIMEOUT 240)
+    LABELS "threading;stage-close" TIMEOUT 240)
 
 # The SEGV's precondition, greped off the logs both runs just wrote
 # (nogrouplesstexture.cmake carries the mechanism, and fails on an empty directory).
@@ -297,14 +196,14 @@ add_test(NAME threading.import_soak.no_groupless_texture
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
     DEPENDS threading.import_soak FIXTURES_REQUIRED "threading_home_import_soak;threading_run_import_soak"
-    LABELS "threading" TIMEOUT 60)
+    LABELS "threading;stage-close" TIMEOUT 60)
 
 add_test(NAME threading.newproject_stall.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
     DEPENDS threading.newproject_stall FIXTURES_REQUIRED "threading_home_newproject_stall;threading_run_newproject_stall"
-    LABELS "threading" TIMEOUT 60)
+    LABELS "threading;stage-close" TIMEOUT 60)
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
@@ -313,3 +212,25 @@ jah_tsan_blocked(threading.import_soak threading.newproject_stall
                  threading.texture_wait_watchdog)
 set_property(TEST threading.import_soak APPEND PROPERTY FIXTURES_SETUP threading_run_import_soak)   # its inspector's run (item 3 above)
 set_property(TEST threading.newproject_stall APPEND PROPERTY FIXTURES_SETUP threading_run_newproject_stall)   # its inspector's run (item 3 above)
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "threading.gi_resolve=1371"
+        "threading.import_soak=550"
+        "threading.import_soak.no_groupless_texture=0"
+        "threading.mode=1355"
+        "threading.newproject_stall=494"
+        "threading.newproject_stall.no_groupless_texture=0"
+        "threading.newproject_stall.timing=500"
+        "threading.staging_race=255"
+        "threading.texture_wait_watchdog=473"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

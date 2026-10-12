@@ -47,6 +47,10 @@ endfunction()
 jahshaka_engine_test(test_engine)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
 # declared 120 was below the policy, honest only with the +900 s widening (now deleted).
+# budget 20 s (the lead's): 96 cases, 2,550 frames — 28.2 s at load 6, 30.4 s at load 10 at the tip (42-51 s loaded at
+# the base; 39 s quiet): measured_exposure converges to where the value stops moving, the heavy-frame case builds its
+# ~640 M triangles a frame from a 2.5 M shell (TESTING-SPEED-B3). STILL OVER: ~8.7 s of the rest are the cases' WALL-CLOCK
+# auto-exposure waits (renderFor: the chain adapts per second) under pixel bars — reported, not cut.
 set_tests_properties(test_engine PROPERTIES TIMEOUT 240)
 target_link_libraries(test_engine PRIVATE JahshakaEngine)
 
@@ -265,8 +269,10 @@ if(JAHSHAKA_ASAN)
     # Use-after-free / overflow detection is the point here and stays on.
     # TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (40 quiet PASS runs since 2026-10-01, worst 88.4 s);
     # declared 420 was below the policy, honest only with the +900 s widening (now deleted).
+    # STAGE-CLOSE (TESTING-SPEED-B3): an ASAN twin keeps its row and moves to the stage close; test_engine
+    # (the same suite, uninstrumented) is the merge tier's.
     set_tests_properties(test_engine_asan PROPERTIES
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430)
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430 LABELS "engine;stage-close")
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
@@ -287,3 +293,29 @@ add_dependencies(test_engine_media_check JahshakaEngineMedia)
 jah_gpu_row(engine.media_check CLASS engine COMMAND test_engine_media_check
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.media_check PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "decals.engine=60"
+        "engine.frame_catch=27"
+        "engine.gi_scan=162"
+        "engine.gpu_scene=58"
+        "engine.headless=0"
+        "engine.lod_hysteresis=265"
+        "engine.media_check=0"
+        "engine.oom_is_not_loss=20"   # counted from the source (it _exits: no meter report)
+        "engine.window=65"
+        "meshbake.shadow_vao_alias=3"
+        "test_engine=2550"
+        "test_engine_asan=2550"   # its plain twin's (the ASan runtime refuses the frame meter)
+        "test_engine_recreate=48"
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

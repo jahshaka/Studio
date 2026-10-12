@@ -20,7 +20,7 @@
 //   something else re-solves.
 //
 // THE SHAPE, and every step is load-bearing:
-//   1. a VIRGIN HOME per half, so both really compile (the ctest fixtures wipe);
+//   1. a VIRGIN HOME per half, so both really compile (pair.sh wipes each);
 //   2. Matcaps at Epic — the one shipped sample that is open-to-open pixel
 //      deterministic (perf.epic_steady_state's argument), and Epic is where the
 //      voxel arm and the irradiance field are both live;

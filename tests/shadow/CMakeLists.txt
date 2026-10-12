@@ -116,6 +116,8 @@ jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon bloom ssao sma
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# budget 60 s: the measurement (TESTING-SPEED-B3): one process, 1,552 frames, 43.8-52 s loaded (the 377 s price was the
+# six-process era's: stale).
 set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272)
 jah_gpu_row(shadow.two_sided_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
@@ -124,6 +126,7 @@ jah_gpu_row(shadow.two_sided_caster CLASS app TIER epic NEEDS photon bloom ssao 
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# budget 60 s: the measurement (TESTING-SPEED-B3): one process, 1,107 frames, 33.6-43 s loaded (the 319 s price: stale).
 set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 256)
 jah_gpu_row(shadow.cutout_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
@@ -158,3 +161,27 @@ set_tests_properties(gpu.cutout_soak PROPERTIES
     ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
     PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
     FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
+
+# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+foreach(_row_frames
+        "gpu.cutout_soak=11260"
+        "lights.shadows=832"
+        "shadow.atlas_binding=166"
+        "shadow.atlas_rebuilds=640"
+        "shadow.cache_kinds=36"
+        "shadow.cutout_caster=1552"
+        "shadow.cutout_caster.churn=15520"   # ten processes of shadow.cutout_caster
+        "shadow.helper_casters=8"
+        "shadow.layout=0"
+        "shadow.two_sided_caster=1107"
+        "shadow.two_sided_caster.churn=11070"   # ten processes of shadow.two_sided_caster
+        )
+    string(REPLACE "=" ";" _rf "${_row_frames}")
+    list(GET _rf 0 _r)
+    list(GET _rf 1 _n)
+    if(TEST ${_r})
+        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
+    endif()
+endforeach()

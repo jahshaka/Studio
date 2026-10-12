@@ -2,8 +2,18 @@
 // UI thread: a new material and a tier change are built by the engine's background compiler
 // while the view keeps drawing, the waiting objects show the grey placeholder, the pending
 // count ("Compiling shaders (N)") rises and falls back to 0, and the settled picture is the one
-// a warm launch draws. Two launches into one scratch home: COLD (an empty shader cache) and
-// WARM (the reference: everything is already built, nothing may take the placeholder).
+// a warm launch draws. Two launches into one scratch home: COLD and WARM (the reference: everything
+// is already built, nothing may take the placeholder).
+//
+// THE COLD LAUNCH STARTS FROM A WARM STARTUP CACHE (TESTING-SPEED-B3, the lead's verdict on the
+// profile): the subject is the OPEN's background compile — the new material's and the tier's
+// permutations, which no startup set holds — never the startup build behind the splash (53-58 s
+// of the old 87-s cold launch, Debug, a loaded box; spikes/testing-speed-b3/profile.txt). So the
+// cold home is seeded with THE STARTUP SEED: the shader cache a launch that only boots and quits
+// leaves (`e2e-async-after-open-seed/`, kept beside the row's home and made by the row itself
+// when it is missing). A seed the build no longer matches (the cache's fingerprint moved) is
+// refused by the app, which then compiles the startup set itself — the run stays valid, only
+// slower — and the row deletes the stale seed so the next run makes a fresh one.
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -112,17 +122,77 @@ void report(const char *run, const QJsonObject &r)
 
 }  // namespace
 
+/// Launches the app with a script that only quits: the startup shader set is built behind the
+/// splash and saved at the clean quit — THE STARTUP SEED's source.
+bool seedLaunch(const QString &seedHome)
+{
+    QDir(seedHome).removeRecursively();
+    QDir().mkpath(seedHome + "/run");
+    QDir().mkpath(seedHome + "/cache");
+    const QString script = seedHome + "/run/seed.js";
+    {
+        QFile f(script);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+        f.write("app.quit();\n");
+    }
+    QProcess app;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("HOME", seedHome);
+    env.insert("JAHSHAKA_DATA_ROOT", seedHome + "/.local/share/Jahshaka");
+    env.insert("XDG_CACHE_HOME", seedHome + "/cache");
+    app.setProcessEnvironment(env);
+    app.setWorkingDirectory(seedHome + "/run");
+    app.setProcessChannelMode(QProcess::MergedChannels);
+    app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << "--script" << script);
+    if (!app.waitForStarted(20000) || !app.waitForFinished(500000)) { app.kill(); app.waitForFinished(5000); return false; }
+    return app.exitCode() == 0;
+}
+
+/// Copies a directory tree (the seed into the cold home).
+bool copyTree(const QString &from, const QString &to)
+{
+    QDir src(from);
+    if (!src.exists()) return false;
+    QDir().mkpath(to);
+    for (const QFileInfo &fi : src.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden)) {
+        const QString dst = to + "/" + fi.fileName();
+        if (fi.isDir()) { if (!copyTree(fi.absoluteFilePath(), dst)) return false; }
+        else if (!QFile::copy(fi.absoluteFilePath(), dst)) return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-async-after-open"));
-    QDir(home).removeRecursively();            // a cold cache, an empty library
+    const QString seed = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seed/shadercache"));
+    QDir(home).removeRecursively();            // an empty library; the shader cache is the seed's
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
     QDir().mkpath(home + "/cold");
     QDir().mkpath(home + "/warm");
 
+    // THE STARTUP SEED (the header): made once when missing, copied into the cold home every run.
+    if (!QDir(seed).exists()) {
+        const QString seedHome = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seeding"));
+        const bool seeded = seedLaunch(seedHome) &&
+                            QDir().mkpath(QFileInfo(seed).absolutePath()) &&
+                            QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);
+        QDir(seedHome).removeRecursively();
+        std::printf("    the startup seed: %s\n", seeded ? "made by a boot-and-quit launch" : "COULD NOT be made (the cold launch builds the startup set)");
+    }
+    copyTree(seed, home + "/.local/share/Jahshaka/shadercache");
+
     const QJsonObject cold = runApp(home, home + "/cold");
+    // A STALE SEED (the app's cache fingerprint moved since it was made): the cold launch compiled the
+    // startup set itself — valid, slower; the next run makes a fresh seed.
+    const int startupCompiled = cold.value("startup").toObject().value("compiledThisRun").toInt(-1);
+    std::printf("    the cold launch's startup: compiled %d shader(s) before the script ran\n", startupCompiled);
+    if (startupCompiled > 0) {
+        QDir(QFileInfo(seed).absolutePath()).removeRecursively();
+        std::printf("    the startup seed was stale (the cache fingerprint moved): deleted, the next run re-seeds\n");
+    }
     const QJsonObject warm = runApp(home, home + "/warm");
     CHECK(!cold.isEmpty() && !warm.isEmpty(), "both launches reported");
     report("cold", cold);

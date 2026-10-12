@@ -3,24 +3,30 @@
 //
 // The container suite next door proves the file format survives abuse. This one
 // proves the product-level contract, and it does it the only way that is worth
-// anything — by launching the REAL binary, twice, into a scratch HOME, and
-// reading what `app.shaderCache()` says each time (the import.shutdown /
-// open.responsive pattern).
+// anything — by launching the REAL binary into a scratch HOME and reading what
+// `app.shaderCache()` says each time (the import.shutdown / open.responsive
+// pattern). TWO ROWS (TESTING-SPEED-B3; one row of five launches before):
 //
+// shadercache.app — three launches:
 //   run 1, cold : the cache reports itself enabled and located, the startup
 //                 gate builds shaders BEFORE the window (compiledThisRun > 0),
 //                 app.saveShaderCache() writes files, app.clearShaderCache()
 //                 removes them, and the session survives its own cache being
 //                 deleted underneath it.
-//   run 2, warm : after run 1 has quit and saved, a second launch compiles a
-//                 small fraction of what the cold one did and serves the rest
-//                 from the cache. This is the whole feature, asserted.
-//   run 3       : steady state — NOTHING compiles. (So is run 2 now: the
-//                 recorded warm-up SET, whose replay used to add a handful of
-//                 permutations of its own, was deleted in WARMUPSET-2.)
-//   run 4       : --clear-shader-cache makes a warm launch cold again, and the
+//   run 2, warm : after run 1 has quit and saved, a second launch serves its
+//                 shaders from the cache and compiles NOTHING AT ALL — the
+//                 steady state every launch after the first sees. (It was a
+//                 third launch of its own until TESTING-SPEED-B3: the recorded
+//                 warm-up SET, whose replay used to add a handful of permutations
+//                 to the first warm launch, was deleted in WARMUPSET-2, so the
+//                 first warm launch IS the steady state; its compiled == 0 bar
+//                 is asserted here.) This is the whole feature, asserted.
+//   run 3       : --clear-shader-cache makes a warm launch cold again, and the
 //                 run still succeeds. Our r.InvalidateCachedShaders.
-//   run 5       : THE SAVE UNDER CHURN. Every World post row through every
+//
+// shadercache.app.churn (`--churn`, stage-close) — its own home: a cold launch
+// seeds the cache (the state the churn ran on as run 5 of the old row), then
+// THE SAVE UNDER CHURN. Every World post row through every
 //                 value, the player in and out, 300 SKY CHANGES, a save after
 //                 each step — the path that crashed three instances on
 //                 2026-09-14. Asserts the process survives it AND that neither
@@ -29,14 +35,16 @@
 //                 run a REGRESSION test rather than a hope: before the fix
 //                 (lane shadercache-2) those 300 captures minted 300 permanent
 //                 Hlms pass-cache entries and the warning fired at 256.
-//                 (The field is 13 bits since fork d6348decd (was 0046) and run 5 asserts
-//                 the live count instead of the warning — see run 5. And it
+//                 (The field is 13 bits since fork d6348decd (was 0046) and the
+//                 churn asserts the live count instead of the warning. And it
 //                 asserts a DELTA across the sky loop, not an absolute after
 //                 it: the absolute is that delta plus a baseline nobody
 //                 controls, so a legitimate new pass property used to red this
 //                 suite with no regression in it.)
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -89,6 +97,8 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     app.setProcessEnvironment(env);
     app.setWorkingDirectory(home + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
+    QElapsedTimer launch;   // printed per launch (the row's price is its launches: TESTING-SPEED-B3)
+    launch.start();
     app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
     if (!app.waitForFinished(240000)) {
@@ -96,6 +106,7 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
         return {};
     }
     if (exitCodeOut) *exitCodeOut = app.exitCode();
+    std::printf("   launch %s: %.1f s\n", qPrintable(QFileInfo(script).fileName()), launch.elapsed() / 1000.0);
     const QString out = QString::fromUtf8(app.readAll());
     gLastOutput = out;
     const QJsonObject last = markerObject(out, QStringLiteral("SHADERCACHE "));
@@ -110,8 +121,10 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    const bool churnRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--churn");
 
-    const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-shadercache"));
+    const QString home = QDir::current().absoluteFilePath(
+        churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
     // A fresh start every time the suite runs, or "cold" would be a lie.
@@ -119,9 +132,113 @@ int main(int argc, char **argv)
 
     const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");
+    int rc = -1;
+
+    if (churnRow) {
+        // THE SEED: the cold launch, its own assertions left to shadercache.app — what the churn
+        // needs is a cache on disk for its launch to load and its saves to rewrite.
+        runApp(home, scripts + "e2e_shader_cache_cold.js", {}, &rc);
+        CHECK(rc == 0, "the seeding cold launch exited cleanly");
+        // ---- THE SAVE UNDER CHURN (SMOKE-ENGINE-1 item 3) ------------------------
+        // The periodic save crashed the owner's editor and two rig instances on
+        // 2026-09-14, inside HlmsDiskCache::copyFrom, which subscripts Ogre's
+        // renderable and pass caches with indices unpacked from a shader hash and
+        // checks neither (fork d6348decd (was 0035) checks them now). Both indices grow with
+        // CHURN — new material/mesh permutations, new pass property sets, and every
+        // World post row is a compositor rebuild that produces some.
+        //
+        // THE CAUSE IS KNOWN SINCE 2026-09-14 (lane shadercache-2) and this run is
+        // the regression test for it. It was never a renderable-cache reset: the
+        // PASS index has eight bits, `HlmsPbs::preparePassHash` puts the cube
+        // render target's NAME in the pass properties (`target_envprobe_map`), and
+        // this engine gave every sky capture a fresh name — one permanent pass-cache
+        // entry per capture, 1847 of them in the owner's session, and past 256 the
+        // pass index spills into the renderable field so copyFrom subscripts
+        // mRenderableCache out of range.
+        //
+        // The script drives that churn — the post rows, the player, and 300 sky
+        // changes — and saves after every step. This run asserts:
+        //   * the process SURVIVES it (before 0035 an out-of-range index was a
+        //     SIGSEGV, not a skipped entry),
+        //   * the guard never had to fire, and
+        //   * the pass cache stayed SMALL. That last one is the regression: with the
+        //     capture cube named uniquely again, 300 sky changes mint 300 permanent
+        //     pass-cache entries (measured, A/B).
+        //
+        // IT IS A NUMBER NOW, NOT THE ABSENCE OF A WARNING (lane HLMSBITS-1).
+        // fork d6348decd (was 0046) rebalanced the shader hash to [3][16][13], so the pass
+        // field holds 8,192 entries and 300 stray ones would no longer trip any
+        // log line — the assertion that caught this regression would have gone
+        // quiet while still printing "ok". app.shaderCache() reports the live cache
+        // sizes, so the bound is stated directly.
+        //
+        // AND IT IS A DELTA, NOT A FENCE (lane SMALL-ITEMS D, ledger §417). The
+        // absolute count after the churn is two things added together: the sky
+        // captures' contribution, which is the regression, and a BASELINE this
+        // suite does not control — the World-row churn's compositor rebuilds, the
+        // player round trips, and the pass sets the seeding launch left in the disk cache for
+        // this run to replay (measured at 115 for a whole session). `< 256`
+        // conflated them: the day somebody legitimately adds a pass property the
+        // baseline rises and this suite reds with no regression in it, while the
+        // regression it guards — one permanent entry per sky capture — is a STEP
+        // across the sky loop. So the script samples the cache either side of that
+        // loop and the assertion is the difference.
+        //
+        // THE TOLERANCE IS 8, MEASURED. MEASURED ON THIS TREE, twice, 300 colour-sky
+        // captures: 36 -> 36, delta ZERO — which is the point of the recycled
+        // capture name, a sky change re-entering pass property sets that already
+        // exist. The tolerance is not zero because a sky change is not GUARANTEED
+        // free of new sets: the first capture of a run mints the sets for a
+        // configuration nothing has drawn yet, and a future sky type or a new pass
+        // property could add a handful more. Eight is that handful; the regression's
+        // own signature is +300, nearly two orders of magnitude above it.
+        //
+        // The BASELINE this delta is taken from — 36 here, 115 in a whole editor
+        // session — is exactly what the old absolute fence conflated with the
+        // regression, and it moves for reasons that have nothing to do with sky
+        // captures.
+        const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
+        CHECK(rc == 0, "the churn launch survived the churn and exited cleanly");
+        CHECK(!churn.isEmpty(), "the churn launch reported its cache state after the churn");
+        CHECK(!gLastOutput.contains(QStringLiteral("skipping shader cache entry")),
+              "no shader-cache entry had an out-of-range index or a missing PSO during the churn");
+        const QJsonObject preSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-PRESKY "));
+        const QJsonObject postSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-POSTSKY "));
+        CHECK(!preSky.isEmpty() && !postSky.isEmpty(),
+              "the churn launch reported its cache state either side of the sky loop");
+        const int passBefore = preSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
+        const int passAfter = postSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
+        const int compiledBefore = preSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
+        const int compiledAfter = postSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
+        const int passEntries = churn.value(QStringLiteral("passCacheEntries")).toInt(-1);
+        const int passCapacity = churn.value(QStringLiteral("passCacheCapacity")).toInt(-1);
+        std::printf("      pass cache across 300 sky captures: %d -> %d (delta %d); "
+                    "compiled %d -> %d (delta %d)\n",
+                    passBefore, passAfter, passAfter - passBefore,
+                    compiledBefore, compiledAfter, compiledAfter - compiledBefore);
+        std::printf("      pass cache after the whole churn: %d of %d\n", passEntries, passCapacity);
+        CHECK(passBefore > 0 && passAfter >= passBefore,
+              "the pass cache was measured either side of the sky loop and never shrank");
+        // THE REGRESSION ASSERTION. Before the fix this delta was 300.
+        CHECK(passAfter - passBefore < 8,
+              "300 sky captures added fewer than 8 pass-cache entries "
+              "(the recycled capture name — before the fix: 300)");
+        // The absolute stays PRINTED, and asserted only against the field that
+        // actually overflowed. It is a sanity bound on the whole session, not the
+        // regression fence it used to be.
+        CHECK(passEntries > 0 && passEntries < passCapacity,
+              "the whole session's pass cache fits the shader hash's pass field");
+        CHECK(passCapacity >= 8192,
+              "the shader hash's pass field addresses at least 8192 entries (fork d6348decd (was 0046))");
+        CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),
+              "no Hlms reported its pass cache filling up");
+        CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),
+              "no re-entrant save was attempted");
+        std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+        return failures ? 1 : 0;
+    }
 
     // ---- run 1: cold ------------------------------------------------------
-    int rc = -1;
     const QJsonObject cold = runApp(home, scripts + "e2e_shader_cache_cold.js", {}, &rc);
     CHECK(rc == 0, "run 1 exited cleanly");
     CHECK(cold.value("enabled").toBool(), "the cache is enabled by default");
@@ -186,11 +303,7 @@ int main(int argc, char **argv)
           "run 2 logs no missing warm-up material");
     CHECK(!gLastOutput.contains(QStringLiteral("VertexFormatWarmUp")),
           "run 2 runs no warm-up-set replay at all (the machinery is deleted)");
-
-    // ---- run 3: steady state ----------------------------------------------
-    // The number that describes every launch a user ever sees after the first.
-    const QJsonObject steady = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
-    CHECK(rc == 0, "run 3 exited cleanly");
+    // THE STEADY STATE — NOTHING compiles (a third launch of its own until TESTING-SPEED-B3).
     // THE NUMBER, PRINTED, because "NOTHING AT ALL" with no count sends the next
     // reader back to the logs to find out which shaders they were.
     //
@@ -204,15 +317,14 @@ int main(int argc, char **argv)
     // to hold on either end. fork 5bfe24cd9 (was 0063) stores the reflected bindings beside
     // the SPIR-V and the number is 0 again. If it ever prints 3 once more, that
     // patch is missing from the tree's engine — re-run build-ogre.sh.
-    std::printf("   run 3: compiled %d, loaded %d\n", steady.value("compiledThisRun").toInt(),
-                steady.value("loadedThisRun").toInt());
-    CHECK(steady.value("compiledThisRun").toInt() == 0, "run 3 compiled NOTHING AT ALL");
-    CHECK(steady.value("loadedThisRun").toInt() > 0, "and served everything from the cache");
+    std::printf("   run 2: compiled %d, loaded %d\n", warm.value("compiledThisRun").toInt(),
+                warm.value("loadedThisRun").toInt());
+    CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
 
-    // ---- run 4: --clear-shader-cache --------------------------------------
+    // ---- run 3: --clear-shader-cache --------------------------------------
     const QJsonObject cleared = runApp(home, scripts + "e2e_shader_cache_warm.js",
                                        {QStringLiteral("--clear-shader-cache")}, &rc);
-    CHECK(rc == 0, "run 4 exited cleanly with --clear-shader-cache");
+    CHECK(rc == 0, "run 3 exited cleanly with --clear-shader-cache");
     CHECK(cleared.value("compiledThisRun").toInt() > 0,
           "--clear-shader-cache made the next launch cold again");
     // NOT "loadedThisRun == 0": that counter also ticks for an IN-PROCESS
@@ -222,102 +334,6 @@ int main(int argc, char **argv)
     CHECK(!cleared.value("microcodeLoaded").toBool() &&
           !cleared.value("pipelineCacheLoaded").toBool(),
           "--clear-shader-cache left no layer to load");
-
-    // ---- run 5: THE SAVE UNDER CHURN (SMOKE-ENGINE-1 item 3) --------------
-    // The periodic save crashed the owner's editor and two rig instances on
-    // 2026-09-14, inside HlmsDiskCache::copyFrom, which subscripts Ogre's
-    // renderable and pass caches with indices unpacked from a shader hash and
-    // checks neither (fork d6348decd (was 0035) checks them now). Both indices grow with
-    // CHURN — new material/mesh permutations, new pass property sets, and every
-    // World post row is a compositor rebuild that produces some.
-    //
-    // THE CAUSE IS KNOWN SINCE 2026-09-14 (lane shadercache-2) and this run is
-    // the regression test for it. It was never a renderable-cache reset: the
-    // PASS index has eight bits, `HlmsPbs::preparePassHash` puts the cube
-    // render target's NAME in the pass properties (`target_envprobe_map`), and
-    // this engine gave every sky capture a fresh name — one permanent pass-cache
-    // entry per capture, 1847 of them in the owner's session, and past 256 the
-    // pass index spills into the renderable field so copyFrom subscripts
-    // mRenderableCache out of range.
-    //
-    // The script drives that churn — the post rows, the player, and 300 sky
-    // changes — and saves after every step. This run asserts:
-    //   * the process SURVIVES it (before 0035 an out-of-range index was a
-    //     SIGSEGV, not a skipped entry),
-    //   * the guard never had to fire, and
-    //   * the pass cache stayed SMALL. That last one is the regression: with the
-    //     capture cube named uniquely again, 300 sky changes mint 300 permanent
-    //     pass-cache entries (measured, A/B).
-    //
-    // IT IS A NUMBER NOW, NOT THE ABSENCE OF A WARNING (lane HLMSBITS-1).
-    // fork d6348decd (was 0046) rebalanced the shader hash to [3][16][13], so the pass
-    // field holds 8,192 entries and 300 stray ones would no longer trip any
-    // log line — the assertion that caught this regression would have gone
-    // quiet while still printing "ok". app.shaderCache() reports the live cache
-    // sizes, so the bound is stated directly.
-    //
-    // AND IT IS A DELTA, NOT A FENCE (lane SMALL-ITEMS D, ledger §417). The
-    // absolute count after the churn is two things added together: the sky
-    // captures' contribution, which is the regression, and a BASELINE this
-    // suite does not control — the World-row churn's compositor rebuilds, the
-    // player round trips, and the pass sets runs 1-4 left in the disk cache for
-    // this run to replay (measured at 115 for a whole session). `< 256`
-    // conflated them: the day somebody legitimately adds a pass property the
-    // baseline rises and this suite reds with no regression in it, while the
-    // regression it guards — one permanent entry per sky capture — is a STEP
-    // across the sky loop. So the script samples the cache either side of that
-    // loop and the assertion is the difference.
-    //
-    // THE TOLERANCE IS 8, MEASURED. MEASURED ON THIS TREE, twice, 300 colour-sky
-    // captures: 36 -> 36, delta ZERO — which is the point of the recycled
-    // capture name, a sky change re-entering pass property sets that already
-    // exist. The tolerance is not zero because a sky change is not GUARANTEED
-    // free of new sets: the first capture of a run mints the sets for a
-    // configuration nothing has drawn yet, and a future sky type or a new pass
-    // property could add a handful more. Eight is that handful; the regression's
-    // own signature is +300, nearly two orders of magnitude above it.
-    //
-    // The BASELINE this delta is taken from — 36 here, 115 in a whole editor
-    // session — is exactly what the old absolute fence conflated with the
-    // regression, and it moves for reasons that have nothing to do with sky
-    // captures.
-    const QJsonObject churn = runApp(home, scripts + "e2e_shader_cache_churn.js", {}, &rc);
-    CHECK(rc == 0, "run 5 survived the churn and exited cleanly");
-    CHECK(!churn.isEmpty(), "run 5 reported its cache state after the churn");
-    CHECK(!gLastOutput.contains(QStringLiteral("skipping shader cache entry")),
-          "no shader-cache entry had an out-of-range index or a missing PSO during the churn");
-    const QJsonObject preSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-PRESKY "));
-    const QJsonObject postSky = markerObject(gLastOutput, QStringLiteral("SHADERCACHE-POSTSKY "));
-    CHECK(!preSky.isEmpty() && !postSky.isEmpty(),
-          "run 5 reported its cache state either side of the sky loop");
-    const int passBefore = preSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
-    const int passAfter = postSky.value(QStringLiteral("passCacheEntries")).toInt(-1);
-    const int compiledBefore = preSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
-    const int compiledAfter = postSky.value(QStringLiteral("compiledThisRun")).toInt(-1);
-    const int passEntries = churn.value(QStringLiteral("passCacheEntries")).toInt(-1);
-    const int passCapacity = churn.value(QStringLiteral("passCacheCapacity")).toInt(-1);
-    std::printf("      pass cache across 300 sky captures: %d -> %d (delta %d); "
-                "compiled %d -> %d (delta %d)\n",
-                passBefore, passAfter, passAfter - passBefore,
-                compiledBefore, compiledAfter, compiledAfter - compiledBefore);
-    std::printf("      pass cache after the whole churn: %d of %d\n", passEntries, passCapacity);
-    CHECK(passBefore > 0 && passAfter >= passBefore,
-          "the pass cache was measured either side of the sky loop and never shrank");
-    // THE REGRESSION ASSERTION. Before the fix this delta was 300.
-    CHECK(passAfter - passBefore < 8,
-          "300 sky captures added fewer than 8 pass-cache entries "
-          "(the recycled capture name — before the fix: 300)");
-    // The absolute stays PRINTED, and asserted only against the field that
-    // actually overflowed. It is a sanity bound on the whole session, not the
-    // regression fence it used to be.
-    CHECK(passEntries > 0 && passEntries < passCapacity,
-          "the whole session's pass cache fits the shader hash's pass field");
-    CHECK(passCapacity >= 8192,
-          "the shader hash's pass field addresses at least 8192 entries (fork d6348decd (was 0046))");
-    CHECK(!gLastOutput.contains(QStringLiteral("distinct pass property combinations")),
-          "no Hlms reported its pass cache filling up");
-    CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),
-          "no re-entrant save was attempted");
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;

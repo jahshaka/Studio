@@ -5200,6 +5200,23 @@ void fixed_exposure_tonemap() {
 /// FIVE THINGS, four of which are the documented ways to get 0 back — a
 /// readback of a texture nobody has written is the reflection_map class of
 /// defect (CLAUDE.md), where "finite and positive" happily passes garbage.
+/// Renders until the view's measured exposure stops moving: reads 0.1 s of frames apart (renderFor: the
+/// adaptation runs per SECOND) until two agree within 0.1 % with a value, bounded by the four seconds the case
+/// used to wait unconditionally (TESTING-SPEED-B3).
+static void renderUntilExposureSettles(Engine *e, View *v) {
+    float prev = -1.0f;
+    for (int i = 0; i < 40; ++i) {
+        renderFor(e, 0.1);
+        const float now = v->measuredExposureScale();
+        if (now > 0.0f && prev > 0.0f && std::fabs(now - prev) <= 0.001f * prev) {
+            std::printf("    the measured exposure stopped moving after %.1f s: %f\n", 0.1 * (i + 1), double(now));
+            return;
+        }
+        prev = now;
+    }
+    std::printf("    the measured exposure still moved after 4.0 s\n");
+}
+
 void measured_exposure_is_readable_and_refuses_to_guess() {
     Fixture fx;
     View *v = fx.view("measured-exp-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
@@ -5235,10 +5252,11 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
               "a freshly built chain that has drawn nothing measures nothing: %f",
               double(v->measuredExposureScale()));
 
-    // 3. CONVERGED. Four seconds of frames is 0.25^4 of the way there; the
-    //    value is the tonemapper's own multiplier, so it must be a plausible
-    //    positive number rather than merely non-zero.
-    renderFor(fx.e, 4.0);
+    // 3. CONVERGED. Read until the value stops moving (TESTING-SPEED-B3: it was four
+    //    seconds of frames, 0.25^4 of the way there, read once); the value is the
+    //    tonemapper's own multiplier, so it must be a plausible positive number
+    //    rather than merely non-zero.
+    renderUntilExposureSettles(fx.e, v);
     const float measured = v->measuredExposureScale();
     std::printf("    measured exposure scale after convergence: %f\n", double(measured));
     CHECK_MSG(measured > 0.0f && std::isfinite(measured),
@@ -5263,7 +5281,7 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
               double(v->measuredExposureScale()));
-    renderFor(fx.e, 4.0);
+    renderUntilExposureSettles(fx.e, v);
     CHECK_MSG(v->measuredExposureScale() > 0.0f,
               "...and it reports again once the NEW graph has drawn: %f",
               double(v->measuredExposureScale()));
@@ -6406,7 +6424,11 @@ void monitor_is_forward_only_for_compiles() {
 /// brief's: at least 95 % of the records carry the heavy pass's GPU time, and no
 /// frame aged out.
 void monitor_heavy_frames_keep_their_samples() {
-    static const int kHeavyInstances = 64;
+    // THE HEAVY FRAME, BUILT CHEAPER (TESTING-SPEED-B3): 256 instances of a 2.5 M-triangle shell draw the same
+    // ~640 M triangles a frame as 64 of a 10 M one did — the GPU-bound frame this case needs — for a quarter of
+    // the shell's CPU build (the build was ~9 of the case's 12 s in Debug; spikes/testing-speed-b3/profile.txt).
+    static const int kHeavyInstances = 256;
+    static const int kHeavySide = 16;
     Fixture fx;
     View *v = fx.view("mon-heavy-view", 1280, 720, kBlue);
     Scene *s = fx.scene("mon-heavy-scene");
@@ -6418,7 +6440,7 @@ void monitor_heavy_frames_keep_their_samples() {
     s->setAtomDrawEnabled(false);
     s->setAmbient(Colour(0.2f, 0.2f, 0.2f), Colour(0.1f, 0.1f, 0.1f));
     enginetest::addDirectionalLight(s, Vec3(-0.4f, -0.8f, -0.3f), 3.0f);
-    const enginetest::ShellMesh shell = enginetest::proceduralShell(10000000u);
+    const enginetest::ShellMesh shell = enginetest::proceduralShell(2500000u);
     MeshData d;
     d.positions = shell.positions;
     d.normals = shell.normals;
@@ -6432,8 +6454,8 @@ void monitor_heavy_frames_keep_their_samples() {
     for (int i = 0; i < kHeavyInstances; ++i) {
         const NodeId n = s->createNode();
         REQUIRE(s->attachMesh(n, mesh, mat));
-        s->setNodeTransform(n, Vec3(float(i % 8) * 1.1f - 3.85f, float(i / 8) * 1.1f - 3.85f, 0), Quat(),
-                            Vec3(0.5f, 0.5f, 0.5f));
+        s->setNodeTransform(n, Vec3(float(i % kHeavySide) * 0.55f - 4.125f, float(i / kHeavySide) * 0.55f - 4.125f, 0),
+                            Quat(), Vec3(0.25f, 0.25f, 0.25f));
     }
     CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0, 0, 10.0f), Vec3(0, 0, 0));
     v->setCamera(c);
@@ -6453,7 +6475,9 @@ void monitor_heavy_frames_keep_their_samples() {
     // Only what the capture PUBLISHED while running is read: stopping it flushes
     // the frames still in flight unsampled, by design.
     std::vector<FrameRecord> recs;
-    for (int i = 0; i < 60; ++i) { render(fx.e, 1); fx.e->takeFrameRecords(recs); }
+    // 48 capture frames: the bar counts >= 40 heavy records, and the capture publishes all but the 2-3 frames
+    // still in flight (58 of 60 measured) — the frames the bar counts and that margin, no more.
+    for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->takeFrameRecords(recs); }
     st = fx.e->monitorStatus();
     const unsigned pools = st.gpuQueryPools;
     fx.e->setFrameMonitor(MonitorLevel::Off);
