@@ -852,7 +852,10 @@ def case_carried_red(E):
     E.put(["test_engine"], "FAIL", "2026-01-01T08:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
     rc, out = E.run("--verdict", "test_engine=real:FIXTURE-1 the old tip's red, reproduced on the base")
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-aaaaaaaaa" in f]
-    check(rc == 0 and vfiles, "...a verdict at A (recorded AT A) -> accepted (%d, %s)" % (rc, vfiles))
+    # (round 8: the base's solo reproduces A's red of a registered row, so the REGISTRY answers it and drops the carried red
+    # before any verdict is needed — the lead's verdict there is then not recorded: nothing is red to answer)
+    check(rc == 0 and (vfiles or "OPEN RED" not in out), "...a verdict at A (recorded AT A) -> accepted, or the registry "
+          "answered the row first (round 8) (%d, %s)" % (rc, vfiles))
     rc, out = E.run()
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
     E.fresh()
@@ -1001,6 +1004,19 @@ def case_carried_red(E):
     rc, out = E.run()
     check(rc == 0 and "KNOWN RED" in out and "no hand verdict needed" in out,
           "round 7 (2): ...and the merge's judge accepts that red with no hand verdict (%d)" % rc)
+
+    # ROUND 8: THE REGISTRY ANSWERS THE ROW, NOT ONE RECORD — the lane's earlier tip (a same-tree twin: round 5 alone would
+    # carry its red) holds a red of a base-reproduced registered row (FIXTURE-1, the base's solos red): the candidate's red
+    # is a KNOWN RED by the registry and the earlier tip's red is dropped with it — the lane lands with no hand step
+    E.fresh()
+    E.put(ROWS, "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    E.put([SPEED_ROW], "FAIL", "2026-01-01T09:30:00", tip=twin)
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+    rc, out = E.run()
+    check(rc == 0 and "KNOWN RED" in out and "OPEN RED" not in out,
+          "round 8: an earlier tip's red of a row the registry answers (base-reproduced) is not carried: the lane lands "
+          "with no hand verdict (%d%s)" % (rc, "; " + [l for l in out.splitlines() if "OPEN RED" in l][0][:120]
+                                          if "OPEN RED" in out else ""))
 
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never

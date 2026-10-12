@@ -1311,9 +1311,11 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 # tier `lane`); a stage close judges its own rows, so the rule is the merge's and the push's
                 if not stage_close and k[0] in outside_tier:
                     continue
-                # A RED OF A ROW THE LANE REGISTERED BY DESIGN, at ANY of the lane's earlier tips (round 6: its self-audit
-                # tips, its pre-rebase tips) is answered by that entry — never carried
-                if mode == "merge" and by_design_entry(defects, k[0], lanes):
+                # A RED OF A ROW THE REGISTRY ANSWERS FOR THIS CANDIDATE (round 8; round 6 did it for by-design entries):
+                # at ANY earlier tip of the lane (an ancestor, a twin, a pre-rebase tip) it is answered by the same entry —
+                # the registry answers the ROW, not one record of it — never carried
+                if mode == "merge" and KnownRegistry(defects, lambda kk: base_of(kk, got)).known(
+                        k, got[tip_sha].get(k, []))[0]:
                     continue
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
                                   base_recs=base_of(k, got), tip_sha=tip_sha, mode=mode,
