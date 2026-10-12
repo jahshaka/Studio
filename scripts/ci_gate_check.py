@@ -1114,6 +1114,12 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             lanes.add(tip)
         for t, recs in lane_records(lanes, {tip_sha, base_sha, *earlier}).items():
             for k, rs in recs.items():
+                # A ROW OUTSIDE THE MERGE TIER IS NEVER A MERGE VERDICT AND NEVER CARRIED (RUNNER-FIX-4 item 14, the lead's
+                # rule): its LABELS in this build put it outside (the stage-close rows, the *-target rows — red by design),
+                # whatever tier its record names (VOXEL-READOUT-1's self-audits recorded five photon-target rows red under
+                # tier `lane`); a stage close judges its own rows, so the rule is the merge's and the push's
+                if not stage_close and k[0] in outside_tier:
+                    continue
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
                                   base_recs=base_of(k, got), tip_sha=tip_sha, mode=mode,
                                   proves=prover)
@@ -1132,6 +1138,13 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         return out
 
     carried = {}
+    # the rows the merge tier never takes, by this build's labels (gate-scope's own sets: the MERGE tier = every row but
+    # the stage-close and the target rows — its serial phase runs the timing rows; needed_rows' "MERGE tier" too)
+    try:
+        _inv = gs.load_inventory(build)
+    except Exception:          # no inventory: nothing is set aside (the safe side: carried as before)
+        _inv = {}
+    outside_tier = {n for n, t in _inv.items() if set(t.get("labels") or ()) & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS)}
     judged = judge_all()
 
     def carried_order(item):
