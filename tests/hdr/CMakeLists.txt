@@ -151,11 +151,13 @@ set_tests_properties(hdr.display_encode PROPERTIES JAHSHAKA_TEST_FRAMES 336)
 # pixel bright enough to bloom lies within a halo's reach of them. An app run on the
 # rig's display; a FRESH home per run (the sample is imported). A whole-scene proof: a
 # stage-close row (hdr.bloom_isotropic is the seconds-long merge guard of the same claim).
+# TIER document: the sample opens at its own saved World (the product's picture,
+# which a test tier would rewrite before the shot).
 set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
 set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
 jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting;stage-close")
-jah_gpu_row(hdr.bloom_showroom CLASS app
+jah_gpu_row(hdr.bloom_showroom CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
          WORKING_DIRECTORY ${_bloom_home}/run)
 set_tests_properties(hdr.bloom_showroom PROPERTIES
