@@ -495,6 +495,9 @@ def main(source, build):
 
 
 if __name__ == "__main__":
+    # every check line as it happens (DOOR-HYGIENE-1): under ctest stdout is a pipe, block-buffered — a row killed at its
+    # TIMEOUT printed NOTHING of the checks it had passed (VOXEL-READOUT-1's self-audit, 2026-10-12)
+    sys.stdout.reconfigure(line_buffering=True)
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)

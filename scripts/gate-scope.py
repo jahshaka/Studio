@@ -875,11 +875,12 @@ def run_log_prices(since=PRICE_SINCE):
                                                                            "*.jsonl"), recursive=True)
     acc = collections.defaultdict(list)
     lm = gate_runlog.quiet_load_max()
+    since_at = gate_runlog.instant(since)            # INSTANTS, never the ISO text (F20's class; the DST switch misorders text)
     for f in files:
         for line in open(f, errors="replace"):
             try: r = json.loads(line)
             except ValueError: continue
-            if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or (r.get("ts") or "") < since:
+            if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or gate_runlog.instant(r.get("ts")) < since_at:
                 continue
             k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
             acc[k].append((r["seconds"], gate_runlog.quiet(r, lm)[0]))
@@ -2198,7 +2199,9 @@ def data_facts(build):
     key = os.path.abspath(build)
     if key not in _DATA_FACTS:
         try:
-            _DATA_FACTS[key] = gate_graph.row_facts(build)[0]
+            # the DIRS only (hashed=False): a selection reads the data edges, never the hashes (DOOR-HYGIENE-1: hashing
+            # every row's data was 1.1 s of each 1.9 s call — the tool's own guard row ran out its bound under load)
+            _DATA_FACTS[key] = gate_graph.row_facts(build, hashed=False)[0]
         except (OSError, ValueError):
             _DATA_FACTS[key] = {}
     return _DATA_FACTS[key]

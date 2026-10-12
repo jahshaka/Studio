@@ -725,10 +725,11 @@ def _walk(path, memo):
     return out
 
 
-def data_set(test, roots, _memo=None):
+def data_set(test, roots, _memo=None, hashed=True):
     """THE ROW'S DATA SET: {hash | None, why | None, files {tree-or-build rel: sha}, sources {rel: argument|walked|
     declared}, dirs [tree-relative dir/file prefixes a change under which reaches the row], declared [names], none bool,
-    bytes}."""
+    bytes}. `hashed=False` (DOOR-HYGIENE-1): the DIRS only — a SELECTION reads the data edges (dirs), never the hashes;
+    walking and hashing every row's files cost 1.1 s of a 1.9 s gate-scope call — no file is read, hash None, said."""
     memo = {} if _memo is None else _memo
     cur = {"<root>": (roots or {}).get("cur_root"), "<build>": (roots or {}).get("cur_build")}
     files, sources, dirs, problems = {}, {}, [], []
@@ -745,6 +746,12 @@ def data_set(test, roots, _memo=None):
             problems.append(f"no source root to read {rel_tree}")
             return
         p = os.path.join(root, rel_tree)
+        if not hashed:
+            if os.path.exists(p):
+                dirs.append(rel_tree)
+            else:
+                problems.append(f"{rel_tree} is absent")
+            return
         if os.path.isdir(p):
             w = _walk(p, memo)
             if w is None:
@@ -786,6 +793,10 @@ def data_set(test, roots, _memo=None):
                 if tok == "<root>":
                     problems.append(f"{rel} is absent")
                 continue
+            if not hashed:
+                if not _is_elf(path) and tok == "<root>":
+                    dirs.append(rel[len("<root>/"):])
+                continue
             if path not in memo:
                 memo[path] = None if _is_elf(path) else _sha256(open(path, "rb").read())
             if memo[path] is not None:
@@ -799,6 +810,9 @@ def data_set(test, roots, _memo=None):
             problems.append(why)
         for p in paths:
             add_tree_path(p, "declared")
+    if not hashed:
+        return {"files": {}, "sources": {}, "dirs": sorted(set(dirs)), "declared": declared + (["NONE"] if none else []),
+                "none": none, "bytes": 0, "hash": None, "why": "not hashed (the data edges only: hashed=False)"}
     size = 0
     for k in files:
         tok = "<build>" if k.startswith("<build>") else "<root>"
@@ -1003,7 +1017,7 @@ def declared_from_source(src, inventory, roots=None):
     return out
 
 
-def row_facts(build, data_from=None):
+def row_facts(build, data_from=None, hashed=True):
     """({row: {labels, declaration, data_hash, data_why, data_dirs, data_declared, data_count, data_sources}}, roots) for
     every ctest row of <build> (its inventory:
     ctest_inventory, cached per build state), or ({}, None) when the build has none."""
@@ -1028,7 +1042,11 @@ def row_facts(build, data_from=None):
             t = dict(t, properties=[p for p in t.get("properties", []) if p.get("name") != DATA_PROPERTY]
                      + ([{"name": DATA_PROPERTY, "value": data_from[t["name"]]}] if data_from[t["name"]] else []))
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
-        d = data_set(t, roots, memo)
+        d = data_set(t, roots, memo, hashed=hashed)
+        if not hashed:                     # a selection's data edges: the dirs, nothing hashed (data_set's hashed=False)
+            out[t["name"]] = {"labels": props.get("LABELS", []) or [], "data_dirs": d["dirs"], "data_hash": None,
+                              "data_why": d["why"]}
+            continue
         out[t["name"]] = {"labels": props.get("LABELS", []) or [], "declaration": declaration(t, roots),
                           "data_hash": d["hash"], "data_why": d["why"], "data_dirs": d["dirs"],
                           "data_declared": d["declared"], "data_count": len(d["files"]), "data_bytes": d["bytes"],
