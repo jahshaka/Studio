@@ -11,33 +11,37 @@
 // GatherTuning{filterRadius 1, youngFrames 1, youngReach 1, crossStrata 1}; the shipped one is
 // every field 0.
 //
-// TWO ARMS IN ONE PROCESS (trap 12: paired, the same chain, the same frames), each:
+// TWO ARMS IN ONE PROCESS (trap 12: paired, the same chain, the same frames):
 //   THE SHOWROOM (the Showroom-2-shaped room of the flythrough, its camera at the flythrough's
 //   fourth capture — the floor and the wall band in view), 256 x 256 at Epic, restOff (a still
 //   view would otherwise hold its rest mean and every estimator's answer be one draw): the camera
 //   settles looking AWAY, TURNS onto the pose in 4 frames (young pixels: the wide read acts on them
 //   only), then a 32-frame window reads the gather's own answer back every frame (GatherTuning::
-//   readback: E/pi before any material, light or tonemap) — and the SAME TURN IS FLOWN TWICE. THE
-//   METRIC IS THE FLYTHROUGH'S: the floor region's (the lower 40 %) 16-px block means of the
-//   luminance, NOISE = the mean |run 0 - run 1| (two independent draws of one path: the sequence
-//   advances with the frame index) over the window, as a fraction of the region's mean. (A
-//   frame-to-frame delta of ONE run was measured first and is NOT this quantity: the history's EMA
-//   correlates consecutive frames, it read 0.67 where the two-draw metric reads 0.53 on the same
-//   frames — spikes/testing-speed-b1/est-dbg1.txt.)
+//   readback: E/pi before any material, light or tonemap) — and the SAME TURN IS FLOWN TWICE (a twin
+//   pair). Two twin pairs per arm in ABBA order (pre, shipped, shipped, pre), pooled per arm.
+//   NOISE IS THE FLYTHROUGH'S METRIC: the floor region's (the lower 40 %) 16-px block means of the
+//   luminance, the mean |run 0 - run 1| (two independent draws of one path: the sequence advances with
+//   the frame index) over the window, as a fraction of the region's mean. (A frame-to-frame delta of
+//   ONE run is NOT this quantity: the history's EMA correlates consecutive frames.)
+//   ERROR IS THE FLYTHROUGH'S BLUR BAR: the converged reference at the pose (two rest means of 64 frames
+//   at two sample sequences, GatherTuning restFrames/restSeed, under the pre-lane estimator), and the
+//   RMS over blocks and frames of (run - reference) as a fraction of its mean — a wider read lowers the
+//   noise and RAISES this where the irradiance has a gradient.
 //   THE LEAK (the flythrough's leak arm, one pose): a thin partition, a lamp on one side, the camera
 //   turning in 4 frames onto the two floors seen from above — the young dark floor beside the
 //   partition must carry no more of the lit side's light than the pre-lane estimator's.
-// THE BARS ARE THE FLYTHROUGH'S RATIOS, unchanged: the shipped floor noise <= 0.60 x the pre-lane's
-// (GATHER-NOISE-1's -40 %); the dark side <= the pre-lane's x 1.10 + 0.002 x the lit floor's. No
-// stored constants: both arms are measured here, every run.
+// THE BARS ARE THE FLYTHROUGH'S, unchanged: the shipped floor noise <= 0.60 x the pre-lane's
+// (GATHER-NOISE-1's -40 %); the shipped error <= 1.05 x the pre-lane's (kErrorTolerance); the dark side
+// <= the pre-lane's x 1.10 + 0.002 x the lit floor's. No stored constants: both arms measured every run.
 // THE BAR BITES: `test_gi_gather_estimator --swap-arms` runs the same process with the arms' roles
 // exchanged and must FAIL (spikes/testing-speed-b1/estimator-red.txt) — a proof, never a row.
 //
-// FRAMES (declared on the row): kChainFrames + 4 x (kAwayFrames + kTurnFrames + kWindowFrames + the
-// readback's tail <= kTailFrames) + 2 x (kLeakAwayFrames + kTurnFrames + kLeakReadFrames). The readback
-// is on for the read frames only (its copy and decode cost a Debug frame ~30 ms). Frames, never time.
-// THE PRICE: <= 10 s with the shader cache warm (TESTING-SPEED-A's shared cache); a cold process pays ~13 s of
-// shader compiles in its first frames and the leak scene's new permutations (spikes/testing-speed-b1/profile.txt).
+// FRAMES (declared on the row): kChainFrames + 2 x (2 + 64 + 4 + the readback's tail) for the reference
+// + 8 x (kAwayFrames + kTurnFrames + kWindowFrames + the tail <= kTailFrames) + 2 x (kLeakAwayFrames +
+// kTurnFrames + kLeakReadFrames). The readback is on for the read frames only (its copy and decode cost a
+// Debug frame ~30 ms). Frames, never time.
+// BUDGET 15 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12): 640 + ~300 frames and two references;
+// <= 10 s warm (a cold process pays its shader compiles in its first frames: spikes/testing-speed-b1/profile.txt).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -65,17 +69,19 @@ static int failures = 0;
     } while (0)
 
 static const unsigned kSize = 256u, kBlock = 16u;
-// THE FRAMES (TESTING-SPEED-B1). kChainFrames and kLeakAwayFrames are the flythrough's own (its 60-frame chain build
-// and its leak arm's 120-frame settle away); kAwayFrames fills an arm's history at the away pose (the history is a
-// 10-frame EMA, GatherTuning::historyFrames: four of them); the window is the brief's ~32. The row's FRAMES: 60 +
-// 4 x (40 + 4 + 32 + <= 8) + 2 x (120 + 4 + 10) = 664 at most (measured 640: the readback's tail retires early).
-static const int kChainFrames = 60;      // the chain built over the room before the first arm
+// THE FRAMES (TESTING-SPEED-B1). kChainFrames: the flythrough's warm-up (its 60-frame chain build + the ~170 frames
+// its references rendered before the first flight); kLeakAwayFrames: its leak arm's 120-frame settle away;
+// kAwayFrames fills an arm's history at the away pose (a 10-frame EMA, GatherTuning::historyFrames: four of them).
+static const int kChainFrames = 230;     // the chain built over the room before the reference and the arms
 static const int kAwayFrames = 40;       // an arm's history filled at the away pose
 static const int kTurnFrames = 4;        // the turn (the flythrough's leak arm's): young pixels
 static const int kWindowFrames = 32;     // the measured window
 static const int kTailFrames = 8;        // the readback retires a few frames late
 static const int kLeakAwayFrames = 120;  // the leak arm's settle away (the flythrough's)
 static const int kLeakReadFrames = 10;   // the leak arm's frames after the turn (read from the 6th)
+
+/// THE SHOWROOM'S POSE: the flythrough's fourth capture (its kKeys[4]); away = the same eye turned 40 degrees left.
+static const Vec3 kPos(10.5f, 1.7f, 4.0f), kTarget(-5.0f, 0.5f, -4.0f), kAway(-1.0f, 0.5f, 12.0f);
 
 static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
@@ -180,8 +186,7 @@ static std::vector<double> floorBlocks(const std::vector<float> &irr)
 /// turn, then the window's floor blocks by their frame offset after the turn's last frame.
 static std::vector<std::vector<double>> turnWindow(Engine *e, View *view, Scene *s, GatherTuning t)
 {
-    // the flythrough's fourth capture (its kKeys[4]); away = the same eye turned 40 degrees left
-    const Vec3 pos(10.5f, 1.7f, 4.0f), target(-5.0f, 0.5f, -4.0f), away(-1.0f, 0.5f, 12.0f);
+    const Vec3 &pos = kPos, &target = kTarget, &away = kAway;
     t.readback = false;
     s->setGatherTuning(t);
     enginetest::testCameraLookAt(view, pos, away);
@@ -209,24 +214,69 @@ static std::vector<std::vector<double>> turnWindow(Engine *e, View *view, Scene 
     return got;
 }
 
-/// THE SHOWROOM ARM — THE FLYTHROUGH'S METRIC AT ONE POSE: the same turn flown twice from the same start (two
-/// independent draws: the sample sequence advances with the frame index), NOISE = the mean |run 0 - run 1| of the
-/// floor blocks over the window's frames, as a fraction of their mean.
-static double showroomNoise(Engine *e, View *view, Scene *s, const GatherTuning &t, unsigned &frames)
+/// THE CONVERGED REFERENCE at the pose (the flythrough's, at one pose): two rest means of 64 frames at two
+/// independent sample sequences (GatherTuning restFrames / restSeed) under the PRE-LANE estimator, averaged — its
+/// own noise a fraction of a young frame's, and it enters only the ERROR. The camera is nudged first so the rest
+/// restarts at the pose; the readback is on for the held frames only.
+static std::vector<double> reference(Engine *e, View *view, Scene *s, const GatherTuning &preLane)
+{
+    std::vector<double> sum;
+    for (unsigned seed = 1; seed <= 2; ++seed) {
+        GatherTuning t = preLane;
+        t.restOff = false;
+        t.restFrames = 64u;
+        t.restSeed = seed;
+        t.readback = false;
+        s->setGatherTuning(t);
+        enginetest::testCameraLookAt(view, Vec3(kPos.x + 0.01f, kPos.y, kPos.z), kTarget);
+        render(e, 2);
+        enginetest::testCameraLookAt(view, kPos, kTarget);
+        render(e, 64 + 4);   // the rest mean completes at its 64th rest frame and HOLDS
+        const unsigned since = s->giStatus().gather.frame;
+        t.readback = true;
+        s->setGatherTuning(t);
+        std::vector<double> b;
+        for (int k = 0; k < kTailFrames + 4 && b.empty(); ++k) {
+            render(e, 1);
+            const GatherStatus g = s->giStatus().gather;
+            if (!g.irradiance.empty() && g.irradianceW == kSize && g.irradianceH == kSize && g.irradianceFrame >= since)
+                b = floorBlocks(g.irradiance);
+        }
+        if (b.empty()) return {};
+        if (sum.empty()) sum.assign(b.size(), 0.0);
+        for (size_t i = 0; i < b.size(); ++i) sum[i] += 0.5 * b[i];
+    }
+    return sum;
+}
+
+/// ONE ARM'S READINGS, pooled over its twin pairs. NOISE (the flythrough's metric at one pose): the same turn flown
+/// twice from the same start — two independent draws, the sequence advancing with the frame index — the mean
+/// |run 0 - run 1| of the floor blocks over the window, as a fraction of their mean. ERROR (the flythrough's blur
+/// bar): the RMS over blocks and frames of (run - reference), as a fraction of the reference's mean — a wider read
+/// lowers the noise and RAISES this where the irradiance has a gradient.
+struct ArmReading {
+    double diff = 0.0, mean = 0.0, sq = 0.0;
+    size_t nsq = 0;
+    unsigned frames = 0u;
+    double noise() const { return mean > 0.0 ? diff / mean : 0.0; }
+    double error(double refMean) const { return nsq && refMean > 0.0 ? std::sqrt(sq / double(nsq)) / refMean : 0.0; }
+};
+static void twinPair(Engine *e, View *view, Scene *s, const GatherTuning &t, const std::vector<double> &ref,
+                     ArmReading &a)
 {
     const auto r0 = turnWindow(e, view, s, t);
     const auto r1 = turnWindow(e, view, s, t);
-    double diff = 0.0, mean = 0.0;
-    frames = 0u;
     for (size_t k = 0; k < r0.size(); ++k) {
         if (r0[k].empty() || r1[k].empty()) continue;
         for (size_t i = 0; i < r0[k].size(); ++i) {
-            diff += std::fabs(r1[k][i] - r0[k][i]);
-            mean += 0.5 * (r1[k][i] + r0[k][i]);
+            a.diff += std::fabs(r1[k][i] - r0[k][i]);
+            a.mean += 0.5 * (r1[k][i] + r0[k][i]);
+            const double d0 = r0[k][i] - ref[i], d1 = r1[k][i] - ref[i];
+            a.sq += 0.5 * (d0 * d0 + d1 * d1);
+            ++a.nsq;
         }
-        ++frames;
+        ++a.frames;
     }
-    return mean > 0.0 ? diff / mean : 0.0;
 }
 
 /// THE LEAK ARM: the young dark floor's mean E/pi just after the turn, and the lit floor's.
@@ -310,17 +360,33 @@ int main(int argc, char **argv)
     buildShowroom(s);
     CHECK(epicGather(s), "the chain builds over the room");
     render(e, kChainFrames);
-    unsigned prePairs = 0u, nowPairs = 0u;
-    const double preNoise = showroomNoise(e, view, s, preLane, prePairs);
-    const double nowNoise = showroomNoise(e, view, s, shipped, nowPairs);
+    const std::vector<double> ref = reference(e, view, s, preLane);
+    CHECK(!ref.empty(), "the converged reference reads back at the pose");
+    if (ref.empty()) return 1;
+    double refMean = 0.0;
+    for (double v : ref) refMean += v / double(ref.size());
+    // ABBA (the read's finding: one order read 0.535, the other 0.599 — the chain still warming and the frame
+    // index's draw both ride on the order): pre, shipped, shipped, pre, each a twin pair, pooled per arm.
+    ArmReading pre, now;
+    twinPair(e, view, s, preLane, ref, pre);
+    twinPair(e, view, s, shipped, ref, now);
+    twinPair(e, view, s, shipped, ref, now);
+    twinPair(e, view, s, preLane, ref, pre);
+    const double preNoise = pre.noise(), nowNoise = now.noise();
     const double ratio = preNoise > 0.0 ? nowNoise / preNoise : 0.0;
-    std::printf("   FLOOR noise after the turn: pre-lane %.4f, shipped %.4f (ratio %.3f; %u / %u frames read twice)\n",
-                preNoise, nowNoise, ratio, prePairs, nowPairs);
-    CHECK(prePairs >= unsigned(kWindowFrames) / 2u && nowPairs >= unsigned(kWindowFrames) / 2u,
+    const double preErr = pre.error(refMean), nowErr = now.error(refMean);
+    std::printf("   FLOOR noise after the turn: pre-lane %.4f, shipped %.4f (ratio %.3f; %u / %u frames, two pairs "
+                "each, ABBA)\n", preNoise, nowNoise, ratio, pre.frames, now.frames);
+    std::printf("   FLOOR error against the converged reference: pre-lane %.4f, shipped %.4f (ratio %.3f)\n", preErr,
+                nowErr, preErr > 0.0 ? nowErr / preErr : 0.0);
+    CHECK(pre.frames >= unsigned(kWindowFrames) && now.frames >= unsigned(kWindowFrames),
           "both arms read the window back (the gather ran every frame)");
     CHECK_MSG(preNoise > 0.0 && nowNoise <= 0.60 * preNoise,
               "THE FLOOR AFTER A TURN: the shipped estimator's noise is at most 0.60 of the pre-lane's "
               "(%.4f against %.4f, ratio %.3f)", nowNoise, preNoise, ratio);
+    CHECK_MSG(preErr > 0.0 && nowErr <= 1.05 * preErr,
+              "NO BLUR PAID FOR IT: the shipped estimator's error against the converged reference is at most "
+              "1.05 x the pre-lane's (%.4f against %.4f)", nowErr, preErr);
 
     // ---- THE LEAK: no light through a wall ------------------------------------------------------
     // a view and a scene of its own (the flythrough's leak arm was its own process): the room's go first

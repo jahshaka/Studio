@@ -2042,9 +2042,11 @@ set_tests_properties(gi.gather_motion PROPERTIES JAHSHAKA_TEST_FRAMES 1263)
 # gi.gather_estimator (GATHER-NOISE-1's guard; TESTING-SPEED-B1 replaced gi.flythrough_noise.{Showroom2,Open,Leak},
 # 810 s of flights that re-flew the pre-lane estimator every run — their source and the script that re-runs them by
 # hand: spikes/testing-speed-b1/flythrough/, never a row): the Showroom-2-shaped room at Epic, 256 x 256, one pose
-# after a 4-frame turn, the PRE-LANE and the SHIPPED estimator in one process (trap 12): the floor's frame-to-frame
-# block noise, shipped <= 0.60 x pre-lane; the leak pose's young dark floor <= pre-lane x 1.10 + 0.002 x lit. The
-# flythrough's ratios, unchanged; no stored constants. `--swap-arms` (the bar's proof, never a row) must fail.
+# after a 4-frame turn, the PRE-LANE and the SHIPPED estimator in one process (trap 12), two twin pairs each in ABBA
+# order: the floor's TWO-FLIGHT noise (|run 0 - run 1| of its 16-px blocks), shipped <= 0.60 x pre-lane; its error
+# against the converged reference, shipped <= 1.05 x pre-lane; the leak pose's young dark floor <= pre-lane x 1.10 +
+# 0.002 x lit. The flythrough's bars, unchanged; no stored constants. `--swap-arms` (the bar's proof) must fail.
+# BUDGET 15 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12): 640 + ~300 frames and two references; <= 10 s warm.
 add_executable(test_gi_gather_estimator test_gi_gather_estimator.cpp)
 set_target_properties(test_gi_gather_estimator PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -2060,7 +2062,7 @@ add_dependencies(test_gi_gather_estimator JahshakaEngineMedia)
 jah_gpu_row(gi.gather_estimator CLASS engine COMMAND test_gi_gather_estimator
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_estimator PROPERTIES TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.gather_estimator PROPERTIES JAHSHAKA_TEST_FRAMES 640)
+set_tests_properties(gi.gather_estimator PROPERTIES JAHSHAKA_TEST_FRAMES 1270)
 
 # gi.gather_adaptive_fair — THE ADAPTIVE BUDGET STARVES NO CELL (PHOTON-II-1 F3): with the cap at
 # a quarter of the demand, every frame spends the budget and every asking cell gets its second
@@ -2321,6 +2323,7 @@ jah_gpu_row(photon.view CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          WORKING_DIRECTORY ${_photon_view_home}/run)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 620 = 6 x the run log's quiet median 102.6 s (44 quiet PASS runs since 2026-10-01, worst 323.7 s);
 # declared 400 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(photon.view PROPERTIES JAHSHAKA_TEST_FRAMES 4042)
 set_tests_properties(photon.view PROPERTIES
     TIMEOUT 620 LABELS "scripting"
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
@@ -2374,4 +2377,5 @@ set_tests_properties(gi.cone_skip PROPERTIES JAHSHAKA_TEST_FRAMES 414)
 if(TEST photon.view)
     jah_fresh_home_fixture(photon.view.fresh_home photonViewFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon_view" WARM LABELS "scripting")
     set_property(TEST photon.view APPEND PROPERTY FIXTURES_REQUIRED photonViewFreshHome)
+    set_tests_properties(photon.view.fresh_home PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 endif()

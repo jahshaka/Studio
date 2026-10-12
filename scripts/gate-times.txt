@@ -224,7 +224,7 @@ gi.gather_cards 12.49  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x,
 gi.gather_cost 30.02  all n=2
 gi.gather_deterministic 8.71  quiet n=41
 gi.gather_edge 9.11  quiet n=42
-gi.gather_estimator 10.52  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
+gi.gather_estimator 15.54  hand: TESTING-SPEED-B1 fix round (ABBA + the error bar, 1270 frames), 2026-10-12 2x:xx, box busy; budget 15 s: the measurement (the lead 2026-10-12; <= 10 s warm)
 gi.gather_glass 6.52  quiet n=40
 gi.gather_letterbox 7.15  quiet n=41
 gi.gather_motion 5.78  quiet n=46
