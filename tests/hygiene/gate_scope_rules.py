@@ -67,7 +67,7 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
 
   10. A SUITE REGISTERED THROUGH A HELPER FUNCTION (jah_gpu_exclusive_test)
       belongs to the directory that CALLS the helper: a change to
-      tests/openasync/test_open_responsive.cpp selects open.responsive. FAILS
+      tests/gi/test_gi_budget.cpp selects gi.budget (open.responsive's case until TESTING-SPEED-B3 deleted it). FAILS
       BEFORE the fix (the backtrace's add_test frame is tests/CMakeLists.txt).
 
   11. THE SUBJECTS SELECT THEIR SUITES (D6B-GATE-SHAPE; the suites audit's S1/S2). A change
@@ -79,8 +79,9 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
   12. THE STAGE-CLOSE LABELS SAY WHAT THEY MEAN (D6B-GATE-SHAPE; audit §8; STAGE-CLOSE-1).
       `stage-close` leaves the MERGE/PUSH tiers for the lead's stage-close batch; `quiet-box`
       beside it keeps a MEASUREMENT out of every scoped gate. A change to
-      test_open_responsive.cpp selects open.responsive (the counts) and NOT
-      open.responsive.timing (its millisecond bars); `--stage-close-tier` names `stage-close`
+      tests/ui/test_selection_cost.cpp selects ui.selection_cost (the counts) and NOT
+      ui.selection_cost.timing (its millisecond bars; open.responsive's case until TESTING-SPEED-B3 deleted it);
+      `--stage-close-tier` names `stage-close`
       and `--stage-close-tier-serial` runs the measuring rows at -j1 (the subject-only
       selection itself: gate.stage_close_select).
 
@@ -565,7 +566,7 @@ def main(source, build):
     # (POST-C-FIXES-1). jah_gpu_exclusive_test's add_test lives in tests/CMakeLists.txt,
     # so ctest's backtrace put every GPU-lock suite in dir "tests" and a change to the
     # suite's OWN source selected everything in its directory except the suite itself
-    # (open.responsive for tests/openasync/test_open_responsive.cpp - measured).
+    # (open.responsive for tests/openasync/test_open_responsive.cpp - measured; deleted by TESTING-SPEED-B3).
     # (TESTING-SPEED-A for TESTING-SPEED-B batch 2: open.responsive is deleted; the two gi GPU-lock rows carry the case)
     for path, suite in (("tests/gi/test_gi_budget.cpp", "gi.budget"),
                         ("tests/gi/test_gi_field_scroll.cpp", "gi.field_scroll")):

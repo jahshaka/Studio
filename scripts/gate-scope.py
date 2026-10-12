@@ -2383,8 +2383,8 @@ class Selection:
     RETIRED = {
         "app.create_loop": "SUITE-POOL-1; its one unique check (the Properties column after 40 "
                            "creates) is open.responsive's full-library arm",
-        "test_create_loop": "app.create_loop's executable (SUITE-POOL-1; open.responsive carries its check)",
-        "app.create_loop.fresh_home": "app.create_loop's fixture (SUITE-POOL-1; open.responsive carries its check)",
+        "test_create_loop": "app.create_loop's executable (SUITE-POOL-1; open.responsive carried its check until TESTING-SPEED-B3)",
+        "app.create_loop.fresh_home": "app.create_loop's fixture (SUITE-POOL-1; open.responsive carried its check until TESTING-SPEED-B3)",
         "atom.error_bound": "SUITE-POOL-1; merged into atom.lod_bound_bar (test_mesh_bake --bound-bar)",
     }
 
