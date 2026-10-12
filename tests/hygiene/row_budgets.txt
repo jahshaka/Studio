@@ -1,9 +1,11 @@
-# THE ROWS' FATES AND BUDGETS (TESTING-SPEED-A item 7; source.row_budget) — copied from the lead's classification
-# SPECS/TESTING_SPEED_ROWS.md (2026-10-12, with the B2-B4 preflights' corrections of 20:4x-20:5x; the owner's review SPECS/TESTING_SPEED_KEEP.md): <row> <class> <fate> <budget s|->.
-# A KEPT row (KEEP, KEEP:rewrite, or a row this file does not name) whose scripts/gate-times.txt price exceeds its budget
-# — its own (a KEEP:rewrite line) or its class's (fixture/other 10 s, app 60 s) — is a RED OF THE ROW, never a widened
-# budget. MOVE:stage-close / THROW / SETUP / TOOLING rows are Part B's to move, delete or follow (TESTING-SPEED-B); each
-# batch deletes its rows' lines here as it lands them. RED BY DESIGN until Part B: the KEEP:rewrite rows over budget.
+# THE ROWS' FATES AND BUDGETS (source.row_budget) — GENERATED, never hand-kept: `python3 tests/hygiene/row_budget.py
+# --generate <lead repo>/SPECS/TESTING_SPEED_ROWS.md tests/hygiene/row_budgets.txt` (the ROWS table is the ONE source of
+# budgets; a row the table prices "-" is kept and warned about). One line per table row: <row> <class> <fate> <budget s|->,
+# the budget the last `<= N s` / `budget N s` of a KEEP / KEEP:rewrite row's reason, `-` = its class's (fixture/other 10 s,
+# app 60 s; a POOL 60 s of ARMS: the sum of its <pool>::<arm> prices, the boot on top). A kept row whose
+# scripts/gate-times.txt price exceeds its budget is a RED OF THE ROW, never a widened budget. MOVE:stage-close / THROW /
+# SETUP / TOOLING rows are Part B's (TESTING-SPEED-B). RED BY DESIGN until Part B: the KEEP:rewrite rows over budget —
+# the row is registered as a known red at its lane's delivery (lane.sh deliver: an acceptance row RED BY DESIGN).
 api.contract app KEEP -
 app.sky_swap_presented app THROW -
 app.shader_gate_warm app THROW -
@@ -58,10 +60,10 @@ atom.cluster_crack fixture MOVE:stage-close -
 atom.decode_exact fixture KEEP:rewrite 20
 atom.cluster_cut fixture MOVE:stage-close -
 atom.dolly_gate fixture KEEP 30
-atom.dag_bound_bar fixture KEEP 60
-atom.dag_chain_validate fixture KEEP 60
-atom.lod_bound_bar fixture KEEP 60
-atom.occlusion_exact fixture KEEP 60
+atom.dag_bound_bar fixture KEEP -
+atom.dag_chain_validate fixture KEEP -
+atom.lod_bound_bar fixture KEEP -
+atom.occlusion_exact fixture KEEP -
 atom.dag_bound fixture KEEP -
 atom.two_sided fixture KEEP -
 atom.words_still fixture KEEP -
@@ -80,7 +82,7 @@ avatar.document fixture KEEP -
 avatar.responsive.timing.fresh_home setup SETUP -
 avatar.responsive.fresh_home setup SETUP -
 bake.determinism fixture MOVE:stage-close -
-bundle.writer fixture KEEP 60
+bundle.writer fixture KEEP -
 cameras.exposure fixture KEEP -
 cameras.pip fixture KEEP -
 cameras.body fixture KEEP -
@@ -186,20 +188,20 @@ gi.field_thin_wall fixture KEEP:rewrite 20
 gi.contact_occlusion_target fixture KEEP:rewrite 25
 gi.gather_cost fixture MOVE:stage-close -
 gi.cascades_asan fixture MOVE:stage-close -
-gi.rt_alpha_tested fixture KEEP 60
-gi.gather_plane fixture KEEP 60
-gi.gather_plane_target fixture KEEP 60
+gi.rt_alpha_tested fixture KEEP -
+gi.gather_plane fixture KEEP -
+gi.gather_plane_target fixture KEEP -
 gi.rt_reflect_asan fixture MOVE:stage-close -
-gi.hit_shade fixture KEEP 60
-gi.gather_reference_target fixture KEEP 60
-gi.gather_reference fixture KEEP 60
-gi.gather fixture KEEP 60
-gi.gather_plane_weight fixture KEEP 60
+gi.hit_shade fixture KEEP -
+gi.gather_reference_target fixture KEEP -
+gi.gather_reference fixture KEEP -
+gi.gather fixture KEEP -
+gi.gather_plane_weight fixture KEEP -
 gi.field_scroll fixture MOVE:stage-close -
-gi.probe_inputs fixture KEEP 60
-gi.gather_stable fixture KEEP 60
-gi.reflect_fog fixture KEEP 60
-gi.ddgi fixture KEEP 60
+gi.probe_inputs fixture KEEP -
+gi.gather_stable fixture KEEP -
+gi.reflect_fog fixture KEEP -
+gi.ddgi fixture KEEP -
 gi.rayquery_asan fixture MOVE:stage-close -
 gi.pcc_mirror fixture KEEP -
 gi.chain_converge fixture KEEP -
@@ -349,7 +351,7 @@ input.axis_view_lock fixture KEEP -
 input.alt_orbit fixture KEEP -
 input.actions fixture KEEP -
 library.model fixture KEEP -
-lights.shadows fixture KEEP 60
+lights.shadows fixture KEEP -
 lights.hygiene fixture KEEP -
 lights.masks fixture KEEP -
 lights.icons fixture KEEP -
@@ -369,7 +371,7 @@ material.live_roundtrip app MOVE:stage-close -
 materialpreview.engine fixture KEEP -
 materials.members fixture KEEP -
 materials.bundle fixture KEEP -
-math.parity fixture KEEP 60
+math.parity fixture KEEP -
 mcp.e2e app KEEP:rewrite 30
 mcp.e2e.fresh_home setup SETUP -
 meshbake.archive_bakes app MOVE:stage-close -
@@ -387,7 +389,7 @@ meshbake.async_landing fixture KEEP -
 meshbake.archive_bakes.fresh_home setup SETUP -
 meshbake.shipped_bakes.fresh_home setup SETUP -
 mirror.settle_incremental fixture MOVE:stage-close -
-mirror.settle_thumbnails fixture KEEP 60
+mirror.settle_thumbnails fixture KEEP -
 mirror.document_to_engine fixture KEEP -
 mirror.cull_twin fixture KEEP -
 mirror.sun_night fixture KEEP -
@@ -486,6 +488,19 @@ scale.shadow_cut fixture MOVE:stage-close -
 scale.cpu_walks fixture MOVE:stage-close -
 scale.gpu_coverage fixture MOVE:stage-close -
 scale.library.fixture app KEEP -
+scale.world fixture KEEP -
+scale.voxel_scroll fixture KEEP -
+scale.cluster_cut fixture KEEP -
+scale.levels fixture KEEP -
+scale.cut_cost fixture KEEP -
+scale.residency fixture KEEP -
+scale.decode fixture KEEP -
+scale.tlas fixture KEEP -
+scale.atlas fixture KEEP -
+scale.far_field fixture KEEP -
+scale.bake fixture KEEP -
+scale.hit_list fixture KEEP -
+scale.assets other KEEP -
 scene.reopen_fidelity app MOVE:stage-close -
 scene.reopen_fidelity.fresh_home setup SETUP -
 scenegraph.benchmark other MOVE:stage-close -
@@ -570,7 +585,7 @@ shader.async_after_open app KEEP:rewrite 30
 shadercache.container_asan fixture MOVE:stage-close -
 shadercache.app app KEEP:rewrite 60
 shadercache.container fixture KEEP 60
-shadercache.engine_pipelines fixture KEEP 60
+shadercache.engine_pipelines fixture KEEP -
 shadercache.warmup_pass fixture KEEP -
 shadercache.warmup fixture KEEP -
 shadergraph.emitter_parity fixture KEEP -
@@ -588,7 +603,7 @@ shadow.cutout_caster.churn app MOVE:stage-close -
 shadow.two_sided_caster.churn app MOVE:stage-close -
 shadow.cutout_caster app KEEP:rewrite 60
 shadow.two_sided_caster app KEEP:rewrite 60
-shadow.atom_parity fixture KEEP 60
+shadow.atom_parity fixture KEEP -
 shadow.caster_first_frame fixture KEEP -
 shadow.atom_cut fixture KEEP -
 shadow.cache_kinds fixture KEEP -
@@ -599,7 +614,7 @@ shadow.helper_casters fixture KEEP -
 shadow.layout fixture KEEP -
 shell.contract fixture KEEP -
 shortcuts.registry fixture KEEP -
-skeletal.gpu_parity fixture KEEP 60
+skeletal.gpu_parity fixture KEEP -
 skeletal.cpu_skinning fixture KEEP -
 skeletal.gpu_clips fixture KEEP -
 skeletal.rig_translation fixture KEEP -

@@ -138,7 +138,7 @@ def main(source, build):
 
 
 BUDGET_RX = re.compile(r"(?:<=|\u2264|\bbudget)\s*(\d+(?:\.\d+)?)\s*s\b")
-ROW_RX = re.compile(r"\|\s*([A-Za-z0-9_.:\-]+)\s*\|\s*(\w+)\s*\|\s*[\d.]+\s*\|\s*([A-Za-z:\-]+)\s*\|(.*)\|\s*$")
+ROW_RX = re.compile(r"\|\s*([A-Za-z0-9_.:\-]+)\s*\|\s*(\w+)\s*\|\s*([\d.]+|-)\s*\|\s*([A-Za-z:\-]+)\s*\|(.*)\|\s*$")
 
 
 def generate(rows_md):
@@ -150,8 +150,11 @@ def generate(rows_md):
         m = ROW_RX.match(line)
         if not m or m.group(1) in seen or m.group(1) in ("row", "---"):
             continue
-        name, klass, fate, why = m.groups()
+        name, klass, secs, fate, why = m.groups()
         seen.add(name)
+        if secs == "-":
+            # a row the table prices "-" (a NEW row, no record yet): KEPT in the file, and SAID — never dropped silently
+            sys.stderr.write(f"row_budgets: WARN {name} has no seconds in the table (\"-\"): kept with its fate and budget\n")
         b = "-"
         if fate.startswith("KEEP"):
             nums = BUDGET_RX.findall(why)

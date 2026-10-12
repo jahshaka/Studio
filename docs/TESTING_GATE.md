@@ -434,7 +434,8 @@ drafted). Tested by the lead repo's `scripts/lead/tests/runner_pipeline_test.sh`
 
 A ROW RENDERS SECONDS AND LEAVES NOTHING (TESTING-SPEED-A item 7): `jah_gpu_row(... FRAMES <n> ...)` states the frames a row
 renders (the property `JAHSHAKA_TEST_FRAMES`; `source.testing_rules` R7 ratchets on `tests/hygiene/frames_pending.txt`); a kept
-row's price over its budget (fixture 10 s, app 60 s, or its own in `tests/hygiene/row_budgets.txt`) is a red of the row
+row's price over its budget (fixture 10 s, app 60 s, a pool 60 s of ARMS, or its own in `tests/hygiene/row_budgets.txt` —
+GENERATED from the lead's `SPECS/TESTING_SPEED_ROWS.md` by `row_budget.py --generate`, never hand-kept) is a red of the row
 (`source.row_budget`); a home made by `tests/support/fresh_home.sh` is deleted when its row exits 0 and kept once as evidence
 (`build-linux/tests/.evidence/<home>/`) when it does not — by the row's own wrapper (`-- <cmd>`), or for a fixture home with ONE
 consumer by that consumer's admission (`JAH_WIPE_AFTER`); the boot's shader cache is ONE per tree (`build-linux/tests/.shadercache`,
@@ -446,7 +447,8 @@ A red at a merge is rerun ONCE at the candidate (-j1, the whole card); a red tha
 (`ci_gate_check.py --known-red`: the registry + the nearest ancestor of the base holding a run of the row) stops the run
 (`refused-early`); a known red runs on and the door decides; an acceptance row a brief declares RED BY DESIGN is registered
 as a known red at the delivery (`lane.sh deliver`); the merge refuses with the row's output and THE LEAD DECIDES (§1;
-`runner.sh attribute <lane> --parent` runs it once at the parent on the lead's word). Nothing is registered automatically.
+`runner.sh attribute <lane> --parent` runs it once at the parent on the lead's word). A merge registers nothing; the ONE registration outside the lead's
+`lane.sh defect` is a brief's RED BY DESIGN acceptance row, at its delivery.
 "Environmental" is not a verdict: an Xid from the row's pid is never environmental. ANY OTHER red needs a
 recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
 `scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
