@@ -13,7 +13,7 @@ shipped zip (a legitimate exporter change must not red the row).
 THE HOLES: the sample's named failure is a funnel that lost its cut-out and opens SOLID. On the frame from the
 sample's own camera (800x600, a pinned shader time), inside the funnel's envelope (its warm-or-white pixels in the
 window x 230..580; 4 % below its top to 22 % above its bottom), the fraction of pixels that are NOT funnel — the
-holes the cut-out punches — must be above zero. No reference picture: the bar is the property, not an old still.
+holes the cut-out punches — must be at least HOLES_BAR (0.005; below). No reference picture: the bar is the property, not an old still.
 """
 import collections
 import json
@@ -42,6 +42,10 @@ def read(path):
 
 
 XW0, XW1 = 230, 580
+# THE HOLES BAR (the lead, 2026-10-12, from the measured pair; the house rule: measured, headroom either way):
+# the shipped archive reads 0.0165 see-through, the Top Shell's cut-out OFF 0.000029 (2 stray px;
+# spikes/testing-speed-b2/tornado-cutout-off.txt) — 0.005 is three times under the one, 170 times above the other.
+HOLES_BAR = 0.005
 
 
 def torn(p):
@@ -76,9 +80,9 @@ def main(argv):
         if env == 0:
             print("FAIL: no funnel in the frame %s" % argv[2])
             return 1
-        ok = frac > 0.0
-        print("%s: the funnel is see-through: %.4f of its %d envelope pixels are holes (bar > 0)"
-              % ("ok" if ok else "FAIL", frac, env))
+        ok = frac >= HOLES_BAR
+        print("%s: the funnel is see-through: %.4f of its %d envelope pixels are holes (bar >= %.3f)"
+              % ("ok" if ok else "FAIL", frac, env, HOLES_BAR))
         return 0 if ok else 1
     if len(argv) == 3 and argv[1] == "counts":
         assets, oids, bad = read(argv[2])

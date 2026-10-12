@@ -95,12 +95,12 @@ set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stag
 # the SHIPPED Tornado archive, opened on a clean machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece
 # cache anywhere), closes (every dependency and file of its manifest is in the zip), imports exactly its assets and
 # objects, keeps its live graph materials (every layer re-emits its pieces from its graph, the shells keep their
-# baked cut-out) after the import AND after a close and reopen, is SEE-THROUGH from its own camera (the named failure:
+# baked cut-out) after the import AND after a close and reopen, is SEE-THROUGH (>= 0.005) from its own camera (the named failure:
 # a sample that loses its cut-out opens with no holes), and is a FIXED POINT: exported, imported and exported again,
 # the same archive (never held against the shipped zip).
-# THE HOLES, measured (2026-10-12, spikes/testing-speed-b2/tornado-cutout-off.txt): the shipped archive 0.0165 see-through;
-# the Top Shell's cut-out OFF (its map solid) 0.00003 (2 stray px) — so the "> 0" bar does NOT yet separate them: the
-# lead's call.
+# THE HOLES BAR: see-through >= 0.005 (the lead, 2026-10-12; the house rule: measured, headroom either way) — the
+# shipped archive reads 0.0165 (three times above), the Top Shell's cut-out OFF (its map solid) 0.000029, 2 stray px
+# (170 times below): spikes/testing-speed-b2/tornado-cutout-off.txt.
 # STAGE-CLOSE: a whole-archive round trip (SPECS/TESTING_SPEED_ROWS.md).
 jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
