@@ -272,6 +272,7 @@ gi.ray_levels 3.31  quiet n=36
 gi.rayquery 1.77  quiet n=40
 gi.rayquery_asan 9.73  quiet n=41
 gi.rayquery_norays 1.25  quiet n=43
+gi.readout_async 5.99  hand: VOXEL-READOUT-1 self-audit PASS runs 2026-10-12 (5.99 s, 3.27 s; the slower) (no quiet run in the log yet)
 gi.reenable 4.07  quiet n=41
 gi.reflect_fog 10.50  quiet n=38
 gi.reflect_fog_norays 4.86  quiet n=37
