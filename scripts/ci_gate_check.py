@@ -191,6 +191,12 @@ HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `con
 #                      COMPETITOR CENSUS (box.census) shows real competition — GPU processes outside the gate, sibling
 #                      ctests, builds, memory/IO pressure; never the gate's own queue or drain — and 3/3 solo PASS.
 #   xid-read:<window>  LOST/OOM/CRASH whose record says journal_unreadable (else the Xid would be in the record).
+#                      WHAT A RECORD'S `xid` IS (RUNNER-AUDIT-FIX-2, F11 closed as no defect): ONLY the Xids of the ROW'S
+#                      OWN process tree — vram_tokens.py supervise() reads kernel_xid.kernel_xids(t0, tracker.pids) and
+#                      tests/support/run_pool.py the arm's {pid}; no record ever carries the box's Xid from another pid.
+#                      So an Xid in a record is the row's, a defect by law, cleared by real:<id> only (above). This read
+#                      is checked against the RECORD, never a name alone: it is accepted only when every hard red's
+#                      record says journal_unreadable (no Xid of the row COULD be read) and the window covers the red.
 # A red whose record carries an `xid` takes `real:` only. Solos below 3/3 are red. `environmental`, ENOSPC and a dead
 # display are never verdicts. Nothing accepts prose.
 # `real:<id>` names ANY token (TESTING-CLEANUP-2B item 14): the REGISTRY is the grammar — _real looks the token up and
@@ -395,6 +401,8 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
     if hard:
         cls = "/".join(sorted(hard))
         if real: return _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode, proves, key)
+        # xid-read: the record's own fact decides (journal_unreadable), the text only names the window that covers the
+        # red — a record WITH an xid never reaches here (the row's own Xid: real:<id> only, above); F11 (FIX-2)
         w = _xid_window(text)
         if w:
             if not all(r.get("journal_unreadable") for r in reds if r.get("verdict") in HARD):
