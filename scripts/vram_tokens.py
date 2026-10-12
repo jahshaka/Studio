@@ -34,8 +34,11 @@ THE CONTRACT
     it happens BEFORE the command starts. It is no longer in any row's TIMEOUT (TESTING-CLEANUP-2B:
     the +900 s widening is gone): inside a gate ctest schedules the rows by their tokens
     (RESOURCE_GROUPS against the build's resource spec, tests/cmake/vram_rows.cmake), so a gate's rows
-    never wait here for each other; a short admission inside a gate is another process's tokens and
-    exits 75 at once (row_wait_bound: NOADMIT, re-queued by the gate); outside a gate a row whose
+    never wait here for each other; a short admission inside a gate is another process's tokens: when a
+    CARD-QUEUE JOB holds them (a builder's lane-rows job beside the merge run — the queue's P13 sharing) the
+    row WAITS for them, the holder named, its own TIMEOUT the bound, and every admission outside a gate waits
+    while it does (the slot holder first: <dir>/gate-want); only a shortage no queue job explains (a leak)
+    exits 75 at once (NOADMIT, re-queued by the gate) — RUNNER-FIX-3 finding 1; outside a gate a row whose
     TIMEOUT ends while still waiting is recorded NOADMIT by the run log (gate_runlog.unadmitted_wait). An expired wait exits 75 (EX_TEMPFAIL) and
     never runs the command. A wait prints ONE line, `vram: waiting for <k> tokens, <n> free`,
     and a closing `vram: admitted …` line with the tokens it got, so the triage sees it.
@@ -155,7 +158,8 @@ def wait_bound():
 
 
 def row_wait_bound():
-    """THE ADMISSION NEVER WAITS INSIDE A GATE (TESTING-CLEANUP-2B fix C). Inside one gate ctest already schedules the
+    """THE ADMISSION'S FIRST LOOK INSIDE A GATE IS NO WAIT (TESTING-CLEANUP-2B fix C; RUNNER-FIX-3: a shortage a card-queue
+    job explains then WAITS — acquire()'s queue_holders; only a leak stays the NOADMIT below). Inside one gate ctest already schedules the
     rows by their tokens (RESOURCE_GROUPS, tests/cmake/vram_rows.cmake), so a row that finds its tokens taken is
     blocked by a process OUTSIDE the gate — and every second it waited was charged to the row's own TIMEOUT (a row
     admitted late, then killed, read as a TIMEOUT of its code). So inside a gate (a live JAH_GATE_SLOT_HELD) the
@@ -294,6 +298,98 @@ def _say(log, text):
         log.flush()
 
 
+# ---- THE QUEUE-AWARE ADMISSION INSIDE A GATE (RUNNER-FIX-3 finding 1; §2131) --------------------------------------------
+# The card queue (scripts/lead/lib/runner/queue.py, P13) lets a builder's lane-rows job take tokens BESIDE a merge run
+# that holds the slot. A gate row then finds its tokens held by ANOTHER QUEUE JOB — not a leak, a sibling the queue
+# admitted — and "NOADMIT at once" turned VOXEL-READOUT-1's merge run into 569 never-ran records. So: a gate row whose
+# tokens are held by a queue job WAITS for them (the holder named; the row's own TIMEOUT bounds the wait: ended while
+# waiting it is NOADMIT, never ran — gate_runlog.unadmitted_wait), and only a shortage NO queue job explains (a leak: a
+# hand-run app, an orphan) refuses at once. The slot holder keeps priority: while a gate row waits, a want mark
+# (<dir>/gate-want/<pid>) makes every admission OUTSIDE a gate wait before it takes a token.
+def _env_of(pid):
+    try:
+        return open("/proc/%d/environ" % pid, "rb").read().split(b"\0")
+    except OSError:
+        return None
+
+
+def _ppid(pid):
+    try:
+        st = open("/proc/%d/stat" % pid).read()
+        return int(st[st.rfind(")") + 2:].split()[1])
+    except (OSError, ValueError, IndexError):
+        return 0
+
+
+def queue_job_of(pid):
+    """The card queue's job a token-holding process belongs to — 'job <id>' (its JAH_RUNNER_JOB, itself or an ancestor's:
+    a hold-rows job's row) or 'job (the queue's own hold, pid <p>)' (a `queue.py run` process holding tokens for its job)
+    — or None (not the queue's: a leak)."""
+    seen, p = 0, pid
+    while p > 1 and seen < 32:
+        env = _env_of(p)
+        if env is None:
+            return None
+        for e in env:
+            if e.startswith(b"JAH_RUNNER_JOB="):
+                return "job %s" % e[len(b"JAH_RUNNER_JOB="):].decode(errors="replace")
+        try:
+            argv = open("/proc/%d/cmdline" % p, "rb").read().split(b"\0")
+        except OSError:
+            argv = []
+        if any(a.endswith(b"queue.py") for a in argv) and b"run" in argv:
+            return "job (the queue's own hold, pid %d)" % p
+        p, seen = _ppid(p), seen + 1
+    return None
+
+
+def queue_holders(n=None):
+    """[(token index, holder pid, its queue job)] of the tokens held by card-queue jobs OUTSIDE this gate."""
+    gate = os.environ.get("JAH_GATE_SLOT_HELD")
+    out = []
+    for i, pid in sorted(_token_holders(n).items()):
+        if gate and gate.isdigit() and _of_gate(pid, int(gate)):
+            continue
+        j = queue_job_of(pid)
+        if j:
+            out.append((i, pid, j))
+    return out
+
+
+def _want_dir():
+    return os.path.join(token_dir(), "gate-want")
+
+
+def _wanting():
+    """[(pid, k, label)] of the LIVE gate rows waiting for tokens (stale marks reaped)."""
+    d, out = _want_dir(), []
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return out
+    for f in names:
+        try:
+            pid = int(f)
+        except ValueError:
+            continue
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            try:
+                os.remove(os.path.join(d, f))
+            except OSError:
+                pass
+            continue
+        except PermissionError:
+            pass
+        try:
+            k, _, lab = open(os.path.join(d, f)).read().partition(" ")
+            out.append((pid, int(k or 0), lab.strip()))
+        except (OSError, ValueError):
+            out.append((pid, 0, "?"))
+    return out
+
+
 def acquire(k, label="", wait=None, log=sys.stderr):
     """Take k tokens (all or nothing, lowest free indices first). Returns the token fds,
     inheritable, which the caller keeps open for exactly the life of the GPU process. Raises
@@ -335,6 +431,8 @@ def acquire(k, label="", wait=None, log=sys.stderr):
     gate_row = wait <= 0 and not os.environ.get("JAH_VRAM_ALL") and bool(os.environ.get("JAH_GATE_SLOT_HELD")) \
         and slot_held_valid()
     ahead = None
+    want = None              # this gate row's want mark while it waits for a queue job's tokens (finding 1)
+    yielded = False          # an admission outside a gate that waited for a gate row's want (said once)
     turnstile = _open(os.path.join(d, "turnstile"))
     try:
         # 1. THE TURNSTILE: one acquirer scans at a time, and the head of the queue keeps it.
@@ -375,6 +473,22 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                     os.close(fd)
                     if view is not None:
                         break       # a foreign lock raced the view: drop everything, look again
+            # THE SLOT HOLDER FIRST (finding 1): an admission OUTSIDE a gate never takes tokens while a gate row waits
+            if len(got) == k and not gate_row and not os.environ.get("JAH_GATE_SLOT_HELD"):
+                w = [x for x in _wanting() if x[0] != os.getpid()]
+                if w:
+                    for fd in got:
+                        os.close(fd)
+                    got = []
+                    if not yielded:
+                        _say(log, "vram: waiting — a gate row waits for tokens (pid %d, %d token(s), %s): the slot "
+                             "holder first%s" % (w[0][0], w[0][1], w[0][2] or "?", (" — " + label) if label else ""))
+                        yielded = waited = True
+                    if time.monotonic() > deadline:
+                        raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (a gate row waited "
+                                           "for tokens ahead of it)%s" % (k, wait, (" — " + label) if label else ""))
+                    time.sleep(POLL_S)
+                    continue
             if len(got) == k:
                 break
             for fd in got:
@@ -387,17 +501,40 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                 scans += 1
                 time.sleep(0.005)
                 continue
+            if gate_row and want is None and time.monotonic() > deadline:
+                # SHORT INSIDE A GATE: a queue job holds them -> WAIT for them (named); none does -> a leak, refused now
+                qh = queue_holders(n)
+                if qh:
+                    jobs = sorted({j for _, _, j in qh})
+                    deadline = time.monotonic() + wait_bound()
+                    os.makedirs(_want_dir(), exist_ok=True)
+                    want = os.path.join(_want_dir(), str(os.getpid()))
+                    with open(want, "w") as wf:
+                        wf.write("%d %s" % (k, label))
+                    _say(log, "vram: waiting for %d tokens, %d free — held by the card queue's %s (pid %s): a gate row "
+                         "waits for a queue job's tokens, its own TIMEOUT the bound%s"
+                         % (k, free, ", ".join(jobs), ",".join(sorted({str(p) for _, p, _ in qh})[:6]), (" — " + label) if label else ""))
+                    waited = True
+                    time.sleep(POLL_S)
+                    continue
             if not waited:
                 _say(log, "vram: waiting for %d tokens, %d free%s" % (k, free, (" — " + label) if label else ""))
                 waited = True
             if time.monotonic() > deadline:
                 raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (%d of %d free at "
-                                   "the last look)%s%s" % (k, wait, free, n,
+                                   "the last look%s)%s%s" % (k, wait if want is None else wait_bound(), free, n,
+                                                           "" if not gate_row or want else
+                                                           "; no card-queue job holds them: a leak",
                                                            ("; ahead at the turnstile: " + ahead) if ahead else "",
                                                            (" — " + label) if label else ""))
             time.sleep(POLL_S)
     finally:
         os.close(turnstile)
+        if want:
+            try:
+                os.remove(want)
+            except OSError:
+                pass
     for fd in got:
         os.set_inheritable(fd, True)
         try:
