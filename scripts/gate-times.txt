@@ -316,6 +316,9 @@ gizmo.screen_size 0.08  quiet n=46
 gpu.cutout_soak 292.31  all n=30
 hdr.bloom_amount 1.66  quiet n=44
 hdr.bloom_amount_asan 9.21  quiet n=42
+hdr.bloom_isotropic 2.66  hand: BLOOM-1 self-audit prep, one admitted run on :74 beside the merge runs (2026-10-12)
+hdr.bloom_showroom 192.79  hand: BLOOM-1 self-audit prep, one admitted run on :74 beside the merge runs (2026-10-12; TIER document, Showroom 2 imported)
+hdr.bloom_showroom.fresh_home 0.01  hand: BLOOM-1 self-audit prep (the fixture: a wipe), 2026-10-12
 hdr.display_encode 1.88  quiet n=40
 hdr.dither 1.56  quiet n=42
 hdr.dither_asan 9.30  quiet n=39
