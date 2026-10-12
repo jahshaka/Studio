@@ -25,18 +25,11 @@ target_compile_definitions(test_archive_responsive PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 
-set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
-file(MAKE_DIRECTORY ${_archive_home}/run)
-jah_gpu_row(archive.responsive CLASS app TIER epic NEEDS photon COMMAND test_archive_responsive
-         WORKING_DIRECTORY ${_archive_home}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 460 = 6 x the run log's quiet median 75.1 s (42 quiet PASS runs since 2026-10-01, worst 546.5 s);
-# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(archive.responsive PROPERTIES
-    ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
-    TIMEOUT 460 LABELS "archive")
 # archive.responsive.timing — THE UI-GAP BUDGETS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
-# GPU-timing lock; the push row above asserts everything else and prints the gaps.
+# GPU-timing lock; it asserts everything (the round trip, the manifest, the cancel, the quit)
+# and the gaps. Its un-timed twin archive.responsive (the same binary and counts without the
+# bars) was DELETED by TESTING-SPEED-B2 as its duplicate (SPECS/TESTING_SPEED_ROWS.md: THROW).
 set(_archive_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing)
 file(MAKE_DIRECTORY ${_archive_timing_home}/run)
 jah_gpu_exclusive_test(NAME archive.responsive.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300 COMMAND test_archive_responsive
@@ -48,17 +41,13 @@ set_tests_properties(archive.responsive.timing PROPERTIES
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
+jah_tsan_blocked(archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
-if(TEST archive.responsive)
-    jah_fresh_home_fixture(archive.responsive.fresh_home archiveResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive" WARM LABELS "archive")
-    set_property(TEST archive.responsive APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveFreshHome)
-endif()
 if(TEST archive.responsive.timing)
     jah_fresh_home_fixture(archive.responsive.timing.fresh_home archiveResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing" WARM LABELS "archive")
     set_property(TEST archive.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveTimingFreshHome)

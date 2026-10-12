@@ -123,3 +123,18 @@ if(TEST log.perf)
     jah_fresh_home_fixture(log.perf.fresh_home logPerfFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-perf-home" WARM LABELS "log")
     set_property(TEST log.perf APPEND PROPERTY FIXTURES_REQUIRED logPerfFreshHome)
 endif()
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST log.engine)
+    set_property(TEST log.engine PROPERTY JAHSHAKA_TEST_FRAMES 616)
+endif()
+if(TEST log.events)
+    set_property(TEST log.events PROPERTY JAHSHAKA_TEST_FRAMES 469)
+endif()
+if(TEST log.perf)
+    set_property(TEST log.perf PROPERTY JAHSHAKA_TEST_FRAMES 1149)
+endif()

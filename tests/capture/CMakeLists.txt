@@ -27,12 +27,10 @@ jah_pool_arm(capture abandon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_abandon
 # capture.first_recording — the session's FIRST recording compiles no shader: the startup gate
 #   drew the recorder's own view (its chain and the NV12 job) behind the splash (VIDEO-REC-2).
 jah_pool_arm(capture first_recording ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_first_recording.js 15 FIRST)
-# capture.offline_unique — THE OFFLINE MODE (VIDEO-REC-2): a spinning bar + sparks recorded with
-#   the editor slowed on purpose (50 ms blocked per frame, the frames on the wall clock) gives N
-#   frames at 60/1, one clock step per frame, no two consecutive decoded pictures the same, and
-#   1.5 deg (1/60 s of 90 deg/s) per frame read off the decoded pixels; real time under the same
-#   load is the control (it holds frames).
-jah_pool_arm(capture offline_unique ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_offline_unique.js 120)
+# capture.offline_unique — THE OFFLINE MODE (VIDEO-REC-2): no longer an arm of this pool. Alone it was 73 s of
+#   arm (50 ms blocked per frame on purpose), over the pool budget (TESTING-SPEED-B2: <= 60 s of arms), and its
+#   .timing twin below runs THE SAME SCRIPT (every count, plus its 100 ms readback bar) at the stage close — that row
+#   is the offline mode's guard. Deleted from the merge pool on the lead's word (2026-10-12).
 # capture.offline_video — a PLAYING video texture rides the offline clock: decoded forward one
 #   1/60 s per recorded frame (8 video frames a second of an 8 fps clip, whatever the wall time).
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
@@ -47,10 +45,11 @@ jah_add_pool(capture TIER document   LABELS scripting capture)
 # the derivation in the script), and the readback ring's
 # 100 ms worst UI-thread wait, ARMED in a
 # jah_timing_script copy of each arm's script, each its own process on its own wiped home (warm
-# caches, like the pool), on the quiet box under the GPU-timing lock. The pool's arms keep every
-# count and print these readings. RUN_TIMEOUT = 6x the measured run after the admission
+# caches, like the pool), on the quiet box under the GPU-timing lock. The pool's first_recording arm keeps
+# every count and prints these readings; offline_unique is no pool arm (TESTING-SPEED-B2): its .timing row is
+# its only run, counts and bar together. RUN_TIMEOUT = 6x the measured run after the admission
 # (2026-10-09 on :71: first_recording 32 s, offline_unique 101 s).
-# TIER document, as the `capture` pool whose arms these scripts are: a bar measures the boot its
+# TIER document, as the `capture` pool these scripts belong to: a bar measures the boot its
 # pool counts on (the recording view takes the scene's own chain at its own tier).
 set(_cap_timing_first_recording 200)
 set(_cap_timing_offline_unique 610)
@@ -91,3 +90,15 @@ target_link_libraries(test_mp4_faststart PRIVATE Qt6::Core)
 add_test(NAME capture.faststart COMMAND test_mp4_faststart)
 set_tests_properties(capture.faststart PROPERTIES TIMEOUT 60 LABELS "capture")
 jah_no_display(capture.faststart)
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST pool.capture)
+    set_property(TEST pool.capture PROPERTY JAHSHAKA_TEST_FRAMES 1303)
+endif()
+if(TEST pool.capture_validation)
+    set_property(TEST pool.capture_validation PROPERTY JAHSHAKA_TEST_FRAMES 601)
+endif()

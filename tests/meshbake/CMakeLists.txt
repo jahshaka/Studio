@@ -234,9 +234,10 @@ set_tests_properties(meshbake.hemisphere_winding PROPERTIES
 # thread and on every thread (twice) give byte-identical blobs.
 add_test(NAME bake.determinism COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism" -- $<TARGET_FILE:test_mesh_bake> --determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(bake.determinism PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism;JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism/.local/share/Jahshaka"
-    TIMEOUT 480 LABELS "meshbake")
+    TIMEOUT 480 LABELS "meshbake;stage-close")
 jah_no_display(bake.determinism)
 
 jah_no_display(meshbake.primitives_baked)
@@ -263,9 +264,10 @@ jah_gpu_row(meshbake.archive_bakes CLASS app TIER low NEEDS NONE
                  "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"
                  "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes_open.js"
          WORKING_DIRECTORY ${_archive_home}/run)
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(meshbake.archive_bakes PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
-    TIMEOUT 400 LABELS "meshbake")
+    TIMEOUT 400 LABELS "meshbake;stage-close")
 
 # meshbake.shipped_bakes (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
 # its seed BAKES every shipped mesh (the primitives, the Teapot, the preview
@@ -288,10 +290,11 @@ jah_gpu_row(meshbake.shipped_bakes CLASS vr TIER low NEEDS NONE
                  "/usr/share/openxr/1/openxr_monado.json"
                  "${CMAKE_SOURCE_DIR}/src/data/primitives.h"
          WORKING_DIRECTORY ${_shipped_home}/run)
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(meshbake.shipped_bakes PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_shipped_home};JAHSHAKA_DATA_ROOT=${_shipped_home}/data"
     RESOURCE_LOCK monado
-    TIMEOUT 400 LABELS "meshbake")
+    TIMEOUT 400 LABELS "meshbake;stage-close")
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -299,10 +302,25 @@ set_tests_properties(meshbake.shipped_bakes PROPERTIES
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST meshbake.archive_bakes)
-    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS "meshbake")
+    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS meshbake stage-close)
     set_property(TEST meshbake.archive_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeArchiveBakesFreshHome)
 endif()
 if(TEST meshbake.shipped_bakes)
-    jah_fresh_home_fixture(meshbake.shipped_bakes.fresh_home meshbakeShippedBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home" WARM LABELS "meshbake")
+    jah_fresh_home_fixture(meshbake.shipped_bakes.fresh_home meshbakeShippedBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home" WARM LABELS meshbake stage-close)
     set_property(TEST meshbake.shipped_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeShippedBakesFreshHome)
+endif()
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST meshbake.archive_bakes)
+    set_property(TEST meshbake.archive_bakes PROPERTY JAHSHAKA_TEST_FRAMES 551)
+endif()
+if(TEST meshbake.quit_during_bake)
+    set_property(TEST meshbake.quit_during_bake PROPERTY JAHSHAKA_TEST_FRAMES 1)
+endif()
+if(TEST meshbake.shipped_bakes)
+    set_property(TEST meshbake.shipped_bakes PROPERTY JAHSHAKA_TEST_FRAMES 525)
 endif()

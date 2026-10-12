@@ -119,33 +119,11 @@ jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.js"
          WORKING_DIRECTORY ${_siv_home}/run)
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(app.start_in_vr PROPERTIES
     ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR="
     TIMEOUT 300
-    LABELS "app")
-
-# app.shader_gate_warm — THE STARTUP SHADER GATE KNOWS A WARM CACHE (TEST-TIER-1): a cold boot
-# (--clear-shader-cache) compiles and runs the GI warm-up; the second boot in the same home compiles
-# ZERO programs and skips it. A ROW of its own: its claim is two boots of one home, the first
-# with its shader cache wiped (a pool process cannot reboot). The home is fresh every run; the
-# row's own first boot is what makes the cache cold. THREE ARMS (TESTING-DEBTS-1 T7): the
-# document's tier (Epic: the race the gate had is the Epic lighting arm's), a Low test process
-# (JAHSHAKA_TEST_TIER=low: the gate warms the born tier) and rays off (JAHSHAKA_NO_RAY_QUERY=1).
-set(_sgw_home ${CMAKE_CURRENT_BINARY_DIR}/shader-gate-warm-home)
-file(MAKE_DIRECTORY ${_sgw_home}/run)
-jah_gpu_row(app.shader_gate_warm CLASS app TIER document
-         COMMAND sh ${JAH_FRESH_HOME} --warm ${_sgw_home} --
-                 bash "${CMAKE_CURRENT_SOURCE_DIR}/shader_gate_warm.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
-         WORKING_DIRECTORY ${_sgw_home}/run)
-# TESTING-CLEANUP-2B: TIMEOUT 710 = the slot-era worst 705.9 s (8 PASS runs since 2026-10-09 18:00), above 6 x the
-# quiet median 80.2 s (49 quiet PASS runs since 2026-10-01) = 490 — the policy's max (tests/CMakeLists.txt). Declared
-# 350 was honest only with the +900 s widening (now deleted). The 706 s run is 9x the median: a finding for the triage.
-set_tests_properties(app.shader_gate_warm PROPERTIES
-    ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
-    TIMEOUT 710
-    LABELS "app")
+    LABELS "app;stage-close")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
@@ -190,10 +168,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # replaces was: this row is one long chain of synthesised keys with
         # fixed sleeps between them, and a loaded box stretches every one of
         # them. 600 s against a ~40 s measured run.
-        set_tests_properties(app.input_keys PROPERTIES
+        # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+set_tests_properties(app.input_keys PROPERTIES
             ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
-            LABELS "app")
+            LABELS "app;stage-close")
     else()
         message(STATUS "app.input_keys skipped: needs xdotool, curl, jq and Xvfb")
     endif()
@@ -221,9 +200,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # Like app.input_keys, a DOCUMENTED exception to the 6x policy: a chain
         # of synthesised gestures with fixed sleeps between them, every one of
         # which a loaded box stretches. 400 s against a ~50 s measured run.
-        set_tests_properties(app.play_select PROPERTIES
+        # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+set_tests_properties(app.play_select PROPERTIES
             ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
-            LABELS "app")
+            LABELS "app;stage-close")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
     endif()
@@ -244,14 +224,14 @@ jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
 # Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
 # "one selected" arm) and the GROUND never is (its ground arm).
-jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
+jah_pool_arm(editor_view_b multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
 
 # ---- app.close_shot ---------------------------------------------------------
 # A PROJECT'S DESKTOP TILE IS THE PRESENTED FRAME (CLOSE-SHOT-2): read back from
 # the window (View::requestFrameCapture), drawn once without the grid, outline and
 # gizmo — no second render, no settle. The frame as shown against the capture, the
 # save's tile against a clean capture, and the close's tile showing an edit.
-jah_pool_arm(editor_view close_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_close_shot.js 12)
+jah_pool_arm(editor_view_c close_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_close_shot.js 12)
 
 # ---- app.window_fits --------------------------------------------------------
 # A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
@@ -281,41 +261,6 @@ set_tests_properties(pool.runner PROPERTIES
     LABELS "pool;scripting;tooling" TIMEOUT 180)
 jah_no_display(pool.runner)
 
-# app.sky_swap_presented — NO PRESENTED FRAME LOSES THE SKY ENVIRONMENT (SKY-SWAP-1,
-# the owner's smoke bug #3: the flicker in 'were'). Every sky re-capture used to
-# present ONE frame with a black environment (the swap destroyed the old cube
-# while the Atom decode twins still sampled it). scripting.e2e.sky_swap_transient
-# reads offscreen renders, which never see the presented frame; this row reads
-# the X server's copy of the viewport (xwd of the root) while the UI thread is
-# frozen on each frame after a change — the sun disc into the probes, the cloud
-# altitude, clouds off/on and an observer-band crossing, at Medium and at Epic
-# with rays off (Epic as shipped hides the flash under its traced reflections).
-# Its own private Xvfb (301-340), like play_select: the capture reads the whole
-# root. Not in the GPU-timing lock: it measures no time — app.blockUiThread holds
-# each frame on screen, and the reads are pixel means.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_program(JAH_XWD xwd)
-    find_program(JAH_XDPYINFO xdpyinfo)
-    find_program(JAH_XVFB Xvfb)
-    if(JAH_XWD AND JAH_XDPYINFO AND JAH_XVFB)
-        set(_ssp_home ${CMAKE_CURRENT_BINARY_DIR}/sky-swap-presented-home)
-        file(MAKE_DIRECTORY ${_ssp_home}/run)
-        jah_gpu_row(app.sky_swap_presented CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-                 COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/sky_swap_presented.py"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${_ssp_home}/out"
-                 WORKING_DIRECTORY ${_ssp_home}/run)
-        set_tests_properties(app.sky_swap_presented PROPERTIES
-            ENVIRONMENT "HOME=${_ssp_home};JAHSHAKA_DATA_ROOT=${_ssp_home}/.local/share/Jahshaka"
-            SKIP_RETURN_CODE 77
-            # measured 123-290 s (two tiers x eight arms x five held frames, each a 1 s
-            # UI freeze; three lanes on the box); 900 = 3x the worst run
-            TIMEOUT 900
-            LABELS "app")
-    else()
-        message(STATUS "app.sky_swap_presented skipped: needs xwd, xdpyinfo and Xvfb")
-    endif()
-endif()
-
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
@@ -326,14 +271,28 @@ if(TEST app.startup_quiet)
     set_property(TEST app.startup_quiet APPEND PROPERTY FIXTURES_REQUIRED appStartupQuietFreshHome)
 endif()
 if(TEST app.input_keys)
-    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS "app")
+    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS app stage-close)
     set_property(TEST app.input_keys APPEND PROPERTY FIXTURES_REQUIRED appInputKeysFreshHome)
 endif()
 if(TEST app.play_select)
-    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS "app")
+    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS app stage-close)
     set_property(TEST app.play_select APPEND PROPERTY FIXTURES_REQUIRED appPlaySelectFreshHome)
 endif()
-if(TEST app.sky_swap_presented)
-    jah_fresh_home_fixture(app.sky_swap_presented.fresh_home appSkySwapPresentedFreshHome "${CMAKE_CURRENT_BINARY_DIR}/sky-swap-presented-home" WARM LABELS "app")
-    set_property(TEST app.sky_swap_presented APPEND PROPERTY FIXTURES_REQUIRED appSkySwapPresentedFreshHome)
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST app.engine_selftest_validation)
+    set_property(TEST app.engine_selftest_validation PROPERTY JAHSHAKA_TEST_FRAMES 2196)
+endif()
+if(TEST app.start_in_vr)
+    set_property(TEST app.start_in_vr PROPERTY JAHSHAKA_TEST_FRAMES 607)
+endif()
+if(TEST app.startup_quiet)
+    set_property(TEST app.startup_quiet PROPERTY JAHSHAKA_TEST_FRAMES 535)
+endif()
+if(TEST app.test_needs_boot)
+    set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)
 endif()

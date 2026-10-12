@@ -46,3 +46,12 @@ if(TEST app.data_root)
     jah_fresh_home_fixture(app.data_root.fresh_home appDataRootFreshHome "${CMAKE_CURRENT_BINARY_DIR}/data-root-home" WARM LABELS "app")
     set_property(TEST app.data_root APPEND PROPERTY FIXTURES_REQUIRED appDataRootFreshHome)
 endif()
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST app.data_root)
+    set_property(TEST app.data_root PROPERTY JAHSHAKA_TEST_FRAMES 5)
+endif()

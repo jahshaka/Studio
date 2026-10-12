@@ -5,13 +5,16 @@
 # and asserts no pin, an honest Custom, and a re-pick that moves Photon; the blob saved after it
 # carries no `photon` key.
 # usage: photon_pin_read.sh <app> <script.js.in> <workdir>
+# <workdir> is the row's HOME, wiped by tests/support/fresh_home.sh --warm before this runs (TESTING-SPEED-B2: the
+# shader cache comes warm — a cold compile is no part of this claim, and it was half the row's 42 s); the data
+# root is the home's own.
 set -u
 APP="$1"; SCRIPT_IN="$2"; WORK="$3"
-rm -rf "$WORK"; mkdir -p "$WORK/home/.cache" || exit 1
-ROOT="$WORK/root"
+mkdir -p "$WORK/.cache" || exit 1
+ROOT="$WORK/.local/share/Jahshaka"
 run() {   # run <stage>
     sed -e "s#@STAGE@#$1#g" "$SCRIPT_IN" > "$WORK/$1.js"
-    ( cd "$(dirname "$APP")" && env HOME="$WORK/home" XDG_CACHE_HOME="$WORK/home/.cache" \
+    ( cd "$(dirname "$APP")" && env HOME="$WORK" XDG_CACHE_HOME="$WORK/.cache" \
           timeout -k 10 300 "$APP" --data-root "$ROOT" --script "$WORK/$1.js" > "$WORK/$1.log" 2>&1 )
     local rc=$?
     grep -E '^ok:|assert failed' "$WORK/$1.log"

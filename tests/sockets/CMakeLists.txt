@@ -113,3 +113,15 @@ if(TEST sockets.e2e)
     jah_fresh_home_fixture(sockets.e2e.fresh_home socketsE2eFreshHome "${CMAKE_CURRENT_BINARY_DIR}/sockets-home" WARM LABELS "scripting")
     set_property(TEST sockets.e2e APPEND PROPERTY FIXTURES_REQUIRED socketsE2eFreshHome)
 endif()
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST sockets.e2e)
+    set_property(TEST sockets.e2e PROPERTY JAHSHAKA_TEST_FRAMES 509)
+endif()
+if(TEST sockets.render)
+    set_property(TEST sockets.render PROPERTY JAHSHAKA_TEST_FRAMES 24)
+endif()

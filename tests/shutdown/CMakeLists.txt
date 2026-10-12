@@ -58,10 +58,11 @@ jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app TIER low NEEDS NONE RUN
 # measurements), perf.*, threading.* — and this suite was recorded as a new
 # contention-flake candidate on 2026-09-08 (JOURNAL) for exactly that reason.
 # N7, ENGINEERING_DEBT_SPEC re-audit.
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(app.watchdog_stall PROPERTIES
     ENVIRONMENT "HOME=${_watchdog_home};JAHSHAKA_DATA_ROOT=${_watchdog_home}/.local/share/Jahshaka"
     RUN_SERIAL TRUE
-    LABELS "shutdown")
+    LABELS "shutdown;stage-close")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
@@ -98,6 +99,16 @@ target_link_libraries(test_device_loss_end PRIVATE IrisGL Qt6::Widgets)
 add_test(NAME app.device_loss_end COMMAND test_device_loss_end
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set(_dle_home ${CMAKE_CURRENT_BINARY_DIR}/device-loss-end-home)
-set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown"
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown;stage-close"
     ENVIRONMENT "HOME=${_dle_home};JAHSHAKA_DATA_ROOT=${_dle_home}/.local/share/Jahshaka")
 jah_no_display(app.device_loss_end)
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST app.shutdown_order)
+    set_property(TEST app.shutdown_order PROPERTY JAHSHAKA_TEST_FRAMES 555)
+endif()

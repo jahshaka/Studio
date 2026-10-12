@@ -15,6 +15,11 @@
 # assets.bakeAll and reopens again. See scripts/cleanstart.js.in for what each
 # step asserts and why.
 #
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md): the subject is the COLD open from a
+# virgin home with a cold shader cache — nine processes on purpose (a pool cannot give an arm a
+# virgin home, and would save no boot) — so the nine rows and their setups run at the stage close
+# and the ship, never in a merge.
+#
 # THE ONLY SAMPLE GATE (TEST_GATE_AUDIT.md §2, 2026-09-09). It absorbed
 # scripting.e2e.samples (exact-colour material probes for five samples in one
 # shared session, plus the Particles save round trip) and the seven
@@ -37,7 +42,7 @@ foreach(SAMPLE IN LISTS _samples)
     # start: its library already holds the sample, its store already holds the
     # objects, and the import half of this gate would be testing a re-import.
     # The setup fixture wipes and recreates the directory before the test runs.
-    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS "scripting")
+    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS scripting stage-close)
 
     jah_gpu_row(samples.cleanstart.${_slug} CLASS app TIER document
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -50,18 +55,19 @@ foreach(SAMPLE IN LISTS _samples)
     set_tests_properties(samples.cleanstart.${_slug} PROPERTIES
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         FIXTURES_REQUIRED samples_home_${_slug}
-        LABELS "scripting"
+        LABELS "scripting;stage-close"
         TIMEOUT 480)
 endforeach()
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
 # archives imported into ONE home and opened back to back in ONE process — the
 # shape the cleanstart fold lost (cross-archive dedup, catalog growth, live
-# scene switches across the process-wide-state class). ~35 s, no pixel probes.
+# scene switches across the process-wide-state class). ~35 s, no pixel probes. STAGE-CLOSE
+# (TESTING-SPEED-B2): seven archives in one process is the stage close's, not a merge's.
 configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS "scripting")
+jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting stage-close)
 jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
@@ -69,7 +75,7 @@ jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
 set_tests_properties(samples.session PROPERTIES
     ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED samples_home_session
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
@@ -84,18 +90,60 @@ jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
 # declared 1800 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stage-close" TIMEOUT 1940)
 
-# samples.archive_fidelity.Tornado — LIVE-PERSIST-1: the SHIPPED Tornado archive, opened on a clean
-# machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece cache anywhere), keeps its live
-# graph materials: every layer re-emits its pieces from its graph, the shells keep their baked
-# cut-out, and the torn silhouette at tornado.jpg's camera (detached flaps + see-through, the mean
-# of four pinned shader times) is within 25 % of the reference still and 10 % of the in-memory scene
-# make_tornado.js builds. The archive that shipped before this lane opens smooth: 0 px / 0.00x.
+# samples.archive_fidelity.Tornado — LIVE-PERSIST-1, rewritten by TESTING-SPEED-B2 against the ARCHIVE'S OWN
+# INVARIANTS (no reference picture: tests/samples/data/tornado_reference.jpg and its metric deleted, forward-only):
+# the SHIPPED Tornado archive, opened on a clean machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece
+# cache anywhere), closes (every dependency and file of its manifest is in the zip), imports exactly its assets and
+# objects, keeps its live graph materials (every layer re-emits its pieces from its graph, the shells keep their
+# baked cut-out) after the import AND after a close and reopen, and exports again as the same archive.
+# STAGE-CLOSE: a whole-archive round trip (SPECS/TESTING_SPEED_ROWS.md).
 jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity_tornado.js.in
                  ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
                  ${CMAKE_CURRENT_BINARY_DIR}/archive-fidelity-Tornado
-                 ${CMAKE_CURRENT_SOURCE_DIR}/data/tornado_reference.jpg
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/tornado_metrics.py
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_invariants.py
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting" TIMEOUT 480)
+set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting;stage-close" TIMEOUT 480)
+
+# THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
+# JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
+# the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
+# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# the one empty frame a headless engine walks.
+if(TEST samples.archive_fidelity.Tornado)
+    set_property(TEST samples.archive_fidelity.Tornado PROPERTY JAHSHAKA_TEST_FRAMES 476)
+endif()
+if(TEST samples.cleanstart.Matcaps)
+    set_property(TEST samples.cleanstart.Matcaps PROPERTY JAHSHAKA_TEST_FRAMES 1470)
+endif()
+if(TEST samples.cleanstart.Mirror_Room)
+    set_property(TEST samples.cleanstart.Mirror_Room PROPERTY JAHSHAKA_TEST_FRAMES 1547)
+endif()
+if(TEST samples.cleanstart.Particles)
+    set_property(TEST samples.cleanstart.Particles PROPERTY JAHSHAKA_TEST_FRAMES 1808)
+endif()
+if(TEST samples.cleanstart.Physics)
+    set_property(TEST samples.cleanstart.Physics PROPERTY JAHSHAKA_TEST_FRAMES 1466)
+endif()
+if(TEST samples.cleanstart.Showroom)
+    set_property(TEST samples.cleanstart.Showroom PROPERTY JAHSHAKA_TEST_FRAMES 1301)
+endif()
+if(TEST samples.cleanstart.Showroom_2)
+    set_property(TEST samples.cleanstart.Showroom_2 PROPERTY JAHSHAKA_TEST_FRAMES 1300)
+endif()
+if(TEST samples.cleanstart.Skeletal_Animation)
+    set_property(TEST samples.cleanstart.Skeletal_Animation PROPERTY JAHSHAKA_TEST_FRAMES 1449)
+endif()
+if(TEST samples.cleanstart.Tornado)
+    set_property(TEST samples.cleanstart.Tornado PROPERTY JAHSHAKA_TEST_FRAMES 1302)
+endif()
+if(TEST samples.cleanstart.World_Background)
+    set_property(TEST samples.cleanstart.World_Background PROPERTY JAHSHAKA_TEST_FRAMES 1466)
+endif()
+if(TEST samples.mirror_room_boots)
+    set_property(TEST samples.mirror_room_boots PROPERTY JAHSHAKA_TEST_FRAMES 11348)
+endif()
+if(TEST samples.session)
+    set_property(TEST samples.session PROPERTY JAHSHAKA_TEST_FRAMES 1046)
+endif()
