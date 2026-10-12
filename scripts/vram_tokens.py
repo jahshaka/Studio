@@ -344,11 +344,14 @@ def queue_job_of(pid):
 
 
 def queue_holders(n=None):
-    """[(token index, holder pid, its queue job)] of the tokens held by card-queue jobs OUTSIDE this gate."""
+    """[(token index, holder pid, who)] of the tokens a known holder has: a card-queue job, or a ROW OF THIS GATE (RUNNER-FIX-4
+    item 11: VOXEL-READOUT-1's fourth fire NOADMITted three rows as "a leak" while the gate's own rows held all 11 tokens —
+    its siblings end on their own: a wait, never a leak). Only a holder that is neither is a leak."""
     gate = os.environ.get("JAH_GATE_SLOT_HELD")
     out = []
     for i, pid in sorted(_token_holders(n).items()):
         if gate and gate.isdigit() and _of_gate(pid, int(gate)):
+            out.append((i, pid, "this gate's own row"))
             continue
         j = queue_job_of(pid)
         if j:
@@ -502,17 +505,17 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                 time.sleep(0.005)
                 continue
             if gate_row and want is None and time.monotonic() > deadline:
-                # SHORT INSIDE A GATE: a queue job holds them -> WAIT for them (named); none does -> a leak, refused now
+                # SHORT INSIDE A GATE: a queue job or this gate's own row holds them -> WAIT (named); neither -> a leak
                 qh = queue_holders(n)
                 if qh:
-                    jobs = sorted({j for _, _, j in qh})
+                    jobs = sorted({("the card queue's " + j) if j.startswith("job") else j for _, _, j in qh})
                     deadline = time.monotonic() + wait_bound()
                     os.makedirs(_want_dir(), exist_ok=True)
                     want = os.path.join(_want_dir(), str(os.getpid()))
                     with open(want, "w") as wf:
                         wf.write("%d %s" % (k, label))
-                    _say(log, "vram: waiting for %d tokens, %d free — held by the card queue's %s (pid %s): a gate row "
-                         "waits for a queue job's tokens, its own TIMEOUT the bound%s"
+                    _say(log, "vram: waiting for %d tokens, %d free — held by %s (pid %s): a gate row waits for a known "
+                         "holder's tokens, its own TIMEOUT the bound%s"
                          % (k, free, ", ".join(jobs), ",".join(sorted({str(p) for _, p, _ in qh})[:6]), (" — " + label) if label else ""))
                     waited = True
                     time.sleep(POLL_S)
@@ -524,7 +527,7 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                 raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (%d of %d free at "
                                    "the last look%s)%s%s" % (k, wait if want is None else wait_bound(), free, n,
                                                            "" if not gate_row or want else
-                                                           "; no card-queue job holds them: a leak",
+                                                           "; no card-queue job nor this gate's own row holds them: a leak",
                                                            ("; ahead at the turnstile: " + ahead) if ahead else "",
                                                            (" — " + label) if label else ""))
             time.sleep(POLL_S)
