@@ -94,7 +94,8 @@ editor.gameView(false);
 // THE ROUND TRIP: the project as imported, exported again (the wrapper checks its closure, and the FIXED POINT
 // below against it — never the shipped zip, which a legitimate exporter change may legitimately differ from).
 var again = project.exportArchive(REEXPORT);
-assert(again && again.assets > 0, "re-exported: " + again.assets + " assets, " + again.objects + " objects");
+assert(again && again.assets === imported.assets,
+       "re-exported: " + again.assets + " assets (imported " + imported.assets + "), " + again.objects + " objects");
 
 // THE REOPEN: closed and opened again, the live materials are still whole.
 var guid = imported.guid;

@@ -7,7 +7,7 @@ usage: archive_invariants.py counts <archive.zip>          prints "<assets> <obj
 
 THE CLOSURE: every dependency guid an asset names is an asset of the same manifest, and every file an asset
 lists (its oid) is a member of the zip under objects/. The OBJECTS are the distinct oids the manifest lists.
-THE SAME ASSETS: the two manifests' (name, type) multisets are equal, and so are their object counts — used for the
+THE SAME ASSETS: the two manifests' (name, type) multisets are equal, and so are their OBJECT SETS (the oids) — used for the
 FIXED POINT (the archive this build exports, imported and exported again, is the same archive), never against the
 shipped zip (a legitimate exporter change must not red the row).
 THE HOLES: the sample's named failure is a funnel that lost its cut-out and opens SOLID. On the frame from the
@@ -101,11 +101,12 @@ def main(argv):
             print("FAIL: the archive is no fixed point: only in the first export %s, only in the second %s"
                   % (sorted((k1 - k2).elements()), sorted((k2 - k1).elements())))
             ok = False
-        if len(o1) != len(o2):
-            print("FAIL: objects %d in the first export, %d in the second" % (len(o1), len(o2)))
+        if o1 != o2:
+            print("FAIL: the objects differ: %d only in the first export, %d only in the second (%s / %s)"
+                  % (len(o1 - o2), len(o2 - o1), sorted(o1 - o2)[:3], sorted(o2 - o1)[:3]))
             ok = False
         if ok:
-            print("ok: a fixed point: exported, imported and exported again, the archive closes with the same %d assets and %d objects"
+            print("ok: a fixed point: exported, imported and exported again, the archive closes with the same %d assets and the same %d objects (oid for oid)"
                   % (len(a1), len(o1)))
         return 0 if ok else 1
     print(__doc__)

@@ -27,7 +27,7 @@ target_compile_definitions(test_archive_responsive PRIVATE
 
 # KEPT (the lead, TESTING-SPEED-B2 fix round 2026-10-12): the merge tier's ONE guard of src/services/projectarchiver.cpp
 # (the threaded export/import, the cancel, the quit mid-export) — its .timing twin runs at the stage close only.
-# budget 60 s (a solo median: scripts/gate-times.txt).
+# budget 70 s (the ROWS table; solo median 68.4 s on 2026-10-12: scripts/gate-times.txt).
 set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 jah_gpu_row(archive.responsive CLASS app TIER epic NEEDS photon COMMAND test_archive_responsive
