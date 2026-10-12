@@ -892,7 +892,8 @@ def lane_tips(gs, lane, tip_sha, limit=8):
     """THE LANE'S OWN EARLIER TIPS THAT ARE NOT ANCESTORS of the tip (RUNNER-FIX-4 item 2: a rebase rewrites the lane's
     commits — VOXEL-READOUT-1's builder records sat at c8d21b245, the pre-rebase twin of the candidate 498931e06): every
     clean tip holding a RUN record of the lane's own (`lanes == [<lane>]`), newest record first. Their reach to the tip is
-    the TREE DIFF (Reach.between): a row its inputs did not change in is served from there (rule 2: the inputs equal)."""
+    the TREE DIFF (Reach.between): a row its inputs did not change in is served from there (rule 2: the inputs equal).
+    candidates() asks them right after the tip itself, before the ancestors."""
     if not lane:
         return []
     d = gate_runlog.log_dir()
@@ -949,11 +950,16 @@ def candidates(gs, tip_sha, pins_of=None, lane=None):
         if c in have:
             ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
             out.append((c, ig or None, fork_pin(gs, ig)))
-    # ...after the ancestors, THE LANE'S OWN NON-ANCESTOR TIPS (a rebase's pre-rebase twin; item 2), when the lane is named
+    # THE LANE'S OWN NON-ANCESTOR TIPS (a rebase's pre-rebase twin; item 2), when the lane is named — right AFTER the tip
+    # itself and BEFORE the ancestors: serve_key stops at the first candidate holding a record (newest first: an older
+    # ancestor's range reaches at least what a newer one's does), and the twin's tree diff to the tip is the smallest
+    # (VOXEL-READOUT-1: c8d21b245..498931e06 is one tooling file; an ancestor 60cd0e674's range is the whole lane)
+    twins = []
     for c in lane_tips(gs, lane, tip_sha):
         ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
-        out.append((c, ig or None, fork_pin(gs, ig)))
-    return out
+        twins.append((c, ig or None, fork_pin(gs, ig)))
+    at = 1 if out and out[0][0] == tip_sha else 0
+    return out[:at] + twins + out[at:]
 
 
 def record_verdicts(pairs, tip_sha, pin):

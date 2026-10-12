@@ -258,6 +258,12 @@ def main(source, build):
     n_none, _ = plan_from([])
     check(n_lane > 0 and n_none == 0, "item 2: a REBASED lane's records at its pre-rebase twin X serve the rows X..C's tree "
           "diff does not reach — %d served from X with the lane named, %d without (the old door) %s" % (n_lane, n_none, err))
+    # ...and an ANCESTOR holding records too (T0, X's parent: T0..C reaches the whole lane) never hides the twin — the
+    # twin is asked right after the tip, before the ancestors (serve_key stops at the first candidate with a record)
+    put(lane_need, "PASS", "2026-01-01T09:00:00", T0)
+    n_lane2, err2 = plan_from(["--lane", "lane-rb"])
+    check(n_lane2 == n_lane, "item 2: ...with the lane's records at the ancestor T0 too (T0..C reaches the lane), X still "
+          "serves the same %d rows (got %d) %s" % (n_lane, n_lane2, err2))
 
     # ---- 5. the targets never set the exit code ------------------------------------------------------
     spec = importlib.util.spec_from_file_location("gate_scope_t", os.path.join(scripts, "gate-scope.py"))
