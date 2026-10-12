@@ -578,17 +578,45 @@ def stale_build(shas):
 
 PREBUILD_MAX_EDGES = 50
 
+# THE BOX LAWS' ONE DEFINITION EACH (RUNNER-AUDIT-FIX-2 F18): the judge (ci_gate_check) and the lead's runner (its card
+# queue's law(): scripts/lead/lib/runner/queue.py — the ship's, the base's and the deployment's builds, the merge run's and
+# the builder's measuring rows, the inventory) read these and keep no copy.
+# MEASURING: the labels of rows that measure time or GPU budget (TESTING_GATE §4; perf: tests/perf) — never served from a
+# record, run on a whole-card hold
+MEASURING = frozenset({"timing", "quiet-box", "perf"})
+
+
+def live_ninja():
+    """The live ninja builds on the box (/proc comm, never a name match on a command line)."""
+    n = 0
+    for p in os.listdir("/proc"):
+        if not p.isdigit():
+            continue
+        try:
+            with open("/proc/%s/comm" % p) as f:
+                n += f.read().strip() == "ninja"
+        except OSError:
+            continue
+    return n
+
+
+def build_width(live=None):
+    """THE MEMORY LAW (DOCS/traps/GATE_AND_RIG.md; CLAUDE.md): 12 compile jobs box-wide, shared with every other live
+    ninja build — max(2, 12 // (1 + n))."""
+    return max(2, 12 // (1 + (live_ninja() if live is None else live)))
+
 
 def prebuild(build, jobs=None):
     """THE GATE'S NO-OP BUILD (GATE-COST-2 F4): before any row, `cmake --build <build>` — seconds when nothing
     changed — rebuilds whatever is stale (a reverted edit, a `--target` build's leftovers) and refreshes
     BUILT_FROM, so the binaries match HEAD's sources by construction. At the box's priority and a width the
-    memory law allows (JAH_GATE_BUILD_JOBS, default 3). Returns None when it built (or the dir is not a CMake
+    memory law allows (JAH_GATE_BUILD_JOBS, default build_width()). Returns None when it built (or the dir is not a CMake
     build), else the refusal text — a failed no-op build never gates."""
     cache = os.path.join(build, "CMakeCache.txt")
     if not os.path.isfile(cache):
         return None
-    cmd = "nice -n 19 ionice -c 3 cmake --build %s -j %s" % (build, jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3"))
+    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS") or build_width()
+    cmd = "nice -n 19 ionice -c 3 cmake --build %s -j %s" % (build, jobs)
     # NEVER A SILENT FULL BUILD (round 2, B): a tree that was never built (no stamp, no app binary) or that is
     # far from built (ninja -n: more than PREBUILD_MAX_EDGES) is refused with the command that builds it — the
     # gate's build is the no-op one, seconds, not a lane's build under the gate's name
@@ -610,7 +638,6 @@ def prebuild(build, jobs=None):
     print("=== the no-op build before any row: %s (log %s) ===" % (cmd, log))
     sys.stdout.flush()
     t0 = time.time()
-    jobs = jobs or os.environ.get("JAH_GATE_BUILD_JOBS", "3")
     with open(log, "w") as out:
         rc = subprocess.run(["nice", "-n", "19", "ionice", "-c", "3", "cmake", "--build", build, "-j", str(jobs)],
                             stdout=out, stderr=subprocess.STDOUT).returncode

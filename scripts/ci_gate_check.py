@@ -178,7 +178,6 @@ def _when(r):
 
 
 NEVER_RAN = ("NOADMIT", "NOTRUN")
-MEASURING = {"timing", "quiet-box", "perf"}   # labels of rows that measure time or GPU budget (TESTING_GATE §4; perf: tests/perf)
 HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `contention:`
 
 # THE VERDICT DOOR (TESTING_V3_SPEC §1.4; lane VERDICT-1 + the lead's band-aid addendum): a verdict clears an open red
@@ -473,7 +472,7 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
     name, arm = key
     row = arm or name
     # GATE-COST-2: a MEASURING row's record that ran without its whole-card hold (`fallback`) is no evidence
-    unheld = lambda r: r.get("fallback") and set(r.get("labels") or ()) & MEASURING
+    unheld = lambda r: r.get("fallback") and set(r.get("labels") or ()) & gate_runlog.MEASURING
     runs = sorted((r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN
                    and not unheld(r)), key=_when)
     verdicts = sorted((r for r in recs if r.get("kind") == "verdict"), key=_when)
@@ -730,7 +729,7 @@ class Prover:
 #   * the fork pin at A equals C's, or the row does not reach the fork;
 #   * the row's DECLARATION and DATA hashes in the record equal the build's at C (gate_graph: root-stripped) — a null
 #     on either side is UNKNOWN and never equal (a record before schema 3 serves nothing);
-#   * the row is not MEASURING (timing / quiet-box / perf: a measurement is never served) and not a REGISTERED
+#   * the row is not MEASURING (gate_runlog.MEASURING: timing / quiet-box / perf: a measurement is never served) and not a REGISTERED
 #     NONDETERMINISM (an open `nondeterminism` entry: its green is not a fact);
 # then that record's state is the row's at C — green serves; a red stays red until a change reaches it. Candidates are
 # the tip's ancestors that hold records, newest first; the newest one holding a run of the row decides (an older A
@@ -774,8 +773,8 @@ class Server:
         """Why the row is never served whatever its records (None when it may be)."""
         n = key[0]
         labels = set((self.inv.get(n) or {}).get("labels") or ())
-        if labels & MEASURING:
-            return f"MEASURING ({'/'.join(sorted(labels & MEASURING))}): a measurement is never served"
+        if labels & gate_runlog.MEASURING:
+            return f"MEASURING ({'/'.join(sorted(labels & gate_runlog.MEASURING))}): a measurement is never served"
         if n in self.nondet or (key[1] and key[1] in self.nondet):
             return f"a REGISTERED NONDETERMINISM ({self.nondet.get(n) or self.nondet.get(key[1])}): its green is not a fact"
         return None
@@ -784,7 +783,7 @@ class Server:
         """Why record r at A cannot stand for the row at C, the selection aside (None when it can)."""
         if r.get("tier") == "target" or r.get("gating") is False:
             return f"a non-gating record (tier {r.get('tier')})"
-        if r.get("fallback") and set(r.get("labels") or ()) & MEASURING:
+        if r.get("fallback") and set(r.get("labels") or ()) & gate_runlog.MEASURING:
             return "a measurement under a fallback"
         if key[0] in self.fork and (not a_fork or a_fork != self.tip_fork):
             return f"the fork pin moved ({(a_fork or '?')[:9]} -> {(self.tip_fork or '?')[:9]}) and the row reaches the fork"
@@ -914,7 +913,7 @@ def tier_need(gs, S, need):
     for n in sorted(inv):
         if inv[n]["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS):
             continue
-        if (n, None) in have or ((inv[n]["labels"] & MEASURING) and n not in sel):
+        if (n, None) in have or ((inv[n]["labels"] & gate_runlog.MEASURING) and n not in sel):
             continue
         out.append((n, None))
     return out
@@ -1246,9 +1245,9 @@ def plan(rng, build, gs=None, named=()):
         else:
             run[k] = sv[-1]
     in_u = {k[0] for k in universe}
-    left = sorted(n for n, t in S.inv.items() if n not in in_u and (t["labels"] & MEASURING)
+    left = sorted(n for n, t in S.inv.items() if n not in in_u and (t["labels"] & gate_runlog.MEASURING)
                   and not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS)))
-    measuring = sorted(n for n in in_u if S.inv.get(n, {}).get("labels", set()) & MEASURING)
+    measuring = sorted(n for n in in_u if S.inv.get(n, {}).get("labels", set()) & gate_runlog.MEASURING)
     return {"tip": tip_sha, "base": base_sha, "irisgl": pin, "fork": fork_pin(gs, pin), "what": what,
             "measuring_run": measuring, "measuring_left": left, "fork_rows": sorted(server.fork),
             "selected": sorted(sel_keys, key=str), "universe": len(universe), "run": run, "served": served,
