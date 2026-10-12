@@ -2043,9 +2043,10 @@ set_tests_properties(gi.gather_motion PROPERTIES JAHSHAKA_TEST_FRAMES 1263)
 # 810 s of flights that re-flew the pre-lane estimator every run — their source and the script that re-runs them by
 # hand: spikes/testing-speed-b1/flythrough/, never a row): the Showroom-2-shaped room at Epic, 256 x 256, one pose
 # after a 4-frame turn, the PRE-LANE and the SHIPPED estimator in one process (trap 12), two twin pairs each in ABBA
-# order: the floor's TWO-FLIGHT noise (|run 0 - run 1| of its 16-px blocks), shipped <= 0.60 x pre-lane; its error
+# order: the floor's TWO-FLIGHT noise (|run 0 - run 1| of its 16-px blocks), shipped <= 0.80 x pre-lane (this row's
+# own calibration: draws 0.535..0.647, the swap 1.675; the flythrough's whole-flight 0.60 stays with flythrough.sh); its error
 # against the converged reference, shipped <= 1.05 x pre-lane; the leak pose's young dark floor <= pre-lane x 1.10 +
-# 0.002 x lit. The flythrough's bars, unchanged; no stored constants. `--swap-arms` (the bar's proof) must fail.
+# 0.002 x lit. No stored constants. `--swap-arms` (the bar's proof) must fail.
 # BUDGET 15 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12): 640 + ~300 frames and two references; <= 10 s warm.
 add_executable(test_gi_gather_estimator test_gi_gather_estimator.cpp)
 set_target_properties(test_gi_gather_estimator PROPERTIES

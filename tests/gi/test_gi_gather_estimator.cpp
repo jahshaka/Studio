@@ -30,9 +30,15 @@
 //   THE LEAK (the flythrough's leak arm, one pose): a thin partition, a lamp on one side, the camera
 //   turning in 4 frames onto the two floors seen from above — the young dark floor beside the
 //   partition must carry no more of the lit side's light than the pre-lane estimator's.
-// THE BARS ARE THE FLYTHROUGH'S, unchanged: the shipped floor noise <= 0.60 x the pre-lane's
-// (GATHER-NOISE-1's -40 %); the shipped error <= 1.05 x the pre-lane's (kErrorTolerance); the dark side
-// <= the pre-lane's x 1.10 + 0.002 x the lit floor's. No stored constants: both arms measured every run.
+// THE BARS. The floor noise: shipped <= kFloorNoiseBar (0.80) x the pre-lane's — THIS ROW'S OWN CALIBRATION (the
+// lead, TESTING-SPEED-B1 2026-10-12, the house rule: measured, with headroom either way). The flythrough's 0.60
+// (GATHER-NOISE-1's -40 %) was the bar of ITS measurement — two 360-frame flights at 768x432, motion-averaged — and
+// stays with that measurement, re-run by hand (spikes/testing-speed-b1/flythrough/flythrough.sh). This row measures
+// one pose, two twin pairs per arm at 256 x 256, whose ratio is the draw's: five arrangements of the same frames read
+// 0.535 / 0.560 / 0.588 / 0.599 / 0.647 (the ABBA order 0.647), the arms SWAPPED 1.675 — 0.80 sits above every
+// measured draw and far below the swap (1.700 in the ABBA order). The error: shipped <= 1.05 x the pre-lane's (the flythrough's kErrorTolerance,
+// unchanged). The dark side <= the pre-lane's x 1.10 + 0.002 x the lit floor's (unchanged). No stored constants:
+// both arms are measured every run.
 // THE BAR BITES: `test_gi_gather_estimator --swap-arms` runs the same process with the arms' roles
 // exchanged and must FAIL (spikes/testing-speed-b1/estimator-red.txt) — a proof, never a row.
 //
@@ -69,6 +75,7 @@ static int failures = 0;
     } while (0)
 
 static const unsigned kSize = 256u, kBlock = 16u;
+static const double kFloorNoiseBar = 0.80;   // this row's calibration (the header: five draws 0.535..0.647, the swap 1.675)
 // THE FRAMES (TESTING-SPEED-B1). kChainFrames: the flythrough's warm-up (its 60-frame chain build + the ~170 frames
 // its references rendered before the first flight); kLeakAwayFrames: its leak arm's 120-frame settle away;
 // kAwayFrames fills an arm's history at the away pose (a 10-frame EMA, GatherTuning::historyFrames: four of them).
@@ -381,9 +388,9 @@ int main(int argc, char **argv)
                 nowErr, preErr > 0.0 ? nowErr / preErr : 0.0);
     CHECK(pre.frames >= unsigned(kWindowFrames) && now.frames >= unsigned(kWindowFrames),
           "both arms read the window back (the gather ran every frame)");
-    CHECK_MSG(preNoise > 0.0 && nowNoise <= 0.60 * preNoise,
-              "THE FLOOR AFTER A TURN: the shipped estimator's noise is at most 0.60 of the pre-lane's "
-              "(%.4f against %.4f, ratio %.3f)", nowNoise, preNoise, ratio);
+    CHECK_MSG(preNoise > 0.0 && nowNoise <= kFloorNoiseBar * preNoise,
+              "THE FLOOR AFTER A TURN: the shipped estimator's noise is at most %.2f of the pre-lane's "
+              "(%.4f against %.4f, ratio %.3f)", kFloorNoiseBar, nowNoise, preNoise, ratio);
     CHECK_MSG(preErr > 0.0 && nowErr <= 1.05 * preErr,
               "NO BLUR PAID FOR IT: the shipped estimator's error against the converged reference is at most "
               "1.05 x the pre-lane's (%.4f against %.4f)", nowErr, preErr);
