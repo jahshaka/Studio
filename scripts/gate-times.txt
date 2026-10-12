@@ -421,7 +421,7 @@ photon.view 102.64  quiet n=44
 photon.view.fresh_home 0.01  quiet n=4
 picking.document 0.07  quiet n=45
 picking.fov_cap 1.54  quiet n=44
-picking.trimesh_index 10.63  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, 100 soup segments
+picking.trimesh_index 9.70  hand: TESTING-SPEED-B4 solo median of 3, 2026-10-12 (100 soup segments, the COST print deleted)
 pieces.live_paths 1.31  quiet n=12
 pieces.mirror 1.83  quiet n=46
 pieces.spike 1.77  quiet n=43

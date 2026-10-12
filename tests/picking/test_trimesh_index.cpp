@@ -23,10 +23,9 @@
 // soup, the samples, the degenerate meshes and the exact compare are unchanged.
 //
 // Optional argument: a model file (any format assimp reads, e.g. the owner's
-// greek_temple_scan.glb) — its meshes join the sample set and the timing line
-// reports brute force vs the index on its biggest mesh. Timings are PRINTED,
-// never asserted (this is a correctness suite; a millisecond bar would need the
-// GPU-timing admission and a quiet box).
+// greek_temple_scan.glb) — its meshes join the sample set. The printed COST
+// section (brute force vs the index, timed, never asserted) is DELETED
+// (TESTING-SPEED-B4, the lead 2026-10-12: a print nobody asserts is dead code).
 
 #include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/core/geometry/trianglebvh.h"
@@ -38,7 +37,6 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QElapsedTimer>
 #include <QFileInfo>
 
 #include <cmath>
@@ -270,31 +268,6 @@ int main(int argc, char **argv)
         m.addTriangle(iris::Vec3(0, 0, 0), iris::Vec3(NAN, 0, 0), iris::Vec3(0, 0, 1));
         m.buildIndex();
         CHECK(!m.hasIndex(), "a mesh with a NaN corner keeps the brute-force loop");
-    }
-
-    // THE COST, PRINTED: brute force vs the index on every sample of 50k+ triangles.
-    for (Sample &big : samples) {
-        if (big.mesh.triangles.size() < 50000) continue;
-        const Sample *largest = &big;
-        iris::TriMesh &m = big.mesh;
-        QElapsedTimer built; built.start();
-        m.buildIndex();
-        const double buildMs = double(built.nsecsElapsed()) / 1e6;
-        const auto segs = segmentsFor(m, rng, 40);
-        QElapsedTimer tb; tb.start();
-        int sink = 0;
-        for (const auto &sg : segs) sink += bruteForce(m, sg.first, sg.second).size();
-        const double bruteMs = double(tb.nsecsElapsed()) / 1e6 / double(segs.size());
-        QElapsedTimer ti; ti.start();
-        for (const auto &sg : segs) {
-            QList<iris::TriangleIntersectionResult> r;
-            sink -= m.getSegmentIntersections(sg.first, sg.second, r);
-        }
-        const double indexMs = double(ti.nsecsElapsed()) / 1e6 / double(segs.size());
-        std::printf("    COST %s: %d triangles, index build %.2f ms (%d nodes); per pick brute %.3f ms, "
-                    "indexed %.4f ms (%d)\n",
-                    largest->name.c_str(), int(m.triangles.size()), buildMs, m.indexNodeCount(), bruteMs,
-                    indexMs, sink);
     }
 
     std::printf(gFailures ? "FAILED: %d\n" : "all passed\n", gFailures);
