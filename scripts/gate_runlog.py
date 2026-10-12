@@ -338,6 +338,8 @@ def workspace_root():
 
 
 def log_dir():
+    """THE LIVE RUN LOG — the only records the door reads (the lead's call, RUNNER-AUDIT-FIX-2): testing/runs. The
+    archive (testing/runs-archive) is history: the lead's store indexes it beside the live log, the door never reads it."""
     return os.environ.get("JAH_RUN_LOG_DIR") or os.path.join(workspace_root(), "testing", "runs")
 
 
