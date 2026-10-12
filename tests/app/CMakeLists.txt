@@ -39,6 +39,7 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # satisfies its centre-pixel check (engine_selftest.sh says why, in full).
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (a hash-free selftest under the layer; it was in the lock by flake history only).
+# budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
 jah_gpu_row(app.engine_selftest_validation CLASS selftest
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"

@@ -3,6 +3,7 @@
 # launch again. Runs the REAL binary on two scratch data roots — one fresh, one
 # populated — and compares their censuses, then checks the store, the projects
 # root and the database on disk. Document verbs only -> --headless, no display.
+# budget 40 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it (six boots, six claims).
 set(_rl_home ${CMAKE_CURRENT_BINARY_DIR}/reset-library-home)
 file(MAKE_DIRECTORY ${_rl_home}/run)
 add_test(NAME app.reset_library

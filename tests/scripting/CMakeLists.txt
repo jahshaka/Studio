@@ -322,6 +322,7 @@ jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e
 # shaders are being generated and compiled for the first time, and it took the
 # process down through the shader-cache save when it did. The script asserts the
 # engine's own self-check (world.shadowStatus().shaderLightMismatches).
+# budget 60 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
 set(_scHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shadow_cache_probes)
 jah_fresh_home_fixture(scripting.e2e.shadow_cache_probes.fresh_home shadowCacheProbesFreshHome "${_scHome}" LABELS "scripting")
 jah_gpu_row(scripting.e2e.shadow_cache_probes CLASS app TIER epic NEEDS photon
@@ -622,6 +623,7 @@ jah_pool_arm(world_sky_c sky_name_recycle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2
 # used to sample a reflection cube nothing had written, with the SH one host
 # push behind it. Engine UP (a picture); the home is WIPED first, so no cached
 # shader or face stands between a change and its first frame. ~10 s solo.
+# budget 70 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
 jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app TIER epic NEEDS photon
