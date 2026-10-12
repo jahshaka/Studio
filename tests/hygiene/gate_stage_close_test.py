@@ -90,9 +90,11 @@ def select_cases(source, build):
         return S, gating
 
     print("1. a broad rule leaves the stage-close rows for the batch")
-    S, g = sel(["irisgl/engine/src/OgreChain.cpp"])
+    # TESTING-SPEED-A item 4: the engine family is gone — the subsystem table's Atom line (atom scale shadow engine.atom_)
+    # is the broad rule here (OgreChain.cpp is the post chain's line now)
+    S, g = sel(["irisgl/engine/src/OgreAtomPass.cpp"])
     check("engine.atom_parity" in g and "shadow.cutout_caster" in g,
-          "the engine family selects the plain rows of atom/ and shadow/ (%s)" % sorted(g))
+          "the Atom line selects the plain rows of atom/ and shadow/ (%s)" % sorted(g))
     sc = {n for n, (d, l) in TOY_INV.items() if "stage-close" in l}
     check(not (g & sc), "...and no stage-close row (%s)" % sorted(g & sc))
     check({"atom.cluster_cut", "atom.cluster_crack", "gpu.cutout_soak", "shadow.cutout_caster.churn"}

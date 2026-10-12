@@ -802,12 +802,14 @@ source.member_init 9.64  quiet n=60
 source.no_fixed_gi_volume 0.08  quiet n=58
 source.no_glsl_path 0.10  quiet n=57
 source.no_raw_transaction 0.01  quiet n=59
+source.no_renders_tracked 0.20  TESTING-SPEED-A: measured by hand (git ls-files)
 source.notices_coverage 0.02  quiet n=58
 source.one_fonticons 0.05  quiet n=58
 source.one_material_resolve 0.20  quiet n=63
 source.one_readfile 0.01  quiet n=58
 source.panel_rows_guarded 0.03  quiet n=58
 source.photon_never_pinned 0.09  all n=2
+source.row_budget 1.00  TESTING-SPEED-A: measured by hand (one ctest -N + two files)
 source.row_declares_needs 0.35  all n=2
 source.settings_keys 0.21  quiet n=58
 source.shell_boundaries 0.26  quiet n=58
@@ -819,6 +821,7 @@ ssr.rings 1.73  quiet n=38
 test_engine 39.14  quiet n=40
 test_engine_asan 71.07  quiet n=40
 test_engine_recreate 4.18  quiet n=44
+testing_speed_a.boot_profile 70.00  TESTING-SPEED-A: two engine selftests (the lane's own row)
 theme.manager 0.08  quiet n=25
 theme.no_raw_sheets 0.05  quiet n=35
 theme.sheets 70.88  quiet n=44

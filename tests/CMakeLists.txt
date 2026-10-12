@@ -448,7 +448,11 @@ function(_jah_data _row _class)
 endfunction()
 
 # jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"] [TEST_WINDOW]] [TOKENS <k>]
-#             COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+#             [FRAMES <n>] COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+# FRAMES <n> (TESTING-SPEED-A item 7; SPECS/TESTING_SPEED_SPEC.md §2 A8): THE FRAMES THE ROW RENDERS, stated — the test
+# property JAHSHAKA_TEST_FRAMES (a row declared by add_test / jah_gpu_exclusive_test sets the same property with
+# set_tests_properties). source.testing_rules reads the PROPERTY (ctest --show-only=json-v1) and reds a kept GPU row
+# without it beyond tests/hygiene/frames_pending.txt (the ratchet Part B empties); a row renders seconds, never minutes.
 # CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
 # World Mode with only the named features on, and an app row's tokens are the declaration's.
 # add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
@@ -457,9 +461,12 @@ endfunction()
 # $<TARGET_FILE:...>. A pool is not registered here: run_pool.py (jah_add_pool) takes its tokens ONCE for the
 # pool's whole run and every app process it starts inherits them (TESTING-CLEANUP-2B F-C1: the unit is the pool).
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
+    endif()
+    if(DEFINED G_FRAMES AND NOT G_FRAMES MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): FRAMES '${G_FRAMES}' is not a whole number of frames")
     endif()
     if(G_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "jah_gpu_row(${_row}): unexpected arguments '${G_UNPARSED_ARGUMENTS}'")
@@ -488,11 +495,54 @@ function(jah_gpu_row _row)
     # the label carries the class (`<row>:<class>`): source.gpu_rows_closure checks an app-spawning
     # row declared an app-sized class
     add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
+    if(DEFINED G_FRAMES)
+        set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})
+    endif()
     _jah_data(${_row} ${G_CLASS} ${G_DATA})
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
     if(_declared)
         _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
+endfunction()
+
+# jah_lane_row(<LANE> <row> CLASS app|selftest|engine|vr|none FRAMES <n> COMMAND <exe-or-target> [args...] [the rest of
+#              jah_gpu_row's keywords]) — A LANE'S OWN TEST (TESTING-SPEED-A item 6; SPECS/TESTING_SPEED_SPEC.md §2 A7): declared
+# in tests/lanes/<LANE>/CMakeLists.txt (the glob at the end of this file adds every one), = jah_gpu_row (CLASS none: a plain
+# add_test with no display — a CPU proof) + the label `lane:<LANE>`. gate-scope selects a `lane:<LANE>` row for that lane's
+# own range only; `lane.sh self-audit` runs them with the brief's acceptance rows; `runner.sh merge` LANDS the lane with
+# tests/lanes/<LANE>/ deleted unless `runner.sh land <lane> --keep <row>` moved the row into its family dir.
+# FRAMES is required here: a lane row states the frames it renders (0 for a CPU row).
+function(jah_lane_row _lane _row)
+    cmake_parse_arguments(L "" "CLASS;FRAMES" "" ${ARGN})
+    if(NOT L_CLASS OR NOT DEFINED L_FRAMES)
+        message(FATAL_ERROR "jah_lane_row(${_lane} ${_row}): CLASS and FRAMES are required")
+    endif()
+    if(NOT CMAKE_CURRENT_SOURCE_DIR MATCHES "/tests/lanes/${_lane}$")
+        message(FATAL_ERROR "jah_lane_row(${_lane} ${_row}): a lane row lives in tests/lanes/${_lane}/")
+    endif()
+    if(L_CLASS STREQUAL "none")
+        cmake_parse_arguments(N "" "WORKING_DIRECTORY" "COMMAND" ${L_UNPARSED_ARGUMENTS})
+        set(_wd)
+        if(N_WORKING_DIRECTORY)
+            set(_wd WORKING_DIRECTORY "${N_WORKING_DIRECTORY}")
+        endif()
+        add_test(NAME ${_row} COMMAND ${N_COMMAND} ${_wd})
+        set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${L_FRAMES})
+        jah_no_display(${_row})
+    else()
+        jah_gpu_row(${_row} CLASS ${L_CLASS} FRAMES ${L_FRAMES} ${L_UNPARSED_ARGUMENTS})
+    endif()
+    # the label at the end of the directory (a site's own set_tests_properties(... LABELS ...) replaces the list)
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_lane_label [[${_row}]] [[${_lane}]])")
+endfunction()
+function(_jah_lane_label _row _lane)
+    get_test_property(${_row} LABELS _l)
+    if(NOT _l)
+        set(_l "")
+    endif()
+    list(APPEND _l "lane:${_lane}")
+    list(REMOVE_DUPLICATES _l)
+    set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
 
 # jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
@@ -593,6 +643,27 @@ function(jah_fresh_home_fixture row fixture home)
     set_property(TEST ${row} APPEND PROPERTY JAH_DATA NONE)
     if(F_LABELS)
         set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
+    endif()
+    # THE WIPE AFTER THE CONSUMER (TESTING-SPEED-A item 7): at the end of this directory, a fixture home that ONE row
+    # requires is wiped by that row's admission on its exit (JAH_WIPE_AFTER: green -> deleted, red -> the evidence); a
+    # home several rows share keeps the wipe at its next setup (no row knows it is the last)
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_fresh_home_consumer [[${row}]] [[${fixture}]] [[${home}]])")
+endfunction()
+function(_jah_fresh_home_consumer _setup _fixture _home)
+    get_property(_tests DIRECTORY PROPERTY TESTS)
+    set(_users)
+    foreach(_t IN LISTS _tests)
+        get_test_property(${_t} FIXTURES_REQUIRED _req)
+        if(_req AND "${_fixture}" IN_LIST _req)
+            list(APPEND _users ${_t})
+        endif()
+    endforeach()
+    list(LENGTH _users _n)
+    if(_n EQUAL 1)
+        set_property(TEST ${_users} APPEND PROPERTY ENVIRONMENT_MODIFICATION "JAH_WIPE_AFTER=set:${_users}|${_home}")
+        set_property(GLOBAL APPEND PROPERTY JAH_WIPED_BY_CONSUMER "${_fixture}|${_users}")
+    else()
+        set_property(GLOBAL APPEND PROPERTY JAH_WIPED_AT_SETUP "${_fixture}|${_n}")
     endif()
 endfunction()
 
@@ -912,6 +983,15 @@ add_subdirectory(vr)
 # closure: every suite the list names is registered through the timing admission (app.input_keys and app.play_select need xdotool/curl/
 # jq/Xvfb, vr.warmup.timing the VR stack — absent without them).
 add_subdirectory(tooling)
+# THE LANES' OWN TESTS (TESTING-SPEED-A item 6): every tests/lanes/<LANE>/CMakeLists.txt — a lane's proofs, registered with
+# jah_lane_row (label lane:<LANE>), deleted at the lane's land unless the lead keeps a row (runner.sh land --keep)
+file(GLOB _jah_lane_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lanes/*")
+foreach(_d IN LISTS _jah_lane_dirs)
+    if(IS_DIRECTORY "${_d}" AND EXISTS "${_d}/CMakeLists.txt")
+        get_filename_component(_n "${_d}" NAME)
+        add_subdirectory("${_d}" "${CMAKE_CURRENT_BINARY_DIR}/lanes/${_n}")
+    endif()
+endforeach()
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
 set(_gpu_optional app.input_keys app.play_select vr.warmup.timing vr.frame_budget)
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)

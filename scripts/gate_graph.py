@@ -1374,3 +1374,156 @@ TARGET_CMDS = {"target_sources", "target_link_libraries", "target_compile_option
                "target_compile_definitions", "target_include_directories", "target_compile_features",
                "target_link_options", "target_precompile_headers", "set_target_properties",
                "add_executable", "add_library", "add_dependencies", "add_custom_target"}
+
+
+def _outer_scopes(lines):
+    """For every stripped line, the OUTERMOST named scope it belongs to (a top-level function or class: the first named
+    entry of the scope stack, namespaces and unnamed blocks skipped), or None at namespace scope. Unlike _scopes this
+    steps OUT of lambdas and local structs (a lambda inside renderOneFrame is renderOneFrame's line), and a function's
+    signature lines — its name, a parameter on the next line, the line holding its `{` — belong to the function they
+    open. No _GENERIC filter: `init` is `init`."""
+    res = [None] * len(lines)
+    stack, header, pending = [], [], []
+    decl = re.compile(r"\b(?:struct|class|union|enum(?:\s+class|\s+struct)?)\s+(?:\w+\s+)*?([A-Za-z_]\w*)\s*(?:final\s*)?"
+                      r"(?::[^{]*)?$")
+    for k, ln in enumerate(lines):
+        outer = next((s for s in stack if s), None)
+        res[k] = outer
+        if ln.startswith("#"):
+            continue                 # a preprocessor line opens nothing and is no part of a signature
+        if outer is None and ln.strip():
+            pending.append(k)
+        for ch in re.split(r"([{};])", ln):
+            if ch == "{":
+                h = " ".join(header).strip()
+                name = None
+                if not re.match(r"^(?:inline\s+)?namespace\b", h) and not h.startswith("extern \"C\""):
+                    m = decl.search(h)
+                    if m:
+                        name = m.group(1)
+                    else:
+                        m = re.search(r"([A-Za-z_~][\w:~]*)\s*\(", h)
+                        if m and m.group(1).split("::")[-1] not in _CXX_KEYWORDS:
+                            name = m.group(1).split("::")[-1]
+                if name and not any(stack):
+                    for j in pending:        # the signature's lines are the function's own
+                        res[j] = name
+                stack.append(name)
+                header, pending = [], []
+            elif ch == "}":
+                if stack: stack.pop()
+                header = []
+                if not any(stack): pending = []
+            elif ch == ";":
+                header = []
+                if not any(stack): pending = []
+            elif ch:
+                header.append(ch)
+    return res
+
+
+def enclosing_functions(old_text, new_text, hunks):
+    """THE ENCLOSING FUNCTION WALK (TESTING-SPEED-A item 4): {name or None: changed line count} — the top-level function
+    (or class) of every changed CODE line on either side of `hunks` (git's -U0; comments and whitespace stripped, as
+    cxx_changed_identifiers reads them), stepping out of lambdas and local structs to the member function. None = a line
+    at namespace scope (an include, a constant, a using). Unfiltered: no _GENERIC word is dropped (`init` returns
+    `init`). An empty dict = a comment/whitespace-only change."""
+    a = strip_cxx(old_text or "")
+    b = strip_cxx(new_text or "")
+    oa, ob = _outer_scopes(a), _outer_scopes(b)
+    out = {}
+    for os_, oc, ns, nc in hunks or []:
+        i1 = os_ - 1 if oc else os_
+        j1 = ns - 1 if nc else ns
+        if [x for x in a[i1:i1 + oc] if x.strip()] == [x for x in b[j1:j1 + nc] if x.strip()]:
+            continue
+        for lines, outer, lo, hi in ((a, oa, i1, i1 + oc), (b, ob, j1, j1 + nc)):
+            for k in range(lo, min(hi, len(lines))):
+                if lines[k].strip():
+                    out[outer[k]] = out.get(outer[k], 0) + 1
+    return out
+
+
+def new_scope_ids(old_text, new_text, hunks, ids):
+    """(ids, new) for an ENGINE header (TESTING-SPEED-A item 4: "a Types.h field add -> the users' subsystems"): the
+    members declared INSIDE A SCOPE THE CHANGE CREATES (a new struct, enum or class: its name is nowhere in the old text)
+    select through that scope's name only — a user of `GatherRay::distance` names GatherRay, and `distance` alone
+    matches every file of the engine; `new` = the identifiers the old text never names at all (their users are in this
+    very change: nothing outside it can name them)."""
+    a = strip_cxx(old_text or "")
+    b = strip_cxx(new_text or "")
+    old_words = set(_TOKEN.findall(" ".join(a)))
+    sb = _scopes(b)
+    inside, outside, collapsed, added, removed = set(), set(), set(), set(), set()
+    fb = _function_depth(b)
+    for os_, oc, ns, nc in hunks or []:
+        j1 = ns - 1 if nc else ns
+        for k in range(j1, min(j1 + nc, len(b))):
+            toks = set(_TOKEN.findall(b[k])) & set(ids)
+            added |= declared_names(b[k], fb[k])[0] & set(ids)
+            scope = next((x for x in sb[k] if x and x not in old_words), None)
+            if scope:
+                collapsed.add(scope)
+                inside |= toks
+            else:
+                outside |= toks
+        i1 = os_ - 1 if oc else os_
+        for k in range(i1, min(i1 + oc, len(a))):
+            outside |= set(_TOKEN.findall(a[k])) & set(ids)
+            removed |= set(_TOKEN.findall(a[k]))
+    out = (set(ids) - (inside - outside)) | collapsed
+    # AN APPEND TO A LINE (`enum class V { A, B };` -> `{ A, B, C };`): the old line's tokens are a subsequence of the new
+    # one's — only the INSERTED names changed; the line's old names (V, A, B) select nothing by this line
+    appended = set()
+    touched_elsewhere = set()
+    for os_, oc, ns, nc in hunks or []:
+        i1 = os_ - 1 if oc else os_
+        j1 = ns - 1 if nc else ns
+        olds = [x for x in a[i1:i1 + oc] if x.strip()]
+        news = [x for x in b[j1:j1 + nc] if x.strip()]
+        for k, nl in enumerate(news):
+            lex = lambda t: re.findall(r"[A-Za-z_]\w*|\d[\w.']*|\S", t)
+            ot = lex(olds[k]) if k < len(olds) else None
+            nt = lex(nl)
+            it = iter(nt)
+            if ot is not None and len(olds) == len(news) and all(x in it for x in ot):
+                appended |= set(ot) & set(ids)
+            else:
+                touched_elsewhere |= set(nt) & set(ids)
+                if ot is not None:
+                    touched_elsewhere |= set(ot) & set(ids)
+    out -= (appended - touched_elsewhere - collapsed)
+    # NEW: never named by the old text, or DECLARED on an added line and on no removed one (an added member: code that
+    # names it is in this change; code naming an older namesake still means the namesake)
+    return out, {t for t in out if t not in old_words or (t in added and t not in removed)}
+
+
+def names_in_body(text, ids):
+    """True when `text` (a header) names one of `ids` INSIDE A FUNCTION BODY (an inline helper whose callers name the
+    helper, not the id) — a declaration alone (a parameter's type, a member) is named again by whoever uses it."""
+    lines = strip_cxx(text or "")
+    fd = _function_depth(lines)
+    rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b") if ids else None
+    return bool(rx) and any(fd[k] and rx.search(ln) for k, ln in enumerate(lines))
+
+
+def body_wrappers(text, ids):
+    """The functions of `text` (a header) whose BODIES name one of `ids` — an inline helper's (or a default virtual's)
+    callers name the helper, so the helper's NAME is what a symbol search follows next (one level)."""
+    lines = strip_cxx(text or "")
+    if not ids:
+        return set()
+    fd, sc = _function_depth(lines), _scopes(lines)
+    rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b")
+    out = set()
+    for k, ln in enumerate(lines):
+        if not rx.search(ln):
+            continue
+        if fd[k] and sc[k] and sc[k][-1]:
+            out.add(sc[k][-1])
+        else:
+            # a one-line body on the declaration's own line: `virtual X f(Y y) const { return Y::Off; }`
+            m = re.match(r".*?\b([A-Za-z_]\w*)\s*\([^;{]*\)[^;{]*\{(.*)\}\s*;?\s*$", ln)
+            if m and rx.search(m.group(2)):
+                out.add(m.group(1))
+    return {t for t in out if t not in _CXX_KEYWORDS}

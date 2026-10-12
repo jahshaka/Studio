@@ -112,10 +112,10 @@ def arm_cases(gs, graph, build, inv0):
         S = gs.select([rel], None, build, 4, graph=graph, inv=copy.deepcopy(inv), quiet_graph=True)
         check(S.arm_subsets().get("pool.synth") == ["p"], "a touched arm script selects that arm (%s)"
               % S.arm_subsets().get("pool.synth"))
-    S = gs.select(["irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any"], None, build, 4, graph=graph,
+    S = gs.select(["irisgl/engine/src/OgreEngine.cpp"], None, build, 4, graph=graph,
                   inv=copy.deepcopy(inv), quiet_graph=True)
     check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
-          "an engine rule's app group selects the pool whole (every arm)")
+          "the frame loop's app group (OgreEngine.cpp, no diff to read: every app row) selects the pool whole (every arm)")
 
 
 def gone_cases(gs, graph, build, inv0):
@@ -201,6 +201,8 @@ def hunk_cases(gs, graph, build, inv0, cases):
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
         miss = [m for m in c["must"] if m not in S.selected and not S.full_tier]
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
+        extra = [m for m in c.get("must_not", []) if m in S.selected]
+        check(not extra, "%s: does NOT select %s (%s)" % (c["case"][:60], c.get("must_not", []), extra))
 
 
 def tooling_cases(gs, graph, build, inv0):
@@ -231,9 +233,9 @@ def tooling_cases(gs, graph, build, inv0):
     S = sel(["tests/gi/test_gi_speckle.cpp"])
     # + gate.tokens_by_needs: RUNNER-A2B's DATA EDGE — that row's command hands it the whole tests/ directory (-DSRC=), so
     # every file under tests/ is its data (the safe side: a directory argument is walked) — and nothing else, no smoke pair
-    check(S.tooling_only and set(S.selected) == {"gi.speckle", "gate.tokens_by_needs"},
-          "a test source alone selects its row (+ the data edge's gate.tokens_by_needs) and nothing else — no smoke pair "
-          "(%s)" % sorted(S.selected)[:6])
+    # TESTING-SPEED-A item 5: gate.tokens_by_needs is a TOOLING row now — a test source is no tool path, so it rides no more
+    check(S.tooling_only and set(S.selected) == {"gi.speckle"},
+          "a test source alone selects its row and nothing else — no smoke pair, no tooling row (%s)" % sorted(S.selected)[:6])
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
     check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,
@@ -241,10 +243,14 @@ def tooling_cases(gs, graph, build, inv0):
           % len(mb))
     alone = set(sel(["src/services/vrworld.cpp"]).selected)
     S = sel(["scripts/gate-scope.py", "src/services/vrworld.cpp"])
-    check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" in S.selected
-          and "pool.vr_session" in S.selected and "source.gate_scope_rules" in S.selected,
-          "ONE product path makes it a product diff: the whole union (vrworld.cpp's %d rows + the tool's) and the smoke "
-          "pair" % len(alone))
+    check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" not in alone
+          and "ui.vr_panel" in S.selected and "source.gate_scope_rules" in S.selected
+          and not any("hygiene" in S.inv[n]["labels"] for n in alone),
+          "ONE product path makes it a product diff: the union (vrworld.cpp's %d rows + the tool's hygiene/tooling rows); "
+          "the product path alone selects no tools' row and no smoke pair (TESTING-SPEED-A item 5)" % len(alone))
+    S = sel(["tests/support/fresh_home.sh"])
+    check("app.startup_quiet" in S.selected and "api.contract" in S.selected,
+          "a change to the test harness (tests/support/) selects the smoke pair (%s)" % sorted(S.selected)[:4])
     check(gs.product_paths(["irisgl/docs/OGRE_BUILD.md", "docs/TESTING.md", "scripts/x.py", "tests/hygiene/y.py",
                             "irisgl/README.md"]) == []
           and len(gs.product_paths(["irisgl/engine/src/OgreGi.cpp", "app/content/x.obj", "CMakeLists.txt",
@@ -510,7 +516,13 @@ def main(source, build):
         table.append((c["lane"], "TIER" if whole else len(gating), est))
         print("  %-42s %9s %10.0f  %d/%d   (%.1f s)" % (c["lane"][:42], "TIER" if whole else len(gating), est,
                                                      len(env_hit), len(c.get("env", [])), time.time() - t0))
-        check(not S.fallback, "%s: no fallback (%s)" % (c["lane"], S.fallback[:2]))
+        if c.get("rows_at_tip_only"):
+            # a REPLAY against this build: the range's NEW rows are registered at its tip, not here — their registration
+            # commands resolve to nothing in this build and fall to their test directory (never the tier), said
+            check(all(f.startswith("tests/") for f in S.fallback),
+                  "%s: only the range's new test registrations are unresolved here (%s)" % (c["lane"], S.fallback[:2]))
+        else:
+            check(not S.fallback, "%s: no fallback (%s)" % (c["lane"], S.fallback[:2]))
         if c.get("whole_tier"):
             check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
         if c.get("fork_reach"):
@@ -528,7 +540,34 @@ def main(source, build):
         for np_ in c.get("not_paths", []):
             check(np_ not in paths, "%s: %s came in through a forward merge — not the lane's path" % (c["lane"], np_))
         for m in c.get("must", []):
+            # A HYGIENE ROW IS THE LANE RUN'S (TESTING-SPEED-A item 5): a product change no longer selects the tools'
+            # rows — the builder's self-audit runs the whole hygiene label at the lane's tip (records), so a lint red the
+            # lane's gate once found is caught there, said
+            if not (whole or chosen(S, m)) and m in inv0 and "hygiene" in inv0[m]["labels"]:
+                print("  (%s: %s is a hygiene row — the self-audit's hygiene label runs it at the lane's tip)" % (c["lane"], m))
+                continue
             check(whole or chosen(S, m), "%s: selects %s" % (c["lane"], m))
+        # THE TESTING-SPEED-A REPLAYS: the families, the picture set, the rows that must NOT ride, no pool whole
+        fam = lambda n: {inv0[n]["dir"], n.split(".", 1)[0]}
+        for f_ in c.get("must_families", []):
+            want = sorted(n for n in inv0 if f_ in fam(n) and not (inv0[n]["labels"] & (gs.STAGE_CLOSE_LABELS
+                          | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS | {"hygiene", "tooling"}))
+                          and not inv0[n].get("fixture_setup") and S.own_lane_row(n))
+            miss = [n for n in want if n not in sel]
+            check(bool(want) and not miss, "%s: selects every kept %s row (%d; missing %s)" % (c["lane"], f_, len(want),
+                                                                                             miss[:5]))
+        if c.get("must_picture"):
+            pic = sorted(n for n, t in inv0.items() if t.get("picture"))
+            arms = sorted("%s.%s" % (t["pool"], a) for n, t in inv0.items() for a in t.get("picture_arms") or ())
+            miss = [n for n in pic if n not in sel] + [a for a in arms if not chosen(S, a)]
+            check(bool(pic) and not miss, "%s: selects THE PICTURE SET (%d rows, %d screenshot arms; missing %s)"
+                  % (c["lane"], len(pic), len(arms), miss[:5]))
+        for f_ in c.get("none_of", []):
+            bad = sorted(n for n in sel if f_ in fam(n))
+            check(not bad, "%s: selects NO %s row (%s)" % (c["lane"], f_, bad[:6]))
+        if c.get("no_whole_pool"):
+            wp = sorted(n for n in sel if inv0[n].get("pool") and n not in S.arm_subsets())
+            check(not wp, "%s: no pool selected WHOLE — only its screenshot arms (%s)" % (c["lane"], wp[:4]))
         if "max_rows" in c:
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
@@ -543,6 +582,12 @@ def main(source, build):
         for m in c.get("must_not", []):
             check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
                                                                          S.selected.get(m, "")))
+        if "only_labels" in c:
+            other = sorted(n for n in sel if not (inv0[n]["labels"] & set(c["only_labels"])))
+            check(bool(sel) and not other, "%s: only %s rows (%d; others %s)" % (c["case"], "/".join(c["only_labels"]),
+                                                                             len(sel), other[:5]))
+        if c.get("selects_nothing"):
+            check(not sel, "%s: selects nothing (%s)" % (c["case"], sorted(sel)[:5]))
     tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)
     gone_cases(gs, graph, build, inv0)

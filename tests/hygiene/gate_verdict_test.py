@@ -36,13 +36,35 @@ import sys
 import tempfile
 import time
 
-RANGE = "51e9f2c49..3756b2f18"          # VIEWS-DEPTH-1 (ci_gate_check_test's): photon.view + the smoke pair
-ROWS = ["api.contract", "app.startup_quiet", "photon.view"]
+RANGE = None          # 51e9f2c49..<speed_commit> — set by Env (the row: SPEED_ROW, which stays; see speed_commit)
+ROWS = ["gi.speckle"]
 # THE DATA EDGE (RUNNER-A2B): RANGE touches tests/gi/CMakeLists.txt, which gate.tokens_by_needs READS (it lints every row's
 # declarations) — the scoped selection holds it (every range here touches that file or descends from one that did). Each
 # run records it green at the range's tip first (no case is about it); the cases' reds stay on the rows they name.
-DATA_EDGE_ROWS = ["gate.tokens_by_needs"]
+# TESTING-SPEED-A item 5: RANGE touches tests/support/ (the test harness, a tool path): the smoke pair and the tools'
+# rows that read it ride with it — recorded green at the range's tip like the data edge
+DATA_EDGE_ROWS = []      # the speed range touches one test source: no data edge, no tool path, no harness
 FAILURES = []
+
+# THE RANGE'S ROW, ONE THAT STAYS (TESTING-SPEED-A, for TESTING-SPEED-B's batches: gi.speckle — the VIEWS-DEPTH-1 range's
+# row — is DELETED by batch 1): the range is 51e9f2c49..<a synthetic commit on it that adds a code line to gi.speckle's own
+# source> — an unreferenced object, no ref, no worktree moved; it reaches gi.speckle alone
+SPEED_ROW = "gi.speckle"
+SPEED_PATH = "tests/gi/test_gi_speckle.cpp"
+
+
+def speed_commit(source, scratch, parent="51e9f2c49", text="static int tsa_speed_probe = 1;\n", msg="the speed range"):
+    """A commit object on `parent` whose tree carries SPEED_PATH = `text` (a code line: gi.speckle's source moved)."""
+    env = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
+               GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com",
+               GIT_INDEX_FILE=os.path.join(scratch, "speed-%d.index" % len(os.listdir(scratch))))
+    g = lambda *a, **k: subprocess.run(["git"] + list(a), cwd=source, capture_output=True, text=True, env=env, **k)
+    blob = g("hash-object", "-w", "--stdin", input=text).stdout.strip()
+    g("read-tree", parent + "^{tree}")
+    g("update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, SPEED_PATH))
+    tree = g("write-tree").stdout.strip()
+    return g("commit-tree", tree, "-p", g("rev-parse", parent).stdout.strip(), "-m", "TESTING-SPEED-A " + msg).stdout.strip()
+
 
 
 ENROLLED = {"enrolled": {"by": "lead", "rate": "3 in 200 (fixture)", "census": {"other_ctests": 2}, "date": "2026-10-09"}}
@@ -56,11 +78,11 @@ def defect(i, rows, kind="defect", **kw):
                  "recheck": "2099-12-31", "found_by": "lane"}, **kw)
 
 
-FIXTURE_DEFECTS = [defect("FIXTURE-1", ROWS + ["test_engine"]), defect("VIEWS-XID-1", ["photon.view"]),
-                   defect("BUDGET-7", ["photon.view"]), defect("RETIRED-1", ["photon.view"], state="retired"),
-                   defect("OTHER-ROW-1", ["api.contract"]), defect("NONDET-SOLO-1", ["photon.view"], "nondeterminism",
+FIXTURE_DEFECTS = [defect("FIXTURE-1", ROWS + ["test_engine"]), defect("VIEWS-XID-1", [SPEED_ROW]),
+                   defect("BUDGET-7", [SPEED_ROW]), defect("RETIRED-1", [SPEED_ROW], state="retired"),
+                   defect("OTHER-ROW-1", ["api.contract"]), defect("NONDET-SOLO-1", [SPEED_ROW], "nondeterminism",
                                                                     state="retired")]
-NONDET = defect("NONDET-FIXTURE-1", ["photon.view"], "nondeterminism")
+NONDET = defect("NONDET-FIXTURE-1", [SPEED_ROW], "nondeterminism")
 BUSY = {"census": {"gpu_apps": [], "gpu_competitors": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
 
 
@@ -79,8 +101,10 @@ class Env:
         self.tool = os.path.join(source, "scripts", "ci-gate-check.sh")
         self.contention(None)
         os.environ["JAH_VRAM_DIR"] = os.path.join(self.scratch, "vram")
-        self.tip = self.git("rev-parse", "3756b2f18")
-        self.pin = self.git("rev-parse", "3756b2f18:irisgl")
+        global RANGE
+        self.tip = speed_commit(source, self.scratch)
+        self.pin = self.git("rev-parse", self.tip + ":irisgl")
+        RANGE = "51e9f2c49.." + self.tip
 
     def git(self, *a):
         return subprocess.run(["git"] + list(a), cwd=self.source, capture_output=True, text=True).stdout.strip()
@@ -119,7 +143,8 @@ class Env:
                                 "text": text, "ts": ts, "tip": {"studio": t, "irisgl": self.pin,
                                                                 "studio_dirty": False, "irisgl_dirty": False}}) + "\n")
 
-    def run(self, *extra, rng=RANGE):
+    def run(self, *extra, rng=None):
+        rng = rng or RANGE
         self.put(DATA_EDGE_ROWS, "PASS", "2026-01-01T00:30:00", tip=self.git("rev-parse", rng.split("..")[1]))
         p = subprocess.run([self.tool, rng, "--build", self.build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
@@ -128,16 +153,16 @@ class Env:
     def judge(self, recs, listed=False, base=None, defects=None):
         d = defects or {e["id"]: e for e in FIXTURE_DEFECTS + ([NONDET] if listed else [])}
         # a stub history for the toy shas: every different sha descends and reaches (the real Prover is tested apart)
-        return self.cgc.judge(("photon.view", None), recs, d, base_recs=base,
+        return self.cgc.judge((SPEED_ROW, None), recs, d, base_recs=base,
                               proves=lambda a, b, k: bool(a and b and a != b))
 
 
 def rec(verdict, ts, retry=False, **kw):
-    return dict({"suite": "photon.view", "arm": None, "verdict": verdict, "ts": ts, "retry": retry}, **kw)
+    return dict({"suite": SPEED_ROW, "arm": None, "verdict": verdict, "ts": ts, "retry": retry}, **kw)
 
 
 def vrec(text, ts):
-    return {"kind": "verdict", "suite": "photon.view", "arm": None, "verdict": "VERDICT", "text": text, "ts": ts}
+    return {"kind": "verdict", "suite": SPEED_ROW, "arm": None, "verdict": "VERDICT", "text": text, "ts": ts}
 
 
 def case_verdict_door(E):
@@ -257,22 +282,22 @@ def case_verdict_door(E):
     check(st == "nondet" and "3/3" in why, "real:<an enrolled nondeterminism id> + 3/3 solo -> cleared as nondeterminism "
           "(%s)" % why[:80])
     tip = E.tip
-    nr = defect("NOTREPRO-1", ["photon.view"], "nondeterminism", uses=1, suspects=["lane-x"], census={"other_ctests": 1},
+    nr = defect("NOTREPRO-1", [SPEED_ROW], "nondeterminism", uses=1, suspects=["lane-x"], census={"other_ctests": 1},
                 first_seen={"tip": tip[:9], "pin": "0" * 9, "run": "20261009T120000-" + tip[:9]})
     one = {"NOTREPRO-1": nr}
-    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip)
+    st, why = E.cgc.judge((SPEED_ROW, None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip)
     check(st == "nondet", "a SINGLE-USE NOT REPRODUCED entry clears its own merge's red by 3/3 (%s)" % why[:70])
-    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip,
+    st, why = E.cgc.judge((SPEED_ROW, None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha=tip,
                           mode="push")
     check(st == "red" and "never a push" in why, "F4: ...never a push, even at the sha that registered it (%s)" % why[:70])
-    st, why = E.cgc.judge(("photon.view", None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha="b" * 40)
+    st, why = E.cgc.judge((SPEED_ROW, None), [red] + ok3 + [vrec("real:NOTREPRO-1", T % "11:00")], one, tip_sha="b" * 40)
     check(st == "red" and "SINGLE-USE" in why, "...and never a red at another tip (a later merge, a push) (%s)" % why[:80])
     check(not E.rl.contention_of(one), "...and it is never the contention class (only an ENROLLED entry is)")
-    old = {"OLD-1": defect("OLD-1", ["photon.view"], recheck="2026-01-01")}
-    st, why = E.cgc.judge(("photon.view", None), [red, fixpass, vrec("real:OLD-1", T % "11:00")], old)
+    old = {"OLD-1": defect("OLD-1", [SPEED_ROW], recheck="2026-01-01")}
+    st, why = E.cgc.judge((SPEED_ROW, None), [red, fixpass, vrec("real:OLD-1", T % "11:00")], old)
     check(st == "red" and "past its recheck" in why, "an entry past its recheck DATE is refused until re-verdicted (%s)"
           % why[:80])
-    oldnd = {"OLD-2": defect("OLD-2", ["photon.view"], "nondeterminism", recheck="2026-01-01")}
+    oldnd = {"OLD-2": defect("OLD-2", [SPEED_ROW], "nondeterminism", recheck="2026-01-01")}
     check(not E.rl.contention_of(oldnd), "...and a nondeterminism entry past its recheck leaves the contention class")
     st, why = E.judge([red, vrec("the reader looked at it and it is fine", T % "11:00")])
     check(st == "red" and why.startswith("VERDICT REFUSED") and "nothing accepts prose" in why,
@@ -407,15 +432,15 @@ def case_verdict_door(E):
     # the CLI: VERDICT REFUSED printed; a KNOWN RED passes a merge and refuses a push
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
-    E.put(ROWS[2:], "FAIL", "2026-01-01T10:00:01")
-    rc, out = E.run("--verdict", "photon.view=looked fine to the reader")
-    check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "the CLI prints VERDICT REFUSED <row>: <why> and "
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:01")
+    rc, out = E.run("--verdict", "gi.speckle=looked fine to the reader")
+    check(rc == 1 and "VERDICT REFUSED gi.speckle:" in out, "the CLI prints VERDICT REFUSED <row>: <why> and "
           "refuses (%d)" % rc)
-    rc, out = E.run("--verdict", "photon.view=real:FIXTURE-1")
-    check(rc == 1 and "VERDICT REFUSED photon.view:" in out, "...real:<id> with no proof -> refused (%d)" % rc)
-    E.put(ROWS[2:], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    rc, out = E.run("--verdict", "gi.speckle=real:FIXTURE-1")
+    check(rc == 1 and "VERDICT REFUSED gi.speckle:" in out, "...real:<id> with no proof -> refused (%d)" % rc)
+    E.put(ROWS, "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
     rc, out = E.run()
-    check(rc == 0 and "KNOWN RED photon.view" in out, "...the red reproduced by a recorded solo at the RANGE'S BASE -> "
+    check(rc == 0 and "KNOWN RED gi.speckle" in out, "...the red reproduced by a recorded solo at the RANGE'S BASE -> "
           "KNOWN RED: the merge passes it (%d)" % rc)
     for mode in ("push", "stage-close"):
         rc, out = E.run("--mode", mode)
@@ -439,7 +464,7 @@ def case_verdict_door(E):
     # ROUND 3 F-A: AN EMPTY COMMIT proves nothing. C1 = a lane commit (51e9f2c49's child carrying 3756b2f18's tree), X =
     # an EMPTY commit on it (`git commit --allow-empty`, made here with commit-tree: objects only, no ref moves): red at
     # C1, green at X -> refused (before: X..C1 read as unreadable -> ALL -> "the fix reached it" -> green, no verdict)
-    tree = E.git("rev-parse", "3756b2f18^{tree}")
+    tree = E.git("rev-parse", E.tip + "^{tree}")
     env = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
                GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com")
     c1 = subprocess.run(["git", "commit-tree", tree, "-p", E.git("rev-parse", "51e9f2c49"), "-m", "verdict test C1"],
@@ -448,10 +473,10 @@ def case_verdict_door(E):
                        capture_output=True, text=True, env=env).stdout.strip()
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T09:00:00", tip=c1)
-    E.put(ROWS[2:], "FAIL", "2026-01-01T09:30:00", tip=c1)
+    E.put(ROWS, "FAIL", "2026-01-01T09:30:00", tip=c1)
     E.put(ROWS, "PASS", "2026-01-01T10:00:00", tip=x)
     rc, out = E.run(rng="51e9f2c49..%s" % x)
-    check(bool(c1 and x) and rc == 1 and "photon.view" in out and "OPEN red at %s" % c1[:9] in out,
+    check(bool(c1 and x) and rc == 1 and SPEED_ROW in out and "OPEN red at %s" % c1[:9] in out,
           "F-A: red at C1, a green re-run at an EMPTY commit X on it -> refused, no verdict passes it silently (%d)" % rc)
     # ROUND 4: ONE STRAY FILE proves nothing either — Y = C1 + a root file no rule owns (the selector FALLS BACK): red at
     # C1, green at Y -> refused (before: a fallback read as ALL on the proving side)
@@ -467,10 +492,11 @@ def case_verdict_door(E):
                        capture_output=True, text=True, env=env).stdout.strip()
     gs = E.cgc.load_gs()
     R = E.cgc.Reach(gs, E.build, y, "")
-    check(R.between(c1, y, unreadable=set()) == set() and R.between(c1, y) is E.cgc.Reach.ALL,
-          "a FALLBACK range reaches nothing when proving, everything when re-using")
+    # TESTING-SPEED-A item 1: a fallback is ITS DIRECTORY's subsystem (a root file: nothing more) on BOTH sides, never ALL
+    check(R.between(c1, y, unreadable=set()) == set() and R.between(c1, y) == set(),
+          "a FALLBACK range reaches its directory's subsystem (a root file: nothing) when proving AND re-using — never ALL")
     prover4 = E.cgc.Prover(gs, E.build, lambda: R)
-    st, why = E.cgc.judge(("photon.view", None), [rec("FAIL", T % "09:30", tip={"studio": c1}),
+    st, why = E.cgc.judge((SPEED_ROW, None), [rec("FAIL", T % "09:30", tip={"studio": c1}),
                                                   rec("PASS", T % "10:00", tip={"studio": y}),
                                                   vrec("real:FIXTURE-1", T % "11:00")],
                           {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover4)
@@ -478,21 +504,21 @@ def case_verdict_door(E):
           "falls back) + real:<id> -> refused (%s)" % why[:80])
     # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
     E.fresh()
-    E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
-    E.put(ROWS[2:], "PASS", "2026-01-01T10:00:00", tier="lane")
+    # (the speed range has one row: no other row recorded green beside it)
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00", tier="lane")
     rc, out = E.run()
     check(rc == 1 and "no record" in out, "a lane-tool PASS (tier lane) does not answer a row the gate never ran (%d)" % rc)
     # the abort's droppedRed: 3/3 solo, whatever else answered it
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
     E.rl.append_records([{"schema": 2, "kind": "abort", "suite": "(abort)", "arm": None, "verdict": "ABORT",
-                          "ts": "2026-01-01T10:30:00", "droppedRed": ["photon.view"],
+                          "ts": "2026-01-01T10:30:00", "droppedRed": [SPEED_ROW],
                           "tip": {"studio": E.tip, "studio_dirty": False, "irisgl": E.pin, "irisgl_dirty": False}}],
                         "scoped", E.tip)
-    E.put(ROWS[2:], "PASS", "2026-01-01T10:40:00")
+    E.put(ROWS, "PASS", "2026-01-01T10:40:00")
     rc, out = E.run()
     check(rc == 1 and "DROPPED RED" in out, "a row the abort dropped RED stays red after a quiet PASS (%d)" % rc)
-    for k in range(3): E.put(ROWS[2:], "PASS", "2026-01-01T10:5%d:00" % k, retry=True)
+    for k in range(3): E.put(ROWS, "PASS", "2026-01-01T10:5%d:00" % k, retry=True)
     rc, out = E.run()
     check(rc == 0, "...until 3/3 solo PASS after the abort (%d)" % rc)
     # overrides: the push refuses a candidate whose records carry any
@@ -533,13 +559,13 @@ def batch_range_cases(E):
         return subprocess.run(["git", "write-tree"], cwd=E.source, env=genv, capture_output=True, text=True).stdout.strip()
 
     base = E.git("rev-parse", "51e9f2c49")
-    tip_tree = E.git("rev-parse", "3756b2f18^{tree}")
+    tip_tree = E.git("rev-parse", E.tip + "^{tree}")
 
     def solos(tip, t0, verdicts=("FAIL", "FAIL", "FAIL"), fl=FL, batch=None):
         for i, v in enumerate(verdicts):
             extra = {"failLine": fl} if v == "FAIL" else ({"status": "Exception: SegFault"} if v == "CRASH" else {})
             # an attribution's solo is never a lane's own record (it never carries, U4): `lanes: [attribution:<lane>]`
-            E.put(["photon.view"], v, T % ("%s:%02d" % (t0, i)), tip=tip, retry=True,
+            E.put([SPEED_ROW], v, T % ("%s:%02d" % (t0, i)), tip=tip, retry=True,
                   **({"lane": "attribution:" + batch} if batch else {}), **extra)
 
     # ---- (1) the batch's verdict covers the batch: C1 = a lane commit, X = an empty commit on it (C1..X reaches nothing)
@@ -548,37 +574,37 @@ def batch_range_cases(E):
     for variant in ("same", "crash"):
         E.fresh()
         solos(base, "09")
-        E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+        E.put([SPEED_ROW], "FAIL", T % "10:00", tip=c1, failLine=FL)
         solos(c1, "10", ("FAIL", "CRASH", "FAIL") if variant == "crash" else ("FAIL", "FAIL", "FAIL"))
-        E.put(["photon.view"], "FAIL", T % "11:00", tip=x, failLine=FL)
+        E.put([SPEED_ROW], "FAIL", T % "11:00", tip=x, failLine=FL)
         solos(x, "11")
-        E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=x)
+        E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=x)
         rc, out = E.run(rng="%s..%s" % (base, x))
         if variant == "same":
-            check(bool(c1 and x) and rc == 0 and "KNOWN RED photon.view" in out and "OPEN red at" not in out,
+            check(bool(c1 and x) and rc == 0 and "KNOWN RED gi.speckle" in out and "OPEN red at" not in out,
                   "(1) a KNOWN RED at the tip is KNOWN at the batch's earlier commit C1 too: the tip's verdict covers C1's "
-                  "3/3 red solos (rc %d; %s)" % (rc, [l for l in out.splitlines() if "photon.view" in l][:1]))
+                  "3/3 red solos (rc %d; %s)" % (rc, [l for l in out.splitlines() if SPEED_ROW in l][:1]))
         else:
             check(rc == 1 and "OPEN red at %s" % c1[:9] in out and "not every pending red" in out,
                   "(1) ...but a CRASH among C1's solos (another signature) is still refused there (rc %d)" % rc)
     # a verdict recorded at C1 itself (an older lane delivery) keeps working
     E.fresh()
     solos(base, "09")
-    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    E.put([SPEED_ROW], "FAIL", T % "10:00", tip=c1, failLine=FL)
     solos(c1, "10")
-    E.verdict("photon.view", "real:VIEWS-XID-1", T % "10:30", tip=c1)
-    E.put(["photon.view"], "PASS", T % "11:00", tip=x)
+    E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "10:30", tip=c1)
+    E.put([SPEED_ROW], "PASS", T % "11:00", tip=x)
     rc, out = E.run(rng="%s..%s" % (base, x))
     check(rc == 0, "(1) a verdict recorded at the earlier commit itself still answers its red (rc %d)" % rc)
 
     # read 1 I1 (a): a tip verdict stamped BEFORE C1's red clears nothing there — C1's reds after it stay open
     E.fresh()
     solos(base, "09")
-    E.put(["photon.view"], "FAIL", T % "09:40", tip=x, failLine=FL)
+    E.put([SPEED_ROW], "FAIL", T % "09:40", tip=x, failLine=FL)
     for i in range(3):
-        E.put(["photon.view"], "FAIL", T % ("09:4%d" % (i + 1)), tip=x, retry=True, failLine=FL)
-    E.verdict("photon.view", "real:VIEWS-XID-1", T % "09:50", tip=x)
-    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+        E.put([SPEED_ROW], "FAIL", T % ("09:4%d" % (i + 1)), tip=x, retry=True, failLine=FL)
+    E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "09:50", tip=x)
+    E.put([SPEED_ROW], "FAIL", T % "10:00", tip=c1, failLine=FL)
     solos(c1, "10")
     rc, out = E.run(rng="%s..%s" % (base, x))
     check(rc == 1 and "OPEN red at %s" % c1[:9] in out,
@@ -586,36 +612,36 @@ def batch_range_cases(E):
     # read 1 I1 (b): a verdict at C1 does not answer the TIP's reds (only the tip's verdicts reach down, never up)
     E.fresh()
     solos(base, "09")
-    E.put(["photon.view"], "FAIL", T % "10:00", tip=c1, failLine=FL)
+    E.put([SPEED_ROW], "FAIL", T % "10:00", tip=c1, failLine=FL)
     solos(c1, "10")
-    E.put(["photon.view"], "FAIL", T % "11:00", tip=x, failLine=FL)
+    E.put([SPEED_ROW], "FAIL", T % "11:00", tip=x, failLine=FL)
     solos(x, "11")
-    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=c1)
+    E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=c1)
     rc, out = E.run(rng="%s..%s" % (base, x))
-    check(rc == 1 and "row photon.view <- %s (the tip): red" % x[:9] in out,
+    check(rc == 1 and "row gi.speckle <- %s (the tip): red" % x[:9] in out,
           "(1, read 1 I1b) a verdict recorded at C1 does not answer the tip's reds (rc %d)" % rc)
 
     # ---- (2) the base's proof travels: A = 51e9f2c49 (the solos), B = A + one docs file (the base), Tt = the VIEWS-DEPTH-1
-    # tree + the same docs file on B (B..Tt selects photon.view; A..B is docs-only: reaches no product row)
+    # tree + the same docs file on B (B..Tt selects gi.speckle; A..B is docs-only: reaches no product row)
     a_tree = E.git("rev-parse", "51e9f2c49^{tree}")
     b = commit(tree_plus(a_tree, "docs/batch_range_test_note.md", "a note\n"), base, "batch-range test B (docs only)")
     tt = commit(tree_plus(tip_tree, "docs/batch_range_test_note.md", "a note\n"), b, "batch-range test T")
     b0 = commit(a_tree, base, "batch-range test B0 (tree-equal)")
     t0 = commit(tip_tree, b0, "batch-range test T0")
-    # Br = A + photon.view's own script (A..Br reaches the row); Tr = the VIEWS-DEPTH-1 tree on Br
-    br = commit(tree_plus(a_tree, "tests/gi/scripts/photon_view.js.in", "// reaches\n"), base, "batch-range test Br")
+    # Br = A + gi.speckle's own script (A..Br reaches the row); Tr = the VIEWS-DEPTH-1 tree on Br
+    br = commit(tree_plus(a_tree, SPEED_PATH, "static int tsa_reaches = 1;\n"), base, "batch-range test Br")
     tr = commit(tip_tree, br, "batch-range test Tr")
-    other = commit(a_tree, E.git("rev-parse", "3756b2f18"), "batch-range test: not an ancestor of B")
+    other = commit(a_tree, E.tip, "batch-range test: not an ancestor of B")
 
     def item2(base_sha, tip_sha, a_sha, verdicts=("FAIL", "FAIL", "FAIL")):
         E.fresh()
         solos(a_sha, "08", verdicts, batch="t2d")
-        E.put(["photon.view"], "FAIL", T % "11:00", tip=tip_sha, failLine=FL)
-        E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tip_sha)
+        E.put([SPEED_ROW], "FAIL", T % "11:00", tip=tip_sha, failLine=FL)
+        E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=tip_sha)
         return E.run(rng="%s..%s" % (base_sha, tip_sha))
 
     rc, out = item2(b, tt, base)
-    check(bool(b and tt) and rc == 0 and "KNOWN RED photon.view" in out and "the base's proof is %s's solos" % base[:9] in out,
+    check(bool(b and tt) and rc == 0 and "KNOWN RED gi.speckle" in out and "the base's proof is %s's solos" % base[:9] in out,
           "(2) no solo at the base B; A = B's parent has 3/3 red of the signature and A..B is docs-only -> KNOWN, the why "
           "names A (rc %d; %s)" % (rc, [l for l in out.splitlines() if "base proof" in l or "KNOWN RED photon" in l][:2]))
     rc, out = item2(b, tt, base, ("FAIL", "PASS", "FAIL"))
@@ -626,33 +652,33 @@ def batch_range_cases(E):
           "(2) refused when A..base is TREE-EQUAL (the selector cannot read it: ALL, the proof does not travel) (rc %d)" % rc)
     rc, out = item2(br, tr, base)
     check(bool(br and tr) and rc == 1 and "reaches the row (or cannot be read)" in out,
-          "(2) refused when A..base REACHES the row (photon.view's own script changes between A and the base) (rc %d)" % rc)
+          "(2) refused when A..base REACHES the row (gi.speckle's own script changes between A and the base) (rc %d)" % rc)
     rc, out = item2(b, tt, other)
-    check(bool(other) and rc == 1 and "KNOWN RED photon.view" not in out,
+    check(bool(other) and rc == 1 and "KNOWN RED gi.speckle" not in out,
           "(2) refused when the sha with the solos is NOT an ancestor of the base (rc %d)" % rc)
     # the helper alone: the nearest ancestor is the one candidate (one hop) — an all-red OLDER ancestor behind a mixed
     # nearer one proves nothing; an unreadable range (ALL) refuses
     S = {"near": [rec("FAIL", T % "09:00", retry=True), rec("PASS", T % "09:01", retry=True)],
          "far": [rec("FAIL", T % "08:00", retry=True)] * 3}
     dist = {"near": 1, "far": 5}
-    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", S, lambda a_, b_: True,
+    got, a, why = E.cgc.ancestor_base_proof((SPEED_ROW, None), "B", S, lambda a_, b_: True,
                                             lambda a_, b_: dist[a_], lambda a_, b_, k: False)
     check(got == [] and a is None and "near" in why, "(2) one hop: the nearest ancestor decides, never an older one behind it")
-    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"far": S["far"]}, lambda a_, b_: True,
+    got, a, why = E.cgc.ancestor_base_proof((SPEED_ROW, None), "B", {"far": S["far"]}, lambda a_, b_: True,
                                             lambda a_, b_: 5, lambda a_, b_, k: E.cgc.Reach.reaches(E.cgc.Reach.ALL, k))
     check(got == [] and "reaches the row" in why, "(2) an unreadable range (Reach.ALL) refuses")
-    got, a, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"far": S["far"]}, lambda a_, b_: True,
+    got, a, why = E.cgc.ancestor_base_proof((SPEED_ROW, None), "B", {"far": S["far"]}, lambda a_, b_: True,
                                             lambda a_, b_: 5, lambda a_, b_, k: False)
     check(len(got) == 3 and a == "far" and all(r.get("_proofFrom") == "far" for r in got) and "far's solos" in why,
           "(2) the proof found: A's solos tagged with A, the why names A")
     # read 1 I3: an all-green A, or an A that never ran it, is named for what it is (never "nondeterminism")
-    _, _, why = E.cgc.ancestor_base_proof(("photon.view", None), "B", {"g": [rec("PASS", T % "08:00", retry=True)] * 3},
+    _, _, why = E.cgc.ancestor_base_proof((SPEED_ROW, None), "B", {"g": [rec("PASS", T % "08:00", retry=True)] * 3},
                                           lambda a_, b_: True, lambda a_, b_: 1, lambda a_, b_, k: False)
     check("green: no red to prove" in why and "nondeterminism" not in why,
           "(2, read 1 I3) an all-green A: 'no red to prove' (%s)" % why)
     # read 2 I2: an attribution at A1 that never got admission (NOADMIT / NOTRUN only) is no run — it does not hide the
     # older A2's 3/3 red (RED ON 8e57285b6: A1 was the one hop and refused "never ran it")
-    got, a, why2 = E.cgc.ancestor_base_proof(("photon.view", None), "B",
+    got, a, why2 = E.cgc.ancestor_base_proof((SPEED_ROW, None), "B",
                                              {"A1": [rec("NOADMIT", T % "08:30", retry=True), rec("NOTRUN", T % "08:31", retry=True)],
                                               "A2": [rec("FAIL", T % "08:00", retry=True)] * 3},
                                              lambda a_, b_: True, lambda a_, b_: {"A1": 1, "A2": 2}[a_], lambda a_, b_, k: False)
@@ -662,25 +688,25 @@ def batch_range_cases(E):
     # candidate is a regression); and a GREEN row never reads or prints the base proof
     E.fresh()
     solos(base, "08", batch="t2d")
-    E.put(["photon.view"], "PASS", T % "09:00", tip=b)
-    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
-    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    E.put([SPEED_ROW], "PASS", T % "09:00", tip=b)
+    E.put([SPEED_ROW], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=tt)
     rc, out = E.run(rng="%s..%s" % (b, tt))
-    check(rc == 1 and "base proof for" not in out and "KNOWN RED photon.view" not in out,
+    check(rc == 1 and "base proof for" not in out and "KNOWN RED gi.speckle" not in out,
           "(2, read 1 I2) a base with a gate PASS of the row is its own evidence: the proof does not travel (rc %d)" % rc)
     # read 2 I1: a base holding only NOADMIT / NOTRUN records of the row has NO run of it — the proof still travels
     E.fresh()
     solos(base, "08", batch="t2d")
-    E.put(["photon.view"], "NOADMIT", T % "09:00", tip=b)
-    E.put(["photon.view"], "NOTRUN", T % "09:01", tip=b, retry=True)
-    E.put(["photon.view"], "FAIL", T % "11:00", tip=tt, failLine=FL)
-    E.verdict("photon.view", "real:VIEWS-XID-1", T % "12:00", tip=tt)
+    E.put([SPEED_ROW], "NOADMIT", T % "09:00", tip=b)
+    E.put([SPEED_ROW], "NOTRUN", T % "09:01", tip=b, retry=True)
+    E.put([SPEED_ROW], "FAIL", T % "11:00", tip=tt, failLine=FL)
+    E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=tt)
     rc, out = E.run(rng="%s..%s" % (b, tt))
     check(rc == 0 and "the base's proof is %s's solos" % base[:9] in out,
           "(2, read 2 I1) a base with only NOADMIT / NOTRUN records of the row falls through to the ancestor (rc %d)" % rc)
     E.fresh()
     solos(base, "08", batch="t2d")
-    E.put(["photon.view"], "PASS", T % "11:00", tip=tt)
+    E.put([SPEED_ROW], "PASS", T % "11:00", tip=tt)
     rc, out = E.run(rng="%s..%s" % (b, tt))
     check(rc == 0 and "base proof for" not in out, "(2, read 1 I3) a green row never reads nor prints a base proof (rc %d)" % rc)
     # read 1 F1: A STAGE-CLOSE ROW THE SELECTOR SET ASIDE IS STILL REACHED — A..base touching an app source (every app
@@ -806,7 +832,7 @@ def case_carried_red(E):
     t0 = E.git("rev-parse", "51e9f2c49^")
     E.fresh()
     E.put(ROWS, "PASS", "2026-01-01T10:00:00")
-    E.put(["photon.view"], "FAIL", "2026-01-01T09:00:00", tip=t0)
+    E.put([SPEED_ROW], "FAIL", "2026-01-01T09:00:00", tip=t0)
     rc, out = E.run()
     check(rc == 0 and "OPEN RED" not in out, "a carried red at an ANCESTOR whose range to the tip reaches the row is "
           "answered by the tip's later green (%d)" % rc)
@@ -814,7 +840,8 @@ def case_carried_red(E):
     # older code never had to answer — the tip's PASS is pre-bug and clears nothing
     E.fresh()
     E.put(ROWS + ["test_engine"], "PASS", "2026-01-01T11:00:00")
-    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "a5ab3a057"))
+    E.put(["test_engine"], "FAIL", "2026-01-01T09:00:00",
+          tip=speed_commit(E.source, E.scratch, parent=E.tip, msg="a lane tip that descends from the checked tip"))
     rc, out = E.run()
     check(rc == 1 and "OPEN RED carried" in out, "a red at a lane tip that DESCENDS from the checked tip is not cleared by "
           "the tip's (pre-bug) PASS (%d)" % rc)
@@ -892,11 +919,11 @@ def case_contention_shape(E):
     import shutil
     E.fresh()
     E.put(ROWS[:2], "PASS", "2026-01-01T10:00:00")
-    E.put(ROWS[2:], "FAIL", "2026-01-01T10:00:01")
-    E.put(ROWS[2:], "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)   # KNOWN on the base
-    good = defect("GOOD-1", ["photon.view"])
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:01")
+    E.put(ROWS, "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)   # KNOWN on the base
+    good = defect("GOOD-1", [SPEED_ROW])
     q = lambda: E.rl.defects_quarantine_dir()
-    cases = [("missing `%s`" % m, m, {k: v for k, v in defect("SHAPE-1", ["photon.view"]).items() if k != m})
+    cases = [("missing `%s`" % m, m, {k: v for k, v in defect("SHAPE-1", [SPEED_ROW]).items() if k != m})
              for m in ("first_seen", "recheck", "kind", "found_by", "rows", "cause", "state")]
     cases += [("a kind outside the five", "kind", defect("SHAPE-1", ["x"], "flake")),
               ("a state outside open|fixed{tip}|retired", "state", defect("SHAPE-1", ["x"], state="closed")),
@@ -911,7 +938,7 @@ def case_contention_shape(E):
     for name, word, bad in cases:
         shutil.rmtree(q(), ignore_errors=True)
         E.registry([bad, good])
-        rc, out = E.run("--verdict", "photon.view=real:GOOD-1")
+        rc, out = E.run("--verdict", "gi.speckle=real:GOOD-1")
         files = os.listdir(q()) if os.path.isdir(q()) else []
         check(rc == 0 and "REGISTRY:" in out and "quarantined" in out and word in out and any(f.endswith(".why") for f in files),
               "%s -> QUARANTINED (printed, a .why sidecar), the rest loads and the door works (%d, %s)" % (name, rc, files))
@@ -942,9 +969,9 @@ def case_contention_shape(E):
     os.environ["JAH_DEFECTS_FILE"] = path
     rc, out = E.run()
     check(rc == 2 and "defect registry" in out, "the registry FILE itself unreadable -> the judge is unusable, exit 2 (%d)" % rc)
-    E.registry([defect("SHAPE-1", ["photon.view"], state={"fixed": {"tip": "abc"}}), NONDET])
+    E.registry([defect("SHAPE-1", [SPEED_ROW], state={"fixed": {"tip": "abc"}}), NONDET])
     cl = E.rl.contention_list()
-    check(list(cl or {}) == ["photon.view"] and "NONDET-FIXTURE-1" in cl["photon.view"],
+    check(list(cl or {}) == [SPEED_ROW] and "NONDET-FIXTURE-1" in cl[SPEED_ROW],
           "the contention class = the enrolled open nondeterminism entries (%s)" % cl)
     live = os.path.join(E.rl.workspace_root(), "testing")
     for f in ("contention.json", "defects.json"):

@@ -36,6 +36,18 @@ here, each with its name in the failure line:
      threading.{import_soak,newproject_stall}.no_groupless_texture (batch C2: the twin 0/3 solo, "no logs — did the
      run happen?").
 
+  R7 A GPU ROW STATES THE FRAMES IT RENDERS (TESTING-SPEED-A item 7; SPECS/TESTING_SPEED_SPEC.md §2 A8). Every row
+     registered by jah_gpu_row (its command opens with scripts/gpu-admit.sh) carries the test property
+     JAHSHAKA_TEST_FRAMES — READ FROM THE PROPERTY (ctest --show-only=json-v1), never the CMake text, so a row declared
+     by add_test / jah_gpu_exclusive_test + set_tests_properties counts as well. THE RATCHET: the rows without it are
+     listed in tests/hygiene/frames_pending.txt (343 jah_gpu_row call sites at TESTING-SPEED-A's land; every Part B
+     batch removes its own) — a row without FRAMES that the list does not name is RED (a NEW row is never pending), and
+     a listed row that now states its FRAMES (or exists no more) is RED until the list drops it (the ratchet only
+     tightens). Never an exclusion: the list shrinks to zero.
+  R8 A LANE ROW IS LABELLED (item 6). Every row registered under tests/lanes/<LANE>/ carries the label `lane:<LANE>`
+     (jah_lane_row adds it) — gate-scope keeps such a row out of every selection but its own lane's; an unlabelled one
+     would leak into everyone's merge.
+
 Run: testing_rules.py <source-dir> <build-dir>
 """
 import glob
@@ -153,6 +165,36 @@ def r6_bad(tests):
     return bad
 
 
+FRAMES_PROPERTY = "JAHSHAKA_TEST_FRAMES"
+ADMIT = "gpu-admit.sh"
+
+
+def _props(t):
+    return {p["name"]: p["value"] for p in t.get("properties", [])}
+
+
+def r7_bad(tests, pending):
+    """(new, stale): `new` = jah_gpu_row rows (the command opens with gpu-admit.sh) without the FRAMES property that
+    frames_pending.txt does not name; `stale` = listed rows that state FRAMES now or are not registered."""
+    gpu = {t["name"]: _props(t) for t in tests if (t.get("command") or [""])[0].endswith(ADMIT)}
+    lacking = {n for n, P in gpu.items() if FRAMES_PROPERTY not in P}
+    names = {t["name"] for t in tests}
+    new = sorted(lacking - set(pending))
+    stale = sorted(n for n in pending if n not in lacking or n not in names)
+    return new, stale
+
+
+def r8_bad(tests, frames_of):
+    """[row] registered under tests/lanes/<LANE>/ (its backtrace's file) without the label lane:<LANE>."""
+    bad = []
+    for t in tests:
+        f = frames_of(t) or ""
+        m = re.search(r"/tests/lanes/([^/]+)/", f)
+        if m and ("lane:" + m.group(1)) not in _list(_props(t).get("LABELS")):
+            bad.append(t["name"])
+    return sorted(bad)
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -181,6 +223,18 @@ def the_rules_catch():
           and not r5_bad({"h": row(["/b/h"])}, set(), {"avatar"}, set(), lambda s: set(), {"h": {"avatar"}}),
           "R5 flags an app row nothing selects (a harness's own verbs clear it)")
     T = lambda name, **p: {"name": name, "properties": [{"name": k, "value": v} for k, v in p.items()]}
+    G = lambda name, **p: dict(T(name, **p), command=["/s/scripts/gpu-admit.sh", "1", "--label", name + ":engine", "--"])
+    new, stale = r7_bad([G("a"), G("b", JAHSHAKA_TEST_FRAMES="60"), T("c")], ["a"])
+    new2, stale2 = r7_bad([G("a"), G("n")], ["a"])
+    new3, stale3 = r7_bad([G("a", JAHSHAKA_TEST_FRAMES="0")], ["a", "gone"])
+    check(not new and not stale and new2 == ["n"] and not stale2 and not new3 and stale3 == ["a", "gone"],
+          "R7 flags a GPU row without FRAMES that the ratchet does not list (a NEW row), and a listed row that states "
+          "FRAMES or is gone (the ratchet tightens); a CPU row needs none")
+    where = {"x": "/s/tests/lanes/LANE-A/CMakeLists.txt", "y": "/s/tests/lanes/LANE-A/CMakeLists.txt",
+             "z": "/s/tests/gi/CMakeLists.txt"}
+    check(r8_bad([T("x", LABELS=["lane:LANE-A"]), T("y", LABELS=["gi"]), T("z", LABELS=["gi"])],
+                 lambda t: where[t["name"]]) == ["y"],
+          "R8 flags a tests/lanes/<LANE>/ row without its lane:<LANE> label, not a labelled one or a family row")
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
@@ -229,6 +283,14 @@ def main(source, build):
     rule_dirs = set()
     for pat_, dirs, modules in gs.AREA_RULES:
         rule_dirs |= {d for d in dirs if not d.startswith("*")}
+    # THE SUBSYSTEM TABLE NAMES DIRECTORIES TOO (TESTING-SPEED-A item 4): the engine lines, OgreEngine.cpp's functions,
+    # the core TUs' keywords and the fork's components select their tokens' rows
+    for toks in ([t for _, t, _w in getattr(gs, "ENGINE_SUBSYSTEMS", [])] + list(getattr(gs, "OGRE_ENGINE_FUNCTIONS", {}).values())
+                 + [t for _, t in getattr(gs, "FUNCTION_KEYWORDS", [])]
+                 + [t for _, t in getattr(gs, "FORK_COMPONENTS", []) if t != "none"]):
+        rule_dirs |= {d for d in toks if not d.startswith("*")}
+    # a LANE'S OWN ROW (label lane:<LANE>) is selected by its own directory, tests/lanes/<LANE>/ (item 6)
+    inv = {n: t for n, t in inv.items() if not any(l.startswith("lane:") for l in t["labels"])}
     tracked = {os.path.normpath(os.path.join(source, f)) for f in files}
     harness = gs.Selection(inv, graph, os.path.join(build, "bin", "Jahshaka"), gs.Revs(None), 4).mods
     bad = r5_bad(inv, rule_dirs, gs.api_modules(), tracked, gs.script_modules, harness)
@@ -248,6 +310,31 @@ def main(source, build):
     raw, rc = gs.gate_graph.ctest_inventory(build)
     bad = r6_bad(json.loads(raw or "{}").get("tests", [])) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R6 a row that DEPENDS on another row's run requires a fixture that run sets up %s" % bad[:8])
+
+    tests = json.loads(raw or "{}").get("tests", []) if rc == 0 else []
+    pend_path = os.path.join(source, "tests", "hygiene", "frames_pending.txt")
+    pending = [x.split("#", 1)[0].strip() for x in open(pend_path, errors="replace")] if os.path.isfile(pend_path) else None
+    pending = [x for x in (pending or []) if x] if pending is not None else None
+    if pending is None:
+        check(False, "R7 tests/hygiene/frames_pending.txt exists (the FRAMES ratchet)")
+    else:
+        new, stale = r7_bad(tests, pending)
+        check(not new and not stale, "R7 every jah_gpu_row row states its FRAMES (%d pending in the ratchet; NEW without "
+              "FRAMES: %s; listed but stating FRAMES or gone — drop them from frames_pending.txt: %s)"
+              % (len(pending), new[:8], stale[:8]))
+    j_ = json.loads(raw or "{}") if rc == 0 else {}
+    bt = j_.get("backtraceGraph") or {}
+
+    def file_of(t):
+        n_ = (bt.get("nodes") or [])[t["backtrace"]] if "backtrace" in t else None
+        while n_ is not None:
+            f_ = (bt.get("files") or [])[n_["file"]] if n_.get("file") is not None else ""
+            if "/tests/lanes/" in f_:
+                return f_
+            n_ = (bt.get("nodes") or [])[n_["parent"]] if "parent" in n_ else None
+        return ""
+    bad = r8_bad(tests, file_of)
+    check(not bad, "R8 every tests/lanes/<LANE>/ row carries its lane:<LANE> label %s" % bad[:8])
 
     if FAILURES:
         print("source.testing_rules: FAILED (%d)" % len(FAILURES))

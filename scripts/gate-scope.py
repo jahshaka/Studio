@@ -66,63 +66,178 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # dirs are tests/<dir>; modules are the `<module>.` prefixes an e2e script calls. The
 # special dir "*vulkan-scripts" means every app-spawning suite that is NOT --headless
 # (anything that renders), "*headless-scripts" the --headless ones, "*all-scripts" both.
-# THE ENGINE FAMILY: the test dirs any change to the engine's pixels or boundary selects.
-# `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING from this list,
-# so no engine change ever selected the ray-traced reflection suites — DRAG-1 changed what
-# the ray arm reads from the voxels and two scoped gates came back green while
-# gi.rt_reflect was red. The entries are test DIRECTORY names, not ctest labels, so a
-# suite whose dir is not named is invisible however it is labelled.
-# `atom` and `defaults` (D6B-GATE-SHAPE; audit S2): the visibility buffer IS the product's
-# opaque path (engine.atom_draw) and defaults.exposure_plane is an exposure picture — an
-# OgreChain.cpp change selected 415 suites and none of tests/atom before.
-ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow",
-                 "shadercache", "compute", "hdr", "sky", "pieces", "vr", "atom", "defaults",
-                 "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
-                 "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
-                 "shutdown", "openasync", "*vulkan-scripts"]
-
-# THE FORK'S FAMILIES (TEST-SELECTOR-1 T2; the merge read's D2): a fork pin bump inside a lane
-# selects by what the fork's own diff reaches — each changed fork file, first match:
-#   none    — what the engine never builds or stages: the other render systems, the upstream
-#             samples and their media, the docs (irisgl/engine/CMakeLists.txt stages exactly
-#             Hlms/{Common,Pbs,Unlit}, 2.0/scripts/materials/{Common,HDR,Tutorial_SSAO,
-#             Tutorial_SMAA}, VCT, Compute/Tools, Compute/Algorithms/{IBL,IrradianceFields} and
-#             packs/DebugPack.zip; nothing else of Samples/ reaches a process of ours), and the
-#             HLSL/Metal twins of a shader (Vulkan reads the .glsl / .any);
-#   engine  — EVERYTHING ELSE the engine builds or stages: the pixel family (ENGINE_FAMILY + atom)
-#             and every executable that extracts the engine — the pin's selection before this lane.
-#             The narrower arms the first version had are gone (the read's D2, the brief's error):
-#             the Vulkan render system runs every rendering executable; the irradiance field (and
-#             the VCT feeding it) shades every lit pixel at every tier (Types.h fieldDefault);
-#             Compute/Tools is the voxelizer's clear.
-# The only narrowing left is `none`. A fork file no family names is the MERGE tier.
-FORK_FAMILIES = [
-    (r"^(Docs/|Scripts/|\.github/|\.circleci/|.*\.md$|LICENSE|README|Other/|Samples/2\.0/|"
-     r"RenderSystems/(Direct3D11|GL3Plus|GLES2|Metal)/|.*\.(hlsl|metal)$)", "none"),
-    (r"^Samples/Media/(VCT/|Compute/Tools/|Compute/Algorithms/(IBL|IrradianceFields)/|Hlms/(Common|Pbs|Unlit)/|"
-     r"packs/DebugPack\.zip$|2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/)", "engine"),
-    (r"^Samples/Media/", "none"),
-    (r"^(OgreMain|Components|PlugIns|RenderSystems/(Vulkan|NULL)|CMake|CMakeLists\.txt|Dependencies|DependenciesD)",
-     "engine"),
+# THE SUBSYSTEM TABLE (TESTING-SPEED-A item 4; SPECS/TESTING_SPEED_SPEC.md §2 A4) — THE ONLY SELECTOR OF ENGINE CODE.
+# The engine's facade pulls EVERY engine object into all 252 engine-linking executables (nm on rc-base: OgreChain /
+# OgrePhotonView / OgreSky / OgreParticles / OgreVrSession / OgreEngine symbols in 252/252), so the build graph cannot
+# narrow an engine TU and must not widen it: an irisgl/engine/src/** file or an engine media file is selected by THIS
+# table — the FIRST line that matches the path under irisgl/engine/ (the lines run specific -> generic: a GI shader in
+# media/Hlms/Jahshaka is the gi line's, never the generic Jahshaka medium's picture set).
+# A TOKEN is a test DIRECTORY (tests/<token>/) or a ROW PREFIX (`<token>.*` rows anywhere: cloud_2d.* in tests/gi,
+# decals.engine in tests/engine; a DOTTED token is a name prefix: `engine.atom_`), every kind of row; two special tokens:
+#   *engine-fixtures — every compiled row whose executable links the engine archive (the frame loop's reach)
+#   *picture         — THE PICTURE SET (picture_set()): the kept rows of hdr ssr looks mirror and the app rows /
+#                      pool arms whose script takes a screenshot (editor.screenshot, vr.eyeScreenshot, screenshot()
+#   *screenshots     — the picture set's SCRIPT part alone (the screenshot app rows and arms, not the families)
+# THE CORE HAS NO "RUN EVERYTHING" RULE (the owner 2026-10-12 17:2x): the shared headers (EnginePrivate.h, Types.h,
+# engine/include/**) go through header_symbols (the identifiers changed -> the TUs that use them -> their lines here);
+# OgreEngine.cpp goes through OGRE_ENGINE_FUNCTIONS by the enclosing function of each changed line. THE WHOLE-ENGINE
+# GUARD at every merge is the six hash lines.
+ENGINE_SUBSYSTEMS = [
+    # the post chain: bloom, the display encode, the HDR meter, the screen-space passes it composes
+    # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
+    # defaults.exposure_plane and engine.atom_draw/parity, gate_selection_cases.json "S2 the chain")
+    (r"media/Hlms/Jahshaka/Jah(Bloom|DisplayEncode|HdrMeter|Srgb|Screen)|src/OgreChain\.cpp$",
+     ["hdr", "ssr", "looks", "*picture", "defaults", "engine.atom_draw", "engine.atom_parity"],
+     "the post chain (bloom, encode, meter)"),
+    # Photon: the voxel chain, the cascades, the gather, the cards, the probes, the irradiance field
+    # (+ the screenshot rows: the GI lights every pixel a picture row compares — CONTACT-OCCLUSION-1's GI change went red on
+    # pool.world_sky's clouds_2d arm and atom.occlusion_exact_app, gate_selection_cases.json; the hdr/ssr/looks fixtures,
+    # the picture set's families, are not the GI's)
+    (r"^media/Photon/|^src/photon/|Photon|Voxel|Cascade|Gather|Card|Probe|Irradiance|Ifd|Vct|EnvironmentCones|"
+     r"^src/OgreGi\.cpp$|SurfaceCache|JahshakaIbl|JahshakaPcc", ["gi", "*screenshots"],
+     "Photon (voxels, cascades, gather, cards, probes)"),
+    # Atom: the visibility buffer, the GPU scene, the atom passes and their media
+    (r"Atom|GpuScene|^media/Hlms/Atom/|^src/atomdraw/", ["atom", "scale", "shadow", "engine.atom_"],
+     "Atom (the visibility buffer; engine.atom_* are its decode's own fixtures)"),
+    # shadows: the shadow node, the casters, the sun contact
+    (r"Shadow|SunContact|rq_sun_contact", ["shadow", "lights"], "shadows"),
+    (r"src/OgreLights\.cpp$", ["lights", "shadow"], "the lights"),
+    # sky: the atmosphere, the clouds, the sun disc, the sky capture, height fog
+    (r"Sky|Atmosphere|Atmo|Cloud|SunDisc|Fog", ["sky", "cloud_2d"], "the sky (atmosphere, clouds, sun disc, fog)"),
+    (r"Particle", ["particles"], "particles"),
+    # reflections: planar, SSR, the ray-traced reflection
+    (r"Planar|Reflect|Ssr|rq_reflect", ["ssr", "rtreflect", "mirror", "planar"], "reflections (planar, SSR, RT)"),
+    (r"Vr|OpenXr", ["vr"], "VR"),
+    (r"Skelet|Skin|Anim", ["skeletal", "avatar"], "skinning and animation"),
+    (r"Decal|Distortion|Look|Hdr|Bloom|Dither", ["hdr", "looks", "distortion", "decals"], "the looks and decals"),
+    (r"Mirror", ["mirror", "pieces"], "the mirror"),
+    # culling and LOD: the GPU cull, the HZB, the cluster cut, the level rule
+    (r"Lod|Cull|Hzb|ClusterCut|LevelRule", ["engine", "atom", "scale"], "culling and LOD"),
+    # the ray-query core every ray user shares
+    (r"^src/rayquery/|RayQuery", ["gi", "rtreflect", "shadow"], "the ray-query core"),
+    (r"ShaderCache", ["shadercache"], "the shader cache"),
+    (r"TextureCache", ["engine", "assets", "thumbnails", "openasync"], "the texture cache"),
+    (r"FrameMonitor|OverlayHud", ["perf", "engine"], "the frame monitor"),
+    (r"LogBridge", ["log"], "the log bridge"),
+    (r"Sockets", ["sockets"], "sockets"),
+    (r"VideoReadback|VideoNv12", ["capture", "engine"], "video readback"),
+    (r"Compute", ["compute"], "the compute jobs"),
+    (r"Grid|Clips", ["engine", "gizmo"], "the grid and clip planes"),
+    (r"src/OgreMaterials\.cpp$|src/OgreMesh\.cpp$", ["engine", "pieces", "materialpreview", "atom", "*picture"],
+     "materials and meshes (every lit pixel)"),
+    (r"VkDescriptorPools|src/EnginePrivate\.h$", ["*engine-fixtures", "*picture"],
+     "the Vulkan descriptor pools / the private header's includers (every engine fixture)"),
+    (r"^media/Hlms/Jahshaka/", ["*picture"], "a Jahshaka Hlms medium (the picture set)"),
+    (r"^CMakeLists\.txt$", [], "the engine's CMake: read by what its changed commands name"),
+    # the engine DIRECTORY as a whole (a CMake setting of the engine target its commands cannot narrow, reached through
+    # the fallback's directory walk): what links the engine
+    (r"^(src/)?$", ["*engine-fixtures"], "the engine directory as a whole"),
 ]
 
+# OgreEngine.cpp BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4): gate_graph.enclosing_functions names the TOP-LEVEL
+# function (or class) of each changed line — out of lambdas and local structs, `init` returning `init` — and this map
+# says what it reaches. EVERY function of OgreEngine.cpp is named (the lead reads the map at the read); a name the map
+# does not know, or a line outside every function (an include, a namespace-scope constant), reaches every engine
+# fixture + the picture set + every rendering app row (the frame loop's own reach), printed as such.
+_ALL = ["*engine-fixtures", "*picture", "*vulkan-scripts"]   # everything that renders: the fixtures, the app rows
+OGRE_ENGINE_FUNCTIONS = {
+    # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
+    **{f: _ALL for f in ("init", "renderOneFrame", "closeRenderFrame", "frameCloseStep", "createView",
+                         "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
+                         "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",
+                         "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
+                         "registerCommonMaterials", "tellEveryHlms", "create", "OgreEngine", "~OgreEngine",
+                         "setFixedFrameDelta", "fixedFrameDelta", "documentGraphScene", "blankSceneManager",
+                         "viewNameTaken", "setTransformWriteCounter", "computeDeferralsAtFrameStart",
+                         "asyncViewCount", "noteAsyncView", "isAlive")},
+    # the device's faults: loss, OOM, the injected frame faults (tests/engine's fault rows)
+    **{f: ["engine", "threading"] for f in ("latchDeviceLost", "latchOutOfMemoryInFrame", "deviceLost",
+                                            "raiseFrameFault", "setFrameFault", "InRecordFaultListener", "gpuFault",
+                                            "vulkanOomCount", "vulkanLastOom", "lastError", "takeLastError")},
+    # the shadow nodes
+    **{f: ["shadow", "lights"] for f in ("createShadowNode", "setShadowMeshOptimization", "shadowMeshOptimization")},
+    # the VR session
+    **{f: ["vr"] for f in ("vrAvailable", "vrConnect", "vrProbe", "beginVrSession", "endVrSession",
+                           "endLostOrStoppedVrSession", "vrState", "vrStatus", "vrEyeScreenshot", "setVrMirrorView",
+                           "vrInjectInput", "vrHandJoints", "vrBindingBlocks", "vrInjectJoints", "vrHaptic",
+                           "setVrOrigin", "vrView")},
+    # texture streaming and the texture cache
+    **{f: ["engine", "assets", "thumbnails", "openasync"] for f in (
+        "texturesDoneStreaming", "collectTextureStreaming", "drainTextureStreaming", "waitForTextureLoads",
+        "textureLoadRequests", "textureMetadataCacheEntries", "textureChannelCacheEntries", "saveTextureCache",
+        "textureManagerOf", "countPendingTextures", "textureMultiLoadThreads", "textureWaitAdvances")},
+    # the shader build: async compiles, the shader cache
+    **{f: ["shadercache", "threading"] for f in (
+        "startAsyncShaders", "setAsyncShaderThreads", "setAsyncShaderPlaceholdersOnly", "asyncShaderStats",
+        "waitForAsyncShaders", "shaderCacheStats", "saveShaderCache", "flushShaderCache", "clearShaderCache",
+        "setCompileObserver", "shaderBuildProgress")},
+    # the statistics the monitor and the perf rows read
+    **{f: ["perf", "threading", "engine"] for f in ("renderStats", "textureMemory", "memoryStats", "reclaimMemory",
+                                                    "objectCounts", "threading")},
+    # the validation layer's report
+    **{f: ["engine"] for f in ("validation", "namesValidation", "collectLayerLibrary")},
+}
+
+# THE OTHER TWO CORE TUs BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4, the same walk as OgreEngine.cpp): the scene and
+# the view hold a hundred functions each, most of them one subsystem's (setNodeCastShadow is the shadows', updateGi the
+# GI's) — the enclosing function's NAME is read against these keywords (every matching line adds its tokens); a function
+# no keyword names, or a line at namespace scope, reaches everything that renders (_ALL), said.
+CORE_BY_FUNCTION = ("src/OgreScene.cpp", "src/OgreView.cpp")
+_BY_FUNCTION = {"irisgl/engine/src/OgreEngine.cpp"} | {"irisgl/engine/" + f for f in CORE_BY_FUNCTION}
+FUNCTION_KEYWORDS = [
+    (r"Shadow|Caster", ["shadow", "lights"]),
+    (r"Light|Ambient", ["lights", "shadow"]),
+    (r"Gi$|Gi[A-Z]|Card|Cascade|Vct|Voxel|Probe|Photon|SurfaceCache|Environment|RayTracing|rayEnvironment", ["gi"]),
+    (r"Envmap|Reflection|Ssr", ["ssr", "rtreflect", "mirror", "planar"]),
+    (r"Particle", ["particles"]),
+    (r"Skelet|Skin|Bone|Anim", ["skeletal", "avatar"]),
+    (r"Vr", ["vr"]),
+    (r"Exposure|PostFx|postFx|Letterbox|Pip|pip|Tonemap|chain|Chain|ClearColour|LensShift", ["hdr", "looks", "*picture"]),
+    (r"Lod|Hzb|Atom|Occlusion|incompleteDraws|gpuSlot", ["engine", "atom", "scale"]),
+    (r"Overlay|overlay|Helper|Backdrop", ["engine", "gizmo"]),
+    (r"Hlms|Shaders|asyncShaders", ["shadercache", "threading"]),
+]
+
+# THE FORK BY COMPONENT (TESTING-SPEED-A item 4): a pin move selects by what the FORK DIFF's files reach — each changed
+# fork file takes the FIRST line that matches it (specific -> generic). Every top-level directory of
+# irisgl/thirdparty/ogre-next is named; a fork file no line names is the MERGE tier (said).
+FORK_COMPONENTS = [
+    # what the engine never builds or stages: the other render systems, the upstream samples, docs, tools, tests
+    (r"^(Docs/|Scripts/|Tools/|Tests/|Other/|build/|\.github/|\.circleci/|.*\.md$|LICENSE|README|AUTHORS|BUGS|COPYING|"
+     r"appveyor\.yml|Samples/2\.0/|Samples/CMakeLists\.txt|RenderSystems/(Direct3D11|GL3Plus|GLES2|Metal)/|"
+     r".*\.(hlsl|metal)$)", "none"),
+    (r"^Samples/Media/(VCT|Compute/Algorithms/IrradianceFields|Compute/Tools)/", ["gi"]),
+    (r"^Samples/Media/Compute/Algorithms/IBL/", ["gi", "sky"]),
+    (r"^Samples/Media/Hlms/(Common|Pbs)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture"]),
+    (r"^Samples/Media/Hlms/Unlit/", ["engine", "*picture"]),
+    (r"^Samples/Media/2\.0/scripts/materials/(Common|HDR|Tutorial_SSAO|Tutorial_SMAA)/", ["hdr", "looks", "*picture"]),
+    (r"^Samples/Media/packs/DebugPack\.zip$", ["engine"]),
+    (r"^Samples/Media/", "none"),
+    (r"^OgreMain/(src|include)/(OgreLod|.*/OgreLod)|^Components/MeshLodGenerator/", ["engine", "atom", "scale"]),
+    (r"^OgreMain/(src|include)/.*(Shadow)", ["shadow", "lights"]),
+    (r"^OgreMain/(src|include)/.*(ParticleSystem|Particle)", ["particles"]),
+    (r"^OgreMain/(src|include)/(Animation/|.*Skelet)", ["skeletal", "avatar"]),
+    (r"^OgreMain/(src|include)/Compositor/", ["*engine-fixtures", "*picture"]),
+    (r"^OgreMain/", ["*engine-fixtures"]),
+    (r"^Components/Hlms/Pbs/(src|include)/(Vct|IrradianceField)", ["gi"]),
+    (r"^Components/Hlms/(Pbs|Common)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture"]),
+    (r"^Components/Hlms/Unlit/", ["engine", "*picture"]),
+    (r"^Components/Atmosphere/", ["sky"]),
+    (r"^Components/PlanarReflections/", ["ssr", "rtreflect", "mirror", "planar"]),
+    (r"^Components/(Overlay|Imgui|Paging|Property|SceneFormat|Volume)/", ["engine"]),
+    (r"^Components/CMakeLists\.txt$", ["*engine-fixtures"]),
+    (r"^PlugIns/ParticleFX", ["particles"]),
+    (r"^PlugIns/", ["engine"]),
+    (r"^RenderSystems/(Vulkan|NULL)/|^RenderSystems/CMakeLists\.txt$", ["*engine-fixtures"]),
+    (r"^(CMake/|CMakeLists\.txt$|Dependencies)", ["*engine-fixtures"]),
+]
+
+
 AREA_RULES = [
-    # --- engine: anything that changes pixels or the boundary ---------------------------
-    # THE VISIBILITY-BUFFER DECODE (tests/atom: engine.atom_parity and its twins, the
-    # cluster suites): HlmsAtom is a derived HlmsPbs, so its pixels move with ITS OWN
-    # media and C++, the GPU scene tables it reads, the atom pass, EVERY Hlms piece the
-    # engine stages (PBS's pieces are its text too) and the fork pin (Ogre's Pbs pieces,
-    # the Forward+ hook). PHOTON-HIT-SHADE-1 changed all of these and the generic rule
-    # below did not select engine.atom_parity (audit F2): its byte-identity rested on a
-    # hand run.
-    (r"^irisgl/(engine/media/Hlms/|engine/src/(HlmsAtom|OgreAtomPass|AtomPass|OgreGpuScene|GpuScene)\.|"
-     r"thirdparty/ogre-next)",
-     ENGINE_FAMILY + ["atom"], []),
-    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/(build|prune)-ogre)", ENGINE_FAMILY, []),
-    # HOW OGRE IS FOUND AND LINKED (TEST-SELECTOR-1; the audit's T3 list: 14 lane gates fell back
-    # on this one file): every executable that links the engine, and the pixel family — the
-    # fork family `ogre`, never the whole tier.
-    (r"^cmake/IncludeOgre\.cmake$", ENGINE_FAMILY + ["atom"], []),
+    # --- engine: THE SUBSYSTEM TABLE selects irisgl/engine/** (ENGINE_SUBSYSTEMS above; Selection.engine_path), the fork
+    # by component (FORK_COMPONENTS; Selection.fork). What builds or links Ogre reaches every engine fixture:
+    (r"^irisgl/scripts/(build|prune)-ogre", ["*engine-fixtures"], []),
+    (r"^cmake/IncludeOgre\.cmake$", ["*engine-fixtures"], []),
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
       "materialpreview", "samples", "picking", "particles",
@@ -130,7 +245,9 @@ AREA_RULES = [
       # GI/planar/shadow/post/sky/fog/ray settings and their staleness machine live in
       # scenemirror.cpp, so a mirror edit can move any of these pictures.
       "gi", "rtreflect", "lights", "looks", "planar", "ssr", "shadow", "hdr", "sky", "distortion", "vr",
-      "*vulkan-scripts"], []),
+      # (TESTING-SPEED-A) every app row (*vulkan-scripts) is reached ONLY by the frame loop's paths — the mirror's
+      # pictures are the PICTURE set's
+      "*picture"], []),
     # `hygiene` rides irisgl/import, irisgl/document and irisgl/core because
     # source.bake_key_guard (BAKEKEY-1) watches files in all three: the mesh
     # bake's format version is HAND-bumped, and the lane that has to bump it is
@@ -161,11 +278,12 @@ AREA_RULES = [
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
     (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
-    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what
-    # the engine's shaders SEE — the engine family, not the whole tier (DEVPROCESS-2, 2026-09-24:
-    # eight lane gates fell back to the MERGE tier this phase on paths like this one).
-    # The wrapped pieces are Hlms text HlmsAtom's decode compiles too: the atom dir with it.
-    (r"^irisgl/cmake/WrapHlmsPiece", ENGINE_FAMILY + ["atom"], []),
+    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what every engine shader
+    # SEES: every engine fixture and the picture set (never the whole tier).
+    (r"^irisgl/cmake/WrapHlmsPiece", ["*engine-fixtures", "*picture"], []),
+    # THE PRESENT PATH ON THE STUDIO SIDE (TESTING-SPEED-A): the engine host creates the window and drives the frame —
+    # with OgreEngine.cpp's frame loop, src/viewport/** and src/app/** the only paths that reach every app row
+    (r"^src/bridge/enginehost\.", ["*vulkan-scripts", "player", "thumbnails", "materialpreview"], ["player"]),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
     # THE THREADED AVATAR IMPORT/SWITCH (D6B-GATE-SHAPE; audit S1): avatar.responsive's subject
@@ -198,6 +316,9 @@ AREA_RULES = [
     (r"^src/services/(selection|sceneedit|undo|nodenaming|outline|scenefolders|scenenodehelper)",
      ["services", "commands", "app", "input", "hygiene", "*headless-scripts"],
      ["editor", "scene", "node"]),
+    # THE WORLD MODES' POST CHAIN (TESTING-SPEED-A item 4, the spec's bloom line): worldmodes.cpp sets what the chain
+    # shows — the hdr/ssr/looks families and the picture set, never the GI (BLOOM-1: zero gi rows)
+    (r"^src/services/worldmodes\.", ["hdr", "ssr", "looks", "*picture"], []),
     (r"^src/services/(looks|worldmodes|sunlink|planarreflectors|gibounds|lightbindings|iesprofile|sceneextents)",
      ["services", "looks", "planar", "lights", "gi"], ["world", "scene", "node"]),
     # THE THREADED ARCHIVER (D6B-GATE-SHAPE; audit S1): projectarchiver.cpp is archive.responsive's
@@ -277,6 +398,9 @@ AREA_RULES = [
     # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
     # MODULAR-GATE-1: the selector's two libraries (gate_graph.py, gate_runlog.py) are the
     # tool too, and gate.selection (the replay of recorded lanes) lives beside the rule guard.
+    # THE PRICE FILE SELECTS NOTHING (TESTING-SPEED-A item 5): scripts/gate-times.txt is the rows' measured seconds,
+    # read by the estimate — a lane that adds five prices changed no tool and no row
+    (r"^scripts/gate-times\.txt$", [], []),
     (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
@@ -318,14 +442,38 @@ TOOL_SELF_TESTS = [
 ]
 
 
+def fork_lines(f):
+    """[(pattern, tokens | "none")] — the FIRST FORK_COMPONENTS line a changed fork file matches (the lines run specific ->
+    generic: OgreMain/src/OgreLod* is the LOD line's, not OgreMain's every engine fixture); [] = no line names it (the
+    MERGE tier)."""
+    for pat, toks in FORK_COMPONENTS:
+        if re.match(pat, f):
+            return [(pat, toks)]
+    return []
+
+
 def product_paths(paths):
     """The touched paths the product is built from (§1.3.4): one of them makes the diff a product diff."""
     return [p for p in paths if not NON_PRODUCT.search(p)]
 
 
-# Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
-# contract of the scripting surface), ~15 s together.
+# THE SMOKE PAIR (a boot that renders + the contract of the scripting surface, ~15 s together) — selected by a change
+# to THE TEST HARNESS only (TESTING-SPEED-A item 5, SPECS/TESTING_SPEED_SPEC.md §2 A6): the helpers every row runs
+# through, the rows' macros, the CMake helpers. A product change is guarded at every merge by the six hash lines and by
+# what it reaches; it never selects the pair by itself.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
+# the Studio paths that sit on the subsystem table (their AREA_RULES line is their whole reach — no build graph)
+STUDIO_TABLE_PATHS = (r"^src/services/worldmodes\.",)
+HARNESS_PATHS = re.compile(r"^(tests/support/|tests/CMakeLists\.txt$|tests/cmake/)")
+# THE TOOLING ROWS ARE THE TOOLS' (TESTING-SPEED-A item 5): the `hygiene` and `tooling` labelled rows (the lints, the
+# selector's and the judge's own suites, pool.runner) are selected by a change under these paths ONLY — never by a
+# product path (the builder's self-audit runs the hygiene label in the lane; a product merge does not re-run it)
+TOOLING_PATHS = re.compile(r"^(scripts/(?!gate-times\.txt$)|testing/|tests/hygiene/|tests/support/|"
+                           r"tests/CMakeLists\.txt$|tests/cmake/|\.claude/|docs/TESTING_GATE\.md$)")
+TOOLING_LABELS = {"hygiene", "tooling"}
+# A LANE'S OWN ROWS (TESTING-SPEED-A item 6): tests/lanes/<LANE>/ registers rows labelled `lane:<LANE>` (jah_lane_row) —
+# selected for that lane's own range only (Selection.lane), never for anyone else's
+LANE_LABEL = "lane:"
 # THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; D6B-GATE-SHAPE before it, under a daily-run name for a tier
 # that never once ran — the owner, 2026-10-09: there is no such build). Two labels, read here alone:
 #   `stage-close` — the row leaves the MERGE and PUSH tiers and runs in THE STAGE-CLOSE BATCH
@@ -416,7 +564,12 @@ STAGE_CLOSE_LABEL_RE = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS 
 # instead of quoting a number. Changing the box's width is this one line — and an owner decision
 # (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
 # on rc-smoke15a's durations, CPU contention unmeasured). `-j N` still overrides it per run.
-GATE_JOBS = 4
+# THE WIDTH PER PASS (TESTING-SPEED-A item 3; SPECS/TESTING_SPEED_SPEC.md §2 A10: 20 cores, 121 GB, 16 GB VRAM — a test
+# is one engine and one frame loop, so the parallelism is ACROSS processes): fixtures (CLASS engine|selftest, 1-2
+# tokens, <= 1 GB each) at -j8, the app rows and pools at -j4, a measuring row at -j1 on the whole card. ctest's
+# resource spec (the VRAM tokens, tests/cmake/vram_rows.cmake) stays the bound under every width — never this table.
+# The runner's merge (`--gate-jobs` prints it as JSON) and this tool's own --run read it.
+GATE_JOBS = {"fixture": 8, "app": 4, "measuring": 1}
 
 # The MERGE tier at a given ctest parallelism (GATE_JOBS by default, docs/TESTING_GATE.md §1); the
 # fallback must honour a caller's `-j` as the scoped command does (DEVPROCESS-1 item 2: the
@@ -430,7 +583,7 @@ GATE_JOBS = 4
 TIMING_LABEL = "timing"
 
 
-def merge_tier(jobs=GATE_JOBS):
+def merge_tier(jobs=GATE_JOBS["app"]):
     """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
             f'-LE "^({STAGE_CLOSE_LABEL_RE}|{TIMING_LABEL})$"')
@@ -451,7 +604,7 @@ _STAGE_CLOSE_RX = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
 _QUIET_RX = "|".join(sorted(re.escape(l) for l in (QUIET_BOX_LABEL, TIMING_LABEL)))
 
 
-def stage_close_tier(jobs=GATE_JOBS):
+def stage_close_tier(jobs=GATE_JOBS["app"]):
     """The stage-close batch's PARALLEL phase (its second phase is stage_close_tier_serial())."""
     return f'ctest -j{jobs} --output-on-failure -L "^({_STAGE_CLOSE_RX})$" -LE "^({_QUIET_RX})$"'
 
@@ -815,9 +968,44 @@ def load_inventory(build):
             "fixture_setup": bool(props.get("FIXTURES_SETUP")) and _is_wipe(cmd),
             "run_fixture": bool(props.get("FIXTURES_SETUP")) and not _is_wipe(cmd),
             "labels": set(props.get("LABELS", []) or []),
+            "frame_count": props.get("JAHSHAKA_TEST_FRAMES"),     # FRAMES <n>: the frames the row renders (item 7)
             "kind": "other", "exes": set(),
         }
+    picture_set(inv)
     return inv
+
+
+# THE PICTURE SET (TESTING-SPEED-A item 4; SPECS/TESTING_SPEED_SPEC.md §2 A4): the rows whose subject is the picture the
+# viewport shows — the kept rows of these directories / row prefixes, and every app row and pool ARM whose script takes
+# a screenshot (a pool is reached when any of its arms is: the arm, not the pool). `kept`: not stage-close, not a target.
+PICTURE_FAMILIES = ("hdr", "ssr", "looks", "mirror")
+# ...less the PHOTON family's own pictures (gi.*, photon.*: the GI's picture is the gi subsystem's — reached when Photon
+# is; a bloom change selects ZERO gi rows, SPECS/TESTING_SPEED_SPEC.md §2 A4's BLOOM-1 replay)
+PICTURE_NOT = ("gi", "photon")
+PICTURE_VERBS = re.compile(r"\beditor\.screenshot\b|\bvr\.eyeScreenshot\b|\bscreenshot\s*\(")
+
+
+def _names_picture(path, memo):
+    if path not in memo:
+        try:
+            memo[path] = bool(PICTURE_VERBS.search(open(path, errors="replace").read()))
+        except OSError:
+            memo[path] = False
+    return memo[path]
+
+
+def picture_set(inv):
+    """Marks inv[row]["picture"] (the row whole) and inv[row]["picture_arms"] (a pool's screenshot arms)."""
+    memo = {}
+    for n, t in inv.items():
+        kept = not (t["labels"] & (STAGE_CLOSE_LABELS | TARGET_LABELS)) and not (
+            t["dir"] in PICTURE_NOT or n.split(".", 1)[0] in PICTURE_NOT)
+        fam = t["dir"] in PICTURE_FAMILIES or n.split(".", 1)[0] in PICTURE_FAMILIES
+        arms = sorted(a for a, scr in t["arms"].items() if _names_picture(scr, memo)) if kept else []
+        shot = kept and not t["arms"] and bool(t["script"]) and _names_picture(t["script"], memo)
+        t["picture"] = kept and not t["arms"] and (fam or shot)
+        t["screenshot"] = shot             # the script part alone (`*screenshots`)
+        t["picture_arms"] = arms
 
 
 def classify_rows(inv, graph, build):
@@ -1074,17 +1262,22 @@ class Selection:
     no symbol and no graph owner — and printed with its reason.
     """
 
-    def __init__(self, inv, graph, app_exe, revs, jobs):
+    def __init__(self, inv, graph, app_exe, revs, jobs, lane=None):
         self.inv, self.graph, self.app_exe, self.revs, self.jobs = inv, graph, app_exe, revs, jobs
+        # THE LANE WHOSE RANGE THIS IS (TESTING-SPEED-A item 6): its own `lane:<LANE>` rows are selectable, nobody else's
+        self.lane = (lane or "").lower() or None
         self.selected = {}
         self.fallback = []
         self.full_tier = []          # rules that select the whole tier (an unreadable fork diff, a root setting)
         self.fork_bump = None        # {old, new, files} when the range moves the fork pin (T2)
         self.rationale = []
-        self.code_moved = False
+        self._moved = set()          # the code paths whose change was not comment-only (code_moved)
         self.skipped_ubiquitous = set()
         self.by_dir = collections.defaultdict(list)
-        for n, t in inv.items(): self.by_dir[t["dir"]].append(n)
+        self.by_prefix = collections.defaultdict(list)
+        for n, t in inv.items():
+            self.by_dir[t["dir"]].append(n)
+            self.by_prefix[n.split(".", 1)[0]].append(n)
         self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"] and not t["arms"]}
         # A HARNESS that drives the app over MCP (compiled with JAHSHAKA_BINARY; open.responsive,
         # avatar.responsive, scripting.e2e.texture_missing, ...) calls verbs by name in its own
@@ -1135,13 +1328,20 @@ class Selection:
         self.sc_origins = collections.defaultdict(set)
         self.stage_close_left = {}         # row -> the broad reason that reached it, left for the batch
         self.tooling_only = False          # §1.3.4: no touched path is a product input (select() decides)
+        self.tools_dropped = set()         # hygiene/tooling rows a product path reached: not run, still reached
+        self._symbol_ids = {}              # file -> the changed identifiers it names (OgreEngine.cpp's function walk)
 
+    @property
+    def code_moved(self):
+        return bool(self._moved)
     # -- adding rows -----------------------------------------------------------------------
     def data_edges(self, paths, facts):
         """A CHANGED DATA FILE IS A CHANGED SOURCE (RUNNER-A2B): every row with a DATA EDGE to a touched path (a file it
         names, a directory it walks, a set its CMake declares — gate_graph.data_set) runs; a path the data edges own is
         no FALLBACK (no rule owned it, its readers do)."""
-        hit = gate_graph.data_rows(facts, paths)
+        # the engine's own paths are THE SUBSYSTEM TABLE's (TESTING-SPEED-A item 4): the `engine-media` set every rendering
+        # row declares would reach them all — the table selects, the data hash still keeps a row from being SERVED
+        hit = gate_graph.data_rows(facts, [p for p in paths if not p.startswith("irisgl/engine/")])
         owned = set()
         for n, p in hit.items():
             if n in self.inv:      # in a tooling-only diff too: a row whose OWN data moved is not the product's, it is the row's
@@ -1158,6 +1358,8 @@ class Selection:
     def add(self, suites, why):
         for s in suites:
             r0 = s.split("::", 1)[0]
+            if r0 in self.inv and not self.own_lane_row(r0):
+                continue
             if r0 in self.inv and self.inv[r0]["labels"] & SUBJECT_ONLY_LABELS:
                 self.sc_origins[r0].add(self._origin)
             if "::" in s:
@@ -1170,6 +1372,11 @@ class Selection:
                 self.selected.setdefault(s, why)
                 self.whole.add(s)
 
+    def own_lane_row(self, n):
+        """False for a row labelled `lane:<X>` when X is not this selection's lane (TESTING-SPEED-A item 6)."""
+        ll = [l for l in self.inv[n]["labels"] if l.startswith(LANE_LABEL)]
+        return not ll or bool(self.lane) and any(l[len(LANE_LABEL):].lower() == self.lane for l in ll)
+
     def arm_subsets(self):
         """pool row -> the arms selected, for every pool NOT selected whole."""
         return {r: sorted(a) for r, a in self.arms.items() if r not in self.whole and r in self.selected}
@@ -1179,6 +1386,20 @@ class Selection:
         compiled rows of a C/C++ path, so its rules pick only app and other rows)."""
         for d in dirs:
             if d == "*merge-tier": self.fallback.append(why); continue
+            if d == "*picture":
+                self.add(sorted(n for n, t in self.inv.items() if t.get("picture")), f"{why} [the picture set]")
+                self.add(sorted(f"{n}::{a}" for n, t in self.inv.items() for a in t.get("picture_arms") or ()),
+                         f"{why} [the picture set: its screenshot arm]")
+                continue
+            if d == "*screenshots":
+                self.add(sorted(n for n, t in self.inv.items() if t.get("picture") and t.get("screenshot")),
+                         f"{why} [the picture set's screenshot rows]")
+                self.add(sorted(f"{n}::{a}" for n, t in self.inv.items() for a in t.get("picture_arms") or ()),
+                         f"{why} [the picture set: its screenshot arm]")
+                continue
+            if d == "*engine-fixtures":
+                self.add(sorted(self.engine_fixture_rows()), f"{why} [every engine fixture]")
+                continue
             if d in ("*vulkan-scripts", "*headless-scripts", "*all-scripts", "*app-rows"):
                 for n, t in self.inv.items():
                     if t["kind"] != "app": continue
@@ -1186,14 +1407,21 @@ class Selection:
                     if d == "*headless-scripts" and not t["headless"]: continue
                     self.add([n], why)
                 continue
-            self.add([n for n in self.by_dir.get(d, []) if kinds is None or self.inv[n]["kind"] in kinds], why)
+            # a token is a test DIRECTORY or a ROW PREFIX (`cloud_2d.*` lives in tests/gi, `decals.engine` in tests/engine)
+            rows = set(self.by_dir.get(d, [])) | set(self.by_prefix.get(d, []))
+            if "." in d:                       # a dotted token: the rows whose NAME starts with it (engine.atom_)
+                rows |= {n for n in self.inv if n.startswith(d)}
+            self.add(sorted(n for n in rows if kinds is None or self.inv[n]["kind"] in kinds), why)
         for m in modules:
             if m in self.ubiquitous and not own_api:
                 self.skipped_ubiquitous.add(m); continue
             self.add([n for n, ms in self.mods.items() if m in ms], f"{why} [module {m}]")
 
     def rules_for(self, p, why_prefix, kinds=None):
-        """Apply the first matching AREA_RULE. Returns the rule text, or None when none matched."""
+        """Apply the first matching AREA_RULE. Returns the rule text, or None when none matched. An irisgl/engine/ path
+        answers by THE SUBSYSTEM TABLE (TESTING-SPEED-A item 4): every row kind (the graph does not select engine code)."""
+        if p.startswith("irisgl/engine/"):
+            return self.engine_table(p, why_prefix)
         for pat, dirs, modules in AREA_RULES:
             m = re.match(pat, p)
             if not m: continue
@@ -1218,6 +1446,138 @@ class Selection:
             if e == self.app_exe: continue
             self.add(self.exe_rows.get(e, []), f"{why} [relinks {os.path.basename(e)}]")
         return len(exes), self.app_exe in exes
+
+    def engine_fixture_rows(self):
+        """THE ENGINE FIXTURES: every non-app row whose executable extracts the engine archive (the graph: any engine
+        object's reach — the facade pulls them all), or without a graph every row admitted as CLASS engine|selftest."""
+        if not hasattr(self, "_engine_fixtures"):
+            out = set()
+            if self.graph is not None:
+                if not hasattr(self, "_engine_exes"):
+                    art = self.graph.targets.get("JahshakaEngine")
+                    mem = sorted(self.graph.members(art)) if art else []
+                    self._engine_exes = self.graph.reach_objects(mem)
+                for e in self._engine_exes:
+                    if e != self.app_exe:
+                        out |= {n for n in self.exe_rows.get(e, []) if self.inv[n]["kind"] != "app"}
+            else:
+                for n, t in self.inv.items():
+                    if t["kind"] != "app" and re.search(r"--label \S+:(engine|selftest)\b", " ".join(t["cmd"])):
+                        out.add(n)
+            self._engine_fixtures = out
+        return self._engine_fixtures
+
+    def engine_table(self, p, why):
+        """THE SUBSYSTEM TABLE for one irisgl/engine/ path: the FIRST ENGINE_SUBSYSTEMS line that matches it (relative to
+        irisgl/engine/; the lines run specific -> generic). Returns the rule text, or None when no line names it."""
+        rel = p[len("irisgl/engine/"):]
+        hit = [(pat, toks, what) for pat, toks, what in ENGINE_SUBSYSTEMS if re.search(pat, rel)][:1]   # FIRST match
+        if not hit:
+            return None
+        for pat, toks, what in hit:
+            self.expand(toks, [], f"{why}: subsystem {what}")
+        return "subsystem " + " + ".join(f"{what} -> {' '.join(toks) or 'its CMake commands'}" for _, toks, what in hit)
+
+    def ogre_engine(self, p, tag, notes, depth=0):
+        """irisgl/engine/src/OgreEngine.cpp BY THE FUNCTION CHANGED (TESTING-SPEED-A item 4): the enclosing top-level
+        function of every changed line (gate_graph.enclosing_functions) through OGRE_ENGINE_FUNCTIONS; an unmapped name
+        or a namespace-scope line reaches everything that renders (_ALL), said. Returns False when there is no diff
+        to read (the whole file then reaches _ALL)."""
+        ids = self._symbol_ids.get(p) if depth > 0 else None
+        if ids:
+            # REACHED THROUGH A SYMBOL (a header's changed identifier that OgreEngine.cpp names): the functions whose lines
+            # name it — the same walk over the file as it is
+            try:
+                text = open(os.path.join(ROOT, p), errors="replace").read()
+            except OSError:
+                text = ""
+            lines = gate_graph.strip_cxx(text)
+            outer = gate_graph._outer_scopes(lines)
+            rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b")
+            fns = {}
+            for k, ln in enumerate(lines):
+                if rx.search(ln):
+                    fns[outer[k]] = fns.get(outer[k], 0) + 1
+        elif depth > 0:
+            fns = {None: 1}                  # an includer with no symbol to follow: the file as a whole
+        else:
+            a, b = self.revs.texts(p) if self.revs.base else (None, None)
+            if a is None or b is None:
+                self.expand(_ALL, [], f"{tag}: OgreEngine.cpp with no diff to read")
+                notes.append("OgreEngine.cpp, no diff to read → everything that renders")
+                return
+            fns = gate_graph.enclosing_functions(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
+        if not fns:
+            notes.append("comments/whitespace only → nothing reached")
+            return
+        by_keyword = p != "irisgl/engine/src/OgreEngine.cpp"
+        for fn in sorted(fns, key=lambda x: (x is None, x or "")):
+            if by_keyword:
+                toks = sorted({t for rx, ts in FUNCTION_KEYWORDS if fn and re.search(rx, fn) for t in ts}) or None
+            else:
+                toks = OGRE_ENGINE_FUNCTIONS.get(fn)
+            if toks is None:
+                toks = _ALL
+                what = ("a namespace-scope line" if fn is None else f"{fn}() is named by no line of "
+                        f"{'FUNCTION_KEYWORDS' if by_keyword else 'OGRE_ENGINE_FUNCTIONS'}") + " → everything that renders"
+            else:
+                what = f"{fn}() -> {' '.join(toks)}"
+            self.expand(toks, [], f"{tag}: {what}")
+            notes.append(what)
+
+    def engine_path(self, p, tag, depth, notes):
+        """ENGINE CODE AND MEDIA (TESTING-SPEED-A item 4): the subsystem table is the selector — never the graph, never
+        the engine's data edges. A header goes through its symbols first; a fallback to "every includer" is the
+        includers' subsystems (each includer through this table, a Studio includer through its own rule)."""
+        if p == "irisgl/engine/src/OgreEngine.cpp" or p[len("irisgl/engine/"):] in CORE_BY_FUNCTION:
+            self.ogre_engine(p, tag, notes, depth)
+            return
+        if p.endswith(HEADER_EXT) and self.revs.base and depth == 0:
+            if self.header_symbols(p, tag, notes):
+                return
+            # THE INCLUDERS' SUBSYSTEMS (never the family): who reads the header, each by its own table line / rule
+            srcs = []
+            if self.graph is not None:
+                srcs = sorted({os.path.relpath(self.graph.obj_src[o], ROOT)
+                               for o in self.graph.includers(os.path.join(ROOT, p)) if o in self.graph.obj_src})
+            srcs = [x for x in srcs if x.startswith(("src/", "irisgl/")) and not x.startswith("irisgl/thirdparty/")]
+            for src in srcs:
+                if src.startswith("irisgl/engine/"):
+                    self.path(src, 1, via=f"includes {os.path.basename(p)}")
+                else:
+                    self.rules_for(src, f"{tag} (read by {src})", kinds={"app", "other"})
+            notes.append(f"the includers' subsystems ({len(srcs)} reading source(s))")
+            if not srcs:
+                r = self.engine_table(p, tag)
+                notes.append(r or "no includer, no table line → nothing reached")
+            return
+        r = self.engine_table(p, tag)
+        if r:
+            notes.append(r)
+        else:
+            self._fallback(p, tag, notes)
+
+    def _fallback(self, p, tag, notes, why="no rule, no symbol, no graph owner"):
+        """A PATH NOBODY OWNS (TESTING-SPEED-A item 1): recorded as a fallback (printed, and gate.selection refuses a lane
+        that has one) — and it selects THE SUBSYSTEM OF ITS DIRECTORY by AREA_RULES (the nearest parent directory a rule
+        matches), NEVER the whole tier."""
+        self.fallback.append(f"{tag}: {why}")
+        parts = p.split("/")
+        if parts[:2] == ["tests", "lanes"] and len(parts) > 3:
+            parts = ["tests"] + parts[2:]      # tests/lanes/<LANE>/: the lane's own directory
+        if parts[0] == "tests" and len(parts) > 2 and parts[1] in self.by_dir:
+            # a tests/<dir>/ path: that directory's rows ARE its subsystem
+            self.add(self.by_dir[parts[1]], f"{tag}: its directory tests/{parts[1]}")
+            notes.append(f"NO RULE → its directory's rows: tests/{parts[1]}")
+            return
+        d = os.path.dirname(p)
+        while d:
+            r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
+            if r:
+                notes.append(f"NO RULE → its directory's subsystem: {r}")
+                return
+            d = os.path.dirname(d)
+        notes.append("NO RULE and no rule for any parent directory → nothing more (never the whole tier)")
 
     def engine_rows(self, tag):
         """U2: ENGINE RUNTIME DATA (Hlms pieces, GLSL, compositor scripts, material JSON) is read
@@ -1274,12 +1634,14 @@ class Selection:
         """Select for one reached path. `via` names why a path is reached indirectly (a symbol,
         a CMake command); a directly touched path has via=None."""
         if depth == 0: self._origin = p
-        key = (p, depth > 0)
+        key = (p, depth > 0) if p not in _BY_FUNCTION else (p, depth > 0, via)
         if key in self._visited: return
         self._visited.add(key)
         tag = p if via is None else f"{p} (via {via})"
         notes = []
-        if p.startswith(("src/", "irisgl/", "tests/")): self.code_moved = True
+        if p.startswith(("src/", "irisgl/", "tests/")) and not p.startswith("irisgl/thirdparty/") and (
+                p.endswith(CXX_EXT) or p.startswith("irisgl/engine/")):
+            self._moved.add(p)               # CODE moved (a comment-only or deleted file is discarded again below)
 
         # THE FORK PIN (TEST-SELECTOR-1 T2): inside a lane a pin bump selects by what the FORK'S
         # DIFF reaches (FORK_FAMILIES); §7b rule 4's full tier runs ONCE per bump, at the merge
@@ -1344,14 +1706,40 @@ class Selection:
         is_cmake = base == "CMakeLists.txt" or p.endswith(".cmake")
         is_cxx = p.endswith(CXX_EXT) and not p.startswith(("irisgl/thirdparty/", "thirdparty/"))
 
+        if depth == 0 and any(re.match(pat, p) for pat in STUDIO_TABLE_PATHS) and is_cxx:
+            # A STUDIO FILE ON THE SUBSYSTEM TABLE (worldmodes.cpp: the chain's settings) is selected by its line alone —
+            # like engine code (the spec's bloom line); its compiled readers (test_gi_tiers links it) are not asked
+            if self.revs.base and self._deleted(p):
+                self._moved.discard(p); self.rationale.append((p, "deleted")); return
+            a, b = self.revs.texts(p) if self.revs.base else (None, None)
+            if a is not None and b and a and gate_graph.strip_cxx(a) == gate_graph.strip_cxx(b):
+                self._moved.discard(p); self.rationale.append((p, "comments/whitespace only → nothing reached")); return
+            r = self.rules_for(p, tag)
+            self.rationale.append((p, f"the subsystem table (a Studio line): {r}"))
+            return
+        if p.startswith("irisgl/engine/") and not is_cmake:
+            # THE SUBSYSTEM TABLE (TESTING-SPEED-A item 4): engine code and media are selected by the table only
+            if is_cxx and self.revs.base and depth == 0:
+                if self._deleted(p):
+                    self._moved.discard(p)
+                    self.rationale.append((p, "deleted → what used it is in this diff"))
+                    return
+                a, b = self.revs.texts(p)
+                if a is not None and b and a and gate_graph.cxx_changed_identifiers(
+                        a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))[1] == 0:
+                    # comments/whitespace only, by the hunks (an ADDED comment line shifts the stripped text's length)
+                    self._moved.discard(p)
+                    self.rationale.append((p, "comments/whitespace only → nothing reached"))
+                    return
+            self.engine_path(p, tag, depth, notes)
+            if depth == 0: self.rationale.append((p, "; ".join(notes)))
+            return
+
         if is_cmake:
             # a CMake helper an area rule owns (WrapHlmsPiece: the engine's media staging) keeps
             # its rule; every other build file is read by what its changed commands name
             if any(re.match(pat, p) for pat, _, _ in AREA_RULES):
                 r = self.rules_for(p, tag)
-                if p.startswith("irisgl/cmake/WrapHlmsPiece") or p == "cmake/IncludeOgre.cmake":
-                    n = self.engine_rows(tag)
-                    if n is not None: r += f"; every executable that extracts the engine ({n})"
                 if depth == 0: self.rationale.append((p, r))
                 return
             self.cmake(p, tag, depth)
@@ -1377,16 +1765,18 @@ class Selection:
         if is_cxx and self.revs.base and depth == 0 and self._deleted(p):
             # A DELETED C/C++ file: whatever used it had to change in this same diff (or the
             # build breaks), so it reaches nothing of its own; the source lints ride
+            self._moved.discard(p)
             self.expand(["hygiene"], [], f"{tag}: deleted")
-            self.rationale.append((p, "deleted → what used it is in this diff (the source lints ride)"))
+            self.rationale.append((p, "deleted → what used it is in this diff"))
             return
         if is_cxx or graph_input:
             # comments/whitespace only → nothing reached (the lints still ride)
             if is_cxx and self.revs.base and depth == 0:
                 a, b = self.revs.texts(p)
                 if a is not None and b and a and gate_graph.strip_cxx(a) == gate_graph.strip_cxx(b):
+                    self._moved.discard(p)
                     self.expand(["hygiene"], [], f"{tag}: comment/whitespace only")
-                    self.rationale.append((p, "comments/whitespace only → no code reached (the source lints ride)"))
+                    self.rationale.append((p, "comments/whitespace only → no code reached"))
                     return
             if is_cxx and self.revs.base and depth == 0:
                 self.expand(["hygiene"], [], f"{tag}: source text changed")   # the source lints read it
@@ -1428,9 +1818,6 @@ class Selection:
             return
         r = self.rules_for(p, tag)
         if r: notes.append(r)
-        if p.startswith("irisgl/engine/") or p.startswith("irisgl/cmake/WrapHlmsPiece"):
-            n = self.engine_rows(tag)
-            if n is not None: notes.append(f"engine runtime data: every executable that extracts the engine ({n})")
         if r: pass
         elif not hit_argv:
             g = None if is_cxx else self.graph_rows(p, tag)     # a build input (.ui, .qrc, a shader source)
@@ -1440,8 +1827,7 @@ class Selection:
                     self.expand(["*app-rows"], [], f"{tag}: the app relinked and no rule narrows it")
                     notes.append("the app relinked, no rule narrows it → every app row")
             else:
-                self.fallback.append(f"{tag}: no rule, no symbol, no graph owner")
-                notes.append("NO RULE, no symbol, no graph owner → merge tier")
+                self._fallback(p, tag, notes)
         if depth == 0: self.rationale.append((p, "; ".join(notes)))
 
     def tooling_path(self, p):
@@ -1470,8 +1856,9 @@ class Selection:
                 _git_try(["rev-parse", f"{b}:thirdparty/ogre-next"], ig))
 
     def fork(self, p, tag, depth):
-        """A fork pin bump, selected by the fork diff's reach (FORK_FAMILIES, first match per
-        file). A fork file no family owns, or a diff this checkout cannot read, is the tier."""
+        """A fork pin bump, selected BY COMPONENT (FORK_COMPONENTS, TESTING-SPEED-A item 4: every line that matches a
+        changed fork file adds its tokens; a `none` line ends the file). A fork file no line names, or a diff this
+        checkout cannot read, is the tier (said)."""
         old, new = self.fork_pins()
         src = os.path.join(ROOT, "irisgl", "thirdparty", "ogre-next")
         files = None
@@ -1486,20 +1873,18 @@ class Selection:
             return
         hits = collections.Counter()
         for f in files:
-            fam = next((fam for pat, fam in FORK_FAMILIES if re.match(pat, f)), None)
-            if fam is None:
-                self.full_tier.append(f"{p}: fork file {f} — no fork family owns it")
+            lines = fork_lines(f)
+            if not lines:
+                self.full_tier.append(f"{p}: fork file {f} — no fork component line names it")
                 hits["TIER"] += 1; continue
-            hits[fam] += 1
-            why = f"{tag}: fork {fam} ({f})"
-            if fam == "none":
-                continue
-            # "engine": the pixel family + every executable that extracts the engine
-            self.expand(ENGINE_FAMILY + ["atom"], [], why)
-            self.engine_rows(why)
+            for pat, toks in lines:
+                key = "none" if toks == "none" else " ".join(toks)
+                hits[key] += 1
+                if toks != "none":
+                    self.expand(toks, [], f"{tag}: fork {f} (component {pat[:48]})")
         if depth == 0:
             self.rationale.append((p, f"fork pin {(old or '?')[:9]} -> {(new or '?')[:9]}: {len(files)} fork file(s) "
-                                      f"by family {dict(hits)} (the full tier runs once, at the merge: --fork-tier)"))
+                                      f"by component {dict(hits)} (+ the six hash lines at the merge)"))
 
     def _deleted(self, p):
         """True when the range deletes the file (it is at the base and not at the tip)."""
@@ -1509,6 +1894,8 @@ class Selection:
     def tests_path(self, p, tag, notes, hit_argv):
         parts = p.split("/")
         d = parts[1] if len(parts) > 2 else ""
+        if d == "lanes" and len(parts) > 3:
+            d = parts[2]                       # tests/lanes/<LANE>/: the lane's own rows (their dir is <LANE>)
         if hit_argv:
             return
         base = os.path.basename(p).replace(".js.in", "").replace(".js", "").replace(".sh", "")
@@ -1534,8 +1921,7 @@ class Selection:
             # meets a file a later lane deleted — tests/support/no_xid_run.sh after TEST-SELECTOR-1
             # H4): retired, said out loud, like a gone row; never a fallback
             notes.append(f"retired: {os.path.basename(p)} exists nowhere in this tree"); return
-        self.fallback.append(f"{tag}: no suite owns this tests/ path")
-        notes.append("no suite owns it → fallback")
+        self._fallback(p, tag, notes, "no suite owns this tests/ path")
 
     def naming_tests(self, fname):
         try:
@@ -1566,7 +1952,17 @@ class Selection:
         if not ids:
             notes.append("no specific identifier on the changed lines → every includer")
             return False
+        new_ids = set()
+        if p.startswith("irisgl/engine/"):
+            # AN ENGINE HEADER'S NEW SCOPE SELECTS BY ITS NAME; A NEW NAME'S USERS ARE IN THIS CHANGE (TESTING-SPEED-A item 4)
+            ids, new_ids = gate_graph.new_scope_ids(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)), ids)
+            if new_ids:
+                notes.append(f"new identifier(s) {sorted(new_ids)[:6]}: their users are in this change")
         naming = gate_graph.files_naming(ROOT, ids)
+        if new_ids:
+            touched = getattr(self, "_paths", set())
+            naming = {f: (v - new_ids if f not in touched else v) for f, v in naming.items()}
+            naming = {f: v for f, v in naming.items() if v}
         self._script_namers = sorted(f for f in naming if f.endswith((".js", ".js.in")))
         per_id = collections.Counter(t for toks in naming.values() for t in toks)
         common = sorted(t for t in ids if per_id[t] > self.SYMBOL_SPECIFICITY)
@@ -1632,12 +2028,26 @@ class Selection:
                 return f in readers
             naming = {f: v for f, v in naming.items() if reads(f)}
         reached = sorted(f for f in naming if f != p)
+        for f in reached:
+            self._symbol_ids.setdefault(f, set()).update(t for t in naming[f] if t != "(companion)")
         shown = sorted(ids)[:12]
         notes.append(f"symbols {shown}{' …' if len(ids) > 12 else ''} named by {len(reached)} file(s)")
         # The files that NAME a changed identifier are the reached paths, each through its own
         # graph reach and rules; a naming header through every source that reads it with this one.
         for f in reached:
             if f.endswith(HEADER_EXT):
+                if p.startswith("irisgl/engine/"):
+                    # AN ENGINE HEADER'S NAMER (Engine.h's default `photonViewRefusal(PhotonView)`): a declaration's users
+                    # name the identifier themselves (found above); an inline body's callers name the FUNCTION — the
+                    # wrappers' names are followed one level, never every reader of the namer
+                    wr = gate_graph.body_wrappers(_read(os.path.join(ROOT, f)), naming[f] - {"(companion)"})
+                    if wr:
+                        users = gate_graph.files_naming(ROOT, wr)
+                        for g_ in sorted(u for u in users if u != f and not u.endswith(HEADER_EXT)):
+                            self._symbol_ids.setdefault(g_, set()).update(users[g_])
+                            self.path(g_, 1, via=f"calls {os.path.basename(f)}'s {sorted(users[g_])[0]}(), which "
+                                                 f"names {sorted(naming[f])[0]}")
+                    continue
                 for src in both.get(f, []):
                     self.path(src, 1, via=f"reads {os.path.basename(f)}, which names {sorted(naming[f])[0]}")
             else:
@@ -1658,8 +2068,13 @@ class Selection:
                 self.add(self.by_dir[parts[1]], f"{tag}: tests/{parts[1]} registration")
                 if depth == 0: self.rationale.append((p, f"tests/{parts[1]}'s registration → its rows"))
                 return
-            self.fallback.append(f"{tag}: a build file with no diff to read (--files)")
-            if depth == 0: self.rationale.append((p, "a build file without a range → merge tier"))
+            if p == "CMakeLists.txt":
+                # THE TOP-LEVEL CMake (TESTING-SPEED-A item 1): one of the two places the whole tier is kept for
+                self.full_tier.append(f"{tag}: the top-level build file with no diff to read (--files)")
+                if depth == 0: self.rationale.append((p, "the top-level build file without a range → the MERGE tier"))
+                return
+            self._fallback(p, tag, notes, "a build file with no diff to read (--files)")
+            if depth == 0: self.rationale.append((p, "; ".join(notes)))
             return
         a, b = self.revs.texts(p)
         # A CMAKE SCRIPT RUN WITH -P (irisgl/cmake/ApplyVendorPatches.cmake, run by an
@@ -1771,8 +2186,26 @@ class Selection:
                     continue
             got = self.cmake_command(p, d, name, args, fn, changed_text, whole, tag, notes)
             if not got: unresolved.append(f"{name}() at line {first}")
+        if unresolved and p.startswith("irisgl/engine/"):
+            # THE ENGINE'S CMake (TESTING-SPEED-A item 4: the whole-family arm is gone): a command no reader resolves (a
+            # media staging, a shader compile) reaches the subsystems of the engine files its changed text names, by the
+            # table; naming none, the engine directory as a whole (every engine fixture) — a rule, never a fallback
+            a_, b_ = self.revs.texts(p) if self.revs.base else ("", "")
+            txt = "\n".join(l[1:] for l in (self.revs.diff_u0(p) if self.revs.base else "").splitlines()
+                            if l[:1] in "+-" and not l.startswith(("+++", "---")))
+            named = sorted({m.group(1) for m in re.finditer(r"((?:media|src|include)/[\w./${}-]+\.\w+)", txt)})
+            got = [r for r in (self.engine_table("irisgl/engine/" + f, f"{tag} (names {f})") for f in named) if r]
+            if not got:
+                self.expand(["*engine-fixtures"], [], f"{tag}: the engine's build ({', '.join(unresolved)[:80]})")
+            notes.append(f"the engine's CMake: {', '.join(unresolved)[:120]} -> "
+                         + (f"the subsystems of {len(got)} named file(s)" if got else "every engine fixture"))
+            unresolved = []
         if unresolved:
-            self.fallback.append(f"{tag}: CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
+            if p == "CMakeLists.txt":
+                self.full_tier.append(f"{tag}: a top-level CMake command that names nothing a suite owns: "
+                                      f"{', '.join(unresolved)}")
+            else:
+                self._fallback(p, tag, notes, f"CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
             notes.append("unresolved: " + ", ".join(unresolved))
         if depth == 0: self.rationale.append((p, "; ".join(dict.fromkeys(notes)) or "CMake"))
 
@@ -2207,8 +2640,16 @@ def data_facts(build):
     return _DATA_FACTS[key]
 
 
-def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
-    """The whole selection as data (gate.selection replays call this in-process)."""
+def _read(path):
+    try:
+        return open(path, errors="replace").read()
+    except OSError:
+        return ""
+
+
+def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False, lane=None):
+    """The whole selection as data (gate.selection replays call this in-process). `lane`: the lane whose range this is —
+    its own `lane:<LANE>` rows are selectable (TESTING-SPEED-A item 6)."""
     inv = inv if inv is not None else load_inventory(build)
     if graph is None:
         graph = gate_graph.NinjaGraph.load(build)
@@ -2223,8 +2664,9 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     if graph is None:
         for t in inv.values():
             if t["kind"] == "compiled": t["kind"] = "other"     # the rules' dirs pick them, as before
-    S = Selection(inv, graph, app_exe, Revs(rng), jobs)
+    S = Selection(inv, graph, app_exe, Revs(rng), jobs, lane=lane)
     S.tooling_only = bool(paths) and not product_paths(paths)
+    S._paths = set(paths)
     for p in paths:
         if S.tooling_only and TOOLING_OWN.match(p):
             S.tooling_path(p)
@@ -2232,9 +2674,28 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
             S.path(p)
     S.data_edges(paths, data_facts(build))
     S.stage_close_subjects(paths)
-    if S.code_moved and not S.tooling_only: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
+    tooling_paths(S, paths)
     if graph is not None: graph.save_syms()
     return S
+
+
+def tooling_paths(S, paths):
+    """THE TOOLS' ROWS FOR THE TOOLS' PATHS (TESTING-SPEED-A item 5; SPECS/TESTING_SPEED_SPEC.md §2 A6): the `hygiene` and
+    `tooling` rows ride a change under TOOLING_PATHS only — a product path that reached one (a lint's directory rule, a
+    header's companion) does not keep it; the smoke pair rides a change to the test harness (HARNESS_PATHS) only."""
+    if not any(TOOLING_PATHS.match(p) for p in paths):
+        gone = [n for n in S.selected if S.inv[n]["labels"] & TOOLING_LABELS]
+        S.tools_dropped = set(gone)          # still REACHED for serving (ci_gate_check.Reach): never served across it
+        for n in gone:
+            S.selected.pop(n, None)
+            S.whole.discard(n)
+            S.arms.pop(n, None)
+        if gone:
+            S.rationale.append(("(the tools' rows)", f"{len(gone)} hygiene/tooling row(s) a product path reached are the "
+                                                     f"tools' — not this change's (the self-audit ran the hygiene label)"))
+    harness = [p for p in paths if HARNESS_PATHS.match(p)]
+    if harness:
+        S.add(ALWAYS_ON_CODE, f"{harness[0]}: the test harness moved — the smoke pair")
 
 
 ATTR_DEFECT_COMBINATION, ATTR_INCOMPLETE, ATTR_DEFECT_DBUILD = 3, 7, 5
@@ -2289,8 +2750,9 @@ def main():
     ap.add_argument("--build", default="build-linux")
     ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set); "
                     "every suite's verdict goes to the run log")
-    ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS,
-                    help=f"ctest parallelism of the parallel phase (default GATE_JOBS = {GATE_JOBS}, the one constant)")
+    ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS["app"],
+                    help=f"ctest parallelism of this tool's own parallel phase (default GATE_JOBS['app'] = "
+                         f"{GATE_JOBS['app']}; the runner's merge runs a width per pass: GATE_JOBS = {GATE_JOBS})")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--lane", action="append", default=None,
                     help="the record's `lanes` (default: the branch): repeat it or give a comma-separated list — a "
@@ -2327,7 +2789,7 @@ def main():
                     help="print STAGE_CLOSE_SUBJECTS (which paths still bring which stage-close rows into a "
                          "scoped gate) and exit")
     ap.add_argument("--gate-jobs", action="store_true",
-                    help="print GATE_JOBS, the gate's parallel width (the runner's merge run reads it), and exit")
+                    help="print GATE_JOBS as JSON, the width per pass (the runner's merge run reads it), and exit")
     ap.add_argument("--resume", action="store_true",
                     help="--run, but only the rows with no record at this tip (a gate that was killed or lost its "
                          "display: the rows it finished are in the run log already)")
@@ -2344,7 +2806,7 @@ def main():
     if a.resume:
         a.run = True
     if a.gate_jobs:
-        print(GATE_JOBS); return
+        print(json.dumps(GATE_JOBS, sort_keys=True)); return
     if a.record_times or a.price_check:
         b_ = resolve_build(a.build)
         if a.record_times:
@@ -2563,7 +3025,7 @@ def main():
         rx = "^(" + "|".join(re.escape(n) for n in suites) + ")$"
         return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
 
-    whole_tier = bool(S.fallback or S.full_tier)
+    whole_tier = bool(S.full_tier)
     cmd = ctest_for(par_names, a.jobs) if par_names else ""
     if cmd and pool_env:
         cmd = f"JAH_POOL_ARMS='{pool_env}' {cmd}"
@@ -2626,14 +3088,15 @@ def main():
     elif a.fork_tier:
         sys.stderr.write("gate-scope: --fork-tier on a range that does not move the fork pin — nothing to do\n")
         sys.exit(2)
-    if S.full_tier and not S.fallback:
+    if S.full_tier:
         print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
         for f in S.full_tier: print(f"  {f}")
         run_tier("rule"); return
     if S.fallback:
-        print("\nFALLBACK → MERGE TIER (a touched path has no rule, no symbol and no graph owner):")
-        for f in S.fallback + S.full_tier: print(f"  {f}")
-        run_tier("fallback"); return
+        # NEVER THE WHOLE TIER (TESTING-SPEED-A item 1): a path nobody owns selected its directory's subsystem
+        print("\nFALLBACK (a touched path has no rule, no symbol and no graph owner — its DIRECTORY's subsystem is "
+              "selected, never the whole tier; a rule for it belongs in AREA_RULES):")
+        for f in S.fallback: print(f"  {f}")
     if S.skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
     if quiet: print(f"\n(quiet-box measurements left out — the stage-close batch's: {sorted(quiet)})")
@@ -2653,8 +3116,8 @@ def main():
                 "or inventory defect, not\n            an empty change; refusing to report a "
                 "green empty gate.\n")
             sys.exit(3)
-        print("\nSCOPED tier: NOTHING to gate — every touched path is docs/scripts/data with no owning suite "
-              "(a code path always adds app.startup_quiet + api.contract)")
+        print("\nSCOPED tier: NOTHING to gate — every touched path is docs/data/a price with no owning suite, or a "
+              "comment (the six hash lines are every merge's whole-engine guard)")
         return
     if names:
         print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "

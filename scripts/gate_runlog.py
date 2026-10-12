@@ -1753,10 +1753,31 @@ class _Run:
                 continue
             if v != "PASS":
                 reds.append(name)
+                # THE RED'S OUTPUT, KEPT (TESTING-SPEED-A item 2): the row's captured lines in a file the record names
+                # (`log`) — the merge prints its last 40 lines when it refuses; a green row keeps nothing
+                lp = _row_output(self.build, self.run_id, name, text)
+                if lp:
+                    recs[0]["log"] = lp
             self.path = append_records(recs, self.tier, self.shas["studio"])
             self.recorded += len(recs)
         rc = p.wait()
         return rc, reds, held
+
+
+def _row_output(build, run_id, row, text):
+    """<build>/tests/.evidence/output/<run>/<row>.log holding a red row's captured output (the build tree's, never the run
+    log's directory: its readers list it as records); its path, or None."""
+    if not text or not build:
+        return None
+    try:
+        d = os.path.join(build, "tests", ".evidence", "output", re.sub(r"[^A-Za-z0-9._-]", "_", str(run_id)))
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, re.sub(r"[^A-Za-z0-9._:-]", "_", row) + ".log")
+        with open(path, "w") as f:
+            f.write(text + "\n")
+        return path
+    except OSError:
+        return None
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,

@@ -142,7 +142,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.gate_scope_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.gate_scope_rules)
     # gate.selection — THE SELECTOR'S REPLAY (MODULAR-GATE-1): the recorded lanes' diffs
     # re-selected against this build's graph (gate_selection_cases.json): every REAL red of
@@ -152,7 +152,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.selection
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_selection.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene")
+    set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
     # R1 every measuring row is inside the GPU lock; R2 every stage-close row is priced; R3 no
@@ -162,8 +162,22 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.testing_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/testing_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.testing_rules)
+    # source.row_budget — A ROW RENDERS SECONDS (TESTING-SPEED-A item 7): a kept merge row's price (scripts/gate-times.txt)
+    # within its budget (its own in row_budgets.txt, or fixture 10 s / app 60 s). RED BY DESIGN until TESTING-SPEED-B:
+    # the 45 KEEP:rewrite rows, printed with the lane that owes them.
+    add_test(NAME source.row_budget
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_budget.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.row_budget PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.row_budget)
+    # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
+    # tests/ scripts/ testing/ but the fixture inputs.
+    add_test(NAME source.no_renders_tracked
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/no_renders_tracked.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.no_renders_tracked PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.no_renders_tracked)
     # gate.ci_check — THE MERGE REFUSAL (MODULAR-GATE-1 T6; the flake law since TEST-SELECTOR-1):
     # scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip
     # and its reds are answered — 3/3 solo for a contention-class suite, a recorded verdict for any
@@ -172,7 +186,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.ci_check
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ci_gate_check_test.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.ci_check PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.ci_check PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.ci_check)
     # gate.fix_round — THE FIX ROUND RE-USES WHAT IT CANNOT REACH (GATE-SPEED-1; TESTING_GATE §3b made
     # mechanical): the refusal takes a row's newest record at an earlier commit of the lane when the
@@ -183,7 +197,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.fix_round
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_fix_round_test.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.fix_round PROPERTIES TIMEOUT 600 LABELS "hygiene")
+    set_tests_properties(gate.fix_round PROPERTIES TIMEOUT 600 LABELS "hygiene;tooling")
     jah_no_display(gate.fix_round)
     # gate.cost — HOW GATES SHARE THE BOX (GATE-COST-1; SPECS/audits/GATE_COST_2026-10-09.md): one gate at
     # a time on the box-wide slot (FIFO, the position printed), a NOADMIT row re-queued in the same run and
@@ -194,7 +208,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.cost
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_cost_test.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.cost)
     # gate.verdict_door / noadmit_pool / carried_red / contention_shape / log_schema2 — THE JUDGE'S FOUR
     # DOORS (VERDICT-1 + GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; TESTING_GATE §4): a verdict clears a red only
@@ -206,27 +220,27 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.verdict_door
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" verdict_door
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.verdict_door PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.verdict_door PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.verdict_door)
     add_test(NAME gate.noadmit_pool
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" noadmit_pool
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.noadmit_pool PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.noadmit_pool PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.noadmit_pool)
     add_test(NAME gate.carried_red
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" carried_red
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.carried_red PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.carried_red PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.carried_red)
     add_test(NAME gate.contention_shape
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" contention_shape
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.contention_shape PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.contention_shape PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.contention_shape)
     add_test(NAME gate.log_schema2
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" log_schema2
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.log_schema2 PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    set_tests_properties(gate.log_schema2 PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.log_schema2)
     # gate.stage_close_select / gate.stage_close_labels — THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; TESTING_GATE §1d):
     # a `stage-close` row rides a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own
@@ -237,12 +251,12 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.stage_close_select
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" select
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.stage_close_select PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    set_tests_properties(gate.stage_close_select PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(gate.stage_close_select)
     add_test(NAME gate.stage_close_labels
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" labels
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.stage_close_labels PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    set_tests_properties(gate.stage_close_labels PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(gate.stage_close_labels)
 endif()
 
@@ -336,7 +350,7 @@ jah_no_display(source.row_declares_needs)
 add_test(NAME gate.tokens_by_needs
          COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests -DBIN=${CMAKE_CURRENT_BINARY_DIR}
                  -P "${CMAKE_CURRENT_SOURCE_DIR}/tokens_by_needs.cmake")
-set_tests_properties(gate.tokens_by_needs PROPERTIES TIMEOUT 60 LABELS "hygiene")
+set_tests_properties(gate.tokens_by_needs PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(gate.tokens_by_needs)
 
 # source.no_fixed_gi_volume — D4-PHOTON-TIERS: the single scene-fitted voxel volume
