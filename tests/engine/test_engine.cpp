@@ -142,20 +142,23 @@ void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->ren
 /// clock, frames never clocks). The adaptation is a first-order filter at the engine's fixed 1/60 s
 /// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast)) = 2.284 % of the gap a frame; OgreChain.cpp's
 /// R32_FLOAT note), so it is the frame count that converges it, never the seconds that pass — this replaced a
-/// wall-clock loop (seconds of frames with an 8 ms sleep each). Reads View::measuredExposureScale() every 8 frames
-/// and returns at the first two reads within 0.1 % of each other (a view with no meter reads 0 twice: nothing adapts,
-/// so nothing is waited for), bounded at 600 frames (10 s of the engine's time). Returns the frames rendered.
+/// wall-clock loop (seconds of frames with an 8 ms sleep each). For a view with an AUTOMATIC chain only (the fixed
+/// form has no meter: its callers render a stated count of frames instead). Reads View::measuredExposureScale() every
+/// 8 frames and returns at the first two NON-ZERO reads within 0.1 % of each other — a 0 is "nothing measured yet"
+/// (an unwritten history), never "settled" — bounded at 600 frames (10 s of the engine's time), and CHECKS that it
+/// converged inside the bound. Returns the frames rendered.
 int settleExposure(Engine *e, View *v, int maxFrames = 600) {
-    float prev = -1.0f;
+    float prev = 0.0f;
     int frames = 0;
     while (frames < maxFrames) {
         for (int i = 0; i < 8; ++i) e->renderOneFrame();
         frames += 8;
         const float now = v->measuredExposureScale();
-        if (frames >= 16 && prev >= 0.0f && std::fabs(now - prev) <= 0.001f * std::max(prev, 1e-6f)) return frames;
+        if (now > 0.0f && prev > 0.0f && std::fabs(now - prev) <= 0.001f * prev) return frames;
         prev = now;
     }
-    std::printf("    the exposure still moved after %d frames\n", frames);
+    CHECK_MSG(false, "the automatic exposure converged inside %d frames (last read %f)", maxFrames,
+              double(v->measuredExposureScale()));
     return frames;
 }
 

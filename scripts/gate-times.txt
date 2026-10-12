@@ -58,13 +58,13 @@ atom.coverage_trace 190.97  slot-era quiet n=4 (TC2B item 7's TIMEOUT sample)
 atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5
 atom.dag_bound_bar 18.70  quiet n=30
 atom.dag_chain_validate 12.07  quiet n=44
-atom.decode_exact 17.30  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 6-24)
+atom.decode_exact 22.44  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 atom.dolly_gate 27.89  quiet n=40
 atom.lod_bound_bar 11.36  quiet n=30
 atom.lod_switch 237.65  quiet n=43
 atom.lod_switch.fixture 0.05  quiet n=52
 atom.occlusion_exact 11.19  quiet n=45
-atom.removechild_leak 13.90  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 6-24)
+atom.removechild_leak 15.02  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 atom.two_sided 3.22  quiet n=44
 atom.words_still 2.04  quiet n=42
 audio.peaks 0.83  quiet n=24
@@ -137,8 +137,8 @@ engine.descriptor_pools 3.90  quiet n=43
 engine.error_pump 1.18  quiet n=44
 engine.frame_catch 1.39  quiet n=44
 engine.gi_scan 2.38  quiet n=43
-engine.gpu_cull 8.70  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 6-24)
-engine.gpu_cull.timing 26.07  all n=2
+engine.gpu_cull 13.20  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+engine.gpu_cull.timing 9.20  n=1 at one dolly cycle (the whole card), 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 engine.gpu_scene 1.62  quiet n=43
 engine.headless 0.02  quiet n=44
 engine.lod_hysteresis 1.61  quiet n=44
@@ -658,7 +658,7 @@ scale.cpu_walks 15.07  quiet n=46
 scale.gpu_coverage 11.99  quiet n=25
 scale.library 43.00  quiet n=46
 scale.library.fixture 0.06  quiet n=101
-scale.lights 13.23  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 10-24)
+scale.lights 16.50  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 scale.occlusion 45.24  quiet n=44
 scale.shadow_cut 27.18  quiet n=48
 scene.reopen_fidelity 74.07  quiet n=45
@@ -737,12 +737,12 @@ services.ogre_samples 0.01  quiet n=25
 services.scene_stats 0.04  quiet n=46
 services.selection_set 0.04  quiet n=46
 settings.store 0.56  quiet n=12
-shader.async_after_open 33.10  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 6-24)
+shader.async_after_open 34.26  median of 4, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shader.async_soak 104.91  quiet n=3
 shader.live_compiles 91.32  quiet n=18
 shader.sample_opens_quiet 184.97  quiet n=4
-shadercache.app 42.75  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=2 lane runs, box loaded (load 10-24)
-shadercache.app.churn 64.05  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=2 lane runs, box loaded (load 10-24)
+shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.app.churn 64.28  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadercache.container 52.28  slot-era quiet n=5 (TC2B item 7's TIMEOUT sample)
 shadercache.container_asan 344.68  all n=2
 shadercache.engine_pipelines 11.27  quiet n=36
@@ -765,12 +765,12 @@ shadow.atom_cut 8.61  quiet n=46
 shadow.atom_parity 18.84  quiet n=44
 shadow.cache_kinds 4.38  quiet n=42
 shadow.caster_first_frame 8.71  quiet n=46
-shadow.cutout_caster 43.80  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 10-24)
+shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadow.cutout_caster.churn 758.71  all n=2
 shadow.helper_casters 1.55  quiet n=26
 shadow.layout 0.01  quiet n=44
 shadow.stock_lod 1.99  quiet n=42
-shadow.two_sided_caster 33.60  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=3 lane runs, box loaded (load 10-24)
+shadow.two_sided_caster 37.82  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadow.two_sided_caster.churn 658.36  all n=2
 shell.contract 0.02  quiet n=24
 shortcuts.registry 0.02  quiet n=24
@@ -821,7 +821,7 @@ ssr.edge 1.92  quiet n=40
 ssr.engine 5.82  quiet n=39
 ssr.engine_asan 19.66  quiet n=39
 ssr.rings 1.73  quiet n=38
-test_engine 15.91  TESTING-SPEED-B3 tip 2026-10-12: the frame-counted exposure waits, the lowest of n=2 runs (load 6)
+test_engine 15.99  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 test_engine_asan 71.07  quiet n=40
 test_engine_recreate 4.18  quiet n=44
 testing_speed_a.boot_profile 70.00  TESTING-SPEED-A: two engine selftests (the lane's own row)
@@ -834,10 +834,10 @@ threading.freshhome.import_soak 0.01  quiet n=50
 threading.freshhome.newproject_stall 0.01  quiet n=50
 threading.freshhome.newproject_stall_timing 0.01  quiet n=25
 threading.freshhome.texture_wait_watchdog 0.01  quiet n=46
-threading.gi_resolve 103.59  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=2 lane runs, box loaded (load 10-24)
+threading.gi_resolve 108.65  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 threading.import_soak 42.59  quiet n=50
 threading.import_soak.no_groupless_texture 0.01  quiet n=48
-threading.mode 96.00  TESTING-SPEED-B3 tip 2026-10-12: the lowest of n=2 lane runs, box loaded (load 10-24)
+threading.mode 99.39  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 threading.newproject_stall 38.65  quiet n=50
 threading.newproject_stall.no_groupless_texture 0.01  quiet n=48
 threading.newproject_stall.timing 14.72  hand: its TESTING-DEBTS-1 dev run (the fixture: a wipe) (no PASS run in the log)

@@ -197,8 +197,9 @@ set_tests_properties(scale.cluster_cut scale.levels scale.residency scale.bake P
 # atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
 # still and without holes (its first form proved it byte-identical to the late-discard loop).
 # A pixel suite (no time measured): never the GPU lock.
-# budget 20 s: the measurement (TESTING-SPEED-B3): the settles counted to where the value stops moving — 931 frames
-# (1,825 before), 17.3 s at load 6 / 22.4-24 s at load 10-20 at the tip (41 s quiet / 51-63 s loaded at the base).
+# budget 25 s: the measurement, a LOADED box (TESTING-SPEED-B3, 2026-10-12): the settles counted to where the value
+# stops moving — 931 frames (1,825 before); 17.3 / 22.4 / 24 s at load 6-20 (median 22.4; 41 s quiet / 51-63 s loaded
+# at the base). A bound: the solo price, re-measured at the close, sits under it.
 jah_gpu_row(atom.decode_exact CLASS engine TOKENS 2 COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -226,7 +227,8 @@ set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1150 LABELS "engine;
 # its own knobs to one short landing (JAH_TRACE_LANDING=10), the removeChild arm (20 frames) and the re-add (10 frames),
 # no walk (JAH_TRACE_FRAMES=0: the walk's bars are coverage_trace's, armed only past frame 900). The frames it samples
 # still answer the coverage bars (no frame fails > 0.5 %, none loses half its coverage). (TESTING-SPEED-B3)
-# budget 15 s: the measurement (the lead, 2026-10-12) — 327 frames, 13.9 s at load 6 (15.0-15.7 s loaded) at the tip:
+# budget 20 s: the measurement, a LOADED box (the lead, 2026-10-12) — 327 frames; 13.9 / 15.0 / 15.7 s at load 6-20
+# (median 15.0); a bound, the solo price re-measured at the close:
 # the dense 10k world's boot and the code chart are ~12 s of it, and they are the subject (the leak needs a DAG mesh
 # among the world's).
 jah_gpu_row(atom.removechild_leak CLASS engine TOKENS 2 COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")

@@ -25,8 +25,9 @@ target_link_libraries(test_gpu_cull PRIVATE JahshakaEngine)
 add_dependencies(test_gpu_cull JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_cull CLASS engine COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# budget 10 s: the measurement (TESTING-SPEED-B3): one dolly cycle (900 frames) for four identical ones — 916 frames,
-# 8.7 s at load 6, 13.2 s at load 10 at the tip (57-68 s loaded at the base).
+# budget 15 s: the measurement, a LOADED box (TESTING-SPEED-B3, 2026-10-12): one dolly cycle (900 frames) for four
+# identical ones — 916 frames; 8.7 / 13.2 / 22.2 s at load 6-20 (median 13.2; 57-68 s loaded at the base). A bound:
+# the solo price, re-measured at the close, sits under it.
 set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
 # engine.gpu_cull.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.

@@ -81,6 +81,10 @@ endif()
 #   shadercache.app.churn  `--churn`, stage-close, its own home: a seeding cold launch, then the save
 #                          under churn (the SMOKE-ENGINE-1 crash: the pass-cache delta < 8 across 300 sky
 #                          captures, the capacity >= 8192), unchanged.
+# WHAT MOVED WITH THE SPLIT, ON RECORD (the read's F2, accepted by the lead 2026-10-12): the old run 3 loaded a cache
+# that a WARM launch had saved (run 2's clean-quit save). The merge row no longer has that warm-save -> next-load
+# round trip; shadercache.app.churn covers it at the sprint close — its churn launch loads the cache its seeding cold
+# launch saved at its clean quit.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 add_executable(test_shader_cache_app test_shader_cache_app.cpp)
 set_target_properties(test_shader_cache_app PROPERTIES CXX_STANDARD 17
