@@ -158,9 +158,8 @@
    "evidence": "spikes/views-depth-1/EVIDENCE.txt",
    "must": [],
    "env": [],
-   "max_rows": 10,
    "note": "the old selector fell back on the suite's Xid wrapper (deleted since TEST-SELECTOR-1 H4); the change is one suite's registration, its script and its wrapper",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in). TESTING-SPEED-B1 (the lead, 2026-10-12): the case is DROPPED — its max_rows (<= 10) deleted, nothing asserted: the row it exercised, photon.view, is deleted, so a change to its (now nonexistent) registration and script falls to the directory's subsystem, the whole gi family (119 rows) — the selector's safe answer and correct; no other row's diff in this range stands in"
   },
   {
    "lane": "ATOM-CPU-WALKS-1",
