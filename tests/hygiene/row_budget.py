@@ -7,9 +7,12 @@ tests/hygiene/row_budgets.txt, the lead's ROWS table) or its class's: a fixture 
 app row 60 s, a pool 60 s OF ARMS (the sum of its <pool>::<arm> prices, the boot on top) (the class read from the row's admission label `<row>:<class>`, a pool's `pool` label). A row over
 its budget is A RED OF THE ROW — cut its frames, split it, or move it to the stage close — never a widened budget.
 
-RED BY DESIGN ON THE BASE (0beeac4d3) until TESTING-SPEED-B lands Part B: the 45 KEEP:rewrite rows of the ROWS table are
-over their budgets by definition (that is why they are rewritten); the row prints them and names the lane that owes them,
-so the door reads a known red (the lead registers it at TESTING-SPEED-A's land). Rows whose fate is MOVE:stage-close,
+TWO SETS, PRINTED AND FAILED SEPARATELY (round 4, A): (1) the KEEP:rewrite rows over budget — RED BY DESIGN until
+TESTING-SPEED-B lands Part B (they are over by definition: that is why they are rewritten); this set alone is the by-design
+red the brief names and the delivery registers; (2) the OTHER kept rows over budget — NOT by design: a real red, printed as
+its own check with its list, which the lead registers at the delivery as owed to the sprint close's solo re-price (the
+prices of record are contention medians until then). The second set's check is printed FIRST, so the row's first FAIL
+line names it whenever it is non-empty: a known red registered for the first set never answers the second. Rows whose fate is MOVE:stage-close,
 THROW, SETUP or TOOLING are Part B's (moved, deleted, following their consumer, the tools' own); a stage-close / target /
 hygiene / tooling labelled row is not a merge row at all. Fed a violation first (a lint that cannot fail guards nothing).
 
@@ -125,11 +128,17 @@ def main(source, build):
     other = [x for x in bad if x[3] != "KEEP:rewrite"]
     print("the tree: %d kept merge row(s) over budget — %d KEEP:rewrite (owed by %s), %d other"
           % (len(bad), len(rewrite), OWED_BY, len(other)))
-    for name, p, b_, fate in bad:
-        print("  OVER  %-48s %7.1f s > %5.1f s  (%s%s)" % (name, p, b_, fate,
-                                                         ", owed by " + OWED_BY if fate == "KEEP:rewrite" else ""))
-    check(not bad, "every kept merge row is inside its budget (%d over: %d KEEP:rewrite rows — KNOWN RED BY DESIGN until "
-          "%s lands Part B — and %d other)" % (len(bad), len(rewrite), OWED_BY, len(other)))
+    for title, set_ in (("OTHER kept rows over budget — NOT by design (a real red; registered at the delivery, owed to the "
+                         "sprint close's solo re-price):", other),
+                        ("KEEP:rewrite rows over budget — RED BY DESIGN (owed by %s):" % OWED_BY, rewrite)):
+        print(title)
+        for name, p, b_, fate in set_:
+            print("  OVER  %-48s %7.1f s > %5.1f s  (%s)" % (name, p, b_, fate))
+    check(not other, "every OTHER kept merge row (not KEEP:rewrite) is inside its budget — NOT by design: %d over (%s); the "
+          "lead registers them at the delivery, owed to the sprint close's solo re-price"
+          % (len(other), " ".join(x[0] for x in other)))
+    check(not rewrite, "every KEEP:rewrite row is inside its budget — RED BY DESIGN until %s lands Part B: %d over"
+          % (OWED_BY, len(rewrite)))
     if FAILURES:
         print("source.row_budget: FAILED (%d)" % len(FAILURES))
         return 1
