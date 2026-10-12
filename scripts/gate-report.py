@@ -33,6 +33,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import ci_gate_check  # noqa: E402  (the door)
+# THE ONE SOLO PREDICATE (RUNNER-AUDIT-FIX-1 F1; FIX-2's hand-off): the attribution's tier-`solo` runs and gate-scope's
+# retries alike — the report counts what the door counts
+IS_SOLO = ci_gate_check.gate_runlog.is_solo
 
 GATE_TIERS = ("scoped", "scoped-fallback", "scoped-tier", "fork")
 # THE ARCHIVE'S OWN SPELLINGS: a schema-1 record (before 2026-10-09) names its lane in `lane` and a joint run's tier
@@ -83,7 +86,7 @@ def gates(R):
     rows = [r for r in R if r.get("kind") != "verdict" and r.get("arm") is None and r["_t"]]
     runs = collections.defaultdict(list)
     for r in rows:
-        if not r.get("retry"): runs[r.get("run")].append(r)
+        if not IS_SOLO(r): runs[r.get("run")].append(r)
     G = []
     for k, rs in runs.items():
         s = min(x["_t"] - datetime.timedelta(seconds=x.get("wallSeconds") or x.get("seconds") or 0) for x in rs)
@@ -108,8 +111,8 @@ def preflight_verdicts(R, contention):
         t = (v.get("tip") or {}).get("studio")
         recs = sorted([r for r in idx[(t, v.get("suite"), v.get("arm"))] if r["_t"] <= v["_t"]], key=lambda r: r["_t"])
         reds = [r for r in recs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN")]
-        lastred = max((r["_t"] for r in reds if not r.get("retry")), default=None)
-        solos = [r for r in recs if r.get("retry") and (lastred is None or r["_t"] > lastred)]
+        lastred = max((r["_t"] for r in reds if not IS_SOLO(r)), default=None)
+        solos = [r for r in recs if IS_SOLO(r) and (lastred is None or r["_t"] > lastred)]
         spass = sum(1 for r in solos if r.get("verdict") == "PASS")
         kinds = {r.get("verdict") for r in reds}
         text = v.get("text") or ""
@@ -123,10 +126,10 @@ def preflight_verdicts(R, contention):
         if "LOST" in kinds and not ci_gate_check._xid_window(text) and not ci_gate_check.DEFECT_ID.search(text):
             out["H1: a LOST verdict with no journal window (xid-read:) and no real:<id>"].append(tag)
         if reds:
-            gate_reds = [r for r in reds if not r.get("retry")]
+            gate_reds = [r for r in reds if not IS_SOLO(r)]
             last_gate = max((r["_t"] for r in gate_reds), default=None)
             all_solos = [r for r in idx[(t, v.get("suite"), v.get("arm"))]
-                         if r.get("retry") and last_gate is not None and r["_t"] > last_gate]
+                         if IS_SOLO(r) and last_gate is not None and r["_t"] > last_gate]
             ok, why, _ = ci_gate_check.door(text, reds, all_solos, v.get("arm") or v.get("suite"), DEFECTS)
             if not ok:
                 out["THE DOOR (VERDICT-1 U1, every rule incl. the class token)"].append(tag + (why[:70],))
@@ -174,11 +177,11 @@ def carried(R, repo, ref):
         if not t or a: continue
         rs = [r for r in rs if r["_t"] and (r.get("tier") in GATE_TIERS or ((r.get("schema") or 1) < 2 and r.get("tier")
                                                                              in ARCHIVE_GATE_TIERS)) and r.get("gating", True)]
-        reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not r.get("retry")]
+        reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not IS_SOLO(r)]
         if not reds: continue
         last = max(r["_t"] for r in reds)
         if any(x > last for x in vt.get((t, s, a), [])): continue
-        solos = [r for r in rs if r.get("retry") and r["_t"] > last]
+        solos = [r for r in rs if IS_SOLO(r) and r["_t"] > last]
         if s in CONT and len(solos) >= 3 and all(r.get("verdict") == "PASS" for r in solos): continue
         lane = sorted(_lanes(reds[-1]) or {"?"})[0]
         if lane not in merged or landed(t): continue
@@ -228,12 +231,12 @@ def main():
     # a lane tool's own runs (tier `lane`, GATE-COST-2) are no gate: never in the gate wall
     GW = [g for g in G if g["start"] >= start and g["tier"] != "lane"]
     full = [g for g in GW if g["n"] >= FULL_ROWS]
-    print("\n== 1. gates in the week (non-retry runs) ==")
+    print("\n== 1. gates in the week (non-solo runs) ==")
     print(f"  runs {len(GW)}  full-size (>= {FULL_ROWS} rows) {len(full)}  their wall {h(sum(g['h'] for g in full) * 3600)}")
     by = collections.defaultdict(lambda: [0, 0.0])
     for g in GW:
         by[g["tier"]][0] += 1; by[g["tier"]][1] += g["h"]
-    print(f"  summed gate wall (every non-retry run, rc tiers included): {sum(g['h'] for g in GW):.1f} h")
+    print(f"  summed gate wall (every non-solo run, rc tiers included): {sum(g['h'] for g in GW):.1f} h")
     print("  by kind: " + "  ".join(f"{t} {n} ({hh:.1f} h)" for t, (n, hh) in sorted(by.items(), key=lambda kv: -kv[1][0])))
     alone = [g for g in full if g["sib"] < ALONE_SIB]
     shared = [g for g in full if g["sib"] >= ALONE_SIB]
@@ -242,7 +245,7 @@ def main():
           f"(median {med([g['h'] for g in alone]):.2f} h)   SHARED: {len(shared)}, {sum(g['h'] for g in shared):.1f} h "
           f"(median {med([g['h'] for g in shared]):.2f} h)")
     wk = [r for r in rows if r["_t"] >= start]
-    solos = [r for r in wk if r.get("retry")]
+    solos = [r for r in wk if IS_SOLO(r)]
     print(f"\n== 2. solos ==\n  solo records {len(solos)}  {h(sum(r.get('seconds') or 0 for r in solos))}  rows "
           f"{len({r.get('suite') for r in solos})}  PASS {sum(1 for r in solos if r.get('verdict') == 'PASS')}")
     wk_all = [r for r in R if r.get("kind") != "verdict" and r["_t"] and r["_t"] >= start]
@@ -254,7 +257,7 @@ def main():
     print(f"  pools whose EVERY arm was NOADMIT recorded red (the hole U2 closes): {len(hole)}; recorded NOADMIT "
           f"(since U2): {len(fixed)}")
     for x in hole: print("    ", *x)
-    to = [r for r in wk if r.get("verdict") == "TIMEOUT" and not r.get("retry")]
+    to = [r for r in wk if r.get("verdict") == "TIMEOUT" and not IS_SOLO(r)]
     fam = collections.Counter((r.get("suite") or "?").split(".")[0] for r in to)
     print(f"\n== 4. TIMEOUT by family (week, gate rows) ==\n  {len(to)}: " +
           "  ".join(f"{k} {n}" for k, n in fam.most_common(12)))
@@ -285,7 +288,7 @@ def main():
         print("  (empty)")
     STAGE = ("stage", "stage-close")        # STAGE-CLOSE-1's batches are tier `stage-close`
     st = [g for g in GW if g["tier"] in STAGE]
-    st_rows = [r for r in wk if r.get("tier") in STAGE and not r.get("retry")]
+    st_rows = [r for r in wk if r.get("tier") in STAGE and not IS_SOLO(r)]
     print(f"\n== 7. stage-close rows ==\n  stage runs {len(st)}  rows {len(st_rows)}  {sum(g['h'] for g in st):.1f} h  reds "
           f"{sum(1 for r in st_rows if r.get('verdict') != 'PASS')}")
     s2 = [r for r in wk_all if (r.get("schema") or 1) >= 2]

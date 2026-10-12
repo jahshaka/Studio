@@ -2437,6 +2437,8 @@ def main():
                     rc_ = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '^{re.escape(s_)}$'",
                         build, "solo", lane, 1, reasons={s_: "solo: dropped red by an abort"}, rng=log_range,
+                        # retry=True KEPT: gate_runlog.is_solo (the one solo predicate) reads it — this record's tier is
+                        # `solo` already; the flag makes it a solo whatever the tier argument becomes
                         retry=True, env=env_, labels=labels, whole_card=False, fallback=fb_)) or rc_
         finally:
             gate_runlog._vram().release(card)
@@ -2500,6 +2502,8 @@ def main():
                     r = lost(gate_runlog.run_ctest(
                         f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
                         build, a.tier or "solo", lane, 1, reasons={s: "solo retry"},
+                        # retry=True KEPT: this solo records under the CALLER's tier (a.tier) — gate_runlog.is_solo (the
+                        # one solo predicate) knows it as a solo by this flag only
                         rng=log_range, retry=True, env=env, whole_card=False, fallback=fallback))
                     rc = rc or r
         finally:
