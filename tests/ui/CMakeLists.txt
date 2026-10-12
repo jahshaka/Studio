@@ -157,6 +157,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_dependencies(test_engine_view_winid JahshakaEngineMedia)
     jah_gpu_row(ui.engine_view_winid CLASS engine COMMAND test_engine_view_winid
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(ui.engine_view_winid PROPERTIES JAHSHAKA_TEST_FRAMES 12)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     set_tests_properties(ui.engine_view_winid PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb"
         TIMEOUT 120 LABELS "ui")
@@ -1478,6 +1479,7 @@ set(_columns_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns)
 file(MAKE_DIRECTORY ${_columns_home}/run)
 jah_gpu_row(ui.column_law CLASS app TIER low NEEDS NONE COMMAND test_column_law
          WORKING_DIRECTORY ${_columns_home}/run)
+set_tests_properties(ui.column_law PROPERTIES JAHSHAKA_TEST_FRAMES 519)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.column_law PROPERTIES
     ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
@@ -1505,6 +1507,7 @@ set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
 file(MAKE_DIRECTORY ${_space_docks_home}/run)
 jah_gpu_row(ui.space_docks CLASS app TIER low NEEDS NONE COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
+set_tests_properties(ui.space_docks PROPERTIES JAHSHAKA_TEST_FRAMES 631)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
     TIMEOUT 480 LABELS "ui")
@@ -1531,6 +1534,7 @@ set(_winmin_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum)
 file(MAKE_DIRECTORY ${_winmin_home}/run)
 jah_gpu_row(ui.window_minimum CLASS app TIER low NEEDS NONE COMMAND test_window_minimum
          WORKING_DIRECTORY ${_winmin_home}/run)
+set_tests_properties(ui.window_minimum PROPERTIES JAHSHAKA_TEST_FRAMES 508)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.window_minimum PROPERTIES
     ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")
@@ -1562,6 +1566,7 @@ set(_matdrag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag)
 file(MAKE_DIRECTORY ${_matdrag_home}/run)
 jah_gpu_row(ui.material_drag CLASS app TIER low NEEDS NONE COMMAND test_material_drag
          WORKING_DIRECTORY ${_matdrag_home}/run)
+set_tests_properties(ui.material_drag PROPERTIES JAHSHAKA_TEST_FRAMES 504)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
     TIMEOUT 240 LABELS "ui")
@@ -1583,6 +1588,7 @@ set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
 jah_gpu_row(ui.shot_aspect CLASS app TIER low NEEDS NONE NEEDS_WHY "an offscreen shot is a function of pose and shot size: two window shapes, one boot, identical bytes (no feature claim)" COMMAND test_shot_aspect
          WORKING_DIRECTORY ${_shot_home}/run)
+set_tests_properties(ui.shot_aspect PROPERTIES JAHSHAKA_TEST_FRAMES 510)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "ui")

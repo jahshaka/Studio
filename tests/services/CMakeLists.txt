@@ -94,6 +94,7 @@ target_link_libraries(test_engine_error_pump PRIVATE IrisGL JahshakaEngine Qt6::
 add_dependencies(test_engine_error_pump JahshakaEngineMedia)
 jah_gpu_row(engine.error_pump CLASS engine COMMAND test_engine_error_pump
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(engine.error_pump PROPERTIES JAHSHAKA_TEST_FRAMES 0)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 120 LABELS "services")
 
 # services.memory — session-registry OWNERSHIP (deep audit 2026-09, area 3).

@@ -24,6 +24,7 @@ set(_avatar_async_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async)
 file(MAKE_DIRECTORY ${_avatar_async_home}/run)
 jah_gpu_row(avatar.responsive CLASS app TIER epic NEEDS photon COMMAND test_avatar_async
          WORKING_DIRECTORY ${_avatar_async_home}/run)
+set_tests_properties(avatar.responsive PROPERTIES JAHSHAKA_TEST_FRAMES 921)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
     TIMEOUT 360 LABELS "avatar")

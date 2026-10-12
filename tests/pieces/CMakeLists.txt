@@ -28,6 +28,7 @@ jahshaka_piece_test(test_piece_spike test_piece_spike.cpp)
 jah_gpu_row(pieces.spike CLASS engine
          COMMAND test_piece_spike "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(pieces.spike PROPERTIES JAHSHAKA_TEST_FRAMES 56)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(pieces.spike PROPERTIES TIMEOUT 120 LABELS "pieces")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 
@@ -39,6 +40,7 @@ jahshaka_piece_test(test_live_paths test_live_paths.cpp)
 jah_gpu_row(pieces.live_paths CLASS engine
          COMMAND test_live_paths "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(pieces.live_paths PROPERTIES JAHSHAKA_TEST_FRAMES 18)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(pieces.live_paths PROPERTIES TIMEOUT 120 LABELS "pieces")
 
 # shadergraph.emitter_parity — THE DIFFERENTIAL ORACLE. Needs BOTH halves: the
@@ -84,6 +86,7 @@ add_dependencies(test_emitter_parity JahshakaEngineMedia)
 jah_gpu_row(shadergraph.emitter_parity CLASS engine
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.emitter_parity PROPERTIES JAHSHAKA_TEST_FRAMES 92)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 120 LABELS "pieces")
 
 # shadergraph.emitter_pieces — naming, dedup, the piece-collision allow-list,
@@ -172,6 +175,7 @@ target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Q
 add_dependencies(test_piece_mirror JahshakaEngineMedia)
 jah_gpu_row(pieces.mirror CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(pieces.mirror PROPERTIES JAHSHAKA_TEST_FRAMES 127)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(pieces.mirror PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "pieces")
 

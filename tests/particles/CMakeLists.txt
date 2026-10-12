@@ -16,6 +16,7 @@ target_compile_definitions(test_particles PRIVATE
 target_link_libraries(test_particles PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_particles JahshakaEngineMedia)
 jah_gpu_row(particles.document_to_engine CLASS engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(particles.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 357)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
 # ParticleFX2 adoption (PARTICLES_FX2_SPEC.md phase 0): the ENGINE's own
@@ -32,6 +33,7 @@ target_compile_definitions(test_particles_pfx2 PRIVATE
 target_link_libraries(test_particles_pfx2 PRIVATE JahshakaEngine Qt6::Gui)
 add_dependencies(test_particles_pfx2 JahshakaEngineMedia)
 jah_gpu_row(engine.particles_pfx2 CLASS engine COMMAND test_particles_pfx2 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.particles_pfx2 PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(engine.particles_pfx2 PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
@@ -55,6 +57,7 @@ if(JAHSHAKA_ASAN)
     add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
     jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.particles_pfx2_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Leak detection off for the same reason the engine suite turns it off: the
     # only leaks are libdbus allocations behind the Vulkan loader.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
@@ -84,5 +87,6 @@ target_link_libraries(test_particles_fire PRIVATE IrisGL JahshakaEngine Qt6::Gui
 add_dependencies(test_particles_fire JahshakaEngineMedia)
 jah_gpu_row(particles.fire_shape CLASS engine COMMAND test_particles_fire
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(particles.fire_shape PROPERTIES JAHSHAKA_TEST_FRAMES 191)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.fire_shape PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")

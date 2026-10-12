@@ -80,12 +80,21 @@ target_compile_definitions(test_vr_session PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_vr_session JahshakaEngineMedia)
 
+# THE VR RUNTIME ROWS RUN AT THE SHIP (TESTING-SPEED-B4; SPECS/TESTING_SPEED_ROWS.md, vr): every row
+# below that starts a Monado runtime — vr.session, vr.gather_stereo, vr.no_picture_start, vr.mirror_live,
+# vr.start_recovery, vr.start_press, vr.start_broken (a broken manifest, but its wrapper still SKIPs
+# without Monado: it moves with them), vr.input_session, vr.warmup, vr.warmup_control, vr.eye_grade and
+# the two pools pool.vr_session / pool.vr_validation — carries `stage-close` (the SHIP run only); their
+# fresh-home fixtures carry it with them. Rows, locks, budgets and bars unchanged. vr.session_undithered
+# (7 s, the byte-identical eyes) and vr.grab_maths stay in the merge tier; the no-runtime VR fixtures
+# (pool.vr_noruntime) are tests/scripting's.
 jah_gpu_row(vr.session CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session PROPERTIES JAHSHAKA_TEST_FRAMES 1136)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.session PROPERTIES
-    LABELS "engine"
+    LABELS "engine;stage-close"
     TIMEOUT 480
     # One Monado at a time (the family lock, tests/CMakeLists.txt): the runtime's
     # IPC socket is private to the run (run_vr_session.sh's own XDG_RUNTIME_DIR),
@@ -108,6 +117,7 @@ jah_gpu_row(vr.session_undithered CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_undithered PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.session_undithered PROPERTIES
     LABELS "engine"
     TIMEOUT 420
@@ -138,8 +148,9 @@ jah_gpu_row(vr.gather_stereo CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_gather>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.gather_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 344)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.gather_stereo PROPERTIES
-    LABELS "engine"
+    LABELS "engine;stage-close"
     TIMEOUT 540
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -180,8 +191,9 @@ jah_gpu_row(vr.no_picture_start CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_no_picture_start.js")
+set_tests_properties(vr.no_picture_start PROPERTIES JAHSHAKA_TEST_FRAMES 729)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.no_picture_start PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 360
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -216,10 +228,11 @@ jah_gpu_row(vr.mirror_live CLASS vr TIER epic NEEDS photon
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.mirror_live PROPERTIES JAHSHAKA_TEST_FRAMES 859)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 330 = 6 x the run log's quiet median 53.9 s (46 quiet PASS runs since 2026-10-01, worst 168.6 s);
 # declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(vr.mirror_live PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 330
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -236,8 +249,9 @@ jah_gpu_row(vr.start_recovery CLASS vr TIER epic NEEDS photon
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_recovery PROPERTIES JAHSHAKA_TEST_FRAMES 792)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.start_recovery PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 300
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -253,8 +267,9 @@ jah_gpu_row(vr.start_press CLASS vr TIER epic NEEDS photon
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_press.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_press PROPERTIES JAHSHAKA_TEST_FRAMES 712)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.start_press PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 300
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -270,8 +285,9 @@ jah_gpu_row(vr.start_broken CLASS vr TIER epic NEEDS photon
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
                  "${CMAKE_CURRENT_SOURCE_DIR}/vr_start_broken.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.start_broken PROPERTIES JAHSHAKA_TEST_FRAMES 516)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.start_broken PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 240
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -303,8 +319,9 @@ jah_gpu_row(vr.input_session CLASS vr TIER low NEEDS NONE
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_input_session.js"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.input_session PROPERTIES JAHSHAKA_TEST_FRAMES 776)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.input_session PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     TIMEOUT 480
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
@@ -343,20 +360,23 @@ foreach(_arm warmup warmup_control)
     else()
         set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
     endif()
-    jah_fresh_home_fixture(vr.${_arm}.fresh_home vr${_arm}FreshHome "${_vr_warm_home}" LABELS "scripting")
+    jah_fresh_home_fixture(vr.${_arm}.fresh_home vr${_arm}FreshHome "${_vr_warm_home}" LABELS "scripting;stage-close")
     jah_gpu_row(vr.${_arm} CLASS vr TIER epic NEEDS photon bloom ssao smaa planar
              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                      "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                      "${_vr_warm_script}"
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(vr.${_arm} PROPERTIES
-        LABELS "scripting"
+        LABELS "scripting;stage-close"
         TIMEOUT 600
         RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
         SKIP_RETURN_CODE 77
         FIXTURES_REQUIRED vr${_arm}FreshHome
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
 endforeach()
+# the frames each arm renders, counted 2026-10-12 (TESTING-SPEED-B4)
+set_tests_properties(vr.warmup PROPERTIES JAHSHAKA_TEST_FRAMES 514)
+set_tests_properties(vr.warmup_control PROPERTIES JAHSHAKA_TEST_FRAMES 495)
 # vr.warmup.timing — the warmed arm's 250 ms worst-frame bar, stage-close (lane D6B-GATE-SHAPE;
 # audit §5 F17 FIX-TIME). The COUNT (no compile on a shown frame) is vr.warmup's at push; this
 # is a generated copy of the same script with the bar armed (jah_timing_script), on its own
@@ -455,8 +475,9 @@ jah_gpu_row(vr.eye_grade CLASS vr TIER epic NEEDS photon bloom ssao smaa planar
                  "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js"
                  "$<TARGET_FILE:test_vr_eye_grade>" "${JAH_EYE_GRADE_DIR}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.eye_grade PROPERTIES JAHSHAKA_TEST_FRAMES 6531)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(vr.eye_grade PROPERTIES
-    LABELS "scripting"
+    LABELS "scripting;stage-close"
     # Five arms, each settling and then rendering a ~90-frame mono control for
     # the eye screenshot, on a rig whose present copy is 10-27 ms a frame.
     TIMEOUT 900
@@ -487,7 +508,7 @@ jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scrip
 jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
 jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
 jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
-jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting
+jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting stage-close
     LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
     APP_ARGS --vr
     ENV "${JAH_TEST_DISPLAY_ENV}"
@@ -502,7 +523,7 @@ jah_add_pool(vr_session TIER document   CLASS vr LABELS scripting
 if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
     jah_pool_arm(vr_validation validation_proof ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_validation_proof.js 5 FIRST)
     jah_pool_arm(vr_validation verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
-    jah_add_pool(vr_validation TIER epic NEEDS photon bloom ssao smaa planar CLASS vr LABELS scripting
+    jah_add_pool(vr_validation TIER epic NEEDS photon bloom ssao smaa planar CLASS vr LABELS scripting stage-close
         LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
         APP_ARGS --vr
         ENV "${JAH_TEST_DISPLAY_ENV}" "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
@@ -521,34 +542,34 @@ endforeach()
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST vr.no_picture_start)
-    jah_fresh_home_fixture(vr.no_picture_start.fresh_home vrNoPictureStartFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-nopicture-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.no_picture_start.fresh_home vrNoPictureStartFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-nopicture-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.no_picture_start APPEND PROPERTY FIXTURES_REQUIRED vrNoPictureStartFreshHome)
 endif()
 if(TEST vr.mirror_live)
-    jah_fresh_home_fixture(vr.mirror_live.fresh_home vrMirrorLiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.mirror_live.fresh_home vrMirrorLiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.mirror_live APPEND PROPERTY FIXTURES_REQUIRED vrMirrorLiveFreshHome)
 endif()
 if(TEST vr.start_recovery)
-    jah_fresh_home_fixture(vr.start_recovery.fresh_home vrStartRecoveryFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.start_recovery.fresh_home vrStartRecoveryFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.start_recovery APPEND PROPERTY FIXTURES_REQUIRED vrStartRecoveryFreshHome)
 endif()
 if(TEST vr.start_press)
-    jah_fresh_home_fixture(vr.start_press.fresh_home vrStartPressFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-press-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.start_press.fresh_home vrStartPressFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-press-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.start_press APPEND PROPERTY FIXTURES_REQUIRED vrStartPressFreshHome)
 endif()
 if(TEST vr.start_broken)
-    jah_fresh_home_fixture(vr.start_broken.fresh_home vrStartBrokenFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-broken-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.start_broken.fresh_home vrStartBrokenFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-start-broken-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.start_broken APPEND PROPERTY FIXTURES_REQUIRED vrStartBrokenFreshHome)
 endif()
 if(TEST vr.input_session)
-    jah_fresh_home_fixture(vr.input_session.fresh_home vrInputSessionFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.input_session.fresh_home vrInputSessionFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.input_session APPEND PROPERTY FIXTURES_REQUIRED vrInputSessionFreshHome)
 endif()
 if(TEST vr.frame_budget)
-    jah_fresh_home_fixture(vr.frame_budget.fresh_home vrFrameBudgetFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.frame_budget.fresh_home vrFrameBudgetFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.frame_budget APPEND PROPERTY FIXTURES_REQUIRED vrFrameBudgetFreshHome)
 endif()
 if(TEST vr.eye_grade)
-    jah_fresh_home_fixture(vr.eye_grade.fresh_home vrEyeGradeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-home" WARM LABELS "scripting;vr")
+    jah_fresh_home_fixture(vr.eye_grade.fresh_home vrEyeGradeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-home" WARM LABELS "scripting;vr;stage-close")
     set_property(TEST vr.eye_grade APPEND PROPERTY FIXTURES_REQUIRED vrEyeGradeFreshHome)
 endif()

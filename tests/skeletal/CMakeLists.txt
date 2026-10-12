@@ -17,6 +17,7 @@ target_compile_definitions(test_skeletal_animation PRIVATE
 target_link_libraries(test_skeletal_animation PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_skeletal_animation JahshakaEngineMedia)
 jah_gpu_row(skeletal.cpu_skinning CLASS engine COMMAND test_skeletal_animation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.cpu_skinning PROPERTIES JAHSHAKA_TEST_FRAMES 15)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(skeletal.cpu_skinning PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # GPU_SKINNING_SPEC phase 1 / T4: per-node pose ownership, document-only (no
@@ -55,6 +56,7 @@ target_compile_definitions(test_rig_translation PRIVATE
 target_link_libraries(test_rig_translation PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_rig_translation JahshakaEngineMedia)
 jah_gpu_row(skeletal.rig_translation CLASS engine COMMAND test_rig_translation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.rig_translation PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(skeletal.rig_translation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # GPU_SKINNING_SPEC phase 3 / T3-T6: THE gate. The same rig and the same pose,
@@ -75,6 +77,7 @@ target_compile_definitions(test_gpu_parity PRIVATE
 target_link_libraries(test_gpu_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_gpu_parity JahshakaEngineMedia)
 jah_gpu_row(skeletal.gpu_parity CLASS engine COMMAND test_gpu_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.gpu_parity PROPERTIES JAHSHAKA_TEST_FRAMES 393)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(skeletal.gpu_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # The aiScene overload of loadAsSceneFragment: the library/import side of the
@@ -143,6 +146,7 @@ target_compile_definitions(test_gpu_clips PRIVATE
 target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_gpu_clips JahshakaEngineMedia)
 jah_gpu_row(skeletal.gpu_clips CLASS engine COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.gpu_clips PROPERTIES JAHSHAKA_TEST_FRAMES 66)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # AVATAR_RIG_PERF_SPEC P1a: the CHARACTER rig — the union of a multi-piece
@@ -197,7 +201,8 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
-    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share is the merge row.
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     jah_no_display(skeletal.share_asan)
 endif()

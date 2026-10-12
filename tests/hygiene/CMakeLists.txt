@@ -326,7 +326,7 @@ add_test(NAME source.gpu_rows_closure
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gpu_rows_closure.py"
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
-set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene")
+set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.gpu_rows_closure)
 
 # source.row_declares_needs — TEST-NEEDS-1: every row that starts the app declares the World Mode
@@ -339,7 +339,7 @@ add_test(NAME source.row_declares_needs
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_declares_needs.py"
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
-set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene")
+set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.row_declares_needs)
 
 # gate.tokens_by_needs — TEST-NEEDS-1: the token lookup (tests/support/vram_tokens.cmake, included

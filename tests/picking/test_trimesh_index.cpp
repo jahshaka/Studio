@@ -15,6 +15,13 @@
 // The brute-force reference is the loop the tree used to run, written here over
 // TriMesh::segmentHitsTriangle — the one triangle test both paths share.
 //
+// THE SEGMENT COUNT (TESTING-SPEED-B4, the lead's coverage decision 2026-10-12): the
+// 233k-triangle soup is picked by 100 random segments (+ the axis and grazing sets
+// derived from that count: 250 in all), not 400 — an index correctness check is
+// any-mismatch-is-a-bug, and at ~20 ms per brute-force reference pick in Debug the
+// 400 (1,000 segments) cost 20 s of a 29 s row for no case 100 does not reach. The
+// soup, the samples, the degenerate meshes and the exact compare are unchanged.
+//
 // Optional argument: a model file (any format assimp reads, e.g. the owner's
 // greek_temple_scan.glb) — its meshes join the sample set and the timing line
 // reports brute force vs the index on its biggest mesh. Timings are PRINTED,
@@ -236,7 +243,7 @@ int main(int argc, char **argv)
     for (Sample &s : samples) {
         s.mesh.buildIndex();
         if (s.mesh.hasIndex()) ++indexed;
-        const auto segs = segmentsFor(s.mesh, rng, s.mesh.triangles.size() > 100000 ? 400 : 200);
+        const auto segs = segmentsFor(s.mesh, rng, s.mesh.triangles.size() > 100000 ? 100 : 200);
         segments += int(segs.size());
         hitting += compare(s.name.c_str(), s.mesh, segs, mismatches);
     }

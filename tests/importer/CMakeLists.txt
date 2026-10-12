@@ -156,6 +156,7 @@ jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)
 jah_gpu_row(importer.meshformats CLASS engine COMMAND test_importer_meshformats
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.meshformats PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(importer.meshformats PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 
@@ -349,6 +350,7 @@ target_link_libraries(test_importer_materials PRIVATE IrisGL JahshakaEngine
 add_dependencies(test_importer_materials JahshakaEngineMedia)
 jah_gpu_row(importer.materials CLASS engine COMMAND test_importer_materials
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.materials PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(importer.materials PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 

@@ -20,6 +20,7 @@ target_compile_definitions(test_thumbnails PRIVATE
 target_link_libraries(test_thumbnails PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_thumbnails JahshakaEngineMedia)
 jah_gpu_row(thumbnails.engine CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnails WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(thumbnails.engine PROPERTIES JAHSHAKA_TEST_FRAMES 18)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): MaterialReader::
@@ -121,6 +122,7 @@ add_dependencies(test_shader_thumbnail JahshakaEngineMedia)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 jah_gpu_row(thumbnails.shader CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_shader_thumbnail
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
+set_tests_properties(thumbnails.shader PROPERTIES JAHSHAKA_TEST_FRAMES 8)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # thumbnails.sweep — the REPAIR SWEEP's contract (THUMBS-1 fix round F1/F2/F6):
@@ -212,6 +214,7 @@ target_link_libraries(test_thumbnail_sweep PRIVATE IrisGL JahshakaEngine Qt6::Gu
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
 jah_gpu_row(thumbnails.sweep CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnail_sweep
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
+set_tests_properties(thumbnails.sweep PROPERTIES JAHSHAKA_TEST_FRAMES 0)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.sweep PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
 
 # thumbnails.studio_env — THE ONE STUDIO ENVIRONMENT, measured
@@ -239,4 +242,5 @@ target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6
 add_dependencies(test_preview_environment JahshakaEngineMedia)
 jah_gpu_row(thumbnails.studio_env CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(thumbnails.studio_env PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

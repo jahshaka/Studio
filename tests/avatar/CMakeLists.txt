@@ -129,6 +129,7 @@ target_link_libraries(test_avatar_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 add_dependencies(test_avatar_preview JahshakaEngineMedia beta_mannequin)
 jah_gpu_row(avatar.preview CLASS engine COMMAND test_avatar_preview WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.preview PROPERTIES JAHSHAKA_TEST_FRAMES 121)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.preview PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "avatar")
 
 # avatar.movement — AVATAR_LOCOMOTION_SPEC Stage 2, gates M1-M7.
@@ -247,6 +248,7 @@ target_link_libraries(test_avatar_locomotion_mirror PRIVATE IrisGL JahshakaEngin
 add_dependencies(test_avatar_locomotion_mirror JahshakaEngineMedia)
 jah_gpu_row(avatar.locomotion_mirror CLASS engine COMMAND test_avatar_locomotion_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.locomotion_mirror PROPERTIES JAHSHAKA_TEST_FRAMES 12)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.locomotion_mirror PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "avatar")
 
