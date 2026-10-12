@@ -913,6 +913,40 @@ def case_carried_red(E):
           "item 10: the runner's `kind: attribution` record of the lane is no run: not carried as a red (%d)" % rc)
 
 
+    # ROUND 5 (2): A RED AT A NON-ANCESTOR LANE TIP (the pre-rebase tip, off the candidate's history): carried only while the
+    # TREE diff from that tip to the candidate does NOT reach the row; when it reaches it, the candidate's own record decides
+    pre = speed_commit(E.source, E.scratch, text="static int tsa_pre_rebase = 2;\n", msg="the pre-rebase tip")
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put([SPEED_ROW], "FAIL", "2026-01-01T09:00:00", tip=pre)
+    rc, out = E.run()
+    check(rc == 0 and "OPEN RED" not in out, "round 5: a red at the PRE-REBASE tip whose tree diff to the candidate REACHES "
+          "the row (its source changed) -> the candidate's own green decides: not carried (%d%s)"
+          % (rc, "; " + [l for l in out.splitlines() if "OPEN RED" in l][0][:120] if "OPEN RED" in out else ""))
+    twin = speed_commit(E.source, E.scratch, msg="a rebase twin with the SAME tree")
+    E.fresh()
+    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put([SPEED_ROW], "FAIL", "2026-01-01T09:00:00", tip=twin)
+    rc, out = E.run()
+    check(rc == 1 and "OPEN RED carried from %s" % twin[:9] in out, "round 5: ...a red at a non-ancestor twin whose tree "
+          "diff does NOT reach the row (the same tree) is the same code's red: carried (%d)" % rc)
+    # ROUND 5 (1): A RED REGISTERED BY DESIGN AT ITS LANE'S DELIVERY is a door proof at that lane's candidate (the delivered
+    # tip or a descendant), until its recheck; at any other candidate it proves nothing
+    for at, want_ok, what in ((E.tip[:9], True, "the delivered tip itself"),
+                              (pre[:9], False, "a candidate that does not descend from the delivered tip")):
+        bd = defect("BYDESIGN-9", [SPEED_ROW], first_seen={"tip": at, "pin": "0" * 9, "run": "20261012T232430-" + at},
+                    notes=["2026-10-12T23:24:30+02:00 registered at lane-x's delivery: an acceptance row RED BY DESIGN"])
+        E.fresh()
+        E.defects = E.registry(FIXTURE_DEFECTS + [bd])
+        E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+        rc, out = E.run("--verdict", "%s=real:BYDESIGN-9 red by design at this lane's delivery" % SPEED_ROW)
+        if want_ok:
+            check(rc == 0 and "RED BY DESIGN — registered at lane-x's delivery" in out,
+                  "round 5: real:<id> of an entry registered BY DESIGN at the lane's delivery clears the row at %s, "
+                  "printed as such (%d)" % (what, rc))
+        else:
+            check(rc == 1 and "proves nothing here" in out, "round 5: ...and proves nothing at %s (%d)" % (what, rc))
+
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never
     disables the door); the contention class is the enrolled nondeterminism subset."""
