@@ -202,7 +202,7 @@ gi.cone_emitter 3.47  quiet n=40
 gi.cone_integrator_parity 3.47  quiet n=42
 gi.cone_integrator_parity_offaxis 2.20  quiet n=12
 gi.cone_skip 5.68  quiet n=19
-gi.contact_occlusion 28.58  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
+gi.contact_occlusion 28.58  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2); budget 30 s: the measurement (the lead 2026-10-12)
 gi.ddgi 10.32  quiet n=41
 gi.ddgi_ambient 5.05  quiet n=42
 gi.ddgi_edge 3.70  quiet n=42
@@ -220,7 +220,7 @@ gi.field_scroll 12.66  quiet n=45
 gi.field_thin_wall 16.92  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.gather 14.92  quiet n=38
 gi.gather_adaptive_fair 3.00  quiet n=31
-gi.gather_cards 12.49  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
+gi.gather_cards 12.49  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2); budget 15 s: the measurement (the lead 2026-10-12)
 gi.gather_cost 30.02  all n=2
 gi.gather_deterministic 8.71  quiet n=41
 gi.gather_edge 9.11  quiet n=42
@@ -274,7 +274,7 @@ gi.reflect_fog 10.50  quiet n=38
 gi.reflect_fog_norays 4.86  quiet n=37
 gi.reflect_motion 5.75  quiet n=42
 gi.reflect_motion_norays 4.67  quiet n=43
-gi.reflect_mover 34.39  quiet n=40
+gi.reflect_mover 34.39  quiet n=40; budget 40 s: the measurement (TESTING-SPEED-B1, the lead 2026-10-12; unchanged)
 gi.region_replace 5.36  quiet n=42
 gi.rt_alpha_tested 17.91  quiet n=43
 gi.rt_reflect 4.92  quiet n=40

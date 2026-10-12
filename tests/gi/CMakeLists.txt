@@ -1655,6 +1655,8 @@ target_compile_definitions(test_gi_contact_occlusion PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_contact_occlusion PRIVATE JahshakaEngine)
 add_dependencies(test_gi_contact_occlusion JahshakaEngineMedia)
+# gi.contact_occlusion: BUDGET 30 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12); gi.contact_occlusion_target: BUDGET 25 s: THE
+# MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12) — the counted settles at Epic/High/Medium (kTiers), the rest wait at Low (the physics).
 jah_gpu_row(gi.contact_occlusion CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine")
@@ -2002,6 +2004,8 @@ target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
 # ...and gi.gather_cards (PHOTON-GATHER-1d, GA-1e): the hit lit from the card —
 # the plane fixture on carded meshes, the voxel / card / ungated arms paired.
+# gi.gather_cards: BUDGET 15 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12) — the estimator arm's 64 averaged live frames with their
+# 512 x 512 readbacks are the subject; the readback is on for the read frames only.
 foreach(_arm plane deterministic cards)
     jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -2291,6 +2295,9 @@ set_tests_properties(gi.skin_rays_norays PROPERTIES
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 set_tests_properties(gi.skin_rays_norays PROPERTIES JAHSHAKA_TEST_FRAMES 4)
 
+# TODO(TESTING-SPEED-B1): photon.view is THROW (SPECS/TESTING_SPEED_ROWS.md) — deleted at this lane's rebase onto
+# TESTING-SPEED-A's land, once A's fix round moves the five gate.* hygiene fixtures off this row (with its script
+# tests/gi/scripts/photon_view.js.in, its home and its gate-times lines).
 # ---------------------------------------------------------------------------
 # photon.view — THE PHOTON VIEW (lane PHOTON-VIEW-1): world.setPhotonView's seven
 # debug pictures. On the default scene every mode that can paint changes pixels and

@@ -145,6 +145,8 @@ target_compile_definitions(test_reflect_mover PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_reflect_mover JahshakaEngineMedia)
 target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
+# BUDGET 40 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12) — kept unchanged: its two 90-frame settles hold a reference that is still
+# converging at frame 90; a shorter settle loosens every gated error (spikes/testing-speed-b1/reflect_mover-settle.txt).
 jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
