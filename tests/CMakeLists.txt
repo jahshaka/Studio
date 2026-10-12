@@ -164,6 +164,10 @@ endfunction()
 #       engine's LOD update (irisgl/engine/src/OgreMesh.cpp lodUpdateImpl on the updateAllLodsThread workers), and
 #       none finishes inside its harness's boot wait or its TIMEOUT under TSan. Registered: TSAN-LOD-UPDATE-RACE,
 #       TSAN-GCC15-THREAD-REGISTRY, TSAN-BOOT-TOO-SLOW (testing/defects.json); each call below names its ids.
+#       TSAN-LOD-UPDATE-RACE FIXED 2026-10-12 (LOD-RACE-1): the race was lodSet writing the object memory
+#       manager's shared padding dummy from two workers; the fork's lodSet skips padding slots (row
+#       lod.padding_untouched), the race line is gone from open.frames under TSan, and the calls below name
+#       the blockers that remain.
 function(jah_tsan_blocked)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-blocked)
@@ -958,6 +962,8 @@ add_subdirectory(sockets)
 # THREADING ADOPTION (SPECS/THREADING_ADOPTION_SPEC.md): the frame loop's
 # scene gate and the staging-manager race it closes.
 add_subdirectory(threading)
+# LOD-RACE-1: LodStrategy::lodSet and the ObjectMemoryManager's padding slots (pure OgreMain).
+add_subdirectory(lod)
 # The scene-graph BENCHMARK GATE (SCENEGRAPH_SPEC §6) — the measurement suite
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
 # against. Labels `stage-close;quiet-box`: minutes, not seconds; the MERGE tier skips it.

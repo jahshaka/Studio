@@ -80,7 +80,7 @@ set_tests_properties(threading.gi_resolve PROPERTIES TIMEOUT 560)
 # The gi_resolve script's own header carries the defect it guards (the one frame threading.mode does not
 # exercise: world.refreshGi() EXACTLY ONE rendered frame after the compile burst) and what fixed it
 # (Ogre fork 1bccc3f93+a98e2b0af: BufferPacked's creation serial in the descriptor slots).
-# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 # — the real binary cannot start under GCC 15's libtsan; threading.staging_race carries the lane's coverage.
 jah_tsan_blocked(threading.mode threading.gi_resolve)
 
@@ -207,7 +207,7 @@ set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
-# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-LOD-UPDATE-RACE, TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
+# TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(threading.import_soak threading.newproject_stall
                  threading.texture_wait_watchdog)
 set_property(TEST threading.import_soak APPEND PROPERTY FIXTURES_SETUP threading_run_import_soak)   # its inspector's run (item 3 above)
