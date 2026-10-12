@@ -1844,9 +1844,11 @@ QVariantMap WorldApi::gatherHits(const QVariantMap &params)
         const double v = (double(r.cellY) + 0.5) * g.stride / double(g.targetH);
         if (u < rx || u > rx + rw || v < ry || v > ry + rh) continue;
         if (r.source == 0 || r.source > 6) continue;
+        // a probe of the rectangle counts by its first ray, BEFORE the distance filter (the
+        // rectangle's probes, whichever of their rays the filter keeps)
+        if (r.ray == 0) ++probes;
         const bool isHit = r.distance > 0.0f;
         if ((dMin >= 0.0 || dMax < 1e29) && (!isHit || r.distance < dMin || r.distance > dMax)) continue;
-        if (r.ray == 0) ++probes;
         ++rays;
         if (int(rayList.size()) < wantRays)
             rayList.push_back(QVariantMap{
