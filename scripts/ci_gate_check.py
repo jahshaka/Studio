@@ -296,6 +296,47 @@ def by_design_entry(defects, row, lanes):
     return None
 
 
+class KnownRegistry:
+    """THE REGISTRY AS THE MERGE'S PROOF (round 7): a row with an open registry entry that is a DOOR PROOF for this
+    candidate is a KNOWN RED at a merge — SERVED as such by the select (never run, never re-run) and read so by the judge
+    (no per-record hand verdict): (a) a RED BY DESIGN entry registered at the delivery of the lane the merge is for
+    (CURRENT_LANES); (b) an open `kind: defect` entry whose red THE BASE'S PROOF reproduces — `base_recs(key)`, the door's
+    own base_of (the base's own runs, else the one hop to the nearest ancestor holding solos, under the proof-travel rules):
+    every base solo red, and every red the candidate holds of the row the same red (the door's signature). A push and a
+    stage close refuse every known red (unchanged)."""
+
+    def __init__(self, defects, base_recs):
+        self.defects, self.base_recs = defects or {}, base_recs
+
+    def known(self, key, tip_recs=()):
+        """(True, why) when the row is a registered known red for this candidate, else (False, why)."""
+        row = key[0]
+        e = by_design_entry(self.defects, row, CURRENT_LANES)
+        if e:
+            return True, (f"KNOWN RED: real:{e.get('id')} RED BY DESIGN — registered at {by_design_lane(e)}'s delivery; "
+                          f"until {e.get('recheck')}")
+        ents = [x for x in self.defects.values() if row in (x.get("rows") or []) and x.get("kind") == "defect"
+                and gate_runlog.defect_state(x) == "open" and not gate_runlog.recheck_past(x) and not by_design_lane(x)]
+        if not ents:
+            return False, "no registry entry is a proof here"
+        base = self.base_recs(key)
+        if callable(base):
+            base = base()
+        solos = [r for r in (base or []) if r.get("kind") != "verdict" and is_solo(r) and r.get("verdict") not in NEVER_RAN]
+        reds = [r for r in solos if r.get("verdict") != "PASS"]
+        if not reds or len(reds) != len(solos):
+            return False, "the base's proof holds no red solo of the row (or green beside red)"
+        sig = lambda r: (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
+        if len({r.get("verdict") for r in reds}) > 1:
+            return False, "the base's solos flip class"
+        mine = [r for r in (tip_recs or []) if r.get("kind") != "verdict" and r.get("verdict") not in ("PASS",) + NEVER_RAN]
+        if [r for r in mine if sig(r) not in {sig(b) for b in reds}]:
+            return False, "the candidate's red is not the base's red"
+        frm = reds[0].get("_proofFrom")
+        return True, (f"KNOWN RED: real:{ents[0].get('id')} — the same red reproduced by {len(reds)} solo(s) at the base"
+                      + (f" (the proof from {frm[:9]})" if frm else ""))
+
+
 BY_DESIGN_NOTE = re.compile(r"registered at (\S+?)'s delivery: an acceptance row RED BY DESIGN")
 
 
@@ -1237,6 +1278,11 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 else:
                     why += f"; not served: {sv[1]}"
             st, why = dropped(k, st, why, src)
+            # (the tip's OWN red or no run at all — a red carried from an earlier commit keeps its own proof path)
+            if mode == "merge" and st in ("red", "missing") and src == tip_sha:
+                kn, kwhy = KnownRegistry(defects, lambda kk: base_of(kk, got)).known(k, got[tip_sha].get(k, []))
+                if kn:
+                    st, why, src = "known", kwhy + " (the registry: no hand verdict needed)", tip_sha
             out[k] = (st, why, src)
         resolve_not_run(out, got[tip_sha], lambda pk: judge(pk, got[tip_sha].get(pk, []), defects,
                                                             tip_recs=got[tip_sha].get(pk, []),
@@ -1317,7 +1363,8 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         pairs, unknown = {}, []
         for name, text in verdicts.items():
             keys = [k for k in need if k[0] == name or (k[1] and k[1] == name)]
-            red_keys = [k for k in keys if judged[k][0] == "red"]
+            # (a row the REGISTRY answers as a known red (round 7) still takes the lead's verdict: recorded, harmless)
+            red_keys = [k for k in keys if judged[k][0] == "red" or (judged[k][0] == "known" and "(the registry" in judged[k][1])]
             for k in red_keys:
                 pairs.setdefault(judged[k][2], []).append((k, text))     # recorded where the red happened
             for (t, k) in carried:                                       # U4: answered at the old tip
@@ -1534,7 +1581,34 @@ def plan(rng, build, gs=None, named=(), lane=None, full=False):
     run, served = {}, {}
     sel_keys = set(scoped)
     reasons = {n: r for n, r in (S.selected or {}).items()}
+    CURRENT_LANES.clear()
+    if lane:
+        CURRENT_LANES.add(lane)
+    plan_got = {}
+    prov = Prover(gs, build, lambda: reach)
+    anc_idx = []
+
+    def plan_base(kk):
+        """The door's base proof for one row at the select (base_of's rule): the base's own runs, else the one hop."""
+        if not plan_got:
+            plan_got.update(records_by_tip({base_sha: _git(["rev-parse", f"{base_sha}:irisgl"], gs.ROOT) or None}))
+        own = plan_got.get(base_sha, {}).get(kk, [])
+        if any(r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN for r in own):
+            return own
+        if not anc_idx:
+            anc_idx.append(solo_index(base_sha, gs.ROOT))
+        dist = lambda a, b: int(_git(["rev-list", "--count", f"{a}..{b}"], gs.ROOT) or 10 ** 9)
+        recs, _a, _why = ancestor_base_proof(kk, base_sha, anc_idx[0].get(kk, {}), prov.ancestor, dist,
+                                             lambda a, b, key: Reach.reaches(reach.between(a, b, unreadable=Reach.ALL), key))
+        return own + recs
+    known_reg = KnownRegistry(defects, plan_base)
     for k in universe:
+        # A REGISTERED KNOWN RED IS SERVED AS SUCH (round 7): never run, never re-run — the judge reads the same registry
+        kn, kwhy = known_reg.known(k, got.get(tip_sha, {}).get(k, []))
+        if kn:
+            served[k] = {"sha": base_sha, "run": "registry", "tier": "known-red", "state": "known",
+                         "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "why": kwhy}
+            continue
         sv = serve_key(k, server, [(c, f) for c, _, f in cands], got,
                        lambda kk, recs: judge(kk, recs, defects, tip_sha=tip_sha))
         if sv[0] != "served" and k in sel_keys:
