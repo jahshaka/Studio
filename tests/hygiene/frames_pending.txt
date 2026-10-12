@@ -29,7 +29,6 @@ cloud_2d.budget
 cloud_2d.energy
 cloud_2d.shape
 decals.engine
-distortion.engine
 engine.atom_draw
 engine.atom_negative_control_validation
 engine.atom_parity
@@ -43,7 +42,6 @@ engine.lod_hysteresis
 engine.lod_rule_parity
 engine.media_check
 engine.oom_is_not_loss
-engine.particles_pfx2
 engine.planar
 engine.planar_asan
 engine.tlas_compute
@@ -317,8 +315,6 @@ threading.mode_serial
 threading.newproject_stall
 threading.staging_race
 threading.texture_wait_watchdog
-vr.session
-vr.warmup
 # jah_gpu_exclusive_test rows (fix round: R7 covers them too) — Part B states their FRAMES and drops them here
 app.input_keys
 app.play_select
