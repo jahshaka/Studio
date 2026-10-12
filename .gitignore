@@ -36,3 +36,14 @@ __pycache__/
 
 # an agent's Xvfb pidfile lives in the worktree root (the rig law): never dirt, never committed
 *.pid
+
+# THE DEMO SCENES (owner 2026-10-12): Bistro, San Miguel, Namaqualand are PROJECTS built into a data root from
+# ~/Downloads/demo-scenes (3 GB of ORCA / Poly Haven sources) — never in the tree, never on GitHub; the tracked
+# scenes/tools/make_demo_*.js + prep tools are the only demo-scene files the repo holds
+/scenes/*[Bb]istro*
+/scenes/*[Ss]an*[Mm]iguel*
+/scenes/*[Nn]amaqualand*
+/samples/*[Bb]istro*
+Bistro_v5_2/
+demo-scenes/
+demo-prepared/
