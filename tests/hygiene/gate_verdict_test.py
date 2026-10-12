@@ -614,8 +614,9 @@ def batch_range_cases(E):
     solos(base, "09")
     E.put([SPEED_ROW], "FAIL", T % "10:00", tip=c1, failLine=FL)
     solos(c1, "10")
-    E.put([SPEED_ROW], "FAIL", T % "11:00", tip=x, failLine=FL)
-    solos(x, "11")
+    # (round 7: the tip's red is ANOTHER failure than the base's — the same red would be a registered known red the
+    # registry answers with no verdict at all; this case asks whether C1's verdict reaches UP to a red it does not name)
+    E.put([SPEED_ROW], "FAIL", T % "11:00", tip=x, failLine=FL + " (another assertion)")
     E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=c1)
     rc, out = E.run(rng="%s..%s" % (base, x))
     check(rc == 1 and "row gi.speckle <- %s (the tip): red" % x[:9] in out,
@@ -958,11 +959,48 @@ def case_carried_red(E):
     E.put([SPEED_ROW], "FAIL", "2026-01-01T09:00:00", tip=twin)   # a twin: its tree diff reaches nothing (round 5 would carry it)
     E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
     rc, out = E.run("--lane", "lane-x", "--verdict", "%s=real:BYDESIGN-6 red by design at this lane's delivery" % SPEED_ROW)
-    check(rc == 0 and "the candidate is lane-x's" in out and "rebases keep the proof" in out and "OPEN RED" not in out,
+    check(rc == 0 and (("the candidate is lane-x's" in out and "rebases keep the proof" in out)
+                       or "KNOWN RED: real:BYDESIGN-6 RED BY DESIGN" in out) and "OPEN RED" not in out,
           "round 6: a by-design red of the REGISTERING lane, its delivery's tip rebased away -> cleared at the new tip by the "
           "lane, the reason printed; the old tip's red not carried (%d%s)"
           % (rc, "; " + [l for l in out.splitlines() if "REFUSED" in l or "OPEN RED" in l][0][:140]
                   if ("REFUSED" in out or "OPEN RED" in out) else ""))
+
+    # ROUND 7: THE REGISTRY IS THE MERGE'S PROOF — no hand verdict: a by-design row of the lane and a base-reproduced registered
+    # defect are SERVED AS KNOWN RED by the select (never run) and ACCEPTED by the merge's judge; a push still refuses them
+    def plan_of(*extra):
+        rc_, out_ = E.run("--plan", *extra)
+        try:
+            return json.loads(out_.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return {"served": {}, "run": {}, "err": out_[-300:]}
+    bd7 = defect("BYDESIGN-7", [SPEED_ROW], notes=["2026-10-13T00:00:00+02:00 registered at lane-x's delivery: an acceptance "
+                                                   "row RED BY DESIGN"])
+    E.fresh()
+    E.defects = E.registry([x for x in FIXTURE_DEFECTS if SPEED_ROW not in x["rows"]] + [bd7])
+    pl = plan_of("--lane", "lane-x")
+    check((pl["served"].get(SPEED_ROW) or {}).get("state") == "known" and SPEED_ROW not in pl["run"],
+          "round 7 (1): the select SERVES a by-design row of the lane AS KNOWN RED — never run (%s)"
+          % ((pl["served"].get(SPEED_ROW) or {}).get("why") or pl.get("err") or "")[:100])
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+    rc, out = E.run("--lane", "lane-x")
+    check(rc == 0 and "KNOWN RED" in out and "RED BY DESIGN" in out,
+          "round 7 (2): the merge's judge reads the registry: the by-design red ACCEPTED with no hand verdict (%d)" % rc)
+    rc, out = E.run("--lane", "lane-x", "--mode", "push")
+    check(rc == 1, "round 7: ...a push still refuses it (%d)" % rc)
+    rc, out = E.run("--lane", "lane-z")
+    check(rc == 1, "round 7: ...and another lane's merge is not answered by lane-x's by-design entry (%d)" % rc)
+    E.fresh()          # FIXTURE-1 (kind defect) names the row; the base's solos reproduce the red
+    E.put(ROWS, "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    E.put(ROWS, "FAIL", "2026-01-01T09:05:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
+    pl = plan_of()
+    check((pl["served"].get(SPEED_ROW) or {}).get("state") == "known" and SPEED_ROW not in pl["run"],
+          "round 7 (1): the select SERVES a registered defect the base's solos reproduce AS KNOWN RED (%s)"
+          % ((pl["served"].get(SPEED_ROW) or {}).get("why") or pl.get("err") or "")[:100])
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+    rc, out = E.run()
+    check(rc == 0 and "KNOWN RED" in out and "no hand verdict needed" in out,
+          "round 7 (2): ...and the merge's judge accepts that red with no hand verdict (%d)" % rc)
 
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never
