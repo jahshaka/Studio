@@ -2291,6 +2291,33 @@ set_tests_properties(gi.skin_rays_norays PROPERTIES
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 set_tests_properties(gi.skin_rays_norays PROPERTIES JAHSHAKA_TEST_FRAMES 4)
 
+# ---------------------------------------------------------------------------
+# photon.view — THE PHOTON VIEW (lane PHOTON-VIEW-1): world.setPhotonView's seven
+# debug pictures. On the default scene every mode that can paint changes pixels and
+# 'off' after each is the off picture, pixel for pixel; on Showroom 2 at the High
+# Photon tier each of the seven repaints more than 20 % of the frame; every refusal
+# names its reason (no field, no cards, no rays, the Low mode's passthrough viewport,
+# GI off); the thumbnail's shot parks the view. Every shot is the "scene" grade at
+# 160 x 90 with every pixel probed. An app run on the rig's display, like atom.view.
+set(_photon_view_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon_view)
+file(MAKE_DIRECTORY ${_photon_view_home}/run)
+set(PHOTON_VIEW_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_view.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js @ONLY)
+# ...and arm (f), the COMBINATION with the Atom view (VIEWS-DEPTH-1), whose second
+# half is the kernel's: like every GPU row since TEST-SELECTOR-1 H4, the admission
+# (scripts/vram_tokens.py) reds the row on any NVRM Xid line from its process tree since
+# the launch (scripts/kernel_xid.py reads the journal, no sudo).
+jah_gpu_row(photon.view CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
+         WORKING_DIRECTORY ${_photon_view_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 620 = 6 x the run log's quiet median 102.6 s (44 quiet PASS runs since 2026-10-01, worst 323.7 s);
+# declared 400 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(photon.view PROPERTIES
+    TIMEOUT 620 LABELS "scripting"
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
+
 # gi.probe_nan — PROBE-NAN-1 (D4-PHOTON-TIERS): a point light of intensity 20 at 0.3 m over
 # a 100 m ground leaves every irradiance-field texel FINITE (tested on the bits) and never
 # darkens the field against intensity 2 — the defect turned every probe black at once.
