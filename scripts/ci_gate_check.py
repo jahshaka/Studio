@@ -281,6 +281,19 @@ def _sha(r):
     return (r.get("tip") or {}).get("studio")
 
 
+BY_DESIGN_NOTE = re.compile(r"registered at (\S+?)'s delivery: an acceptance row RED BY DESIGN")
+
+
+def by_design_lane(e):
+    """The lane whose delivery registered entry `e` as an acceptance row RED BY DESIGN (registry.register_by_design's
+    note), or None."""
+    for n in (e.get("notes") or []):
+        m = BY_DESIGN_NOTE.search(str(n))
+        if m:
+            return m.group(1)
+    return None
+
+
 def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode="merge", proves=None, key=None):
     """`real:<ID>` checked: (ok, why, kind) — kind None | "known" (KNOWN RED) | "nondet" (cleared as nondeterminism:
     a push / stage close re-asks it 3/3 at the candidate)."""
@@ -313,6 +326,20 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         if _solos_ok(solos):
             return True, f"real:{did} (nondeterminism, {len(solos)}/{len(solos)} solo PASS)", "nondet"
         return False, f"real:{did} is a nondeterminism entry: it clears only by 3/3 solo PASS after the red", False
+    # A RED REGISTERED BY DESIGN AT ITS LANE'S DELIVERY IS A DOOR PROOF (round 5, 1): an entry whose notes say it was
+    # "registered at <lane>'s delivery: an acceptance row RED BY DESIGN" clears the row at that lane's candidate — the
+    # registering delivery's tip (first_seen.tip) or a descendant of it — until its recheck date (checked above); a merge
+    # passes it as a KNOWN RED, a push/stage close refuses it like every known red (never push on a red)
+    bd = by_design_lane(e)
+    if bd:
+        at = (e.get("first_seen") or {}).get("tip") or ""
+        ok_at = bool(at and tip_sha) and (tip_sha.startswith(at) or (proves is not None and proves.ancestor(at, tip_sha)))
+        if ok_at:
+            return True, (f"real:{did} RED BY DESIGN — registered at {bd}'s delivery (an acceptance row the brief declares "
+                          f"red by design), the candidate {tip_sha[:9]} is that delivery's tip or a descendant of it "
+                          f"{at[:9]}; until the entry's recheck {e.get('recheck')}"), "known"
+        return False, (f"real:{did} is RED BY DESIGN for {bd}'s delivery at {at[:9]} — {(tip_sha or '?')[:9]} is not that "
+                       f"tip nor a descendant of it: it proves nothing here"), False
     last = max(_when(r) for r in reds)
     red_shas = {_sha(r) for r in reds}
     later = [r for r in (tip_recs or []) if r.get("kind") != "verdict" and r.get("verdict") == "PASS" and _when(r) > last]
@@ -1228,6 +1255,17 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 # range REACHES the row (the Prover) — a rebased-away tip or one that descends from the checked tip carries
                 if later and prover(t, tip_sha, k) \
                         and judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode, proves=prover)[0] in PASSING: continue
+                # A RED AT A NON-ANCESTOR LANE TIP (round 5, 2 — rule 2's twin logic, FIX-4 item 2): a rebase leaves the
+                # pre-rebase tip off the candidate's history, so "a PASS at a descendant that reaches the row" can never
+                # come; the TREE diff from that tip to the candidate decides — it does not reach the row: the red is the
+                # same code's and is carried; it REACHES the row: the candidate's own record decides (green there: not
+                # carried; no run there: the row's own judgement at the tip says missing, never a carried red)
+                if not prover.ancestor(t, tip_sha):
+                    if Reach.reaches(get_reach().between(t, tip_sha, unreadable=Reach.ALL), k):
+                        st_tip = judge(k, at_tip, defects, tip_sha=tip_sha, mode=mode, proves=prover)[0] if at_tip \
+                            else "missing"
+                        if st_tip != "red":
+                            continue
                 carried[(t, k)] = cwhy
         return out
 

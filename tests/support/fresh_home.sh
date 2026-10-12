@@ -31,7 +31,7 @@
 #   --mkdir <dir>   also created.
 #   -- <command>    run, in the directory the caller started in — re-entered by path, because the wipe may have
 #                   deleted it (a ctest WORKING_DIRECTORY inside <home>). THE WIPE AFTER (item 7, the default): when the
-#                   command exits 0 the home is deleted; on any other exit it MOVES to <build>/tests/.evidence/<home's
+#                   command exits 0 the home is deleted (its empty run/ re-created: a row's working directory); on any other exit it MOVES to <build>/tests/.evidence/<home's
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
@@ -108,6 +108,12 @@ else
     rm -rf "$ev"
     mv "$home" "$ev" 2>/dev/null || rm -rf "$home"
 fi
+# A ROW'S WORKING DIRECTORY SURVIVES THE WIPE (round 5): a pool's ctest WORKING_DIRECTORY is <home>/run (and a row may
+# start inside its home): only a configure creates them, so a wipe that took them made the row's NEXT run "Not Run:
+# Failed to change working directory". The empty <home>/run — and the caller's start dir when it lies in the home — are
+# re-created: no bytes left, the cwd kept.
+mkdir -p "$home/run"
+case "$start" in "$home"/*|"$home") mkdir -p "$start" ;; esac
 }
 
 if [ -n "$after" ]; then

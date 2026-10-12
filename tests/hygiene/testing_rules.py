@@ -283,7 +283,7 @@ def fresh_home_behaves(source):
     shared cache is whole (one of the runs' caches, complete)."""
     import shutil
     import tempfile
-    fh = os.path.join(source, "tests", "support", "fresh_home.sh")
+    fh = os.path.join(os.path.abspath(source), "tests", "support", "fresh_home.sh")
     t = tempfile.mkdtemp(prefix="fresh-home-test-")
     try:
         b = os.path.join(t, "deep", "build")
@@ -294,13 +294,27 @@ def fresh_home_behaves(source):
         home = os.path.join(td, "x", "home-a")
         w = "mkdir -p %s/%s && head -c 4096 /dev/zero > %s/%s/a.bin" % (home, cache, home, cache)
         r = subprocess.run(["sh", fh, "--warm", home, "--", "sh", "-c", w], capture_output=True, text=True)
-        check(r.returncode == 0 and not os.path.exists(home) and os.path.isfile(os.path.join(td, ".shadercache", "a.bin")),
-              "fresh_home: a green run deletes its home and PROMOTES its grown cache as the shared one (%d %s)"
+        gone = lambda h: os.path.isdir(h) and os.listdir(h) == ["run"] and not os.listdir(os.path.join(h, "run"))
+        check(r.returncode == 0 and gone(home) and os.path.isfile(os.path.join(td, ".shadercache", "a.bin")),
+              "fresh_home: a green run deletes its home (an empty <home>/run kept: a row's cwd) and PROMOTES its grown cache as the shared one (%d %s)"
               % (r.returncode, r.stderr[-120:]))
         r = subprocess.run(["sh", fh, home, "--", "sh", "-c", "touch %s/run/x.png; exit 3" % home], capture_output=True)
-        check(r.returncode == 3 and not os.path.exists(home)
+        check(r.returncode == 3 and gone(home)
               and os.path.isfile(os.path.join(td, ".evidence", "home-a", "run", "x.png")),
               "fresh_home: a red run keeps its exit code and MOVES its home to the evidence")
+        # ROUND 5: A ROW'S WORKING DIRECTORY SURVIVES THE WIPE — a toy pool whose ctest WORKING_DIRECTORY is <home>/run
+        ph = os.path.join(td, "x", "pool-home-toy")
+        os.makedirs(os.path.join(ph, "run"))
+        r = subprocess.run(["sh", fh, ph, "--", "sh", "-c", "pwd > %s/run/where; touch %s/run/lib.db" % (ph, ph)],
+                           cwd=os.path.join(ph, "run"), capture_output=True, text=True)
+        left = sorted(os.listdir(ph)) if os.path.isdir(ph) else None
+        check(r.returncode == 0 and left == ["run"] and os.listdir(os.path.join(ph, "run")) == [],
+              "fresh_home: a green pool's home is wiped AROUND its working directory — <home>/run re-created empty, the "
+              "next ctest run can change into it (left %s)" % left)
+        r = subprocess.run(["sh", fh, ph, "--", "sh", "-c", "exit 4"], cwd=os.path.join(ph, "run"), capture_output=True)
+        check(r.returncode == 4 and os.path.isdir(os.path.join(ph, "run"))
+              and os.path.isdir(os.path.join(td, ".evidence", "pool-home-toy")),
+              "fresh_home: ...a red pool's home goes to the evidence and its working directory is re-created too")
         procs = []
         for k in range(12):
             h = os.path.join(td, "x", "home-c%d" % k)
