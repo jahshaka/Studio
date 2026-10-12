@@ -932,20 +932,37 @@ def case_carried_red(E):
           "diff does NOT reach the row (the same tree) is the same code's red: carried (%d)" % rc)
     # ROUND 5 (1): A RED REGISTERED BY DESIGN AT ITS LANE'S DELIVERY is a door proof at that lane's candidate (the delivered
     # tip or a descendant), until its recheck; at any other candidate it proves nothing
-    for at, want_ok, what in ((E.tip[:9], True, "the delivered tip itself"),
-                              (pre[:9], False, "a candidate that does not descend from the delivered tip")):
+    for at, want_ok, what, reg in ((E.tip[:9], True, "the delivered tip itself", "lane-x"),
+                                   (pre[:9], False, "another lane's candidate that does not descend from the delivered tip",
+                                    "lane-z")):
         bd = defect("BYDESIGN-9", [SPEED_ROW], first_seen={"tip": at, "pin": "0" * 9, "run": "20261012T232430-" + at},
-                    notes=["2026-10-12T23:24:30+02:00 registered at lane-x's delivery: an acceptance row RED BY DESIGN"])
+                    notes=["2026-10-12T23:24:30+02:00 registered at %s's delivery: an acceptance row RED BY DESIGN" % reg])
         E.fresh()
         E.defects = E.registry(FIXTURE_DEFECTS + [bd])
         E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
         rc, out = E.run("--verdict", "%s=real:BYDESIGN-9 red by design at this lane's delivery" % SPEED_ROW)
         if want_ok:
-            check(rc == 0 and "RED BY DESIGN — registered at lane-x's delivery" in out,
+            check(rc == 0 and ("RED BY DESIGN — registered at %s's delivery" % reg) in out,
                   "round 5: real:<id> of an entry registered BY DESIGN at the lane's delivery clears the row at %s, "
                   "printed as such (%d)" % (what, rc))
         else:
             check(rc == 1 and "proves nothing here" in out, "round 5: ...and proves nothing at %s (%d)" % (what, rc))
+
+    # ROUND 6: THE REGISTERING LANE'S CANDIDATE, WHATEVER ITS TIP AFTER THE TOOL'S REBASE — the entry was registered at
+    # lane-x's delivery at `twin` (now rebased away: the candidate E.tip does not descend from it); judged for lane-x, its red
+    # at the new tip is cleared by real:<id> and its red at the old tip is never carried
+    bd = defect("BYDESIGN-6", [SPEED_ROW], first_seen={"tip": twin[:9], "pin": "0" * 9, "run": "20261012T232430-" + twin[:9]},
+                notes=["2026-10-12T23:24:30+02:00 registered at lane-x's delivery: an acceptance row RED BY DESIGN"])
+    E.fresh()
+    E.defects = E.registry(FIXTURE_DEFECTS + [bd])
+    E.put([SPEED_ROW], "FAIL", "2026-01-01T09:00:00", tip=twin)   # a twin: its tree diff reaches nothing (round 5 would carry it)
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+    rc, out = E.run("--lane", "lane-x", "--verdict", "%s=real:BYDESIGN-6 red by design at this lane's delivery" % SPEED_ROW)
+    check(rc == 0 and "the candidate is lane-x's" in out and "rebases keep the proof" in out and "OPEN RED" not in out,
+          "round 6: a by-design red of the REGISTERING lane, its delivery's tip rebased away -> cleared at the new tip by the "
+          "lane, the reason printed; the old tip's red not carried (%d%s)"
+          % (rc, "; " + [l for l in out.splitlines() if "REFUSED" in l or "OPEN RED" in l][0][:140]
+                  if ("REFUSED" in out or "OPEN RED" in out) else ""))
 
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never

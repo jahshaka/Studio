@@ -281,6 +281,21 @@ def _sha(r):
     return (r.get("tip") or {}).get("studio")
 
 
+# THE LANE(S) THE CHECK JUDGES FOR (round 6): a by-design entry clears its REGISTERING LANE's candidate whatever the tip
+# after the tool's rebases — check() names the lane (--lane, else the lanes the tip's records name)
+CURRENT_LANES = set()
+
+
+def by_design_entry(defects, row, lanes):
+    """An open RED BY DESIGN entry naming `row` registered at the delivery of one of `lanes` (not retired, not past its
+    recheck), or None."""
+    for e in (defects or {}).values():
+        if row in (e.get("rows") or []) and by_design_lane(e) in (lanes or ()) \
+                and gate_runlog.defect_state(e) == "open" and not gate_runlog.recheck_past(e):
+            return e
+    return None
+
+
 BY_DESIGN_NOTE = re.compile(r"registered at (\S+?)'s delivery: an acceptance row RED BY DESIGN")
 
 
@@ -333,6 +348,11 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     bd = by_design_lane(e)
     if bd:
         at = (e.get("first_seen") or {}).get("tip") or ""
+        if bd in CURRENT_LANES:
+            # THE REGISTERING LANE'S CANDIDATE (round 6): matched by the lane, whatever its tip after the tool's rebases
+            return True, (f"real:{did} RED BY DESIGN — registered at {bd}'s delivery (an acceptance row the brief declares "
+                          f"red by design); the candidate is {bd}'s (its tip {(tip_sha or '?')[:9]}, the delivery's "
+                          f"{at[:9]}: rebases keep the proof); until the entry's recheck {e.get('recheck')}"), "known"
         ok_at = bool(at and tip_sha) and (tip_sha.startswith(at) or (proves is not None and proves.ancestor(at, tip_sha)))
         if ok_at:
             return True, (f"real:{did} RED BY DESIGN — registered at {bd}'s delivery (an acceptance row the brief declares "
@@ -1060,6 +1080,9 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     gs = gs or load_gs()
     if mode not in MODES:
         return None, [f"mode '{mode}' is not one of {', '.join(MODES)}"]
+    CURRENT_LANES.clear()
+    if lane:
+        CURRENT_LANES.add(lane)
     defects, problem = gate_runlog.defects_load()
     if defects is None:
         return None, [f"{problem} — the door cannot check a verdict without it (JAH_DEFECTS_FILE overrides)"]
@@ -1233,6 +1256,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                         if r.get("kind") != "verdict" and gate_runlog.own_lane(r): lanes.add(gate_runlog.own_lane(r))
         if not lanes and not re.fullmatch(r"[0-9a-f]{7,40}", tip):
             lanes.add(tip)
+        CURRENT_LANES.update(lanes)
         for t, recs in lane_records(lanes, {tip_sha, base_sha, *earlier}).items():
             for k, rs in recs.items():
                 # A ROW OUTSIDE THE MERGE TIER IS NEVER A MERGE VERDICT AND NEVER CARRIED (RUNNER-FIX-4 item 14, the lead's
@@ -1240,6 +1264,10 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
                 # whatever tier its record names (VOXEL-READOUT-1's self-audits recorded five photon-target rows red under
                 # tier `lane`); a stage close judges its own rows, so the rule is the merge's and the push's
                 if not stage_close and k[0] in outside_tier:
+                    continue
+                # A RED OF A ROW THE LANE REGISTERED BY DESIGN, at ANY of the lane's earlier tips (round 6: its self-audit
+                # tips, its pre-rebase tips) is answered by that entry — never carried
+                if mode == "merge" and by_design_entry(defects, k[0], lanes):
                     continue
                 cst, cwhy = judge(k, rs, defects, tip_recs=got[tip_sha].get(k, []),
                                   base_recs=base_of(k, got), tip_sha=tip_sha, mode=mode,
