@@ -1626,7 +1626,7 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_ssr_mirror.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js @ONLY)
 set(_ssrhome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ssr_mirror)
 file(MAKE_DIRECTORY ${_ssrhome}/run)
-jah_gpu_row(scripting.e2e.ssr_mirror CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+jah_gpu_row(scripting.e2e.ssr_mirror CLASS app TIER epic NEEDS photon ssao smaa planar
          COMMAND ${JAH_FRESH_HOME} --warm ${_ssrhome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
