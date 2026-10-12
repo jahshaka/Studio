@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # Screen-space reflection test — headless, framework-free, links JahshakaEngine
 # ONLY. Pixel-proves the SSR chain end to end (POST_CHAIN_SPEC.md §4.1 row "SSR"
 # and §8 phase 6), including the one property no probe can have: the reflection
@@ -38,6 +41,7 @@ jah_gpu_row(ssr.engine CLASS engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(ssr.engine PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 
 if(JAHSHAKA_ASAN)
     jahshaka_ssr_test(test_ssr_asan)
@@ -49,8 +53,9 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     # ...and the same ruling for the sanitised twin (see ssr.engine above).
-    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
+    set_tests_properties(ssr.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 endif()
 
 # ssr.rings — SSR-RINGS-1's measurement of the concentric staircase on a curved
@@ -73,6 +78,7 @@ jah_gpu_row(ssr.rings CLASS engine COMMAND test_ssr_rings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.rings PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(ssr.rings PROPERTIES JAHSHAKA_TEST_FRAMES 105)
 
 # ssr.edge — SSR-EDGE-1: the rim of the accepted region, read on the reflection's
 # own weight (View::readReflectionHdr) as a RIM METRIC (pixels whose weight
@@ -95,3 +101,4 @@ jah_gpu_row(ssr.edge CLASS engine COMMAND test_ssr_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.edge PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(ssr.edge PROPERTIES JAHSHAKA_TEST_FRAMES 34)

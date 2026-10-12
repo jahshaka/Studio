@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # THE SUN'S TRANSMITTANCE (lane SKY-DENSITY-1) — headless, framework-free, links
 # JahshakaEngine ONLY, same runtime requirements as tests/engine and tests/hdr
 # (a reachable DISPLAY, a Vulkan driver or lavapipe). The file header carries the
@@ -25,6 +28,7 @@ target_link_libraries(test_sun_transmittance PRIVATE JahshakaEngine)
 jah_gpu_row(sky.sun_transmittance CLASS engine COMMAND test_sun_transmittance
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.sun_transmittance PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(sky.sun_transmittance PROPERTIES JAHSHAKA_TEST_FRAMES 5)
 
 if(JAHSHAKA_ASAN)
     jahshaka_sky_test(test_sun_transmittance_asan)
@@ -35,8 +39,9 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine, tests/ssr and tests/hdr: the only leaks LSan
     # finds here are libdbus-1 allocations reached from the Vulkan loader.
-    set_tests_properties(sky.sun_transmittance_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(sky.sun_transmittance_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(sky.sun_transmittance_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5)
 endif()
 
 # sky.env_layout — THE REFLECTION CUBE'S LAYOUT (lane ENGINE-SMALL-B,
@@ -55,6 +60,7 @@ set_tests_properties(sky.env_layout PROPERTIES
     TIMEOUT 120 LABELS "engine"
     ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
     FAIL_REGULAR_EXPRESSION "Validation Error")
+set_tests_properties(sky.env_layout PROPERTIES JAHSHAKA_TEST_FRAMES 28)
 
 # sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
 # FOG-ATMO-1). The file header carries the model, the instrument (two emissive
@@ -65,6 +71,7 @@ target_link_libraries(test_aerial_perspective PRIVATE JahshakaEngine)
 jah_gpu_row(sky.aerial_perspective CLASS engine COMMAND test_aerial_perspective
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.aerial_perspective PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(sky.aerial_perspective PROPERTIES JAHSHAKA_TEST_FRAMES 153)
 
 # sky.atmosphere — THE PLANET'S ATMOSPHERE (SKY-ATMOSPHERE-1).
 jahshaka_sky_test_src(test_atmosphere test_atmosphere.cpp)
@@ -72,3 +79,4 @@ target_link_libraries(test_atmosphere PRIVATE JahshakaEngine)
 jah_gpu_row(sky.atmosphere CLASS engine COMMAND test_atmosphere
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.atmosphere PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(sky.atmosphere PROPERTIES JAHSHAKA_TEST_FRAMES 231)

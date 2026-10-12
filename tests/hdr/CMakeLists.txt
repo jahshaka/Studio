@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # THE HDR AUTO-EXPOSURE'S STABILITY (lane HDR-1, fork feab041c6 (was 0042)) — headless,
 # framework-free, links JahshakaEngine ONLY, same runtime requirements as
 # tests/engine and tests/ssr (a reachable DISPLAY, a Vulkan driver or lavapipe).
@@ -25,6 +28,7 @@ target_link_libraries(test_hdr_drag PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.drag_stable CLASS engine COMMAND test_hdr_drag
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(hdr.drag_stable PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_drag_asan test_hdr_drag.cpp)
@@ -35,8 +39,9 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 endif()
 
 # THE HISTOGRAM METER'S ARITHMETIC (EXPOSURE-2). The companion of the suite
@@ -48,6 +53,7 @@ target_link_libraries(test_hdr_meter PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.meter CLASS engine COMMAND test_hdr_meter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(hdr.meter PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_meter_asan test_hdr_meter.cpp)
@@ -56,8 +62,9 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.meter_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 endif()
 
 # THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, fork feab041c6 (was 0079)). A
@@ -73,6 +80,7 @@ target_link_libraries(test_hdr_dither PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.dither CLASS engine COMMAND test_hdr_dither
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(hdr.dither PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 
 # THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, fork feab041c6 (was 0082)).
 # One bright emissive square on black, rendered four ways in ONE process —
@@ -87,6 +95,7 @@ target_link_libraries(test_hdr_bloom_amount PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.bloom_amount CLASS engine COMMAND test_hdr_bloom_amount
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(hdr.bloom_amount PROPERTIES JAHSHAKA_TEST_FRAMES 26)
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_bloom_amount_asan test_hdr_bloom_amount.cpp)
@@ -95,8 +104,9 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.bloom_amount_asan CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES JAHSHAKA_TEST_FRAMES 26)
 endif()
 
 if(JAHSHAKA_ASAN)
@@ -106,8 +116,9 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.dither_asan CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.dither_asan PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 endif()
 
 # EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1). A flat emissive
@@ -120,3 +131,4 @@ target_link_libraries(test_hdr_display_encode PRIVATE JahshakaEngine)
 jah_gpu_row(hdr.display_encode CLASS engine COMMAND test_hdr_display_encode
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.display_encode PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(hdr.display_encode PROPERTIES JAHSHAKA_TEST_FRAMES 336)

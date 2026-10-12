@@ -468,14 +468,20 @@ static int cardsMain(Engine *e)
         GatherTuning at = t;
         at.probeStride = probeStride;
         at.freezeFrameIndex = liveFrames <= 1;
+        // THE READBACK ON FOR THE READ FRAMES ONLY (TESTING-SPEED-B1): its 512 x 512 copy and decode cost a Debug
+        // frame ~130 ms, and the settle reads nothing; the loop below waits for the first fresh copy.
+        at.readback = false;
         s->setGatherTuning(at);
         render(e, 150);   // captures + relights (a card's indirect is marched before it is read)
-        unsigned lastFrame = ~0u;
+        at.readback = true;
+        s->setGatherTuning(at);
+        // the first copy OF THIS ARM: the status keeps the previous arm's last copy until a new one retires
+        const unsigned since = s->giStatus().gather.frame;
         GatherStatus st;
         for (int f = 0; f < 20; ++f) {
             e->renderOneFrame();
             st = s->giStatus().gather;
-            if (!st.irradiance.empty() && st.irradianceFrame != lastFrame) break;
+            if (!st.irradiance.empty() && st.irradianceFrame >= since) break;
         }
         a.ran = st.running && !st.irradiance.empty();
         a.cards = s->giStatus().cards.cardsResident;

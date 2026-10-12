@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # The LIGHTING_FIX acceptance suites — headless, framework-free, engine only.
 # Same runtime requirements as tests/engine (a reachable DISPLAY, a Vulkan
 # driver or lavapipe).
@@ -23,6 +26,7 @@ add_dependencies(test_light_falloff JahshakaEngineMedia)
 jah_gpu_row(lights.falloff CLASS engine COMMAND test_light_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.falloff PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.falloff PROPERTIES JAHSHAKA_TEST_FRAMES 54)
 
 # lights.masks is the RUNTIME half of build-ogre.sh's
 # OGRE_CONFIG_ENABLE_FINE_LIGHT_MASK_GRANULARITY guard: with the flag dropped
@@ -43,6 +47,7 @@ add_dependencies(test_light_masks JahshakaEngineMedia)
 jah_gpu_row(lights.masks CLASS engine COMMAND test_light_masks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.masks PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.masks PROPERTIES JAHSHAKA_TEST_FRAMES 106)
 
 add_executable(test_light_hygiene test_light_hygiene.cpp)
 set_target_properties(test_light_hygiene PROPERTIES
@@ -59,6 +64,7 @@ add_dependencies(test_light_hygiene JahshakaEngineMedia)
 jah_gpu_row(lights.hygiene CLASS engine COMMAND test_light_hygiene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.hygiene PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.hygiene PROPERTIES JAHSHAKA_TEST_FRAMES 52)
 
 # lights.icons — the 2026-09-08 icon fix: an editor helper billboard draws in
 # the overlay pass (after the post chain, no depth test) instead of being
@@ -78,6 +84,7 @@ add_dependencies(test_light_icons JahshakaEngineMedia)
 jah_gpu_row(lights.icons CLASS engine COMMAND test_light_icons
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.icons PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.icons PROPERTIES JAHSHAKA_TEST_FRAMES 24)
 
 # lights.sealed_room — THE OWNER'S CASE IN PIXELS (SUN_AND_LIGHT_DEFAULTS §0):
 # a lamp above the roof of a sealed room lit the floor through it, because the
@@ -99,6 +106,7 @@ add_dependencies(test_sealed_room JahshakaEngineMedia)
 jah_gpu_row(lights.sealed_room CLASS engine COMMAND test_sealed_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.sealed_room PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.sealed_room PROPERTIES JAHSHAKA_TEST_FRAMES 18)
 
 # lights.secondary_directional — ONLY THE SUN CASTS (SUN_AND_LIGHT_DEFAULTS
 # §3.3). Two directional lights rolled opposite ways: the side the shadow lands
@@ -119,3 +127,4 @@ add_dependencies(test_secondary_directional JahshakaEngineMedia)
 jah_gpu_row(lights.secondary_directional CLASS engine COMMAND test_secondary_directional
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.secondary_directional PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.secondary_directional PROPERTIES JAHSHAKA_TEST_FRAMES 78)

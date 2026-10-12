@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # The looks stage (SPECS/POST_LOOKS_SPEC.md §4) — headless, framework-free,
 # links JahshakaEngine ONLY, exactly like tests/ssr and tests/planar beside it.
 #
@@ -31,6 +34,7 @@ target_link_libraries(test_looks PRIVATE JahshakaEngine)
 jah_gpu_row(looks.engine CLASS engine COMMAND test_looks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(looks.engine PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(looks.engine PROPERTIES JAHSHAKA_TEST_FRAMES 81)
 
 if(JAHSHAKA_ASAN)
     jahshaka_looks_test(test_looks_asan)
@@ -41,7 +45,8 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(looks.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 81)
 endif()

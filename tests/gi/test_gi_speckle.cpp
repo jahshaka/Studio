@@ -331,7 +331,18 @@ static void routeAgreement(Engine *e)
     // list dropped leaves its ray black, which reads as a route DISAGREEMENT.
     unsigned long long dropped = 0;
     const auto strip = [&](double &mean, unsigned &n, unsigned long long &records) {
-        render(e, 120);
+        // THE READBACK ON FOR THE READ FRAMES ONLY (TESTING-SPEED-B1): its 640 x 360 copy and decode cost a Debug
+        // frame ~120 ms and the settle reads nothing — on for the last 8 settle frames (the copy retires a few
+        // frames late; until then the status still holds the PREVIOUS route's copy, which a read refuses below)
+        // and the 8 read frames. The frame index is frozen and the jitter off: every frame of the still view is
+        // the same estimate, so the 8 frames read are the frames the 120-frame settle read.
+        GatherTuning quiet = t;
+        quiet.readback = false;
+        s->setGatherTuning(quiet);
+        render(e, 112);
+        const unsigned since = s->giStatus().gather.frame;
+        s->setGatherTuning(t);
+        render(e, 8);
         mean = 0.0;
         n = 0;
         records = 0;
@@ -340,7 +351,7 @@ static void routeAgreement(Engine *e)
             records += s->rayQueryStatus().hitRecords;
             dropped += s->rayQueryStatus().hitDropped;
             const GatherStatus g = s->giStatus().gather;
-            if (g.irradiance.empty()) continue;
+            if (g.irradiance.empty() || g.irradianceFrame < since) continue;
             const double halfW = 4.0 * double(g.irradianceW) / double(g.irradianceH);
             for (unsigned y = 0; y < g.irradianceH; ++y)
                 for (unsigned x = 0; x < g.irradianceW; ++x) {

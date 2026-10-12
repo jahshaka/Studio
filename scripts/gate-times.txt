@@ -202,7 +202,7 @@ gi.cone_emitter 3.47  quiet n=40
 gi.cone_integrator_parity 3.47  quiet n=42
 gi.cone_integrator_parity_offaxis 2.20  quiet n=12
 gi.cone_skip 5.68  quiet n=19
-gi.contact_occlusion 36.30  quiet n=40
+gi.contact_occlusion 28.58  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.ddgi 10.32  quiet n=41
 gi.ddgi_ambient 5.05  quiet n=42
 gi.ddgi_edge 3.70  quiet n=42
@@ -217,16 +217,14 @@ gi.field_edge 8.02  quiet n=29
 gi.field_follows 6.14  quiet n=45
 gi.field_follows.timing 5.91  all n=2
 gi.field_scroll 12.66  quiet n=45
-gi.field_thin_wall 30.59  quiet n=45
-gi.flythrough_noise.Leak 120.24  quiet n=3
-gi.flythrough_noise.Open 343.68  quiet n=4
-gi.flythrough_noise.Showroom2 345.63  quiet n=4
+gi.field_thin_wall 16.92  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.gather 14.92  quiet n=38
 gi.gather_adaptive_fair 3.00  quiet n=31
-gi.gather_cards 61.01  quiet n=42
+gi.gather_cards 12.49  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.gather_cost 30.02  all n=2
 gi.gather_deterministic 8.71  quiet n=41
 gi.gather_edge 9.11  quiet n=42
+gi.gather_estimator 10.52  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.gather_glass 6.52  quiet n=40
 gi.gather_letterbox 7.15  quiet n=41
 gi.gather_motion 5.78  quiet n=46
@@ -295,7 +293,7 @@ gi.skin_rays_mirror 4.83  quiet n=40
 gi.skin_rays_norays 1.52  quiet n=42
 gi.sky_light 4.60  quiet n=44
 gi.socket_camera 4.48  quiet n=4
-gi.speckle 59.75  quiet n=10
+gi.speckle 17.73  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.stream_edit 3.94  quiet n=40
 gi.sun_contact 1.92  quiet n=43
 gi.sun_contact_both 3.30  quiet n=42
@@ -414,8 +412,6 @@ perf.offscreen_isolation 21.27  quiet n=42
 perf.offscreen_isolation.fresh_home 0.01  quiet n=4
 perf.pacing 0.00  quiet n=37
 photon.tiers 0.05  quiet n=45
-photon.view 102.64  quiet n=44
-photon.view.fresh_home 0.01  quiet n=4
 picking.document 0.07  quiet n=45
 picking.fov_cap 1.54  quiet n=44
 picking.trimesh_index 9.70  hand: TESTING-SPEED-B4 solo median of 3, 2026-10-12 (100 soup segments, the COST print deleted)

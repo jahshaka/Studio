@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # Ray-traced reflections (SPECS/PHOTON_SPEC.md §7 R5) — headless, framework-free,
 # links JahshakaEngine only. Same runtime requirements as tests/ssr and
 # tests/gi: a reachable DISPLAY and a Vulkan driver.
@@ -25,6 +28,7 @@ target_link_libraries(test_rt_reflect PRIVATE JahshakaEngine)
 jah_gpu_row(gi.rt_reflect CLASS engine COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.rt_reflect PROPERTIES JAHSHAKA_TEST_FRAMES 1435)
 
 # THE LAMP ARM — A RAY-TRACED MIRROR IS A RADIOMETER (PHOTON phase A, A1
 # section 1.2; lane FENCE-1). Same binary, its own fixture and its own process:
@@ -43,11 +47,13 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_row(gi.rt_reflect_lamp CLASS engine COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.rt_reflect_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 224)
 
 jah_gpu_row(gi.rt_reflect_lamp_clip CLASS engine COMMAND test_rt_reflect --lamp --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
                      TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES JAHSHAKA_TEST_FRAMES 224)
 
 # F1-HITRES (PHOTON-CARDS-2 part B): a perfect mirror's hit reads the hit
 # surface's CARD — the reflected panel's row held to the card's closed form pixel
@@ -55,6 +61,7 @@ set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
 jah_gpu_row(gi.rt_reflect_hitres CLASS engine COMMAND test_rt_reflect --hitres
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.rt_reflect_hitres PROPERTIES JAHSHAKA_TEST_FRAMES 300)
 
 # RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
 # support of the tier's history formats and refuses with a log line — a
@@ -67,11 +74,13 @@ if(EXISTS "${_rt_lvp_icd}")
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd}")
+    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES JAHSHAKA_TEST_FRAMES 8)
     add_test(NAME gi.rt_reflect_format_refused_lavapipe COMMAND test_rt_reflect --format-check
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 120
                          LABELS "engine"
                          ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
+    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES JAHSHAKA_TEST_FRAMES 8)
 endif()
 
 # ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
@@ -82,12 +91,14 @@ endif()
 jah_gpu_row(gi.env_ray_match CLASS engine COMMAND test_rt_reflect --env-ray-match
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.env_ray_match PROPERTIES JAHSHAKA_TEST_FRAMES 1368)
 
 jah_gpu_row(gi.rt_reflect_norays CLASS engine COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES
                      TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(gi.rt_reflect_norays PROPERTIES JAHSHAKA_TEST_FRAMES 28)
 
 # REFLECTIONS UNDER A MOVING CAMERA (PAN-SMEAR-1): the moving frame against the
 # frame the renderer settles to at the same pose, counted in frames. Two entries,
@@ -107,6 +118,7 @@ target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_motion CLASS engine COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.reflect_motion PROPERTIES JAHSHAKA_TEST_FRAMES 885)
 # THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
 # shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
 # takes the shot's uv in its pass buffer, the ray tier its image basis expanded
@@ -116,6 +128,7 @@ jah_gpu_row(gi.reflect_motion_norays CLASS engine COMMAND test_reflect_motion
 set_tests_properties(gi.reflect_motion_norays PROPERTIES
                      TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(gi.reflect_motion_norays PROPERTIES JAHSHAKA_TEST_FRAMES 885)
 
 # A MOVING OBJECT'S REFLECTIONS (REFLECT-MOVERS-1): a sphere on a circle over a
 # glossy floor, a mirror floor, and a glossy sphere — the moving frame against
@@ -135,6 +148,7 @@ target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_mover PROPERTIES JAHSHAKA_TEST_FRAMES 11664)
 
 # A REFLECTION IS FOGGED ALONG ITS OWN PATH (PHOTON-I-1 fix 5): a mirror's off-screen
 # reflection of an emissive wall against the wall seen from the mirror's virtual eye,
@@ -154,12 +168,14 @@ target_link_libraries(test_reflect_fog PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_fog CLASS engine COMMAND test_reflect_fog
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_fog PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_fog PROPERTIES JAHSHAKA_TEST_FRAMES 3360)
 # ...and the paths a machine without ray queries reflects through: the screen march
 # alone and the voxel march (the same law, JahSsrResolve_ps.glsl / PhotonVct).
 jah_gpu_row(gi.reflect_fog_norays CLASS engine COMMAND test_reflect_fog
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_fog_norays PROPERTIES TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(gi.reflect_fog_norays PROPERTIES JAHSHAKA_TEST_FRAMES 1440)
 
 # ID-DEPTH-1: a still, stock-drawn character in front of a moving Atom mover keeps its
 # own (zero) motion in the march's object motion — the id pass's own depth against the
@@ -179,46 +195,13 @@ target_link_libraries(test_id_depth PRIVATE JahshakaEngine)
 jah_gpu_row(gi.id_depth CLASS engine COMMAND test_id_depth
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.id_depth PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.id_depth PROPERTIES JAHSHAKA_TEST_FRAMES 1104)
 # ...and the RAY REFLECTION's own motion (PHOTON-II-1 item 11): the march off, the comb a
 # glossy metal; its own traced reflection keeps its history where the mover passes behind.
 jah_gpu_row(gi.id_depth_rays CLASS engine COMMAND test_id_depth --rays
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.id_depth_rays PROPERTIES TIMEOUT 300 LABELS "engine")
-
-# A REFLECTED ASSET'S LEVEL CHANGE (REFLECT-LOD-POP-1): two metal hemispheres
-# reflecting a baked multi-level asset while the camera dollies at them — the
-# frame-to-frame change of the reflection at every ray-level crossing against the
-# still grain of the same region, and a chain-less twin as the paired control. The
-# asset is baked through the import's own door (tests/atom's cluster fixtures).
-# AN INSTRUMENT: label photon-target (reported, never deciding a tier).
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_reflect_lod_pop test_reflect_lod_pop.cpp
-    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_reflect_lod_pop PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_reflect_lod_pop PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
-    ${CMAKE_SOURCE_DIR}/tests/atom)
-target_compile_definitions(test_reflect_lod_pop PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-add_dependencies(test_reflect_lod_pop JahshakaEngineMedia)
-target_link_libraries(test_reflect_lod_pop PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-jah_gpu_row(gi.reflect_lod_pop CLASS engine COMMAND test_reflect_lod_pop
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
-# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=2 — this
-# lane's solo runs 52.8 s (14:58, load 4.3) and 56.9 s (15:07, load 6.7, 2 builds on the box); no gate record since the
-# slot (a photon-target row); median 54.8 -> 6x = 330; slot-era worst 56.9 -> TIMEOUT 330 (was 600).
-set_tests_properties(gi.reflect_lod_pop PROPERTIES TIMEOUT 330 LABELS "photon-target"
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(gi.id_depth_rays PROPERTIES JAHSHAKA_TEST_FRAMES 1104)
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
@@ -234,6 +217,7 @@ jah_gpu_exclusive_test(NAME gi.rt_reflect_cost CLASS engine RUN_TIMEOUT 300 COMM
 set_tests_properties(gi.rt_reflect_cost PROPERTIES
                      LABELS "engine"
                      ENVIRONMENT "JAH_RT_REFLECT_COST=1")
+set_tests_properties(gi.rt_reflect_cost PROPERTIES JAHSHAKA_TEST_FRAMES 361)
 
 if(JAHSHAKA_ASAN)
     # THE SANITISED TWIN for the new pass. `protect_shadow_gap=0` is already in
@@ -249,8 +233,9 @@ if(JAHSHAKA_ASAN)
     jah_gpu_row(gi.rt_reflect_asan CLASS engine COMMAND test_rt_reflect_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_asan PROPERTIES
-                         TIMEOUT 180 LABELS "engine"
+                         TIMEOUT 180 LABELS "engine;stage-close"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(gi.rt_reflect_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1435)
 endif()
 
 # A CUT-OUT IS GEOMETRY WITH HOLES FOR THE RAYS TOO (REFLECT-MOVERS-2): a fence
@@ -274,6 +259,7 @@ target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine OgreNext)
 jah_gpu_row(gi.rt_alpha_tested CLASS engine COMMAND test_rt_alpha_tested
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_alpha_tested PROPERTIES TIMEOUT 240 LABELS "engine")
+set_tests_properties(gi.rt_alpha_tested PROPERTIES JAHSHAKA_TEST_FRAMES 844)
 
 # THE RAY TIER'S LEVEL CAP (architecture audit D1): a mesh deeper than the GPU scene's
 # eight levels is traced at level 7 at most, so its hits decode against its own rows —
@@ -294,3 +280,4 @@ target_link_libraries(test_ray_levels PRIVATE JahshakaEngine)
 jah_gpu_row(gi.ray_levels CLASS engine COMMAND test_ray_levels
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ray_levels PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.ray_levels PROPERTIES JAHSHAKA_TEST_FRAMES 360)

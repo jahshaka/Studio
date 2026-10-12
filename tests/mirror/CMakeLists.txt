@@ -1,3 +1,6 @@
+# FRAMES (TESTING-SPEED-B1, 2026-10-12): every row here states JAHSHAKA_TEST_FRAMES — the frames its process(es) render,
+# COUNTED on the Debug tree (an LD_PRELOAD count of Ogre::Root::_updateAllRenderTargets per row; an _asan twin = its
+# twin's count; 0 = no engine frame): spikes/testing-speed-b1/frames.json, framecount/.
 # SceneMirror tests: iris:: document -> engine, verified by pixels. Links IrisGL
 # (Qt) AND JahshakaEngine — the only suite that spans the boundary, on purpose.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
@@ -16,6 +19,7 @@ target_link_libraries(test_scene_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Q
 add_dependencies(test_scene_mirror JahshakaEngineMedia)
 jah_gpu_row(mirror.document_to_engine CLASS engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 856)
 
 # mirror.skinned_outline — the SELECTION SILHOUETTE over a skinned character.
 # The shell is a second Item over the same mesh; on HlmsUnlit (which has no
@@ -40,6 +44,7 @@ add_dependencies(test_skinned_outline JahshakaEngineMedia)
 jah_gpu_row(mirror.skinned_outline CLASS engine COMMAND test_skinned_outline WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.skinned_outline PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.skinned_outline PROPERTIES JAHSHAKA_TEST_FRAMES 9)
 
 # mirror.cull_twin — A NODE'S FACE CULL through its material's CULL TWIN (CULL-MODE-2):
 # one datablock per (material, cull) worn, kept in step with the material, gone
@@ -62,6 +67,7 @@ add_dependencies(test_cull_twin JahshakaEngineMedia)
 jah_gpu_row(mirror.cull_twin CLASS engine COMMAND test_cull_twin WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.cull_twin PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.cull_twin PROPERTIES JAHSHAKA_TEST_FRAMES 652)
 
 # mirror.scale — the SHAPE of a still frame's mirror cost at scale (MIRROR_SCALE
 # lane, 2026-09-13). The render review measured `host.mirror` at 52 ms per STILL
@@ -90,6 +96,7 @@ jah_gpu_exclusive_test(NAME mirror.scale CLASS engine RUN_TIMEOUT 300 COMMAND te
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.scale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
+set_tests_properties(mirror.scale PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # mirror.settle_incremental — the static re-promotion after a settle is a
 # BOUNDED walk spread over syncs (SceneMirror::kStaticSettleNodesPerSync,
@@ -118,7 +125,8 @@ jah_gpu_row(mirror.settle_incremental CLASS engine COMMAND test_mirror_settle
 # Sample: n=2 quiet PASS runs at B=24 (71.59, 68.89 s; median 70.24, worst 71.59), warm, 2026-10-11 12:4x, quiet box
 # (no VRAM wait in these seconds).
 set_tests_properties(mirror.settle_incremental PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror;stage-close")
+set_tests_properties(mirror.settle_incremental PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # mirror.settle_thumbnails — a settle is fed by ITS OWN document's writes:
 # a 10k scene demoted by one edit settles within its quiet window + one
@@ -149,6 +157,7 @@ jah_gpu_row(mirror.settle_thumbnails CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bi
 # (11.03, 11.20 s), warm, 2026-10-11 12:4x, quiet box.
 set_tests_properties(mirror.settle_thumbnails PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.settle_thumbnails PROPERTIES JAHSHAKA_TEST_FRAMES 894)
 
 # mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
@@ -174,6 +183,7 @@ jah_gpu_row(mirror.dirty_equals_full CLASS engine COMMAND test_dirty_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.dirty_equals_full PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.dirty_equals_full PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # mirror.grid_floor — THE GROUND GRID ON TOP OF THE FLOOR (GIZMO-2 item 5, owner
 # §370). The grid sits at exactly y=0 now and wins against the coplanar floor
@@ -196,6 +206,7 @@ add_dependencies(test_grid_floor JahshakaEngineMedia)
 jah_gpu_row(mirror.grid_floor CLASS engine COMMAND test_grid_floor WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.grid_floor PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.grid_floor PROPERTIES JAHSHAKA_TEST_FRAMES 42)
 
 # mirror.ground_plane — THE GROUND PLANE WIDGET (WORLD-MODEL-1): the editor's
 # infinite matte ground is a mirror-owned backdrop quad, off by default, out of
@@ -219,6 +230,7 @@ jah_gpu_row(mirror.ground_plane CLASS engine COMMAND test_ground_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.ground_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.ground_plane PROPERTIES JAHSHAKA_TEST_FRAMES 99)
 
 # mirror.sun_night — WHEN THE SUN GOES OUT (SKY-SMALL / SKY-NIGHT-1). The disc
 # and the sun's PSSM passes used to be dropped on a RELATIVE tint test, which
@@ -242,6 +254,7 @@ add_dependencies(test_sun_night JahshakaEngineMedia)
 jah_gpu_row(mirror.sun_night CLASS engine COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.sun_night PROPERTIES JAHSHAKA_TEST_FRAMES 216)
 
 # mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
 # §5 phase 4, lane VR-4). The two HAND markers the editor's VR preview shows
@@ -278,3 +291,4 @@ jah_gpu_row(mirror.vr_proxies CLASS engine COMMAND test_vr_proxies
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.vr_proxies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.vr_proxies PROPERTIES JAHSHAKA_TEST_FRAMES 94)

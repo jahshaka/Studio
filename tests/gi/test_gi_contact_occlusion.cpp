@@ -323,23 +323,28 @@ bool build(Fixture &f)
     return true;
 }
 
-struct Tier { const char *name; GiMode mode; GiQuality q; int bounces; };
+struct Tier { const char *name; GiMode mode; GiQuality q; int bounces; int settle; };
 // kPhotonTable (src/services/worldmodes.cpp): technique, quality, bounces; the
 // field and the gather AUTO (the tier's own resolution), the cards the default.
+// `settle` = THE COUNTED SETTLE (TESTING-SPEED-B1, spikes/testing-speed-b1/co-trace2.log: the strip read every 10
+// frames from the arm's change to giAtRest at 210): the frame from which every strip of every arm is within the
+// row's own 0.3 % of its rest value — at the three gather tiers the strip IS the rest value from there (0.0000
+// apart at 60 frames), so the wait for giAtRest read the same numbers 150 frames later. 0 = wait for giAtRest: at
+// Low (the field alone) the strip still drifts 0.4 % at frame 150, so it keeps the rest.
 const Tier kTiers[4] = {
-    { "Epic",   GiMode::VctPccHybrid, GiQuality::Epic,   3 },
-    { "High",   GiMode::VctPccHybrid, GiQuality::High,   1 },
-    { "Medium", GiMode::Vct,          GiQuality::Medium, 1 },
-    { "Low",    GiMode::Vct,          GiQuality::Low,    1 },
+    { "Epic",   GiMode::VctPccHybrid, GiQuality::Epic,   3, 50 },
+    { "High",   GiMode::VctPccHybrid, GiQuality::High,   1, 50 },
+    { "Medium", GiMode::Vct,          GiQuality::Medium, 1, 60 },
+    { "Low",    GiMode::Vct,          GiQuality::Low,    1, 0 },
 };
 
 enum class Arm { Open, Black, White, Cube };
 
-/// Settles (giAtRest, frames-counted, then until the strip stops moving) and
+/// Settles (the tier's counted settle, or giAtRest; then until the strip stops moving) and
 /// returns the strip means at every kDs, averaged over 8 frames.
 struct Profile { double v[kNd]; double far = 0.0; double top = 0.0; double across[17] = { 0 }; bool rest = false; int frames = 0; };
 
-Profile measure(Fixture &f, Arm arm)
+Profile measure(Fixture &f, Arm arm, int settle)
 {
     f.s->setNodeVisible(f.wall, arm == Arm::Black || arm == Arm::White);
     f.s->setNodeVisible(f.box, arm == Arm::Cube);
@@ -351,9 +356,14 @@ Profile measure(Fixture &f, Arm arm)
     const bool cubeArm = arm == Arm::Cube;
     const float z0 = cubeArm ? -0.1f : -2.0f, z1 = cubeArm ? 0.1f : 2.0f;
     int frames = 0;
-    render(f.e, 60);
-    frames += 60;
-    while (!f.s->giStatus().giAtRest && frames < 1200) { render(f.e, 10); frames += 10; }
+    if (settle > 0) {   // the tier's counted settle (kTiers)
+        render(f.e, settle);
+        frames += settle;
+    } else {
+        render(f.e, 60);
+        frames += 60;
+        while (!f.s->giStatus().giAtRest && frames < 1200) { render(f.e, 10); frames += 10; }
+    }
     p.rest = f.s->giStatus().giAtRest;
     // ...and until the strip stops moving (trap 7: read until the value stops).
     double prev[kNd] = { 0 };
@@ -597,11 +607,11 @@ int main()
             const bool rayTier = t.mode == GiMode::VctPccHybrid;
             if (term.raysOnly && (!rayTier || !rays)) continue;
             setTier(f, t, term.gather, term.ddgi);
-            const Profile open = measure(f, Arm::Open);
+            const Profile open = measure(f, Arm::Open, t.settle);
             const GiStatus st = f.s->giStatus();
             Profile A, B;
-            if (whiteFirst) { B = measure(f, Arm::White); A = measure(f, Arm::Black); }
-            else { A = measure(f, Arm::Black); B = measure(f, Arm::White); }
+            if (whiteFirst) { B = measure(f, Arm::White, t.settle); A = measure(f, Arm::Black, t.settle); }
+            else { A = measure(f, Arm::Black, t.settle); B = measure(f, Arm::White, t.settle); }
             if (measureMode && std::getenv("JAH_CONTACT_VOXELS")) {
                 // THE STORE, read where the white wall and the open floor are: radiance
                 // = light / (k c), against the sky radiance L (the 1x1 sky's linear grey).
@@ -643,7 +653,7 @@ int main()
                     }
                 }
             }
-            const Profile C = measure(f, Arm::Cube);
+            const Profile C = measure(f, Arm::Cube, t.settle);
             std::printf("\n== %s — %s (gather %s, field %s; frames open %d A %d B %d C %d; rest %d%d%d%d)\n",
                         t.name, term.name, st.gather.running ? "RUNNING" : "off",
                         st.ifdTargetSamples ? "on" : "off", open.frames, A.frames, B.frames,
