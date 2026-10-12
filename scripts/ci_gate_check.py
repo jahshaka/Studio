@@ -650,6 +650,17 @@ def ancestor_base_proof(key, base_sha, solos_at, is_ancestor, distance, reaches)
             f"the base's proof is {a[:9]}'s solos; {a[:9]}..{base_sha[:9]} does not reach the row")
 
 
+def tree_paths(gs, a, b):
+    """The paths whose content differs between commit a's tree and b's (irisgl's own diff between their pins, prefixed)."""
+    files = [x for x in _git(["diff", "--name-only", a, b], gs.ROOT).splitlines() if x]
+    out = [f for f in files if f != "irisgl"]
+    if "irisgl" in files:
+        old, new = _git(["rev-parse", f"{a}:irisgl"], gs.ROOT), _git(["rev-parse", f"{b}:irisgl"], gs.ROOT)
+        ig = os.path.join(gs.ROOT, "irisgl")
+        out += ["irisgl/" + x for x in _git(["diff", "--name-only", old, new], ig).splitlines() if x]
+    return sorted(set(out))
+
+
 class Reach:
     """What the scoped selection of <A>..<tip> reaches, per earlier commit A (computed once each, on
     one build graph and one inventory). ALL = every row: a fork pin change, a fallback, the tier by
@@ -673,7 +684,16 @@ class Reach:
         rng = f"{a}..{b}"
         reach = unreadable
         try:
-            S = self.gs.select(self.gs.touched_paths(rng), rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
+            # a NON-ANCESTOR a (the lane's pre-rebase twin, item 2): what changed between the two TREES, not a range's
+            # commits (own_base would read the whole lane from the merge-base)
+            if subprocess.run(["git", "merge-base", "--is-ancestor", a, b], cwd=self.gs.ROOT).returncode != 0:
+                paths = tree_paths(self.gs, a, b)
+                if not paths:
+                    self.cache[ck] = set()
+                    return self.cache[ck]
+            else:
+                paths = self.gs.touched_paths(rng)
+            S = self.gs.select(paths, rng, self.build, self.gs.GATE_JOBS, graph=self.graph,
                                inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
             if S.full_tier or (S.fork_bump and fork_rows is None):
                 reach = Reach.ALL
@@ -868,7 +888,49 @@ def serve_key(key, server, cands, got, judge_at):
     return ("unserved", first_why or "no record of it at any ancestor of the tip")
 
 
-def candidates(gs, tip_sha, pins_of=None):
+def lane_tips(gs, lane, tip_sha, limit=8):
+    """THE LANE'S OWN EARLIER TIPS THAT ARE NOT ANCESTORS of the tip (RUNNER-FIX-4 item 2: a rebase rewrites the lane's
+    commits — VOXEL-READOUT-1's builder records sat at c8d21b245, the pre-rebase twin of the candidate 498931e06): every
+    clean tip holding a RUN record of the lane's own (`lanes == [<lane>]`), newest record first. Their reach to the tip is
+    the TREE DIFF (Reach.between): a row its inputs did not change in is served from there (rule 2: the inputs equal)."""
+    if not lane:
+        return []
+    d = gate_runlog.log_dir()
+    newest = {}
+    if not os.path.isdir(d):
+        return []
+    for f in os.listdir(d):
+        if not f.endswith(".jsonl"):
+            continue
+        for line in open(os.path.join(d, f), errors="replace"):
+            if lane not in line:
+                continue
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            t = r.get("tip") or {}
+            sha = t.get("studio")
+            if not sha or sha == tip_sha or t.get("studio_dirty") or t.get("irisgl_dirty") or not is_run(r):
+                continue
+            if gate_runlog.own_lane(r) != lane:
+                continue
+            w = _when(r)
+            if sha not in newest or w > newest[sha]:
+                newest[sha] = w
+    out = []
+    for sha in sorted(newest, key=lambda x: newest[x], reverse=True):
+        if subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=gs.ROOT).returncode != 0:
+            continue
+        if subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip_sha], cwd=gs.ROOT).returncode == 0:
+            continue                       # an ancestor is a candidate already
+        out.append(sha)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def candidates(gs, tip_sha, pins_of=None, lane=None):
     """[(A, A's irisgl pin, A's fork pin)] — THE TIP ITSELF and every ancestor of it holding a record in the run log,
     newest first (topological: the tip first), and the irisgl pin its records must carry. THE TIP IS A CANDIDATE
     (RUNNER-AUDIT-FIX-1 F4, rule 1): a clean, stamped, same-pin, non-measuring green record AT the candidate — the
@@ -887,6 +949,10 @@ def candidates(gs, tip_sha, pins_of=None):
         if c in have:
             ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
             out.append((c, ig or None, fork_pin(gs, ig)))
+    # ...after the ancestors, THE LANE'S OWN NON-ANCESTOR TIPS (a rebase's pre-rebase twin; item 2), when the lane is named
+    for c in lane_tips(gs, lane, tip_sha):
+        ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
+        out.append((c, ig or None, fork_pin(gs, ig)))
     return out
 
 
@@ -970,7 +1036,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     # THE RANGE'S EARLIER COMMITS, and EVERY ANCESTOR of the tip holding records (the serving candidates, RUNNER-A2), with
     # the pins they ran on (records at each are read in one pass)
     earlier = range_commits(gs, base_sha, tip_sha)
-    cands = candidates(gs, tip_sha)
+    cands = candidates(gs, tip_sha, lane=lane)        # the lane named: its non-ancestor tips serve too (item 2)
     pins = {tip_sha: pin or None}
     for c, ig, _ in cands:
         pins[c] = ig
@@ -1225,7 +1291,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     return not (missing or red or carried), reasons
 
 
-def plan(rng, build, gs=None, named=()):
+def plan(rng, build, gs=None, named=(), lane=None):
     """THE MERGE RUN'S ROW SET (RUNNER-A2; `runner.sh select`): {run: {key: reason}, served: {key: {sha, run, tier, ts,
     state, why}}, tip, base, what, selected: [the scoped selection's keys], universe: n}. The universe is the merge tier
     (tier_need); a row is RUN when the range B..C reaches it (gate-scope's selection: the graph, the symbols, the area
@@ -1255,7 +1321,7 @@ def plan(rng, build, gs=None, named=()):
                   and not (S.inv[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS | gs.STAGE_CLOSE_LABELS))]
         what = f"the pin move ({len(server.fork)} rows reach the fork by the graph) + the change's own reach"
     universe = tier_need(gs, S, list(scoped)) if not (S.fallback or S.full_tier) else list(scoped)
-    cands = candidates(gs, tip_sha)
+    cands = candidates(gs, tip_sha, lane=lane)         # the lane named: its non-ancestor tips serve too (item 2)
     pins = {c: ig for c, ig, _ in cands}
     got = records_by_tip(pins)
     run, served = {}, {}
@@ -1320,7 +1386,7 @@ def main():
             verdicts[k.strip()] = v.strip()
     gs = load_gs()
     if a.plan:
-        out = plan(a.range, gs.resolve_build(a.build), gs, named=set(a.named))
+        out = plan(a.range, gs.resolve_build(a.build), gs, named=set(a.named), lane=a.lane)
         lab = lambda k: k[0] + (f" :: {k[1]}" if k[1] else "")
         print(json.dumps(dict(out, run={lab(k): v for k, v in out["run"].items()},
                               served={lab(k): v for k, v in out["served"].items()},
