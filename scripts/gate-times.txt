@@ -184,6 +184,7 @@ gi.card_read_parity 3.26  quiet n=41
 gi.card_shadow 4.63  quiet n=41
 gi.card_view 8.05  quiet n=42
 gi.card_view_batch 1.96  quiet n=42
+gi.cards_move_keep 87.75  hand: REFLECT-FIX-1 self-audit prep, one ctest run at 346145c55 on :73 beside a merge run (2026-10-12)
 gi.cards_mover_shadow 5.02  quiet n=40
 gi.cascade_bounce_bindings 2.79  quiet n=48
 gi.cascade_determinism 3.08  quiet n=46
@@ -276,9 +277,13 @@ gi.readout_async 5.99  hand: VOXEL-READOUT-1 self-audit PASS runs 2026-10-12 (5.
 gi.reenable 4.07  quiet n=41
 gi.reflect_fog 10.50  quiet n=38
 gi.reflect_fog_norays 4.86  quiet n=37
+gi.reflect_metal_hit 69.16  hand: REFLECT-FIX-1 self-audit prep, one ctest run at 346145c55 on :73 beside a merge run (2026-10-12)
 gi.reflect_motion 5.75  quiet n=42
 gi.reflect_motion_norays 4.67  quiet n=43
 gi.reflect_mover 34.39  quiet n=40; budget 40 s: the measurement (TESTING-SPEED-B1, the lead 2026-10-12; unchanged)
+gi.reflect_no_helpers 34.93  hand: REFLECT-FIX-1 self-audit prep, one ctest run at 346145c55 on :73 beside a merge run (2026-10-12)
+gi.reflect_uncover 11.22  hand: REFLECT-FIX-1 self-audit prep, one ctest run at 346145c55 on :73 beside a merge run (2026-10-12)
+gi.reflect_uncover_norays 38.69  hand: REFLECT-FIX-1 self-audit prep, one ctest run at 346145c55 on :73 beside a merge run (2026-10-12)
 gi.region_replace 5.36  quiet n=42
 gi.rt_alpha_tested 17.91  quiet n=43
 gi.rt_reflect 4.92  quiet n=40
