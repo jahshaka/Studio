@@ -88,7 +88,9 @@ target_compile_definitions(test_scale_library PRIVATE
 # ---------------------------------------------------------------------------
 # THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact
 # and atom.removechild_leak. scale.occlusion, atom.coverage_trace and the bars that TIME the world (scale.cpu_walks,
-# scale.shadow_cut, scale.gpu_coverage, scale.library with its fixture) are stage-close: measurements of a whole world.
+# scale.shadow_cut, scale.gpu_coverage, scale.library) are stage-close: measurements of a whole world. scale.library's
+# setup row scale.library.fixture keeps its label (the ROWS table: KEEP — a no-op once the template exists; ctest adds it
+# to whatever names scale.library).
 # The `scale-target` rows print, never gate, and are untouched.
 #
 # THE ROWS — one per wall. Label `scale-target` on every one (TARGET_LABELS). The rows
@@ -239,7 +241,7 @@ set_tests_properties(atom.removechild_leak PROPERTIES TIMEOUT 120 LABELS "engine
 # ctest adds a required setup row to any selection that names the measurement (`-L timing`, `-R`).
 jah_gpu_row(scale.library.fixture CLASS app TIER low NEEDS NONE COMMAND test_scale_library --generate
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale;stage-close"
+set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
                      FIXTURES_SETUP scale_library_template)
 jah_gpu_exclusive_test(NAME scale.library CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
