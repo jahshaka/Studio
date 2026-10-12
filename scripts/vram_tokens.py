@@ -1327,6 +1327,21 @@ def _pdeathsig():
         pass
 
 
+def _wipe_after(rc, label):
+    """THE FIXTURE HOME'S WIPE AFTER ITS CONSUMER (TESTING-SPEED-A item 7): a row that is the ONE consumer of a fresh-home
+    fixture carries JAH_WIPE_AFTER=<home> (tests/CMakeLists.txt) — the row's admission knows its exit code, so the home
+    is deleted on a green exit and kept as the row's evidence on a red one (tests/support/fresh_home.sh --after)."""
+    row, _, home = (os.environ.get("JAH_WIPE_AFTER") or "").partition("|")
+    # ONLY THE ROW'S OWN ADMISSION (its label is `<row>:<class>`, jah_gpu_row / jah_gpu_exclusive_test): a harness's
+    # inner app admissions carry their own labels and never wipe the home under it
+    if not home or (label or "").split(":", 1)[0] != row:
+        return
+    sh = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests", "support", "fresh_home.sh")
+    if os.path.isfile(sh):
+        import subprocess
+        subprocess.run(["sh", sh, "--after", str(rc), home])
+
+
 def supervise(argv, held, label, on_end=None):
     """THE ROW RUNS AS THIS ADMISSION'S CHILD (TEST-SELECTOR-1 H4 — it was exec'd in place, and
     no one was left to read how it ended): the tokens stay held here and are inherited by the row;
@@ -1377,6 +1392,7 @@ def supervise(argv, held, label, on_end=None):
         sys.stderr.write("XID-WINDOW %s %s\n" % (kernel_xid.window(t0 - 1, time.time()), label))
     sys.stderr.flush()
     _job_end((128 - rc) if rc < 0 else (1 if xids and rc == 0 else rc), pids=tracker.pids, xids=xids)
+    _wipe_after(1 if rc != 0 or xids else 0, label)
     if rc < 0:
         sys.stderr.write("row-exit: %s died of signal %d\n" % (label, -rc)); sys.stderr.flush()
         release(held)

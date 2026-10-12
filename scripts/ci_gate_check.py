@@ -25,8 +25,9 @@ everything), the fork pin is equal or the row does not reach the fork, the recor
 the build's at the tip (a null is unknown: never equal — a record before schema 3 serves nothing), its build was clean,
 its tier admissible (a lane-tool record only when it carries seconds, the census, labels and the Xid read), and the row
 is neither MEASURING nor a REGISTERED NONDETERMINISM. That newest record decides: green serves; red refuses until
-answered there. `--universe tier` (the runner's judge) asks EVERY merge-tier row this way, not only the range's scoped
-rows; a measuring row the range does not reach is not asked. Every row prints the commit its record came from.
+answered there. THE UNIVERSE IS THE REACH (TESTING-SPEED-A item 1): the range's scoped rows + `--named` (the lane brief's
+rows) — a row outside it is not asked; `--full` (the SHIP only) asks EVERY merge-tier row this way (tier_need); a measuring
+row the range does not reach is not asked. Every row prints the commit its record came from.
 
 A VERDICT COVERS ITS RANGE (TESTING-CLEANUP-2D item 1): a verdict is per ROW per RANGE — the verdict records at the
 TIP are in scope for the same row's reds at every earlier commit of the range the judge reads (the lane tip the
@@ -42,9 +43,10 @@ A..base does NOT reach the row, where an unreadable, fallback, tree-equal or for
 reaching everything (Reach.ALL: the proof does not travel) — a stage-close row the selector set aside for the batch
 included. The why names A; the proof is read only when the door reaches it.
 
-A range that MOVES THE FORK PIN needs the whole MERGE tier at the tip (§7b rule 4: the one full
-tier per bump, `gate-scope.sh <range> --run --fork-tier`; the lane's own gates select by the fork
-diff's reach). So does a selection that fell back or is the tier by rule.
+A range that MOVES THE FORK PIN asks the fork diff's COMPONENT reach (TESTING-SPEED-A item 4: FORK_COMPONENTS — never
+the whole tier; the old `--fork-tier` rule is gone; the lane's own gates select by the fork
+diff's reach). A fallback is its directory's subsystem; only the tier BY RULE (a top-level CMake command, a vendored path no
+one owns, an unreadable fork diff) asks the whole MERGE tier.
 
 THE VERDICT IS PER ROW AND TIMESTAMPED: `--verdict "<row>=<text>" ...` records one `VERDICT` record
 per named red row into the run log (`<date>-verdict-<tip>.jsonl`, the same directory) and
@@ -552,15 +554,15 @@ def judge(key, recs, defects, tip_recs=None, base_recs=None, tip_sha=None, mode=
 
 
 def needed_rows(gs, S):
-    """[(row, arm|None)] the refusal asks a record for, and the name of the selection."""
+    """[(row, arm|None)] the refusal asks a record for, and the name of the selection. THE WHOLE TIER ONLY BY RULE
+    (TESTING-SPEED-A item 1): `full_tier` — a top-level CMake command, a vendored path no one owns, a patch with no
+    compiled copy, an unreadable fork diff. A fallback is its directory's subsystem; a pin move its component reach."""
     inv = S.inv
     gating = lambda n: not (inv[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))
-    if S.fallback or S.full_tier or S.fork_bump:
-        rows = [n for n, t in inv.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))]
-        what = ("the MERGE tier (the fork pin moved: §7b rule 4's one full tier, `--fork-tier`)" if S.fork_bump
-                and not (S.fallback or S.full_tier) else
-                "the MERGE tier (%s)" % ("fallback" if S.fallback else "by rule"))
-        return [(n, None) for n in rows], what
+    if S.full_tier:
+        rows = [n for n, t in inv.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))
+                and S.own_lane_row(n)]
+        return [(n, None) for n in rows], "the MERGE tier (by rule: %s)" % S.full_tier[0][:120]
     subsets = S.arm_subsets()
     need = []
     for n in sorted(S.selected):
@@ -568,7 +570,8 @@ def needed_rows(gs, S):
         need.append((n, None))
         for arm in subsets.get(n, []):
             need.append((n, f"{inv[n]['pool']}.{arm}"))
-    return need, "the scoped selection"
+    what = "the reach" + (" (the pin move: the fork diff's components)" if S.fork_bump else "")
+    return need, what
 
 
 def _git(args, cwd):
@@ -697,11 +700,8 @@ class Reach:
                                inv=self.copy.deepcopy(self.inv0), quiet_graph=True)
             if S.full_tier or (S.fork_bump and fork_rows is None):
                 reach = Reach.ALL
-            elif S.fallback:
-                # ROUND 4: a fallback is a path NO rule owns — for re-use that is ALL (no re-use across it); for PROVING
-                # a fix it reaches NOTHING (one stray file must not "prove" a fix for every red)
-                reach = Reach.ALL if unreadable is Reach.ALL else set()
             else:
+                # (TESTING-SPEED-A item 1: a FALLBACK is its directory's subsystem — what it selected, never ALL)
                 subsets = S.arm_subsets()
                 reach = set()
                 for n in S.selected:
@@ -716,6 +716,10 @@ class Reach:
                 # stage_close_left for COST only (the batch runs it); unlike a fallback it WAS reached, so it is a reach on
                 # EVERY side: for re-use, for a travelling base proof, and for PROVING a fix (every arm with it)
                 for n in getattr(S, "stage_close_left", None) or {}:
+                    reach |= {(n, None), (n, "*")}
+                # THE TOOLS' ROWS A PRODUCT PATH REACHED (TESTING-SPEED-A item 5) are not RUN by the merge, but they were
+                # reached: never served across the range
+                for n in getattr(S, "tools_dropped", None) or ():
                     reach |= {(n, None), (n, "*")}
                 # A PIN MOVE, FOR SERVING (RUNNER-A2, rule 3): every row that reaches the fork by the graph, every arm
                 if S.fork_bump and fork_rows is not None:
@@ -872,6 +876,12 @@ def serve_key(key, server, cands, got, judge_at):
         if why:
             return ("unserved", f"{a[:9]}'s record: {why}")
         reach = server.reach_of(a)
+        if Reach.reaches(reach, key) and a in _TWINS:
+            # A TWIN IS NOT AN ANCESTOR (TESTING-SPEED-A): the lane's non-ancestor tips are unordered among themselves — one
+            # whose tree diff reaches the row says nothing of the next; the walk goes on (ancestors stay terminal: an older
+            # one's range reaches at least what a newer one's does)
+            first_why = first_why or f"{a[:9]}..{server.tip[:9]} reaches it (a twin)"
+            continue
         if Reach.reaches(reach, key):
             return ("unserved", (f"{a[:9]}..{server.tip[:9]} reaches it" if reach is not Reach.ALL else
                                  f"{a[:9]}..{server.tip[:9]} reaches everything (a fallback, the tier by rule, an "
@@ -931,6 +941,9 @@ def lane_tips(gs, lane, tip_sha, limit=8):
     return out
 
 
+_TWINS = set()       # the lane's non-ancestor tips of the last candidates() call (serve_key walks past a reaching twin)
+
+
 def candidates(gs, tip_sha, pins_of=None, lane=None):
     """[(A, A's irisgl pin, A's fork pin)] — THE TIP ITSELF and every ancestor of it holding a record in the run log,
     newest first (topological: the tip first), and the irisgl pin its records must carry. THE TIP IS A CANDIDATE
@@ -955,7 +968,9 @@ def candidates(gs, tip_sha, pins_of=None, lane=None):
     # ancestor's range reaches at least what a newer one's does), and the twin's tree diff to the tip is the smallest
     # (VOXEL-READOUT-1: c8d21b245..498931e06 is one tooling file; an ancestor 60cd0e674's range is the whole lane)
     twins = []
+    _TWINS.clear()
     for c in lane_tips(gs, lane, tip_sha):
+        _TWINS.add(c)
         ig = _git(["rev-parse", f"{c}:irisgl"], gs.ROOT)
         twins.append((c, ig or None, fork_pin(gs, ig)))
     at = 1 if out and out[0][0] == tip_sha else 0
@@ -989,14 +1004,17 @@ def stage_close_rows(gs, build):
 
 
 def tier_need(gs, S, need):
-    """THE TIER AS THE UNIVERSE (RUNNER-A2): the scoped keys plus EVERY other row of the merge tier (not stage-close,
-    not a target, not quiet-box) — each answered at the tip or SERVED (rule 2). A MEASURING row the change does not
-    reach is not asked (a measurement is never served; it runs when reached, at a stage close, at a ship)."""
+    """THE TIER AS THE UNIVERSE — `--full` ONLY (the SHIP; TESTING-SPEED-A item 1: a merge's universe is its reach): the
+    scoped keys plus EVERY other row of the merge tier (not stage-close, not a target, not quiet-box, not another lane's
+    `lane:` row) — each answered at the tip or SERVED (rule 2). A MEASURING row the change does not reach is not asked
+    (a measurement is never served; it runs when reached, at a stage close, at a ship)."""
     inv, have = S.inv, set(need)
     sel = {k[0] for k in need}
     out = list(need)
     for n in sorted(inv):
         if inv[n]["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS):
+            continue
+        if not S.own_lane_row(n):
             continue
         if (n, None) in have or ((inv[n]["labels"] & gate_runlog.MEASURING) and n not in sel):
             continue
@@ -1004,11 +1022,11 @@ def tier_need(gs, S, need):
     return out
 
 
-def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_close=False, universe="selection"):
+def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_close=False, full=False, named=()):
     """(ok, reasons) for a range. `verdicts`: {row or pool.arm: text} recorded for those rows first
-    (per row, timestamped; a row that is not red now is refused as a verdict, said out loud). `universe`: "selection"
-    (the range's scoped rows, ci_gate_check's own default) | "tier" (every merge-tier row — the runner's judge: what the
-    range reaches must have run, the rest is SERVED or refused; RUNNER-A2). `mode`:
+    (per row, timestamped; a row that is not red now is refused as a verdict, said out loud). THE UNIVERSE
+    (TESTING-SPEED-A item 1): the range's REACH (its scoped rows) + `named` (the lane's brief rows) — a row outside is not
+    the change's and is not asked; `full` (the SHIP only) every merge-tier row, at the tip or SERVED (tier_need). `mode`:
     merge (a KNOWN RED passes) | push | stage-close (a KNOWN RED refuses: never push on a red). `lane`:
     the lane whose own records carry their open reds to this tip (default: the lane named by the tip's
     own records, else the tip's branch name)."""
@@ -1033,10 +1051,14 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
         if not need:
             return None, [f"{build} registers no stage-close row — not the build of a tree with the batch"]
     else:
-        S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True)
+        S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True, lane=lane)
         need, what = needed_rows(gs, S)
-        if universe == "tier" and not (S.fallback or S.full_tier or S.fork_bump):
-            need, what = tier_need(gs, S, need), f"the merge tier ({what} at the tip, every other row served or run)"
+        have = set(need)
+        for n in sorted(set(named or ()) - {k[0] for k in need}):
+            if n in S.inv and (n, None) not in have:
+                need.append((n, None))
+        if full and not S.full_tier:
+            need, what = tier_need(gs, S, need), f"the merge tier ({what} at the tip, every other row served or run: --full)"
     pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
     label = lambda k: f"{k[0]}{' :: ' + k[1] if k[1] else ''}"
     # THE RANGE'S EARLIER COMMITS, and EVERY ANCESTOR of the tip holding records (the serving candidates, RUNNER-A2), with
@@ -1297,15 +1319,127 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     return not (missing or red or carried), reasons
 
 
-def plan(rng, build, gs=None, named=(), lane=None):
-    """THE MERGE RUN'S ROW SET (RUNNER-A2; `runner.sh select`): {run: {key: reason}, served: {key: {sha, run, tier, ts,
-    state, why}}, tip, base, what, selected: [the scoped selection's keys], universe: n}. The universe is the merge tier
-    (tier_need); a row is RUN when the range B..C reaches it (gate-scope's selection: the graph, the symbols, the area
-    rules; a pin move every fork-reaching row), when the lane's brief names it (`named`), or when it cannot be SERVED —
-    and EVERY row of the universe, reached and named ones included, is first asked of serve_key, the judge's own
-    predicate, over C ITSELF and its ancestors (RUNNER-AUDIT-FIX-1 F4, rule 1: the builder's green record at the
-    candidate is the row tested once at its tip — never re-run; a reached row is served only from a record whose range
-    to C does not reach it, which for a reached row is C's own)."""
+# THE ESTIMATE IS WALL TIME AT THE PASS WIDTHS (TESTING-SPEED-A item 4): a merge prints its selection and its estimate
+# BEFORE anything runs, and the runner refuses one over this many seconds without the lead's `--go`
+ESTIMATE_LIMIT_S = 900
+PASS_ORDER = ("named", "picture", "measuring", "rest")
+
+
+def known_red(rng, row, gs=None):
+    """THE EARLY STOP'S KNOWN-RED PREDICATE (TESTING-SPEED-A fix round, item 1): (known, why) for a row red at the range's
+    tip. The merge run stops early on THE LANE'S red only — never on a red the registry already names: KNOWN when an
+    open registry entry (testing/defects.json: not retired, not past its recheck) names the row AND either the nearest
+    ancestor of the base (the base itself first) that holds a run of the row holds only reds, each tip red's signature
+    (verdict class, masked failLine) among them (the door's own _sig), or NO ancestor holds a run of it at all (a NEW row
+    declared red by design: the door and the lead decide, never the early stop). Never "the record at exactly the base":
+    a base without its own run of the row looks to the nearest ancestor that has one. The door (judge) stays the
+    verdict: this only says whether the early stop may refuse."""
+    gs = gs or load_gs()
+    defects, problem = gate_runlog.defects_load()
+    if defects is None:
+        return False, f"{problem}: no registry, nothing is known"
+    ents = [e for e in defects.values() if row in (e.get("rows") or []) and gate_runlog.defect_state(e) != "retired"
+            and not gate_runlog.recheck_past(e)]
+    if not ents:
+        return False, f"no open registry entry names {row}"
+    ids = ", ".join(sorted(str(e.get("id")) for e in ents))
+    base, tip = rng.split("..", 1)
+    tip_sha, base_sha = _git(["rev-parse", tip], gs.ROOT), _git(["rev-parse", base], gs.ROOT)
+    if not tip_sha or not base_sha:
+        return False, f"cannot resolve {rng}"
+    cands = [(c, ig) for c, ig, _ in candidates(gs, base_sha)]          # the base first, then its ancestors, newest first
+    pins = {tip_sha: _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT) or None}
+    for c, ig in cands:
+        pins.setdefault(c, ig)
+    got = records_by_tip(pins)
+    key = (row, None)
+    runs = lambda recs: [r for r in recs if r.get("kind") != "verdict" and r.get("verdict") not in NEVER_RAN]
+    reds = [r for r in runs(got[tip_sha].get(key, [])) if r.get("verdict") != "PASS"]
+    if not reds:
+        return False, f"no red record of {row} at {tip_sha[:9]}"
+    at = next((c for c, _ in cands if runs(got[c].get(key, []))), None)
+    if at is None:
+        return True, (f"registered ({ids}) and no ancestor of the base holds a run of {row} (a new row): the door "
+                      f"decides, not the early stop")
+    sig = lambda r: (r.get("verdict"), masked(r.get("failLine")), masked(r.get("status")))
+    there = runs(got[at][key])
+    base_reds = [r for r in there if r.get("verdict") != "PASS"]
+    if not base_reds:
+        return False, f"registered ({ids}) but {at[:9]} (the nearest ancestor of the base with a run) is green: the lane's red"
+    if len(base_reds) < len(there):
+        return False, (f"registered ({ids}) but {at[:9]} holds {len(there) - len(base_reds)} green beside "
+                       f"{len(base_reds)} red: nondeterminism there, not one known red")
+    odd = [r for r in reds if sig(r) not in {sig(b) for b in base_reds}]
+    if odd:
+        o = odd[-1]
+        return False, (f"registered ({ids}) but the tip's {o.get('verdict')} "
+                       f"'{masked(o.get('failLine') or o.get('status'))[:60]}' is not {at[:9]}'s red")
+    return True, f"KNOWN RED ({ids}): the same red at {at[:9]}, the nearest ancestor of the base holding a run of {row}"
+
+
+def passes(gs, inv, run_rows, named, arm_subsets=None, costs=None):
+    """THE PASSES (TESTING-SPEED-A item 3; SPECS/TESTING_SPEED_SPEC.md §2 A5): the run rows in the order a red is found
+    soonest — [the lane's named rows] -> [the PICTURE set] -> [the measuring rows, -j1 on the whole card] -> [the rest];
+    a non-measuring pass runs as up to two batches, its fixtures at GATE_JOBS["fixture"] and its app rows / pools at
+    GATE_JOBS["app"] (the VRAM tokens stay the bound under both). Each batch: {rows, jobs, whole, serial_s, wall_s};
+    a pass's wall is its batches' sum; the plan's estimate the passes' sum (a row's price: load_costs, 10 s unknown)."""
+    costs = gs.load_costs() if costs is None else costs
+    arm_subsets = arm_subsets or {}
+    J = gs.GATE_JOBS
+
+    def cost(n):
+        if n in arm_subsets:
+            return 10.0 + sum(costs.get(f"{n}::{a}", 10.0) for a in arm_subsets[n])
+        return float(costs.get(n, 10.0))
+    named = set(named or ())
+    sets = {p: [] for p in PASS_ORDER}
+    for n in sorted(set(run_rows)):
+        t = inv.get(n) or {"labels": set(), "kind": "other"}
+        if t["labels"] & gate_runlog.MEASURING:
+            sets["measuring"].append(n)
+        elif n in named:
+            sets["named"].append(n)
+        elif t.get("picture") or set(arm_subsets.get(n, t.get("arms") or {})) & set(t.get("picture_arms") or ()):
+            sets["picture"].append(n)
+        else:
+            sets["rest"].append(n)
+    out = []
+    for name in PASS_ORDER:
+        rows = sets[name]
+        if not rows:
+            continue
+        if name == "measuring":
+            groups = [("measuring", rows, J["measuring"], True)]
+        else:
+            fx = [n for n in rows if (inv.get(n) or {}).get("kind") != "app"]
+            ap = [n for n in rows if (inv.get(n) or {}).get("kind") == "app"]
+            groups = [(k, rs, J[k], False) for k, rs in (("fixture", fx), ("app", ap)) if rs]
+        batches = []
+        for klass, rs, jobs, whole in groups:
+            ser = sum(cost(n) for n in rs)
+            wall = max(ser / max(1, jobs), max(cost(n) for n in rs))
+            # THE POOLS' ARMS (fix round item 4): a pool the change reaches by some arms runs THOSE arms — the batch carries
+            # JAH_POOL_ARMS (`<pool>.<arm>,...`; a pool absent from it runs every arm), as its estimate prices it
+            pa = ",".join(f"{(inv.get(n) or {}).get('pool') or n.split('.', 1)[-1]}.{a}" for n in rs
+                          for a in arm_subsets.get(n, ()))
+            batches.append({"class": klass, "rows": rs, "jobs": jobs, "whole": whole, "serial_s": round(ser, 1),
+                            "wall_s": round(wall, 1), "pool_arms": pa})
+        out.append({"name": name, "batches": batches, "rows": rows,
+                    "serial_s": round(sum(b["serial_s"] for b in batches), 1),
+                    "wall_s": round(sum(b["wall_s"] for b in batches), 1)})
+    return out
+
+
+def plan(rng, build, gs=None, named=(), lane=None, full=False):
+    """THE MERGE RUN'S ROW SET (`runner.sh select`; TESTING-SPEED-A item 1 — rule 3 of the runner spec restored: a merge
+    runs what the change reaches and nothing else): {run: {key: reason}, served: {key: {sha, run, tier, ts, state, why}},
+    passes, estimate_s, serial_s, tip, base, what, selected, universe: n}. THE UNIVERSE IS THE REACH: gate-scope's
+    selection over B..C (the lane's own `lane:` rows included, nobody else's; a pin move: the fork diff's components)
+    plus the rows the lane's brief names (`named`). A row outside it is NOT run, NOT served, NOT listed: it is not the
+    change's. `full` (the SHIP only) takes the whole merge tier (tier_need). Every row of the universe is first asked of
+    serve_key, the judge's own predicate, over C ITSELF and its ancestors (rule 1: the builder's green record at the
+    candidate is the row tested once at its tip; a reached row is served only from a record whose range to C does not
+    reach it, which for a reached row is C's own); the rest RUN, each with its reason, in PASSES (passes())."""
     gs = gs or load_gs()
     defects, problem = gate_runlog.defects_load()
     if defects is None:
@@ -1315,18 +1449,19 @@ def plan(rng, build, gs=None, named=(), lane=None):
     base_sha = _git(["rev-parse", base], gs.ROOT)
     if not tip_sha or not base_sha:
         raise SystemExit(f"select: cannot resolve {rng}")
-    S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True)
+    S = gs.select(gs.touched_paths(rng), rng, build, gs.GATE_JOBS, quiet_graph=True, lane=lane)
     pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
     reach = Reach(gs, build, tip_sha, fork_pin(gs, pin))
     server = Server(gs, build, tip_sha, fork_pin(gs, pin), defects, reach)
     scoped, what = needed_rows(gs, S)
-    if S.fork_bump and not (S.fallback or S.full_tier):
-        # rule 3: a pin move runs what the change's own paths reach AND every row that reaches the fork — not the tier
-        sel = set(S.selected) | server.fork
-        scoped = [(n, None) for n in sorted(sel) if n in S.inv
-                  and not (S.inv[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS | gs.STAGE_CLOSE_LABELS))]
-        what = f"the pin move ({len(server.fork)} rows reach the fork by the graph) + the change's own reach"
-    universe = tier_need(gs, S, list(scoped)) if not (S.fallback or S.full_tier) else list(scoped)
+    named = set(named or ())
+    universe = list(scoped)
+    have = set(universe)
+    for n in sorted(named):
+        if n in S.inv and (n, None) not in have:
+            universe.append((n, None))
+    if full and not S.full_tier:
+        universe, what = tier_need(gs, S, universe), f"the merge tier (--full: {what} + every other row, served or run)"
     cands = candidates(gs, tip_sha, lane=lane)         # the lane named: its non-ancestor tips serve too (item 2)
     pins = {c: ig for c, ig, _ in cands}
     got = records_by_tip(pins)
@@ -1337,8 +1472,7 @@ def plan(rng, build, gs=None, named=(), lane=None):
         sv = serve_key(k, server, [(c, f) for c, _, f in cands], got,
                        lambda kk, recs: judge(kk, recs, defects, tip_sha=tip_sha))
         if sv[0] != "served" and k in sel_keys:
-            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else
-                                             (" (the fork pin moved: it reaches the fork)" if k[0] in server.fork else "")))
+            run[k] = ("reached by " + rng + (f": {str(reasons.get(k[0]))[:120]}" if reasons.get(k[0]) else ""))
         elif sv[0] != "served" and k[0] in named:
             run[k] = "named by the lane's brief"
         elif sv[0] == "served":
@@ -1350,13 +1484,19 @@ def plan(rng, build, gs=None, named=(), lane=None):
         else:
             run[k] = sv[-1]
     in_u = {k[0] for k in universe}
-    left = sorted(n for n, t in S.inv.items() if n not in in_u and (t["labels"] & gate_runlog.MEASURING)
-                  and not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS)))
     measuring = sorted(n for n in in_u if S.inv.get(n, {}).get("labels", set()) & gate_runlog.MEASURING)
+    run_rows = sorted({k[0] for k in run})
+    subsets = {}
+    for (n, arm) in run:
+        if arm and S.inv.get(n, {}).get("pool") and n not in S.whole:
+            subsets.setdefault(n, []).append(arm.split(".", 1)[1] if "." in arm else arm)
+    ps = passes(gs, S.inv, run_rows, named, subsets)
     return {"tip": tip_sha, "base": base_sha, "irisgl": pin, "fork": fork_pin(gs, pin), "what": what,
-            "measuring_run": measuring, "measuring_left": left, "fork_rows": sorted(server.fork),
-            "selected": sorted(sel_keys, key=str), "universe": len(universe), "run": run, "served": served,
-            "selections": server.computed}
+            "measuring_run": measuring, "fork_rows": sorted(server.fork), "full": bool(full or S.full_tier),
+            "fallback": list(S.fallback), "selected": sorted(sel_keys, key=str), "universe": len(universe), "run": run,
+            "served": served, "selections": server.computed, "passes": ps,
+            "estimate_s": round(sum(p["wall_s"] for p in ps), 1), "serial_s": round(sum(p["serial_s"] for p in ps), 1),
+            "estimate_limit_s": ESTIMATE_LIMIT_S}
 
 
 def main():
@@ -1370,18 +1510,26 @@ def main():
     ap.add_argument("--mode", default=None, choices=MODES,
                     help="merge: a KNOWN RED passes; push / stage-close: it refuses (never push on a red)")
     ap.add_argument("--lane", default=None, help="the lane whose own records carry open reds to the tip")
-    ap.add_argument("--universe", default="selection", choices=("selection", "tier"),
-                    help="selection: the range's scoped rows (default); tier: every merge-tier row, at the tip or SERVED "
-                         "by rule 2 (the runner's judge, RUNNER-A2)")
+    ap.add_argument("--full", action="store_true",
+                    help="THE SHIP's universe: every merge-tier row, at the tip or SERVED by rule 2 (tier_need) — the "
+                         "default universe is the range's REACH + the --named rows (TESTING-SPEED-A item 1)")
     ap.add_argument("--plan", action="store_true",
                     help="print the merge run's row set as JSON (`runner.sh select`): run (with reasons) and served")
-    ap.add_argument("--named", action="append", default=[], help="(--plan) a row the lane's brief names: always run")
+    ap.add_argument("--known-red", default=None, metavar="ROW",
+                    help="print {row, known, why} as JSON: is the row's red at the tip a KNOWN red (known_red: the "
+                         "registry + the nearest ancestor of the base holding a run) — the merge run's early stop asks")
+    ap.add_argument("--named", action="append", default=[], help="a row the lane's brief names: in the universe (run "
+                    "by --plan unless served at the tip; asked by the judge)")
     # action="extend": `--verdict a=x b=y` and `--verdict a=x --verdict b=y` (the form the runner
     # builds) both record EVERY verdict — with nargs="+" alone a repeated flag kept only the last one
     ap.add_argument("--verdict", nargs="+", action="extend", default=None, metavar="ROW=TEXT",
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
                          "then re-check; it clears only the reds logged before it (repeatable)")
     a = ap.parse_args()
+    if a.known_red:
+        k, why = known_red(a.range, a.known_red, load_gs())
+        print(json.dumps({"row": a.known_red, "known": k, "why": why}))
+        sys.exit(0)
     verdicts = None
     if a.verdict:
         verdicts = {}
@@ -1392,7 +1540,7 @@ def main():
             verdicts[k.strip()] = v.strip()
     gs = load_gs()
     if a.plan:
-        out = plan(a.range, gs.resolve_build(a.build), gs, named=set(a.named), lane=a.lane)
+        out = plan(a.range, gs.resolve_build(a.build), gs, named=set(a.named), lane=a.lane, full=a.full)
         lab = lambda k: k[0] + (f" :: {k[1]}" if k[1] else "")
         print(json.dumps(dict(out, run={lab(k): v for k, v in out["run"].items()},
                               served={lab(k): v for k, v in out["served"].items()},
@@ -1402,7 +1550,7 @@ def main():
     if a.stage_close and mode == "merge":
         ap.error("--stage-close judges a push or a stage close: --mode push|stage-close, never merge")
     ok, reasons = check(a.range, gs.resolve_build(a.build), gs, verdicts=verdicts, mode=mode, lane=a.lane,
-                        stage_close=a.stage_close, universe=a.universe)
+                        stage_close=a.stage_close, full=a.full, named=set(a.named))
     if ok is None:
         for r in reasons: print("ci-gate-check: UNUSABLE — " + r)
         sys.exit(2)

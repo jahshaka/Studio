@@ -394,7 +394,8 @@ def main(source, build):
             for tc in ET.parse(junit).getroot().iter("testcase")}
     R = rl._Run("scoped", "gate-cost-test", 3, None, None, None, False, LABELS, False, None, build=tb)
     R.sampler.stop()
-    skip = ("ts", "run", "box", "seconds", "wallSeconds", "retries")
+    # `log` (TESTING-SPEED-A item 2): the streamed path writes a red row's output to a file and names it; the junit path has none
+    skip = ("ts", "run", "box", "seconds", "wallSeconds", "retries", "log")
     same, n = True, 0
     for name in sorted({k[0] for k in new}):
         row = new[(name, None)]

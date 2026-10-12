@@ -7,21 +7,25 @@ break, and the full run is a per-batch event. This file is the reference; `scrip
 carries the rules, and SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md is the audit the 2026-09-27
 reshape followed.
 
-## 1. The tiers — THE RUNNER (RUNNER-A6, 2026-10-11; the procedure: `~/Developer/DOCS/PROCESS.md`, the spec: `~/Developer/SPECS/TESTING_RUNNER_SPEC.md`)
+## 1. The four runs — THE RUNNER (TESTING-SPEED-A, 2026-10-12; the spec: `~/Developer/SPECS/TESTING_SPEED_SPEC.md` §1, the procedure: `~/Developer/DOCS/PROCESS.md`)
 
-The old batch layer and its hand tiers are gone (RUNNER-A6/A7B): every gate is a runner verb. What runs, and when:
+There are no tiers. A branch is built and proved by its builder, read once, merged by a MINUTES-long run of what it reaches,
+landed the same day; the long run is a proof, once, at the ship. No run re-runs a green at the same input: a record is the one
+thing that AVOIDS a run (rule 2); no record ever DEMANDS one.
 
-| Run | What runs | When | Who |
+| Run | When | What runs | Budget |
 |---|---|---|---|
-| **THE LANE'S ROWS** | the brief's acceptance rows, the subject suite, the hygiene label, the six hashes — `lane-test.sh --self-audit` at the tip, through the card queue, recorded | while the lane is built; ONCE at its tip (nobody re-runs them: deliver checks the records) | the builder |
-| **THE MERGE RUN** | `runner.sh merge <lane>` (fired by `lane.sh read <lane> --ready`): `runner.sh select d-build..candidate` — every row the change REACHES (gate-scope's selection; a pin move: every row that reaches the fork) ∪ the brief's rows, minus the rows SERVED by rule 2 (a green record at an ancestor the range does not reach, the pin equal, the declaration and data unchanged) — as ONE class-1 queue job in the candidate's tree (the lane's own build when a fast-forward), the six hashes, `runner.sh judge --mode merge`; a red is ATTRIBUTED (3× solo at the candidate, the lane's tip and d-build's tip) | at every merge, no hand step | the runner |
-| **THE STAGE CLOSE** | `runner.sh stage-close <tag>`: every `stage-close` row (§1d) at d-build's tip as one class-1 job, the rows served where their inputs did not move, the quiet-box ones on a whole-card hold; the registry recheck; the judge in stage-close mode | on the lead's word, at a stage close | the lead |
-| **THE PUSH** | `runner.sh push <tip>`: the guards and the door in push mode over the store — NO rows | at a stage close or on the lead's word | the lead |
-| **THE SHIP** | `runner.sh ship <tip> [--production]`: the deep gate — the full MERGE tier (`gate-scope.py --merge-tier` + `--merge-tier-serial`), every stage-close row, the target rows, hygiene, lsan, tsan, the six hashes, uncached, ONE job list deduped, one build; `--production` adds the Release build-only phase and the control (the last shipped build); then `runner.sh deploy` | on the owner's word | the lead |
+| **LANE** | the builder, while building and ONCE at the tip (`lane-test.sh --self-audit`) | the lane's own tests (`tests/lanes/<LANE>/`, label `lane:<LANE>`), the brief's named rows, the six hashes, the `hygiene` label through `gate_runlog.py run` — every row a record; a `small: true` lane (`lane.sh small`): the hashes + the rows the merge's plan selects for its range | the builder's: as heavy as the proof needs |
+| **MERGE** | `runner.sh merge <lane>` (fired by `lane.sh read <lane> --ready`) | THE REACH: the rows the change reaches (`gate-scope.py`: the build graph for Studio code, THE SUBSYSTEM TABLE for engine code and media, the fork by component; a fallback is its directory's subsystem, never the tier) ∪ the brief's named rows — served where a record answers them; the selection and its WALL estimate PRINTED before any build (over 900 s: refused without `--go`); then THE PASSES — named → the picture set → the measuring rows (-j1, the whole card) → the rest (fixtures -j8, app rows -j4, the VRAM tokens the bound) — each judged; a red rerun ONCE at the candidate; a red that stays red and is NOT A KNOWN RED (`ci_gate_check.py --known-red`: an open registry entry names the row and the nearest ancestor of the base holding a run of it holds the same red, or none holds a run — a new row red by design) STOPS the run (`refused-early`); pools run only the arms the change reaches (JAH_POOL_ARMS); the six hashes; `runner.sh judge --mode merge` | typical 2-10 min; > 15 min only on the lead's `--go` |
+| **FORK** | a `kind: fork` lane's merge (a pin move) | the fork diff's COMPONENT reach (`FORK_COMPONENTS`: OgreLod → engine/atom/scale; Hlms Pbs → the shading families + the picture set; RenderSystems/Vulkan → every engine fixture; …) + the six hashes; never the whole-scene rows | 2-12 min, once per pin move |
+| **SHIP** | `runner.sh ship <tip> --production`, the owner's word | everything: the kept rows + the stage-close rows (`--full`: the one universe that is the whole merge tier, `gate-scope.py --merge-tier [-j N]` / `--merge-tier-serial`), uncached, one build, one job list | ≤ 45 min, ONCE; a red → a fix lane → its small merge → only the reds + the fix's reach re-run |
 
-The MERGE tier's two phases remain the deep gate's definition (`gate-scope.py --merge-tier [-j N]` / `--merge-tier-serial`
-print them; the set lives in the script ONLY — `source.gate_scope_rules` case 9 fails on a literal `-LE` list here); the
-hand-launched rc tiers are deleted (RUNNER-A7B: every tier is a runner verb). Rows are contracts: nobody hand-picks suites out of a selection.
+The lead decides a red: the merge prints the red row's last 40 output lines (its record's `log`) and refuses (fault `red`);
+`runner.sh attribute <lane> --parent` runs the red rows once at the parent on the lead's word; a red of the base is the lead's
+`runner.sh ready <lane> --why` after the lead's own diagnosis and a verdict through the door. Nothing is registered
+automatically. `runner.sh verdict [--since <date>]` prints the sprint table (minutes per merge, time to the first red, rows per
+merge) from the merge records. The stage close (`runner.sh stage-close <tag>`, §1d) and the push (`runner.sh push`: the door
+over the records, no rows) stay. Rows are contracts: nobody hand-picks suites out of a selection.
 
 ### 1b. TARGET TESTS — the `photon-target` label (PHOTON phase A, A1 §0; lane FENCE-1)
 
@@ -413,26 +417,38 @@ A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... served from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
 
-## 3c. THE MERGE RUN (RUNNER-A6, 2026-10-11) — the batch layer it replaced is deleted
+## 3c. THE MERGE RUN (RUNNER-A6, 2026-10-11; TESTING-SPEED-A, 2026-10-12)
 
 One lane, one merge, no hand step: `lane.sh read <lane> --ready` fires `runner.sh merge <lane>` (`--no-merge`: only ready).
 The CPU checks (check-trailers as a command, platform-audit, the Qt linter, the bar/TIMEOUT/RUN_SERIAL scan — a changed line
 refuses until the lead's verdict record names it); the fork grouping (one pin move at a time, after the ready lanes at the old
 pin; `runner.sh rebase <lane>` moves a lane left behind); `runner.sh merge-tree` (a fast-forward in the lane's frozen tree, else
-a merge commit as objects, irisgl first); `runner.sh select`; the run as ONE class-1 job of the card queue (the measuring rows
-alone on a whole-card hold), the six hashes as records (an undeclared move refuses); `runner.sh judge --mode merge`; on a red
-THE ATTRIBUTION — each red row 3× solo at the candidate, at the lane's own tip and at d-build's tip (rc-base): red at d-build =
-a D-BUILD DEFECT (registered, `real:<id>`, the lane lands), red at the lane's tip = the lane's defect (refused), red only at
-the candidate = a COMBINATION DEFECT (kind `combination`, refused), green everywhere = NOT REPRODUCED (a single-use
-`nondeterminism` entry, the lane lands) — each a `kind: attribution` record; then THE LAND (d-build fast-forwarded, irisgl
-first; the lane `merged`; its tree removed or made rc-base; the phases timed into `testing/lanes/<lane>.merge.json`; the page
-`testing/lanes/reports/<lane>.md`; the ledger line drafted). Tested by the lead repo's `scripts/lead/tests/runner_pipeline_test.sh`.
+a merge commit as objects, irisgl first); THE SELECTION PRINTED (the reach + the named rows, each with its reason, the passes,
+the wall estimate; over 900 s refused without `--go`); the build; the run as ONE class-1 job of the card queue in PASSES (§1),
+the six hashes as records (an undeclared move refuses); `runner.sh judge --mode merge` over the reach; a red → the merge
+REFUSES with the row's output (the lead decides, §1); then THE LAND (d-build fast-forwarded to the candidate, or to the land
+commit that deletes `tests/lanes/<LANE>/` and moves the rows `runner.sh land <lane> --keep <row>` kept into their family dirs;
+irisgl first; the lane `merged`; its tree removed or made rc-base; the phases, the passes, `seconds_to_first_red`, `rows_run`,
+`rows_served` and `estimate_s` in `testing/lanes/<lane>.merge.json`; the page `testing/lanes/reports/<lane>.md`; the ledger line
+drafted). Tested by the lead repo's `scripts/lead/tests/runner_pipeline_test.sh`.
+
+A ROW RENDERS SECONDS AND LEAVES NOTHING (TESTING-SPEED-A item 7): `jah_gpu_row(... FRAMES <n> ...)` states the frames a row
+renders (the property `JAHSHAKA_TEST_FRAMES`; `source.testing_rules` R7 ratchets on `tests/hygiene/frames_pending.txt`); a kept
+row's price over its budget (fixture 10 s, app 60 s, a pool 60 s of ARMS, or its own in `tests/hygiene/row_budgets.txt` —
+GENERATED from the lead's `SPECS/TESTING_SPEED_ROWS.md` by `row_budget.py --generate`, never hand-kept) is a red of the row
+(`source.row_budget`); a home made by `tests/support/fresh_home.sh` is deleted when its row exits 0 and kept once as evidence
+(`build-linux/tests/.evidence/<home>/`) when it does not — by the row's own wrapper (`-- <cmd>`), or for a fixture home with ONE
+consumer by that consumer's admission (`JAH_WIPE_AFTER`); the boot's shader cache is ONE per tree (`build-linux/tests/.shadercache`,
+hard-linked into every `--warm` home); `source.no_renders_tracked` refuses any render, home or `Testing/` in git.
 
 ## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
 
-A red is ATTRIBUTED by the runner (`runner.sh merge`: the row re-run SOLO 3× at the candidate AND 3× at the parent
-(rc-base at d-build's tip), each solo taking the whole card, §4b): red at both = a d-build defect (registered, lands);
-red only at the candidate = the lane's (refused); green 3/3 at the candidate = not reproduced (recorded as such, lands).
+A red at a merge is rerun ONCE at the candidate (-j1, the whole card); a red that stays red and is not a KNOWN red
+(`ci_gate_check.py --known-red`: the registry + the nearest ancestor of the base holding a run of the row) stops the run
+(`refused-early`); a known red runs on and the door decides; an acceptance row a brief declares RED BY DESIGN is registered
+as a known red at the delivery (`lane.sh deliver`); the merge refuses with the row's output and THE LEAD DECIDES (§1;
+`runner.sh attribute <lane> --parent` runs it once at the parent on the lead's word). A merge registers nothing; the ONE registration outside the lead's
+`lane.sh defect` is a brief's RED BY DESIGN acceptance row, at its delivery.
 "Environmental" is not a verdict: an Xid from the row's pid is never environmental. ANY OTHER red needs a
 recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
 `scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL

@@ -6,7 +6,7 @@ row the range selects under THE FLAKE LAW (scripts/ci_gate_check.py): a contenti
 3/3 solo PASS after it, any other red a recorded verdict (`--verdict "<row>=<text>"`, per row and
 timestamped in the log, clearing only the reds before it),
 and a row never run is refused. Proved on a recorded range (VIEWS-DEPTH-1, 51e9f2c49..3756b2f18:
-photon.view + the smoke pair) against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE defect
+photon.view then; since TESTING-SPEED-A a synthetic range on 51e9f2c49 reaching gi.speckle) against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE defect
 registry (JAH_DEFECTS_FILE):
 
   nothing run -> refused; all green -> accepted; a verdict-less red -> refused, and ONE solo PASS
@@ -25,19 +25,40 @@ import subprocess
 import sys
 import tempfile
 
-RANGE = "51e9f2c49..3756b2f18"
+RANGE = None          # 51e9f2c49..<synth(gi.speckle's source)> — set in main (TESTING-SPEED-A: the old range's row,
+                      # photon.view, is DELETED by TESTING-SPEED-B batch 1; gi.speckle stays)
 FORK_RANGE = "1775e79f0..684e0f7aa"     # contact-occlusion-1: a pin bump inside the lane
 # TWO RED ROWS FOR THE REPEATED --verdict CASES (TESTING-CLEANUP-2B item 1): RANGE is a tests-only diff, so under
-# TESTING_V3 §1.3.4 it selects photon.view alone (the product smoke pair no longer rides a tooling-only diff).
+# TESTING_V3 §1.3.4 it selects gi.speckle alone (the product smoke pair no longer rides a tooling-only diff).
 # This one-commit range (TESTING-CLEANUP-2 read 3 F1: two test scripts) selects exactly two rows, both of which run
 # the file their own command names.
-RANGE2 = "b04d14f8d..f40399a76"
-ROWS2 = ["app.sky_swap_presented", "log.perf"]
+# TESTING-SPEED-A: the old pair's app.sky_swap_presented is DELETED by TESTING-SPEED-B batch 2 — the range is now a
+# synthetic commit on b04d14f8d changing the scripts of two rows that stay, each running the file its command names
+RANGE2 = None
+ROWS2 = ["log.events", "log.perf"]
+RANGE2_FILES = ["tests/log/e2e_log_events.js", "tests/log/e2e_log_perf.js"]
 # THE DATA EDGE (RUNNER-A2B): both ranges touch a tests/**/CMakeLists.txt, which gate.tokens_by_needs READS (it lints every
 # row's declarations) — so each scoped selection holds it beside the named rows. The fixtures record it green at both tips
 # (a row the case is not about); the cases' reds stay on the rows they name.
-DATA_EDGE_ROWS = ["gate.tokens_by_needs"]
+DATA_EDGE_ROWS = []      # the synthetic ranges touch test sources/scripts only: no data edge, no tool path, no harness
 FAILURES = []
+
+
+def synth(source, parent, files, scratch, msg):
+    """A commit object on `parent` whose tree carries each of `files` with today's text + one code line (an unreferenced
+    object: no ref, no worktree moves) — what the cases' ranges are since the rows they named were deleted."""
+    env = dict(os.environ, GIT_AUTHOR_NAME="jahshaka", GIT_AUTHOR_EMAIL="jahshaka@gmail.com",
+               GIT_COMMITTER_NAME="jahshaka", GIT_COMMITTER_EMAIL="jahshaka@gmail.com",
+               GIT_INDEX_FILE=os.path.join(scratch, "synth-%d.index" % len(os.listdir(scratch))))
+    g = lambda *a, **k: subprocess.run(["git"] + list(a), cwd=source, capture_output=True, text=True, env=env, **k)
+    g("read-tree", parent + "^{tree}")
+    for f in files:
+        text = open(os.path.join(source, f), errors="replace").read()
+        text += ("\nvar tsaSpeedProbe = 1;\n" if f.endswith(".js") else "\nstatic int tsa_speed_probe = 1;\n")
+        blob = g("hash-object", "-w", "--stdin", input=text).stdout.strip()
+        g("update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, f))
+    tree = g("write-tree").stdout.strip()
+    return g("commit-tree", tree, "-p", g("rev-parse", parent).stdout.strip(), "-m", "TESTING-SPEED-A " + msg).stdout.strip()
 
 
 def check(ok, what):
@@ -47,20 +68,23 @@ def check(ok, what):
 
 def main(source, build):
     tool = os.path.join(source, "scripts", "ci-gate-check.sh")
-    # the rows RANGE selects (a tests-only diff, TESTING_V3 §1.3.4: photon.view alone — the smoke pair it used to
+    # the rows RANGE selects (a tests-only diff, TESTING_V3 §1.3.4: gi.speckle alone — the smoke pair it used to
     # carry no longer rides, so records for it were noise)
-    rows = ["photon.view"]
+    global RANGE, RANGE2
+    rows = ["gi.speckle"]
+    scratch = tempfile.mkdtemp(prefix="ci-check-")
     base = subprocess.run(["git", "rev-parse", "51e9f2c49"], cwd=source, capture_output=True, text=True).stdout.strip()
     base_pin = subprocess.run(["git", "rev-parse", "51e9f2c49:irisgl"], cwd=source, capture_output=True,
                               text=True).stdout.strip()
-    tip = subprocess.run(["git", "rev-parse", "3756b2f18"], cwd=source, capture_output=True, text=True).stdout.strip()
-    check(bool(tip), "the recorded tip 3756b2f18 is in this clone")
+    tip = synth(source, "51e9f2c49", ["tests/gi/test_gi_speckle.cpp"], scratch, "the ci-check range (gi.speckle)")
+    check(bool(tip), "the synthetic tip on 51e9f2c49 is made")
     if not tip: return 1
-    pin = subprocess.run(["git", "rev-parse", "3756b2f18:irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
+    RANGE = "51e9f2c49.." + tip
+    RANGE2 = "b04d14f8d.." + synth(source, "b04d14f8d", RANGE2_FILES, scratch, "the two-row range (log.events + log.perf)")
+    pin = subprocess.run(["git", "rev-parse", tip + ":irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_runlog
-    scratch = tempfile.mkdtemp(prefix="ci-check-")
-    # THE DEFECT REGISTRY (TESTING_V3 §1.5): the fixtures' defects; `listed` adds photon.view's nondeterminism
+    # THE DEFECT REGISTRY (TESTING_V3 §1.5): the fixtures' defects; `listed` adds gi.speckle's nondeterminism
     # entry (the contention class is the registry's open nondeterminism subset)
     def entry(i, rows, kind="defect"):
         return {"id": i, "rows": rows, "kind": kind, "cause": "the fixture's (this test only)", "state": "open",
@@ -69,16 +93,17 @@ def main(source, build):
                 "first_seen": {"tip": "0" * 9, "pin": "0" * 9, "run": "20261009T120000-000000000"},
                 "recheck": "2099-12-31", "found_by": "lane"}
     fixtures = [entry("FIXTURE-1", rows + ROWS2), entry("FIXTURE-2", rows + ROWS2),
-                dict(entry("NOTREPRO-FIXTURE-1", ["photon.view"], "nondeterminism"), uses=1, suspects=["ci-check"],
+                dict(entry("NOTREPRO-FIXTURE-1", [rows[0]], "nondeterminism"), uses=1, suspects=["ci-check"],
                      census={"other_ctests": 1}, first_seen={"tip": tip[:9], "pin": "0" * 9,
                                                              "run": "20261009T120000-" + tip[:9]})]
     fixtures[-1].pop("enrolled", None)
     listed = os.path.join(scratch, "defects-listed.json")
     unlisted = os.path.join(scratch, "defects.json")
-    json.dump({"defects": fixtures + [entry("NONDET-FIXTURE-1", ["photon.view"], "nondeterminism")]}, open(listed, "w"))
+    json.dump({"defects": fixtures + [entry("NONDET-FIXTURE-1", [rows[0]], "nondeterminism")]}, open(listed, "w"))
     json.dump({"defects": fixtures}, open(unlisted, "w"))
 
-    def run(rng=RANGE, *extra):
+    def run(rng=None, *extra):
+        rng = rng or RANGE
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout
@@ -107,12 +132,12 @@ def main(source, build):
     # ---- the law, a row NOT in the contention class ---------------------------------------------
     fresh(unlisted, data_edge=False)
     rc, out = run()
-    check(rc == 1 and "no record" in out and "gate.tokens_by_needs" in out and "photon.view" in out,
-          "nothing run -> refused, and says which rows (the data edge's gate.tokens_by_needs among them) (%d)" % rc)
+    check(rc == 1 and "no record" in out and rows[0] in out,
+          "nothing run -> refused, and says which rows (%d)" % rc)
     fresh(unlisted)
     put(rows, "FAIL", "2026-01-01T10:00:01")
     rc, out = run()
-    check(rc == 1 and "photon.view" in out and "needs a verdict" in out,
+    check(rc == 1 and rows[0] in out and "needs a verdict" in out,
           "a verdict-less red -> refused, naming it and what it needs (%d)" % rc)
     put(rows, "PASS", "2026-01-01T10:05:00", retry=True)
     rc, out = run()
@@ -122,11 +147,11 @@ def main(source, build):
     put(rows, "PASS", "2026-01-01T10:06:00", retry=True)
     put(rows, "PASS", "2026-01-01T10:07:00", retry=True)
     # (a PASS at the red's own sha proves no fix — F1; this red is NOT REPRODUCED by its 3/3: a single-use entry)
-    rc, out = run(RANGE, "--verdict", "photon.view=real:NOTREPRO-FIXTURE-1 the fixture's red, read by the test")
+    rc, out = run(RANGE, "--verdict", "gi.speckle=real:NOTREPRO-FIXTURE-1 the fixture's red, read by the test")
     check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
-    check(len(vrec) == 1 and vrec[0]["suite"] == "photon.view" and vrec[0]["kind"] == "verdict"
+    check(len(vrec) == 1 and vrec[0]["suite"] == rows[0] and vrec[0]["kind"] == "verdict"
           and "read by the test" in vrec[0]["text"], "...and the verdict is a record in the run log (%s)" % vfiles)
     rc, out = run()
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
@@ -163,8 +188,8 @@ def main(source, build):
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
     fresh(unlisted)
     put(rows, "NOADMIT", "2026-01-01T10:00:01")
-    rc, out = run(RANGE, "--verdict", "photon.view=it waited too long")
-    check(rc == 1 and "no record" in out and "no verdict recorded for photon.view" in out,
+    rc, out = run(RANGE, "--verdict", "gi.speckle=it waited too long")
+    check(rc == 1 and "no record" in out and "no verdict recorded for gi.speckle" in out,
           "a NOADMIT row is missing and a verdict cannot clear it (%d)" % rc)
 
     # ---- the law, a CONTENTION-CLASS row ----------------------------------------------------------
@@ -202,7 +227,7 @@ def main(source, build):
     fresh(unlisted)
     put(rows, "PASS", "2026-01-01T12:00:00")
     rc, out = run()
-    check(rc == 0, "every selected row green at the tip -> accepted (%d)" % rc)
+    check(rc == 0, "every selected row green at the tip -> accepted (%d) %s" % (rc, out.strip().splitlines()[-2:]))
 
     # ---- no defect registry -----------------------------------------------------------------------
     fresh(os.path.join(scratch, "absent.json"))
@@ -216,8 +241,9 @@ def main(source, build):
     if ftip:
         fresh(unlisted)
         rc, out = run(FORK_RANGE)
-        check(rc == 1 and "the fork pin moved" in out,
-              "a range that moves the fork pin asks for the MERGE tier's records (%d: %s)"
+        # TESTING-SPEED-A item 4: a pin move asks for the FORK DIFF'S COMPONENT reach (never the whole tier)
+        check(rc == 1 and "the pin move: the fork diff's components" in out and "MERGE tier" not in out,
+              "a range that moves the fork pin asks for its component reach's records, not the tier's (%d: %s)"
               % (rc, out.strip().splitlines()[0][:160] if out.strip() else ""))
     else:
         check(False, "the recorded fork range %s is in this clone" % FORK_RANGE)
@@ -246,6 +272,76 @@ def main(source, build):
     check(recs.get("s.one", {}).get("other_ctests") == 2 and recs.get("s.two", {}).get("other_ctests") == 3,
           "each suite's record carries the box sampled at ITS start (%s)"
           % {k: v.get("other_ctests") for k, v in recs.items()})
+
+    # ---- FIX ROUND item 1: THE EARLY STOP'S KNOWN-RED PREDICATE (--known-red) -------------------------------------
+    # a registered row red at the tip AND red at the nearest ancestor of the base holding a run -> known; the base green ->
+    # the lane's; no run anywhere (a NEW row, red by design) -> known (the door decides); no registry entry -> the lane's
+    def kr(row):
+        rc_, out_ = run(RANGE, "--known-red", row)
+        try:
+            return json.loads(out_.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return {"known": None, "why": out_[-200:]}
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is True and "the same red at" in j["why"], "--known-red: registered + the same red at the base -> "
+          "KNOWN (the early stop does not refuse it) (%s)" % j["why"][:90])
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "PASS", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is False and "green" in j["why"], "--known-red: registered but the base GREEN -> the lane's red (%s)"
+          % j["why"][:90])
+    fresh(unlisted, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    j = kr(rows[0])
+    check(j["known"] is True and "new row" in j["why"], "--known-red: registered and no ancestor holds a run (a NEW row "
+          "red by design: source.row_budget at its own merge) -> known, the door decides (%s)" % j["why"][:90])
+    empty = os.path.join(scratch, "defects-empty.json")
+    json.dump({"defects": []}, open(empty, "w"))
+    fresh(empty, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T10:00:00")
+    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
+    j = kr(rows[0])
+    check(j["known"] is False and "no open registry entry" in j["why"], "--known-red: no registry entry -> never known, "
+          "whatever the base holds (%s)" % j["why"][:90])
+    # ---- FIX ROUND item 4: a batch carries its pools' arms (JAH_POOL_ARMS) --------------------------------------------
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    import ci_gate_check as cgc_mod
+
+    class _GS:
+        GATE_JOBS = {"fixture": 8, "app": 4, "measuring": 1}
+
+        @staticmethod
+        def load_costs():
+            return {}
+    inv_ = {"pool.toy": {"labels": set(), "kind": "app", "pool": "toy", "arms": {"a1": 1, "a2": 1}},
+            "x.fixture": {"labels": set(), "kind": "fixture"}}
+    ps_ = cgc_mod.passes(_GS, inv_, ["pool.toy", "x.fixture"], [], {"pool.toy": ["a2"]})
+    pa_ = {b["class"]: b["pool_arms"] for p_ in ps_ for b in p_["batches"]}
+    check(pa_.get("app") == "toy.a2" and pa_.get("fixture") == "", "passes(): the app batch carries JAH_POOL_ARMS=toy.a2 "
+          "(the one arm the change reaches), the fixture batch none (%s)" % pa_)
+
+    # ---- FIX ROUND: THE RENDERS OUTSIDE THE HOMES, wiped after the run (gate_runlog._wipe_renders) ---------------------
+    import time as _t
+    wb = os.path.join(scratch, "wipe-build"); wt = os.path.join(wb, "tests", "gi")
+    os.makedirs(os.path.join(wt, "e2e-home-x")); os.makedirs(os.path.join(wb, "tests", ".evidence"))
+    old = os.path.join(wt, "reference.png"); open(old, "w").close(); os.utime(old, (1, 1))
+    t0_ = _t.time() - 1
+    for f in ("shot.png", "frame.ppm", "e2e-home-x/in_home.png"):
+        open(os.path.join(wt, f), "w").close()
+    msg = gate_runlog._wipe_renders(wb, t0_, "run-green", False)
+    check(not os.path.exists(os.path.join(wt, "shot.png")) and not os.path.exists(os.path.join(wt, "frame.ppm"))
+          and os.path.exists(old) and os.path.exists(os.path.join(wt, "e2e-home-x", "in_home.png")) and "deleted" in msg,
+          "renders: an all-green run DELETES the images it wrote under build/tests/<dir>/ (not an older input, not a home's: "
+          "fresh_home owns those) (%s)" % msg)
+    open(os.path.join(wt, "shot.png"), "w").close()
+    msg = gate_runlog._wipe_renders(wb, t0_, "run-red", True)
+    check(os.path.isfile(os.path.join(wb, "tests", ".evidence", "output", "run-red", "renders", "gi", "shot.png"))
+          and not os.path.exists(os.path.join(wt, "shot.png")) and os.path.exists(old),
+          "renders: a run with a red MOVES them to .evidence/output/<run>/renders/<dir>/ (%s)" % msg)
 
     subprocess.run(["rm", "-rf", scratch])
     if FAILURES:

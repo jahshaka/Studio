@@ -1,8 +1,13 @@
 # suite seconds source — THE PRICE OF EVERY TIER ROW (TESTING-CLEANUP-2B item 6; scripts/gate-scope.py "THE PRICES").
 # One line per row of the MERGE and STAGE-CLOSE tiers (and per pool ARM, <pool>::<arm>): <row> <seconds> <source>.
-# The source is NAMED: "quiet n=K" = the median of the row's PASS runs with no sibling ctest (>= 3 of them) — THE
-# price; "all n=K" = fewer quiet runs, the median of every PASS run; "fixture" = a home wipe; any other text = a
-# hand price and where it came from. Read from testing/runs + testing/runs-archive since 2026-10-01 13:10 (before
+# THE PRICE RULE (the lead, TESTING-SPEED-B4's read, 2026-10-12): a row's price is THE ROW'S OWN COST — its solo median,
+# admitted, the card otherwise quiet — never a median of gate runs beside siblings (that measured the box: four app rows
+# priced 70/50/37/31 s under contention ran 20/18/11/11 s alone). A HAND price (a "solo median" line, any source text
+# below that is not one of the run log's) is NEVER overwritten by --record-times; the run log's median is written only
+# for a row with no hand price, and only from records that ran alone ("solo-quiet n=K": >= 3 PASS records whose census
+# shows no other ctest, no build, no GPU competitor, the load under the box's figure, and no gate sibling — the row's
+# ctest at -j1); a census that cannot tell writes nothing. "quiet n=K" / "all n=K" = older run-log prices (kept until a
+# solo-quiet or hand price replaces them); "fixture" = a home wipe. Read from testing/runs + testing/runs-archive since 2026-10-01 13:10 (before
 # GATE-SPEED-1's L2 a record's seconds held its admission wait). Re-price: scripts/gate-scope.sh --record-times
 # [--build <dir>]; the self-check: --price-check (source.testing_rules R2 fails an unpriced tier row).
 api.contract 3.65  quiet n=58
@@ -802,12 +807,14 @@ source.member_init 9.64  quiet n=60
 source.no_fixed_gi_volume 0.08  quiet n=58
 source.no_glsl_path 0.10  quiet n=57
 source.no_raw_transaction 0.01  quiet n=59
+source.no_renders_tracked 0.20  TESTING-SPEED-A: measured by hand (git ls-files)
 source.notices_coverage 0.02  quiet n=58
 source.one_fonticons 0.05  quiet n=58
 source.one_material_resolve 0.20  quiet n=63
 source.one_readfile 0.01  quiet n=58
 source.panel_rows_guarded 0.03  quiet n=58
 source.photon_never_pinned 0.09  all n=2
+source.row_budget 1.00  TESTING-SPEED-A: measured by hand (one ctest -N + two files)
 source.row_declares_needs 0.35  all n=2
 source.settings_keys 0.21  quiet n=58
 source.shell_boundaries 0.26  quiet n=58
@@ -819,6 +826,7 @@ ssr.rings 1.73  quiet n=38
 test_engine 39.14  quiet n=40
 test_engine_asan 71.07  quiet n=40
 test_engine_recreate 4.18  quiet n=44
+testing_speed_a.boot_profile 70.00  TESTING-SPEED-A: two engine selftests (the lane's own row)
 theme.manager 0.08  quiet n=25
 theme.no_raw_sheets 0.05  quiet n=35
 theme.sheets 70.88  quiet n=44

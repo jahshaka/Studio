@@ -406,7 +406,7 @@ remains below is read ONCE (a boot or session latch). A new measuring switch is 
 | `JAHSHAKA_NO_RAY_QUERY` | OgreEngine.cpp | tests/CMakeLists.txt, ssr, app rows | boots without the ray-query tier (the no-rays rows) |
 | `JAHSHAKA_NO_DITHER` | OgreChain.cpp | vr, samples, scale | the chain without its dither (byte-comparable pictures) |
 | `JAHSHAKA_WARMUP_PASS` | OgreChain.cpp | shadercache.warm_up, projectrunner | the shader warm-up pass (an engine route with a known crash, off unless asked) |
-| `JAHSHAKA_HLMS_DEBUG_DIR` | OgreEngine.cpp | app/shader_gate_warm.sh, docs/SCRIPTING.md | dumps the generated Hlms shaders |
+| `JAHSHAKA_HLMS_DEBUG_DIR` | OgreEngine.cpp | docs/SCRIPTING.md | dumps the generated Hlms shaders |
 | `JAHSHAKA_ATOM_DRAW_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B (no script can reach the selftest) | the Atom split off: every item through PBS |
 | `JAHSHAKA_ATOM_OCCLUSION_OFF` | OgreScene.cpp | the `--engine-selftest` hash A/B | the id pass frustum-only |
 | `JAHSHAKA_ATOM_TRACE` | OgreGpuScene.cpp | scale | the GPU scene's per-frame trace lines |

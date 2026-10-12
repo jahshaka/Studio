@@ -278,7 +278,7 @@ add_test(NAME pool.runner
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(pool.runner PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "pool;scripting" TIMEOUT 180)
+    LABELS "pool;scripting;tooling" TIMEOUT 180)
 jah_no_display(pool.runner)
 
 # app.sky_swap_presented — NO PRESENTED FRAME LOSES THE SKY ENVIRONMENT (SKY-SWAP-1,
