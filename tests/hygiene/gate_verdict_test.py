@@ -1018,6 +1018,20 @@ def case_carried_red(E):
           "with no hand verdict (%d%s)" % (rc, "; " + [l for l in out.splitlines() if "OPEN RED" in l][0][:120]
                                           if "OPEN RED" in out else ""))
 
+    # ROUND 11: TWO LANES DECLARE THE SAME ROW BY DESIGN, each its own entry (lane.sh deliver registers per lane): each
+    # lane's merge is answered by its own entry with no hand verdict
+    two = [defect("BYDESIGN-11X", [SPEED_ROW], notes=["2026-10-13T01:00:00+02:00 registered at lane-x's delivery: an "
+                                                      "acceptance row RED BY DESIGN"]),
+           defect("BYDESIGN-11Y", [SPEED_ROW], notes=["2026-10-13T01:00:00+02:00 registered at lane-y's delivery: an "
+                                                      "acceptance row RED BY DESIGN"])]
+    for ln in ("lane-x", "lane-y"):
+        E.fresh()
+        E.defects = E.registry([x for x in FIXTURE_DEFECTS if SPEED_ROW not in x["rows"]] + two)
+        E.put(ROWS, "FAIL", "2026-01-01T10:00:00", lane=ln)
+        rc, out = E.run("--lane", ln)
+        check(rc == 0 and ("real:BYDESIGN-11%s RED BY DESIGN" % ln[-1].upper()) in out,
+              "round 11: two lanes declaring the same row by design: %s's merge lands on its own entry (%d)" % (ln, rc))
+
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never
     disables the door); the contention class is the enrolled nondeterminism subset."""
