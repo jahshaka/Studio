@@ -33,6 +33,10 @@ FORK_RANGE = "1775e79f0..684e0f7aa"     # contact-occlusion-1: a pin bump inside
 # the file their own command names.
 RANGE2 = "b04d14f8d..f40399a76"
 ROWS2 = ["app.sky_swap_presented", "log.perf"]
+# THE DATA EDGE (RUNNER-A2B): both ranges touch a tests/**/CMakeLists.txt, which gate.tokens_by_needs READS (it lints every
+# row's declarations) — so each scoped selection holds it beside the named rows. The fixtures record it green at both tips
+# (a row the case is not about); the cases' reds stay on the rows they name.
+DATA_EDGE_ROWS = ["gate.tokens_by_needs"]
 FAILURES = []
 
 
@@ -88,16 +92,24 @@ def main(source, build):
                                     for s in suites], "scoped", t)
     busy = {"census": {"gpu_apps": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
 
-    def fresh(contention):
+    def fresh(contention, data_edge=True):
         d = tempfile.mkdtemp(dir=scratch)
         os.environ["JAH_RUN_LOG_DIR"] = d
         os.environ["JAH_DEFECTS_FILE"] = contention
+        if data_edge:
+            put(DATA_EDGE_ROWS, "PASS", "2026-01-01T09:30:00")
+            put(DATA_EDGE_ROWS, "PASS", "2026-01-01T09:30:00", t=tip2, ig=pin2)
         return d
 
+    tip2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[1]], cwd=source, capture_output=True,
+                          text=True).stdout.strip()
+    pin2 = subprocess.run(["git", "rev-parse", tip2 + ":irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
     # ---- the law, a row NOT in the contention class ---------------------------------------------
-    fresh(unlisted)
+    fresh(unlisted, data_edge=False)
     rc, out = run()
-    check(rc == 1 and "no record" in out, "nothing run -> refused, and says which rows (%d)" % rc)
+    check(rc == 1 and "no record" in out and "gate.tokens_by_needs" in out and "photon.view" in out,
+          "nothing run -> refused, and says which rows (the data edge's gate.tokens_by_needs among them) (%d)" % rc)
+    fresh(unlisted)
     put(rows, "FAIL", "2026-01-01T10:00:01")
     rc, out = run()
     check(rc == 1 and "photon.view" in out and "needs a verdict" in out,
@@ -127,8 +139,6 @@ def main(source, build):
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
 
     # ---- a REPEATED --verdict records every verdict (the form the runner builds) -------
-    tip2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[1]], cwd=source, capture_output=True,
-                          text=True).stdout.strip()
     base2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[0]], cwd=source, capture_output=True,
                            text=True).stdout.strip()
     pin2, base2_pin = (subprocess.run(["git", "rev-parse", r + ":irisgl"], cwd=source, capture_output=True,
@@ -213,7 +223,7 @@ def main(source, build):
         check(False, "the recorded fork range %s is in this clone" % FORK_RANGE)
 
     # ---- L1: the box is sampled at each suite's START ----------------------------------------------
-    d = fresh(unlisted)
+    d = fresh(unlisted, data_edge=False)
     fake = os.path.join(scratch, "fake_ctest.sh")
     open(fake, "w").write("#!/bin/sh\n"
                           "echo '      Start  1: s.one'\n"

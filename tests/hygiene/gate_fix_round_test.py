@@ -90,9 +90,16 @@ def main(source, build):
         os.environ["JAH_RUN_LOG_DIR"] = d
         return d
 
+    # RULE 2 (RUNNER-A2): a record serves a later commit only when it carries the row's DECLARATION and DATA HASH and they
+    # equal the candidate's — a gate record carries them since schema 3 (gate_runlog's writer). The fixture's records are
+    # gate records of THIS build's rows: they carry this build's facts, as gate_runlog.run_ctest stamps them.
+    facts, _, _ = gate_runlog.row_facts(build)
+
     def put(keys, verdict, ts, at):
         s = revs.get(at, at)
-        gate_runlog.append_records([{"suite": k[0], "arm": k[1], "verdict": verdict, "ts": ts, "retry": False,
+        gate_runlog.append_records([{"schema": 3, "suite": k[0], "arm": k[1], "verdict": verdict, "ts": ts, "retry": False,
+                                     "declaration": (facts.get(k[0]) or {}).get("declaration"),
+                                     "data_hash": (facts.get(k[0]) or {}).get("data_hash"),
                                      "tip": {"studio": s, "studio_dirty": False, "irisgl": pin(s),
                                              "irisgl_dirty": False,
                                              "built": {"studio": s, "irisgl": pin(s), "dirty": False}}}
@@ -106,6 +113,15 @@ def main(source, build):
     lane, fix = f"{BASE}..{B}", f"{A}..{B}"
     lane_need, fix_need = need(lane), need(fix)
     fix_keys = set(fix_need)
+    # RULE 2's GUARDS (RUNNER-A2): a record is SERVED to a later commit only for a row whose declaration and data hash are
+    # KNOWN (a row with an undeclared data set — `JAH_DATA` missing — is "unknown, never equal") and that does not MEASURE
+    # (gate_runlog.MEASURING: a measurement is never served). Such rows run at the tip whatever the fix reaches: the
+    # fixture records them there, and counts as re-used only the rows rule 2 can serve.
+    def servable(k):
+        f = facts.get(k[0]) or {}
+        return bool(f.get("data_hash") and f.get("declaration")) and not (set(inv0[k[0]]["labels"]) & gate_runlog.MEASURING)
+    unservable = [k for k in lane_need if not servable(k) and k not in fix_keys]
+    tip_need = list(fix_need) + unservable
     print(f"  (fixture: {lane} needs {len(lane_need)} rows, the fix {fix} {len(fix_need)})")
     check(0 < len(fix_need) < len(lane_need), "the UI-only fix selects fewer rows than its lane (%d < %d)"
           % (len(fix_need), len(lane_need)))
@@ -113,12 +129,13 @@ def main(source, build):
     # ---- 1. a fix round touching only Studio UI re-uses the ancestor's records -----------------------
     fresh()
     put(lane_need, "PASS", "2026-01-01T10:00:00", A)            # the lane's gate at its fix-3 tip
-    put(fix_need, "PASS", "2026-01-01T11:00:00", B)             # the fix round: A..B --run
+    put(tip_need, "PASS", "2026-01-01T11:00:00", B)             # the fix round: A..B --run (+ what rule 2 cannot serve)
     rc, out = run(lane)
-    reused = len(lane_need) - len([k for k in lane_need if k in fix_keys])
+    reused = len([k for k in lane_need if k not in fix_keys and servable(k)])
     check(rc == 0, "the fix round's selection at the tip + the lane's earlier records -> ACCEPTED (%d)" % rc)
-    check(f"{reused} re-used from {revs[A][:9]}" in out,
-          "...%d untouched rows re-used from %s, said in the summary" % (reused, A))
+    # (rule 2's word since RUNNER-A2: a record at an earlier commit SERVES the row)
+    check(f"{reused} served from {revs[A][:9]}" in out,
+          "...%d untouched rows SERVED from %s (rule 2), said in the summary" % (reused, A))
     row_lines = [l for l in out.splitlines() if l.startswith("ci-gate-check: row ")]
     check(len(row_lines) == len(lane_need) and all(" <- " in l for l in row_lines),
           "...and EVERY row prints the commit its record came from (%d lines)" % len(row_lines))
@@ -131,7 +148,7 @@ def main(source, build):
     fresh()
     dropped = row_keys[0]
     put(lane_need, "PASS", "2026-01-01T10:00:00", A)
-    put([k for k in fix_need if k != dropped], "PASS", "2026-01-01T11:00:00", B)
+    put([k for k in tip_need if k != dropped], "PASS", "2026-01-01T11:00:00", B)
     rc, out = run(lane)
     check(rc == 1 and "no record" in out and dropped[0] in out and f"{A[:9]}..{B[:9]} reaches it" in out,
           "a row the fix reaches, green only at %s -> REFUSED, naming %s (%d)" % (A, dropped[0], rc))
@@ -142,13 +159,16 @@ def main(source, build):
     check(sha(f"{F_A}:irisgl") != sha(f"{F_B}:irisgl"), "the fork fixture's two commits pin different engines")
     put(f_need, "PASS", "2026-01-01T10:00:00", F_A)
     rc, out = run(f"{F_BASE}..{F_B}")
-    check(rc == 1 and "the fork pin moved" in out and "no re-use across" in out,
-          "every row green at %s, the pin moved in %s..%s -> REFUSED, no re-use across it (%d)" % (F_A, F_A, F_B, rc))
+    # rule 2 (RUNNER-A2): a pin move invalidates the earlier record of every row that REACHES THE FORK (a row that does not
+    # keeps its record: "the pin is equal, or the row does not reach the fork")
+    check(rc == 1 and "the fork pin moved" in out and "and the row reaches the fork" in out,
+          "every row green at %s, the pin moved in %s..%s -> REFUSED, no re-use across it for a row that reaches the fork "
+          "(%d)" % (F_A, F_A, F_B, rc))
 
     # ---- 4. a later red without a verdict blocks reuse -----------------------------------------------
     reach_t0 = sel(f"{T0}..{B}")
     t0_keys = {(n, None) for n in reach_t0.selected}
-    cand = [k for k in lane_need if k[1] is None and k not in t0_keys and k not in fix_keys]
+    cand = [k for k in lane_need if k[1] is None and k not in t0_keys and k not in fix_keys and servable(k)]
     check(bool(cand), "fixture: a row of the lane that %s..%s does not reach (%d)" % (T0, B, len(cand)))
     if cand:
         k = cand[0]
@@ -157,7 +177,7 @@ def main(source, build):
         put(lane_need, "PASS", "2026-01-01T09:00:00", T0)                 # the lane's gate at T0
         put([x for x in lane_need if x != k], "PASS", "2026-01-01T10:00:00", A)  # a later round at A...
         put([k], "FAIL", "2026-01-01T10:00:01", A)                         # ...where k went red
-        put(fix_need, "PASS", "2026-01-01T11:00:00", B)
+        put(tip_need, "PASS", "2026-01-01T11:00:00", B)
         rc, out = run(lane)
         check(rc == 1 and f"red at {revs[A][:9]}" in out and k[0] in out,
               "%s green at %s, RED at the later %s, nothing at the tip -> REFUSED (%d)" % (k[0], T0, A, rc))

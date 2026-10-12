@@ -229,8 +229,11 @@ def tooling_cases(gs, graph, build, inv0):
           "scripts/vram_tokens.py alone: its own tests (pool.runner, devprocess.vram_admit), no product row (%s)"
           % product(S)[:6])
     S = sel(["tests/gi/test_gi_speckle.cpp"])
-    check(S.tooling_only and set(S.selected) == {"gi.speckle"},
-          "a test source alone selects its row and nothing else — no smoke pair (%s)" % sorted(S.selected)[:6])
+    # + gate.tokens_by_needs: RUNNER-A2B's DATA EDGE — that row's command hands it the whole tests/ directory (-DSRC=), so
+    # every file under tests/ is its data (the safe side: a directory argument is walked) — and nothing else, no smoke pair
+    check(S.tooling_only and set(S.selected) == {"gi.speckle", "gate.tokens_by_needs"},
+          "a test source alone selects its row (+ the data edge's gate.tokens_by_needs) and nothing else — no smoke pair "
+          "(%s)" % sorted(S.selected)[:6])
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
     check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,

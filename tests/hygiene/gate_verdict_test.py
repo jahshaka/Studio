@@ -38,6 +38,10 @@ import time
 
 RANGE = "51e9f2c49..3756b2f18"          # VIEWS-DEPTH-1 (ci_gate_check_test's): photon.view + the smoke pair
 ROWS = ["api.contract", "app.startup_quiet", "photon.view"]
+# THE DATA EDGE (RUNNER-A2B): RANGE touches tests/gi/CMakeLists.txt, which gate.tokens_by_needs READS (it lints every row's
+# declarations) — the scoped selection holds it (every range here touches that file or descends from one that did). Each
+# run records it green at the range's tip first (no case is about it); the cases' reds stay on the rows they name.
+DATA_EDGE_ROWS = ["gate.tokens_by_needs"]
 FAILURES = []
 
 
@@ -116,6 +120,7 @@ class Env:
                                                                 "studio_dirty": False, "irisgl_dirty": False}}) + "\n")
 
     def run(self, *extra, rng=RANGE):
+        self.put(DATA_EDGE_ROWS, "PASS", "2026-01-01T00:30:00", tip=self.git("rev-parse", rng.split("..")[1]))
         p = subprocess.run([self.tool, rng, "--build", self.build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout + p.stderr
@@ -418,13 +423,13 @@ def case_verdict_door(E):
     # F4: a row cleared as NONDETERMINISM must be 3/3 solo green AT THE CANDIDATE for a push (patched judge: every
     # row "nondet", no solo at the tip)
     E.fresh()
-    E.put(ROWS, "PASS", "2026-01-01T10:00:00")
+    E.put(ROWS + DATA_EDGE_ROWS, "PASS", "2026-01-01T10:00:00")     # the in-process check: no E.run() records the data edge
     real_judge = E.cgc.judge
     E.cgc.judge = lambda *a, **k: ("nondet", "cleared as nondeterminism (the patched fixture)")
     try:
         ok_m, _ = E.cgc.check(RANGE, E.build, mode="merge")
         ok_p, why_p = E.cgc.check(RANGE, E.build, mode="push")
-        for k in range(3): E.put(ROWS, "PASS", "2026-01-01T11:0%d:00" % k, retry=True)
+        for k in range(3): E.put(ROWS + DATA_EDGE_ROWS, "PASS", "2026-01-01T11:0%d:00" % k, retry=True)
         ok_p3, _ = E.cgc.check(RANGE, E.build, mode="push")
     finally:
         E.cgc.judge = real_judge
@@ -1033,7 +1038,7 @@ def case_log_schema2(E):
     p = subprocess.run([sys.executable, rep, d2, "--week", "2026-10-09T17:30", "--ref", "HEAD"], capture_output=True,
                        text=True)
     m7 = re.search(r"stage runs (\d+)\s+rows (\d+)", p.stdout)
-    mw = re.search(r"summed gate wall \(every non-retry run, rc tiers included\): ([\d.]+) h", p.stdout)
+    mw = re.search(r"summed gate wall \(every non-solo run, rc tiers included\): ([\d.]+) h", p.stdout)
     check(p.returncode == 0 and m7 and m7.groups() == ("1", "2") and mw and float(mw.group(1)) < 1.5,
           "gate-report counts a stage-close batch in section 7 (%s) and keeps a lane-tier run out of the gate wall (%s h)"
           % (m7.groups() if m7 else None, mw.group(1) if mw else None))
