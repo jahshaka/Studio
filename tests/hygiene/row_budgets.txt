@@ -168,6 +168,7 @@ gate.stage_close_select other TOOLING -
 gate.noadmit_pool other TOOLING -
 gate.stage_close_labels other TOOLING -
 gate.tokens_by_needs other TOOLING -
+gi.gather_estimator fixture KEEP 15
 gi.flythrough_noise.Showroom2 fixture THROW -
 gi.flythrough_noise.Open fixture THROW -
 gi.flythrough_noise.Leak fixture THROW -
