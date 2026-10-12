@@ -354,6 +354,7 @@ lights.masks 1.79  quiet n=44
 lights.sealed_room 1.60  quiet n=41
 lights.secondary_directional 1.74  quiet n=43
 lights.shadows 11.92  quiet n=41
+lod.padding_untouched 0.01  hand: LOD-RACE-1 self-audit 2026-10-12 (0.01 s, pure OgreMain, no engine)
 log.core 0.45  quiet n=42
 log.engine 15.75  quiet n=46
 log.engine.fresh_home 0.02  quiet n=3
