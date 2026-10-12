@@ -6,14 +6,6 @@
 # copy is the ratchet: a name ADDED is red, a name REMOVED is fine;
 # R7 reds a row without FRAMES that this list does not name (a NEW row is never pending) and a listed row that states
 # FRAMES now (the list only shrinks — to zero, never an exclusion).
-app.engine_selftest_validation
-app.shader_gate_warm
-app.shutdown_order
-app.sky_swap_presented
-app.start_in_vr
-app.startup_quiet
-app.test_needs_boot
-archive.responsive
 atom.cluster_crack
 atom.coverage_trace
 atom.dag_chain_validate
@@ -131,11 +123,9 @@ gi.leak_room
 gi.material_swap
 gi.mobility
 gi.modes
-gi.one_writer
 gi.overlay
 gi.pcc_bounds
 gi.pcc_mirror
-gi.pcc_mirror.ray_tier
 gi.pcc_second_scene
 gi.pcc_stability
 gi.probe_gate
@@ -192,7 +182,6 @@ hdr.drag_stable
 hdr.drag_stable_asan
 hdr.meter
 hdr.meter_asan
-import.shutdown
 lights.falloff
 lights.hygiene
 lights.icons
@@ -200,16 +189,9 @@ lights.masks
 lights.sealed_room
 lights.secondary_directional
 lights.shadows
-log.engine
-log.events
-log.perf
 looks.engine
 looks.engine_asan
-material.live_roundtrip
-mcp.e2e
-meshbake.archive_bakes
 meshbake.shadow_vao_alias
-meshbake.shipped_bakes
 mirror.cull_twin
 mirror.dirty_equals_full
 mirror.document_to_engine
@@ -228,18 +210,6 @@ perf.hide_soak
 perf.offscreen_isolation
 photon.view
 rigperf.smoke
-samples.archive_fidelity.Tornado
-samples.cleanstart.Matcaps
-samples.cleanstart.Mirror_Room
-samples.cleanstart.Particles
-samples.cleanstart.Physics
-samples.cleanstart.Showroom
-samples.cleanstart.Showroom_2
-samples.cleanstart.Skeletal_Animation
-samples.cleanstart.Tornado
-samples.cleanstart.World_Background
-samples.mirror_room_boots
-samples.session
 scale.atlas
 scale.bake
 scale.far_field
@@ -249,28 +219,7 @@ scale.library.fixture
 scale.lights
 scale.occlusion
 scale.residency
-scene.reopen_fidelity
 scenegraph.smoke
-scripting.e2e.lattice_placement
-scripting.e2e.material_tabs
-scripting.e2e.material_tabs.relaunch
-scripting.e2e.ogre_ports
-scripting.e2e.perf_capture_frames
-scripting.e2e.photon_pin_read
-scripting.e2e.player_bounce
-scripting.e2e.player_no_editor
-scripting.e2e.preset_seed_boot
-scripting.e2e.preset_seed_race
-scripting.e2e.pump_defer
-scripting.e2e.ray_row_norays
-scripting.e2e.shadow_cache_probes
-scripting.e2e.sky_swap_transient
-scripting.e2e.ssr_mirror
-scripting.e2e.texture_missing
-scripting.e2e.thumbnails_order
-scripting.e2e.tray_panel
-scripting.live
-scripting.live_off
 shader.async_after_open
 shader.async_soak
 shader.live_compiles
@@ -298,8 +247,6 @@ sky.atmosphere
 sky.env_layout
 sky.sun_transmittance
 sky.sun_transmittance_asan
-sockets.e2e
-sockets.render
 ssr.edge
 ssr.engine
 ssr.engine_asan
@@ -316,15 +263,7 @@ threading.newproject_stall
 threading.staging_race
 threading.texture_wait_watchdog
 # jah_gpu_exclusive_test rows (fix round: R7 covers them too) — Part B states their FRAMES and drops them here
-app.input_keys
-app.play_select
-app.shutdown_order.timing
-app.update_check.timing
-app.watchdog_stall
-archive.responsive.timing
 avatar.responsive.timing
-capture.first_recording.timing
-capture.offline_unique.timing
 chain.hzb.timing
 engine.gpu_cull.timing
 gi.budget
@@ -332,7 +271,6 @@ gi.field_follows.timing
 gi.field_scroll
 gi.gather_cost
 gi.rt_reflect_cost
-meshbake.cards.timing
 mirror.scale
 open.responsive.timing
 perf.capture_off_is_free
@@ -350,7 +288,6 @@ scale.tlas
 scale.voxel_scroll
 scale.world
 scenegraph.benchmark
-scripting.e2e.editor_controls.timing
 shadergraph.bake_output
 threading.newproject_stall.timing
 ui.components.timing
