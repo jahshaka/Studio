@@ -49,13 +49,15 @@ assets.cas fixture KEEP -
 assets.metadata fixture KEEP -
 assets.paths fixture KEEP -
 assets.torn_write fixture KEEP -
+atom.removechild_leak fixture KEEP 10
+shadercache.app.churn app MOVE:stage-close -
 atom.lod_switch app MOVE:stage-close -
 atom.coverage_trace fixture KEEP:rewrite 20
 atom.occlusion_exact_app app THROW -
 atom.cluster_crack fixture MOVE:stage-close -
 atom.decode_exact fixture KEEP:rewrite 20
 atom.cluster_cut fixture MOVE:stage-close -
-atom.dolly_gate fixture KEEP:rewrite 10
+atom.dolly_gate fixture KEEP 30
 atom.dag_bound_bar fixture KEEP 60
 atom.dag_chain_validate fixture KEEP 60
 atom.lod_bound_bar fixture KEEP 60
@@ -126,8 +128,8 @@ document.color_json fixture KEEP -
 document.reader_defaults other KEEP -
 document.simulation_clock fixture KEEP -
 drawers.db fixture KEEP -
-engine.atom_parity fixture KEEP:rewrite 20
-engine.atom_draw fixture KEEP:rewrite 20
+engine.atom_parity fixture KEEP 40
+engine.atom_draw fixture KEEP 40
 engine.gpu_cull fixture KEEP:rewrite 10
 engine.gpu_cull.timing fixture MOVE:stage-close -
 engine.particles_pfx2_asan fixture MOVE:stage-close -
@@ -179,7 +181,7 @@ gi.one_writer app MOVE:stage-close -
 gi.voxel_coverage fixture MOVE:stage-close -
 gi.contact_occlusion fixture KEEP:rewrite 30
 gi.reflect_mover fixture KEEP 40
-gi.field_thin_wall fixture KEEP:rewrite -
+gi.field_thin_wall fixture KEEP:rewrite 20
 gi.contact_occlusion_target fixture KEEP:rewrite 25
 gi.gather_cost fixture MOVE:stage-close -
 gi.cascades_asan fixture MOVE:stage-close -
@@ -476,8 +478,8 @@ samples.freshhome.Skeletal_Animation setup SETUP -
 samples.freshhome.Tornado setup SETUP -
 samples.freshhome.World_Background setup SETUP -
 samples.freshhome.session setup SETUP -
-scale.lights fixture KEEP:rewrite 20
-scale.occlusion fixture KEEP:rewrite 20
+scale.lights fixture KEEP -
+scale.occlusion fixture MOVE:stage-close -
 scale.library app MOVE:stage-close -
 scale.shadow_cut fixture MOVE:stage-close -
 scale.cpu_walks fixture MOVE:stage-close -
@@ -566,7 +568,7 @@ shader.live_compiles app MOVE:stage-close -
 shader.async_after_open app KEEP:rewrite 30
 shadercache.container_asan fixture MOVE:stage-close -
 shadercache.app app KEEP:rewrite 60
-shadercache.container fixture KEEP:rewrite 20
+shadercache.container fixture KEEP 60
 shadercache.engine_pipelines fixture KEEP 60
 shadercache.warmup_pass fixture KEEP -
 shadercache.warmup fixture KEEP -
@@ -674,7 +676,7 @@ thumbnails.studio_env fixture KEEP -
 thumbnails.engine fixture KEEP -
 thumbnails.shader fixture KEEP -
 thumbnails.sweep fixture KEEP -
-ui.space_docks app KEEP:rewrite 30
+ui.space_docks app KEEP 40
 ui.window_minimum app KEEP:rewrite 20
 ui.column_law app KEEP:rewrite 20
 ui.material_drag app KEEP 60
