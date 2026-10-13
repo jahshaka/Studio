@@ -105,24 +105,28 @@ def _git(args, cwd=None):
 
 
 def tree_shas(root=None):
-    """The tree that ran: {studio, irisgl, fork, studio_dirty, irisgl_dirty} (irisgl's vendored submodules' content —
-    the applied assimp stack — is not dirt)."""
+    """The tree that ran: {studio, irisgl, fork, studio_dirty, irisgl_dirty, fork_dirty} (the applied assimp stack is not
+    dirt; the fork's working tree, hidden by irisgl's --ignore-submodules=dirty, is read apart, untracked files too)."""
     root = root or ROOT
     ig = os.path.join(root, "irisgl")
+    fk = os.path.join(ig, "thirdparty", "ogre-next")
     dirty = lambda d: bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"], d))
     i_dirty = dirty(ig)
     return {"studio": _git(["rev-parse", "HEAD"], root), "irisgl": _git(["rev-parse", "HEAD"], ig),
-            "fork": _git(["rev-parse", "HEAD"], os.path.join(ig, "thirdparty", "ogre-next")),
-            "studio_dirty": dirty(root) or i_dirty, "irisgl_dirty": i_dirty}
+            "fork": _git(["rev-parse", "HEAD"], fk),
+            "studio_dirty": dirty(root) or i_dirty, "irisgl_dirty": i_dirty,
+            "fork_dirty": bool(_git(["status", "--porcelain", "--untracked-files=normal"], fk))}
 
 
 def built_from(build):
-    """{studio, irisgl, dirty} from <build>/BUILT_FROM (cmake/BuiltFrom.cmake writes it as every build's last step)."""
+    """{studio, irisgl, dirty, fork_dirty} from <build>/BUILT_FROM (cmake/BuiltFrom.cmake writes it as every build's last
+    step)."""
     try:
         kv = dict(l.split("=", 1) for l in open(os.path.join(build, "BUILT_FROM")).read().splitlines() if "=" in l)
     except OSError:
         return None
-    return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1"}
+    return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1",
+            "fork_dirty": kv.get("fork_dirty") != "0"}
 
 
 def stale_build(shas):

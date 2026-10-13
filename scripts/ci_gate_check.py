@@ -64,8 +64,8 @@ def candidates(root, tip):
 
 
 def records_by_tip(pins):
-    """{sha: {row: [run records, oldest first]}} for every sha of `pins` ({sha: its irisgl pin}): a clean tree, a build
-    of that tip, irisgl at its pin; row records only (a pool's arms ride on their row)."""
+    """{sha: {row: [run records, oldest first]}} for every sha of `pins` ({sha: its irisgl pin}): a clean tree (the fork's
+    unknown = dirty), a build of that tip, irisgl at its pin; row records only (a pool's arms ride on their row)."""
     out = {t: {} for t in pins}
     d = gate_runlog.log_dir()
     if not os.path.isdir(d):
@@ -80,7 +80,8 @@ def records_by_tip(pins):
                 continue
             t = r.get("tip") or {}
             sha = t.get("studio")
-            if sha not in out or r.get("kind") or r.get("arm") or t.get("studio_dirty") or t.get("irisgl_dirty"):
+            if sha not in out or r.get("kind") or r.get("arm") or t.get("studio_dirty") or t.get("irisgl_dirty") \
+                    or t.get("fork_dirty") is not False or (t.get("built") or {}).get("fork_dirty") is not False:
                 continue
             if gate_runlog.stale_build(t) or (pins[sha] and t.get("irisgl") != pins[sha]):
                 continue
@@ -139,12 +140,16 @@ class Reach:
         return reach
 
 
-def why_not(rec, fact, row, reach, a_fork, tip_fork):
-    """Why record `rec` at A cannot stand for the row at C (None when it can)."""
+def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
+    """Why record `rec` at A cannot stand for the row at C (None when it can); `cfg`: the build's configuration."""
     if rec.get("verdict") != "PASS":
         return f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]})"
     if fact is None:
         return "the row is not in the build's ctest inventory"
+    rc = (rec.get("config") or {}).get("hash")
+    if not rc or not cfg or rc != cfg.get("hash"):
+        return "its build configuration differs (or is unknown): %s vs this build's %s" % (
+            (rec.get("config") or {}).get("build_type"), (cfg or {}).get("build_type"))
     d = rec.get("declaration")
     d = d.get("hash") if isinstance(d, dict) else None
     if not d or d != (fact.get("declaration") or {}).get("hash"):
@@ -164,7 +169,7 @@ def serve(build, tip, rows):
     gs = load_gs()
     build = gs.resolve_build(build)
     reach = Reach(gs, build, tip)
-    facts, _, _ = gate_runlog.row_facts(build)
+    facts, cfg, _ = gate_runlog.row_facts(build)
     cands = candidates(gs.ROOT, tip)
     got = records_by_tip({c: ig for c, ig, _ in cands})
     tip_fork = next((fk for c, _, fk in cands if c == tip), None) or \
@@ -181,7 +186,7 @@ def serve(build, tip, rows):
             run[row] = "no record of it at the tip or an ancestor"
             continue
         rec = got[hit[0]][row][-1]
-        why = why_not(rec, facts.get(row), row, reach, hit[1], tip_fork)
+        why = why_not(rec, facts.get(row), row, reach, hit[1], tip_fork, cfg)
         if why:
             run[row] = f"{hit[0][:9]}: {why}"
         else:
