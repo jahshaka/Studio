@@ -29,7 +29,12 @@
 //                                   shaded - several pieces inside every cascade-3 cell of the
 //                                   street, the shape of Bistro's chairs and tables); the ratio to
 //                                   the closed form (which counts every face of them, exact
-//                                   geometry) within 0.90-1.10 of the clean arm's.
+//                                   geometry, SINGLE SCATTER - so this mode runs bounces 0, the
+//                                   direct store alone) within 0.90-1.10 of the clean arm's. RED
+//                                   (VOXEL-STORE-OVERCOUNT-1, registered): terrace 1.235 against
+//                                   clean 0.963 at bounces 0 and at bounces 1 alike (the shipped
+//                                   bounce adds no grey-to-grey light here: no sky, one bounce =
+//                                   the direct store), so the over-count is the store's.
 //   contrast   gi.store_contrast  — a black floor patch beside the sunlit grey floor, both in
 //                                   cascade 3: what a gather ray reads at the black patch is
 //                                   < 0.15 of what it reads on the sunlit grey (the store's own
@@ -40,9 +45,14 @@
 //   castshadow gi.cast_shadow_gi  — a black slab with castShadow off over the sunlit floor: the
 //                                   wall reads what it reads with the slab hidden, and the slab
 //                                   casting reads less.
-//                                   RED WITHOUT THE CASTER SHARE (FAR-SUN-1 D reverted, voxel
-//                                   route): no-cast 0.07368 = casting 0.07368 against hidden 0.13969;
-//                                   with it: no-cast 0.13969 = hidden (t-castshadow-vox-*.log).
+//                                   RED WITHOUT THE CASTER SHARE (D reverted on 4d38b30: every
+//                                   surface a caster, voxel route): no-cast 0.07716 = casting
+//                                   0.07716 against hidden 0.14564; with it: no-cast 0.14564 =
+//                                   hidden, casting 0.07716. THE MIXED CELL (read F1): the slab
+//                                   with three non-casting panels in its cells reads 0.10641 under
+//                                   a share of the RAW coverage sums against 0.07716 alone (red);
+//                                   0.07729 with the share of the capped sums
+//                                   (spikes/far-sun-1/logs/d-red.log, f1-red.log, f1-green.log).
 // Paired arms in one process; settled in FRAMES (the gather's rest), never in seconds.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -306,7 +316,7 @@ bool boot(Fixture &f, const char *log)
 /// answers a street hit at its facade, and cards off reads the same).
 bool gVoxelRoute = false;
 
-GiParams highGi()
+GiParams highGi(unsigned bounces = 1u)
 {
     GiParams gi;
     gi.cards = !gVoxelRoute;
@@ -314,7 +324,7 @@ GiParams highGi()
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::On;
-    gi.numBounces = 1;
+    gi.numBounces = bounces;
     return gi;
 }
 
@@ -369,7 +379,6 @@ const Vec3 kFarCam(8.0f, 5.0f, 40.0f), kNearCam(8.0f, 5.0f, 12.0f), kTarget(0.0f
 double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose = true)
 {
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
-    const double L = floorRadiance();
     // THE DARK ARM blackens EVERY grey surface (the floor and the clutter): the closed form counts
     // the light of all of them, so the measured share must be all of them too.
     const auto paint = [&](MaterialId m) {
@@ -387,7 +396,6 @@ double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose =
         const double a = gatheredAt(lit, cam, kTarget, p), b = gatheredAt(dark, cam, kTarget, p);
         if (a < 0.0 || b < 0.0) continue;
         const double expect = expectedEoverPi(p, f.boxes);
-        (void)L;
         if (verbose)
             std::printf("     %s  wall (%.1f, %.1f): gathered %.5f (dark %.5f), closed form %.5f -> %.3f\n",
                         label, double(p.y), double(p.z), a, b, expect, expect > 0 ? (a - b) / expect : 0.0);
@@ -412,7 +420,12 @@ void printCascades(Scene *s)
 int modeShare(Fixture &f, bool clutter)
 {
     if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
-    f.s->setGlobalIllumination(highGi());
+    // THE TERRACE'S CLOSED FORM IS SINGLE-SCATTER (expectedEoverPi: the first face a ray meets, its
+    // DIRECT light), and with a bounce stored the grey tables, chairs and floor light each other - a
+    // light the closed form leaves out (the clean canyon has no grey-to-grey exchange: the floor sees
+    // black walls and no sky). So both arms of this mode run the DIRECT STORE ALONE (bounces 0,
+    // BOUNCES-ZERO-1); the clean modes keep the shipped bounce.
+    f.s->setGlobalIllumination(highGi(clutter ? 0u : 1u));
     GatherTuning t;
     t.readback = true;
     f.s->setGatherTuning(t);
@@ -496,9 +509,6 @@ int modeCastShadow(Fixture &f)
     const double noCast = wallMean(settled(f));
     f.s->setNodeCastShadow(slab, true);
     const double casting = wallMean(settled(f));
-    const double expHidden = floorRadiance(), expCast = floorRadiance();
-    (void)expHidden;
-    (void)expCast;
     double fHidden = 0.0, fCast = 0.0;
     for (const Vec3 &p : wallPoints()) {
         fHidden += sunlitFloorFraction(p, noSlab.boxes, 96);
@@ -511,6 +521,22 @@ int modeCastShadow(Fixture &f)
               "does (%.5f against %.5f, bar 3 %%)", noCast, hidden);
     CHECK_MSG(casting > 0.0 && casting < 0.9 * hidden,
               "...and the casting slab shades the strip (%.5f against %.5f)", casting, hidden);
+    // THE MIXED CELL (FAR-SUN-1 read F1): the casting slab and THREE NON-CASTING black panels facing
+    // the same way IN ITS CELLS (2 cm thick, within 0.25 m of it; the far camera holds the slab in
+    // cells of 0.47 m and up). The panels stop no light, so the slab must shade the strip exactly as
+    // it does alone. A share taken of the raw coverage sums (1 - S_nc / S: 1 / 4 per half here)
+    // scaled the slab's CAPPED coverage (1 per half) and marched the cell at 2 x 1/4: half the sun
+    // through a casting slab. The share of the capped sums keeps it min( Sc, 1 ) = 1 per half.
+    for (float dy : { -0.15f, 0.15f, 0.22f }) {
+        const NodeId panel = addBox(f, Vec3(slabC.x, slabC.y + dy, slabC.z), Vec3(5.0f, 0.02f, 16.0f), f.black, false);
+        f.s->setNodeCastShadow(panel, false);
+    }
+    const double mixed = wallMean(settled(f));
+    std::printf("   the mixed cell: slab casting + three non-casting panels in its cells %.5f (the slab alone %.5f)\n",
+                mixed, casting);
+    CHECK_MSG(mixed > 0.0 && std::fabs(mixed / casting - 1.0) <= 0.03,
+              "NON-CASTERS BESIDE A CASTER IN ONE CELL STOP NOTHING AND LEAK NOTHING: the slab with the "
+              "panels reads %.5f against the slab alone %.5f (bar 3 %%)", mixed, casting);
     return 0;
 }
 
@@ -648,7 +674,7 @@ int modeContrast(Fixture &f)
             const float x = r.hitPos[0], z = r.hitPos[2];
             if (std::fabs(x - patchC.x) < 1.0f && std::fabs(z - patchC.z) < 1.0f) {
                 blackSum += l; blackStore += storeAt(r.hitPos); ++blackN;
-            } else if (x > 6.5f && x < 11.5f && z > -1.0f && z < 9.0f && r.sunVisibility > 0.5f) {
+            } else if (x > 6.5f && x < 10.0f && z > -1.0f && z < 9.0f && r.sunVisibility > 0.5f) {
                 litSum += l; litStore += storeAt(r.hitPos); ++litN;
             }
         }
