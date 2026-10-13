@@ -369,6 +369,13 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
     if e["kind"] == "nondeterminism" and (hard or any(r.get("xid") for r in reds)):
         return False, (f"real:{did} is a nondeterminism entry — a {'/'.join(hard) or 'red with an Xid'} takes only a "
                        f"`kind: defect` entry (a crash, a loss, an Xid is never nondeterminism)"), False
+    # AT A MERGE THE LEAD'S real:<id> NAMING AN OPEN ENTRY OF THE ROW CLEARS IT (round 13: the lead decides a red from one
+    # rerun and the log; a merge passes a known red) — "known" for a defect, "nondet" for a nondeterminism entry, whatever
+    # the solo count; a SINGLE-USE entry still answers only the merge that registered it; the 3/3 re-ask and the proofs
+    # stay the push's and the stage close's
+    if mode == "merge" and not (e["kind"] == "nondeterminism" and gate_runlog.single_use(e)) and not by_design_lane(e):
+        return True, (f"real:{did} — an OPEN registry entry ({e['kind']}) naming {row}: the lead's verdict, a merge passes "
+                      f"it; the push and the stage close re-ask"), ("nondet" if e["kind"] == "nondeterminism" else "known")
     if e["kind"] == "nondeterminism":
         if gate_runlog.single_use(e) and mode != "merge":
             return False, (f"real:{did} is a SINGLE-USE NOT REPRODUCED entry: it clears the merge that registered it, "
@@ -480,6 +487,11 @@ def door(text, reds, solos, row, defects=None, tip_recs=None, base_recs=None, ti
         x = xid[-1]["xid"]
         return False, (f"the red carries an Xid from the row's own process (pid {x.get('pid')}, "
                        f"{x.get('window')}) — a DEFECT by law: only real:<registered id> clears it"), False
+    if real and mode == "merge":
+        # round 13: the registry entry the lead names decides at a merge (_real's merge rule), before the solo rule
+        ok_, why_, kind_ = _real(real, row, reds, solos, defects, tip_recs, base_recs, tip_sha, mode, proves, key)
+        if ok_:
+            return ok_, why_, kind_
     spass = sum(1 for r in solos if r.get("verdict") == "PASS")
     # THE SOLO RULE IS FOR A CLAIM OF NONDETERMINISM (TESTING-CLEANUP-2C, the lead's item 4): solos below 3/3 refuse
     # prose, a contention: claim and a nondeterminism entry (which must SHOW 3/3 green) — but a real:<id> of a DEFECT

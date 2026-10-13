@@ -150,10 +150,12 @@ class Env:
                            env=dict(os.environ))
         return p.returncode, p.stdout + p.stderr
 
-    def judge(self, recs, listed=False, base=None, defects=None):
+    def judge(self, recs, listed=False, base=None, defects=None, mode="push"):
         d = defects or {e["id"]: e for e in FIXTURE_DEFECTS + ([NONDET] if listed else [])}
-        # a stub history for the toy shas: every different sha descends and reaches (the real Prover is tested apart)
-        return self.cgc.judge((SPEED_ROW, None), recs, d, base_recs=base,
+        # a stub history for the toy shas: every different sha descends and reaches (the real Prover is tested apart).
+        # THE PROOFS ARE THE PUSH'S (round 13: at a MERGE the lead's real:<id> naming an open entry of the row clears it
+        # whatever the proof — case_merge_registry): the door's proof rules are asked in push mode
+        return self.cgc.judge((SPEED_ROW, None), recs, d, base_recs=base, mode=mode,
                               proves=lambda a, b, k: bool(a and b and a != b))
 
 
@@ -187,7 +189,7 @@ def case_verdict_door(E):
     st, why = E.cgc.judge(("api.contract", None), [rec("FAIL", T % "10:00", suite="api.contract", tip={"studio": docs_p}),
                                                    rec("PASS", T % "10:30", suite="api.contract", tip={"studio": docs}),
                                                    vrec("real:OTHER-ROW-1", T % "11:00")],
-                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover)
+                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover, mode="push")   # round 13: the push's proof
     check(st == "red" and "REACHES" in why, "real:<id> + a green re-run at a docs-only commit after the red -> refused "
           "(%s)" % why[:90])
     # real:<id> — a REGISTERED fact, proved
@@ -436,8 +438,9 @@ def case_verdict_door(E):
     rc, out = E.run("--verdict", "gi.speckle=looked fine to the reader")
     check(rc == 1 and "VERDICT REFUSED gi.speckle:" in out, "the CLI prints VERDICT REFUSED <row>: <why> and "
           "refuses (%d)" % rc)
-    rc, out = E.run("--verdict", "gi.speckle=real:FIXTURE-1")
-    check(rc == 1 and "VERDICT REFUSED gi.speckle:" in out, "...real:<id> with no proof -> refused (%d)" % rc)
+    rc, out = E.run("--verdict", "gi.speckle=real:FIXTURE-1", "--mode", "push")
+    check(rc == 1 and "VERDICT REFUSED gi.speckle:" in out, "...real:<id> with no proof -> refused at a PUSH (round 13: a "
+          "merge passes the lead's real:<id> of an open entry) (%d)" % rc)
     E.put(ROWS, "FAIL", "2026-01-01T09:00:00", tip=E.git("rev-parse", "51e9f2c49"), retry=True)
     rc, out = E.run()
     check(rc == 0 and "KNOWN RED gi.speckle" in out, "...the red reproduced by a recorded solo at the RANGE'S BASE -> "
@@ -499,7 +502,7 @@ def case_verdict_door(E):
     st, why = E.cgc.judge((SPEED_ROW, None), [rec("FAIL", T % "09:30", tip={"studio": c1}),
                                                   rec("PASS", T % "10:00", tip={"studio": y}),
                                                   vrec("real:FIXTURE-1", T % "11:00")],
-                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover4)
+                          {e["id"]: e for e in FIXTURE_DEFECTS}, proves=prover4, mode="push")   # round 13: the push's proof
     check(bool(y) and st == "red" and "REACHES" in why, "ROUND 4: red at C1, green at Y (one stray file, the selector "
           "falls back) + real:<id> -> refused (%s)" % why[:80])
     # N5: a lane-tool PASS (tier `lane`) never answers a row for the judge
@@ -579,9 +582,9 @@ def batch_range_cases(E):
         E.put([SPEED_ROW], "FAIL", T % "11:00", tip=x, failLine=FL)
         solos(x, "11")
         E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=x)
-        rc, out = E.run(rng="%s..%s" % (base, x))
+        rc, out = E.run("--mode", "push", rng="%s..%s" % (base, x))     # round 13: the proofs are the push's
         if variant == "same":
-            check(bool(c1 and x) and rc == 0 and "KNOWN RED gi.speckle" in out and "OPEN red at" not in out,
+            check(bool(c1 and x) and "KNOWN RED gi.speckle" in out and "OPEN red at" not in out,
                   "(1) a KNOWN RED at the tip is KNOWN at the batch's earlier commit C1 too: the tip's verdict covers C1's "
                   "3/3 red solos (rc %d; %s)" % (rc, [l for l in out.splitlines() if SPEED_ROW in l][:1]))
         else:
@@ -639,10 +642,10 @@ def batch_range_cases(E):
         solos(a_sha, "08", verdicts, batch="t2d")
         E.put([SPEED_ROW], "FAIL", T % "11:00", tip=tip_sha, failLine=FL)
         E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=tip_sha)
-        return E.run(rng="%s..%s" % (base_sha, tip_sha))
+        return E.run("--mode", "push", rng="%s..%s" % (base_sha, tip_sha))      # round 13: the proofs are the push's
 
     rc, out = item2(b, tt, base)
-    check(bool(b and tt) and rc == 0 and "KNOWN RED gi.speckle" in out and "the base's proof is %s's solos" % base[:9] in out,
+    check(bool(b and tt) and "KNOWN RED gi.speckle" in out and "the base's proof is %s's solos" % base[:9] in out,
           "(2) no solo at the base B; A = B's parent has 3/3 red of the signature and A..B is docs-only -> KNOWN, the why "
           "names A (rc %d; %s)" % (rc, [l for l in out.splitlines() if "base proof" in l or "KNOWN RED photon" in l][:2]))
     rc, out = item2(b, tt, base, ("FAIL", "PASS", "FAIL"))
@@ -655,7 +658,7 @@ def batch_range_cases(E):
     check(bool(br and tr) and rc == 1 and "reaches the row (or cannot be read)" in out,
           "(2) refused when A..base REACHES the row (gi.speckle's own script changes between A and the base) (rc %d)" % rc)
     rc, out = item2(b, tt, other)
-    check(bool(other) and rc == 1 and "KNOWN RED gi.speckle" not in out,
+    check(bool(other) and rc == 1 and "KNOWN RED gi.speckle:" not in out,
           "(2) refused when the sha with the solos is NOT an ancestor of the base (rc %d)" % rc)
     # the helper alone: the nearest ancestor is the one candidate (one hop) — an all-red OLDER ancestor behind a mixed
     # nearer one proves nothing; an unreadable range (ALL) refuses
@@ -692,7 +695,7 @@ def batch_range_cases(E):
     E.put([SPEED_ROW], "PASS", T % "09:00", tip=b)
     E.put([SPEED_ROW], "FAIL", T % "11:00", tip=tt, failLine=FL)
     E.verdict(SPEED_ROW, "real:VIEWS-XID-1", T % "12:00", tip=tt)
-    rc, out = E.run(rng="%s..%s" % (b, tt))
+    rc, out = E.run("--mode", "push", rng="%s..%s" % (b, tt))         # round 13: the proofs are the push's
     check(rc == 1 and "base proof for" not in out and "KNOWN RED gi.speckle" not in out,
           "(2, read 1 I2) a base with a gate PASS of the row is its own evidence: the proof does not travel (rc %d)" % rc)
     # read 2 I1: a base holding only NOADMIT / NOTRUN records of the row has NO run of it — the proof still travels
@@ -1031,6 +1034,19 @@ def case_carried_red(E):
         rc, out = E.run("--lane", ln)
         check(rc == 0 and ("real:BYDESIGN-11%s RED BY DESIGN" % ln[-1].upper()) in out,
               "round 11: two lanes declaring the same row by design: %s's merge lands on its own entry (%d)" % (ln, rc))
+
+    # ROUND 13: AT A MERGE THE LEAD'S real:<id> NAMING AN OPEN ENTRY OF THE ROW CLEARS ITS REDS, whatever the solo count —
+    # a red + ONE green rerun at the candidate (1/1 solo: below 3/3); "known" for a defect entry, "nondet" for an enrolled
+    # nondeterminism entry; the push still refuses until 3/3
+    for eid, listed in (("VIEWS-XID-1", False), ("NONDET-FIXTURE-1", True)):
+        E.fresh(listed=listed)
+        E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+        E.put(ROWS, "PASS", "2026-01-01T10:05:00", retry=True)
+        rc, out = E.run("--verdict", "%s=real:%s the lead read the rerun and the log" % (SPEED_ROW, eid))
+        check(rc == 0 and "a merge passes it" in out, "round 13: a MERGE: real:%s (an open entry of the row) clears a red "
+              "with 1/1 green rerun, no 3/3 (%d)" % (eid, rc))
+        rc, out = E.run("--mode", "push")
+        check(rc == 1, "round 13: ...the PUSH of the same still refuses until 3/3 (%d)" % rc)
 
 def case_contention_shape(E):
     """THE REGISTRY'S SHAPE (TESTING_V3 §1.5) — a malformed entry is QUARANTINED, the rest loads (one bad file never
