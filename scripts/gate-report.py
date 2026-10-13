@@ -5,22 +5,15 @@ The audit's and the preflight's queries (SPECS/audits/GATE_COST_2026-10-09.md; s
 q_runlog.py + q_refine.py) as ONE command over the run log's directories (testing/runs, testing/runs-archive —
 read recursively; a record later than the week's end is not read):
 
-    scripts/gate-report.py <runs dir> [<runs dir> ...] [--week <date | date>T<hh:mm>] [--ref <integration ref>]
-                           [--carried] [--defects <file>] [--contention <frozen list>]
+    scripts/gate-report.py <runs dir> [<runs dir> ...] [--week <date | date>T<hh:mm>] [--defects <file>]
 
   --week   the seven days ENDING at that moment (a bare date: the end of that day; default: now)
-  --ref    the integration line a tip "landed" on, for the carried reds (default d-build; the Studio repo
-           this script lives in is asked, so a moved ref gives a later answer — name the sha to reproduce one)
-  --carried  print every carried red (lane, tip, row), not only the per-lane counts
 
 THE TABLE: gates by kind (tier) and the full-size ones (>= 400 rows) with their hours, alone vs shared (a full
 gate with < 0.2 sibling ctests on average is alone); solos; NOADMIT (records, and the pools whose every arm was
-NOADMIT — recorded FAIL before VERDICT-1 U2, NOADMIT since); TIMEOUT by family; the verdicts, their red classes
-and what the verdict door (scripts/ci_gate_check.py door()) and the two preflight rules would refuse; the
-carried reds (open reds left on a never-landed tip of a lane that merged — VERDICT-1 U4's report; forward, the
-merge refusal carries them); the stage-close rows' runs; the slot / drain / hold hours (schema 2 records); the forced exits (code 86, TESTING-CLEANUP-2 H8c).
-Section 1 and the per-week rows read the week; the verdicts, the NOADMIT pools and the carried reds read every
-record up to the week's end (the log the judge reads)."""
+NOADMIT); TIMEOUT by family; the defect registry; the stage-close rows' runs; the slot / drain / hold hours; the forced
+exits (code 86). (The verdict door's and the carried reds' sections went with their rules, TESTING-SPEED-A round 27.)
+Section 1 and the per-week rows read the week; the NOADMIT pools read every record up to the week's end."""
 import argparse
 import collections
 import datetime
@@ -32,9 +25,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import ci_gate_check  # noqa: E402  (the door)
+import ci_gate_check  # noqa: E402  (its gate_runlog: the one record reader)
 # THE ONE SOLO PREDICATE (RUNNER-AUDIT-FIX-1 F1; FIX-2's hand-off): the attribution's tier-`solo` runs and gate-scope's
-# retries alike — the report counts what the door counts
+# retries alike
 IS_SOLO = ci_gate_check.gate_runlog.is_solo
 
 GATE_TIERS = ("scoped", "scoped-fallback", "scoped-tier", "fork")
@@ -97,45 +90,6 @@ def gates(R):
     return rows, G
 
 
-def preflight_verdicts(R, contention):
-    """The preflight's rules over every verdict record (q_runlog Q5) + the door: {rule: [lines]}."""
-    V = [r for r in R if r.get("kind") == "verdict" and r["_t"]]
-    idx = collections.defaultdict(list)
-    for r in R:
-        if r.get("kind") != "verdict" and r["_t"]:
-            idx[((r.get("tip") or {}).get("studio"), r.get("suite"), r.get("arm"))].append(r)
-    DEFECT = re.compile(r"\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)*-\d+[a-z]?\b")
-    XID = re.compile(r"\bXid\b", re.I)
-    kinds_c, out = collections.Counter(), collections.defaultdict(list)
-    for v in V:
-        t = (v.get("tip") or {}).get("studio")
-        recs = sorted([r for r in idx[(t, v.get("suite"), v.get("arm"))] if r["_t"] <= v["_t"]], key=lambda r: r["_t"])
-        reds = [r for r in recs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN")]
-        lastred = max((r["_t"] for r in reds if not IS_SOLO(r)), default=None)
-        solos = [r for r in recs if IS_SOLO(r) and (lastred is None or r["_t"] > lastred)]
-        spass = sum(1 for r in solos if r.get("verdict") == "PASS")
-        kinds = {r.get("verdict") for r in reds}
-        text = v.get("text") or ""
-        kinds_c[tuple(sorted(kinds)) or ("no red found",)] += 1
-        tag = (v.get("suite"), v.get("arm"), sorted(kinds), text[:90])
-        if solos and spass < 3:
-            out["H2: solos below 3/3 cleared by text"].append(tag + ("%d/%d solo" % (spass, len(solos)),))
-        hard = kinds & {"LOST", "OOM", "CRASH"}
-        if hard and not (DEFECT.search(text) or XID.search(text)):
-            out["H1: LOST/OOM/CRASH without a defect id or an Xid read"].append(tag)
-        if "LOST" in kinds and not ci_gate_check._xid_window(text) and not ci_gate_check.DEFECT_ID.search(text):
-            out["H1: a LOST verdict with no journal window (xid-read:) and no real:<id>"].append(tag)
-        if reds:
-            gate_reds = [r for r in reds if not IS_SOLO(r)]
-            last_gate = max((r["_t"] for r in gate_reds), default=None)
-            all_solos = [r for r in idx[(t, v.get("suite"), v.get("arm"))]
-                         if IS_SOLO(r) and last_gate is not None and r["_t"] > last_gate]
-            ok, why, _ = ci_gate_check.door(text, reds, all_solos, v.get("arm") or v.get("suite"), DEFECTS)
-            if not ok:
-                out["THE DOOR (VERDICT-1 U1, every rule incl. the class token)"].append(tag + (why[:70],))
-    return V, kinds_c, out
-
-
 def noadmit_pools(R):
     byrun = collections.defaultdict(list)
     for r in R:
@@ -151,44 +105,6 @@ def noadmit_pools(R):
     return hole, fixed
 
 
-def carried(R, repo, ref):
-    """q_refine's query: open (unanswered) reds on tips that never landed on `ref`, of lanes that DID merge."""
-    def git(*a):
-        return subprocess.run(["git", "-C", repo] + list(a), capture_output=True, text=True)
-    cache = {}
-
-    def landed(t):
-        if t not in cache: cache[t] = git("merge-base", "--is-ancestor", t, ref).returncode == 0
-        return cache[t]
-    idx = collections.defaultdict(list)
-    vt = collections.defaultdict(list)
-    tips_by_lane = collections.defaultdict(set)
-    for r in R:
-        t = (r.get("tip") or {}).get("studio")
-        if r.get("kind") == "verdict":
-            if r["_t"]: vt[(t, r.get("suite"), r.get("arm"))].append(r["_t"])
-            continue
-        idx[(t, r.get("suite"), r.get("arm"))].append(r)
-        if t:
-            for ln in _lanes(r): tips_by_lane[ln].add(t)
-    merged = {ln for ln, ts in tips_by_lane.items() if any(landed(t) for t in ts)}
-    out = collections.defaultdict(list)
-    for (t, s, a), rs in idx.items():
-        if not t or a: continue
-        rs = [r for r in rs if r["_t"] and (r.get("tier") in GATE_TIERS or ((r.get("schema") or 1) < 2 and r.get("tier")
-                                                                             in ARCHIVE_GATE_TIERS)) and r.get("gating", True)]
-        reds = [r for r in rs if r.get("verdict") not in ("PASS", "NOADMIT", "NOTRUN") and not IS_SOLO(r)]
-        if not reds: continue
-        last = max(r["_t"] for r in reds)
-        if any(x > last for x in vt.get((t, s, a), [])): continue
-        solos = [r for r in rs if IS_SOLO(r) and r["_t"] > last]
-        if s in CONT and len(solos) >= 3 and all(r.get("verdict") == "PASS" for r in solos): continue
-        lane = sorted(_lanes(reds[-1]) or {"?"})[0]
-        if lane not in merged or landed(t): continue
-        out[lane].append((t[:9], s, reds[-1].get("verdict"), (reds[-1].get("ts") or "")[:16]))
-    return merged, out
-
-
 def _lanes(r):
     """`lanes` through the one reader; a schema-1 ARCHIVE record's `lane` string (the past only)."""
     v = set(ci_gate_check.gate_runlog.lanes_of(r))
@@ -197,7 +113,6 @@ def _lanes(r):
     return v
 
 
-CONT = set()
 DEFECTS = {}
 
 
@@ -205,12 +120,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--week", default=None)
-    ap.add_argument("--ref", default="d-build")
-    ap.add_argument("--carried", action="store_true")
     ap.add_argument("--defects", default=None, help="the defect registry (default: testing/defects.json)")
-    ap.add_argument("--contention", default=None,
-                    help="a FROZEN contention list ({suites: {...}}) for the carried query's 3/3 solo clearance instead "
-                         "of the registry's nondeterminism rows (to reproduce a past read, e.g. the preflight's)")
     a = ap.parse_args()
     end = parse_end(a.week)
     start = end - datetime.timedelta(days=7)
@@ -218,12 +128,8 @@ def main():
     if a.defects: os.environ["JAH_DEFECTS_FILE"] = a.defects
     reg, why = ci_gate_check.gate_runlog.defects_load()
     if reg is None:
-        print(f"(the defect registry is unusable: {why} — the door's column reads an empty registry)")
+        print(f"(the defect registry is unusable: {why} — its section reads an empty registry)")
     DEFECTS.update(reg or {})
-    if a.contention:
-        CONT.update(json.load(open(a.contention)).get("suites", {}).keys())
-    else:
-        CONT.update(ci_gate_check.gate_runlog.contention_of(DEFECTS).keys())
     print(f"GATE REPORT  week {start.isoformat(timespec='minutes')} .. {end.isoformat(timespec='minutes')}  "
           f"records read {len(R)} (to the week's end) from {', '.join(a.dirs)}")
 
@@ -261,23 +167,6 @@ def main():
     fam = collections.Counter((r.get("suite") or "?").split(".")[0] for r in to)
     print(f"\n== 4. TIMEOUT by family (week, gate rows) ==\n  {len(to)}: " +
           "  ".join(f"{k} {n}" for k, n in fam.most_common(12)))
-    V, kinds, ref = preflight_verdicts(R, CONT)
-    print(f"\n== 5. verdicts ==\n  verdict records {len(V)}  red classes answered: "
-          + "  ".join(f"{'/'.join(k)} {n}" for k, n in kinds.most_common()))
-    for rule, xs in ref.items():
-        print(f"  {rule}: {len(xs)}")
-        if "DOOR" not in rule or len(xs) <= 8:
-            for x in xs: print("      ", x)
-    merged, out = carried(R, ci_gate_check.gate_runlog.ROOT, a.ref)
-    tot = sum(len(v) for v in out.values())
-    print(f"\n== 6. carried reds (open reds on never-landed tips of MERGED lanes; no pattern drops; ref {a.ref}) ==")
-    print(f"  merged lanes {len(merged)}  carried reds {tot}  on tips {len({x[0] for v in out.values() for x in v})}  "
-          f"lanes {len(out)}")
-    for ln, xs in sorted(out.items(), key=lambda kv: -len(kv[1])):
-        print("    %-22s %3d red(s) on %d tip(s) %s" % (ln, len(xs), len({x[0] for x in xs}),
-                                                     dict(collections.Counter(x[2] for x in xs))))
-        if a.carried:
-            for x in xs: print("        ", x)
     print("\n== 6b. the defect registry ==")
     if DEFECTS:
         for fld in ("kind", "found_by"):
@@ -313,10 +202,7 @@ def main():
     print(f"\n== 9. forced exits (the shutdown watchdog, code 86; week, every row) ==\n  {len(fx)} record(s), "
           f"{sum(1 for r in fx if r.get('verdict') == 'PASS')} of them green: " +
           "  ".join(f"{k} {n}" for k, n in collections.Counter(r.get("suite") or "?" for r in fx).most_common(12)))
-    print(f"\nTABLE gates {len(full)} | verdicts {len(V)} | refusable(H2 solos<3/3) "
-          f"{len(ref.get('H2: solos below 3/3 cleared by text', []))} | door refuses "
-          f"{len(ref.get('THE DOOR (VERDICT-1 U1, every rule incl. the class token)', []))} | NOADMIT pools {len(hole)} | "
-          f"carried {tot} | forced exits {len(fx)}")
+    print(f"\nTABLE gates {len(full)} | NOADMIT pools {len(hole)} | forced exits {len(fx)}")
 
 
 if __name__ == "__main__":

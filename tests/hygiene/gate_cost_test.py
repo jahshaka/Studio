@@ -257,7 +257,8 @@ def main(source, build):
           "a row that never gets one is tried 1 + JAH_GATE_REQUEUE (2) times, one NOADMIT record per try, the run red "
           "(rc %r, %r)" % (rc, recs))
     import ci_gate_check as cgc
-    st_, why_ = cgc.judge(("gpu.noadmit_always", None), [r for r in records() if r["suite"] == "gpu.noadmit_always"], {})
+    st_, why_ = cgc.state_of(("gpu.noadmit_always", None), [r for r in records() if r["suite"] == "gpu.noadmit_always"],
+                             cgc.KnownRegistry({}))[:2]
     check(st_ == "missing", "...and the refusal still reads them as never-ran (%s: %s)" % (st_, why_))
 
     # ---- 3. P6: a killed ctest keeps what it finished; the rest runs on resume --------------------
@@ -603,9 +604,10 @@ def main(source, build):
     # the judge: a MEASURING row's record with a fallback is not evidence — the row re-runs; any other row's is
     tim = {"suite": "time.card", "arm": None, "verdict": "PASS", "ts": "2026-10-10T01:00:00+02:00",
            "labels": ["timing"], "fallback": "drain-timeout"}
-    st_t, why_t = cgc.judge(("time.card", None), [tim], {})
-    st_p, _ = cgc.judge(("gpu.a", None), [dict(tim, suite="gpu.a", labels=[])], {})
-    st_f, _ = cgc.judge(("perf.x", None), [dict(tim, suite="perf.x", labels=["perf"])], {})
+    kr0 = cgc.KnownRegistry({})
+    st_t, why_t = cgc.state_of(("time.card", None), [tim], kr0)[:2]
+    st_p = cgc.state_of(("gpu.a", None), [dict(tim, suite="gpu.a", labels=[])], kr0)[0]
+    st_f = cgc.state_of(("perf.x", None), [dict(tim, suite="perf.x", labels=["perf"])], kr0)[0]
     check(st_t == "missing" and "fallback" in why_t and st_p == "green" and st_f == "missing",
           "ci_gate_check refuses a timing or perf row's record carried by a fallback (re-run it), never another row's "
           "(%s / %s / %s)" % (st_t, st_f, st_p))

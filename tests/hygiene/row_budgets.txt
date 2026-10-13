@@ -163,7 +163,6 @@ export.raw fixture KEEP -
 gate.selection other TOOLING -
 gate.fix_round other TOOLING -
 gate.cost other TOOLING -
-gate.carried_red other TOOLING -
 gate.ci_check other TOOLING -
 gate.verdict_door other TOOLING -
 gate.contention_shape other TOOLING -

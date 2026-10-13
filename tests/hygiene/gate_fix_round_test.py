@@ -17,7 +17,8 @@ registry (JAH_DEFECTS_FILE):
   3. CONTACT-OCCLUSION-1's 1775e79f0 -> 684e0f7aa moves the FORK PIN: every row green at 1775e79f0 and
      nothing at 684e0f7aa -> REFUSED, "no re-use across" (a pin change invalidates every earlier record);
   4. a row green at 0dba35f9e and RED at the later 1e21df220 (neither reached by the fix) -> REFUSED: the
-     later red blocks the older green; `--verdict` records its answer AT 1e21df220 -> accepted;
+     served record is the newest, red; an open entry naming the row makes it KNOWN; a red at an earlier commit
+     with the row green at the tip is NOT carried (the one judge, TESTING-SPEED-A round 27);
   5. THE TARGETS NEVER SET THE EXIT CODE: gate-scope's `--run` returns the gating phases' code; the
      target step runs AFTER the verdict line, inside the gate (GATE-COST-1 P9: the gate's display, the
      whole card) and its red does not change the exit; `--no-targets` skips it; `--targets-only` runs
@@ -83,7 +84,10 @@ def main(source, build):
                          quiet_graph=True)
 
     def need(rng):
-        return cgc.needed_rows(gs, sel(rng))[0]
+        # the merge's selection (the one judge, round 27): the stage-close rows are the ship's, set apart
+        S_ = sel(rng)
+        return [k for k in cgc.needed_rows(gs, S_)[0]
+                if not (S_.inv.get(k[0], {}).get("labels", set()) & gs.STAGE_CLOSE_LABELS)]
 
     def fresh():
         d = tempfile.mkdtemp(dir=scratch)
@@ -108,7 +112,6 @@ def main(source, build):
 
     def run(rng, *extra):
         # the earlier commits' reds are the PUSH's rule (round 14: a merge reads this run's records only)
-        extra = list(extra) + ([] if "--mode" in extra else ["--mode", "push"])
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout
@@ -137,11 +140,12 @@ def main(source, build):
     reused = len([k for k in lane_need if k not in fix_keys and servable(k)])
     check(rc == 0, "the fix round's selection at the tip + the lane's earlier records -> ACCEPTED (%d)" % rc)
     # (rule 2's word since RUNNER-A2: a record at an earlier commit SERVES the row)
+    summ = next((l for l in out.splitlines() if " served from " in l and "row(s) — " in l), "")
     check(f"{reused} served from {revs[A][:9]}" in out,
-          "...%d untouched rows SERVED from %s (rule 2), said in the summary" % (reused, A))
+          "...%d untouched rows SERVED from %s (rule 2), said in the summary (%s)" % (reused, A, summ[-160:]))
     row_lines = [l for l in out.splitlines() if l.startswith("ci-gate-check: row ")]
     check(len(row_lines) == len(lane_need) and all(" <- " in l for l in row_lines),
-          "...and EVERY row prints the commit its record came from (%d lines)" % len(row_lines))
+          "...and EVERY row prints the commit its record came from (%d lines of %d)" % (len(row_lines), len(lane_need)))
     row_keys = sorted(k for k in fix_keys if k[1] is None)
     some_fix = row_keys[0]
     check(any(l.startswith(f"ci-gate-check: row {some_fix[0]} <- {revs[B][:9]} (the tip)") for l in row_lines),
@@ -153,7 +157,7 @@ def main(source, build):
     put(lane_need, "PASS", "2026-01-01T10:00:00", A)
     put([k for k in tip_need if k != dropped], "PASS", "2026-01-01T11:00:00", B)
     rc, out = run(lane)
-    check(rc == 1 and "no record" in out and dropped[0] in out and f"{A[:9]}..{B[:9]} reaches it" in out,
+    check(rc == 1 and "NEVER RAN" in out and dropped[0] in out and f"{A[:9]}..{B[:9]} reaches it" in out,
           "a row the fix reaches, green only at %s -> REFUSED, naming %s (%d)" % (A, dropped[0], rc))
 
     # ---- 3. a fork pin change invalidates everything -------------------------------------------------
@@ -168,14 +172,13 @@ def main(source, build):
           "every row green at %s, the pin moved in %s..%s -> REFUSED, no re-use across it for a row that reaches the fork "
           "(%d)" % (F_A, F_A, F_B, rc))
 
-    # ---- 4. a later red without a verdict blocks reuse -----------------------------------------------
+    # ---- 4. a later red blocks the older green's reuse (the newest record decides); nothing carried from another sha --
     reach_t0 = sel(f"{T0}..{B}")
     t0_keys = {(n, None) for n in reach_t0.selected}
     cand = [k for k in lane_need if k[1] is None and k not in t0_keys and k not in fix_keys and servable(k)]
     check(bool(cand), "fixture: a row of the lane that %s..%s does not reach (%d)" % (T0, B, len(cand)))
     if cand:
         k = cand[0]
-        register([k[0]])
         fresh()
         put(lane_need, "PASS", "2026-01-01T09:00:00", T0)                 # the lane's gate at T0
         put([x for x in lane_need if x != k], "PASS", "2026-01-01T10:00:00", A)  # a later round at A...
@@ -183,48 +186,21 @@ def main(source, build):
         put(tip_need, "PASS", "2026-01-01T11:00:00", B)
         rc, out = run(lane)
         check(rc == 1 and f"red at {revs[A][:9]}" in out and k[0] in out,
-              "%s green at %s, RED at the later %s, nothing at the tip -> REFUSED (%d)" % (k[0], T0, A, rc))
-        # VERDICT-1's checked door: a pre-existing defect is proved by its red reproduced on the base (a solo)
-        gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
-                                     "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
-                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False,
-                                                            "built": {"studio": revs[BASE], "irisgl": pin(revs[BASE]),
-                                                                      "dirty": False}}}],
-                                   "scoped", revs[BASE])
-        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 pre-existing: the fixture's red, answered where it happened")
-        vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
-        if rc != 0:
-            print("\n".join(l for l in out.splitlines() if "REFUSED" in l)[:2000])
-        check(any(revs[A][:9] in f for f in vfiles) and "KNOWN RED" in out,
-              "...a verdict is recorded AT %s (where the red happened) and reads as a KNOWN RED (the push refuses known "
-              "reds; round 14: the merge never asks an earlier commit) (%d, %s)"
-              % (A, rc, vfiles))
-
-    # ---- 4b. THE FLAKE LAW ACROSS COMMITS (the lead's read, F1): a green at the tip does not answer an
-    # earlier red the fix does not reach; it does answer one the fix reaches ------------------------
-    if cand:
-        k = cand[0]
-        fresh()
-        put([x for x in lane_need if x not in (k, some_fix)], "PASS", "2026-01-01T10:00:00", A)
-        put([k, some_fix], "FAIL", "2026-01-01T10:00:01", A)
-        put(lane_need, "PASS", "2026-01-01T11:00:00", B)                 # everything re-run green at the tip
+              "%s green at %s, RED at the later %s, nothing at the tip -> REFUSED (the served record is red) (%d)"
+              % (k[0], T0, A, rc))
+        register([k[0]])
         rc, out = run(lane)
-        check(rc == 1 and f"OPEN red at {revs[A][:9]}" in out and k[0] in out
-              and not any(l.startswith(f"ci-gate-check: RED {some_fix[0]}:") for l in out.splitlines()),
-              "%s red at %s (the fix does not reach it), green at the tip -> REFUSED; %s, which the fix reaches, "
-              "is answered by the tip (%d)" % (k[0], A, some_fix[0], rc))
-        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 fixed: the fixture's red (green at the tip)")
-        check(rc == 1 and "REACHES" in out, "...a 'fix' proved by the tip's PASS is REFUSED: %s..%s does not reach %s, so "
-              "the tip's green is the same code passing again (ROUND 2 F1) (%d)" % (A, B, k[0], rc))
-        gate_runlog.append_records([{"suite": k[0], "arm": None, "verdict": "FAIL", "ts": "2026-01-01T10:30:00",
-                                     "retry": True, "tip": {"studio": revs[BASE], "studio_dirty": False,
-                                                            "irisgl": pin(revs[BASE]), "irisgl_dirty": False,
-                                                            "built": {"studio": revs[BASE], "irisgl": pin(revs[BASE]),
-                                                                      "dirty": False}}}],
-                                   "scoped", revs[BASE])
-        rc, out = run(lane, "--verdict", f"{k[0]}=real:FIXTURE-1 the same red on the base")
-        if rc: print("\n".join(l for l in out.splitlines() if "REFUSED" in l or "OPEN" in l)[:1500])
-        check(rc == 0, "...the same red reproduced on the base (KNOWN RED) answers it at %s (%d)" % (A, rc))
+        check(rc == 0 and ("KNOWN " + k[0]) in out, "...an open entry naming %s -> the served red is KNOWN, ACCEPTED (%d)"
+              % (k[0], rc))
+        # ROUND 27: a red at an earlier commit, everything re-run green at the tip -> ACCEPTED: nothing is carried
+        register(["(none)"])
+        fresh()
+        put([x for x in lane_need if x != k], "PASS", "2026-01-01T10:00:00", A)
+        put([k], "FAIL", "2026-01-01T10:00:01", A)
+        put(lane_need, "PASS", "2026-01-01T11:00:00", B)
+        rc, out = run(lane)
+        check(rc == 0 and "OPEN red" not in out, "%s red at %s, green at the tip -> ACCEPTED: the tip's record decides, "
+              "nothing carried from another sha (%d)" % (k[0], A, rc))
 
     # ---- 4c. RULE 2 AT THE MERGE OVER A REBASE (RUNNER-FIX-4 item 2) ------------------------------------------------
     # the lane was REBASED: its builder records sit at X, a commit with B's tree on ANOTHER parent (the pre-rebase twin —

@@ -149,13 +149,10 @@ by `gate-scope.py` alone:
 
   Once selected, a stage-close row GATES like any row (the label is NOT in
   `SCOPE_EXCLUDED_LABELS`, which means "never gating").
-  **A STAGE-CLOSE RED BLOCKS.** `scripts/ci_gate_check.py <base>..<tip> --stage-close [--mode push]
-  --build <a build of the tip>` is the judge's SELECTION of every `stage-close` row (not the range's scoped
-  rows), judged by the one judge in mode stage-close (or push): the door (a proved `real:<id>` clears through
-  the Prover against the base), the aborts, a nondeterminism clearance re-asked 3/3 at the tip, the
-  overrides — refused (exit 1) while one is red, a KNOWN RED or unrecorded; `--mode merge` beside it is
-  refused, never ignored. `runner.sh stage-close` runs it at a stage close and `runner.sh push` refuses a push on
-  it (base = the previous pushed sha).
+  **A STAGE-CLOSE RED BLOCKS.** `scripts/ci_gate_check.py <base>..<tip> --stage-close --build <a build of the tip>`
+  is the judge's SELECTION of every `stage-close` row (not the range's scoped rows), judged by the one judge (§4): refused
+  (exit 1) while one is red with no entry or verdict, or never ran. `runner.sh stage-close` runs it at a stage close;
+  `runner.sh push`'s door (`--ship`) holds them too.
 
 - **`quiet-box`**, beside `stage-close` on every row that MEASURES — the wall-clock benchmarks,
   gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4) — and on
@@ -391,9 +388,8 @@ reuse rule below is what the judge applies to every range, a merge candidate's i
 the scoped selection of the FIX's own diff (`runner.sh select` serves the rest), never the lane's whole selection
 again. After a forward merge of d-build into the lane, the fix round is `<merge
 commit>..<tip>` (the merge commit is the lane's own; a range across it scopes the whole lane again).
-A red the fix does not reach is answered where it happened: a recorded verdict, or `--solo` 3/3 for
-the contention class — a green re-run at a later commit does NOT answer it. The merge run at the candidate catches
-a merge interaction at merge time; the ship is the deep gate.
+The tip's records decide (§4): a red at an earlier commit that the tip re-ran green is answered by the tip. The merge run
+at the candidate catches a merge interaction at merge time; the ship is the deep gate.
 
 THE MERGE REFUSAL ACCEPTS IT, AND A GREEN HOLDS UNTIL A CHANGE REACHES THE ROW (`scripts/ci_gate_check.py`; GATE-SPEED-1's
 fix-round re-use made general by RUNNER-A2 — TESTING_RUNNER_SPEC v2.1 rule 2). For a row with no record at the tip it takes
@@ -405,14 +401,9 @@ serves with; the integration-line exclusion is deleted), provided:
 - the fork pin is the same at A and at the tip, OR the row does not reach the fork;
 - the record's `declaration` and `data_hash` equal the build's at the tip (a null is unknown, never equal: a record before
   schema 3 serves nothing), its build was clean (BUILT_FROM), its tier admissible (a lane-tool record only when complete);
-- the row is not MEASURING (timing / quiet-box / perf) and not a REGISTERED NONDETERMINISM (an open entry);
-- that newest record decides: green is served; a red without its verdict (or a contention red without its 3/3) REFUSES —
-  a later red blocks an older green. `--verdict "<row>=<text>"` records the answer at the commit where that red happened.
-`--universe tier` (the runner's judge, `runner.sh judge`): EVERY merge-tier row must be green at the tip or served this
-way (an unreached measuring row is not asked); the default asks the range's scoped rows.
-THE FLAKE LAW ACROSS COMMITS: a row green at the tip is STILL refused while an earlier commit that
-the fix does not reach holds an open red of it — a verdict-less red, or a contention red without its
-3/3. A red at a commit the fix DOES reach is answered by the tip's run.
+- the row is not MEASURING (timing / quiet-box / perf);
+- that newest record decides: green is served; a red is KNOWN or refused as at the tip (§4) — a later red blocks an older
+  green. `--full` (the ship) asks EVERY merge-tier row at the tip or served this way; the default asks the range's reach.
 A row the fix reaches needs its record at the tip. Every row prints its source
 (`row <name> <- <sha> (the tip)` or `... served from <sha>`); the summary counts both. Measured
 on this lane's own two rounds: `spikes/gate-speed-1/`.
@@ -441,86 +432,32 @@ GENERATED from the lead's `SPECS/TESTING_SPEED_ROWS.md` by `row_budget.py --gene
 consumer by that consumer's admission (`JAH_WIPE_AFTER`); the boot's shader cache is ONE per tree (`build-linux/tests/.shadercache`,
 hard-linked into every `--warm` home); `source.no_renders_tracked` refuses any render, home or `Testing/` in git.
 
-## 4. Flake protocol (the law in the refusal since TEST-SELECTOR-1)
+## 4. THE ONE JUDGE (TESTING-SPEED-A round 27; the owner, 2026-10-13: the door arbitrates NOTHING, the lead decides a red)
 
-**A MERGE ARBITRATES NOTHING (TESTING-SPEED-A round 14).** The merge's judge reads THIS run's records only (`--since` the
-run's start: the rows the select ran at the candidate, each with its one rerun) and the served rows. A row an OPEN registry
-entry names is KNOWN — served at the select, never run, nothing proved. A red at a merge is rerun ONCE at the candidate (-j1,
-the whole card); a red that stays red stops the run (`refused-early`) unless the lead named a verdict for it; the merge lands
-when every row of the run is green or every red carries THE LEAD'S NAMED VERDICT — `runner.sh merge <lane> --door-verdict
-"<row>=<text>"`, or `runner.sh ready <lane> --why "<text naming the row>"` after the refusal (carried to the next merge's
-judge). No earlier fire, earlier tip, base proof, 3/3 solo, single-use or by-design rule is read at a merge. A row labelled
-stage-close NEVER runs in a merge — named by the brief or reached, it is printed `STAGE-CLOSE (the ship's)` and skipped.
-`runner.sh attribute <lane> --parent` runs a red once at the parent on the lead's word. A merge registers nothing.
-**THE PUSH AND THE STAGE CLOSE keep every rule below** (the carried reds, the proofs, 3/3, the registry's conditions).
-"Environmental" is not a verdict: an Xid from the row's pid is never environmental. ANY OTHER red needs a
-recorded verdict that passes THE VERDICT DOOR (below; VERDICT-1):
-`scripts/ci-gate-check.sh <range> --verdict "<row>=<text>" ...` writes it into the run log, per row and timestamped (it clears only the reds logged before it; a row that never ran — NOADMIT — is missing, which no verdict clears). THE MERGE REFUSAL
-APPLIES THIS (TEST-SELECTOR-1 L2/L3): `ci-gate-check.sh` refuses a merge while a selected row was
-never run at the tip, a contention-class red lacks 3/3 solo PASS after it (a solo red means it is not
-contention: a verdict), or any other red lacks a verdict — one solo PASS erases nothing — and
-`runner.sh merge` (through `runner.sh judge`) refuses on it. A
-`VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
-by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
-unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
-`nvidia-smi` beside the red). THE CONTENTION CLASS IS DATA: the defect registry's enrolled
-`nondeterminism` entries (`<workspace>/testing/defects.json`, below), read by the refusal and by `--solo` — never a
-prose list; a row joins it by the lead's `defect enrol` (a measured rate and the census). Every failure in a gate
-report carries a verdict through the door; a report without verdicts is not a gate.
+`scripts/ci_gate_check.py` (`runner.sh judge`) is ONE judge at a merge, a push and a stage close; the moment only names the
+SELECTION — a merge its reach (+ the brief's rows; the stage-close rows set apart: the ship's), a stage close every
+stage-close row, a push / the ship (`--ship`) every merge-tier row + every stage-close row + the sanitizer runs at the tip.
+Per key (a row or a pool arm) AT THE TIP:
+- the newest run PASSED (or, with no run at the tip, an ancestor's record serves it: §3b) → **green**;
+- a red → **KNOWN** when an OPEN entry of the defect registry OF THE RUN'S BUILD KIND names the row (`build: debug | asan |
+  tsan`; the LSan run's arms by the asan entries, build-tsan's by the tsan ones) or the lead's verdict names it
+  (`--verdict "<row>=<text>"`, free text, recorded at the tip; `runner.sh merge|push --door-verdict`, `runner.sh ready
+  --why` naming the row) — it passes, the entry id / the text on its line;
+- any other red → **REFUSED**, the row named with its fail line and its log; the lead decides (the builder's fix, a
+  verdict, a registry entry);
+- no run at the tip and none served → **NEVER-RAN [OWED]**, refused (at a ship: a gap in the schedule).
+An Xid on a red row is printed on its line — an Xid from the row's pid is never environmental — and changes nothing else.
+A merge reads THIS run's records (`--since` the run's start); a red at a merge is rerun ONCE at the candidate and a red
+that stays red stops the run (`refused-early`) unless the lead named a verdict for it. NOTHING ELSE: no proof of a fix,
+no base proof, no 3/3 solo law, no contention class, no competitor census, no carried red from another sha or a lane's
+other tip — a `nondeterminism` entry is an ordinary open entry. A merge registers nothing; `runner.sh attribute <lane>
+--parent` runs a red once at the parent on the lead's word. A `VK_ERROR_OUT_OF_DEVICE_MEMORY` red is not environmental
+(§4b): the budget is wrong or an unadmitted process filled the card — say which.
 
-**THE VERDICT DOOR (lane VERDICT-1, 2026-10-09; TESTING_V3_SPEC §1.4-1.6 is the law text; the preflight measured 58
-verdicts of a week, 6 clearing solos below 3/3 by prose, 2 LOSTs called environmental with no journal read, 13
-never-ran pools recorded FAIL).** `ci_gate_check.py` accepts registered facts, never prose; `--verdict "<row>=<text>"`
-keeps its syntax and the text is parsed:
-- **`real:<ID>`** — `<ID>` is in THE DEFECT REGISTRY (`testing/defects.json`, below) for this row, not retired, not
-  past its recheck date, and PROVED: a PASS record of the row at a later sha that REACHES the row (a descendant of the
-  red's sha whose change the selector maps to the row — a PASS at the red's own sha, at an ancestor, or after a
-  docs-only / empty commit is the same code passing again: nondeterminism, 3/3 solo), or the SAME red — the same status text too,
-  the same verdict class and the same failLine with its numbers masked — reproduced by a recorded solo at the
-  range's base (a d-build commit): the row is then **KNOWN RED** — `--mode merge` passes it, `--mode push` and
-  `--mode stage-close` refuse it (never push on a red). A ticket named alone clears nothing; a CRASH never.
-  THE BATCH'S VERDICT COVERS THE BATCH'S RANGE (TESTING-CLEANUP-2D): a verdict recorded at the candidate answers the same
-  red at every commit of the range — the cross-commit loop and the re-use arm read it through the same door and the same
-  proof. THE PROOF TRAVELS: a base with NO run of the row takes the nearest ancestor with a run (by ancestry, one hop)
-  whose solos are all the same masked red, when ancestor..base does not reach the row — an unreadable, fallback,
-  tree-equal or fork-pin range reaches everything, and a set-aside stage-close row is reached on both sides; the door's
-  why names the ancestor.
-  A `nondeterminism` id clears a FAIL/TIMEOUT by 3/3 solo PASS (never a LOST/OOM/CRASH or an Xid red: those take a
-  `kind: defect` entry) — a SINGLE-USE (NOT REPRODUCED) one only in the merge that registered it, never a push. A
-  nondeterminism clearance passes a merge; a push or stage close re-asks 3/3 solo green AT THE CANDIDATE.
-- **`contention:<evidence>`** (FAIL / TIMEOUT only) — the row has an ENROLLED, open `nondeterminism` entry within its
-  recheck date (the contention class), the red's **competitor census** (`box.census`) shows real competition — a GPU
-  process of ours outside the gate, one whose exe is not in the idle baseline `testing/box-baseline.json`, or any
-  above its `vram_floor_mb`; a sibling ctest; a build outside the gate's tree; memory or IO pressure ≥ 10 % avg10;
-  NEVER the gate's own queue or drain, never the idle desktop — AND 3/3 solo PASS after the red (the solos may run after the verdict). The class's own 3/3 clearance
-  (no verdict) needs the same census.
-- **LOST / OOM / CRASH** — `real:<ID>` only; `xid-read:<journal window>` ONLY when the record says
-  `journal_unreadable` (else the Xid would be in the record), the window covering the red. A red whose record
-  carries an `xid` (a pid of the row's own process tree) takes `real:` only — never environmental (CLAUDE.md).
-- **solos below 3/3 are red** — never cleared by text, listed or not. NOADMIT / NOTRUN never ran: nothing clears them.
-- **`environmental`, ENOSPC and a dead display are never verdicts** — the cause is a registered `box` defect or the
-  run's abort record; a row an abort dropped RED (`droppedRed`) needs 3/3 solo PASS after it, whatever else answered it.
-- A lane-tool record (tier `lane`) answers a row for the judge only when it is COMPLETE — seconds, the census, labels and
-  the Xid read (RUNNER-A2; N5's blanket exclusion deleted); `overrides` in the candidate's records refuse a
-  push or a stage close.
-A refused verdict prints `VERDICT REFUSED <row>: <why>` (the rule named) and the row stays red.
-
-**A REBASE CARRIES ITS OPEN REDS (VERDICT-1 U4).** The judge reads, for a lane's tip, the lane's OWN records
-(`lanes == [<lane>]`, no `batch` tag; `--lane`, else the tip's records, else the branch) at any other tip, ancestor or
-not, and refuses the tip while a red there has no later green record of the same row+arm at the tip and no verdict
-through the door: `OPEN RED carried from <old tip>: <row>` (a red at a lane tip that DESCENDS from the checked tip
-is never answered by the tip's PASS: that code predates it). Batch records never carry. `--verdict` records the answer
-AT the old tip. Forward only: schema-2 records; the historic cases are `scripts/gate-report.py --carried`.
-
-**THE DEFECT REGISTRY (TESTING_V3 §1.5) — `testing/defects.json`, owned by VERDICT-1's reader
-(`gate_runlog.defects_load()`).** `{"defects": [{id, rows, kind: defect|nondeterminism|selector|box|combination,
-cause, first_seen {tip, pin, run}, state: open | {fixed: {tip}} | retired, recheck: YYYY-MM-DD, found_by:
-read|gate|owner|lane}]}`; a `nondeterminism` entry is single-use (`uses: 1, suspects, census`) or `enrolled {by, rate,
-census, date}` by the lead; an entry may carry the attribution's `sightings`. ONE FILE (RUNNER-A1: the attribution
-writes its entries here; `testing/defects.pending/` and its reader are deleted). A malformed entry is QUARANTINED (copied
-to `testing/defects.quarantine/` with a `.why`, printed as `REGISTRY: <id> quarantined: <why>`, a finding until fixed) and the rest loads; only an unreadable registry FILE
-leaves the judge unusable (exit 2). The contention class is
-the enrolled nondeterminism subset; `contention.json` is gone.
+**THE DEFECT REGISTRY** (`<workspace>/testing/defects.json`, `lane.sh defect add|enrol|fix|retire|build|list`): entries
+`{id, rows, kind, cause, first_seen {tip, pin, run}, state: open | {fixed: {tip}} | retired, recheck, found_by, build?}`.
+A malformed entry is QUARANTINED (copied to `testing/defects.quarantine/` with a `.why`, printed as `REGISTRY: <id>
+quarantined: <why>`) and the rest loads; only an unreadable registry FILE leaves the judge unusable (exit 2).
 
 **THE Xid IN THE RECORD (VERDICT-1 U3).** `vram_tokens.py`'s supervise reads the kernel journal (through
 `kernel_xid.py`) after every admitted row and prints `XID … from pid <p> of the row …` and `XID-WINDOW <start>..<end>`;
@@ -567,9 +504,7 @@ perf.drag_mirror_room, perf.capture_off_is_free; R3), with app.play_select besid
 (key/gesture arrival; R5). Every timing row also takes ctest's `RESOURCE_LOCK gpu_timing`, so two
 of ONE gate never start together and wait in a slot on the admission. `ctest -N -V | grep -c 'Test
 command: .*gpu-exclusive.sh'` = 37 (a bare `grep -c gpu-exclusive` also counts the guard's own
-command line). Its guard is `devprocess.gpu_lock` (label `tooling`). A contention verdict on a
-timing row needs a sibling that took no token (an app on `:0`, a measurement outside the wrapper,
-or — the admission never excludes it — the CPU load of the gate's own other slots) — say which.
+command line). Its guard is `devprocess.gpu_lock` (label `tooling`).
 
 **THE ADMISSION'S WAIT IS NEVER THE ROW'S TIME** (LOCK-WAIT-1, stage close 1: perf.epic_steady_state
 ran ~30 s solo and was killed at its TIMEOUT in the stage tier by queue time). The wrapper prints

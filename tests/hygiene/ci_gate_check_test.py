@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
-"""gate.ci_check — THE MERGE REFUSAL, proved (MODULAR-GATE-1 T6; the flake law since TEST-SELECTOR-1).
+"""gate.ci_check — THE REFUSAL, proved (MODULAR-GATE-1 T6; the one judge since TESTING-SPEED-A round 27).
 
-scripts/ci-gate-check.sh <range> refuses a merge unless the run log at the range's tip answers every
-row the range selects under THE FLAKE LAW (scripts/ci_gate_check.py): a contention-class red needs
-3/3 solo PASS after it, any other red a recorded verdict (`--verdict "<row>=<text>"`, per row and
-timestamped in the log, clearing only the reds before it),
-and a row never run is refused. Proved on a recorded range (VIEWS-DEPTH-1, 51e9f2c49..3756b2f18:
-photon.view then; since TESTING-SPEED-A a synthetic range on 51e9f2c49 reaching gi.speckle) against a PRIVATE run log (JAH_RUN_LOG_DIR) and a PRIVATE defect
-registry (JAH_DEFECTS_FILE):
+scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip (or served) and each red
+is KNOWN — an open entry of the defect registry names it, or the lead's verdict (`--verdict "<row>=<text>"`, free text,
+per row and timestamped in the log) does. On a synthetic range on 51e9f2c49 reaching gi.speckle against a PRIVATE run
+log (JAH_RUN_LOG_DIR) and a PRIVATE registry (JAH_DEFECTS_FILE):
 
-  nothing run -> refused; all green -> accepted; a verdict-less red -> refused, and ONE solo PASS
-  does not clear it; the same red with a recorded verdict -> accepted (the verdict is in the log);
-  a contention-class red with 2/3 solo -> refused, 3/3 -> accepted, a solo red among them -> refused;
-  a green run from a DIRTY tree, at another tip, with a DIRTY irisgl or an irisgl that is not the
-  tip's pin -> refused (F1); no defect registry -> unusable (exit 2); a range that MOVES THE FORK
-  PIN needs the whole MERGE tier at its tip (§7b rule 4), whatever its scoped selection;
-  and the run log samples the box at EACH SUITE'S START (L1), not once per gate.
+  nothing run -> refused (NEVER-RAN); all green -> accepted; a red with no entry -> refused, a later PASS answers it; a
+  red an entry names -> KNOWN; a merge reads this run's records (--since); a verdict -> KNOWN, recorded, answering only
+  the reds before it; a green run from a DIRTY tree, at another tip, with a DIRTY irisgl or an irisgl that is not the
+  tip's pin -> refused; no registry -> unusable (exit 2); a range that MOVES THE FORK PIN asks its component reach;
+  the run log samples the box at EACH SUITE'S START (L1).
 
 Run: ci_gate_check_test.py <source-dir> <build-dir>
 """
@@ -84,8 +79,7 @@ def main(source, build):
     pin = subprocess.run(["git", "rev-parse", tip + ":irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_runlog
-    # THE DEFECT REGISTRY (TESTING_V3 §1.5): the fixtures' defects; `listed` adds gi.speckle's nondeterminism
-    # entry (the contention class is the registry's open nondeterminism subset)
+    # THE DEFECT REGISTRY (TESTING_V3 §1.5): the fixtures' entries (FIXTURE-1 names gi.speckle)
     def entry(i, rows, kind="defect"):
         return {"id": i, "rows": rows, "kind": kind, "cause": "the fixture's (this test only)", "state": "open",
                 **({"enrolled": {"by": "lead", "rate": "fixture", "census": {"other_ctests": 2}, "date": "2026-10-09"}}
@@ -97,16 +91,11 @@ def main(source, build):
                      census={"other_ctests": 1}, first_seen={"tip": tip[:9], "pin": "0" * 9,
                                                              "run": "20261009T120000-" + tip[:9]})]
     fixtures[-1].pop("enrolled", None)
-    listed = os.path.join(scratch, "defects-listed.json")
     unlisted = os.path.join(scratch, "defects.json")
-    json.dump({"defects": fixtures + [entry("NONDET-FIXTURE-1", [rows[0]], "nondeterminism")]}, open(listed, "w"))
     json.dump({"defects": fixtures}, open(unlisted, "w"))
 
     def run(rng=None, *extra):
-        # THE DOOR'S RULES LIVE AT THE PUSH (round 14: a merge arbitrates nothing — its own checks below, `merge_case`):
-        # these checks ask the door in push mode unless they name a mode
         rng = rng or RANGE
-        extra = list(extra) + ([] if "--mode" in extra else ["--mode", "push"])
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout
@@ -118,7 +107,6 @@ def main(source, build):
                                                   "built": {"studio": t, "irisgl": ig, "dirty": False}}},
                                          **({"box": box} if box else {}))
                                     for s in suites], "scoped", t)
-    busy = {"census": {"gpu_apps": [], "other_ctests": 2, "builds": 0, "psi10_mem": 0.0, "psi10_io": 0.0}}
 
     def fresh(contention, data_edge=True):
         d = tempfile.mkdtemp(dir=scratch)
@@ -132,63 +120,56 @@ def main(source, build):
     tip2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[1]], cwd=source, capture_output=True,
                           text=True).stdout.strip()
     pin2 = subprocess.run(["git", "rev-parse", tip2 + ":irisgl"], cwd=source, capture_output=True, text=True).stdout.strip()
-    # ---- the law, a row NOT in the contention class ---------------------------------------------
-    fresh(unlisted, data_edge=False)
-    rc, out = run()
-    check(rc == 1 and "no record" in out and rows[0] in out,
-          "nothing run -> refused, and says which rows (%d)" % rc)
-    fresh(unlisted)
-    put(rows, "FAIL", "2026-01-01T10:00:01")
-    rc, out = run()
-    check(rc == 1 and rows[0] in out and "needs a verdict" in out,
-          "a verdict-less red -> refused, naming it and what it needs (%d)" % rc)
-    put(rows, "PASS", "2026-01-01T10:05:00", retry=True)
-    rc, out = run()
-    check(rc == 1 and "needs a verdict" in out,
-          "...and ONE solo PASS does not erase it (the audit's L2: latest-wins is gone) (%d)" % rc)
-    # ---- A MERGE ARBITRATES NOTHING (round 14): this run's records; a red stands until the lead's named verdict -----
-    # (no registry entry names the rows here: a row an open entry names is KNOWN at a merge, served, never run)
+    # ---- THE ONE JUDGE (round 27): green passes; a red is KNOWN (an open entry, the lead's verdict) or refused ----------
     empty = os.path.join(scratch, "defects-none.json")
     json.dump({"defects": []}, open(empty, "w"))
     fresh(empty, data_edge=False)
+    rc, out = run()
+    check(rc == 1 and "NEVER RAN" in out and rows[0] in out, "nothing run -> refused, NEVER-RAN [OWED], the rows named (%d)" % rc)
+    fresh(empty)
+    put(rows, "FAIL", "2026-01-01T10:00:01")
+    rc, out = run()
+    check(rc == 1 and ("RED " + rows[0]) in out and "the lead decides" in out,
+          "a red with no entry and no verdict -> refused, naming it (%d)" % rc)
+    put(rows, "PASS", "2026-01-01T10:05:00")
+    rc, out = run()
+    check(rc == 0, "...a later PASS at the tip (the newest record decides) -> accepted (%d)" % rc)
+    fresh(unlisted)
+    put(rows, "FAIL", "2026-01-01T10:00:01")
+    rc, out = run()
+    check(rc == 0 and ("KNOWN " + rows[0]) in out and "FIXTURE-1" in out,
+          "a red an open registry entry names -> KNOWN, the entry printed, accepted (%d)" % rc)
+    # A MERGE READS THIS RUN'S RECORDS (--since)
+    fresh(empty, data_edge=False)
     put(rows, "FAIL", "2026-01-01T09:00:00")                       # an EARLIER fire's red at the same tip
     put(rows, "PASS", "2026-01-01T10:00:00")                       # this run: green
-    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T09:30:00")
-    check(rc == 0, "round 14: a MERGE reads THIS run's records — an earlier fire's red at the same tip, this run green -> "
-          "accepted (%d)" % rc)
-    put(rows, "FAIL", "2026-01-01T10:30:00")                       # this run: red
-    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00")
-    check(rc == 1 and "the lead decides" in out, "round 14: a red of this run without the lead's verdict -> refused (%d)"
+    rc, out = run(RANGE, "--since", "2026-01-01T09:30:00")
+    check(rc == 0, "a merge reads THIS run's records — an earlier fire's red at the same tip, this run green -> accepted (%d)"
           % rc)
-    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00", "--verdict",
+    put(rows, "FAIL", "2026-01-01T10:30:00")
+    rc, out = run(RANGE, "--since", "2026-01-01T10:15:00")
+    check(rc == 1 and "the lead decides" in out, "a red of this run without the lead's verdict -> refused (%d)" % rc)
+    rc, out = run(RANGE, "--since", "2026-01-01T10:15:00", "--verdict",
                   "gi.speckle=the lead read the log: the fixture's red, read by the test")
-    check(rc == 0, "round 14: ...with the lead's named verdict (--door-verdict -> --verdict) -> accepted, whatever its "
-          "text (%d)" % rc)
+    check(rc == 0 and "the lead's verdict" in out, "...with the lead's verdict (free text) -> KNOWN, accepted (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
     check(len(vrec) == 1 and vrec[0]["suite"] == rows[0] and vrec[0]["kind"] == "verdict"
           and "read by the test" in vrec[0]["text"], "...and the verdict is a record in the run log (%s)" % vfiles)
-    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00")
+    rc, out = run(RANGE, "--since", "2026-01-01T10:15:00")
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
     put(rows, "FAIL", "2099-01-01T10:00:00")
-    rc, out = run(RANGE, "--mode", "merge")
+    rc, out = run(RANGE)
     check(rc == 1 and "the lead decides" in out,
-          "a red logged AFTER the verdict is not cleared by it (per row, timestamped) (%d)" % rc)
-    rc, out = run(RANGE, "--mode", "push")
-    check(rc == 1, "round 14: ...and the PUSH of a merge-accepted red (a verdict in prose) refuses: its proof rules stay "
-          "(%d)" % rc)
+          "a red logged AFTER the verdict is not answered by it (per row, timestamped) (%d)" % rc)
     rc, out = run(RANGE, "--verdict", "api.contract=not red, so nothing to answer")
     check(rc == 1 and "no verdict recorded for api.contract" in out,
-          "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
+          "a verdict for a row that is not red is said out loud, not recorded (%d)" % rc)
 
     # ---- a REPEATED --verdict records every verdict (the form the runner builds) -------
-    base2 = subprocess.run(["git", "rev-parse", RANGE2.split("..")[0]], cwd=source, capture_output=True,
-                           text=True).stdout.strip()
-    pin2, base2_pin = (subprocess.run(["git", "rev-parse", r + ":irisgl"], cwd=source, capture_output=True,
-                                      text=True).stdout.strip() for r in (tip2, base2))
     fresh(empty)
     put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
-    rc, out = run(RANGE2, "--mode", "merge", "--verdict", "%s=the lead: first verdict" % ROWS2[0], "--verdict",
+    rc, out = run(RANGE2, "--verdict", "%s=the lead: first verdict" % ROWS2[0], "--verdict",
                   "%s=the lead: second verdict" % ROWS2[1])
     vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
             for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
@@ -197,40 +178,16 @@ def main(source, build):
           % (rc, sorted(r["suite"] for r in vrec)))
     fresh(empty)
     put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
-    rc, out = run(RANGE2, "--mode", "merge", "--verdict", "%s=the lead: first verdict" % ROWS2[0],
+    rc, out = run(RANGE2, "--verdict", "%s=the lead: first verdict" % ROWS2[0],
                   "%s=the lead: second verdict" % ROWS2[1])
     check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
 
-    # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
+    # ---- a row that never ran (NOADMIT) is NEVER-RAN [OWED], which no verdict answers -------------------
     fresh(unlisted)
     put(rows, "NOADMIT", "2026-01-01T10:00:01")
     rc, out = run(RANGE, "--verdict", "gi.speckle=it waited too long")
-    check(rc == 1 and "no record" in out and "no verdict recorded for gi.speckle" in out,
-          "a NOADMIT row is missing and a verdict cannot clear it (%d)" % rc)
-
-    # ---- the law, a CONTENTION-CLASS row ----------------------------------------------------------
-    fresh(listed)
-    put(rows, "FAIL", "2026-01-01T10:00:01")
-    for k in range(3): put(rows, "PASS", "2026-01-01T10:0%d:00" % (5 + k), retry=True)
-    rc, out = run()
-    check(rc == 1 and "competitor census" in out, "a contention-class red whose census shows no competition is not "
-          "cleared by 3/3 solo (TESTING_V3 §1.4) (%d)" % rc)
-    fresh(listed)
-    put(rows, "FAIL", "2026-01-01T10:00:01", box=busy)
-    put(rows, "PASS", "2026-01-01T10:05:00", retry=True)
-    put(rows, "PASS", "2026-01-01T10:06:00", retry=True)
-    rc, out = run()
-    check(rc == 1 and "2/3" in out, "a contention-class red with 2/3 solo PASS -> refused (%d)" % rc)
-    put(rows, "PASS", "2026-01-01T10:07:00", retry=True)
-    rc, out = run()
-    check(rc == 0 and "3/3 solo PASS" in out, "...3/3 -> accepted, and says why (%d)" % rc)
-    fresh(listed)
-    put(rows, "FAIL", "2026-01-01T10:00:01", box=busy)
-    for k, v in enumerate(("PASS", "FAIL", "PASS")):
-        put(rows, v, "2026-01-01T10:0%d:00" % (5 + k), retry=True)
-    rc, out = run()
-    check(rc == 1 and "SOLO retry went red" in out, "a contention-class red whose solo retries read 2/3 -> refused "
-          "(not contention: a verdict) (%d)" % rc)
+    check(rc == 1 and "NEVER-RAN [OWED]" in out and "no verdict recorded for gi.speckle" in out,
+          "a NOADMIT row never ran: owed, and a verdict cannot answer it (%d)" % rc)
 
     # ---- the tree the records came from -----------------------------------------------------------
     for name, kw in (("a DIRTY tree", {"dirty": True}), ("another tip", {"t": "0" * 40}),
