@@ -79,10 +79,17 @@ struct EngineOverrides {
 /// hand, a cold row) = no cache, the engine's default. It runs BEFORE a fixture's
 /// overrides, so a fixture that states its cache (shaderCacheDir / shaderCacheOff)
 /// always wins.
+/// THE FIXTURES' CAP: the union of every engine family's shaders outgrows the app's 256 MiB (220 MB /
+/// 1,686 shaders on one tree's night), and a save past the cap WIPES the directory — the union would go
+/// cold every few days. The harness's cache is held to 1 GiB (shadercache.fixture_warm reads it back).
+constexpr unsigned long long kFixtureShaderCacheMaxBytes = 1024ull * 1024ull * 1024ull;
+
 inline void applyHarnessDefaults(EngineConfig &cfg)
 {
-    if (const char *dir = std::getenv("JAHSHAKA_SHADER_CACHE_DIR"))
+    if (const char *dir = std::getenv("JAHSHAKA_SHADER_CACHE_DIR")) {
         cfg.shaderCacheDir = dir;
+        cfg.shaderCacheMaxBytes = kFixtureShaderCacheMaxBytes;
+    }
 }
 
 #if defined(JAHSHAKA_TEST_PLUGIN_DIR) && defined(JAHSHAKA_TEST_MEDIA_DIR)

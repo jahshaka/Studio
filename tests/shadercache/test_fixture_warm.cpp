@@ -117,6 +117,9 @@ int main()
     }
     const ShaderCacheStats one = boot("boot one, with the piece", piece);
     CHECK(one.enabled, "boot one ran with the cache on (%s)", one.dir.c_str());
+    CHECK(one.maxBytes == enginetest::kFixtureShaderCacheMaxBytes,
+          "the fixtures' union is held to the harness's cap, never the app's: maxBytes = %llu (the bar: %llu)",
+          (unsigned long long)one.maxBytes, (unsigned long long)enginetest::kFixtureShaderCacheMaxBytes);
     const ShaderCacheStats two = boot("boot two, without it", std::string());
     CHECK(two.compiledThisRun == 0, "boot two compiled nothing: compiledThisRun = %u (the bar: 0)", two.compiledThisRun);
     CHECK(two.loadedThisRun >= 80, "boot two loaded its shaders from the cache: loadedThisRun = %u (the bar: >= 80)",
