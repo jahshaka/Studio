@@ -115,7 +115,7 @@ static QJsonObject importSummaryOf(const iris::SceneNodePtr &root, const QString
             case iris::SceneNodeType::Camera: ++cameras; break;
             default: break;
             }
-            const float s = n == root ? 1.0f : scale * n->getLocalScale().x();
+            const float s = scale * n->getLocalScale().x();   // the root's own scale included
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
                 ++meshes;
                 ++scales[QString::number(double(s), 'g', 4)];

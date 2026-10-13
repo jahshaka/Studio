@@ -11,7 +11,7 @@
 //
 // The base's numbers (82d38ccb5, measured by this suite before the fix) are in each
 // row's comment: every row but the 2 m box and the opaque cube was RED there
-// (13 reds of the 15 rows on the base).
+// (14 reds of the 16 rows on the base).
 #include <QApplication>
 #include <QColor>
 #include <QDir>
@@ -157,6 +157,17 @@ int main(int argc, char **argv)
     };
     dirs(blob);
     CHECK(directional == 1, QStringLiteral("...and it is a directional light (%1)").arg(directional));
+    // ...in the engine's unit: the file's key light is the sun of 1 (its 300 % FBX
+    // Intensity is a DCC unit; the ratios between a file's lights are what is kept),
+    // with the file's colour. Base: no light at all.
+    QJsonObject sunLight;
+    std::function<void(const QJsonObject &)> findSun = [&](const QJsonObject &n) {
+        if (n.value("type").toString() == "light") sunLight = n;
+        for (const QJsonValue &c : n.value("children").toArray()) findSun(c.toObject());
+    };
+    findSun(blob);
+    const double sunI = sunLight.value("intensity").toDouble(-1);
+    CHECK(std::fabs(sunI - 1.0) < 1e-4, QStringLiteral("...a sun of intensity 1 in the engine's unit (%1)").arg(sunI));
 
     // The placed document: the fragment the importer builds, in a scene of its own.
     QTemporaryDir extract;
