@@ -2389,7 +2389,7 @@ add_dependencies(test_gi_far_sun JahshakaEngineMedia)
 # proof; the contrast and the instrument rows are merge rows (seconds).
 foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels:260:stage" "far_sun_clutter:clutter:voxels:260:stage"
                               "store_contrast:contrast:voxels:625:merge" "gather_hits_view:hits:shipped:5:merge"
-                              "cast_shadow_gi:castshadow:voxels:260:stage")
+                              "cast_shadow_gi:castshadow:voxels:260:stage" "far_sun_lamp:lamp:voxels:190:stage")
     string(REPLACE ":" ";" _far_sun_pair "${_far_sun_row}")
     list(GET _far_sun_pair 0 _far_sun_name)
     list(GET _far_sun_pair 1 _far_sun_mode)
