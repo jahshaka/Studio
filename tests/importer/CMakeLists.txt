@@ -486,3 +486,71 @@ add_test(NAME importer.extent COMMAND test_importer_extent
 set_tests_properties(importer.extent PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
 jah_no_display(importer.extent)
+
+# importer.scene — THE FBX SCENE (BISTRO-IMPORT-1, SPECS/BISTRO-FIXES-1.md stages 1-3).
+# One hand-written fixture of ours (fixtures/make_scene_fbx.py: a split specular pair,
+# a cutout, a tinted glass with one missing map, a 2 m box under a pivot chain, a
+# directional light, a camera and a Take that moves ONE node) through the real
+# pipeline; the rows are counts: maps bound and missing, alpha modes, the root's
+# name, the box's size, the light/camera nodes, one movable and the rest static.
+# Headless document graph, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+add_executable(test_importer_scene test_importer_scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
+    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
+    # the bake on the asset's import settings.
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
+    # database.cpp's link closure (same as tests/importer's other suites)
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_importer_scene PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_importer_scene PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_importer_scene PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_importer_scene PRIVATE IrisGL
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
+jah_document_graph(test_importer_scene)
+add_test(NAME importer.scene COMMAND test_importer_scene
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.scene PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
+jah_no_display(importer.scene)
+

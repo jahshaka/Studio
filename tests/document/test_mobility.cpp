@@ -181,13 +181,54 @@ int main(int argc, char **argv)
             rigged->mesh->addSkeletalAnimation("Walk", iris::SkeletalAnimation::create());
         CHECK(is(rigged, "movable/skeleton"), "a rig WITH a clip resolves movable/skeleton");
 
-        // ...and the same clip carried on an Animation rather than the asset.
+        // A SKELETAL CLIP MOVES THE NODES IT KEYS (BISTRO-IMPORT-1), never its carrier
+        // for carrying it: an imported file's clips ride the fragment root, and a Take
+        // that moves one camera made every mesh of the Bistro movable.
+        auto carrier = iris::SceneNode::create();
+        carrier->setName("Carrier");
+        root->addChild(carrier, false);
+        auto keyed = iris::SceneNode::create();
+        keyed->setName("Keyed");
+        carrier->addChild(keyed, false);
+        auto still = iris::SceneNode::create();
+        still->setName("Still");
+        carrier->addChild(still, false);
+        auto listed = iris::SceneNode::create();
+        listed->setName("Listed");
+        carrier->addChild(listed, false);
+        auto skel = iris::SkeletalAnimation::create();
+        auto *moving = new iris::BoneAnimation();
+        moving->posKeys->addKey(iris::Vec3(0, 0, 0), 0.0f);
+        moving->posKeys->addKey(iris::Vec3(1, 0, 0), 1.0f);
+        skel->addBoneAnimation("Keyed", moving);
+        auto *constant = new iris::BoneAnimation();   // listed, keys that never change
+        constant->posKeys->addKey(iris::Vec3(2, 0, 0), 0.0f);
+        constant->posKeys->addKey(iris::Vec3(2, 0, 0), 1.0f);
+        skel->addBoneAnimation("Listed", constant);
+        auto clip = iris::Animation::create("Take 001");
+        clip->setSkeletalAnimation(skel);
+        carrier->setAnimation(clip);
+        CHECK(is(carrier, "static/default"), "the clip's CARRIER resolves static (no channel keys it)");
+        CHECK(is(keyed, "movable/animation"), "the node the clip KEYS resolves movable/animation");
+        CHECK(is(still, "static/default"), "a node the clip does not name resolves static");
+        CHECK(is(listed, "static/default"), "a node named by a channel of constant keys resolves static");
+        CHECK(carrier->isStaticEligible() && !keyed->isStaticEligible(),
+              "graph-static follows the same rule: the carrier may go static, the keyed node not");
+
+        // A RIG under that clip deforms: its skin is movable/skeleton.
+        auto skin = iris::MeshNode::create();
+        skin->setMesh(testmesh::load(":assets/models/cube.obj"));
+        carrier->addChild(skin, false);
+        skin->skeleton = iris::Skeleton::create();
+        CHECK(is(skin, "movable/skeleton"), "a rig under a moving clip resolves movable/skeleton");
+
+        // ...and an EMPTY clip (a Take that moves nothing) moves nothing at all.
         auto other = iris::MeshNode::create();
         root->addChild(other, false);
-        auto clip = iris::Animation::create("Clip");
-        clip->setSkeletalAnimation(iris::SkeletalAnimation::create());
-        other->setAnimation(clip);
-        CHECK(is(other, "movable/skeleton"), "a skeletal clip on an Animation resolves the same");
+        auto empty = iris::Animation::create("Clip");
+        empty->setSkeletalAnimation(iris::SkeletalAnimation::create());
+        other->setAnimation(empty);
+        CHECK(is(other, "static/default"), "a clip that keys nothing resolves static");
     }
 
     {
