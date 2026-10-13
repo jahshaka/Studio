@@ -973,6 +973,24 @@ def case_carried_red(E):
     check(rc == 0, "round 14: ...with the lead's named verdict (runner.sh merge --door-verdict) -> the merge LANDS (%d)" % rc)
     rc, out = E.run("--mode", "push")
     check(rc == 1, "round 14: ...and the PUSH of the same is refused (the door's proof rules stay the push's) (%d)" % rc)
+    # ROUND 18: THE BUILD KIND — an entry measured under a sanitizer build (build: asan) never answers a Debug run
+    E.fresh()
+    E.defects = E.registry([dict(x, build="asan") if SPEED_ROW in x["rows"] else x for x in FIXTURE_DEFECTS])
+    pl = plan_of()
+    sv = pl["served"].get(SPEED_ROW) or {}
+    check(sv.get("state") != "known" and (SPEED_ROW in pl["run"] or sv),
+          "round 18: a Debug merge with an ASAN entry naming the row: NOT known — the row runs (or is served by its own "
+          "records), never KNOWN on another build's entry (%s)" % (pl["run"].get(SPEED_ROW) or sv.get("why") or "")[:90])
+    pl = plan_of("--build-kind", "asan")
+    check((pl["served"].get(SPEED_ROW) or {}).get("state") == "known" and SPEED_ROW not in pl["run"],
+          "round 18: ...the same under the asan tier (--build-kind asan): served KNOWN on its entry (%s)"
+          % ((pl["served"].get(SPEED_ROW) or {}).get("why") or pl.get("err") or "")[:90])
+    E.fresh()
+    E.put(ROWS, "FAIL", "2026-01-01T10:00:00")
+    E.defects = E.registry([dict(x, build="tsan") if SPEED_ROW in x["rows"] else x for x in FIXTURE_DEFECTS])
+    rc, out = E.run("--mode", "push", "--verdict", "%s=real:FIXTURE-1" % SPEED_ROW)
+    check(rc == 1 and "a tsan build's entry" in out, "round 18: a push's real:<id> of a TSAN entry at a Debug run -> "
+          "refused, the kind said (%d)" % rc)
     sc = "gi.chain_converge_scenes"
     pl = plan_of("--named", sc)
     check(sc in (pl.get("stage_close") or []) and sc not in pl["run"] and sc not in pl["served"],
