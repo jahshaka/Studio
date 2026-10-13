@@ -308,13 +308,19 @@ def speed_cases(source, build):
         S = sel([vp], revs=fake({vp: (va, va.replace(nd.group(0), nd.group(0) + "    (void)0x5a; // tsa\n", 1))}))
         check(of(S, "particles") and not of(S, "gi") and not of(S, "hdr") and len(S.selected) < 80,
               "25. an edit inside OgreView::updateParticles -> the particles rows only (%d rows)" % len(S.selected))
-    tail_ = va + "\nstatic int tsaUnnamedProbe() { return 0x5a; }\n"
+    tail_ = va + "\nstatic int tsaUnnamedThing() { return 0x5a; }\n"
     S = sel([vp], revs=fake({vp: (va, tail_)}))
     apps = [n for n in S.selected if inv0[n]["app"] and not inv0[n].get("picture") and not inv0[n].get("picture_arms")]
     pics = [n for n, t in inv0.items() if t.get("picture")]
     check(all(p in S.selected for p in pics) and len(S.selected) > 200 and not apps,
           "25. an UNNAMED function of OgreView.cpp -> every engine fixture + the picture set (%d rows), no other app row "
           "(%s)" % (len(S.selected), apps[:4]))
+    # round 15: a function the map does not name is read by its NAME's keyword first (reflect-fix-1's readSsrHistoryHdr)
+    S = sel([vp], revs=fake({vp: (va, va + "\nstatic int readSsrTsaHistory() { return 0x5a; }\n")}))
+    fams_ = {n.split(".")[0] for n in S.selected}
+    check(S.selected and "ssr" in fams_ and not fams_ & {"vr", "particles", "ui", "hdr"} and len(S.selected) < 100,
+          "25. round 15: a NEW OgreView function named by a keyword (readSsrTsaHistory: 'Ssr') -> the reflection rows "
+          "only, never every engine fixture (%d rows: %s)" % (len(S.selected), sorted(fams_)[:8]))
     # 26. (fix round items 3, 5) src/viewport/ reaches the picture set; a Jahshaka Hlms PIECE reaches Atom besides its
     # line; the fork's Hlms Pbs/Common lines reach Atom
     S = sel(["src/viewport/enginerenderdriver.cpp"])

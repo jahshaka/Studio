@@ -725,6 +725,10 @@ def _walk(path, memo):
     return out
 
 
+# the hash of the EMPTY data set (no file named, none declared): a row's data hash, never "unknown"
+EMPTY_DATA_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"   # sha256 of b""
+
+
 def data_set(test, roots, _memo=None, hashed=True):
     """THE ROW'S DATA SET: {hash | None, why | None, files {tree-or-build rel: sha}, sources {rel: argument|walked|
     declared}, dirs [tree-relative dir/file prefixes a change under which reaches the row], declared [names], none bool,
@@ -825,8 +829,9 @@ def data_set(test, roots, _memo=None, hashed=True):
     if problems:
         out.update(hash=None, why="; ".join(sorted(set(problems)))[:300])
     elif not files and not none:
-        out.update(hash=None, why="UNDECLARED: it names no data and its CMake declares none (DATA NONE when it reads "
-                                  "nothing, else the sets it reads)")
+        # A ROW THAT NAMES NO DATA AND DECLARES NONE HAS THE EMPTY DATA SET (the lead, TESTING-SPEED-A round 15): its hash
+        # is the empty set's — equal while it still names none — never "unknown" (its records then never served)
+        out.update(hash=EMPTY_DATA_HASH, why=None, undeclared=True)
     else:
         out.update(hash=_sha256("".join(f"{k}\0{v}\n" for k, v in sorted(files.items())).encode()), why=None)
     return out

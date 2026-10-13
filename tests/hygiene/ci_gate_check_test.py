@@ -325,6 +325,30 @@ def main(source, build):
           and not os.path.exists(os.path.join(wt, "shot.png")) and os.path.exists(old),
           "renders: a run with a red MOVES them to .evidence/output/<run>/renders/<dir>/ (%s)" % msg)
 
+    # ---- ROUND 15: a record of a row that names no data — THE EMPTY SET, never "unknown" ---------------------------
+    import importlib.util as ilu
+    sys.path.insert(0, os.path.join(source, "scripts"))
+    spec = ilu.spec_from_file_location("cgc_r15", os.path.join(source, "scripts", "ci_gate_check.py"))
+    cgc = ilu.module_from_spec(spec); spec.loader.exec_module(cgc)
+    import gate_graph as gg_
+    srv = cgc.Server.__new__(cgc.Server)
+    srv.fork, srv.tip_fork = set(), None
+    decl = {"hash": "d" * 64}
+    srv.facts = {"x.row": {"declaration": decl, "data_hash": gg_.EMPTY_DATA_HASH, "data_why": None}}
+    old = {"tier": "merge", "declaration": decl, "data_hash": None,
+           "nulls": {"data_hash": "UNDECLARED: it names no data and its CMake declares none (DATA NONE ...)"}}
+    check(srv.record_why_not(("x.row", None), old, None) is None,
+          "round 15: an older record of a row naming no data (data_hash null, UNDECLARED) is the EMPTY set's — "
+          "it serves while the row still names none")
+    srv.facts["x.row"]["data_hash"] = "e" * 64
+    check(srv.record_why_not(("x.row", None), old, None) == "its DATA changed since the record",
+          "round 15: ...and the row naming data since -> its DATA changed (run)")
+    cgc.UNCOMPARABLE.clear()
+    srv.facts["x.row"].update(data_hash=None, data_why="tests/x is absent")
+    why = srv.record_why_not(("x.row", None), dict(old, data_hash="f" * 64, nulls={}), None)
+    check(why == "a data hash is unknown (never equal)" and cgc.UNCOMPARABLE.get("x.row") == "tests/x is absent",
+          "round 15: a record that truly cannot be compared is counted ONCE in the plan's `uncomparable`, with its why")
+
     subprocess.run(["rm", "-rf", scratch])
     if FAILURES:
         print("gate.ci_check: FAILED (%d)" % len(FAILURES)); return 1

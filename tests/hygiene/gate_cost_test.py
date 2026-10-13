@@ -1223,10 +1223,10 @@ set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;f
     check(len(dr.get("data_hash") or "") == 64 and "data_hash" not in (dr.get("nulls") or {}),
           "...the DATA HASH of the file its command names (dat.sh; the absent output it writes is not data)")
     gn = ga.get("nulls") or {}
-    check(ga.get("data_hash") is None and "UNDECLARED" in gn.get("data_hash", "")
+    check(ga.get("data_hash") == __import__("hashlib").sha256(b"").hexdigest() and "data_hash" not in gn
           and ga.get("tip", {}).get("built") and "built_from" not in gn and "no DISPLAY" in gn.get("display", ""),
-          "...a row naming no data and declaring none is UNKNOWN (RUNNER-A2B: null, its reason; never served); a field "
-          "that cannot be known is null WITH ITS REASON in `nulls` (gpu.a: %s)" % gn)
+          "...a row naming no data and declaring none has THE EMPTY DATA SET's hash (round 15: never unknown, served "
+          "while it still names none); a field that cannot be known is null WITH ITS REASON in `nulls` (gpu.a: %s)" % gn)
     # P12: THE TREE ROOT IS STRIPPED — the same toy configured at another path keys the same; its data moving re-keys
     # (two FRESH copies of the toy — earlier sections rewrite the first toy's CMakeLists)
     facts = []
@@ -1240,8 +1240,10 @@ set_tests_properties(fx.parent.inspector PROPERTIES FIXTURES_REQUIRED "fx_home;f
         facts.append(rl.row_facts(tb2)[0])
     f1, f2 = facts
     import hashlib as hl_
-    check(f1.get("dat.none", {}).get("data_hash") == hl_.sha256(b"").hexdigest() and f1["gpu.a"]["data_hash"] is None,
-          "DATA NONE is a KNOWN empty set (servable); no declaration and no data is unknown (RUNNER-A2B)")
+    check(f1.get("dat.none", {}).get("data_hash") == hl_.sha256(b"").hexdigest()
+          and f1["gpu.a"]["data_hash"] == hl_.sha256(b"").hexdigest(),
+          "DATA NONE is a KNOWN empty set (servable); a row naming no data and declaring none has the EMPTY set too "
+          "(round 15: never unknown)")
     check(f1.get("dat.row") and len(f1) == len(f2) and all(f1[k]["declaration"] == f2.get(k, {}).get("declaration") for k in f1)
           and f1["dat.row"]["data_hash"] == f2["dat.row"]["data_hash"],
           "the declaration and the data hash do not depend on WHERE the tree is (root-stripped, P12; %d rows)" % len(f1))

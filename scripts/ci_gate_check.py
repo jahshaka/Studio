@@ -797,6 +797,10 @@ def fork_rows(gs, build, graph, inv):
     return {n for n, t in inv.items() if (t.get("exes") or set()) & fe or (t.get("kind") == "app" and app in fe)}
 
 
+# THE RECORDS THAT CANNOT BE COMPARED (round 15): {row: why} — a select says them ONCE, counted (plan()'s `uncomparable`)
+UNCOMPARABLE = {}
+
+
 class Server:
     """THE KEY, as one object per tip: the facts at C (the build's rows: labels, declaration, data hash), the fork rows,
     the registered nondeterminism, and the selections A..C (cached)."""
@@ -841,9 +845,15 @@ class Server:
             return "its record carries no declaration (unknown is never equal: a record before schema 3)"
         if d != (f.get("declaration") or {}).get("hash"):
             return "its DECLARATION changed since the record"
-        if not r.get("data_hash") or not f.get("data_hash"):
+        rd = r.get("data_hash")
+        if not rd and str((r.get("nulls") or {}).get("data_hash") or "").startswith("UNDECLARED"):
+            # a record written before round 15: its row named no data and declared none — THE EMPTY SET's hash
+            import gate_graph
+            rd = gate_graph.EMPTY_DATA_HASH
+        if not rd or not f.get("data_hash"):
+            UNCOMPARABLE[key[0]] = (f.get("data_why") if not f.get("data_hash") else None) or "the record carries none"
             return "a data hash is unknown (never equal)"
-        if r["data_hash"] != f["data_hash"]:
+        if rd != f["data_hash"]:
             return "its DATA changed since the record"
         return None
 
@@ -1519,6 +1529,7 @@ def plan(rng, build, gs=None, named=(), lane=None, full=False):
     ps = passes(gs, S.inv, run_rows, named, subsets)
     return {"tip": tip_sha, "base": base_sha, "irisgl": pin, "fork": fork_pin(gs, pin), "what": what,
             "stage_close": sc_rows,
+            "uncomparable": dict(sorted(UNCOMPARABLE.items())),
             "measuring_run": measuring, "fork_rows": sorted(server.fork), "full": bool(full or S.full_tier),
             "fallback": list(S.fallback), "selected": sorted(sel_keys, key=str), "universe": len(universe), "run": run,
             "served": served, "selections": server.computed, "passes": ps,
