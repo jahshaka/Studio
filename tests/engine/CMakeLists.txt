@@ -285,6 +285,23 @@ if(OGRE_NEXT_VULKAN_RS_LIB AND Vulkan_FOUND)
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true;VK_KHRONOS_VALIDATION_DEBUG_ACTION=VK_DBG_LAYER_ACTION_LOG_MSG;VK_KHRONOS_VALIDATION_REPORT_FLAGS=error,warn;VK_KHRONOS_VALIDATION_LOG_FILENAME=${_jah_vvl_log}")
 endif()
 
+# engine.gpu_substrate — THE SUBSTRATE (ENGINE-UPGRADE-2 stage 1): one writer per SceneManager,
+# one walk per frame (the pre-frame GI readers and the frame's own read share it), Atom's
+# words step once a frame, one instance-table copy per frame in flight. Counts, not clocks.
+add_executable(test_engine_gpu_substrate test_engine_gpu_substrate.cpp)
+set_target_properties(test_engine_gpu_substrate PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_gpu_substrate PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_gpu_substrate PRIVATE JahshakaEngine)
+add_dependencies(test_engine_gpu_substrate JahshakaEngineMedia)
+jah_gpu_row(engine.gpu_substrate CLASS engine COMMAND test_engine_gpu_substrate
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpu_substrate PROPERTIES TIMEOUT 60 LABELS "engine")
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
@@ -356,6 +373,7 @@ foreach(_row_frames
         "engine.frame_catch=27"
         "engine.gi_scan=162"
         "engine.gpu_scene=58"
+        "engine.gpu_substrate=94"   # counted from the source (4 + 8 + 2 x 31 + 4 + 4 + 12)
         "engine.headless=0"
         "engine.lod_hysteresis=265"
         "engine.media_check=0"
