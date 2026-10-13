@@ -490,18 +490,9 @@ class NinjaGraph:
 
 
 def ctest_inventory(build):
-    """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree.
-    ctest opens <build>/Testing/Temporary/LastTest.log even for a listing, which TRUNCATES the log
-    of a gate still running in that dir (the suites audit proved it, GATE_AND_RIG) — and the
-    selector's own guards list the inventory from inside a gate. The copy answers the same
-    (backtraces and commands are absolute paths) and leaves the build dir's log alone.
-    Returns (stdout, returncode).
-
-    ONE LISTING PER BUILD STATE (TESTING-CLEANUP-2B H8b): the listing is cached in the build dir
-    (.gate-scope-inventory.json), keyed on the build dir's spelling, every CTestTestfile.cmake's mtime and size
-    and the mtime of ninja's log (a build changes which commands exist: ctest leaves out the command of an
-    executable that is not built yet). source.gate_scope_rules alone ran 34 selections a run, each one copying
-    the tree and running ctest."""
+    """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree (a listing in the
+    build dir itself truncates a running ctest's LastTest.log), cached per build state in .gate-scope-inventory.json
+    (every CTestTestfile's mtime and size, ninja's log). Returns (stdout, returncode)."""
     import hashlib
     import json as _json
     import shutil
@@ -535,7 +526,10 @@ def ctest_inventory(build):
             os.makedirs(os.path.join(tmp, rel), exist_ok=True)
             shutil.copy2(os.path.join(build, rel, "CTestTestfile.cmake"), os.path.join(tmp, rel, "CTestTestfile.cmake"))
         r = subprocess.run(["ctest", "--show-only=json-v1"], cwd=tmp, capture_output=True, text=True)
-        if r.returncode == 0 and r.stdout.strip():
+        # a listing with a row whose command is missing (an executable mid-link, a build killed half-way) is never
+        # cached: the next listing, after the build, must see the commands
+        if r.returncode == 0 and r.stdout.strip() and '"command"' in r.stdout and all(
+                "command" in t for t in _json.loads(r.stdout).get("tests", [])):
             try:
                 with open(cache + ".tmp", "w") as fh:
                     _json.dump({"key": key, "stdout": r.stdout}, fh)

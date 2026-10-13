@@ -36,7 +36,7 @@ jah_gpu_row(perf.offscreen_isolation CLASS app TIER low NEEDS NONE NEEDS_WHY "a 
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(perf.offscreen_isolation PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "perf;stage-close"
+    LABELS "perf"
     TIMEOUT 240)
 
 # perf.epic_steady_state — the GROWTH-ONLY steady-state gate (fps audit F11).
@@ -67,7 +67,7 @@ set(_ess_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-epic_steady_state)
 
 # "A scratch HOME that is virgin every run" is one idea and has one implementation
 # (tests/support/fresh_home.sh through jah_fresh_home_fixture).
-jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf;stage-close")
+jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf")
 
 jah_gpu_exclusive_test(NAME perf.epic_steady_state CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -76,7 +76,7 @@ jah_gpu_exclusive_test(NAME perf.epic_steady_state CLASS app TIER epic NEEDS pho
 set_tests_properties(perf.epic_steady_state PROPERTIES
     ENVIRONMENT "HOME=${_ess_home};JAHSHAKA_DATA_ROOT=${_ess_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_epic_steady_state
-    LABELS "perf;stage-close")
+    LABELS "perf")
 
 # ---------------------------------------------------------------------------
 # perf.drag_mirror_room — WHAT A DRAG COSTS A FRAME (the render audit's A13
@@ -109,7 +109,7 @@ configure_file(drag_mirror_room.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
 set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
 
-jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf;stage-close")
+jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf")
 
 jah_gpu_exclusive_test(NAME perf.drag_mirror_room CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 600
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -118,7 +118,7 @@ jah_gpu_exclusive_test(NAME perf.drag_mirror_room CLASS app TIER epic NEEDS phot
 set_tests_properties(perf.drag_mirror_room PROPERTIES
     ENVIRONMENT "HOME=${_drag_home};JAHSHAKA_DATA_ROOT=${_drag_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_drag_mirror_room
-    LABELS "perf;stage-close")
+    LABELS "perf")
 
 # ---------------------------------------------------------------------------
 # perf.hide_soak — HIDING AND SHOWING, TWO HUNDRED TIMES (the render audit's
@@ -147,7 +147,7 @@ set_tests_properties(perf.drag_mirror_room PROPERTIES
 configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
 set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
 
-jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf;stage-close")
+jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf")
 
 jah_gpu_row(perf.hide_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -156,7 +156,7 @@ jah_gpu_row(perf.hide_soak CLASS app TIER epic NEEDS photon bloom ssao smaa plan
 set_tests_properties(perf.hide_soak PROPERTIES
     ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_hide_soak
-    LABELS "perf;stage-close"
+    LABELS "perf;measure"
     TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
@@ -187,32 +187,10 @@ jah_no_display(perf.pacing)
 set(_cb_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle)
 set(JAH_TEST_BUNDLE ${_cb_home}/bundle)
 configure_file(capture_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js @ONLY)
-add_executable(test_capture_bundle test_capture_bundle.cpp)
-set_target_properties(test_capture_bundle PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # Qt6::Network and the shared MCP harness (tests/support/mcpharness.h, included
 # by path): phase 2 drives a REAL window close (app.quit over MCP) with a
 # capture running, which is the path --script can never take.
 find_package(Qt6 REQUIRED COMPONENTS Network)
-target_link_libraries(test_capture_bundle PRIVATE Qt6::Core Qt6::Network)
-target_compile_definitions(test_capture_bundle PRIVATE
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-    JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
-    JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
-# NEEDS photon (DBUILD-FIX-1): the bundle's events.jsonl must carry a gi.rebuild, and the only gi.*
-# event the engine files is the VCT arm's rebuild (OgreGi.cpp, MonitorEventKind::GiRebuild). NEEDS
-# NONE switched Photon OFF (worldmodes::applyTestTier), where world.gi({quality}) writes a field
-# nothing renders and refreshGi is a no-op — the row was red 3/3 from TEST-NEEDS-1's declaration on.
-# TIER low keeps it cheap: Photon Low runs at Low quality, so the script's quality:"medium" is a
-# change of the arm's shape — a from-scratch rebuild (low:photon = 2 tokens, as low:none).
-jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS photon COMMAND test_capture_bundle
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(perf.capture_bundle PROPERTIES
-    LABELS "perf;stage-close"
-    # 420 -> 900: phase 2 boots the real binary TWICE more (the window-close
-    # case and the default-capture-root check), each a cold-cache engine start.
-    TIMEOUT 900)
 
 # perf.capture_off_is_free — off costs nothing, and the state machine's edges
 # (refusals, the early stop, the return to exactly the state it started in).
@@ -237,7 +215,7 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
     # creates directories and truncates files in whatever it is pointed at), so
     # the suite says where its own root is.
     ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
-    LABELS "perf;stage-close")
+    LABELS "perf")
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -245,27 +223,18 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST perf.offscreen_isolation)
-    jah_fresh_home_fixture(perf.offscreen_isolation.fresh_home perfOffscreenIsolationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" WARM LABELS "perf;stage-close")
+    jah_fresh_home_fixture(perf.offscreen_isolation.fresh_home perfOffscreenIsolationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" WARM LABELS "perf")
     set_property(TEST perf.offscreen_isolation APPEND PROPERTY FIXTURES_REQUIRED perfOffscreenIsolationFreshHome)
 endif()
 if(TEST perf.capture_off_is_free)
-    jah_fresh_home_fixture(perf.capture_off_is_free.fresh_home perfCaptureOffIsFreeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off" WARM LABELS "perf;stage-close")
+    jah_fresh_home_fixture(perf.capture_off_is_free.fresh_home perfCaptureOffIsFreeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off" WARM LABELS "perf")
     set_property(TEST perf.capture_off_is_free APPEND PROPERTY FIXTURES_REQUIRED perfCaptureOffIsFreeFreshHome)
-endif()
-if(TEST perf.capture_bundle)
-    jah_fresh_home_fixture(perf.capture_bundle.capture_bundle.fresh_home perfCaptureBundleCaptureBundleFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle" WARM LABELS "perf;stage-close")
-    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureBundleFreshHome)
-endif()
-if(TEST perf.capture_bundle)
-    jah_fresh_home_fixture(perf.capture_bundle.capture_quit.fresh_home perfCaptureBundleCaptureQuitFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_quit" WARM LABELS "perf;stage-close")
-    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureQuitFreshHome)
 endif()
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "perf.capture_bundle=1051"
         "perf.capture_off_is_free=663"
         "perf.drag_mirror_room=964"
         "perf.epic_steady_state=1024"

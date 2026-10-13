@@ -164,9 +164,9 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.testing_rules)
-    # source.row_budget — A ROW RENDERS SECONDS (TESTING-SPEED-A item 7): a kept merge row's price (scripts/gate-times.txt)
-    # within its budget (its own in row_budgets.txt, or fixture 10 s / app 60 s). RED BY DESIGN until TESTING-SPEED-B:
-    # the 45 KEEP:rewrite rows, printed with the lane that owes them.
+    # source.row_budget — A ROW IS A SECONDS-LONG GUARD (DOCS/PROCESS.md): every kept guard's price (scripts/gate-times.txt)
+    # within its class's budget (a fixture or CPU row 10 s, an app row 60 s); a `measure` row runs at the ship only. One
+    # rule, no "by design": a guard over its budget is red.
     add_test(NAME source.row_budget
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_budget.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")

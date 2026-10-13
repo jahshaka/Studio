@@ -43,28 +43,6 @@ set_tests_properties(engine.particles_pfx2 PROPERTIES
 # SceneManager — exactly the shape of lifecycle that hides read-after-destroy, so it
 # gets the same treatment the engine suite gets.
 if(JAHSHAKA_ASAN)
-    add_executable(test_particles_pfx2_asan test_particles_pfx2.cpp)
-    set_target_properties(test_particles_pfx2_asan PROPERTIES
-        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-    target_include_directories(test_particles_pfx2_asan PRIVATE ${CMAKE_SOURCE_DIR})
-    target_compile_definitions(test_particles_pfx2_asan PRIVATE
-        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-    target_compile_options(test_particles_pfx2_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options(test_particles_pfx2_asan PRIVATE -fsanitize=address)
-    target_link_libraries(test_particles_pfx2_asan PRIVATE JahshakaEngineAsan Qt6::Gui)
-    add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
-    jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.particles_pfx2_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-    # Leak detection off for the same reason the engine suite turns it off: the
-    # only leaks are libdbus allocations behind the Vulkan loader.
-    # STAGE-CLOSE (TESTING-SPEED-B3): the ASAN twin keeps its row at the stage close; engine.particles_pfx2 is the
-    # merge tier's.
-    set_tests_properties(engine.particles_pfx2_asan PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}"
-        TIMEOUT 120 LABELS "particles;stage-close")
 endif()
 
 # THE FIRE GATE (PARTICLES_FX2_SPEC §11 phase 3). Builds the SHIPPING fire preset

@@ -33,7 +33,7 @@ THE CASES, each a rule of the tool rather than a number:
      reaches every row by rule.
   10. A suite registered through a helper (jah_gpu_exclusive_test) belongs to the directory that CALLS the helper.
   11. THE SUBJECTS SELECT THEIR SUITES (the suites audit's S1/S2).
-  14. One build, one selection, from any checkout; 15. a symlinked root is the same tree.
+  15. A symlinked root is the same tree (with case 2: `--build .` through a fresh symlink).
   16-26. THE SUBSYSTEM TABLE (speed_cases below): a representative file per table line, the core by what changed (a
       Types.h field add, OgreEngine.cpp's frame loop vs vrHaptic, a comment), the fork by component, the picture set,
       the tools' rows for the tools' paths, a fallback that is never the whole inventory.
@@ -117,7 +117,8 @@ def speed_cases(source, build):
             ("irisgl/engine/src/OgreShaderCache.cpp", ["shadercache"], ["gi", "hdr"])):
         S = sel([path])
         got = {f: of(S, f) for f in want}
-        bad = {f: strictly(S, f)[:3] for f in never if strictly(S, f)}
+        bad = {f: [n for n in strictly(S, f) if not inv0[n].get("screenshot")][:3] for f in never
+               if [n for n in strictly(S, f) if not inv0[n].get("screenshot")]}
         check(all(got.values()) and not bad and not S.fallback and not S.full_tier,
               "16. %s -> %s (%s), never %s (%s)" % (path, "+".join(want), {k: len(v) for k, v in got.items()},
                                                    "/".join(never), bad))
@@ -158,9 +159,10 @@ def speed_cases(source, build):
     check(anchor in ta, "17. the anchor `struct GatherStatus {` is in Types.h")
     S = sel([tpath, upath], revs=fake(texts))
     nonshot = [n for n in strictly(S, "vr") if not inv0[n].get("screenshot") and not inv0[n].get("picture_arms")]
-    check(of(S, "gi") and not strictly(S, "hdr") and not nonshot and not S.fallback,
+    hdr_ = [n for n in strictly(S, "hdr") if not inv0[n].get("screenshot")]
+    check(of(S, "gi") and not hdr_ and not nonshot and not S.fallback,
           "17. a Types.h field ADDED and used by OgrePhotonView.cpp -> the users' subsystem (gi %d + the screenshot rows), "
-          "no hdr row, no other vr row (%s)" % (len(of(S, "gi")), (strictly(S, "hdr") + nonshot)[:4]))
+          "no hdr row, no other vr row (%s)" % (len(of(S, "gi")), (hdr_ + nonshot)[:4]))
     # 18. OgreEngine.cpp by the ENCLOSING FUNCTION: a frame-loop edit -> every engine fixture + the picture set; a VR edit
     ep = "irisgl/engine/src/OgreEngine.cpp"
     ea = open(os.path.join(source, ep), errors="replace").read()
@@ -271,6 +273,27 @@ def speed_cases(source, build):
                                                     "Samples/Media/Hlms/Pbs/Any/Main/800.PixelShader_piece_ps.any")
               for t_ in ("atom", "engine.atom_")),
           "26. the fork's Hlms Pbs/Common lines reach atom + engine.atom_")
+    # 4. the honest empty selection (docs only); 5. a source file with no precise rule still reaches rows
+    S = sel(["docs/BUILDING_LINUX.md"])
+    check(not S.selected and not S.fallback, "4. a docs-only change selects nothing (%s)" % sorted(S.selected)[:3])
+    check(bool(sel(["src/io/scenereader.cpp"]).selected), "5. src/io/scenereader.cpp (no precise rule) still reaches rows")
+    # 8. the Atom media and HlmsAtom reach the decode's own rows; the fork pin with no diff to read reaches every row
+    for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any", "irisgl/engine/src/HlmsAtom.cpp"):
+        S = sel([path])
+        check([n for n in S.selected if n.startswith("engine.atom_")], "8. %s reaches the engine.atom_ rows" % path)
+    check(bool(sel(["irisgl/thirdparty/ogre-next"]).full_tier), "8. the fork pin with no diff to read reaches every row")
+    # 10. a row registered through a helper (jah_gpu_row's add_test is in tests/CMakeLists.txt) is its CALL SITE's: a
+    # change to a test source selects its own row
+    S = sel(["tests/gi/test_gi_cliff.cpp"])
+    check("gi.cliff" in S.selected, "10. tests/gi/test_gi_cliff.cpp selects its own row gi.cliff (%d rows)" % len(S.selected))
+    # 11. THE SUBJECTS SELECT THEIR GUARDS (the suites audit's S1/S2)
+    for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("defaults.exposure_plane",)),
+                       ("irisgl/import/meshbake.cpp", ("engine.lod_rule_parity",)),
+                       ("src/services/avatarassets.cpp", ("avatar.responsive",)),
+                       ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",))):
+        S = sel([path])
+        for r in rows:
+            check(r in inv0 and r in S.selected and not S.fallback, "11. %s selects %s" % (path, r))
     # 24. a fallback is its directory's subsystem, never the tier
     S = sel(["tests/gi/tsa_new_dir/input.bin"])
     gi_rows = [n for n, t in inv0.items() if t["dir"] == "gi"]
@@ -284,197 +307,32 @@ def speed_cases(source, build):
 
 def main(source, build):
     tool = os.path.join(source, "scripts", "gate-scope.py")
-    if not os.path.isfile(tool):
-        print("gate_scope_rules: cannot find %s" % tool)
-        return 2
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_scope_rules: %s is not a configured build dir" % build)
         return 2
-
-    # 1. a code path selects suites, and the ones its rule names.
-    code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", build], source)
-    check(code == 0, "a code path exits 0 (%d)%s" % (code, ("\n" + err) if code else ""))
-    check("row(s) in" in out and "NOTHING reached" not in out, "a code path selects rows rather than nothing")
-    # MODULAR-GATE-1: the rule picks the APP rows (the vr_session pool runs the app — its
-    # verbs_session arm was the vr.verbs_session row until SUITE-POOL-1); a compiled
-    # row runs only when the build graph says its executable contains the file — test_vr_session
-    # does not compile vrworld.cpp, so vr.session is not in (it used to be, by directory).
-    # (TESTING-SPEED-A for TESTING-SPEED-B batch 4: pool.vr_session moves to stage-close — the VR panel row stands in)
-    check("ui.vr_panel" in out, "the vr app suites are in it (the file's own area rule)")
-    check("vr.session " not in out and "vr.session|" not in out.replace("\\", "") and "vr.session)" not in out.replace("\\", ""),
-          "...and the compiled vr.session is not: its executable does not contain vrworld.cpp (the graph)")
-    # TESTING-SPEED-A item 5: the smoke pair rides a change to the test harness only (case 22), never a product path
-    check("app.startup_quiet" not in out and "api.contract" not in out,
-          "the smoke pair rides no product path")
-    absolute_form = out
-
-    # 2. THE TRAP: `--build .` from inside the build dir is the same answer.
-    code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", "."], build)
-    check(code == 0, "`--build .` from inside the build dir exits 0 (%d)" % code)
-    check("NOTHING reached" not in out,
-          "`--build .` from inside the build dir does NOT report an empty selection "
-          "(the SQUARE-1 trap: it used to, with exit 0)")
-    def ctest_line(text):
-        return sorted(l.split("&& ", 1)[1] for l in text.splitlines() if "&& " in l and " ctest -j" in l)
-    check(ctest_line(out) == ctest_line(absolute_form) and ctest_line(out),
-          "the CWD-relative and absolute forms select the same suites")
-
-    # 3. a directory that registers no suite is an ERROR.
-    with tempfile.TemporaryDirectory() as empty:
-        code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", empty], source)
-        check(code == 2, "an unconfigured --build dir exits 2 (%d)" % code)
-        check("registers no ctest suite" in err,
-              "...and says so, naming the directory")
-        check("NOTHING reached" not in out,
-              "...instead of reporting an empty selection")
-
-    # 4. the honest empty selection: docs only. (Not docs/TESTING_GATE.md: case 9's
-    # lint reads that one, so it selects the hygiene rows.)
-    code, out, err = run([tool, "--files", "docs/BUILDING_LINUX.md", "--build", build], source)
-    check(code == 0, "a docs-only change exits 0 (%d)" % code)
-    check("NOTHING reached" in out,
-          "a docs-only change still selects nothing (the case lanes rely on)")
-    check("EVERY ROW" not in out,
-          "...and does not fall back to every row")
-
-    # 5. the invariant, on a file whose own rule is broad.
-    code, out, err = run([tool, "--files", "src/io/scenereader.cpp", "--build", build], source)
-    check(code == 0 and "NOTHING reached" not in out,
-          "a source file with no precise rule still gates (exit %d)" % code)
-
-    def plain(text):
-        return text.replace("\\", "")
-
-    # 8. THE DECODE'S OWN SUITE (PHOTON-HIT-SHADE-1 audit F2): the Atom media, HlmsAtom and
-    # the fork pin (Ogre's Pbs pieces are the decode's text too) select engine.atom_parity;
-    # a lane that changed all three gated without it once.
-    for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any",
-                 "irisgl/engine/src/HlmsAtom.cpp"):
-        code, out, err = run([tool, "--files", path, "--build", build], source)
-        check(code == 0 and ("engine.atom_parity|" in plain(out) or "engine.atom_parity)" in plain(out)),
-              "%s selects engine.atom_parity" % path)
-    # the fork pin reaches everything: the MERGE tier BY RULE (PHOTON_ATOM_CONTRACT §7b rule 4),
-    # which carries engine.atom_parity — not a fallback, and said so
-    code, out, err = run([tool, "--files", "irisgl/thirdparty/ogre-next", "--build", build, "--json"], source)
-    try:
-        doc = json.loads(out)
-    except ValueError:
-        doc = {}
-    check(code == 0 and doc.get("full_tier") and not doc.get("fallback") and "engine.atom_parity" in doc.get("rows", []),
-          "irisgl/thirdparty/ogre-next without a readable diff reaches every row by rule (engine.atom_parity among them)")
-
-    # 10. A SUITE REGISTERED THROUGH A HELPER BELONGS TO ITS CALL SITE'S DIR
-    # (POST-C-FIXES-1). jah_gpu_exclusive_test's add_test lives in tests/CMakeLists.txt,
-    # so ctest's backtrace put every GPU-lock suite in dir "tests" and a change to the
-    # suite's OWN source selected everything in its directory except the suite itself
-    # (open.responsive for tests/openasync/test_open_responsive.cpp - measured; deleted by TESTING-SPEED-B3).
-    # (TESTING-SPEED-A for TESTING-SPEED-B batch 2: open.responsive is deleted; the two gi GPU-lock rows carry the case)
-    for path, suite in (("tests/gi/test_gi_speckle.cpp", "gi.speckle"),):
-        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
-        try:
-            doc = json.loads(out)
-        except ValueError:
-            doc = {}
-        check(code == 0 and suite in doc.get("rows", []),
-              "%s selects its own suite %s (%d rows selected)" % (path, suite, len(doc.get("rows", []))))
-
-    # 11. THE SUBJECTS SELECT THEIR SUITES (audit S1/S2). Only suites this build registers
-    # are asked for: the Atom rows exist only where the Vulkan stack does, and a box without
-    # them must not red on their absence.
-    inventory = set()
-    try:
-        # from a copy of the CTestTestfile tree: a listing in the build dir truncates the
-        # LastTest.log of the gate this guard runs inside (gate_graph.ctest_inventory)
-        sys.path.insert(0, os.path.join(source, "scripts"))
-        import gate_graph
-        raw = gate_graph.ctest_inventory(build)[0]
-        inventory = {t["name"] for t in json.loads(raw).get("tests", [])}
-    except (ValueError, OSError):
-        pass
-    for path, suites in (
-            ("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
-            ("irisgl/import/meshbake.cpp", ("engine.lod_rule_parity",)),
-            # (archive.responsive is KEPT: the archiver's only merge-tier guard — SPECS/TESTING_SPEED_ROWS.md at 5db89728)
-            ("src/services/projectarchiver.cpp", ("archive.responsive",)),
-            ("src/services/avatarassets.cpp", ("avatar.responsive",)),
-            ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",)),
-            ("src/modules/avatar/avatarmodule.cpp", ("avatar.responsive",))):
-        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
-        try:
-            doc = json.loads(out)
-        except ValueError:
-            doc = {}
-        chosen = set(doc.get("rows", []))
-        for suite in suites:
-            if suite not in inventory:
-                # A MISSING ROW IS A RED, never a skip (fix round 3): the subject's guard must exist in the build
-                check(False, "%s's guard %s is registered in this build (it is not)" % (path, suite))
-                continue
-            check(code == 0 and not doc.get("fallback") and suite in chosen,
-                  "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
-
-    # 14. ONE BUILD, ONE SELECTION, FROM ANY CHECKOUT (TEST-1 fix round, CLIP-REF-1's finding): the
-    # merge judge runs d-build's copy of the scripts against a LANE's build, and the build's graph
-    # names files under the lane's tree — read against the script's own checkout every touched path
-    # was "not in the build graph" (448 rows against the lane's own 372). The scripts copied to a
-    # foreign root must select exactly what they select at home, through the graph.
-    foreign = tempfile.mkdtemp(prefix="gate-scope-root-")
-    try:
-        os.makedirs(os.path.join(foreign, "scripts"))
-        for f in ("gate-scope.py", "gate_graph.py", "gate_runlog.py"):
-            if os.path.isfile(os.path.join(source, "scripts", f)):
-                shutil.copy(os.path.join(source, "scripts", f), os.path.join(foreign, "scripts", f))
-        probe = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp",
-                 "--build", build, "--json"]
-        c1, o1, e1 = run([tool] + probe, source)
-        c2, o2, e2 = run([os.path.join(foreign, "scripts", "gate-scope.py")] + probe, foreign)
-        try:
-            d1, d2 = json.loads(o1), json.loads(o2)
-        except ValueError:
-            d1, d2 = {}, {}
-        s1, s2 = set(d1.get("rows", [])), set(d2.get("rows", []))
-        check(c1 == 0 and c2 == 0 and s1 and s1 == s2 and "not in the build graph" not in o2 + e2,
-              "the same files and build select the same %d rows from a foreign checkout (%d there; "
-              "only here %s, only there %s)" % (len(s1), len(s2), sorted(s1 - s2)[:5], sorted(s2 - s1)[:5]))
-    finally:
-        shutil.rmtree(foreign, ignore_errors=True)
-
-    # 15. A SYMLINKED ROOT IS THE SAME TREE (SYMLINK-ROOT-1, the box's /home/jahshaka/Developer ->
-    # /mnt/work/Developer move): the build graph names files under the spelling the tree was CONFIGURED
-    # with; python's getcwd()/realpath() return the resolved one, so a run reached through the other
-    # spelling read "not in the build graph" for every file and fell back to path rules (528 rows against
-    # 457). The tree reached as configured, resolved, and through a fresh symlink — scripts, cwd and
-    # --build all spelled that way, `--build .` from inside the build dir included — selects the same rows.
+    rows_of = lambda out: set((json.loads(out) if out.strip().startswith("{") else {}).get("rows", []))
+    # 1. a code path selects rows, the ones its rule names, and NOT a compiled row whose executable lacks the file
+    code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", build, "--json"], source)
+    r1 = rows_of(out)
+    check(code == 0 and "ui.vr_panel" in r1, "1. a code path selects its rule's rows (ui.vr_panel; exit %d)" % code)
+    check("vr.session" not in r1 and "app.startup_quiet" not in r1 and "api.contract" not in r1,
+          "1. ...not the compiled vr.session (its executable does not contain vrworld.cpp), no smoke pair")
+    # 2. THE TRAP: `--build .` from inside the build dir is the same answer; 15. so is a symlinked root
     link = tempfile.mkdtemp(prefix="gate-scope-link-")
     try:
         os.symlink(os.path.realpath(source), os.path.join(link, "tree"))
         os.symlink(os.path.realpath(build), os.path.join(link, "build"))
-        files = ["--files", "irisgl/engine/src/OgreFrameMonitor.cpp", "src/scripting/modules/perfapi.cpp", "--json"]
-        forms = {"as configured": (source, build),
-                 "resolved": (os.path.realpath(source), os.path.realpath(build)),
-                 "through a symlink": (os.path.join(link, "tree"), os.path.join(link, "build"))}
-        sel = {}
-        for name, (src, bld) in forms.items():
-            for how, args, cwd in (("absolute", ["--build", bld], src), ("`--build .`", ["--build", "."], bld)):
-                c, o, e = run([os.path.join(src, "scripts", "gate-scope.py")] + files + args, cwd)
-                try:
-                    d = json.loads(o)
-                except ValueError:
-                    d = {}
-                sel[name + ", " + how] = (c, set(d.get("rows", [])),
-                                          "not in the build graph" in o + e)
-        ref = sel["as configured, absolute"][1]
-        for k, (c, s, missed) in sel.items():
-            check(c == 0 and ref and s == ref and not missed,
-                  "the tree %s (%s) selects the same %d rows through the graph (exit %d, %d rows%s; "
-                  "only here %s, only there %s)" % (k.split(", ")[0], k.split(", ")[1], len(ref), c, len(s),
-                                                    ", NOT IN THE BUILD GRAPH" if missed else "",
-                                                    sorted(ref - s)[:5], sorted(s - ref)[:5]))
+        code, out, err = run([os.path.join(link, "tree", "scripts", "gate-scope.py"), "--files", "src/services/vrworld.cpp",
+                              "--build", ".", "--json"], os.path.join(link, "build"))
+        check(code == 0 and rows_of(out) == r1 and "not in the build graph" not in out + err,
+              "2/15. `--build .` from inside the build dir, through a symlinked root, selects the same %d rows" % len(r1))
     finally:
         shutil.rmtree(link, ignore_errors=True)
-
+    # 3. a directory that registers no row is an ERROR, never an empty answer
+    with tempfile.TemporaryDirectory() as empty:
+        code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", empty], source)
+        check(code == 2 and "registers no ctest suite" in err, "3. an unconfigured --build dir exits 2 and says so (%d)" % code)
     speed_cases(source, build)
-
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

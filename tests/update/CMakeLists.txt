@@ -21,7 +21,7 @@ set_tests_properties(app.update_check PROPERTIES LABELS "app" TIMEOUT 60)
 jah_gpu_exclusive_test(NAME app.update_check.timing CLASS none RUN_TIMEOUT 60 COMMAND test_update_check
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(app.update_check.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "app;stage-close;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "app;measure")
 jah_no_display(app.update_check app.update_check.timing)
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property

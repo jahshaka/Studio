@@ -80,7 +80,7 @@ jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 C
 # box still can — a red here under external load is retried on a quiet box
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "stage-close;quiet-box"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "measure"
     RUN_SERIAL TRUE FIXTURES_SETUP scenegraph-result)
 
 # THE §6 TREND CHECK: the result file scenegraph.benchmark recorded against the committed baseline (28b91f49) —
@@ -92,7 +92,7 @@ add_test(NAME scenegraph.baseline COMMAND bench_scenegraph --compare
          "${CMAKE_CURRENT_SOURCE_DIR}/baseline-linux.json" "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(scenegraph.baseline PROPERTIES
-    LABELS "stage-close;quiet-box" FIXTURES_REQUIRED scenegraph-result TIMEOUT 120)
+    LABELS "measure" FIXTURES_REQUIRED scenegraph-result TIMEOUT 120)
 jah_no_display(scenegraph.baseline)
 
 jah_gpu_row(scenegraph.smoke CLASS engine COMMAND bench_scenegraph --smoke
@@ -137,7 +137,7 @@ add_dependencies(bench_rigperf JahshakaEngineMedia)
 jah_gpu_exclusive_test(NAME rigperf.benchmark CLASS engine RUN_TIMEOUT 600 COMMAND bench_rigperf --assert
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rigperf.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "stage-close;quiet-box"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "measure"
     RUN_SERIAL TRUE)
 
 jah_gpu_row(rigperf.smoke CLASS engine COMMAND bench_rigperf --smoke

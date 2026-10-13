@@ -6,7 +6,6 @@
 # copy is the ratchet: a name ADDED is red, a name REMOVED is fine;
 # R7 reds a row without FRAMES that this list does not name (a NEW row is never pending) and a listed row that states
 # FRAMES now (the list only shrinks — to zero, never an exclusion).
-gi.chain_converge_scenes
 # jah_gpu_exclusive_test rows (fix round: R7 covers them too) — Part B states their FRAMES and drops them here
 avatar.responsive.timing
 rigperf.benchmark

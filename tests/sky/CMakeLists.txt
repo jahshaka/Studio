@@ -39,7 +39,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine, tests/ssr and tests/hdr: the only leaks LSan
     # finds here are libdbus-1 allocations reached from the Vulkan loader.
-    set_tests_properties(sky.sun_transmittance_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(sky.sun_transmittance_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(sky.sun_transmittance_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5)
 endif()

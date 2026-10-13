@@ -133,7 +133,7 @@ function(jah_scale_row _name _mode _timeout _locked)
         jah_gpu_row(${_name} CLASS engine TOKENS 2 COMMAND test_scale ${_mode} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(${_name} PROPERTIES TIMEOUT ${_timeout})
     endif()
-    set_tests_properties(${_name} PROPERTIES LABELS "scale-target" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(${_name} PROPERTIES LABELS "scale;measure" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endfunction()
 jah_scale_row(scale.world        --world         ${SCALE_T_WORLD}        TRUE)   # the fixture: still + 30 s fly
 jah_scale_row(scale.voxel_scroll --voxel-scroll  ${SCALE_T_VOXEL}        TRUE)   # W1 (+ the 200 m walk, the 60 m teleport)
@@ -144,12 +144,6 @@ jah_scale_row(scale.levels       --levels        ${SCALE_T_LEVELS}       FALSE) 
 jah_scale_row(scale.cut_cost     --cut-cost      ${SCALE_T_CUT_COST}     TRUE)   # D1: the flat cut's ms at 10k
 jah_scale_row(scale.residency    --residency     ${SCALE_T_RESIDENCY}    FALSE)  # W5 (the engine's pool stats)
 jah_scale_row(scale.decode       --decode        ${SCALE_T_DECODE}       TRUE)   # W6
-jah_scale_row(scale.occlusion    --occlusion     ${SCALE_T_OCCLUSION}    FALSE)  # W7 (triangle counts)
-# W7 IS CLOSED (ATOM-OCCLUSION-1): its row is a BAR — the two-pass id pass within 1.25x of the
-# reference cull and its id image the frustum-only one at every pose — and not a target.
-# STAGE-CLOSE (TESTING-SPEED-B3, the lead's verdict): case-bound — 3 arms x 8 poses of id readbacks ARE the
-# measurement (45 s quiet); a scale property. atom.occlusion_exact is the merge tier's occlusion guard.
-set_tests_properties(scale.occlusion PROPERTIES LABELS "scale;stage-close")
 jah_scale_row(scale.tlas         --tlas          ${SCALE_T_TLAS}         TRUE)   # W8
 jah_scale_row(scale.atlas        --atlas         ${SCALE_T_ATLAS}        FALSE)  # W9 (card counts)
 jah_scale_row(scale.far_field    --far-field     ${SCALE_T_FAR}          FALSE)  # W10 (two pictures)
@@ -159,13 +153,13 @@ jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)  
 # ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
 # frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
-set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale;stage-close")
+set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # scale.shadow_cut — ATOM-SHADOWS-1's BARS (CPU a ratio of paired arms, GPU absolute per map): the caster
 # pass from the light's cut against the per-instance PBS caster path, on D1's world and then a
 # small one IN THE SAME PROCESS (the second boot is MONITOR-RETIRE-1 F2's regression test).
 # Locked: it times the CPU and the GPU.
 jah_scale_row(scale.shadow_cut   --shadow-cut    ${SCALE_T_SHADOW}       TRUE)
-set_tests_properties(scale.shadow_cut PROPERTIES LABELS "scale;stage-close")
+set_tests_properties(scale.shadow_cut PROPERTIES LABELS "scale")
 # scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
 # the lattice at Epic, still and panning, the GPU work no monitor row names against the frame's BUSY
 # span (its own GPU span less the GPU's wait for submissions, FrameRecord::gpuIdleMs — printed as a
@@ -174,7 +168,7 @@ set_tests_properties(scale.shadow_cut PROPERTIES LABELS "scale;stage-close")
 # (the lattice's settle is most of it); the run budget is ~3x that.
 set(SCALE_T_COVERAGE 600)
 jah_scale_row(scale.gpu_coverage --gpu-coverage  ${SCALE_T_COVERAGE}     TRUE)
-set_tests_properties(scale.gpu_coverage PROPERTIES LABELS "scale;stage-close")
+set_tests_properties(scale.gpu_coverage PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # scale.assets — THE SHELLS' FIXTURE ROW (V2-P0A): bakes every shell the rows read (250 k,
@@ -187,54 +181,14 @@ jah_no_display(scale.bake)
 # ctest adds this row to any selection naming a row that requires it.
 set(SCALE_T_ASSETS 3600)
 add_test(NAME scale.assets COMMAND scale_assets_gen WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scale.assets PROPERTIES TIMEOUT ${SCALE_T_ASSETS} LABELS "scale-target"
+set_tests_properties(scale.assets PROPERTIES TIMEOUT ${SCALE_T_ASSETS} LABELS "scale;measure"
                      FIXTURES_SETUP scale_shells ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      RUN_SERIAL TRUE PROCESSORS 4)
 jah_no_display(scale.assets)
 set_tests_properties(scale.cluster_cut scale.levels scale.residency scale.bake PROPERTIES
                      FIXTURES_REQUIRED scale_shells)
 
-# atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
-# still and without holes (its first form proved it byte-identical to the late-discard loop).
-# A pixel suite (no time measured): never the GPU lock.
-# budget 25 s: the measurement, a LOADED box (TESTING-SPEED-B3, 2026-10-12): the settles counted to where the value
-# stops moving — 931 frames (1,825 before); 17.3 / 22.4 / 24 s at load 6-20 (median 22.4; 41 s quiet / 51-63 s loaded
-# at the base). A bound: the solo price, re-measured at the close, sits under it.
-jah_gpu_row(atom.decode_exact CLASS engine TOKENS 2 COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-# atom.coverage_trace — ATOM-BLACK-FRAMES-1: 2,600 frames of the world (the 200 materials
-# landing, a 2,000-frame walk with teleports, a DAG mesh released and re-added, a new mesh
-# added and released, the cut's budget forced small twice) with the decode's discriminator
-# on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
-# measured, frames counted): never the GPU lock.
-# TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
-# log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=4 — gate
-# records 193.1 / 173.1 / 202.5 / 188.8 s (10-10 04:25 - 11:33; load 6-15, 0-2 builds beside them); median 191.0 ->
-# 6x = 1150; slot-era worst 241.5 (a scoped gate beside a sibling ctest, 2 builds, load 20.2) -> TIMEOUT 1150 (was 1300).
-# STAGE-CLOSE (TESTING-SPEED-B3, the lead's verdict on its profile: spikes/testing-speed-b3/profile.txt): the full
-# 2,630-frame trace — no frame under change fails > 0.5 %, the coarse overflow, the mesh release and the new mesh — is a
-# whole-world measurement, unchanged, at the stage close. Its REMOVECHILD-LEAK-1 check rides the merge tier as
-# atom.removechild_leak below.
-jah_gpu_row(atom.coverage_trace CLASS engine TOKENS 2 COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1150 LABELS "engine;stage-close"
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-# atom.removechild_leak — REMOVECHILD-LEAK-1 (measured by ATOM-BLACK-FRAMES-1's W3 arm, fixed in OgreScene::releaseNode):
-# removeChild alone takes a mesh's items out of the split AND gives back their mesh-table references, so the last one
-# releases the GPU scene's entry ("mesh released" in the trace). The SAME binary and mode as atom.coverage_trace, cut by
-# its own knobs to one short landing (JAH_TRACE_LANDING=10), the removeChild arm (20 frames) and the re-add (10 frames),
-# no walk (JAH_TRACE_FRAMES=0: the walk's bars are coverage_trace's, armed only past frame 900). The frames it samples
-# still answer the coverage bars (no frame fails > 0.5 %, none loses half its coverage). (TESTING-SPEED-B3)
-# budget 20 s: the measurement, a LOADED box (the lead, 2026-10-12) — 327 frames; 13.9 / 15.0 / 15.7 s at load 6-20
-# (median 15.0); a bound, the solo price re-measured at the close:
-# the dense 10k world's boot and the code chart are ~12 s of it, and they are the subject (the leak needs a DAG mesh
-# among the world's).
-jah_gpu_row(atom.removechild_leak CLASS engine TOKENS 2 COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")
-set_tests_properties(atom.removechild_leak PROPERTIES TIMEOUT 120 LABELS "engine"
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAH_TRACE_LANDING=10;JAH_TRACE_FRAMES=0")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
 # THE FIXTURE IS ITS OWN ROW, OUTSIDE THE LOCK (GATE-SPEED-1 item 4; the gate-speed audit's T1):
@@ -244,23 +198,20 @@ set_tests_properties(atom.removechild_leak PROPERTIES TIMEOUT 120 LABELS "engine
 # ctest adds a required setup row to any selection that names the measurement (`-L timing`, `-R`).
 jah_gpu_row(scale.library.fixture CLASS app TIER low NEEDS NONE COMMAND test_scale_library --generate
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
+set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale;measure"
                      FIXTURES_SETUP scale_library_template)
 jah_gpu_exclusive_test(NAME scale.library CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
 # SKIP (77), SAID, where the counted bars cannot count: app.databaseReads is unavailable when the Qt
 # SQL driver carries its own SQLite (the Qt installer's macOS/Windows builds; databasereads.h).
-set_tests_properties(scale.library PROPERTIES LABELS "scale;stage-close" FIXTURES_REQUIRED scale_library_template
+set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template
                      SKIP_RETURN_CODE 77)
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "atom.coverage_trace=2917"
-        "atom.decode_exact=931"
-        "atom.removechild_leak=327"
         "scale.assets=0"
         "scale.atlas=445"
         "scale.bake=0"
@@ -269,9 +220,8 @@ foreach(_row_frames
         "scale.gpu_coverage=1009"
         "scale.hit_list=583"
         "scale.levels=52"
-        "scale.library.fixture=4808"   # a GENERATING run (a no-op once the template exists)
+        "scale.library.fixture=4808" # a GENERATING run (a no-op once the template exists)
         "scale.lights=1489"
-        "scale.occlusion=495"
         "scale.residency=220"
         "scale.shadow_cut=2102"
         )

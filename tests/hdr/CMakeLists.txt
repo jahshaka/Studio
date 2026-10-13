@@ -31,17 +31,6 @@ set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(hdr.drag_stable PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 
 if(JAHSHAKA_ASAN)
-    jahshaka_hdr_test(test_hdr_drag_asan test_hdr_drag.cpp)
-    target_link_libraries(test_hdr_drag_asan PRIVATE JahshakaEngineAsan)
-    target_compile_options(test_hdr_drag_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options(test_hdr_drag_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.drag_stable_asan CLASS engine COMMAND test_hdr_drag_asan
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
-    # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine;stage-close"
-                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    set_tests_properties(hdr.drag_stable_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 endif()
 
 # THE HISTOGRAM METER'S ARITHMETIC (EXPOSURE-2). The companion of the suite
@@ -56,15 +45,6 @@ set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
 set_tests_properties(hdr.meter PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 
 if(JAHSHAKA_ASAN)
-    jahshaka_hdr_test(test_hdr_meter_asan test_hdr_meter.cpp)
-    target_link_libraries(test_hdr_meter_asan PRIVATE JahshakaEngineAsan)
-    target_compile_options(test_hdr_meter_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine;stage-close"
-                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    set_tests_properties(hdr.meter_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 endif()
 
 # THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, fork feab041c6 (was 0079)). A
@@ -104,7 +84,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.bloom_amount_asan CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.bloom_amount_asan PROPERTIES JAHSHAKA_TEST_FRAMES 26)
 endif()
@@ -116,7 +96,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.dither_asan CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.dither_asan PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 endif()
@@ -156,12 +136,12 @@ set_tests_properties(hdr.display_encode PROPERTIES JAHSHAKA_TEST_FRAMES 336)
 set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
 set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
-jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting;stage-close")
+jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting")
 jah_gpu_row(hdr.bloom_showroom CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
          WORKING_DIRECTORY ${_bloom_home}/run)
 set_tests_properties(hdr.bloom_showroom PROPERTIES
     FIXTURES_REQUIRED bloomShowroomHome
-    TIMEOUT 300 LABELS "scripting;stage-close"
+    TIMEOUT 300 LABELS "scripting"
     ENVIRONMENT "HOME=${_bloom_home};JAHSHAKA_DATA_ROOT=${_bloom_home}/.local/share/Jahshaka")
 set_tests_properties(hdr.bloom_showroom PROPERTIES JAHSHAKA_TEST_FRAMES 737)

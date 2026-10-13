@@ -562,7 +562,7 @@ set_tests_properties(ui.selection_cost PROPERTIES
 jah_gpu_exclusive_test(NAME ui.selection_cost.timing CLASS none RUN_TIMEOUT 31 COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;measure")
 jah_no_display(ui.selection_cost.timing)
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
@@ -614,7 +614,7 @@ jah_no_display(ui.components)
 jah_gpu_exclusive_test(NAME ui.components.timing CLASS none RUN_TIMEOUT 300 COMMAND test_components
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.components.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;measure")
 jah_no_display(ui.components.timing)
 jah_no_display(ui.selection_cost)
 
@@ -1126,7 +1126,7 @@ jah_no_display(ui.properties_filter)
 jah_gpu_exclusive_test(NAME ui.properties_filter.timing CLASS none RUN_TIMEOUT 120 COMMAND test_properties_filter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.properties_filter.timing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;stage-close;quiet-box")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;measure")
 jah_no_display(ui.properties_filter.timing)
 
 

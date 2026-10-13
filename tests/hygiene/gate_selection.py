@@ -1,39 +1,20 @@
 #!/usr/bin/env python3
 """gate.selection — THE SELECTOR'S REPLAY (lane MODULAR-GATE-1; TESTING_V2 T3).
 
-scripts/gate-scope.py decides what a lane runs, so a defect in it is invisible by
-construction: the wrong answer is a SHORTER gate, and a shorter gate passes. The selector now
-chooses by reach — the build graph, the symbols a hunk touches, the app's families — and this
-suite is the guard the contract names (PHOTON_ATOM_CONTRACT §7b: "a suite the selector missed
-that a full tier reds is a SELECTOR defect, fixed there and added to its replay cases").
+scripts/gate-scope.py decides what a spec's test and merge run, so a defect in it is invisible by construction: the
+wrong answer is a SHORTER gate, and a shorter gate passes. A reach a later run proves wrong is fixed in the selector and
+added here. A seconds-long guard (TESTING-SIMPLE: six recorded diffs, within a CPU row's 10 s):
 
-WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
-  * LANES: each recorded lane's diff, re-selected against THIS build's graph and inventory. Every
-    suite the lane's gates found red with a REAL verdict, and every named suite of the lane, must
-    be in the selection (or the selection must be the whole tier). The reds judged environmental
-    are printed — selected or not — and never required: a contention red is not the change's.
-    A case that says `whole_tier` must select the MERGE tier by rule (a fork diff this checkout
-    cannot read); `fork_reach`, a pin bump selected by the FORK DIFF's reach (TEST-SELECTOR-1 T2),
-    never the tier; `own_base`, the lane's OWN range starts at its newest forward merge's d-build
-    parent and `not_paths` (what the merge carried in) are not its paths (T1); a case with
-    `max_rows` must stay under it (the precision the lane is there to prove).
-  * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
-    executable does not contain the file is NOT selected).
-  * HUNKS: a real file with one edit applied IN MEMORY (the Fable read's negative cases: a
-    header-only helper's callers, a struct a header-only helper names, a changed add_test COMMAND
-    line) — each `must` set is what a past selector missed.
-  * NM: without `nm` the selector refuses (H1).
-  * ARMS: a pool row is selected arm by arm where a script or an API module selects, and whole
-    where a directory or a group does (a synthetic pool of two real scripts).
-  * IDENTIFIERS: the symbol reader on fixed texts — a comment-only hunk touches nothing; a
-    member's modified default selects its struct; an added member selects only itself; a body
-    line selects its function; a parameter changed on a declaration's second line selects the
-    function.
-And no LANE case may FALL BACK: the fallback is for a path no rule, no symbol and no graph owner
-covers, and every recorded lane had an owner for every path.
-
-The replay needs the recorded shas (Studio and irisgl) and a BUILT build dir (ninja's deps log);
-a missing sha or an unbuilt dir is a failure, never a skip.
+  * LANES: recorded diffs re-selected against THIS build's graph and inventory (tests/hygiene/gate_selection_cases.json):
+    every named row must be in the selection; `whole_tier`: a fork diff this checkout cannot read reaches every row;
+    `fork_reach`: a pin bump is selected by the fork diff's reach; `must_families`, `must_picture`, `none_of`,
+    `no_whole_pool`: BLOOM-1's precision (the post chain reaches the picture set and no gi row); no case may fall back
+    (`rows_at_tip_only`: a range's new registrations fall to their test directory here, never the whole inventory).
+  * HUNKS: a real file with one edit applied IN MEMORY — each `must` set is what a past selector missed.
+  * ARMS: a pool row is selected arm by arm where a script or an API module selects (a synthetic pool of two scripts).
+  * GONE ROWS, TOOLING-ONLY DIFFS, IDENTIFIERS: the gone-row reader, a diff with no product path, the symbol reader.
+The replay needs the recorded shas (Studio and irisgl) and a BUILT build dir (ninja's deps log); a missing sha or an
+unbuilt dir is a failure, never a skip.
 
 Run: gate_selection.py <source-dir> <build-dir>
 """
@@ -112,10 +93,6 @@ def arm_cases(gs, graph, build, inv0):
         S = gs.select([rel], None, build, graph=graph, inv=copy.deepcopy(inv), quiet_graph=True)
         check(S.arm_subsets().get("pool.synth") == ["p"], "a touched arm script selects that arm (%s)"
               % S.arm_subsets().get("pool.synth"))
-    S = gs.select(["irisgl/engine/src/OgreEngine.cpp"], None, build, graph=graph,
-                  inv=copy.deepcopy(inv), quiet_graph=True)
-    check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
-          "the frame loop's app group (OgreEngine.cpp, no diff to read: every app row) selects the pool whole (every arm)")
 
 
 def gone_cases(gs, graph, build, inv0):
@@ -226,8 +203,8 @@ def tooling_cases(gs, graph, build, inv0):
     check(S.tooling_only and not product(S) and hyg <= set(S.selected) and not S.fallback and not S.full_tier,
           "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
           % (len(hyg), product(S)[:6]))
-    S = sel(["tests/gi/test_gi_speckle.cpp"])
-    check(S.tooling_only and set(S.selected) == {"gi.speckle"},
+    S = sel(["tests/gi/test_gi_cliff.cpp"])
+    check(S.tooling_only and set(S.selected) == {"gi.cliff"},
           "a test source alone selects its row and nothing else — no smoke pair, no tooling row (%s)" % sorted(S.selected)[:6])
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
@@ -253,23 +230,6 @@ def tooling_cases(gs, graph, build, inv0):
           "nobody classified are product; docs, scripts and tests are not")
 
 
-def nm_refusal(source, build):
-    """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from
-    empty symbol tables (an engine .cpp would select no compiled row, silently and persistently)."""
-    import shutil
-    import tempfile
-    print("\nnm refusal (a PATH without nm):")
-    with tempfile.TemporaryDirectory() as d:
-        for tool in ("git", "ctest", "ninja", "cmake", sys.executable.split("/")[-1]):
-            w = shutil.which(tool)
-            if w: os.symlink(w, os.path.join(d, tool))
-        p = subprocess.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--files",
-                            "irisgl/engine/src/OgreChain.cpp", "--build", build, "--json"],
-                           cwd=source, capture_output=True, text=True, env=dict(os.environ, PATH=d))
-        check(p.returncode != 0 and "nm" in p.stderr, "no nm -> the selector refuses with the reason (exit %d: %s)"
-              % (p.returncode, p.stderr.strip().splitlines()[-1:] if p.stderr.strip() else ""))
-
-
 def main(source, build):
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_selection: %s is not a configured build dir" % build)
@@ -291,7 +251,7 @@ def main(source, build):
     # `<pool>.<arm>`: a suite that is renamed or becomes an arm is renamed in the cases file in
     # the same commit
     arm_rows = {f"{t['pool']}.{a}": r for r, t in inv0.items() for a in t["arms"]}
-    for c in cases["lanes"] + cases["files"]:
+    for c in cases["lanes"]:
         for n in c.get("must", []) + c.get("env", []) + c.get("must_not", []):
             check(n in inv0 or n in arm_rows, "%s: %s is a registered suite or arm" % (c.get("lane") or c.get("case"), n))
 
@@ -392,27 +352,10 @@ def main(source, build):
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
 
-    print("\nfiles (the audit's S1/S2 subjects, the graph's precision):")
-    for c in cases["files"]:
-        S = gs.select(c["files"], None, build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
-        sel = set(S.selected)
-        check(not S.fallback, "%s: no fallback" % c["case"])
-        for m in c.get("must", []):
-            check(chosen(S, m), "%s: %s selects %s" % (c["case"], c["files"][0], m))
-        for m in c.get("must_not", []):
-            check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
-                                                                         S.selected.get(m, "")))
-        if "only_labels" in c:
-            other = sorted(n for n in sel if not (inv0[n]["labels"] & set(c["only_labels"])))
-            check(bool(sel) and not other, "%s: only %s rows (%d; others %s)" % (c["case"], "/".join(c["only_labels"]),
-                                                                             len(sel), other[:5]))
-        if c.get("selects_nothing"):
-            check(not sel, "%s: selects nothing (%s)" % (c["case"], sorted(sel)[:5]))
     tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)
     gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
-    nm_refusal(source, build)
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))
         return 1

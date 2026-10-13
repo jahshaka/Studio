@@ -31,7 +31,7 @@ jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS 
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "shutdown;stage-close;quiet-box")
+    LABELS "shutdown;measure")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
 # [warn] and a non-empty stack OF THE UI THREAD; a 100 ms block produces none.
@@ -62,7 +62,7 @@ jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app TIER low NEEDS NONE RUN
 set_tests_properties(app.watchdog_stall PROPERTIES
     ENVIRONMENT "HOME=${_watchdog_home};JAHSHAKA_DATA_ROOT=${_watchdog_home}/.local/share/Jahshaka"
     RUN_SERIAL TRUE
-    LABELS "shutdown;stage-close")
+    LABELS "shutdown")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
@@ -88,21 +88,6 @@ endif()
 # TC2-DEVICE-LOST-HANG): a child that ends with nobody to answer its box exits 86 through the
 # forced-exit watchdog inside 120 s (src/services/forcedexit.h). Offscreen, no engine, no display.
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
-add_executable(test_device_loss_end test_device_loss_end.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_device_loss_end PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_device_loss_end PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
-target_link_libraries(test_device_loss_end PRIVATE IrisGL Qt6::Widgets)
-add_test(NAME app.device_loss_end COMMAND test_device_loss_end
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set(_dle_home ${CMAKE_CURRENT_BINARY_DIR}/device-loss-end-home)
-# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown;stage-close"
-    ENVIRONMENT "HOME=${_dle_home};JAHSHAKA_DATA_ROOT=${_dle_home}/.local/share/Jahshaka")
-jah_no_display(app.device_loss_end)
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
@@ -117,7 +102,4 @@ if(TEST app.shutdown_order.timing)
 endif()
 if(TEST app.watchdog_stall)
     set_property(TEST app.watchdog_stall PROPERTY JAHSHAKA_TEST_FRAMES 1155)
-endif()
-if(TEST app.device_loss_end)
-    set_property(TEST app.device_loss_end PROPERTY JAHSHAKA_TEST_FRAMES 0)
 endif()

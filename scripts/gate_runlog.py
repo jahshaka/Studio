@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""gate_runlog — THE RECORD OF WHAT RAN (DOCS/PROCESS.md; TESTING-SIMPLE).
-
-One record per row (and per pool arm) as the row ends, appended to the run log
-<workspace>/testing/runs/<date>-<tier>-<tip9>.jsonl (JAH_RUN_LOG_DIR overrides). The record is the one thing the
-tools keep: suite, arm, verdict, seconds, labels, the row's inputs (its declaration and data hashes), the tip it ran
-at (studio, irisgl, fork, and the BUILT_FROM stamp of its build), the build config, and a red's first failing line
-and the path of its output. A green record at an equal input at an ancestor serves the row (ci_gate_check.py serve).
+"""gate_runlog — THE RECORD OF WHAT RAN (DOCS/PROCESS.md; TESTING-SIMPLE). One record per row (and per pool arm) as the
+row ends, appended to <workspace>/testing/runs/<date>-<tier>-<tip9>.jsonl (JAH_RUN_LOG_DIR overrides): suite, arm,
+verdict, seconds, labels, the row's inputs (its declaration and data hashes), the tip (studio, irisgl, fork and the
+build's BUILT_FROM stamp), the build config, a red's first failing line and its output's path. A green record at an equal
+input at an ancestor serves the row (ci_gate_check.py serve). It decides nothing: a red is printed and recorded.
 
     scripts/gate_runlog.py run --tier spec|merge|ship --lane <name> [--build build-linux] -- ctest -j8 ...
     scripts/gate_runlog.py clocks          # the GPU's clock state now (exit 3 when it reads locked)
-
-`run` runs ctest -V, prints each row's result line (and a red row's output), writes each row's records when the row
-ends and exits with ctest's exit code. It decides nothing: a red is printed and recorded.
 """
 import argparse
 import datetime

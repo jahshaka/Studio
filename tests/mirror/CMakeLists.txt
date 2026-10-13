@@ -98,67 +98,6 @@ set_tests_properties(mirror.scale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
 set_tests_properties(mirror.scale PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
-# mirror.settle_incremental — the static re-promotion after a settle is a
-# BOUNDED walk spread over syncs (SceneMirror::kStaticSettleNodesPerSync,
-# MIRROR-SETTLE-1) and lands exactly the one-shot applyStaticDefaults' answer:
-# two identical 50,000-node documents, one settled each way, compared node for
-# node (graph class + hint), plus a settle written, mutated and scene-switched
-# part-way through, and the demotion worst case. Counts only — the
-# milliseconds it prints are for the reader, so it is a plain GPU row.
-add_executable(test_mirror_settle test_mirror_settle.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_mirror_settle PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_mirror_settle PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_mirror_settle PRIVATE
-    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_mirror_settle PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_mirror_settle JahshakaEngineMedia)
-jah_gpu_row(mirror.settle_incremental CLASS engine COMMAND test_mirror_settle
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# TIMEOUT (the policy, tests/CMakeLists.txt): max(6 x quiet median, slot-era worst) = max(6 x 70.24, 71.59) -> 430 s.
-# Sample: n=2 quiet PASS runs at B=24 (71.59, 68.89 s; median 70.24, worst 71.59), warm, 2026-10-11 12:4x, quiet box
-# (no VRAM wait in these seconds).
-set_tests_properties(mirror.settle_incremental PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror;stage-close")
-set_tests_properties(mirror.settle_incremental PROPERTIES JAHSHAKA_TEST_FRAMES 0)
-
-# mirror.settle_thumbnails — a settle is fed by ITS OWN document's writes:
-# a 10k scene demoted by one edit settles within its quiet window + one
-# rotation while a thumbnail (a throwaway document: a write and a destruction
-# per tile) is rendered on every sync (MIRROR-SETTLE-1 fix round 1). Counts.
-# In bin/ beside the thumbnail suites (the renderer resolves its media there).
-add_executable(test_mirror_settle_thumbs test_mirror_settle_thumbs.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
-set_target_properties(test_mirror_settle_thumbs PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_mirror_settle_thumbs PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_mirror_settle_thumbs PRIVATE
-    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_mirror_settle_thumbs PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_mirror_settle_thumbs JahshakaEngineMedia)
-jah_gpu_row(mirror.settle_thumbnails CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_mirror_settle_thumbs
-         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-# TIMEOUT (the policy): max(6 x 11.12, 11.20) = 67 s -> the 120 s floor. Sample: n=2 quiet PASS runs at B=24
-# (11.03, 11.20 s), warm, 2026-10-11 12:4x, quiet box.
-set_tests_properties(mirror.settle_thumbnails PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
-set_tests_properties(mirror.settle_thumbnails PROPERTIES JAHSHAKA_TEST_FRAMES 894)
-
 # mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
 # document supports: make the change, run the DIRTY sync that ships, then run

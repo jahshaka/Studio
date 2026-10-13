@@ -37,7 +37,7 @@ jah_gpu_exclusive_test(NAME avatar.responsive.timing CLASS app TIER epic NEEDS p
          WORKING_DIRECTORY ${_avatar_async_timing_home}/run)
 set_tests_properties(avatar.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_timing_home};JAHSHAKA_DATA_ROOT=${_avatar_async_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "avatar;stage-close;quiet-box")
+    LABELS "avatar;measure")
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.

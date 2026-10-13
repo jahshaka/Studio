@@ -32,33 +32,14 @@ from gate_graph import CXX_EXT, HEADER_EXT          # noqa: E402
 # (the lane's tree and build, this file's rules); never set by a gate
 ROOT = os.environ.get("JAH_SCOPE_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ---- AREA RULES: path prefix (or regex) -> (test dirs, script modules) --------------
-# MODULAR-GATE-1: for a C/C++ path (and any other build input the graph knows) the rules pick
-# only the APP rows and the source-reading OTHER rows of their dirs — the compiled rows are the
-# build graph's (Selection.graph_rows). For runtime data the graph cannot see (engine media,
-# scenes, sample content) a rule's dirs still pick every row. The '*merge-tier' rules for the
-# build files, irisgl/CMakeLists and 'any other src/ file' are GONE: the build files are read
-# by what their changed commands name, and a src/ file no rule narrows selects every app row.
-# A touched path picks the FIRST rule whose prefix matches (most specific first). Test
-# dirs are tests/<dir>; modules are the `<module>.` prefixes an e2e script calls. The
-# special dir "*vulkan-scripts" means every app-spawning suite that is NOT --headless
-# (anything that renders), "*headless-scripts" the --headless ones, "*all-scripts" both.
-# THE SUBSYSTEM TABLE (TESTING-SPEED-A item 4; SPECS/TESTING_SPEED_SPEC.md §2 A4) — THE ONLY SELECTOR OF ENGINE CODE.
-# The engine's facade pulls EVERY engine object into all 252 engine-linking executables (nm on rc-base: OgreChain /
-# OgrePhotonView / OgreSky / OgreParticles / OgreVrSession / OgreEngine symbols in 252/252), so the build graph cannot
-# narrow an engine TU and must not widen it: an irisgl/engine/src/** file or an engine media file is selected by THIS
-# table — the FIRST line that matches the path under irisgl/engine/ (the lines run specific -> generic: a GI shader in
-# media/Hlms/Jahshaka is the gi line's, never the generic Jahshaka medium's picture set).
-# A TOKEN is a test DIRECTORY (tests/<token>/) or a ROW PREFIX (`<token>.*` rows anywhere: cloud_2d.* in tests/gi,
-# decals.engine in tests/engine; a DOTTED token is a name prefix: `engine.atom_`), every kind of row; two special tokens:
-#   *engine-fixtures — every compiled row whose executable links the engine archive (the frame loop's reach)
-#   *picture         — THE PICTURE SET (picture_set()): the kept rows of hdr ssr looks mirror and the app rows /
-#                      pool arms whose script takes a screenshot (editor.screenshot, vr.eyeScreenshot, screenshot()
-#   *screenshots     — the picture set's SCRIPT part alone (the screenshot app rows and arms, not the families)
-# THE CORE HAS NO "RUN EVERYTHING" RULE (the owner 2026-10-12 17:2x): the shared headers (EnginePrivate.h, Types.h,
-# engine/include/**) go through header_symbols (the identifiers changed -> the TUs that use them -> their lines here);
-# OgreEngine.cpp goes through OGRE_ENGINE_FUNCTIONS by the enclosing function of each changed line. THE WHOLE-ENGINE
-# GUARD at every merge is the six hash lines.
+# ---- THE SUBSYSTEM TABLE — THE ONLY SELECTOR OF ENGINE CODE ----------------------------------------------------------
+# The engine's facade pulls every engine object into every engine-linking executable, so the build graph cannot narrow an
+# engine TU: an irisgl/engine/src/** file or an engine medium is selected by the FIRST line here that matches its path
+# under irisgl/engine/ (specific -> generic). A TOKEN is a test DIRECTORY (tests/<token>/) or a ROW PREFIX (a dotted token
+# is a name prefix: `engine.atom_`); special tokens: *engine-fixtures (every compiled row linking the engine archive),
+# *picture (THE PICTURE SET: hdr ssr looks mirror and every app row / pool arm whose script takes a screenshot),
+# *screenshots (the picture set's script part alone). The shared headers go through header_symbols; OgreEngine.cpp,
+# OgreScene.cpp and OgreView.cpp through the function maps below. The whole-engine guard at every merge is the six hashes.
 ENGINE_SUBSYSTEMS = [
     # the post chain: bloom, the display encode, the HDR meter, the screen-space passes it composes
     # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
@@ -320,6 +301,8 @@ FORK_COMPONENTS = [
 ]
 
 
+# ---- AREA RULES: path regex -> (test dirs or row prefixes, the API modules an e2e script calls); the FIRST match wins
+# (specific -> generic). For a C/C++ path the build graph owns the compiled rows; a rule picks the app and CPU rows.
 AREA_RULES = [
     # --- engine: THE SUBSYSTEM TABLE selects irisgl/engine/** (ENGINE_SUBSYSTEMS above; Selection.engine_path), the fork
     # by component (FORK_COMPONENTS; Selection.fork). What builds or links Ogre reaches every engine fixture:
@@ -474,14 +457,7 @@ AREA_RULES = [
     (r"^(docs/|README|LICENSE|\.claude/|\.github/|[A-Za-z_\-]+\.md$|\.gitignore$|\.gitmodules$)", [], []),   # no suite at all
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
-    # THE TOOL'S OWN GUARD (source.gate_scope_rules): scripts/gate-scope.* is the
-    # one path under scripts/ that a suite reads, so an edit to it selects the
-    # hygiene rows (seven display-free shell/python lints, well under a second
-    # together). Without this line an edit to the scoping tool selected NOTHING
-    # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
-    # MODULAR-GATE-1: the selector's two libraries (gate_graph.py, gate_runlog.py) are the
-    # tool too, and gate.selection (the replay of recorded lanes) lives beside the rule guard.
-    # THE PRICE FILE (scripts/gate-times.txt, the rows' measured seconds) is read by the budget lint
+    # the tools' own paths: the hygiene and tooling rows (the lints, the selector's own guards)
     (r"^scripts/gate-times\.txt$", ["hygiene"], []),
     (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE CARD'S LOCK (scripts/gpu-exclusive.sh): its tooling suite.
@@ -494,23 +470,9 @@ AREA_RULES = [
     (r"^scripts/", ["hygiene", "tooling"], []),
 ]
 
-# A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW (TESTING_V3_SPEC §1.3.4; the owner 2026-10-10: "why do we still have
-# 1 hour gates?" — batch A's three runner lanes selected 636 rows, 57 min). A change that touches NOTHING the
-# product binary is built from cannot change the product rows' answers: running them re-proves the runner, not the
-# product, and the runner is proved by its own rows. The rule FAILS CLOSED (fix round D): NON_PRODUCT lists the
-# paths that are NOT product inputs — scripts/, tests/, docs/, testing/, .claude/, irisgl/docs/, any *.md — and EVERY
-# other path is product (src/, irisgl/, app/, scenes/, thirdparty/, the build files, a top-level directory nobody
-# has classified yet). A diff with ONE product path takes the whole union below, exactly as before. A diff with none
-# is TOOLING-ONLY:
-#   * a path of the runner itself (TOOLING_OWN: scripts/, tests/hygiene/, tests/tooling/, testing/) selects the
-#     `hygiene` and `tooling` rows (the lints and the runner's own suites, display-free) plus what its area rule
-#     names among the non-app, non-compiled rows and
-#     every row whose COMMAND runs the file;
-#   * any other path — a test's source, a test CMakeLists, a shared test helper — goes through the ordinary walk:
-#     what it reaches IS the rows whose declaration or command changed (the graph for a test source, the CMake
-#     reader for a registration);
-#   * docs and the like select what they always did (nothing);
-#   * the smoke pair (ALWAYS_ON_CODE) is the PRODUCT's smoke: no product path moved, so it does not ride.
+# A TOOLING-ONLY DIFF SELECTS NO PRODUCT ROW: a diff with no product path (NON_PRODUCT lists what is NOT a product input;
+# every other path is, a new top-level directory included — the rule fails closed) takes the hygiene and tooling rows,
+# the rows that run its files and the rows whose declaration changed; never an app or compiled product row.
 NON_PRODUCT = re.compile(r"^(scripts/|tests/|docs/|testing/|\.claude/|irisgl/docs/)|\.md$")
 TOOLING_OWN = re.compile(r"^(scripts/|tests/(hygiene|tooling)/|testing/)")
 def fork_lines(f):
@@ -542,10 +504,9 @@ HARNESS_PATHS = re.compile(r"^(tests/support/|tests/CMakeLists\.txt$|tests/cmake
 TOOLING_PATHS = re.compile(r"^(scripts/|testing/|tests/hygiene/|tests/support/|"
                            r"tests/CMakeLists\.txt$|tests/cmake/|\.claude/)")
 TOOLING_LABELS = {"hygiene", "tooling"}
-# A ROW THAT MEASURES (label `measure`: a timing, quiet-box, soak or churn row) is never selected: it runs at the
-# sprint's ship only (DOCS/PROCESS.md, Testing). The target rows (photon-target, scale-target) report a number with no
-# bar yet: not a guard either.
-NEVER_SELECTED = {"measure", "photon-target", "scale-target", "stage-close"}
+# A ROW THAT MEASURES (label `measure`: a timing, soak, churn or scale row) is never selected: it runs at the sprint's
+# ship only (DOCS/PROCESS.md, Testing).
+NEVER_SELECTED = {"measure"}
 
 
 def sh(cmd, cwd=None):
@@ -606,25 +567,9 @@ def touched_paths(rng):
 
 
 def resolve_build(arg):
-    """WHERE THE BUILD DIR IS, and the trap this function exists to close.
-
-    `ctest --show-only=json-v1` in a directory that is NOT a configured build
-    dir prints an EMPTY inventory and exits 0 (measured: the Studio repo root
-    does exactly this). Every suite name a rule produces is then filtered out
-    by `add()` — it only keeps names the inventory knows — so the selection came
-    out empty and the tool said "NOTHING to gate ... docs/scripts/data" and
-    exited 0. A SILENT EMPTY GATE, with the rationale lines above it listing
-    sixteen test dirs it had just decided to skip (ledger §620 item 5, found by
-    SQUARE-1 the hard way: `gate-scope.py <range> --build . --run` run from
-    INSIDE the build dir, where `--build .` was resolved against the repo root).
-
-    Two halves, and both are needed. This one makes `--build .` from inside the
-    build dir MEAN the build dir: the argument is tried against the CWD first
-    and then against the repo root (the documented form, `--build build-linux`
-    from the tree top), and the first candidate that actually carries a
-    CTestTestfile.cmake wins. `load_inventory` below is the other half: a build
-    dir that registers no suite is now an error instead of an empty answer.
-    """
+    """WHERE THE BUILD DIR IS: `--build .` from inside the build dir means the build dir (the argument is tried
+    against the CWD, then the repo root); the first candidate holding a CTestTestfile.cmake wins. A directory that registers
+    no row is load_inventory's error, never an empty answer (an empty inventory once made a silent green gate: ledger §620)."""
     cands = [arg] if os.path.isabs(arg) else [os.path.abspath(arg), os.path.join(ROOT, arg)]
     for c in cands:
         if os.path.isfile(os.path.join(c, "CTestTestfile.cmake")):
@@ -666,14 +611,8 @@ def build_source_dir(build):
 
 
 def bind_root(build):
-    """THE TREE A SELECTION READS IS THE BUILD'S (TEST-1 fix round, CLIP-REF-1's finding). The build's
-    dependency graph names files under the tree it was configured FROM; read from another checkout
-    (d-build's merge judge, ci_gate_check, judging a lane's build) every touched path was "not in the
-    build graph" and selection fell back to path rules alone — 448 rows where the lane's own gate
-    selected 372, for one range and one build. So the root every path, git command and source read
-    resolves against is the build's source dir (the scripts' own checkout only when that cannot be
-    read). The RULES stay the running script's — which is what a judge is for — and the facts are
-    the build's tree's: one range and one build select the same rows from any checkout."""
+    """THE TREE A SELECTION READS IS THE BUILD'S: every path, git command and source read resolves against the
+    build's source dir (its CMakeCache, as spelled there), so one range and one build select the same rows from any checkout."""
     global ROOT
     # Adopted whenever it differs TEXTUALLY (SYMLINK-ROOT-1): the same tree reached through a symlink is
     # still a different spelling, and the graph only answers to the build's own one.
@@ -692,27 +631,6 @@ def _is_wipe(cmd):
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
 
 
-def _relocated(raw, build):
-    """THE INVENTORY OF A MOVED BUILD DIR (RUNNER-A2): ctest names the paths the build was CONFIGURED with (its
-    CMakeCache's CMAKE_CACHEFILE_DIR / CMAKE_HOME_DIRECTORY) — a build dir copied or renamed since (rc-base is
-    an rc tree's renamed tree; a symlinked overlay of it) still names the old tree, and no row's command then matches
-    the graph's executables (every compiled row read as `other`: measured on rc-base, 619 other + 132 app, no compiled
-    row). The configured build dir is read as this build dir, the configured source root as ROOT (the tree the
-    selection reads)."""
-    roots = gate_graph.build_roots(build)
-    if not raw or not roots or not roots.get("build"):
-        return raw
-    here = os.path.abspath(build).rstrip("/")
-    if roots["build"] == here:
-        return raw
-    pairs = [(roots["build"], here)]
-    if roots.get("root") and roots["root"] != ROOT and not here.startswith(roots["root"] + "/"):
-        pairs.append((roots["root"], ROOT))
-    for old, new in pairs:                 # the build dir first: it sits inside the old root
-        raw = re.sub(re.escape(json.dumps(old)[1:-1]) + r'(?=[/"\\\s;:])', lambda m, n=json.dumps(new)[1:-1]: n, raw)
-    return raw
-
-
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -722,7 +640,6 @@ def load_inventory(build):
         raw, rc = gate_graph.ctest_inventory(build)
         if rc != 0:
             sys.stderr.write(f"gate-scope: ctest --show-only failed ({rc}) for {build}\n"); sys.exit(2)
-    raw = _relocated(raw, build)
     j = json.loads(raw or "{}")
     if not j.get("tests"):
         # See resolve_build: an unconfigured directory answers with an empty
@@ -2079,14 +1996,7 @@ class Selection:
         return re.search(r"(?<![\w.\-])" + re.escape(token) + r"(?![\w.\-])", self._all_cmake) is not None
 
     def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0):
-        """Resolve one changed CMake command to what it names. True when something owned it.
-
-        In order: rows the command names (anywhere in it: an add_test's NAME sits on another line
-        than its changed COMMAND); a helper function's body or header (the rows registered
-        through it, the targets it is called on); a target the command CHANGES (target_*(),
-        set_target_properties(), a helper called on a target); sources it names; a
-        sub-directory; a variable (its user commands, once); and last a directory-scope
-        setting, which reaches every target under the directory."""
+        """Resolve one changed CMake command to what it names. True when something owned it."""
         if name in ("message",):
             notes.append("message() only"); return True
         # the whole command for anything but a list: an add_test's NAME sits on another line than

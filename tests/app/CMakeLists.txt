@@ -124,7 +124,7 @@ jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
 set_tests_properties(app.start_in_vr PROPERTIES
     ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR="
     TIMEOUT 300
-    LABELS "app;stage-close")
+    LABELS "app")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
@@ -173,7 +173,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_tests_properties(app.input_keys PROPERTIES
             ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
-            LABELS "app;stage-close")
+            LABELS "app")
     else()
         message(STATUS "app.input_keys skipped: needs xdotool, curl, jq and Xvfb")
     endif()
@@ -204,7 +204,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
         set_tests_properties(app.play_select PROPERTIES
             ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
-            LABELS "app;stage-close")
+            LABELS "app")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
     endif()
@@ -272,11 +272,11 @@ if(TEST app.startup_quiet)
     set_property(TEST app.startup_quiet APPEND PROPERTY FIXTURES_REQUIRED appStartupQuietFreshHome)
 endif()
 if(TEST app.input_keys)
-    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS app stage-close)
+    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS app)
     set_property(TEST app.input_keys APPEND PROPERTY FIXTURES_REQUIRED appInputKeysFreshHome)
 endif()
 if(TEST app.play_select)
-    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS app stage-close)
+    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS app)
     set_property(TEST app.play_select APPEND PROPERTY FIXTURES_REQUIRED appPlaySelectFreshHome)
 endif()
 

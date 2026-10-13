@@ -51,7 +51,7 @@ MEASURE = "measure"
 def measures(n, t):
     """A row that MEASURES: a `.timing` twin, a `.benchmark`, or one whose environment arms the
     timing bars (JAHSHAKA_TIMING_BARS=1, tests/support/timingbars.h). A fixture's setup row
-    measures nothing; a soak (open.crash_soak) is quiet-box for its minutes, not a bar."""
+    measures nothing; a soak (open.crash_soak) is a `measure` row for its minutes, not a bar."""
     if t.get("fixture_setup"): return False
     return (n.endswith((".timing", ".benchmark")) or ".timing." in n
             or any("JAHSHAKA_TIMING_BARS=1" in e for e in t.get("env", [])))
@@ -62,11 +62,10 @@ def r1_bad(inv):
                   and not (any(c.endswith(LOCK) for c in t["cmd"]) and MEASURE in t["labels"]))
 
 
-TARGETS = {"photon-target", "scale-target"}
 
 
 def r2_bad(inv, priced):
-    return sorted(n for n, t in inv.items() if not (t["labels"] & (TARGETS | {MEASURE})) and n not in priced)
+    return sorted(n for n, t in inv.items() if MEASURE not in t["labels"] and n not in priced)
 
 
 def r4_bad(name, text, gpu_rows):
@@ -189,9 +188,8 @@ def the_rules_catch():
           and not r1_bad({"y.timing.fresh_home": row(["/b/y"], fixture_setup=True)}),
           "R1 flags a measuring row outside the lock or unlabelled, not a labelled one inside it or a fixture's setup")
     check(r2_bad({"m": row([], labels={"engine"})}, set()) == ["m"] and not r2_bad({"m": row([], labels={"engine"})}, {"m"})
-          and not r2_bad({"t": row([], labels={"photon-target"})}, set())
           and not r2_bad({"q": row([], labels={"measure"})}, set()),
-          "R2 flags an unpriced guard, never a measure or target row")
+          "R2 flags an unpriced guard, never a measure row")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())

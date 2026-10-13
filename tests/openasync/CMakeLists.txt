@@ -51,7 +51,7 @@ jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app TIER epic NEEDS pho
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "openasync;stage-close;quiet-box")
+    LABELS "openasync;measure")
 
 # The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread
 # heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a
@@ -104,7 +104,7 @@ jah_gpu_row(open.crash_soak CLASS app TIER epic NEEDS photon
                  ${CMAKE_SOURCE_DIR}/scenes
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
-    TIMEOUT 900 RUN_SERIAL TRUE LABELS "stage-close;quiet-box")
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "measure")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(open.crash_soak)
 
@@ -114,7 +114,7 @@ jah_tsan_blocked(open.crash_soak)
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST open.responsive.timing)
-    jah_fresh_home_fixture(open.responsive.timing.fresh_home openResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing" WARM LABELS "openasync;stage-close")
+    jah_fresh_home_fixture(open.responsive.timing.fresh_home openResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing" WARM LABELS "openasync")
     set_property(TEST open.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED openResponsiveTimingFreshHome)
 endif()
 if(TEST open.frames)
