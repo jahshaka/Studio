@@ -17,7 +17,7 @@ For more information see the LICENSE file
 // A process with no test tier boots at the document's default tier (Epic: the full voxel chain,
 // ~1.5-3 GB of VRAM per process). EVERY ctest row that starts the app declares what it boots
 // instead (TEST-NEEDS-1: `TIER` + `NEEDS`, or `TIER document` for a claim about the document's
-// own World state; tests/support/vram_tokens.cmake, docs/TESTING_GATE.md §4b).
+// own World state; tests/support/the ctest vram resource groups (tests/cmake/vram_rows.cmake), docs/TESTING_GATE.md §4b).
 // `--test-tier <low|medium|high|epic>` (or JAHSHAKA_TEST_TIER for a runner that cannot pass an
 // argument; the flag wins) is the tier, JAHSHAKA_TEST_NEEDS the features it keeps: EVERY scene
 // the process binds to the editor — a new one or an opened one — is put on that World Mode
@@ -100,7 +100,7 @@ inline bool needs(const QString &what) { return needs().contains(what.toLower())
 /// (worldmodes::applyTestTier holds the row each word switches). Shadows, the sun and Atom are
 /// never switchable: they are the scene, not a feature of the chain. `none` is the explicit
 /// empty list — "this process reads no picture" — and stands alone. Every app-binary ctest row
-/// declares the list (jah_gpu_row / jah_add_pool `NEEDS`, tests/support/vram_tokens.cmake);
+/// declares the list (jah_gpu_row / jah_add_pool `NEEDS`, tests/support/the ctest vram resource groups (tests/cmake/vram_rows.cmake));
 /// main() refuses a word outside this list, `none` beside another word, and a list with no
 /// test tier, like any other argument the app cannot honour.
 inline QStringList switchable()
