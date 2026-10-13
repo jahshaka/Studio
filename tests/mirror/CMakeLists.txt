@@ -69,6 +69,28 @@ set_tests_properties(mirror.cull_twin PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 set_tests_properties(mirror.cull_twin PROPERTIES JAHSHAKA_TEST_FRAMES 652)
 
+# mirror.reparent_local — A REPARENT COSTS THE FRAGMENT, NEVER THE SCENE (ENGINE-UPGRADE-1 stage 2): one 500-node
+# fragment moved three ways inside a 1k and a 10k lattice; the same counts at both scales (the mirror's visits, the
+# engine's Items, ONE GI invalidation per sync, the static switches). A law in counts; renders no frame.
+add_executable(test_mirror_reparent test_mirror_reparent.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_reparent PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_reparent PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_reparent PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_reparent PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_reparent JahshakaEngineMedia)
+jah_gpu_row(mirror.reparent_local CLASS engine FRAMES 0 COMMAND test_mirror_reparent
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.reparent_local PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+
 # mirror.scale — the SHAPE of a still frame's mirror cost at scale (MIRROR_SCALE
 # lane, 2026-09-13). The render review measured `host.mirror` at 52 ms per STILL
 # frame on an 8,404-node lattice; this suite is the regression gate, asserting

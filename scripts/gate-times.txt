@@ -387,6 +387,7 @@ mirror.dirty_equals_full 1.12  quiet n=44
 mirror.document_to_engine 9.72  quiet n=43
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
+mirror.reparent_local 2.30  solo, warm, the card lock held (EU-1 stage 2, 2026-10-13)
 mirror.scale 1.85  quiet n=48
 mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
 mirror.settle_thumbnails 11.12  hand: MIRROR-SETTLE-1's runs at B=24, 2026-10-11 (11.03, 11.20 s), n=2 median
@@ -676,7 +677,6 @@ scale.occlusion 38.40  ship 3a0422b4e (2026-10-13)
 scale.shadow_cut 27.18  quiet n=48
 scene.reopen_fidelity 74.07  quiet n=45
 scene.reopen_fidelity.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-scenegraph.baseline 0.00  ship 3a0422b4e (2026-10-13)
 scenegraph.benchmark 283.84  hand: a recorded stage-close run (spikes/) (no PASS run in the log)
 scenegraph.smoke 9.43  quiet n=47
 scripting.e2e.animation_assets 6.50  ship 3a0422b4e (2026-10-13)
