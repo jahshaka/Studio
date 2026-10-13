@@ -53,7 +53,9 @@ import gate_graph                                   # noqa: E402  the build grap
 import gate_runlog                                  # noqa: E402  THE RUN LOG (T8)
 from gate_graph import CXX_EXT, HEADER_EXT          # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# JAH_SCOPE_ROOT (round 15): another tree's selection by THIS selector — a replay of a lane's range over its own build
+# (the lane's tree and build, this file's rules); never set by a gate
+ROOT = os.environ.get("JAH_SCOPE_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---- AREA RULES: path prefix (or regex) -> (test dirs, script modules) --------------
 # MODULAR-GATE-1: for a C/C++ path (and any other build input the graph knows) the rules pick
@@ -256,6 +258,35 @@ OGRE_VIEW_FUNCTIONS = {
                                           "recordFrameCapture", "frameCaptureState", "takeFrameCapture",
                                           "destroyCaptureWorkspace", "releaseFrameCapture")},
 }
+# A FUNCTION THE MAPS DO NOT NAME (a NEW function, round 15): its NAME's keywords, first match — only a name no keyword
+# reads falls to _CORE / _ALL
+FUNCTION_NAME_KEYWORDS = [
+    (r"Ssr|Reflect|Planar|Mirror", _REFL),
+    (r"Shadow|Caster", ["shadow", "lights"]),
+    (r"Gi|Card|Probe|Voxel|Cascade|Gather|Photon|Irradiance|Ddgi|Vct", ["gi"]),
+    (r"Atom|Lod|Hzb|Occlusion|Cluster", ["atom", "engine", "scale"]),
+    (r"Bloom|Exposure|Tonemap|Chain|Pip|Letterbox|PostFx|Lut|Grade", _CHAIN),
+    (r"Vr|Stereo|HiddenArea", ["vr"]),
+    (r"Capture", ["capture", "engine"]),
+    (r"Particle", ["particles"]),
+    (r"Light|Ambient|Sun", ["lights", "*picture"]),
+    (r"Sky|Atmosphere|Environment", ["sky", "gi"]),
+    (r"Shader|Hlms|Pso", ["shadercache", "threading"]),
+]
+
+
+def function_keywords(fn):
+    """(tokens, keyword) of a function name by FUNCTION_NAME_KEYWORDS (camel-case words, case-sensitive on the capital),
+    or None."""
+    name = fn.split("::")[-1]
+    name = name[:1].upper() + name[1:]
+    for rx, toks in FUNCTION_NAME_KEYWORDS:
+        m = re.search(r"(?:" + rx + r")(?![a-z])", name)
+        if m:
+            return toks, m.group(0)
+    return None
+
+
 CORE_FUNCTION_MAPS = {"irisgl/engine/src/OgreScene.cpp": OGRE_SCENE_FUNCTIONS,
                       "irisgl/engine/src/OgreView.cpp": OGRE_VIEW_FUNCTIONS}
 
@@ -281,6 +312,17 @@ FORK_COMPONENTS = [
     (r"^OgreMain/(src|include)/.*(ParticleSystem|Particle)", ["particles"]),
     (r"^OgreMain/(src|include)/(Animation/|.*Skelet)", ["skeletal", "avatar"]),
     (r"^OgreMain/(src|include)/Compositor/", ["*engine-fixtures", "*picture"]),
+    # (round 15: the fork's components the reflect-fix-1 pin move named — never "links Ogre → everything")
+    # buffer READ-BACK (BufferPacked::readRequest, the async tickets, the staging buffers): the rows that read GPU
+    # buffers back — the GI's readouts, Atom's counters, the frame monitor, the capture
+    (r"^OgreMain/(src|include)/Vao/(OgreBufferPacked|OgreAsyncTicket|OgreStagingBuffer|OgreVaoManager)|"
+     r"^RenderSystems/(Vulkan|NULL)/(src|include)/Vao/(Ogre\w*(AsyncTicket|StagingBuffer|VaoManager))",
+     ["gi", "atom", "perf", "capture", "engine"]),
+    # the node / object memory managers (live counts, pool compaction): the scene and the mirror
+    (r"^OgreMain/(src|include)/(.*/)?Ogre(Array|Node|Object|Bone)MemoryManager", ["mirror", "engine", "scale", "pieces"]),
+    # the Hlms core's per-draw render state (a depth write, a blend, a cull): every picture + the depth/reflection rows
+    (r"^OgreMain/(src|include)/OgreHlms(\.cpp|\.h|Datablock)", ["*picture", "ssr", "rtreflect", "mirror", "planar",
+                                                               "shadow", "atom", "materialpreview"]),
     (r"^OgreMain/", ["*engine-fixtures"]),
     (r"^Components/Hlms/Pbs/(src|include)/(Vct|IrradianceField)", ["gi"]),
     (r"^Components/Hlms/(Pbs|Common)/", ["lights", "pieces", "materialpreview", "looks", "hdr", "*picture", "atom",
@@ -292,6 +334,9 @@ FORK_COMPONENTS = [
     (r"^Components/CMakeLists\.txt$", ["*engine-fixtures"]),
     (r"^PlugIns/ParticleFX", ["particles"]),
     (r"^PlugIns/", ["engine"]),
+    # the Vulkan render system's pass / attachment state (a depth attachment, a render pass): every picture + depth/reflection
+    (r"^RenderSystems/Vulkan/(src|include)/Ogre(VulkanRenderSystem|VulkanRenderPassDescriptor)",
+     ["*picture", "ssr", "rtreflect", "mirror", "planar", "shadow", "atom"]),
     (r"^RenderSystems/(Vulkan|NULL)/|^RenderSystems/CMakeLists\.txt$", ["*engine-fixtures"]),
     (r"^(CMake/|CMakeLists\.txt$|Dependencies)", ["*engine-fixtures"]),
 ]
@@ -1610,7 +1655,12 @@ class Selection:
             (OGRE_ENGINE_FUNCTIONS, "OGRE_ENGINE_FUNCTIONS")
         for fn in sorted(fns, key=lambda x: (x is None, x or "")):
             toks = fmap.get(fn)
-            if toks is None:
+            kw = function_keywords(fn) if (toks is None and fn) else None
+            if kw:
+                # A FUNCTION THE MAP DOES NOT NAME (a new one: readSsrHistoryHdr) IS READ BY ITS NAME'S KEYWORDS (round 15)
+                toks = kw[0]
+                what = f"{fn}() (not in {mapname}) by its name's keyword '{kw[1]}' -> {' '.join(toks)}"
+            elif toks is None:
                 # the core's unnamed reach: OgreEngine.cpp's is everything that renders (_ALL, the app rows too);
                 # OgreScene/OgreView's every engine fixture + the picture set (_CORE), never the app rows
                 toks = _CORE if core else _ALL
@@ -2052,6 +2102,14 @@ class Selection:
         if p.startswith("irisgl/engine/"):
             # AN ENGINE HEADER'S NEW SCOPE SELECTS BY ITS NAME; A NEW NAME'S USERS ARE IN THIS CHANGE (TESTING-SPEED-A item 4)
             ids, new_ids = gate_graph.new_scope_ids(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)), ids)
+            # AN ENUM'S COUNT CONSTANT MOVED WITH ITS APPEND (round 15: `kPhotonViewCount` 8 -> 9 beside PhotonView's new
+            # GatherHits): `k<Enum>Count` of an enum that only GREW is part of the append — its users read the new
+            # length, and the new member's users are in this change
+            for t in sorted(ids):
+                m_ = re.fullmatch(r"k(\w+)Count", t)
+                if m_ and m_.group(1) not in ids and re.search(r"\benum\s+(class\s+|struct\s+)?" + re.escape(m_.group(1))
+                                                              + r"\b", b) and new_ids:
+                    ids, new_ids = ids - {t}, new_ids | {t}
             if new_ids:
                 notes.append(f"new identifier(s) {sorted(new_ids)[:6]}: their users are in this change")
         naming = gate_graph.files_naming(ROOT, ids)
@@ -2059,6 +2117,26 @@ class Selection:
             touched = getattr(self, "_paths", set())
             naming = {f: (v - new_ids if f not in touched else v) for f, v in naming.items()}
             naming = {f: v for f, v in naming.items() if v}
+        if p.startswith("irisgl/engine/"):
+            # A DATA MEMBER declared on a changed line (`std::vector<GatherRay> rays;`, `unsigned raysFrame = 0u;`) is a
+            # USE only as a member — `.rays`, `->rays`, `::rays`; a parameter or local of the same word is another
+            # name (round 15: OgreRayQuery.cpp's `const std::vector<float> &rays` is not GatherStatus::rays)
+            hl = set()
+            for _os, _oc, ns, nc in gate_graph.hunks_of(self.revs.diff_u0(p)):
+                hl |= set(range(ns - 1, ns - 1 + nc))
+            bl = gate_graph.strip_cxx(b)
+            members = {m_.group(1) for k in hl if k < len(bl)
+                       for m_ in [re.search(r"^\s*[\w:<>,\s\*&]+?[\s\*&>]([a-z]\w*)\s*(?:=[^;]*|\{[^;]*\}|\[[^;]*\])?\s*;",
+                                            bl[k])] if m_} & set(ids | new_ids)
+            if members:
+                txts = {}
+                for f in list(naming):
+                    hit = naming[f] & members
+                    if hit and f.endswith((".cpp", ".cc", ".mm", ".h", ".hpp")):
+                        txts[f] = txts.get(f) or "\n".join(gate_graph.strip_cxx(_read(os.path.join(ROOT, f)) or ""))
+                        naming[f] = naming[f] - {t for t in hit if not re.search(r"(\.|->|::)\s*" + re.escape(t) + r"\b",
+                                                                                 txts[f])}
+                naming = {f: v for f, v in naming.items() if v}
         self._script_namers = sorted(f for f in naming if f.endswith((".js", ".js.in")))
         per_id = collections.Counter(t for toks in naming.values() for t in toks)
         common = sorted(t for t in ids if per_id[t] > self.SYMBOL_SPECIFICITY)
