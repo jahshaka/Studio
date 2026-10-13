@@ -38,7 +38,7 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "gi.cascadeFault": -1, "gi.cascadeFaultPost": -1, "gi.rebuildSettle": 1,
                  "gi.fieldRays": 0, "gi.fieldSamples": 0, "gi.fieldStatic": 0, "gi.refuseGeometry": 0,
                  "atom.discriminate": 0, "atom.hitWorldLights": 0, "atom.hitVctSpecular": 1,
-                 "gather.hitsReadback": 0, "reflect.metalDecode": 0.3 };
+                 "gather.hitsReadback": 0, "reflect.metalDecode": 0.3, "gi.hitDirect": 1 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
