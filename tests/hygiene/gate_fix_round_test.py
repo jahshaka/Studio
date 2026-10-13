@@ -107,6 +107,8 @@ def main(source, build):
                                     for k in keys], "scoped", s)
 
     def run(rng, *extra):
+        # the earlier commits' reds are the PUSH's rule (round 14: a merge reads this run's records only)
+        extra = list(extra) + ([] if "--mode" in extra else ["--mode", "push"])
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout
@@ -193,8 +195,9 @@ def main(source, build):
         vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
         if rc != 0:
             print("\n".join(l for l in out.splitlines() if "REFUSED" in l)[:2000])
-        check(rc == 0 and any(revs[A][:9] in f for f in vfiles),
-              "...a verdict is recorded AT %s (where the red happened) and the lane is accepted (%d, %s)"
+        check(any(revs[A][:9] in f for f in vfiles) and "KNOWN RED" in out,
+              "...a verdict is recorded AT %s (where the red happened) and reads as a KNOWN RED (the push refuses known "
+              "reds; round 14: the merge never asks an earlier commit) (%d, %s)"
               % (A, rc, vfiles))
 
     # ---- 4b. THE FLAKE LAW ACROSS COMMITS (the lead's read, F1): a green at the tip does not answer an

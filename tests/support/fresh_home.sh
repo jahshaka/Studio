@@ -26,6 +26,8 @@
 #                   measurement — a suite that asserts ON the cold cache (the VR warm-up, the shadow cache probes) runs
 #                   without --warm.
 #   --keep-home     (with a command) keep the home after the run — the old behaviour; a fixture row's own use.
+#   --setup         a FIXTURES_SETUP row (jah_fresh_home_fixture): wipe before, run THEN, exit with its code — no wipe
+#                   after (the consumer's exit does it: --after), no cache promotion.
 #   --reset <dir>   also removed and recreated (a suite's export target beside its home).
 #   --rm <file>     also removed.
 #   --mkdir <dir>   also created.
@@ -35,12 +37,13 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; after=""
+warm=0; keep=0; after=""; setup=0
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --warm)  warm=1; shift ;;
         --keep-home) keep=1; shift ;;
+        --setup) setup=1; shift ;;
         --after) after="$2"; warm=1; shift 2 ;;
         --reset) resets="$resets
 $2"; shift 2 ;;
@@ -174,7 +177,10 @@ shift
 [ $# -gt 0 ] || { echo "fresh_home.sh: -- with no command" >&2; exit 2; }
 mkdir -p "$start" 2>/dev/null || true
 cd "$start"
-if [ "$keep" = 1 ] || [ -z "$tests_dir" ]; then
+# A FIXTURE'S SETUP (--setup, jah_fresh_home_fixture's row; round 14 addendum 2): the wipe BEFORE, then its THEN, then
+# its exit code — never the wipe after (that is the CONSUMER's exit: --after, run by its admission from JAH_WIPE_AFTER)
+# and no cache promotion (the setup compiled nothing): a THEN that writes a file the consumer reads keeps it
+if [ "$keep" = 1 ] || [ "$setup" = 1 ] || [ -z "$tests_dir" ]; then
     exec "$@"
 fi
 set +e

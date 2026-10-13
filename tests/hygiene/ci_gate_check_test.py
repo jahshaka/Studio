@@ -103,7 +103,10 @@ def main(source, build):
     json.dump({"defects": fixtures}, open(unlisted, "w"))
 
     def run(rng=None, *extra):
+        # THE DOOR'S RULES LIVE AT THE PUSH (round 14: a merge arbitrates nothing — its own checks below, `merge_case`):
+        # these checks ask the door in push mode unless they name a mode
         rng = rng or RANGE
+        extra = list(extra) + ([] if "--mode" in extra else ["--mode", "push"])
         p = subprocess.run([tool, rng, "--build", build] + list(extra), capture_output=True, text=True,
                            env=dict(os.environ))
         return p.returncode, p.stdout
@@ -143,22 +146,37 @@ def main(source, build):
     rc, out = run()
     check(rc == 1 and "needs a verdict" in out,
           "...and ONE solo PASS does not erase it (the audit's L2: latest-wins is gone) (%d)" % rc)
-    # (VERDICT-1's door: with solos after the red, a verdict clears it only at 3/3 — gate.verdict_door)
-    put(rows, "PASS", "2026-01-01T10:06:00", retry=True)
-    put(rows, "PASS", "2026-01-01T10:07:00", retry=True)
-    # (a PASS at the red's own sha proves no fix — F1; this red is NOT REPRODUCED by its 3/3: a single-use entry)
-    rc, out = run(RANGE, "--verdict", "gi.speckle=real:NOTREPRO-FIXTURE-1 the fixture's red, read by the test")
-    check(rc == 0 and "recorded verdict" in out, "the same red with a recorded verdict -> accepted (%d)" % rc)
+    # ---- A MERGE ARBITRATES NOTHING (round 14): this run's records; a red stands until the lead's named verdict -----
+    # (no registry entry names the rows here: a row an open entry names is KNOWN at a merge, served, never run)
+    empty = os.path.join(scratch, "defects-none.json")
+    json.dump({"defects": []}, open(empty, "w"))
+    fresh(empty, data_edge=False)
+    put(rows, "FAIL", "2026-01-01T09:00:00")                       # an EARLIER fire's red at the same tip
+    put(rows, "PASS", "2026-01-01T10:00:00")                       # this run: green
+    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T09:30:00")
+    check(rc == 0, "round 14: a MERGE reads THIS run's records — an earlier fire's red at the same tip, this run green -> "
+          "accepted (%d)" % rc)
+    put(rows, "FAIL", "2026-01-01T10:30:00")                       # this run: red
+    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00")
+    check(rc == 1 and "the lead decides" in out, "round 14: a red of this run without the lead's verdict -> refused (%d)"
+          % rc)
+    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00", "--verdict",
+                  "gi.speckle=the lead read the log: the fixture's red, read by the test")
+    check(rc == 0, "round 14: ...with the lead's named verdict (--door-verdict -> --verdict) -> accepted, whatever its "
+          "text (%d)" % rc)
     vfiles = [f for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f]
     vrec = [json.loads(l) for f in vfiles for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
     check(len(vrec) == 1 and vrec[0]["suite"] == rows[0] and vrec[0]["kind"] == "verdict"
           and "read by the test" in vrec[0]["text"], "...and the verdict is a record in the run log (%s)" % vfiles)
-    rc, out = run()
+    rc, out = run(RANGE, "--mode", "merge", "--since", "2026-01-01T10:15:00")
     check(rc == 0, "...which a later check reads without the flag (%d)" % rc)
     put(rows, "FAIL", "2099-01-01T10:00:00")
-    rc, out = run()
-    check(rc == 1 and "needs a verdict" in out,
-          "a red logged AFTER the verdict is not cleared by it (D4: per row, timestamped) (%d)" % rc)
+    rc, out = run(RANGE, "--mode", "merge")
+    check(rc == 1 and "the lead decides" in out,
+          "a red logged AFTER the verdict is not cleared by it (per row, timestamped) (%d)" % rc)
+    rc, out = run(RANGE, "--mode", "push")
+    check(rc == 1, "round 14: ...and the PUSH of a merge-accepted red (a verdict in prose) refuses: its proof rules stay "
+          "(%d)" % rc)
     rc, out = run(RANGE, "--verdict", "api.contract=not red, so nothing to answer")
     check(rc == 1 and "no verdict recorded for api.contract" in out,
           "a verdict for a row that is not red is refused, said out loud (%d)" % rc)
@@ -168,21 +186,19 @@ def main(source, build):
                            text=True).stdout.strip()
     pin2, base2_pin = (subprocess.run(["git", "rev-parse", r + ":irisgl"], cwd=source, capture_output=True,
                                       text=True).stdout.strip() for r in (tip2, base2))
-    fresh(unlisted)
+    fresh(empty)
     put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
-    put(ROWS2, "FAIL", "2026-01-01T09:00:00", t=base2, ig=base2_pin, retry=True)   # the same red on the base: KNOWN
-    rc, out = run(RANGE2, "--verdict", "%s=real:FIXTURE-1 fixed first verdict" % ROWS2[0], "--verdict",
-                  "%s=real:FIXTURE-2 fixed second verdict" % ROWS2[1])
+    rc, out = run(RANGE2, "--mode", "merge", "--verdict", "%s=the lead: first verdict" % ROWS2[0], "--verdict",
+                  "%s=the lead: second verdict" % ROWS2[1])
     vrec = [json.loads(l) for f in os.listdir(os.environ["JAH_RUN_LOG_DIR"]) if "-verdict-" in f
             for l in open(os.path.join(os.environ["JAH_RUN_LOG_DIR"], f))]
     check(rc == 0 and sorted(r["suite"] for r in vrec) == sorted(ROWS2),
           "two repeated --verdict flags record BOTH verdicts and the lane is accepted (%d, %s)"
           % (rc, sorted(r["suite"] for r in vrec)))
-    fresh(unlisted)
+    fresh(empty)
     put(ROWS2, "FAIL", "2026-01-01T10:00:01", t=tip2, ig=pin2)
-    put(ROWS2, "FAIL", "2026-01-01T09:00:00", t=base2, ig=base2_pin, retry=True)
-    rc, out = run(RANGE2, "--verdict", "%s=real:FIXTURE-1 fixed first verdict" % ROWS2[0],
-                  "%s=real:FIXTURE-2 fixed second verdict" % ROWS2[1])
+    rc, out = run(RANGE2, "--mode", "merge", "--verdict", "%s=the lead: first verdict" % ROWS2[0],
+                  "%s=the lead: second verdict" % ROWS2[1])
     check(rc == 0, "...and so does one --verdict with two pairs (%d)" % rc)
 
     # ---- a row that never ran (NOADMIT) is MISSING, which no verdict clears ------------------------
@@ -273,40 +289,6 @@ def main(source, build):
           "each suite's record carries the box sampled at ITS start (%s)"
           % {k: v.get("other_ctests") for k, v in recs.items()})
 
-    # ---- FIX ROUND item 1: THE EARLY STOP'S KNOWN-RED PREDICATE (--known-red) -------------------------------------
-    # a registered row red at the tip AND red at the nearest ancestor of the base holding a run -> known; the base green ->
-    # the lane's; no run anywhere (a NEW row, red by design) -> known (the door decides); no registry entry -> the lane's
-    def kr(row):
-        rc_, out_ = run(RANGE, "--known-red", row)
-        try:
-            return json.loads(out_.strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            return {"known": None, "why": out_[-200:]}
-    fresh(unlisted, data_edge=False)
-    put(rows, "FAIL", "2026-01-01T10:00:00")
-    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
-    j = kr(rows[0])
-    check(j["known"] is True and "the same red at" in j["why"], "--known-red: registered + the same red at the base -> "
-          "KNOWN (the early stop does not refuse it) (%s)" % j["why"][:90])
-    fresh(unlisted, data_edge=False)
-    put(rows, "FAIL", "2026-01-01T10:00:00")
-    put(rows, "PASS", "2026-01-01T08:00:00", t=base, ig=base_pin)
-    j = kr(rows[0])
-    check(j["known"] is False and "green" in j["why"], "--known-red: registered but the base GREEN -> the lane's red (%s)"
-          % j["why"][:90])
-    fresh(unlisted, data_edge=False)
-    put(rows, "FAIL", "2026-01-01T10:00:00")
-    j = kr(rows[0])
-    check(j["known"] is True and "new row" in j["why"], "--known-red: registered and no ancestor holds a run (a NEW row "
-          "red by design: source.row_budget at its own merge) -> known, the door decides (%s)" % j["why"][:90])
-    empty = os.path.join(scratch, "defects-empty.json")
-    json.dump({"defects": []}, open(empty, "w"))
-    fresh(empty, data_edge=False)
-    put(rows, "FAIL", "2026-01-01T10:00:00")
-    put(rows, "FAIL", "2026-01-01T08:00:00", t=base, ig=base_pin)
-    j = kr(rows[0])
-    check(j["known"] is False and "no open registry entry" in j["why"], "--known-red: no registry entry -> never known, "
-          "whatever the base holds (%s)" % j["why"][:90])
     # ---- FIX ROUND item 4: a batch carries its pools' arms (JAH_POOL_ARMS) --------------------------------------------
     sys.path.insert(0, os.path.join(source, "scripts"))
     import ci_gate_check as cgc_mod
