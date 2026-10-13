@@ -68,7 +68,17 @@ endforeach()
 # them on the build's resource spec — the admission's wait outside the row's clock). Counted, never timed:
 # each toy row marks itself running and records any sibling it finds running.
 if(BIN)
-    set(_toy "${BIN}/tokens_by_needs_toy")
+    # THE TOY LIVES OUTSIDE THE BUILD TREE (round 21): a toy project configured inside build-linux/tests/ is a
+    # CTestTestfile tree every inventory walker (gate_graph.ctest_inventory, source.testing_rules) reads while it is
+    # created and deleted — the parallel-ctest race of NONDET-TESTING-RULES-TOY-RACE-1. Its own dir under TMPDIR
+    # (else /tmp), unique per run: no walker of the build ever sees it
+    set(_tmp "$ENV{TMPDIR}")
+    if(NOT _tmp OR NOT IS_DIRECTORY "${_tmp}")
+        set(_tmp "/tmp")
+    endif()
+    file(REMOVE_RECURSE "${BIN}/tokens_by_needs_toy")    # the old in-tree location's leftovers
+    string(RANDOM LENGTH 10 _rnd)
+    set(_toy "${_tmp}/tokens_by_needs_toy-${_rnd}")
     file(REMOVE_RECURSE "${_toy}")
     file(MAKE_DIRECTORY "${_toy}/src" "${_toy}/marks")
     file(WRITE "${_toy}/src/claim.sh" [=[

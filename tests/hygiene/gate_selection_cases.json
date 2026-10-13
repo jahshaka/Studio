@@ -680,54 +680,6 @@
    "rows_at_tip_only": true
   },
   {
-   "lane": "FAR-SUN-1 (TESTING-SPEED-A replay)",
-   "range": "0beeac4d3..3e29d3a5d",
-   "evidence": "spikes/testing-speed-a/far-sun-replay.txt",
-   "must": [],
-   "env": [],
-   "must_families": [
-    "gi"
-   ],
-   "none_of": [
-    "hdr"
-   ],
-   "note": "the Photon line selects gi (+ the screenshot rows), never the hdr family; the five new rows (gi.far_sun_*, gi.cast_shadow_gi, photon.view) are registered at 3e29d3a5d only — proved against far-sun-1's build in the spike",
-   "rows_at_tip_only": true
-  },
-  {
-   "lane": "FAR-SUN-1 on d-build (TESTING-SPEED-A round 15)",
-   "range": "1625aebbc..55ddb285b",
-   "must": [],
-   "env": [],
-   "must_families": [
-    "gi"
-   ],
-   "none_of": [
-    "hdr",
-    "mirror"
-   ],
-   "rows_at_tip_only": true,
-   "note": "the lane's change as the merge will judge it (rebased on d-build 1625aebbc): Types.h's new GatherRay / GatherStatus::rays attribute by identifier (a data member counts only as a member access; kPhotonViewCount moves with PhotonView's append) — gi + the Photon line; OgreRayQuery.cpp's own edit (makeStorageImage, recordGather) reaches the ray-query core, worldapi.cpp / editorpage.cpp their own rules; never the relink or read-by arm of a header, never hdr/vr/atom"
-  },
-  {
-   "lane": "REFLECT-FIX-1 pin move on d-build (TESTING-SPEED-A round 15)",
-   "range": "1625aebbc..22129c289",
-   "must": [],
-   "env": [],
-   "must_families": [
-    "ssr",
-    "gi",
-    "mirror"
-   ],
-   "must_picture": true,
-   "none_of": [
-    "avatar",
-    "ui"
-   ],
-   "rows_at_tip_only": true,
-   "note": "the fork pin 94ac7c94f -> 79b6f0f7c by COMPONENT: OgreHlms.cpp's read-only depth (the picture + depth/reflection rows), Vao/BufferPacked + the Vulkan async ticket (the read-back rows: gi, atom, perf, capture), the other render systems nothing — never 'links Ogre: every row'; a new OgreView function (readSsrHistoryHdr) by its name's keyword (Ssr)"
-  },
-  {
    "lane": "BLOOM-1 on d-build (TESTING-SPEED-A round 15)",
    "range": "1625aebbc..7e268655d",
    "must": [],
@@ -742,6 +694,23 @@
    ],
    "rows_at_tip_only": true,
    "note": "the engine CMake edit (BLOOM-1's comment + the media registration) is read by WHAT it changed: a source-list / comment edit scopes by the files it names — never the family rule (the 54 'irisgl/engine/CMakeLists.txt: rule ^irisgl/(engine/|thirdparty/og…' rows were the lane's stale selector); an option or flag edit is everything, said"
+  },
+  {
+   "lane": "P1C-LIGHT-LIST pin move on d-build (TESTING-SPEED-A round 21)",
+   "range": "bd713186b..5b1d2a502",
+   "must": [
+    "scale.lights"
+   ],
+   "env": [],
+   "must_families": [
+    "lights",
+    "gi",
+    "atom"
+   ],
+   "must_picture": true,
+   "none_of": [],
+   "rows_at_tip_only": true,
+   "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component"
   }
  ],
  "files": [

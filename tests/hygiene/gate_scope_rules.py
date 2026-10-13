@@ -321,6 +321,14 @@ def speed_cases(source, build):
     check(S.selected and "ssr" in fams_ and not fams_ & {"vr", "particles", "ui", "hdr"} and len(S.selected) < 100,
           "25. round 15: a NEW OgreView function named by a keyword (readSsrTsaHistory: 'Ssr') -> the reflection rows "
           "only, never every engine fixture (%d rows: %s)" % (len(S.selected), sorted(fams_)[:8]))
+    # round 21: THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST) has its table line: the light rows, scale.lights, the GI and
+    # Atom (its three consumers) — never "no rule, no symbol, no graph owner"
+    S = sel(["irisgl/engine/src/SceneLightList.cpp"])
+    fams_ = {n.split(".")[0] for n in S.selected}
+    check("scale.lights" in S.selected and {"lights", "gi", "atom"} <= fams_ and not S.fallback and not S.full_tier
+          and not fams_ & {"vr", "ui", "particles"},
+          "26. round 21: SceneLightList.cpp -> the light rows + scale.lights + gi + atom, no fallback (%d rows: %s)"
+          % (len(S.selected), sorted(fams_)[:10]))
     # 26. (fix round items 3, 5) src/viewport/ reaches the picture set; a Jahshaka Hlms PIECE reaches Atom besides its
     # line; the fork's Hlms Pbs/Common lines reach Atom
     S = sel(["src/viewport/enginerenderdriver.cpp"])

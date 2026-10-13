@@ -1248,22 +1248,48 @@ def cxx_changed_identifiers(old_text, new_text, hunks=None):
             # a hunk whose code (comments and whitespace stripped) is unchanged changes nothing
             if [x for x in a[i1:i2] if x.strip()] == [x for x in b[j1:j2] if x.strip()]:
                 continue
-            ops.append(("replace" if oc and nc else ("insert" if nc else "delete"), i1, i2, j1, j2))
+            # (round 21) a side with no CODE (comments only) does not make a replace: a hunk that swaps a comment for
+            # code inserts it
+            ca, cb = any(x.strip() for x in a[i1:i2]), any(x.strip() for x in b[j1:j2])
+            ops.append(("replace" if ca and cb else ("insert" if cb else "delete"), i1, i2, j1, j2))
     sa, sb = _scopes(a), _scopes(b)
     fa, fb = _function_depth(a), _function_depth(b)
     ta, tb = _statement_starts(a), _statement_starts(b)
     ids, changed = set(), 0
+    fn_decl = re.compile(r"\b[A-Za-z_]\w*\s*\(")
     for tag, i1, i2, j1, j2 in ops:
+        # A REPLACE THAT RENAMES, REMOVES OR ADDS MEMBERS (round 21: P1C's `mCardLights` removed and `walkCardLights`'s
+        # signature changed inside OgreScene) selects by those names — code that does not name them compiles to the
+        # same meaning; the enclosing scope only for a member DECLARED ON BOTH SIDES (its type or default modified) or a
+        # line that declares nothing / sits in a function body. A function declaration's callers name the function.
+        side_names = []
+        for lines, fdep, starts, lo, hi in ((a, fa, ta, i1, i2), (b, fb, tb, j1, j2)):
+            got = set()
+            for k in range(lo, min(hi, len(lines))):
+                ln = lines[k].strip()
+                if ln and not _ACCESS.match(ln):
+                    got |= declared_names(lines[starts[k]] if starts[k] < k else ln, fdep[k])[0]
+            side_names.append(got)
+        both = side_names[0] & side_names[1]
         for lines, scopes, fdep, starts, lo, hi in ((a, sa, fa, ta, i1, i2), (b, sb, fb, tb, j1, j2)):
             for k in range(lo, min(hi, len(lines))):
                 ln = lines[k].strip()
                 if not ln: continue
                 changed += 1
                 if _ACCESS.match(ln): continue
+                if not re.search(r"[A-Za-z_]", ln) and starts[k] >= k:
+                    continue                 # (round 21) a brace / punctuation line names nothing of its own
                 head = lines[starts[k]] if starts[k] < k else ln
                 names, with_scope = declared_names(head, fdep[k])
                 ids |= names
-                if with_scope and (tag == "replace" or fdep[k] or not names):
+                modified = tag == "replace" and bool(names & both) and not (
+                    names and all(fn_decl.search(head[head.find(n):] or "") and
+                                  re.search(r"\b" + re.escape(n) + r"\s*\(", head) for n in names))
+                # (round 21) a body line of a function this very hunk INSERTS is new code: its function's name, declared on
+                # the inserted head, carries it — never the enclosing class (PhotonVoxelLighting::lightBudgetFor)
+                new_body = tag == "insert" and fdep[k] and any(declared_names(lines[q].strip(), fdep[q])[0]
+                                                               for q in range(lo, k) if not fdep[q])
+                if with_scope and (modified or (fdep[k] and not new_body) or not names):
                     ids |= set(scopes[k][-1:])
     ids = {t for t in ids if len(t) >= 4 and t not in _CXX_KEYWORDS and t.lower() not in _GENERIC}
     return ids, changed
