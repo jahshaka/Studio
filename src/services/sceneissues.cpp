@@ -534,14 +534,18 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             mMaterialsSeen = iris::Material::globalRevision();
             mFlippedPaths.clear();
         } else {
+            // A node in ANOTHER document (a thumbnail's, a preview's) is not
+            // ours and is skipped; one in NO document has left ours, with its
+            // subtree.
+            const auto departed = [](iris::SceneNode *n) { return n && n->getScene().isNull(); };
             for (iris::graph::NodeHandle h : moved) {
                 iris::SceneNode *n = iris::graph::ownerOf(h);
                 if (inScene(n)) walk(n);
-                else if (n) forgetSubtree(n);
+                else if (departed(n)) forgetSubtree(n);
             }
             for (iris::graph::NodeHandle h : written) {
                 iris::SceneNode *n = iris::graph::ownerOf(h);
-                if (!inScene(n)) { if (n) forgetSubtree(n); continue; }
+                if (!inScene(n)) { if (departed(n)) forgetSubtree(n); continue; }
                 if (visited.contains(n)) continue;
                 visited.insert(n);
                 checkNode(n);
