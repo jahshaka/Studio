@@ -252,7 +252,7 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
     **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "dropWorkspaceForShadowRebuild",
                                          "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},
-    "readReflectionHdr": _REFL,
+    **{f: _REFL for f in ("readReflectionHdr", "readSsrHistoryHdr")},
     "updateParticles": ["particles"],
     "updateGi": ["gi"],
     **{f: ["shadercache", "threading"] for f in ("setAsyncShaders", "asyncShaders", "computeHlms", "warmUpShaders")},
