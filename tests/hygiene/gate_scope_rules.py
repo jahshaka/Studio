@@ -552,29 +552,13 @@ def main(source, build):
           and "-LE" in doc.get("command", ""),
           "irisgl/thirdparty/ogre-next selects the MERGE tier by rule (the tier carries engine.atom_parity)")
 
-    # 9. THE TIER DOC QUOTES THE SCRIPT, NEVER A COPY OF ITS SET (POST-C-FIXES-1).
-    # docs/TESTING_GATE.md's MERGE row carried a literal
-    # -LE "^(benchmark|<the shader-cache attack label>)$" that went stale the day TARGET_LABELS
-    # joined the tier (it never named photon-target). The set lives in
-    # gate-scope.py alone; the doc names `--merge-tier`, which prints the command.
-    import re as _re
-    doc_path = os.path.join(source, "docs", "TESTING_GATE.md")
-    with open(doc_path, errors="replace") as fh:
-        doc_lines = fh.read().splitlines()
-    literal = [i + 1 for i, l in enumerate(doc_lines) if _re.search(r'-LE\s+["\']\^?\(', l)]
-    check(not literal,
-          "docs/TESTING_GATE.md quotes no literal -LE label list (lines %s) - it names "
-          "`gate-scope.py --merge-tier`" % literal)
-    check(any("--merge-tier" in l for l in doc_lines),
-          "...and it names `gate-scope.py --merge-tier` as the tier's command")
+    # 9. THE TIER'S SET LIVES IN THE SCRIPT ALONE (POST-C-FIXES-1; the testing doc that once quoted it is deleted —
+    # THE PROCESS, 2026-10-13: DOCS/PROCESS.md names no label set). `--merge-tier` prints the command.
     code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
     check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
           and "stage-close" in plain(out)
           and "benchmark" not in plain(out),
           "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
-    code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
-    check(code == 0 and "source.gate_scope_rules" in plain(out),
-          "an edit to docs/TESTING_GATE.md selects this guard")
 
     # 10. A SUITE REGISTERED THROUGH A HELPER BELONGS TO ITS CALL SITE'S DIR
     # (POST-C-FIXES-1). jah_gpu_exclusive_test's add_test lives in tests/CMakeLists.txt,
