@@ -127,19 +127,6 @@ bool slabEntry(const Vec3 &o, const Vec3 &d, const enginetest::AnalyticBox &b, f
     return true;
 }
 
-/// Nearest hit of a ray against the fixture's boxes: the box index and the distance (-1 = none).
-int nearest(const Vec3 &o, const Vec3 &d, const std::vector<Box> &boxes, float &tHit)
-{
-    int best = -1;
-    tHit = 1e30f;
-    for (size_t i = 0; i < boxes.size(); ++i) {
-        float t0;
-        if (!slabEntry(o, d, boxes[i].b, t0) || t0 <= 1e-5f) continue;
-        if (t0 < tHit) { tHit = t0; best = int(i); }
-    }
-    return best;
-}
-
 bool sunlit(const Vec3 &p, const std::vector<Box> &boxes)
 {
     for (const Box &b : boxes)
