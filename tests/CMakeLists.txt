@@ -432,10 +432,11 @@ endfunction()
 # Vulkan row that is not): its class (JAH_CLASS) and its slots (RESOURCE_GROUPS, tests/cmake/vram_rows.cmake). A TARGET
 # name as the first COMMAND word becomes $<TARGET_FILE:...>. A pool is registered by jah_add_pool.
 # CLASS engine BOOTS WARM (ENGINE-UPGRADE-1 stage 1, BOOT; DOCS/PROCESS.md: "every engine fixture boots on the shared warm
-# shader cache"): the row runs as `fresh_home.sh --warm <this dir's build>/homes/<row> -- env
-# JAHSHAKA_SHADER_CACHE_DIR=<home>/.local/share/Jahshaka/shadercache JAH_TEXTURE_CACHE=0 <exe> …` — the tree's one shared
-# cache (<build>/tests/.shadercache) hard-linked in, a green run that grew it promoted, the home wiped after (a red one
-# moved to the evidence); the fixture helper's hook (tests/support/enginetesthelpers.h applyHarnessDefaults) copies the
+# shader cache"): the row runs as `fresh_home.sh --warm --cache engine <this dir's build>/homes/<row> -- env
+# JAHSHAKA_SHADER_CACHE_DIR=<home>/.local/share/Jahshaka/shadercache JAH_TEXTURE_CACHE=0 <exe> …` — the fixtures' one
+# shared cache (<build>/tests/.shadercache-engine, keyed apart from the app rows' .shadercache: measured, the app rows'
+# union reached 268 MB = the engine's 256 MB cap and its replay cost a fixture 0.4-0.8 s a boot) hard-linked in, a green
+# run that grew it promoted, the home wiped after (a red one moved to the evidence); the fixture helper's hook (tests/support/enginetesthelpers.h applyHarnessDefaults) copies the
 # variable into the config, and a fixture that states its own cache (shaderCacheDir / shaderCacheOff) still wins. The
 # texture sidecar is OFF on engine rows (its key is a file's path; a shared one could serve a stale channel count). The
 # variables ride the COMMAND, never ENVIRONMENT: a later set_tests_properties(… ENVIRONMENT …) replaces that property.
@@ -480,7 +481,7 @@ function(jah_gpu_row _row)
     endif()
     if(G_CLASS STREQUAL "engine" AND NOT G_COLD)
         set(_home "${CMAKE_CURRENT_BINARY_DIR}/homes/${_row}")
-        add_test(NAME ${_row} COMMAND sh "${JAH_FRESH_HOME}" --warm "${_home}" --
+        add_test(NAME ${_row} COMMAND sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
                  env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
                  "${_exe}" ${G_COMMAND} ${_wd})
     else()

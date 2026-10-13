@@ -4,7 +4,7 @@
 # implementation of the wipe: it replaced 27 hand-copied `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake,
 # and it is every pool's and one-script row's default.
 #
-#   fresh_home.sh [--warm] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
+#   fresh_home.sh [--warm [--cache <key>]] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
 #                 [-- <command> [args...]]
 #
 # WHY. A suite home that survives its run ACCUMULATES: measured on the main tree,
@@ -23,6 +23,10 @@
 #                   PROMOTES it as the shared one (a rename). A cold cache costs ~4 s a boot and is its own
 #                   measurement — a suite that asserts ON the cold cache (the VR warm-up, the shadow cache probes) runs
 #                   without --warm.
+#   --cache <key>   (with --warm) the tree's shared cache NAMED <key>: <build>/tests/.shadercache-<key>, its own lock —
+#                   a set of rows that boots a different shader set keeps its own union (ENGINE-UPGRADE-1: the engine
+#                   fixtures' `engine` cache beside the app rows' 268 MB one, whose replay cost a fixture 0.4-0.8 s a boot
+#                   and which sits at the engine's 256 MB cap). [a-z0-9_] only.
 #   --keep-home     (with a command) keep the home after the run — the old behaviour; a fixture row's own use.
 #   --setup         a FIXTURES_SETUP row (jah_fresh_home_fixture): wipe before, run THEN, exit with its code — no wipe
 #                   after (the home is wiped at its next setup), no cache promotion.
@@ -35,12 +39,14 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; setup=0
+warm=0; keep=0; setup=0; key=""
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --warm)  warm=1; shift ;;
         --keep-home) keep=1; shift ;;
+        --cache) key="${2:-}"; shift 2
+                 case "$key" in ""|*[!a-z0-9_]*) echo "fresh_home.sh: --cache needs a key of [a-z0-9_]" >&2; exit 2 ;; esac ;;
         --setup) setup=1; shift ;;
         --reset) resets="$resets
 $2"; shift 2 ;;
@@ -72,7 +78,7 @@ while [ "$d" != "/" ] && [ -n "$d" ]; do
 done
 cache_rel=.local/share/Jahshaka/shadercache
 shared=""
-[ -n "$tests_dir" ] && shared="$tests_dir/.shadercache"
+[ -n "$tests_dir" ] && shared="$tests_dir/.shadercache${key:+-$key}"
 
 # THE WIPE AFTER (item 7): green -> a grown cache promoted, the home deleted; red -> the home moved to the evidence
 wipe_after() {
@@ -89,15 +95,15 @@ if [ "$rc" = 0 ]; then
             # mid-swap) go under the same lock; a lock not had in 60 s = no promotion (the run stays green)
             (
                 flock -w 60 9 || exit 0
-                for o in "$tests_dir"/.shadercache-next.*; do [ -e "$o" ] && rm -rf "$o"; done
+                for o in "$shared"-next.*; do [ -e "$o" ] && rm -rf "$o"; done
                 theirs=0; [ -d "$shared" ] && theirs=$(du -sk "$shared" 2>/dev/null | cut -f1)
                 [ "${mine:-0}" -gt "${theirs:-0}" ] || exit 0
-                nxt="$tests_dir/.shadercache-next.$$"
+                nxt="$shared-next.$$"
                 mv "$home/$cache_rel" "$nxt" \
                     && { [ ! -d "$shared" ] || mv "$shared" "$nxt.old"; } \
                     && mv "$nxt" "$shared" && rm -rf "$nxt.old"
                 exit 0
-            ) 9>"$tests_dir/.shadercache.lock" || true
+            ) 9>"$shared.lock" || true
         fi
     fi
     rm -rf "$home"
@@ -153,7 +159,7 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
             ln "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || true
         done
         exit 0
-    ) 9>"$tests_dir/.shadercache.lock" || true
+    ) 9>"$shared.lock" || true
 fi
 
 old_ifs="$IFS"; IFS='
