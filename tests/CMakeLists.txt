@@ -283,18 +283,10 @@ target_include_directories(jah_testmesh PRIVATE
 jah_links_assimp(jah_testmesh)
 target_link_libraries(jah_testmesh PUBLIC IrisGL Qt6::Core)
 
-# THE GPU-TIMING ADMISSION (lane DEVPROCESS-1; ONE admission since TEST-SELECTOR-1 G1+G2,
-# docs/TESTING_GATE.md §4). A suite that measures TIME or GPU BUDGET prints a number that reads as
-# a red when anything else shares the GPU with it; RUN_SERIAL serialises only inside ONE ctest
-# process, and every lane is its own ctest process. So these suites — and only these — are
-# REGISTERED THROUGH scripts/gpu-exclusive.sh, which takes EVERY token of the box-wide VRAM budget
-# (below): the card drains to the timing row and nothing untimed shares it. (The separate flock it
-# used to be excluded only the other timing rows.) THE LIST IS THE TIMING LIST (lane
-# D6B-GATE-SHAPE; audit SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4 R3/R4/R5, §5): a suite is
-# on it because it asserts a millisecond, a ratio of milliseconds or a frame budget — never for a
-# flake history (the six members that measured no time left it: app.engine_selftest_validation,
-# claude.chat, ui.media_lazy, scripting.e2e.space_switch / sun_light / reflection_map). A suite
-# joins it by a verdict, never by convenience.
+# THE MEASURING ROWS (TESTING-SIMPLE; DOCS/PROCESS.md, Testing). A suite that measures TIME or GPU BUDGET prints a number
+# that reads as a red when anything else shares the GPU with it: these suites — and only these — are REGISTERED THROUGH
+# scripts/gpu-exclusive.sh (the one lock on the card) on all its slots, and carry the label `measure`: they run at the
+# sprint's ship only, alone on the card, and are never served. A suite joins the list by a verdict, never by convenience.
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
     # the timing suites of the push tier
@@ -331,32 +323,10 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # TEST-1 (the perf audit's F5): the frame's own GPU span against its monitor rows — a share
     # of two GPU times read in one frame, which a sibling's GPU work inside the span would inflate.
     scale.gpu_coverage)
-# THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b; SPECS/audits/
-# GPU_LOSS_AUDIT_2026-09-27.md A3/A4). Every lane's gate is its own ctest process, so nothing
-# inside ctest (RESOURCE_GROUPS, RESOURCE_LOCK, RUN_SERIAL) can bound what FOUR gates put on one
-# 16 GB card: the audit's model peaks 19.5 GB for three lanes at -j4 and 26 GB for four, and
-# every one of 2026-09-27's ~47 VK_ERROR_OUT_OF_DEVICE_MEMORY reds sat where four gates
-# overlapped. The budget lives outside ctest, like the GPU-timing lock: 11 flock TOKENS in
-# /tmp/jah-vram/ (scripts/gpu-admit.sh -> scripts/vram_tokens.py; JAH_VRAM_TOKENS overrides),
-# 1 token = 1,090 MiB at the measured peak (GATE-ADMIT-1's two-tier run: 13,333 MiB with 12 held
-# over a 280 MiB desktop; ~820 at p95) — 11 tokens ~12.2 GB, ~1.3 GB beside the owner's 2.8 GB
-# instance on the 16.4 GB card. Taken ALL OR NOTHING before the process starts and freed when it exits. A row
-# that cannot be admitted WAITS (one `vram: waiting for <k> tokens, <n> free` line) instead of
-# failing an allocation mid-run. The owner's instance and a stray agent app take no token: the
-# slack the count leaves is theirs.
-#
-# THE CLASSES, THE BOOT DECLARATION (TIER + NEEDS) AND THE TOKEN LOOKUP live in
-# tests/support/vram_tokens.cmake (TEST-NEEDS-1) — the one place, which the toy suite
-# gate.tokens_by_needs includes alone. A row MEASURED heavier than its class (GATE-ADMIT-1's
-# two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB) says `TOKENS <k>` beside
-# its CLASS, with the measured number in its comment — round(GB) (engine rows only: an app row's
-# tokens are its declaration's).
-include(${CMAKE_CURRENT_SOURCE_DIR}/support/vram_tokens.cmake)
-set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
-# THE ADMISSION OUTSIDE THE ROW'S CLOCK (TESTING-CLEANUP-2B; tests/cmake/vram_rows.cmake says how): every
-# registered row is scheduled by ctest on its tokens (RESOURCE_GROUPS vram:<k> against this build's resource
-# spec), so a gate's rows never wait for each other inside their TIMEOUT — and the TIMEOUT a site declares is
-# the row's whole bound. (The +900 s every GPU row's TIMEOUT used to carry for the wait is gone.)
+# THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
+# resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
+# time holds the card (scripts/gpu-exclusive.sh), and inside it ctest keeps each class to its width.
+include(${CMAKE_CURRENT_SOURCE_DIR}/support/test_boot.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/vram_rows.cmake)
 jah_vram_resource_spec()
 
@@ -417,16 +387,15 @@ function(_jah_test_boot_declared _who _class _tier _cmd _out)
     endif()
 endfunction()
 
-# THE TIMING PHASE (TEST-SELECTOR-1, W1): every timing row carries the label `timing`, appended at
-# the end of its directory (after the site's own set_tests_properties(... LABELS ...), which
-# replaces the list) — the gates run these rows as their own serial phase after the parallel one
-# (scripts/gate-scope.py merge_tier_serial / the scoped gate's second phase).
-function(_jah_timing_label _row)
+# THE MEASURE LABEL (TESTING-SIMPLE): every measuring row carries the label `measure`, appended at the end of its directory
+# (after the site's own set_tests_properties(... LABELS ...), which replaces the list) — it runs at the sprint's ship only
+# (sprint.sh ship), alone on the card, and is never served or selected for a spec.
+function(_jah_measure_label _row)
     get_test_property(${_row} LABELS _l)
     if(NOT _l)
         set(_l "")
     endif()
-    list(APPEND _l timing)
+    list(APPEND _l measure)
     list(REMOVE_DUPLICATES _l)
     set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
@@ -457,13 +426,11 @@ endfunction()
 # property JAHSHAKA_TEST_FRAMES (a row declared by add_test / jah_gpu_exclusive_test sets the same property with
 # set_tests_properties). source.testing_rules reads the PROPERTY (ctest --show-only=json-v1) and reds a kept GPU row
 # without it beyond tests/hygiene/frames_pending.txt (the ratchet Part B empties); a row renders seconds, never minutes.
-# CLASS app|vr REQUIRES TIER + NEEDS (tests/support/vram_tokens.cmake): the row's process boots that
-# World Mode with only the named features on, and an app row's tokens are the declaration's.
-# add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
-# (source.gpu_rows_closure fails a Vulkan row that is not). Like jah_gpu_exclusive_test, the
-# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
-# $<TARGET_FILE:...>. A pool is not registered here: run_pool.py (jah_add_pool) takes its tokens ONCE for the
-# pool's whole run and every app process it starts inherits them (TESTING-CLEANUP-2B F-C1: the unit is the pool).
+# CLASS app|vr REQUIRES TIER + NEEDS (tests/support/test_boot.cmake): the row's process boots that
+# World Mode with only the named features on.
+# add_test() on the card's slots — the ONE way a row that boots Vulkan is registered (source.gpu_rows_closure fails a
+# Vulkan row that is not): its class (JAH_CLASS) and its slots (RESOURCE_GROUPS, tests/cmake/vram_rows.cmake). A TARGET
+# name as the first COMMAND word becomes $<TARGET_FILE:...>. A pool is registered by jah_add_pool.
 function(jah_gpu_row _row)
     cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
@@ -476,10 +443,9 @@ function(jah_gpu_row _row)
         message(FATAL_ERROR "jah_gpu_row(${_row}): unexpected arguments '${G_UNPARSED_ARGUMENTS}'")
     endif()
     _jah_test_boot_declared("jah_gpu_row(${_row})" "${G_CLASS}" "${G_TIER}" "${G_COMMAND}" _declared ${G_NEEDS})
-    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})
+    jah_card_slots(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})
     if(G_TOKENS AND G_CLASS STREQUAL "app")
-        message(FATAL_ERROR "jah_gpu_row(${_row}): an app row's tokens are its declaration's (TIER + "
-                            "NEEDS) — measure, and move the lookup (tests/support/vram_tokens.cmake)")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): an app row's slots are its class's (tests/support/test_boot.cmake)")
     endif()
     if(G_TOKENS)
         set(_k ${G_TOKENS})
@@ -496,9 +462,7 @@ function(jah_gpu_row _row)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    # the label carries the class (`<row>:<class>`): source.gpu_rows_closure checks an app-spawning
-    # row declared an app-sized class
-    add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
+    add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
     if(DEFINED G_FRAMES)
         set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})
     endif()
@@ -509,51 +473,10 @@ function(jah_gpu_row _row)
     endif()
 endfunction()
 
-# jah_lane_row(<LANE> <row> CLASS app|selftest|engine|vr|none FRAMES <n> COMMAND <exe-or-target> [args...] [the rest of
-#              jah_gpu_row's keywords]) — A LANE'S OWN TEST (TESTING-SPEED-A item 6; SPECS/TESTING_SPEED_SPEC.md §2 A7): declared
-# in tests/lanes/<LANE>/CMakeLists.txt (the glob at the end of this file adds every one), = jah_gpu_row (CLASS none: a plain
-# add_test with no display — a CPU proof) + the label `lane:<LANE>`. gate-scope selects a `lane:<LANE>` row for that lane's
-# own range only; `lane.sh self-audit` runs them with the brief's acceptance rows; `runner.sh merge` LANDS the lane with
-# tests/lanes/<LANE>/ deleted unless `runner.sh land <lane> --keep <row>` moved the row into its family dir.
-# FRAMES is required here: a lane row states the frames it renders (0 for a CPU row).
-function(jah_lane_row _lane _row)
-    cmake_parse_arguments(L "" "CLASS;FRAMES" "" ${ARGN})
-    if(NOT L_CLASS OR NOT DEFINED L_FRAMES)
-        message(FATAL_ERROR "jah_lane_row(${_lane} ${_row}): CLASS and FRAMES are required")
-    endif()
-    if(NOT CMAKE_CURRENT_SOURCE_DIR MATCHES "/tests/lanes/${_lane}$")
-        message(FATAL_ERROR "jah_lane_row(${_lane} ${_row}): a lane row lives in tests/lanes/${_lane}/")
-    endif()
-    if(L_CLASS STREQUAL "none")
-        cmake_parse_arguments(N "" "WORKING_DIRECTORY" "COMMAND" ${L_UNPARSED_ARGUMENTS})
-        set(_wd)
-        if(N_WORKING_DIRECTORY)
-            set(_wd WORKING_DIRECTORY "${N_WORKING_DIRECTORY}")
-        endif()
-        add_test(NAME ${_row} COMMAND ${N_COMMAND} ${_wd})
-        set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${L_FRAMES})
-        jah_no_display(${_row})
-    else()
-        jah_gpu_row(${_row} CLASS ${L_CLASS} FRAMES ${L_FRAMES} ${L_UNPARSED_ARGUMENTS})
-    endif()
-    # the label at the end of the directory (a site's own set_tests_properties(... LABELS ...) replaces the list)
-    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_lane_label [[${_row}]] [[${_lane}]])")
-endfunction()
-function(_jah_lane_label _row _lane)
-    get_test_property(${_row} LABELS _l)
-    if(NOT _l)
-        set(_l "")
-    endif()
-    list(APPEND _l "lane:${_lane}")
-    list(REMOVE_DUPLICATES _l)
-    set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
-endfunction()
-
 # jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
 #                        [WORKING_DIRECTORY <dir>])
-# add_test() through the timing admission: ALL the VRAM tokens (scripts/gpu-exclusive.sh ->
-# vram_tokens.py admit all), whatever the row's class — the class stays in its label for the
-# closure lint. `set_tests_properties` cannot change a registered COMMAND, so the wrapper is
+# add_test() through the card's lock (scripts/gpu-exclusive.sh) on ALL the card's slots, labelled `measure`, whatever
+# the row's class (JAH_CLASS keeps it). `set_tests_properties` cannot change a registered COMMAND, so the wrapper is
 # applied at registration: a TARGET name as the first COMMAND word becomes $<TARGET_FILE:...> (it
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
@@ -561,17 +484,17 @@ function(jah_gpu_exclusive_test)
     cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
-                            "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
+                            "(tests/CMakeLists.txt) — the measuring list changes by a verdict only")
     endif()
     if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND OR NOT G_CLASS)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
     endif()
     if(G_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): unexpected arguments '${G_UNPARSED_ARGUMENTS}' "
-                            "(a timing row takes ALL the tokens: there is no TOKENS)")
+                            "(a measuring row takes ALL the card's slots: there is no TOKENS)")
     endif()
     _jah_test_boot_declared("jah_gpu_exclusive_test(${G_NAME})" "${G_CLASS}" "${G_TIER}" "${G_COMMAND}" _declared ${G_NEEDS})
-    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})   # validates the class; the row takes ALL tokens
+    jah_card_slots(${G_CLASS} _k TIER "${G_TIER}" NEEDS ${G_NEEDS})   # validates the class; the row takes ALL slots
     list(POP_FRONT G_COMMAND _exe)
     if(TARGET ${_exe})
         set(_exe "$<TARGET_FILE:${_exe}>")
@@ -580,24 +503,19 @@ function(jah_gpu_exclusive_test)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the admission —
-    # LOCK-WAIT-1; ctest's TIMEOUT is the backstop: the budget + 30 s (timeout(1)'s kill grace and the
-    # admission's own start). Inside a gate a timing row runs on the phase's whole-card hold (nested: no
-    # wait) and ctest schedules it on every token (RESOURCE_GROUPS, vram_rows.cmake).
+    # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the lock's wait (a holder of the lock runs
+    # it at once); ctest's TIMEOUT is the backstop: the budget + 30 s (timeout(1)'s kill grace).
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
              --label ${G_NAME}:${G_CLASS} "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
-    # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two timing rows of ONE gate
-    # never start together, so the second does not sit in a slot waiting on the admission.
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
     _jah_data(${G_NAME} ${G_CLASS} ${G_DATA})
-    set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
     if(_declared)
         _jah_test_boot_register(${G_NAME} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
-    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_timing_label [[${G_NAME}]])")
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_measure_label [[${G_NAME}]])")
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
@@ -649,33 +567,6 @@ function(jah_fresh_home_fixture row fixture home)
     if(F_LABELS)
         set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
     endif()
-    # THE WIPE AFTER THE CONSUMER (TESTING-SPEED-A item 7): at the end of this directory, a fixture home that ONE row
-    # requires is wiped by that row's admission on its exit (JAH_WIPE_AFTER: green -> deleted, red -> the evidence); a
-    # home several rows share keeps the wipe at its next setup (no row knows it is the last)
-    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_fresh_home_consumer [[${row}]] [[${fixture}]] [[${home}]])")
-endfunction()
-function(_jah_fresh_home_consumer _setup _fixture _home)
-    get_property(_tests DIRECTORY PROPERTY TESTS)
-    set(_users)
-    foreach(_t IN LISTS _tests)
-        get_test_property(${_t} FIXTURES_REQUIRED _req)
-        if(_req AND "${_fixture}" IN_LIST _req)
-            list(APPEND _users ${_t})
-        endif()
-    endforeach()
-    list(LENGTH _users _n)
-    # a consumer that SETS UP a fixture of its own (threading.mode's shot, a parent's run for its inspector) leaves files
-    # another row reads: its exit is not the home's last use — the wipe stays at the next setup (round 14 addendum 2)
-    set(_sets)
-    if(_n EQUAL 1)
-        get_test_property(${_users} FIXTURES_SETUP _sets)
-    endif()
-    if(_n EQUAL 1 AND NOT _sets)
-        set_property(TEST ${_users} APPEND PROPERTY ENVIRONMENT_MODIFICATION "JAH_WIPE_AFTER=set:${_users}|${_home}")
-        set_property(GLOBAL APPEND PROPERTY JAH_WIPED_BY_CONSUMER "${_fixture}|${_users}")
-    else()
-        set_property(GLOBAL APPEND PROPERTY JAH_WIPED_AT_SETUP "${_fixture}|${_n}")
-    endif()
 endfunction()
 
 # jah_timing_script(<in.js> <out.js>) — THE MILLISECOND BARS OF AN E2E SCRIPT, ARMED (lane
@@ -725,7 +616,7 @@ endfunction()
 #         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
 #         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
 #         the process and cannot put back on a red path.
-#         TIER + NEEDS (TEST-TIER-1, TEST-NEEDS-1; tests/support/vram_tokens.cmake) are
+#         TIER + NEEDS (TEST-TIER-1, TEST-NEEDS-1; tests/support/test_boot.cmake) are
 #         REQUIRED on an engine-up pool: every process the pool starts boots that World Mode
 #         (JAHSHAKA_TEST_TIER: every scene it binds, new or opened, the window 1280x720 —
 #         services/testtier.h) with only the NEEDS features on (JAHSHAKA_TEST_NEEDS; NONE =
@@ -794,10 +685,8 @@ function(jah_add_pool pool)
     endif()
     set(_want engine)
     set(_modeflag)
-    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens ONCE for the pool's whole run
-    # (every app process, a restart included, inherits them; TESTING-CLEANUP-2B F-C1). A HEADLESS pool boots the NULL
-    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`. An app
-    # pool's tokens are its declaration's (jah_vram_tokens, TEST-NEEDS-1).
+    # THE CARD'S SLOTS: a pool takes its class's slots for its whole run (tests/support/test_boot.cmake). A HEADLESS pool
+    # boots the NULL render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`.
     if(NOT P_CLASS)
         set(P_CLASS app)
     endif()
@@ -811,7 +700,7 @@ function(jah_add_pool pool)
         endif()
     else()
         jah_test_boot_check("jah_add_pool(${pool})" "${P_TIER}" ${P_NEEDS})
-        jah_vram_tokens(${P_CLASS} _vram TIER "${P_TIER}" NEEDS ${P_NEEDS})
+        jah_card_slots(${P_CLASS} _vram TIER "${P_TIER}" NEEDS ${P_NEEDS})
         string(REPLACE ";" " " _tier "${P_TIER};${P_NEEDS}")
     endif()
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
@@ -853,7 +742,7 @@ function(jah_add_pool pool)
              COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- ${P_LAUNCHER}
                      ${Python3_EXECUTABLE} ${JAH_RUN_POOL} --pool ${pool}
                      --app $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${_modeflag}
-                     --boot-budget ${JAH_POOL_BOOT_BUDGET} --vram-tokens ${_vram}
+                     --boot-budget ${JAH_POOL_BOOT_BUDGET}
                      ${_baseline} ${_args} ${_appargs}
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(pool.${pool} PROPERTIES
@@ -992,19 +881,10 @@ add_subdirectory(update)
 # not installed. Nothing here runs on a box with no VR stack.
 add_subdirectory(vr)
 
-# The admission's tooling suites (devprocess.gpu_lock, devprocess.vram_admit) and the list's
-# closure: every suite the list names is registered through the timing admission (app.input_keys and app.play_select need xdotool/curl/
-# jq/Xvfb, vr.warmup.timing the VR stack — absent without them).
+# The tooling suites, and the measuring list's closure: every suite the list names is registered through
+# jah_gpu_exclusive_test (app.input_keys and app.play_select need xdotool/curl/jq/Xvfb, vr.warmup.timing the VR stack —
+# absent without them).
 add_subdirectory(tooling)
-# THE LANES' OWN TESTS (TESTING-SPEED-A item 6): every tests/lanes/<LANE>/CMakeLists.txt — a lane's proofs, registered with
-# jah_lane_row (label lane:<LANE>), deleted at the lane's land unless the lead keeps a row (runner.sh land --keep)
-file(GLOB _jah_lane_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/lanes/*")
-foreach(_d IN LISTS _jah_lane_dirs)
-    if(IS_DIRECTORY "${_d}" AND EXISTS "${_d}/CMakeLists.txt")
-        get_filename_component(_n "${_d}" NAME)
-        add_subdirectory("${_d}" "${CMAKE_CURRENT_BINARY_DIR}/lanes/${_n}")
-    endif()
-endforeach()
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
 set(_gpu_optional app.input_keys app.play_select vr.warmup.timing vr.frame_budget)
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)

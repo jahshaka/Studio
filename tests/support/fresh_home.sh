@@ -6,8 +6,6 @@
 #
 #   fresh_home.sh [--warm] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
 #                 [-- <command> [args...]]
-#   fresh_home.sh --after <exit code> <home>     the wipe after alone, for a FIXTURE home: its one CONSUMER row's
-#                 admission (scripts/vram_tokens.py, JAH_WIPE_AFTER=<home>) calls it with the row's exit code
 #
 # WHY. A suite home that survives its run ACCUMULATES: measured on the main tree,
 # e2e-home-full_surface held 61 projects and a 220 MB store, e2e-home-export_web 1.1 GB, and
@@ -27,7 +25,7 @@
 #                   without --warm.
 #   --keep-home     (with a command) keep the home after the run — the old behaviour; a fixture row's own use.
 #   --setup         a FIXTURES_SETUP row (jah_fresh_home_fixture): wipe before, run THEN, exit with its code — no wipe
-#                   after (the consumer's exit does it: --after), no cache promotion.
+#                   after (the home is wiped at its next setup), no cache promotion.
 #   --reset <dir>   also removed and recreated (a suite's export target beside its home).
 #   --rm <file>     also removed.
 #   --mkdir <dir>   also created.
@@ -37,14 +35,13 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; after=""; setup=0
+warm=0; keep=0; setup=0
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --warm)  warm=1; shift ;;
         --keep-home) keep=1; shift ;;
         --setup) setup=1; shift ;;
-        --after) after="$2"; warm=1; shift 2 ;;
         --reset) resets="$resets
 $2"; shift 2 ;;
         --rm)    rms="$rms
@@ -119,11 +116,6 @@ mkdir -p "$home/run"
 case "$start" in "$home"/*|"$home") mkdir -p "$start" ;; esac
 }
 
-if [ -n "$after" ]; then
-    # --after: no wipe BEFORE — the consumer has run; only the after step (a home outside a build tree is left alone)
-    [ -n "$tests_dir" ] && [ -d "$home" ] && wipe_after "$after"
-    exit 0
-fi
 
 
 if [ "$warm" = 1 ] && [ -d "$home" ]; then
@@ -178,7 +170,7 @@ shift
 mkdir -p "$start" 2>/dev/null || true
 cd "$start"
 # A FIXTURE'S SETUP (--setup, jah_fresh_home_fixture's row; round 14 addendum 2): the wipe BEFORE, then its THEN, then
-# its exit code — never the wipe after (that is the CONSUMER's exit: --after, run by its admission from JAH_WIPE_AFTER)
+# its exit code — never the wipe after (the home is wiped at its next setup)
 # and no cache promotion (the setup compiled nothing): a THEN that writes a file the consumer reads keeps it
 if [ "$keep" = 1 ] || [ "$setup" = 1 ] || [ -z "$tests_dir" ]; then
     exec "$@"

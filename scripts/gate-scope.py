@@ -1,29 +1,12 @@
 #!/usr/bin/env python3
-"""gate-scope — the SCOPED tier: what a change CAN REACH, and why (MODULAR-GATE-1).
+"""gate-scope — WHAT A CHANGE REACHES, and why (`spec.sh touched`, the merge's gate, the serving's reach).
 
-    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run [--no-targets | --targets-only]] [--json] [-j N]
-    scripts/gate-scope.sh <base>..<tip> --resume [...]          # --run, only the rows with no record at the tip
-    scripts/gate-scope.sh --files path [path ...]
-    scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
-    scripts/gate-scope.sh --record-times | --price-check [--build <dir>]   # the prices: re-priced / checked
-    scripts/gate-scope.sh --merge-tier [-j N] | --merge-tier-serial | --stage-close-tier | --gate-jobs
+    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--json]
+    scripts/gate-scope.sh --files path [path ...] [--build build-linux] [--json]
 
-A lane runs everything its change can reach and nothing it cannot — read from the build and
-the diff, never guessed — and the full tiers stay where the process needs them (a stage
-close, a fork pin bump, stage-close, the phase's push: PHOTON_ATOM_CONTRACT §7b). The tool turns a
-git range into an exact `ctest -R '^(a|b|c)$'` selection with one rationale line per touched
-path and one reason per selected row, estimates the wall time from THE RUN LOG (T8), and
-`--run` writes every row's verdict into the run log (scripts/gate_runlog.py) as the row ends.
-
-A RUN IS A GATE, AND THE BOX RUNS ONE AT A TIME (GATE-COST-1, SPECS/audits/GATE_COST_2026-10-09.md):
-`--run` (scoped, a fallback, `--fork-tier`, `--targets-only`) queues for THE GATE SLOT
-(scripts/vram_tokens.py; by class — a gate before a measurement —, no bound, its position printed) and holds it to its last process;
-`--solo` takes it too — a whole-card hold always does (GATE-COST-2) — and a per-row
-admission never does. Before anything, the no-op build (gate_runlog.prebuild: HEAD's binaries, BUILT_FROM
-fresh). Inside it: the `hygiene` rows first, as their own CPU phase (P8); the GPU
-rows; a row that got no admission re-queued at the end (P5); the timing rows serial on ONE whole-card
-hold (P2); the verdict; then the target rows on the same display and card (P9). `--resume` runs only
-the rows with no record at the tip (P6); a gate whose display dies stops and says so (P6).
+A git range becomes the exact rows its change can reach — read from the build and the diff, never guessed — with one
+rationale line per touched path and one reason per row, grouped by SUBSYSTEM (the row's test directory), and the
+ctest command of each subsystem. It runs nothing and decides nothing.
 
 THE THREE SELECTORS (the Selection class below has the detail):
   1. REBUILT ARTEFACTS — a compiled row runs iff the build graph (build.ninja + ninja's deps
@@ -34,23 +17,15 @@ THE THREE SELECTORS (the Selection class below has the detail):
   3. REACH — the rows that run the app (--script suites, harnesses that spawn it) follow the
      AREA RULES' families and the scripts' API modules; when the app relinked and no rule
      narrows a path, every app row.
-Build files are read by what their changed commands name. The FALLBACK to the MERGE tier is
-only for a path with no rule, no symbol and no graph owner. A fork pin bump selects by the FORK
-DIFF'S reach (FORK_FAMILIES); its one full tier runs at the merge into d-build (`--fork-tier`,
-which ci_gate_check requires). THE RANGE IS THE LANE'S OWN: across a forward merge the scope
-starts at the merge's d-build parent (own_base), and what came in is its own merge's.
-
-THE MERGE RUN (RUNNER-A6; docs/TESTING_GATE.md §3c): `runner.sh select` asks this tool's selection (through
-ci_gate_check --plan) for what a change reaches; `runner.sh merge` runs it as one queue job and attributes a red itself.
-Tiers are contracts: the selection printed here is what runs, nothing
-hand-picked out of it; a red a later tier finds that this selection missed is a defect of
-this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
+Build files are read by what their changed commands name. A path with no rule, no symbol and no graph owner FALLS BACK
+to its directory's subsystem. A fork pin bump selects by the FORK DIFF'S reach (FORK_COMPONENTS). A row labelled
+`measure` is never selected (it runs at the sprint's ship). A reach that is wrong is corrected in the tables here,
+never by a special case elsewhere; tests/hygiene/gate_selection_cases.json replays the cases that taught them.
 """
 import argparse, json, os, re, subprocess, sys, collections, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gate_graph                                   # noqa: E402  the build graph, symbols, CMake
-import gate_runlog                                  # noqa: E402  THE RUN LOG (T8)
 from gate_graph import CXX_EXT, HEADER_EXT          # noqa: E402
 
 # JAH_SCOPE_ROOT (round 15): another tree's selection by THIS selector — a replay of a lane's range over its own build
@@ -367,8 +342,7 @@ AREA_RULES = [
     # display-free shell scripts, well under a second.
     # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
     # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
-    # its only guards (the two cluster sweeps are `stage-close` rows: they ride a bake change through
-    # STAGE_CLOSE_SUBJECTS below, never through this rule's directories — docs/TESTING_GATE.md §1d).
+    # its guards.
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
       "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
@@ -497,11 +471,6 @@ AREA_RULES = [
     (r"^src/app/", ["app", "apppaths", "cli", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
-    # THE TIER DOC'S OWN GUARD (POST-C-FIXES-1): docs/TESTING_GATE.md must quote the
-    # MERGE tier through `gate-scope.py --merge-tier`, never a copy of its -LE set
-    # (a copy went stale once: it lacked photon-target). source.gate_scope_rules case 9
-    # greps it, so an edit to the doc selects the hygiene rows.
-    (r"^docs/TESTING_GATE\.md$", ["hygiene"], []),
     (r"^(docs/|README|LICENSE|\.claude/|\.github/|[A-Za-z_\-]+\.md$|\.gitignore$|\.gitmodules$)", [], []),   # no suite at all
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
@@ -512,15 +481,11 @@ AREA_RULES = [
     # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
     # MODULAR-GATE-1: the selector's two libraries (gate_graph.py, gate_runlog.py) are the
     # tool too, and gate.selection (the replay of recorded lanes) lives beside the rule guard.
-    # THE PRICE FILE SELECTS NOTHING (TESTING-SPEED-A item 5): scripts/gate-times.txt is the rows' measured seconds,
-    # read by the estimate — a lane that adds five prices changed no tool and no row
-    (r"^scripts/gate-times\.txt$", [], []),
+    # THE PRICE FILE (scripts/gate-times.txt, the rows' measured seconds) is read by the budget lint
+    (r"^scripts/gate-times\.txt$", ["hygiene"], []),
     (r"^scripts/gate[-_]", ["hygiene"], []),
-    # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
+    # THE CARD'S LOCK (scripts/gpu-exclusive.sh): its tooling suite.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
-    # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
-    # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
-    (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
     # EVERY OTHER SCRIPT IS THE RUNNER'S TOO (TESTING-CLEANUP-2B item 4, H8a): ci_gate_check.py / ci-gate-check.sh (the
     # judge: gate.ci_check, gate.verdict_door, …), kernel_xid.py (devprocess.kernel_journal, gate.cost),
     # check-trailers.sh (the hygiene rows), sanitize.sh and its lsan/tsan suppressions (the source lints) selected NO row —
@@ -539,23 +504,15 @@ AREA_RULES = [
 # is TOOLING-ONLY:
 #   * a path of the runner itself (TOOLING_OWN: scripts/, tests/hygiene/, tests/tooling/, testing/) selects the
 #     `hygiene` and `tooling` rows (the lints and the runner's own suites, display-free) plus what its area rule
-#     names among the non-app, non-compiled rows (a script's own self-test, e.g. pool.runner for vram_tokens) and
+#     names among the non-app, non-compiled rows and
 #     every row whose COMMAND runs the file;
 #   * any other path — a test's source, a test CMakeLists, a shared test helper — goes through the ordinary walk:
 #     what it reaches IS the rows whose declaration or command changed (the graph for a test source, the CMake
 #     reader for a registration);
-#   * docs and the like select what they always did (nothing; TESTING_GATE.md its guard);
+#   * docs and the like select what they always did (nothing);
 #   * the smoke pair (ALWAYS_ON_CODE) is the PRODUCT's smoke: no product path moved, so it does not ride.
 NON_PRODUCT = re.compile(r"^(scripts/|tests/|docs/|testing/|\.claude/|irisgl/docs/)|\.md$")
 TOOLING_OWN = re.compile(r"^(scripts/|tests/(hygiene|tooling)/|testing/)")
-# A RUNNER'S OWN SELF-TEST THAT BOOTS THE APP (it is the tool's test, not a product row): selected by name in a
-# tooling-only diff, where the area rules' directories pick only lint/script rows. pool.runner drives the pool
-# runner (tests/support/run_pool.py), which takes its tokens through vram_tokens.py.
-TOOL_SELF_TESTS = [
-    (r"^scripts/(gpu-admit|vram_tokens)", ["pool.runner"]),
-]
-
-
 def fork_lines(f):
     """[(pattern, tokens | "none")] — the FIRST FORK_COMPONENTS line a changed fork file matches (the lines run specific ->
     generic: OgreMain/src/OgreLod* is the LOD line's, not OgreMain's every engine fixture); [] = no line names it (the
@@ -582,150 +539,13 @@ HARNESS_PATHS = re.compile(r"^(tests/support/|tests/CMakeLists\.txt$|tests/cmake
 # THE TOOLING ROWS ARE THE TOOLS' (TESTING-SPEED-A item 5): the `hygiene` and `tooling` labelled rows (the lints, the
 # selector's and the judge's own suites, pool.runner) are selected by a change under these paths ONLY — never by a
 # product path (the builder's self-audit runs the hygiene label in the lane; a product merge does not re-run it)
-TOOLING_PATHS = re.compile(r"^(scripts/(?!gate-times\.txt$)|testing/|tests/hygiene/|tests/support/|"
-                           r"tests/CMakeLists\.txt$|tests/cmake/|\.claude/|docs/TESTING_GATE\.md$)")
+TOOLING_PATHS = re.compile(r"^(scripts/|testing/|tests/hygiene/|tests/support/|"
+                           r"tests/CMakeLists\.txt$|tests/cmake/|\.claude/)")
 TOOLING_LABELS = {"hygiene", "tooling"}
-# A LANE'S OWN ROWS (TESTING-SPEED-A item 6): tests/lanes/<LANE>/ registers rows labelled `lane:<LANE>` (jah_lane_row) —
-# selected for that lane's own range only (Selection.lane), never for anyone else's
-LANE_LABEL = "lane:"
-# THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; D6B-GATE-SHAPE before it, under a daily-run name for a tier
-# that never once ran — the owner, 2026-10-09: there is no such build). Two labels, read here alone:
-#   `stage-close` — the row leaves the MERGE and PUSH tiers and runs in THE STAGE-CLOSE BATCH
-#                   (`--stage-close-tier`): one batch in the gate slot, started BY THE LEAD at every
-#                   stage close (`runner.sh stage-close`; the ship runs them too), never
-#                   by a timer. Minutes of one process whose push-time guard lives elsewhere, a churn
-#                   twin (ten processes of a one-process gate row), or a millisecond bar.
-#   `quiet-box`   — beside `stage-close` on the rows that MEASURE (the wall-clock benchmarks, the
-#                   `<suite>.timing` millisecond rows, a GPU clock): never in a scoped gate (it
-#                   shares the box by construction), and in the batch at -j1 on the whole card.
-# A `stage-close` row WITHOUT `quiet-box` rides a scoped gate ONLY when the diff touches ITS OWN
-# SUBJECT: a rule of STAGE_CLOSE_SUBJECTS names it, or the change is in its own test directory
-# (Selection.stage_close_subjects). A broad rule (the engine family, every app row, a header's
-# readers) that reaches it leaves it for the batch — a catch it would have made waits for the stage
-# close (the owner accepted that, 2026-10-09).
-# Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
-# review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
-# hang costs 2 min, not 25.
-# (TESTING-CLEANUP-2B item 11: shadercache.container_asan's own attack label — a second way of
-# saying "not in the merge tier" — is retired; the row is a `stage-close` row like every minutes-long one.)
-STAGE_CLOSE_LABELS = {"stage-close"}
-# Never selected by a scoped gate. A row selected WITHOUT these labels is a gating row of that gate
-# (ci_gate_check reads this set).
-SCOPE_EXCLUDED_LABELS = {"quiet-box"}
-# Selected by a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own test dir);
-# once selected it gates like any row. NOT in SCOPE_EXCLUDED_LABELS on purpose: that set means
-# "never gating", and a subject-selected stage-close row is that change's guard.
-SUBJECT_ONLY_LABELS = {"stage-close"}
-QUIET_BOX_LABEL = "quiet-box"
-
-# THE STAGE-CLOSE SUBJECTS (STAGE-CLOSE-1 U2; the audit's condition S2): path regex -> the
-# `stage-close` rows a change to that path reaches DIRECTLY. Matched against every touched path,
-# and — for a fork pin bump — against every fork file as `irisgl/thirdparty/ogre-next/<file>`. A
-# quiet-box row is never named here. `gate-scope.py --stage-close-rules` prints the table.
-_FORK = r"irisgl/thirdparty/ogre-next/"
-STAGE_CLOSE_SUBJECTS = [
-    # THE BAKE'S SWEEPS: the cluster-DAG bake (irisgl/import: meshbake.cpp, clusterlod.cpp) and the
-    # library it calls (meshoptimizer, its clusterlod patch stack).
-    (r"^irisgl/(import/|thirdparty/meshoptimizer)", ["atom.cluster_cut", "atom.cluster_crack"]),
-    # THE CONVERGE SWEEP and THE BOOT DETERMINISM: Photon (the voxel chain, the irradiance field, the
-    # GI driver, the surface cache it reads) — mirror_room_boots' one real catch (PHOTON-I-1, ledger
-    # §1623) was the GI rest rule — and the fork's VCT / irradiance-field code and media.
-    (r"^(irisgl/engine/(src/(photon/|OgreGi\.|OgrePhotonView\.|(Ogre)?GpuVoxelGather\.|OgreVoxelReaderParity\.|"
-     r"(Ogre)?SurfaceCache\.)|media/Photon/)|" + _FORK +
-     r"(Components/Hlms/Pbs/(src|include)/Vct/|Samples/Media/(VCT|Compute/Algorithms/IrradianceFields)/))",
-     ["gi.chain_converge_scenes", "samples.mirror_room_boots"]),
-    # THE MIRROR ROOM'S OWN PICTURE: the sample, the planar reflections, the screen-probe gather.
-    (r"^(scenes/Mirror Room\.zip$|irisgl/engine/src/(OgrePlanar|OgreScreenProbeGather|ScreenProbeGather)\.)",
-     ["samples.mirror_room_boots"]),
-    # THE CASTER SOAKS: the shadow and caster code (ours and the fork's Pbs caster) — the soak and
-    # the ten-process churn twins of the shadow casters' gate rows.
-    (r"^(irisgl/engine/(src/(OgreShadow|OgreAtomCasterPass)\.|media/Hlms/.*([Ss]hadow|[Cc]aster))|" + _FORK +
-     r"(Components/Hlms/Pbs/src/OgreHlmsPbs\.cpp$|Samples/Media/Hlms/(Common|Pbs)/.*([Ss]hadow|[Cc]aster)))",
-     ["gpu.cutout_soak", "shadow.cutout_caster.churn", "shadow.two_sided_caster.churn"]),
-    # THE SHADER CACHE'S CONTAINER UNDER ASAN (TESTING-CLEANUP-2B item 11): the cache container's reader and writer
-    # (a corrupt file must never read past a buffer it sized from a number in the file).
-    (r"^irisgl/engine/src/OgreShaderCache\.", ["shadercache.container_asan"]),
-]
-
-# TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).
-#
-# A target test states the CORRECT number for a term the renderer gets wrong
-# today, and it cannot pass until the PART named in its header lands. It is not
-# a disabled test and it is not a bracket around an artefact: it RUNS in every
-# scoped selection and PRINTS its value ("target: <value> (bar <bar>)"), so the
-# distance to the bar is visible on every lane and a target that goes green
-# early is noticed instead of sitting red for a month. What it does not do is
-# decide a gate: the lane that fixes the term DELETES the label from the
-# suite's CMake, and that deletion IS the part's acceptance.
-#
-# So the exclusion is from PASS/FAIL, never from the run. gate-scope runs the
-# gating suites (their exit code is the gate's) and prints the verdict; the target
-# suites are THEIR OWN STEP after it (GATE-SPEED-1; GATE-COST-1 P9: after the verdict line,
-# inside the gate, run-log tier `target`), whose result is reported and discarded. The MERGE
-# and PUSH tiers drop them with -LE, which is the only shape ctest offers for
-# "do not let these decide the tier"; their values are read from a lane's scoped
-# run, where they are printed.
-# `scale-target` (lane D1-SCALE-FIXTURES): phase E's measuring stick — one `scale.*`
-# suite per wall (tests/scale), each printing today's number as a `target:` line with
-# no bar yet. Split out exactly like a photon target: reported, never gating, until the
-# part that closes a wall writes its bar and removes the label from that row.
-TARGET_LABELS = {"photon-target", "scale-target"}
-
-STAGE_CLOSE_LABEL_RE = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS | TARGET_LABELS))
-# THE GATE'S PARALLEL WIDTH — THE ONE CONSTANT (GATE-SPEED-1 item 9). Every gate's parallel phase
-# (the scoped selection, the MERGE tier, a fallback, a merge run's), the runner's ctest width
-# (`gate-scope.py --gate-jobs`) and the merge refusal's re-selection read THIS; the docs name it
-# instead of quoting a number. Changing the box's width is this one line — and an owner decision
-# (PHOTON_ATOM_CONTRACT §7b rule 3; the gate-speed audit's replay: -j6 21.7 min against -j4's 31.0
-# on rc-smoke15a's durations, CPU contention unmeasured). `-j N` still overrides it per run.
-# THE WIDTH PER PASS (TESTING-SPEED-A item 3; SPECS/TESTING_SPEED_SPEC.md §2 A10: 20 cores, 121 GB, 16 GB VRAM — a test
-# is one engine and one frame loop, so the parallelism is ACROSS processes): fixtures (CLASS engine|selftest, 1-2
-# tokens, <= 1 GB each) at -j8, the app rows and pools at -j4, a measuring row at -j1 on the whole card. ctest's
-# resource spec (the VRAM tokens, tests/cmake/vram_rows.cmake) stays the bound under every width — never this table.
-# The runner's merge (`--gate-jobs` prints it as JSON) and this tool's own --run read it.
-GATE_JOBS = {"fixture": 8, "app": 4, "measuring": 1}
-
-# The MERGE tier at a given ctest parallelism (GATE_JOBS by default, docs/TESTING_GATE.md §1); the
-# fallback must honour a caller's `-j` as the scoped command does (DEVPROCESS-1 item 2: the
-# fallback used to print and RUN a hardcoded -j4 whatever the caller asked).
-# THE TIMING ROWS ARE THEIR OWN SERIAL PHASE (TEST-SELECTOR-1, the merge read's W1 — the lead's
-# decision): a row that measures takes EVERY VRAM token, and inside a -j4 phase it waited holding
-# the admission's turnstile while its siblings drained (20 timing rows waited 1,104 s in one 69-min
-# gate), stalling every admission on the box. So every tier and every scoped gate runs in two
-# phases: the parallel phase WITHOUT the `timing` rows (label `timing`, appended to every
-# jah_gpu_exclusive_test row), then the timing rows at -j1, the whole GPU theirs.
-TIMING_LABEL = "timing"
-
-
-def merge_tier(jobs=GATE_JOBS["app"]):
-    """The MERGE tier's PARALLEL phase (its second phase is merge_tier_serial())."""
-    return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
-            f'-LE "^({STAGE_CLOSE_LABEL_RE}|{TIMING_LABEL})$"')
-
-
-def merge_tier_serial():
-    """The MERGE tier's SERIAL phase: its timing rows, one at a time, after the parallel phase."""
-    return (f'ctest -j1 --timeout 120 --output-on-failure -L "^{TIMING_LABEL}$" '
-            f'-LE "^({STAGE_CLOSE_LABEL_RE})$"')
-
-
-# THE STAGE-CLOSE BATCH (STAGE-CLOSE-1 U4; docs/TESTING_GATE.md §1d): every `stage-close` row (and
-# the shader-cache attack), in TWO phases like the MERGE tier — the minutes-of-one-process rows and
-# the churn twins at the gate's width, then every `quiet-box` or `timing` row at -j1 on ONE hold of
-# the whole card. ctest ANDs repeated -L filters. Started by the lead (`runner.sh stage-close`, or
-# `gate-scope.sh --stage-close-tier --run`), never by a timer.
-_STAGE_CLOSE_RX = "|".join(sorted(re.escape(l) for l in STAGE_CLOSE_LABELS))
-_QUIET_RX = "|".join(sorted(re.escape(l) for l in (QUIET_BOX_LABEL, TIMING_LABEL)))
-
-
-def stage_close_tier(jobs=GATE_JOBS["app"]):
-    """The stage-close batch's PARALLEL phase (its second phase is stage_close_tier_serial())."""
-    return f'ctest -j{jobs} --output-on-failure -L "^({_STAGE_CLOSE_RX})$" -LE "^({_QUIET_RX})$"'
-
-
-def stage_close_tier_serial():
-    """The stage-close batch's QUIET-BOX phase: the measuring rows, one at a time, on the whole card."""
-    return f'ctest -j1 --output-on-failure -L "^({_STAGE_CLOSE_RX})$" -L "^({_QUIET_RX})$"'
+# A ROW THAT MEASURES (label `measure`: a timing, quiet-box, soak or churn row) is never selected: it runs at the
+# sprint's ship only (DOCS/PROCESS.md, Testing). The target rows (photon-target, scale-target) report a number with no
+# bar yet: not a guard either.
+NEVER_SELECTED = {"measure", "photon-target", "scale-target", "stage-close"}
 
 
 def sh(cmd, cwd=None):
@@ -749,104 +569,29 @@ def _git_try(args, cwd=None):
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-_OWN_BASE_CACHE = {}
-_LINE_CACHE = {}
-INTEGRATION_REFS = ("d-build", "origin/d-build", "main/d-build", "o3de", "origin/o3de", "main/o3de", "ogre",
-                    "origin/ogre", "main/ogre")
-
-
-def integration_line(cwd=None):
-    """Every commit on the first-parent line of the repo's integration branches (JAH_INTEGRATION_REFS,
-    space-separated, overrides INTEGRATION_REFS): the commits a forward merge can bring in."""
-    cwd = cwd or ROOT
-    if cwd in _LINE_CACHE: return _LINE_CACHE[cwd]
-    refs = os.environ.get("JAH_INTEGRATION_REFS", "").split() or INTEGRATION_REFS
-    line = set()
-    for r in refs:
-        if _git_try(["rev-parse", "--verify", "-q", r + "^{commit}"], cwd):
-            line |= set((_git_try(["rev-list", "--first-parent", r], cwd) or "").split())
-    _LINE_CACHE[cwd] = line
-    return line
-
-
-# THE WHOLE RANGE (RUNNER-A2): a SERVING asks "does anything in A..C reach the row" — every change between the record and
-# the tip, forward merges included — never "what is the lane's own change". ci_gate_check's serving sets this around its
-# selections; with it own_base answers the merge-base, whatever merges the range holds.
-WHOLE_RANGES = False
-
-
-def own_base(base, tip, cwd=None):
-    """THE LANE'S OWN DIFF (TEST-SELECTOR-1 T1; audit ARCH_AUDIT_2026-09-30 testing-tooling T1).
-
-    A two-dot `base..tip` across a FORWARD MERGE (d-build merged into the lane) is the lane's
-    change PLUS every sibling change the merge carried in: d7-studio-fixes-1, a Studio-only lane,
-    ran three full tiers on a fork pin its own ten commits never touched. The lane's own change is
-    the diff from the d-build commit it last merged to its tip, so:
-      * a one-commit range (`merge^1..merge`, a lane's merge INTO d-build) is itself;
-      * else the base is the merge-base of base and tip (a base AHEAD of the lane — d-build moved
-        on — is not the lane's change either), moved up to the second parent of the NEWEST FORWARD
-        merge on the tip's first-parent line.
-    A merge is FORWARD only when its second parent lies ON THE INTEGRATION LINE — the first-parent
-    history of d-build (or o3de / ogre, local or remote: integration_line()). Any other merge — an
-    internal fix branch merged into the lane — is the lane's own change (the merge read's
-    scratch-repo replay: counting it as forward dropped laneA..laneC from the diff; over-selection
-    is the safe side). Returns (own base sha, [(merge sha, its second parent)] of the forward merges
-    seen, newest first) — or (base, []) when git cannot resolve the range (a replay's fake revisions)."""
-    cwd = cwd or ROOT
-    key = (base, tip, cwd, WHOLE_RANGES)
-    if key in _OWN_BASE_CACHE: return _OWN_BASE_CACHE[key]
-    b, t = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"], cwd), \
-        _git_try(["rev-parse", "--verify", "-q", tip + "^{commit}"], cwd)
-    if not b or not t:
-        _OWN_BASE_CACHE[key] = (base, []); return _OWN_BASE_CACHE[key]
-    if _git_try(["rev-parse", "--verify", "-q", t + "^1"], cwd) == b:
-        _OWN_BASE_CACHE[key] = (b, []); return _OWN_BASE_CACHE[key]
-    mb = _git_try(["merge-base", b, t], cwd) or b
-    own, fwd = mb, []
-    if WHOLE_RANGES:
-        _OWN_BASE_CACHE[key] = (own, []); return _OWN_BASE_CACHE[key]
-    for line in (_git_try(["rev-list", "--first-parent", "--merges", "--parents", f"{mb}..{t}"], cwd) or "").splitlines():
-        shas = line.split()
-        if len(shas) < 3: continue
-        m, p2 = shas[0], shas[2]
-        if p2 in integration_line(cwd):
-            fwd.append((m, p2))
-    if fwd:
-        own = fwd[0][1]
-    _OWN_BASE_CACHE[key] = (own, fwd)
-    return own, fwd
-
-
 def scope_range(rng):
-    """(own range `<own base>..<tip>`, the range that came in through forward merges or None,
-    the forward merges) — see own_base. A range git cannot resolve is returned unchanged."""
+    """`<merge-base>..<tip>` of a range: the change on the branch, whatever main did since (a spec branch is rebased on
+    main before it merges). A range git cannot resolve is returned unchanged."""
     if not rng or ".." not in rng:
-        return rng, None, []
+        return rng
     base, tip = rng.split("..", 1)
-    own, fwd = own_base(base, tip)
-    b = _git_try(["rev-parse", "--verify", "-q", base + "^{commit}"])
-    mb = (_git_try(["merge-base", b, tip]) if b else None) or b
-    incoming = f"{mb}..{own}" if fwd and mb and own != mb else None
-    return f"{own}..{tip}", incoming, fwd
+    mb = _git_try(["merge-base", base, tip])
+    return f"{mb}..{tip}" if mb else rng
 
 
 def irisgl_pair(base, tip):
-    """The irisgl revisions a Studio range compares: the pins at both ends, the old end moved to
-    the lane's OWN base inside irisgl (a forward merge of d-build's irisgl is not the lane's
-    change, and a base pin AHEAD of the lane's is not either — own_base, run in the submodule)."""
+    """The irisgl revisions a Studio range compares: the pins at both ends, the old end moved to their merge-base."""
     old = sh(f"git rev-parse {base}:irisgl").strip()
     new = sh(f"git rev-parse {tip}:irisgl").strip()
-    ig = os.path.join(ROOT, "irisgl")
     if old != new:
-        o, _ = own_base(old, new, cwd=ig)
-        if _git_try(["rev-parse", "--verify", "-q", o + "^{commit}"], ig): old = o
+        mb = _git_try(["merge-base", old, new], os.path.join(ROOT, "irisgl"))
+        if mb: old = mb
     return old, new
 
 
 def touched_paths(rng):
-    """Files changed in the Studio range, plus the irisgl submodule's own diff (prefixed) — the
-    LANE'S OWN change (scope_range: what forward merges carried in is their own merge's business)."""
-    rng = scope_range(rng)[0]
+    """Files changed in the Studio range (from its merge-base), plus the irisgl submodule's own diff (prefixed)."""
+    rng = scope_range(rng)
     files = [l for l in sh(f"git diff --name-only {rng}").splitlines() if l]
     if not files:
         sys.stderr.write(f"gate-scope: range {rng} touches no file — refusing to scope an empty change\n")
@@ -929,15 +674,13 @@ def bind_root(build):
     resolves against is the build's source dir (the scripts' own checkout only when that cannot be
     read). The RULES stay the running script's — which is what a judge is for — and the facts are
     the build's tree's: one range and one build select the same rows from any checkout."""
-    global ROOT, TIMES_FILE
+    global ROOT
     # Adopted whenever it differs TEXTUALLY (SYMLINK-ROOT-1): the same tree reached through a symlink is
     # still a different spelling, and the graph only answers to the build's own one.
     src = build_source_dir(build)
     if not src or src == ROOT:
         return
     ROOT = src
-    TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
-    gate_runlog.ROOT = src
 
 
 def _is_wipe(cmd):
@@ -1029,17 +772,13 @@ def load_inventory(build):
         # source tree or a configured script (a .js the build dir generated from a .js.in, a
         # wrapper .sh, a lint .py). The audit (§7): wrapper-run app rows never got module
         # selection because only cmd[1] of a bash row was read.
-        # THE WRAPPERS ARE NOT THE ROW'S SUBJECT (GATE-ADMIT-1): the GPU lock and the VRAM budget
-        # (scripts/gpu-exclusive.sh, scripts/gpu-admit.sh <k> --label <l> --) are peeled off
-        # before the row's script and argv files are read; `cmd` itself keeps them (the lock
-        # rules read it).
+        # THE LOCK'S WRAPPER IS NOT THE ROW'S SUBJECT: scripts/gpu-exclusive.sh [--label <l>] is peeled off
+        # before the row's script and argv files are read; `cmd` itself keeps it.
         run = list(cmd)
         if run and os.path.basename(run[0]) == "gpu-exclusive.sh":
             run = run[1:]
             while run and run[0] in ("--run-timeout", "--label"):
                 run = run[2:]
-        if run and os.path.basename(run[0]) == "gpu-admit.sh":
-            run = run[run.index("--") + 1:] if "--" in run else run[2:]
         script = None
         m = re.search(r"--script\s+(\S+)", " ".join(run))
         if m: script = m.group(1)
@@ -1091,7 +830,7 @@ def load_inventory(build):
 
 # THE PICTURE SET (TESTING-SPEED-A item 4; SPECS/TESTING_SPEED_SPEC.md §2 A4): the rows whose subject is the picture the
 # viewport shows — the kept rows of these directories / row prefixes, and every app row and pool ARM whose script takes
-# a screenshot (a pool is reached when any of its arms is: the arm, not the pool). `kept`: not stage-close, not a target.
+# a screenshot (a pool is reached when any of its arms is: the arm, not the pool). `kept`: not a NEVER_SELECTED row.
 PICTURE_FAMILIES = ("hdr", "ssr", "looks", "mirror")
 # ...less the PHOTON family's own pictures (gi.*, photon.*: the GI's picture is the gi subsystem's — reached when Photon
 # is; a bloom change selects ZERO gi rows, SPECS/TESTING_SPEED_SPEC.md §2 A4's BLOOM-1 replay)
@@ -1112,7 +851,7 @@ def picture_set(inv):
     """Marks inv[row]["picture"] (the row whole) and inv[row]["picture_arms"] (a pool's screenshot arms)."""
     memo = {}
     for n, t in inv.items():
-        kept = not (t["labels"] & (STAGE_CLOSE_LABELS | TARGET_LABELS)) and not (
+        kept = not (t["labels"] & NEVER_SELECTED) and not (
             t["dir"] in PICTURE_NOT or n.split(".", 1)[0] in PICTURE_NOT)
         fam = t["dir"] in PICTURE_FAMILIES or n.split(".", 1)[0] in PICTURE_FAMILIES
         arms = sorted(a for a, scr in t["arms"].items() if _names_picture(scr, memo)) if kept else []
@@ -1137,153 +876,6 @@ def classify_rows(inv, graph, build):
         else:
             t["kind"] = "other"
     return app_exe
-
-
-TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
-
-
-# THE PRICES (TESTING-CLEANUP-2B item 6). scripts/gate-times.txt prices EVERY row of the MERGE and STAGE-CLOSE
-# tiers (a gate's estimate, the stage-close batch's plan, ctest's COST order): one line per row, `<row> <seconds>
-# <source>`, the source NAMED — `quiet n=<k>` (the median of the row's PASS runs on a QUIET box — gate_runlog.quiet:
-# no sibling ctest, no build, no GPU competitor, the load under the box's figure —, >= 3 of them: THE price), `all n=<k>` (fewer quiet runs: the median of every PASS run), `fixture` (a home wipe), or the
-# text a hand-priced line carried. The run log read is testing/runs AND testing/runs-archive, from PRICE_SINCE:
-# before GATE-SPEED-1's L2 (2026-10-01 13:10) a record's seconds still held its admission wait. `--price-check`
-# is the self-check: it lists every tier row without a price and fails while one is (source.testing_rules R2).
-PRICE_SINCE = "2026-10-01T13:10"
-
-
-def parse_times(path=None):
-    """row -> (seconds, source text) from gate-times.txt (a data line: `<row> <seconds> [<source>…]`)."""
-    out = {}
-    try:
-        for line in open(path or TIMES_FILE):
-            if line.startswith("#"): continue
-            parts = line.split(None, 2)
-            if len(parts) >= 2:
-                try: out[parts[0]] = (float(parts[1]), parts[2].strip() if len(parts) > 2 else "")
-                except ValueError: pass
-    except OSError:
-        pass
-    return out
-
-
-LOG_SOURCES = ("solo-quiet n=", "quiet n=", "all n=", "fixture")    # the sources record_times writes; any other = a HAND price
-
-
-def solo_quiet(r, load_max=None):
-    """THE PRICE RULE (the lead, TESTING-SPEED-B4's read): a record prices its row only when it ran ALONE — the census
-    shows no other ctest, no build, no GPU competitor, the load under the box's figure (gate_runlog.quiet) AND no gate
-    sibling (its ctest ran at -j1: box.jobs == 1). A census that cannot tell is no price."""
-    if not gate_runlog.quiet(r, load_max)[0]:
-        return False
-    return ((r or {}).get("box") or {}).get("jobs") == 1
-
-
-def run_log_prices(since=PRICE_SINCE):
-    """row -> (median PASS seconds, 'solo-quiet n=<k>') over the run log and its archive since `since` — ONLY from the
-    records that ran alone (solo_quiet), and only when >= gate_runlog.QUIET_MIN of them exist; a row without them has
-    no run-log price (a median of gate runs beside siblings measures the box, not the row: four app rows priced
-    70/50/37/31 s under contention ran 20/18/11/11 s alone)."""
-    import glob, statistics
-    d = gate_runlog.log_dir()
-    files = glob.glob(os.path.join(d, "*.jsonl")) + glob.glob(os.path.join(os.path.dirname(d), "runs-archive", "**",
-                                                                           "*.jsonl"), recursive=True)
-    acc = collections.defaultdict(list)
-    lm = gate_runlog.quiet_load_max()
-    since_at = gate_runlog.instant(since)            # INSTANTS, never the ISO text (F20's class; the DST switch misorders text)
-    for f in files:
-        for line in open(f, errors="replace"):
-            try: r = json.loads(line)
-            except ValueError: continue
-            if r.get("verdict") != "PASS" or r.get("seconds") is None or r.get("kind") or gate_runlog.instant(r.get("ts")) < since_at:
-                continue
-            k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
-            acc[k].append((r["seconds"], solo_quiet(r, lm)))
-    out = {}
-    for k, v in acc.items():
-        q = [x for x, qt in v if qt]
-        if len(q) >= gate_runlog.QUIET_MIN:
-            out[k] = (statistics.median(q), f"solo-quiet n={len(q)}")
-    return out
-
-
-def tier_rows(inv):
-    """The rows the MERGE and STAGE-CLOSE tiers run: every registered row but the target tests."""
-    return sorted(n for n, t in inv.items() if not (t["labels"] & TARGET_LABELS))
-
-
-def unpriced(inv, prices=None):
-    prices = parse_times() if prices is None else prices
-    return [n for n in tier_rows(inv) if n not in prices]
-
-
-def record_times(build):
-    """Re-price scripts/gate-times.txt (item 6's rule above) for every tier row of `build`'s registration: the run
-    log's price where the row has PASS runs, else the line it had, else a fixture's wipe; a row with none of these
-    is left unpriced — `--price-check` names it."""
-    inv = load_inventory(build)
-    log = run_log_prices()
-    old = parse_times()
-    rows = tier_rows(inv)
-    out, kinds = {}, collections.Counter()
-    hand = lambda v: bool(str(v[1] or "").strip()) and not str(v[1]).startswith(LOG_SOURCES)
-    for n in rows:
-        if n in old and hand(old[n]):
-            # A HAND PRICE ("solo median ...", a measurement with its why) IS NEVER OVERWRITTEN by the run log
-            out[n] = old[n]; kinds["hand"] += 1
-        elif n in log:
-            out[n] = log[n]; kinds[log[n][1].split()[0]] += 1
-        elif n in old:
-            out[n] = old[n]; kinds["kept"] += 1
-        elif inv[n].get("fixture_setup"):
-            out[n] = (0.01, "fixture (a home wipe; no PASS record)"); kinds["fixture"] += 1
-    # a pool's ARMS keep their own prices (`<pool>::<arm>`: a partial pool's estimate sums them)
-    for k, v in list(log.items()) + [kv for kv in old.items() if kv[0] not in log or hand(kv[1])]:
-        r_, _, arm = k.partition("::")
-        if arm and r_ in inv and arm in inv[r_]["arms"]:
-            out[k] = v; kinds["arm"] += 1
-    head = [l for l in open(TIMES_FILE) if l.startswith("#")] if os.path.exists(TIMES_FILE) else []
-    with open(TIMES_FILE, "w") as f:
-        f.writelines(head)
-        for n in sorted(out):
-            sec, src = out[n]
-            f.write(f"{n} {sec:.2f}  {src}\n" if src else f"{n} {sec:.2f}\n")
-    gone = sorted(set(old) - set(out))
-    n_rows = sum(1 for n in out if "::" not in n)
-    print(f"priced {n_rows} of {len(rows)} tier rows (+{len(out) - n_rows} pool-arm prices) into "
-          f"{os.path.relpath(TIMES_FILE, ROOT)}: "
-          + ", ".join(f"{k} {v}" for k, v in kinds.most_common())
-          + (f"; dropped {len(gone)} line(s) that are no row of this build: {' '.join(gone[:12])}" if gone else ""))
-    left = unpriced(inv, out)
-    if left:
-        print(f"UNPRICED ({len(left)}): " + " ".join(left))
-    return 1 if left else 0
-
-
-COST_SOURCE = {}   # suite -> "quiet" | "all" (the run log's median, gate_runlog.median_times) | "file"
-
-
-def load_costs():
-    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher; the
-    quiet median where >= 3 records ran on a quiet box, gate_runlog.quiet). COST_SOURCE says which."""
-    costs = {}
-    pt = parse_times()
-    for n, (sec, _src) in pt.items():
-        costs[n] = sec; COST_SOURCE[n] = "file"
-    costs.update(gate_runlog.median_times(days=14, sources=COST_SOURCE))
-    # THE PRICE RULE: a HAND price (a row's own solo median, measured alone) beats the run log's median of gate runs
-    for n, (sec, src) in pt.items():
-        if str(src or "").strip() and not str(src).startswith(LOG_SOURCES):
-            costs[n] = sec; COST_SOURCE[n] = "file"
-    return costs
-
-
-def cost_sources(keys):
-    """'<n> quiet, <n> all, <n> file, <n> assumed' over the keys an estimate summed."""
-    c = {"quiet": 0, "all": 0, "file": 0, "assumed": 0}
-    for k in keys: c[COST_SOURCE.get(k, "assumed")] += 1
-    return (f"costs: {c['quiet']} quiet medians (gate_runlog.quiet, >= 3 records), {c['all']} "
-            f"all-record medians, {c['file']} from gate-times.txt, {c['assumed']} assumed 10 s")
 
 
 def api_modules():
@@ -1332,7 +924,7 @@ def _git_show(rev, path):
 class Revs:
     """The two sides of the range, in each repo (Studio; irisgl at the pins the range names)."""
     def __init__(self, rng):
-        rng = scope_range(rng)[0]            # the lane's OWN change (T1), as touched_paths reads it
+        rng = scope_range(rng)
         self.rng = rng
         self.base, self.tip = rng.split("..", 1) if rng and ".." in rng else (None, None)
         self._ig = None
@@ -1396,10 +988,8 @@ class Selection:
     no symbol and no graph owner — and printed with its reason.
     """
 
-    def __init__(self, inv, graph, app_exe, revs, jobs, lane=None):
-        self.inv, self.graph, self.app_exe, self.revs, self.jobs = inv, graph, app_exe, revs, jobs
-        # THE LANE WHOSE RANGE THIS IS (TESTING-SPEED-A item 6): its own `lane:<LANE>` rows are selectable, nobody else's
-        self.lane = (lane or "").lower() or None
+    def __init__(self, inv, graph, app_exe, revs):
+        self.inv, self.graph, self.app_exe, self.revs = inv, graph, app_exe, revs
         self.selected = {}
         self.fallback = []
         self.full_tier = []          # rules that select the whole tier (an unreadable fork diff, a root setting)
@@ -1456,11 +1046,6 @@ class Selection:
             for e in t["exes"]: self.exe_rows[e].append(n)
         self.row_names = set(inv)
         self._visited = set()
-        # THE STAGE-CLOSE ROWS' ORIGINS (STAGE-CLOSE-1 U2): the directly touched path each
-        # `stage-close` row was reached from, read by stage_close_subjects() after the walk
-        self._origin = None
-        self.sc_origins = collections.defaultdict(set)
-        self.stage_close_left = {}         # row -> the broad reason that reached it, left for the batch
         self.tooling_only = False          # §1.3.4: no touched path is a product input (select() decides)
         self.tools_dropped = set()         # hygiene/tooling rows a product path reached: not run, still reached
         self._symbol_ids = {}              # file -> the changed identifiers it names (OgreEngine.cpp's function walk)
@@ -1492,10 +1077,6 @@ class Selection:
     def add(self, suites, why):
         for s in suites:
             r0 = s.split("::", 1)[0]
-            if r0 in self.inv and not self.own_lane_row(r0):
-                continue
-            if r0 in self.inv and self.inv[r0]["labels"] & SUBJECT_ONLY_LABELS:
-                self.sc_origins[r0].add(self._origin)
             if "::" in s:
                 row, arm = s.split("::", 1)
                 if row in self.inv and row not in self.whole:
@@ -1505,11 +1086,6 @@ class Selection:
             if s in self.inv:
                 self.selected.setdefault(s, why)
                 self.whole.add(s)
-
-    def own_lane_row(self, n):
-        """False for a row labelled `lane:<X>` when X is not this selection's lane (TESTING-SPEED-A item 6)."""
-        ll = [l for l in self.inv[n]["labels"] if l.startswith(LANE_LABEL)]
-        return not ll or bool(self.lane) and any(l[len(LANE_LABEL):].lower() == self.lane for l in ll)
 
     def arm_subsets(self):
         """pool row -> the arms selected, for every pool NOT selected whole."""
@@ -1753,36 +1329,10 @@ class Selection:
         self.add(hit, f"{why}: its command line runs it")
         return hit
 
-    def stage_close_subjects(self, paths):
-        """U2 (STAGE-CLOSE-1): a `stage-close` row stays in a scoped selection only when the change
-        touches ITS OWN SUBJECT — a touched path in its own test directory (tests/<its dir>/: its
-        source, its script, its registration) or a STAGE_CLOSE_SUBJECTS rule naming it. Every other
-        reach (an area rule's directories, the engine family, every app row, a header's readers, a
-        tests/support helper) leaves it in stage_close_left, for the batch. Then the subject rules
-        ADD the rows they name (a broad rule need not have reached them)."""
-        for n in [n for n in self.selected if self.inv[n]["labels"] & SUBJECT_ONLY_LABELS]:
-            d = "tests/" + self.inv[n]["dir"] + "/"
-            if any(o and o.startswith(d) for o in self.sc_origins.get(n, ())):
-                continue
-            self.stage_close_left[n] = self.selected.pop(n)
-            self.whole.discard(n)
-            self.arms.pop(n, None)
-        reached = list(paths)
-        if self.fork_bump and self.fork_bump.get("files"):
-            reached += [_FORK + f for f in self.fork_bump["files"]]
-        for p in reached:
-            for pat, rows in STAGE_CLOSE_SUBJECTS:
-                if not re.match(pat, p): continue
-                named = [r for r in rows if r in self.inv and not (self.inv[r]["labels"] & SCOPE_EXCLUDED_LABELS)]
-                for r in named:
-                    self.stage_close_left.pop(r, None)
-                self.add(named, f"{p}: stage-close subject rule {pat[:60]}{'…' if len(pat) > 60 else ''}")
-
     # -- the path walk ---------------------------------------------------------------------
     def path(self, p, depth=0, via=None):
         """Select for one reached path. `via` names why a path is reached indirectly (a symbol,
         a CMake command); a directly touched path has via=None."""
-        if depth == 0: self._origin = p
         key = (p, depth > 0) if p not in _BY_FUNCTION else (p, depth > 0, via)
         if key in self._visited: return
         self._visited.add(key)
@@ -1792,10 +1342,7 @@ class Selection:
                 p.endswith(CXX_EXT) or p.startswith("irisgl/engine/")):
             self._moved.add(p)               # CODE moved (a comment-only or deleted file is discarded again below)
 
-        # THE FORK PIN (TEST-SELECTOR-1 T2): inside a lane a pin bump selects by what the FORK'S
-        # DIFF reaches (FORK_FAMILIES); §7b rule 4's full tier runs ONCE per bump, at the merge
-        # into d-build (`--fork-tier`, which ci_gate_check requires of a range that moves the pin),
-        # not on every fix round (contact-occlusion-1: eight full tiers in 8.6 h, one per round).
+        # THE FORK PIN (TEST-SELECTOR-1 T2): a pin bump selects by what the FORK'S DIFF reaches (FORK_COMPONENTS).
         if p == "irisgl/thirdparty/ogre-next" or p.startswith("irisgl/thirdparty/ogre-next/"):
             self.fork(p, tag, depth)
             return
@@ -1983,13 +1530,10 @@ class Selection:
         """A path of the runner in a TOOLING-ONLY diff (§1.3.4; NON_PRODUCT above): the tools' own rows — the
         `hygiene` and `tooling` rows, what the path's area rule names among the non-app, non-compiled rows, and
         every row whose command runs the file. Never a product row."""
-        self._origin = p
         why = f"{p}: a tooling-only diff (TESTING_V3 §1.3.4) — the runner's own rows"
         before = set(self.selected)
         self.expand(["hygiene", "tooling"], [], why)
         r = self.rules_for(p, why, kinds={"other"})
-        for pat, rows in TOOL_SELF_TESTS:
-            if re.match(pat, p): self.add(rows, why + " [its self-test]")
         hit = self.argv_rows(p, why)
         n = len(set(self.selected) - before)
         self.rationale.append((p, f"TOOLING-ONLY (no product input in the diff): the hygiene + tooling rows"
@@ -2831,9 +2375,8 @@ def _read(path):
         return ""
 
 
-def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False, lane=None):
-    """The whole selection as data (gate.selection replays call this in-process). `lane`: the lane whose range this is —
-    its own `lane:<LANE>` rows are selectable (TESTING-SPEED-A item 6)."""
+def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
+    """The whole selection as data (gate.selection and ci_gate_check's serving call this in-process)."""
     inv = inv if inv is not None else load_inventory(build)
     if graph is None:
         graph = gate_graph.NinjaGraph.load(build)
@@ -2848,7 +2391,7 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False, lan
     if graph is None:
         for t in inv.values():
             if t["kind"] == "compiled": t["kind"] = "other"     # the rules' dirs pick them, as before
-    S = Selection(inv, graph, app_exe, Revs(rng), jobs, lane=lane)
+    S = Selection(inv, graph, app_exe, Revs(rng))
     S.tooling_only = bool(paths) and not product_paths(paths)
     S._paths = set(paths)
     for p in paths:
@@ -2857,7 +2400,6 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False, lan
         else:
             S.path(p)
     S.data_edges(paths, data_facts(build))
-    S.stage_close_subjects(paths)
     tooling_paths(S, paths)
     if graph is not None: graph.save_syms()
     return S
@@ -2882,480 +2424,91 @@ def tooling_paths(S, paths):
         S.add(ALWAYS_ON_CODE, f"{harness[0]}: the test harness moved — the smoke pair")
 
 
-ATTR_DEFECT_COMBINATION, ATTR_INCOMPLETE, ATTR_DEFECT_DBUILD = 3, 7, 5
+WIDTH = 8        # ctest -j: the card's slots (tests/cmake/vram_rows.cmake) bound each class's width under it
 
 
-def _hold_state(vt, env, tier, lane, rng):
-    """THE FALLBACK OF THE HOLD JUST TAKEN — the first hold_card of a --solo run AND every re-hold after a
-    yield_card (item 15: the re-hold drains again, and a re-drain that times out returns the SLOT only, with no
-    JAH_VRAM_HELD — the callers used to keep the FIRST hold's fallback, so the rows after the yield ran on per-row
-    admission with no JAH_VRAM_ALL, no stamp and no phase record, and a clean re-drain stayed stamped). Reads
-    vt.LAST_DRAIN_TIMEOUT (hold_card resets it on every call): a timeout -> the phase record, the TOOL's JAH_VRAM_ALL
-    (every admission takes the card itself — a fallback, never an override, F2) and "drain-timeout"; else (env, None)
-    with no JAH_VRAM_ALL of ours. Returns (env, fallback|None); env is a copy."""
-    env = dict(env)
-    d = vt.LAST_DRAIN_TIMEOUT
-    if not d or env.get("JAH_VRAM_HELD"):
-        return env, None
-    gate_runlog.phase_record("drain-timeout", tier, lane, rng, gate_runlog.tree_shas(), fallback="drain-timeout", **d)
-    env["JAH_VRAM_ALL"] = "1"
-    return env, "drain-timeout"
+def ctest_line(rows, pool_env=""):
+    """The ctest command of a set of rows (a pool's arm subset rides JAH_POOL_ARMS)."""
+    rx = "^(" + "|".join(re.escape(n) for n in rows) + ")$"
+    return (f"JAH_POOL_ARMS='{pool_env}' " if pool_env else "") + \
+        f"ctest -j{WIDTH} --output-on-failure --no-tests=error -R '{rx}'"
 
 
-def run_target_step(target_cmd, build, lane, log_range, labels, reasons, exclude=None):
-    """THE TARGET STEP (GATE-COST-1 P9; TARGET-STEP-DISPLAY-1, ledger §1851): the selection's target
-    rows, -j1, run-log tier `target`, AFTER the gating verdict and INSIDE the gate — on the gate's own
-    display, under its slot, holding the whole card once (they used to run DETACHED after the gate's
-    exit: the lane killed its Xvfb and the step carried on against a dead display, 159 "Malformed
-    resolution string" records). Reported, never gating: its exit code is printed and dropped. A
-    display that dies under it stops it like any run (gate_runlog's guard). Returns nothing."""
-    print("\n=== target tests (label %s): reported, not gating — the gate's display, the whole card ==="
-          % "/".join(sorted(TARGET_LABELS)))
-    trc = gate_runlog.run_ctest(target_cmd, build, "target", lane, 1, reasons=reasons, rng=log_range,
-                                labels=labels, gating=lambda n: False, whole_card=True, exclude=exclude)
-    if trc == gate_runlog.DISPLAY_LOST or trc < 0 or trc > 128:
-        print("=== target tests STOPPED (the display died, or their ctest was killed) — NOT part of any gate's verdict ===")
-    else:
-        print("=== target tests exited %d — NOT part of any gate's verdict ===" % trc)
+def reach(paths, rng, build):
+    """The selection as data: {paths, rows, by_subsystem, reasons, arms, pool_arms_env, full_tier, fallback, fork_bump,
+    rationale, measure_left, graph, tooling_only}. A rule that reaches every row (full_tier) lists every row."""
+    S = select(paths, rng, build)
+    inv = S.inv
+    rows = sorted(n for n in S.selected if not (inv[n]["labels"] & NEVER_SELECTED))
+    if S.full_tier:
+        rows = sorted(n for n, t in inv.items() if not (t["labels"] & NEVER_SELECTED))
+    subsets = {r: arms for r, arms in S.arm_subsets().items() if r in rows}
+    by_sub = collections.defaultdict(list)
+    for n in rows:
+        by_sub[inv[n]["dir"]].append(n)
+    return {"paths": paths, "rows": rows, "by_subsystem": dict(sorted(by_sub.items())),
+            "reasons": {n: S.selected.get(n, "the whole inventory (a rule reaches every row)") for n in rows},
+            "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
+            "pool_arms_env": ",".join(f"{inv[r]['pool']}.{arm}" for r in sorted(subsets) for arm in subsets[r]),
+            "full_tier": S.full_tier, "fallback": S.fallback, "fork_bump": S.fork_bump,
+            "rationale": [{"path": p, "why": w} for p, w in S.rationale], "graph": S.graph is not None,
+            "tooling_only": S.tooling_only, "code_moved": S.code_moved,
+            "never_selected": sorted(n for n in S.selected if inv[n]["labels"] & NEVER_SELECTED), "_S": S}
 
 
 def main():
-    # A TIER FLAG THIS TOOL DOES NOT RUN is refused by name, never parsed as a range (STAGE-CLOSE-1: the
-    # batch of the rows that leave the MERGE and PUSH tiers is `--stage-close-tier`; no alias is kept)
-    for x in sys.argv[1:]:
-        if re.match(r"^--[a-z-]+-tier(-serial)?$", x) and x not in (
-                "--merge-tier", "--merge-tier-serial", "--fork-tier", "--stage-close-tier", "--stage-close-tier-serial"):
-            sys.stderr.write(f"gate-scope: {x} is not a tier this tool runs — the rows the MERGE and PUSH tiers leave "
-                             f"out run as the stage-close batch: --stage-close-tier (docs/TESTING_GATE.md §1d)\n")
-            sys.exit(2)
-    ap = argparse.ArgumentParser()
-    ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
+    ap = argparse.ArgumentParser(description="the rows a change reaches, by subsystem, and their ctest commands")
+    ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo; read from its merge-base)")
     ap.add_argument("--files", nargs="*", help="explicit touched paths instead of a range")
     ap.add_argument("--build", default="build-linux")
-    ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set); "
-                    "every suite's verdict goes to the run log")
-    ap.add_argument("-j", "--jobs", type=int, default=GATE_JOBS["app"],
-                    help=f"ctest parallelism of this tool's own parallel phase (default GATE_JOBS['app'] = "
-                         f"{GATE_JOBS['app']}; the runner's merge runs a width per pass: GATE_JOBS = {GATE_JOBS})")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--lane", action="append", default=None,
-                    help="the record's `lanes` (default: the branch): repeat it or give a comma-separated list — a "
-                         "gate names the lanes it is for")
-    ap.add_argument("--tier", default=None, choices=gate_runlog.TIERS,
-                    help="the run log's tier name (default: scoped; scoped-fallback / scoped-tier when a scoped "
-                         "gate runs the whole tier)")
-    ap.add_argument("--record-times", action="store_true",
-                    help="re-price scripts/gate-times.txt: every tier row of --build, the run log's (and its archive's) "
-                         "quiet median PASS seconds, the source named on each line")
-    ap.add_argument("--price-check", action="store_true",
-                    help="the prices' self-check: list every MERGE / STAGE-CLOSE tier row of --build with no line in "
-                         "scripts/gate-times.txt; exit 1 while one is")
-    ap.add_argument("--solo", metavar="SUITE", nargs="+",
-                    help="the flake protocol: run each suite alone --times times, logged as retries")
-    ap.add_argument("--times", type=int, default=3)
-    ap.add_argument("--merge-tier", action="store_true",
-                    help="print the MERGE tier's ctest command (at -j) and exit — the one source "
-                         "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
-    ap.add_argument("--fork-tier", action="store_true",
-                    help="a range that moves the fork pin: run the MERGE tier (logged as tier `fork`) — §7b rule 4's "
-                         "one full tier per bump, at the merge into d-build; ci_gate_check requires it")
-    ap.add_argument("--merge-tier-serial", action="store_true",
-                    help="print the MERGE tier's SERIAL phase (its timing rows at -j1, run after --merge-tier's "
-                         "parallel phase) and exit")
-    ap.add_argument("--stage-close-tier", action="store_true",
-                    help="THE STAGE-CLOSE BATCH (the lead's, at every stage close and before every push): print "
-                         "its parallel phase (at -j) and exit; with --run, run both phases in the gate slot "
-                         "(run-log tier `stage-close`; the quiet-box/timing phase -j1 on one whole-card hold)")
-    ap.add_argument("--stage-close-tier-serial", action="store_true",
-                    help="print the stage-close batch's quiet-box phase (every `quiet-box`/`timing` stage-close "
-                         "row, -j1, the whole card) and exit")
-    ap.add_argument("--stage-close-rules", action="store_true",
-                    help="print STAGE_CLOSE_SUBJECTS (which paths still bring which stage-close rows into a "
-                         "scoped gate) and exit")
-    ap.add_argument("--gate-jobs", action="store_true",
-                    help="print GATE_JOBS as JSON, the width per pass (the runner's merge run reads it), and exit")
-    ap.add_argument("--resume", action="store_true",
-                    help="--run, but only the rows with no record at this tip (a gate that was killed or lost its "
-                         "display: the rows it finished are in the run log already)")
-    tg = ap.add_mutually_exclusive_group()
-    tg.add_argument("--no-targets", action="store_true",
-                    help="with --run: do not start the target tests' step after the gating verdict")
-    tg.add_argument("--targets-only", action="store_true",
-                    help="with --run: run ONLY the selection's target tests (-j1, run-log tier `target`), in the "
-                         "foreground; reported, exit 0 whatever they read — the step --run starts by itself")
-    if "--joint" in sys.argv[1:]:
-        sys.stderr.write("gate-scope: --joint is retired — `runner.sh merge <lane>` runs what each merge reaches\n")
-        sys.exit(2)
     a = ap.parse_args()
-    if a.resume:
-        a.run = True
-    if a.gate_jobs:
-        print(json.dumps(GATE_JOBS, sort_keys=True)); return
-    if a.record_times or a.price_check:
-        b_ = resolve_build(a.build)
-        if a.record_times:
-            sys.exit(record_times(b_))
-        left = unpriced(load_inventory(b_))
-        print(f"gate-times.txt: {len(left)} unpriced tier row(s)" + (": " + " ".join(left) if left else " — clean"))
-        sys.exit(1 if left else 0)
-    if a.merge_tier:
-        print(merge_tier(a.jobs)); return
-    if a.merge_tier_serial:
-        print(merge_tier_serial()); return
-    if a.stage_close_tier_serial:
-        print(stage_close_tier_serial()); return
-    if a.stage_close_rules:
-        for pat, rows in STAGE_CLOSE_SUBJECTS:
-            print(f"{pat}\n    -> {' '.join(rows)}")
-        return
-    if a.stage_close_tier and not a.run:
-        print(stage_close_tier(a.jobs)); return
-    build = resolve_build(a.build)
-    # THE BUILT FORK MUST BE THE PIN (TESTING-DEBTS-1 T12): a run on an install built from another
-    # fork commit is void (stale media) — refused before a suite runs, with the lines that fix it.
-    # (A range that MOVES the pin selects by the fork diff's reach, and --fork-tier runs its one full
-    # tier, §7b.4; this check is about the tree.)
-    if a.run or a.solo:
-        bad = gate_runlog.fork_pin_problem()
-        if bad:
-            sys.stderr.write("gate-scope: " + bad + "\n")
-            sys.exit(4)
-        # THE NO-OP BUILD FIRST (GATE-COST-2 F4): the rows run on HEAD's binaries, BUILT_FROM fresh — or not at all
-        bad = gate_runlog.prebuild(build)
-        if bad:
-            sys.stderr.write("gate-scope: " + bad + "\n")
-            sys.exit(5)
-    slot, owed = [], []
-
-    def solo_card(label):
-        """A solo batch's whole card (hold_card: the slot first outside a gate), and on a drain timeout the
-        phase record + the tool's fallback (round 2, C — both solo paths): (fds, env, fallback|None)."""
-        card_, env_ = gate_runlog._vram().hold_card(label, log=sys.stdout)
-        env_, fb_ = _hold_state(gate_runlog._vram(), env_, a.tier or "solo", lane, log_range)
-        return card_, env_, fb_
-
-    def gate(what):
-        """THE GATE SLOT (P1), once per gate run: queue (class 1, no bound, the position printed), then hold
-        it in THIS process to its end (the ctest trees below die with it: gate_runlog F2)."""
-        if not slot:
-            gate_runlog.on_signals()
-            who = "+".join(gate_runlog.lane_list(a.lane)) or os.path.basename(gate_runlog.ROOT)
-            fd = gate_runlog._vram().gate_slot(f"{who} {what}", log=sys.stdout, cls=1)
-            slot.append(fd)
-        return None
-
-    def lost(rc):
-        """A run whose display died (P6) — or whose ctest was KILLED (a signal; 128 + it through a shell:
-        F4) — ends the gate here, with its verdict line: no timing phase, no target step after it."""
-        if rc == gate_runlog.DISPLAY_LOST:
-            print("\n=== GATE VERDICT: ABORTED — the display died; nothing after it ran and no row was recorded "
-                  "against it; re-run with --resume on a live display ===")
-            sys.exit(gate_runlog.DISPLAY_LOST)
-        if rc < 0 or rc > 128:
-            sig = -rc if rc < 0 else rc - 128
-            print(f"\n=== GATE ABORTED: ctest was killed (signal {sig}); the rows it finished are recorded ===\n"
-                  f"=== GATE VERDICT: ABORTED — nothing after it ran; re-run with --resume ===")
-            sys.exit(128 + sig)
-        return rc
-
-    def done_rows():
-        """--resume: the rows with a record at this tip (not run again)."""
-        if not a.resume:
-            return None
-        got = gate_runlog.recorded_rows()
-        print(f"gate-scope --resume: {len(got)} row(s) already have a record at this tip")
-        # A ROW AN ABORT DROPPED RED RE-RUNS AS A SOLO, never in the ordinary pass (GATE-COST-2 #9): out of the
-        # pass here, 3x solo by owed_solo_pass() before the verdict; the abort record keeps droppedRed
-        owed[:] = gate_runlog.owed_solos(gate_runlog.tree_shas())
-        if owed:
-            print(f"gate-scope --resume: {len(owed)} row(s) an abort dropped RED re-run as SOLOS (3x, tier solo), not "
-                  f"in the ordinary pass: {' '.join(owed[:12])}")
-        return got | set(owed)
-
-    def owed_solo_pass(labels):
-        """--resume's solos for the rows an abort dropped red: each 3x, tier `solo`, retry, on one whole-card
-        hold inside the gate. Returns the worst exit code (0 when none was owed)."""
-        if not owed:
-            return 0
-        print(f"\n=== the dropped reds' solos: {len(owed)} row(s), 3x each, the whole card held once ===")
-        card, env_, fb_ = solo_card(f"{'+'.join(lane)} dropped-red solos")
-        rc_ = 0
-        try:
-            for s_ in owed:
-                for _ in range(3):
-                    rc_ = lost(gate_runlog.run_ctest(
-                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '^{re.escape(s_)}$'",
-                        build, "solo", lane, 1, reasons={s_: "solo: dropped red by an abort"}, rng=log_range,
-                        # retry=True KEPT: gate_runlog.is_solo (the one solo predicate) reads it — this record's tier is
-                        # `solo` already; the flag makes it a solo whatever the tier argument becomes
-                        retry=True, env=env_, labels=labels, whole_card=False, fallback=fb_)) or rc_
-        finally:
-            gate_runlog._vram().release(card)
-        return rc_
-
-    if a.stage_close_tier:
-        # THE STAGE-CLOSE BATCH (U4): the slot once, both phases, each row recorded as it ends
-        sc_lane = gate_runlog.lane_list(a.lane) or ["stage-close"]
-        sc_tier = a.tier or "stage-close"
-        labels = {n: t["labels"] for n, t in load_inventory(build).items()}
-        print(f"{stage_close_tier(a.jobs)}\n{stage_close_tier_serial()}")
-        gate("stage-close"); skip = done_rows()
-        t0 = __import__("time").time()
-        rc = lost(gate_runlog.run_ctest(stage_close_tier(a.jobs), build, sc_tier, sc_lane, a.jobs, reasons={},
-                                        labels=labels, exclude=skip))
-        print("\n=== the quiet-box phase: every measuring stage-close row, -j1, the whole card held once ===")
-        rc = lost(gate_runlog.run_ctest(stage_close_tier_serial(), build, sc_tier, sc_lane, 1, reasons={},
-                                        labels=labels, exclude=skip, whole_card=True)) or rc
-        print("\n=== GATE VERDICT: %s (exit %d) — the stage-close batch, %.0f s wall ===" % (
-            "GREEN" if rc == 0 else "RED", rc, __import__("time").time() - t0))
-        gate_runlog.trend_at_gate_end()
-        sys.exit(rc)
-    lane = gate_runlog.lane_list(a.lane) or [gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])]
-    # the run log records the range by sha (HEAD moves; the record must not)
-    log_range = a.range
-    if a.range and ".." in a.range:
-        b_, t_ = a.range.split("..", 1)
-        log_range = "%s..%s" % (gate_runlog._git(["rev-parse", "--short=9", b_]) or b_,
-                                gate_runlog._git(["rev-parse", "--short=9", t_]) or t_)
-    if a.solo:
-        rc = 0
-        # (round 27) a solo is a re-run on the whole card, nothing more: no class, no 3/3 law — a red is the lead's
-        # SOLO ON THE CARD, ONE DRAIN PER BATCH (G1+G2; GATE-COST-1 P2): the whole batch holds every VRAM
-        # token once and each run's admissions are nested on it, so no sibling lane's GPU row runs beside
-        # any of them — and the card drains once, not once per run. A WHOLE-CARD HOLD TAKES THE GATE SLOT
-        # (GATE-COST-2): the batch queues (class 2, behind any waiting gate, and yields to one between runs) before it drains (hold_card does it), so its drain
-        # never starves the gate in the slot into NOADMIT.
-        gate_runlog.on_signals()
-        card, env, fallback = solo_card(f"{'+'.join(lane)} --solo {' '.join(a.solo)[:80]}")
-        try:
-            for s in a.solo:
-                for _ in range(a.times):
-                    # A MEASUREMENT YIELDS TO A GATE BETWEEN ITS RUNS (item 13: the slot is by priority)
-                    card, env_y = gate_runlog._vram().yield_card(card, env, f"{'+'.join(lane)} --solo", sys.stdout)
-                    if env_y is not env:
-                        # THE RE-HOLD IS A NEW HOLD (item 15): its drain decides the fallback, as solo_card's did
-                        env, fallback = _hold_state(gate_runlog._vram(), env_y, a.tier or "solo", lane, log_range)
-                    rx = "^" + re.escape(s) + "$"
-                    r = lost(gate_runlog.run_ctest(
-                        f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
-                        build, a.tier or "solo", lane, 1, reasons={s: "solo retry"},
-                        # retry=True KEPT: this solo records under the CALLER's tier (a.tier) — gate_runlog.is_solo (the
-                        # one solo predicate) knows it as a solo by this flag only
-                        rng=log_range, retry=True, env=env, whole_card=False, fallback=fallback))
-                    rc = rc or r
-        finally:
-            gate_runlog._vram().release(card)
-        sys.exit(rc)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
+    build = resolve_build(a.build)
     paths = a.files if a.files else touched_paths(a.range)
-    own_rng, incoming, fwd = scope_range(a.range) if a.range and not a.files else (a.range, None, [])
-    if fwd and not a.json:
-        # THE LANE IS GATED ON ITS OWN DIFF (T1): what the forward merges carried in is the
-        # siblings' change, gated in their own merge — the combination is that merge's.
-        short = lambda r: "..".join(x[:9] for x in r.split(".."))
-        print(f"gate-scope: {len(fwd)} forward merge(s) in {a.range} — the lane's OWN change is "
-              f"{short(own_rng)} (from the newest one's second parent {fwd[0][1][:9]})")
-        if incoming:
-            print(f"  what came in through them ({short(incoming)}) is NOT this gate's: the combination is the merge's "
-                  f"(runner.sh merge)")
-    if fwd:
-        log_range = "..".join(x[:9] for x in own_rng.split(".."))
-
-    costs = load_costs()
-    S = select(paths, a.range if not a.files else None, build, a.jobs)
-    inv, selected = S.inv, S.selected
-
-    # The quiet-box measurements never ride a scoped gate (see STAGE_CLOSE_LABELS). A `stage-close`
-    # row without `quiet-box` is here only through its own subject (select(): stage_close_subjects).
-    quiet = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
-    for n in quiet: selected.pop(n)
-    # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS).
-    targets = sorted(n for n in selected if inv[n]["labels"] & TARGET_LABELS)
-    selected_targets = {n: selected.pop(n) for n in targets}
-    names = sorted(selected)
-    # POOLS SELECTED BY ARM (TESTING_V2 T3 §2.3): one environment variable carries every partial
-    # pool's arms for the whole ctest line (run_pool.py reads its own pool's entries; a pool
-    # absent from it runs every arm)
-    subsets = {r: arms for r, arms in S.arm_subsets().items() if r in selected}
-    pool_env = ",".join(f"{inv[r]['pool']}.{arm}" for r in sorted(subsets) for arm in subsets[r])
-
-    def cost(n):
-        if n in subsets:   # the selected arms plus one boot
-            return 10.0 + sum(costs.get(f"{n}::{arm}", 10.0) for arm in subsets[n])
-        return costs.get(n, 10.0)
-    est = sum(cost(n) for n in names)
-    timing = [n for n in names if TIMING_LABEL in inv[n]["labels"]]
-    par_names = [n for n in names if n not in timing]
-    serial = sum(cost(n) for n in par_names if inv[n]["serial"])
-    timing_s = sum(cost(n) for n in timing)
-    wall = max((est - timing_s) / float(a.jobs), serial) + timing_s + 5
-    tier_rows = [n for n, t in inv.items() if not (t["labels"] & (STAGE_CLOSE_LABELS | TARGET_LABELS))]
-    tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
-
-    def ctest_for(suites, jobs):
-        rx = "^(" + "|".join(re.escape(n) for n in suites) + ")$"
-        return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
-
-    whole_tier = bool(S.full_tier)
-    cmd = ctest_for(par_names, a.jobs) if par_names else ""
-    if cmd and pool_env:
-        cmd = f"JAH_POOL_ARMS='{pool_env}' {cmd}"
-    timing_cmd = ctest_for(timing, 1) if timing else ""      # the serial phase (W1)
-    target_cmd = ctest_for(targets, 1) if targets else ""
-
+    R = reach(paths, a.range if not a.files else None, build)
+    S = R.pop("_S")
     if a.json:
-        print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": S.fallback,
-                          "full_tier": S.full_tier, "fork_bump": S.fork_bump, "reasons": {n: selected[n] for n in names},
-                          "own_range": own_rng, "incoming": incoming, "forward_merges": [m for m, _ in fwd],
-                          "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
-                          "pool_arms_env": pool_env,
-                          "rationale": [{"path": p, "why": w} for p, w in S.rationale],
-                          "graph": S.graph is not None, "tooling_only": S.tooling_only,
-                          "estimated_seconds": est, "estimated_wall": wall,
-                          "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
-                          "command": merge_tier(a.jobs) if whole_tier else cmd,
-                          "serial_command": merge_tier_serial() if whole_tier else timing_cmd,
-                          "target_command": target_cmd}, indent=1))
+        print(json.dumps(R, indent=1, default=sorted))
         return
-    print(f"gate-scope: {len(paths)} touched path(s)"
-          + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
-    for p, why in S.rationale: print(f"  {p}\n      -> {why}")
-    if S.tooling_only:
-        print("\nTOOLING-ONLY DIFF (TESTING_V3 §1.3.4): every touched path is NON_PRODUCT (gate-scope.py) "
-              "— the hygiene label + the tools' rows + the rows whose declaration or command changed; no product row, "
-              "no smoke pair")
-
-    def run_both(tier_name):
-        """The MERGE tier, both phases (parallel, then the timing rows serial); the worse exit code."""
-        labels = {n: t["labels"] for n, t in inv.items()}
-        gate(tier_name); skip = done_rows()
-        r1 = lost(gate_runlog.run_ctest(merge_tier(a.jobs), build, tier_name, lane, a.jobs, reasons={}, rng=log_range,
-                                        labels=labels, exclude=skip))
-        print("\n=== the timing phase (serial, after the parallel phase; the whole card held once) ===")
-        r2 = lost(gate_runlog.run_ctest(merge_tier_serial(), build, tier_name, lane, 1, reasons={}, rng=log_range,
-                                        labels=labels, exclude=skip, whole_card=True))
-        r3 = owed_solo_pass(labels)
-        gate_runlog.trend_at_gate_end(tier=tier_name, lane=lane)
-        return r1 or r2 or r3
-
-    def run_tier(reason):
-        print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
-        if a.run:
-            # a SCOPED gate that ran the whole tier is logged as such — "scoped-fallback" (no rule,
-            # no symbol, no graph owner) or "scoped-tier" (the tier by rule: a root setting, an unreadable
-            # fork diff) — so the
-            # run log tells it from the lead's MERGE tier runs
-            sys.exit(run_both(a.tier or ("scoped-fallback" if reason == "fallback" else "scoped-tier")))
-    if S.fork_bump:
-        fb = S.fork_bump
-        print(f"\nTHE FORK PIN MOVED ({(fb['old'] or '?')[:9]} -> {(fb['new'] or '?')[:9]}): this gate selects by the "
-              f"fork diff's reach;\n  §7b rule 4's full tier runs ONCE per bump, at the merge into d-build:\n"
-              f"  scripts/gate-scope.sh {a.range} --run --fork-tier   (ci_gate_check refuses the merge without it)")
-        if a.fork_tier:
-            print(f"\n{merge_tier(a.jobs)}\n{merge_tier_serial()}")
-            if a.run:
-                sys.exit(run_both(a.tier or "fork"))
-            return
-    elif a.fork_tier:
-        sys.stderr.write("gate-scope: --fork-tier on a range that does not move the fork pin — nothing to do\n")
-        sys.exit(2)
-    if S.full_tier:
-        print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
-        for f in S.full_tier: print(f"  {f}")
-        run_tier("rule"); return
-    if S.fallback:
-        # NEVER THE WHOLE TIER (TESTING-SPEED-A item 1): a path nobody owns selected its directory's subsystem
-        print("\nFALLBACK (a touched path has no rule, no symbol and no graph owner — its DIRECTORY's subsystem is "
-              "selected, never the whole tier; a rule for it belongs in AREA_RULES):")
-        for f in S.fallback: print(f"  {f}")
+    print(f"gate-scope: {len(paths)} touched path(s)" + ("" if R["graph"] else "   [NO BUILD GRAPH: compiled rows by "
+                                                         "directory rules]"))
+    for x in R["rationale"]:
+        print(f"  {x['path']}\n      -> {x['why']}")
+    if R["fork_bump"]:
+        fb = R["fork_bump"]
+        print(f"\nTHE FORK PIN MOVED ({(fb['old'] or '?')[:9]} -> {(fb['new'] or '?')[:9]}): selected by the fork diff's reach")
+    for f in R["full_tier"]:
+        print(f"\nEVERY ROW (a rule reaches the whole inventory): {f}")
+    for f in R["fallback"]:
+        print(f"\nFALLBACK (no rule, no symbol, no graph owner — its directory's subsystem): {f}")
     if S.skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
-    if quiet: print(f"\n(quiet-box measurements left out — the stage-close batch's: {sorted(quiet)})")
-    if S.stage_close_left:
-        print(f"\n(stage-close rows a broad rule reached, left for the stage-close batch — no subject rule "
-              f"names them and their own test dir did not move: {sorted(S.stage_close_left)})")
-    if targets:
-        print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
-              f"value, and they do NOT decide this gate:")
-        for n in targets: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected_targets[n]}")
-    if not names and not targets:
-        # THE ONLY HONEST EMPTY SELECTION is a change that moved no code.
-        if S.code_moved:
-            sys.stderr.write(
-                "gate-scope: a code path selected NO suite — the rules fired (see the rationale "
-                "above) but\n            named nothing this build dir registers. That is a rule "
-                "or inventory defect, not\n            an empty change; refusing to report a "
-                "green empty gate.\n")
+    if R["never_selected"]:
+        print(f"\n(reached, never selected — measure / target rows, the sprint's ship runs them: {R['never_selected']})")
+    if not R["rows"]:
+        if R["code_moved"]:
+            sys.stderr.write("gate-scope: a code path selected NO row — the rules fired (see above) but named nothing "
+                             "this build registers: a rule or inventory defect, not an empty change\n")
             sys.exit(3)
-        print("\nSCOPED tier: NOTHING to gate — every touched path is docs/data/a price with no owning suite, or a "
-              "comment (the six hash lines are every merge's whole-engine guard)")
+        print("\nNOTHING reached — docs, data no row reads, or comments only")
         return
-    if names:
-        print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "
-              f"suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} (serial islands {serial:.0f} s); "
-              f"{cost_sources([k for n in names for k in ([f'{n}::{a_}' for a_ in subsets[n]] if n in subsets else [n])])}")
-        for n in names:
-            print(f"  {cost(n) if n in subsets else costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
-            for arm in subsets.get(n, []):
-                print(f"           arm {inv[n]['pool']}.{arm}   <- {S.arms[n][arm]}")
-        print(f"\n{cmd}")
-        if timing_cmd: print(f"{timing_cmd}    # the timing rows, serial, after it ({len(timing)}, ~{timing_s:.0f} s)")
-    else:
-        print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
-              "of its own, and the targets below still run and report.")
-    if target_cmd: print(f"\n{target_cmd}    # target tests: reported, NOT gating")
-    if a.run and a.targets_only:
-        # THE TARGET STEP (GATE-SPEED-1 item 2): the targets' own ctest, -j1, its own run-log tier. A
-        # report: its exit code is printed and the step exits 0.
-        if not target_cmd:
-            print("\n=== target tests: none selected ==="); return
-        labels = {n: t["labels"] for n, t in inv.items()}
-        run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=(gate("targets"), done_rows())[1])
-        # F8: --targets-only --resume owes the dropped reds their solos too (the targets themselves never gate)
-        src = owed_solo_pass(labels)
-        gate_runlog.trend_at_gate_end(tier="target", lane=lane)
-        if src:
-            sys.exit(src)
-        return
-    if a.run:
-        labels = {n: t["labels"] for n, t in inv.items()}
-        reasons = dict(selected)
-        for r in subsets:
-            for arm in subsets[r]: reasons[f"{r}::{arm}"] = S.arms[r][arm]
-        env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
-        gate(a.tier or "scoped"); skip = done_rows()
-        rc = lost(gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
-                                        a.jobs, reasons=reasons, rng=log_range, labels=labels, env=env,
-                                        exclude=skip)) if cmd else 0
-        if timing_cmd:
-            print("\n=== the timing phase: %d row(s), serial, the whole card held once ===" % len(timing))
-            rc = lost(gate_runlog.run_ctest(timing_cmd, build, a.tier or "scoped", lane, 1, reasons=reasons,
-                                            rng=log_range, labels=labels, exclude=skip, whole_card=True)) or rc
-        rc = owed_solo_pass(labels) or rc
-        # THE VERDICT IS THE GATING PHASES' (GATE-SPEED-1 item 2): printed, and every gating record
-        # written, before any target runs; the exit code is this one whatever the targets read. THE
-        # TARGETS RUN AFTER IT, INSIDE THE GATE (GATE-COST-1 P9): on the gate's display, under its slot,
-        # on one whole-card hold — the lane reads its verdict from the line below, not from the exit.
-        print("\n=== GATE VERDICT: %s (exit %d) — the gating phases only ===" % ("GREEN" if rc == 0 else "RED", rc))
-        sys.stdout.flush()
-        if target_cmd and not a.no_targets:
-            run_target_step(target_cmd, build, lane, log_range, labels, selected_targets, exclude=skip)
-        gate_runlog.trend_at_gate_end(tier=a.tier or "scoped", lane=lane)
-        sys.exit(rc)
+    print(f"\n{len(R['rows'])} row(s) in {len(R['by_subsystem'])} subsystem(s):")
+    for sub, rows in R["by_subsystem"].items():
+        print(f"\n[{sub}] {len(rows)} row(s)")
+        for n in rows:
+            print(f"  {n}   <- {R['reasons'][n]}")
+            for arm, why in R["arms"].get(n, {}).items():
+                print(f"      arm {S.inv[n]['pool']}.{arm}   <- {why}")
+        env = ",".join(f"{S.inv[r]['pool']}.{arm}" for r in rows for arm in R["arms"].get(r, {}))
+        print(f"  cd {build} && {ctest_line(rows, env)}")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except gate_runlog.GateSignal as e:
-        # F2: a gate told to stop — every run below has stopped its ctest tree and released its card on the
-        # way here; the slot goes with this process
-        print(f"\n=== GATE ABORTED: signal {e.sig} — the ctest tree was stopped, the slot and the card released ===",
-              flush=True)
-        sys.exit(128 + e.sig)
     except gate_graph.GraphError as e:
-        # H1: an unreadable graph is a refusal, never an empty (green) selection
         sys.stderr.write(f"gate-scope: REFUSED — {e}. Install binutils (nm) or fix the build dir; "
                          f"a selection from an unreadable graph would under-select silently.\n")
         sys.exit(4)

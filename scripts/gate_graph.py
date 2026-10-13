@@ -551,7 +551,7 @@ def ctest_inventory(build):
 # Every run-log record carries what the row WAS when it ran: its declaration (ctest's properties and its command line) and
 # a hash of the data files its command names, so a later selection can tell "the row did not change" from "the row's
 # declaration or data moved" (§3.2). THE TREE ROOT IS STRIPPED (preflight 2, P12): ctest's command and WORKING_DIRECTORY
-# carry the worktree's path (rc-merge-<lane>/scripts/gpu-admit.sh, …/build-linux/tests/gi) — a raw hash would re-key every
+# carry the worktree's path (<worktree>/scripts/gpu-exclusive.sh, …/build-linux/tests/gi) — a raw hash would re-key every
 # row per tree. The paths are rewritten to `<root>` / `<build>` from the build's OWN CMakeCache (CMAKE_HOME_DIRECTORY,
 # CMAKE_CACHEFILE_DIR: a copied or moved build dir still names the tree it was configured in) and from the directory the
 # build sits in now; ctest_inventory's temporary copy (a row with no WORKING_DIRECTORY of its own defaults to the copy's
@@ -632,19 +632,16 @@ def _canon_json(v):
 
 def declaration(test, roots):
     """A ctest row's DECLARATION, the tree root stripped: {labels, timeout, tokens, run_serial, hash} — `hash` over
-    EVERY property but COST (scheduling only) and the whole command line, root-free; `tokens` = the VRAM tokens it
-    asks (`gpu-admit.sh <n>`, else its RESOURCE_GROUPS vram slots, else 0)."""
+    EVERY property but COST (scheduling only) and the whole command line, root-free; `tokens` = the card's slots it takes
+    (its RESOURCE_GROUPS vram slots, else 0)."""
     props = {p["name"]: p["value"] for p in test.get("properties", []) if p.get("name") not in _DECL_IGNORED}
     cmd = test.get("command") or []
     full = strip_roots({"command": cmd, "properties": props}, roots)
     tokens = 0
-    if cmd and os.path.basename(cmd[0]) == "gpu-admit.sh" and len(cmd) > 1 and str(cmd[1]).isdigit():
-        tokens = int(cmd[1])
-    else:
-        for g in props.get("RESOURCE_GROUPS") or []:
-            for r_ in (g or {}).get("requirements") or []:
-                if r_.get(".type") == "vram":
-                    tokens += int(r_.get("slots") or 0)
+    for g in props.get("RESOURCE_GROUPS") or []:
+        for r_ in (g or {}).get("requirements") or []:
+            if r_.get(".type") == "vram":
+                tokens += int(r_.get("slots") or 0)
     return {"labels": sorted(props.get("LABELS") or []), "timeout": props.get("TIMEOUT"),
             "tokens": tokens, "run_serial": bool(props.get("RUN_SERIAL")),
             "hash": _sha256(_canon_json(full).encode())}
@@ -679,7 +676,7 @@ DATA_SETS = {                                  # a named set -> the source-tree 
     "samples": ("scenes",),                    # every shipped sample (scenes/ beside the binary); samples/<name>: one
 }
 # THE HARNESS IS NOT DATA (the lead's read of RUNNER-A2B): a command-line path under these source-tree dirs is a wrapper of
-# the harness (scripts/gpu-admit.sh, scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
+# the harness (scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
 # a row's data known; the row's set is its real data arguments, its walked directories and its declared families only.
 HARNESS_DIRS = ("scripts/", "tests/support/")
 DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
@@ -944,8 +941,8 @@ def _call_data(path, line, cache):
 def declared_from_source(src, inventory, roots=None):
     """THE JAH_DATA DECLARATIONS FROM THE TREE'S CMAKE TEXT, without a configure (RUNNER-A2B follow-up): the rules of
     tests/CMakeLists.txt's _jah_data and jah_data_pass, applied to a build's rows —
-      * a row's CLASS from its command line (gpu-admit.sh / gpu-exclusive.sh `--label <row>:<class>`; a pool's run_pool.py,
-        `--headless` or not): engine-media for a rendering class, library-template for app / vr / headless;
+      * a row's CLASS from its JAH_CLASS property (tests/cmake/vram_rows.cmake; a pool's run_pool.py, `--headless` or
+        not): engine-media for a rendering class, library-template for app / vr / headless;
       * the macro call's own `DATA` clause, read at the call site the inventory's backtrace names; a `${…}` it cannot
         expand widens to the family's superset (`samples/${X}` -> `samples`: more reruns, never a wrong serving);
       * a fresh-home wipe (tests/support/fresh_home.sh with FIXTURES_SETUP) is NONE;
@@ -983,13 +980,9 @@ def declared_from_source(src, inventory, roots=None):
             n = nodes[n["parent"]] if "parent" in n else None
         macro = next((c for _, _, c in frames if c in ("jah_gpu_row", "jah_gpu_exclusive_test", "jah_add_pool")), None)
         wipe = any(c == "jah_fresh_home_fixture" for _, _, c in frames)
-        for i, c in enumerate(cmd if macro in ("jah_gpu_row", "jah_gpu_exclusive_test") else []):
-            if os.path.basename(c) in ("gpu-admit.sh", "gpu-exclusive.sh"):
-                j = cmd.index("--label", i) if "--label" in cmd[i:] else -1
-                if j > 0 and j + 1 < len(cmd) and ":" in cmd[j + 1]:
-                    cls = cmd[j + 1].rsplit(":", 1)[1]
-                break
-        if cls is None and macro == "jah_add_pool":
+        if macro in ("jah_gpu_row", "jah_gpu_exclusive_test"):
+            cls = props.get("JAH_CLASS")
+        if macro == "jah_add_pool":
             cls = "headless" if "--headless" in cmd else "app"
         if cls in _RENDERING:
             fams.append("engine-media")

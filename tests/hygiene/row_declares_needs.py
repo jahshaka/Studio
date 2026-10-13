@@ -6,7 +6,7 @@ it needs; if you don't need Photon, run Low").
 A process with no test tier honours the DOCUMENT's tier — Epic, the whole chain, ~1.5-3 GB — so a
 row that declares nothing boots a picture its claim never named. The declaration is two words on
 the registration (jah_gpu_row / jah_gpu_exclusive_test CLASS app|vr, jah_add_pool; the lookup and
-the vocabulary are tests/support/vram_tokens.cmake): `TIER <low|medium|high|epic>` and
+the vocabulary are tests/support/test_boot.cmake): `TIER <low|medium|high|epic>` and
 `NEEDS <photon bloom ssao smaa planar…>|NONE`, which the helpers put on the row as
 ENVIRONMENT_MODIFICATION `JAHSHAKA_TEST_TIER=set:<tier>` / `JAHSHAKA_TEST_NEEDS=set:<list|none>`
 — or, for `TIER document` (no test tier: the process honours each scene's own tier, for a claim
@@ -90,7 +90,7 @@ def row_scripts(words, env):
         for part in re.split(r"[;,= ]", w):
             if SCRIPT_RX.search(part) and os.path.isfile(part):
                 b = os.path.basename(part)
-                if b in ("run_pool.py", "fresh_home.sh", "gpu-admit.sh", "gpu-exclusive.sh"):
+                if b in ("run_pool.py", "fresh_home.sh", "gpu-exclusive.sh"):
                     continue
                 out.append(part)
     # a HARNESS compiled from C++ (test_x spawning the app over MCP) carries its scripts in its
@@ -189,7 +189,7 @@ def check(listing, app, out, harnesses):
         vulkan, _registered, why = closure.classify(t, app, harnesses)
         if not vulkan or not why.startswith("APP "):
             continue
-        if closure.admitted_class(words) == "selftest":
+        if props.get("JAH_CLASS") == "selftest":
             continue
         in_scope += 1
         d = declared(props)
@@ -250,42 +250,35 @@ def self_test(app, out):
         if needs is not None:
             v.append("JAHSHAKA_TEST_NEEDS=set:" + needs)
         return [{"name": "ENVIRONMENT_MODIFICATION", "value": v}]
-    admit = ["/x/scripts/gpu-admit.sh", "1", "--label"]
+    def row(name, cls, cmd, props=None):
+        return {"name": name, "command": cmd,
+                "properties": (props or []) + [{"name": "JAH_CLASS", "value": cls}]}
     harness = "/x/build-linux/tests/toy/test_toy_harness"
-    pool = ["/usr/bin/python3", "/x/tests/support/run_pool.py", "--vram-tokens", "1", "--app", app]
+    pool = ["/usr/bin/python3", "/x/tests/support/run_pool.py", "--app", app]
     synthetic = {"tests": [
-        {"name": "toy.declared", "command": admit + ["toy.declared:app", "--", app, "--script", "x.js"],
-         "properties": mod("low", "none")},
-        {"name": "toy.declared_needs", "command": admit + ["toy.declared_needs:app", "--", app],
-         "properties": mod("high", "photon bloom")},
-        {"name": "toy.undeclared", "command": admit + ["toy.undeclared:app", "--", app, "--script", "x.js"]},
-        {"name": "toy.tier_only", "command": admit + ["toy.tier_only:app", "--", app], "properties": mod("epic", None)},
-        {"name": "toy.typed", "command": admit + ["toy.typed:app", "--", app],
-         "properties": [{"name": "ENVIRONMENT", "value": ["JAHSHAKA_TEST_TIER=low"]}]},
-        {"name": "toy.bad_word", "command": admit + ["toy.bad_word:app", "--", app], "properties": mod("low", "shadows")},
-        {"name": "toy.none_plus", "command": admit + ["toy.none_plus:app", "--", app], "properties": mod("low", "none photon")},
+        row("toy.declared", "app", [app, "--script", "x.js"], mod("low", "none")),
+        row("toy.declared_needs", "app", [app], mod("high", "photon bloom")),
+        row("toy.undeclared", "app", [app, "--script", "x.js"]),
+        row("toy.tier_only", "app", [app], mod("epic", None)),
+        row("toy.typed", "app", [app], [{"name": "ENVIRONMENT", "value": ["JAHSHAKA_TEST_TIER=low"]}]),
+        row("toy.bad_word", "app", [app], mod("low", "shadows")),
+        row("toy.none_plus", "app", [app], mod("low", "none photon")),
         {"name": "toy.pool_declared", "command": pool, "properties": mod("epic", "photon")},
-        {"name": "toy.document", "command": admit + ["toy.document:app", "--", app],
-         "properties": [{"name": "ENVIRONMENT_MODIFICATION",
-                         "value": ["JAHSHAKA_TEST_TIER=unset:", "JAHSHAKA_TEST_NEEDS=unset:"]}]},
-        {"name": "toy.half_document", "command": admit + ["toy.half_document:app", "--", app],
-         "properties": [{"name": "ENVIRONMENT_MODIFICATION",
-                         "value": ["JAHSHAKA_TEST_TIER=unset:", "JAHSHAKA_TEST_NEEDS=set:photon"]}]},
+        row("toy.document", "app", [app], [{"name": "ENVIRONMENT_MODIFICATION",
+                         "value": ["JAHSHAKA_TEST_TIER=unset:", "JAHSHAKA_TEST_NEEDS=unset:"]}]),
+        row("toy.half_document", "app", [app], [{"name": "ENVIRONMENT_MODIFICATION",
+                         "value": ["JAHSHAKA_TEST_TIER=unset:", "JAHSHAKA_TEST_NEEDS=set:photon"]}]),
         {"name": "toy.pool_undeclared", "command": pool},
-        {"name": "toy.none_reads_pixels", "command": admit + ["toy.none_reads_pixels:app", "--", app, "--script", PIXEL_TOY],
-         "properties": mod("low", "none")},
-        {"name": "toy.none_why", "command": admit + ["toy.none_why:app", "--", app, "--script", PIXEL_TOY],
-         "properties": [{"name": "ENVIRONMENT_MODIFICATION", "value": [
+        row("toy.none_reads_pixels", "app", [app, "--script", PIXEL_TOY], mod("low", "none")),
+        row("toy.none_why", "app", [app, "--script", PIXEL_TOY], [{"name": "ENVIRONMENT_MODIFICATION", "value": [
              "JAHSHAKA_TEST_TIER=set:low", "JAHSHAKA_TEST_NEEDS=set:none",
-             "JAHSHAKA_TEST_NEEDS_WHY=set:the GI-off picture is the claim"]}]},
-        {"name": "toy.photon_reads_pixels", "command": admit + ["toy.photon_reads_pixels:app", "--", app, "--script", PIXEL_TOY],
-         "properties": mod("epic", "photon")},
-        {"name": "toy.selftest", "command": admit + ["toy.selftest:selftest", "--", app, "--engine-selftest", "o.png"]},
+             "JAHSHAKA_TEST_NEEDS_WHY=set:the GI-off picture is the claim"]}]),
+        row("toy.photon_reads_pixels", "app", [app, "--script", PIXEL_TOY], mod("epic", "photon")),
+        row("toy.selftest", "selftest", [app, "--engine-selftest", "o.png"]),
         {"name": "toy.headless", "command": [app, "--headless", "--script", "x.js"]},
         # a C++ harness that spawns the app (named in the harness record): it declares like the app
-        {"name": "toy.harness_declared", "command": admit + ["toy.harness_declared:app", "--", harness],
-         "properties": mod("low", "none")},
-        {"name": "toy.harness_undeclared", "command": admit + ["toy.harness_undeclared:app", "--", harness]},
+        row("toy.harness_declared", "app", [harness], mod("low", "none")),
+        row("toy.harness_undeclared", "app", [harness]),
     ]}
     buf = io.StringIO()
     try:

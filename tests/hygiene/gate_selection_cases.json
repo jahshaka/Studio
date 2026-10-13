@@ -67,7 +67,8 @@
    ],
    "env": [],
    "note": "photon.view's ScreenProbes 0 % under load: REAL, fixed in 74d06b020",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> gi.ambient (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> gi.ambient (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)",
+   "rows_at_tip_only": true
   },
   {
    "lane": "PHOTON-VIEW-1 (merge, fork pin 2d6c921a5)",
@@ -80,7 +81,8 @@
    "env": [],
    "note": "the fork pin moved: the MERGE tier by rule (contract §7b.4) — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier)",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> gi.ambient (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> gi.ambient (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)",
+   "rows_at_tip_only": true
   },
   {
    "lane": "ATOM-DECODE-CLASS-1",
@@ -114,7 +116,8 @@
     "threading.import_soak"
    ],
    "note": "engine.window + shadercache.warmup_pass (gate-1) and chain.hzb (the fix gate) were the lane's",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)",
+   "rows_at_tip_only": true
   },
   {
    "lane": "FOG-ATMO-1 (its scoped gate)",
@@ -159,7 +162,8 @@
    "must": [],
    "env": [],
    "note": "the old selector fell back on the suite's Xid wrapper (deleted since TEST-SELECTOR-1 H4); the change is one suite's registration, its script and its wrapper",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in). TESTING-SPEED-B1 (the lead, 2026-10-12): the case is DROPPED — its max_rows (<= 10) deleted, nothing asserted: the row it exercised, photon.view, is deleted, so a change to its (now nonexistent) registration and script falls to the directory's subsystem, the whole gi family (119 rows) — the selector's safe answer and correct; no other row's diff in this range stands in"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: photon.view -> dropped (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in). TESTING-SPEED-B1 (the lead, 2026-10-12): the case is DROPPED — its max_rows (<= 10) deleted, nothing asserted: the row it exercised, photon.view, is deleted, so a change to its (now nonexistent) registration and script falls to the directory's subsystem, the whole gi family (119 rows) — the selector's safe answer and correct; no other row's diff in this range stands in",
+   "rows_at_tip_only": true
   },
   {
    "lane": "ATOM-CPU-WALKS-1",
@@ -217,8 +221,8 @@
     "gi.field_scroll"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
-   "max_rows": 260,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive, vr.eye_grade)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive, vr.eye_grade)",
+   "rows_at_tip_only": true
   },
   {
    "lane": "D3-HIT-SHADE-2 (scoped-fallback gate at 5c3ce8b4d)",
@@ -230,10 +234,6 @@
     "gi.rt_reflect_cost"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
-   "own_base": "dc3fed56a",
-   "not_paths": [
-    "irisgl/thirdparty/ogre-next"
-   ],
    "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
   },
   {
@@ -244,12 +244,7 @@
    "env": [
     "app.watchdog_stall"
    ],
-   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; T1: a Studio-only lane whose forward merge carried fork e78e26e49 in — gated on its own diff from the merge's d-build parent",
-   "own_base": "dc3fed56a",
-   "not_paths": [
-    "irisgl/thirdparty/ogre-next",
-    "cmake/IncludeOgre.cmake"
-   ]
+   "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; T1: a Studio-only lane whose forward merge carried fork e78e26e49 in — gated on its own diff from the merge's d-build parent"
   },
   {
    "lane": "D6-FORK-TOOLING (scoped-fallback gate at 69e1f3f1c)",
@@ -271,9 +266,7 @@
     "editor_view_c.render_stats",
     "pool.editor_view_c"
    ],
-   "env": [
-    "devprocess.vram_admit"
-   ],
+   "env": [],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds",
    "fork_reach": true,
    "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive); TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): editor_view.render_stats -> editor_view.engine_arms (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (editor_view.engine_arms -> editor_view_c.render_stats, pool.editor_view -> pool.editor_view_c)"
@@ -289,11 +282,11 @@
     "source.member_init"
    ],
    "env": [
-    "devprocess.vram_admit",
     "shadergraph.bake_output"
    ],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; reds of rows gone from this tree: ['scale.shadow_cut_small']",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)",
+   "rows_at_tip_only": true
   },
   {
    "lane": "D6-FORK-TOOLING (scoped-fallback gate at 9c3811b1e)",
@@ -338,8 +331,8 @@
    "must": [],
    "env": [],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-fallback); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; since the merge read's D1 the own range starts at the forward merge's d-build parent, whose pin is readable: the fork bump selects by reach",
-   "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)",
+   "whole_tier": true
   },
   {
    "lane": "D4-PHOTON-TIERS (scoped-fallback gate at e6a71d0df)",
@@ -488,11 +481,6 @@
    "must": [],
    "env": [],
    "note": "TEST-SELECTOR-1 T4: one of the 29 tier-sized lane gates since 09-28 (old selector: scoped-tier); must = its reds with no solo PASS outside the contention class (unverified per suite: the class the audit counted), env = solo-passed or contention-class reds; T1: the pin came in through its forward merge — its own diff is ~284 rows",
-   "own_base": "3e632812e",
-   "not_paths": [
-    "irisgl/thirdparty/ogre-next"
-   ],
-   "max_rows": 320,
    "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: env rows the batches delete or move dropped (open.responsive)"
   },
   {
@@ -829,35 +817,13 @@
    ]
   },
   {
-   "case": "H8a scripts/ci_gate_check.py beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
-   "files": [
-    "src/services/vrworld.cpp",
-    "scripts/ci_gate_check.py"
-   ],
-   "must": [
-    "gate.ci_check",
-    "gate.verdict_door"
-   ]
-  },
-  {
-   "case": "H8a scripts/ci-gate-check.sh beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
-   "files": [
-    "src/services/vrworld.cpp",
-    "scripts/ci-gate-check.sh"
-   ],
-   "must": [
-    "gate.ci_check"
-   ]
-  },
-  {
    "case": "H8a scripts/kernel_xid.py beside a product file selects its tests (TESTING-CLEANUP-2B item 4; red on base: no row)",
    "files": [
     "src/services/vrworld.cpp",
     "scripts/kernel_xid.py"
    ],
    "must": [
-    "devprocess.kernel_journal",
-    "gate.cost"
+    "devprocess.kernel_journal"
    ]
   },
   {
@@ -867,7 +833,7 @@
     "scripts/check-trailers.sh"
    ],
    "must": [
-    "gate.cost"
+    "source.bake_key_guard"
    ]
   },
   {
@@ -914,11 +880,13 @@
    ]
   },
   {
-   "case": "TESTING-SPEED-A: scripts/gate-times.txt alone (a price file) selects NOTHING",
+   "case": "TESTING-SPEED-A: scripts/gate-times.txt alone (a price file) selects the budget lint that reads it",
    "files": [
     "scripts/gate-times.txt"
    ],
-   "selects_nothing": true
+   "must": [
+    "source.row_budget"
+   ]
   }
  ],
  "hunks": [
