@@ -592,8 +592,11 @@ static int cardsMain(Engine *e)
               "THE ESTIMATOR MEASURES THE SURFACE: at a 4-px stride, 64 live frames averaged, the floor's "
               "red reads %.3f..%.3f of the closed form over its own cell (bar 0.90..1.05; a ray start lifted "
               "half a voxel off the surface read 0.888..1.069)", estLo, estHi);
-    CHECK_MSG(maxDiff > 0.005,
-              "THE CARD IS READ: the card arm differs from the voxel arm somewhere on the profile "
+    // FAR-SUN-2 (2026-10-13): a hit's direct light is computed at the hit on BOTH arms, so the card arm and the
+    // voxel arm answer the same surface — the old premise ("the card is read because the arms differ") retired
+    // by the lead at the merge (they agree within 0.18 %); the physics bar is that they AGREE.
+    CHECK_MSG(maxDiff <= 0.01,
+              "THE CARD AND THE VOXEL ANSWER THE SAME HIT: the two arms agree over the profile within 1 %% "
               "(largest %.2f %%)", 100.0 * maxDiff);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
