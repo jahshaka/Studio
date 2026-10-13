@@ -22,30 +22,18 @@ test_importer_scene.cpp asserts them as counts:
   SunLight   a directional light;  ShotCam  a camera.
   Spinner    the ONE node the "Take 001" animation moves (a translation curve).
 
-Run:  python3 make_scene_fbx.py      (writes scene_features.fbx + Textures/ beside it)
+The TEXTURES are not tracked (source.no_renders_tracked: no image in git outside the
+fixture allow-list): test_importer_scene.cpp writes them beside a copy of this file in its
+own temporary directory — CubeMat_BaseColor.png (opaque RGB), the split pair
+CubeMat_Specular_{roughness,metallic}.png (grey), LeafMat_BaseColor.png (RGBA, a diamond
+of coverage with the corners cut to alpha 0).
+
+Run:  python3 make_scene_fbx.py      (writes scene_features.fbx beside it)
 """
 
 import os
-import struct
-import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TEX = os.path.join(HERE, "Textures")
-
-
-def png(path, w, h, rows, mode):
-    """A PNG without PIL: `mode` 'L' (grey), 'RGB' or 'RGBA'; rows = list of byte rows."""
-    ct = {"L": 0, "RGB": 2, "RGBA": 6}[mode]
-    raw = b"".join(b"\x00" + bytes(r) for r in rows)
-
-    def chunk(tag, data):
-        c = struct.pack(">I", len(data)) + tag + data
-        return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-
-    data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, ct, 0, 0, 0))
-    data += chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
-    with open(path, "wb") as f:
-        f.write(data)
 
 
 def num(x):
@@ -233,18 +221,4 @@ w("}\n")
 with open(os.path.join(HERE, "scene_features.fbx"), "w") as f:
     f.write("".join(out))
 
-os.makedirs(TEX, exist_ok=True)
-N = 8
-png(os.path.join(TEX, "CubeMat_BaseColor.png"), N, N, [[200, 180, 160] * N for _ in range(N)], "RGB")
-png(os.path.join(TEX, "CubeMat_Specular_roughness.png"), N, N, [[96] * N for _ in range(N)], "L")
-png(os.path.join(TEX, "CubeMat_Specular_metallic.png"), N, N, [[255] * N for _ in range(N)], "L")
-# The leaf: opaque in a diamond, fully cut outside it (the coverage a foliage card has).
-rows = []
-for y in range(N):
-    r = []
-    for x in range(N):
-        inside = abs(x - (N - 1) / 2) + abs(y - (N - 1) / 2) <= N / 2
-        r += [40, 140, 30, 255 if inside else 0]
-    rows.append(r)
-png(os.path.join(TEX, "LeafMat_BaseColor.png"), N, N, rows, "RGBA")
-print("wrote scene_features.fbx + Textures/ in %s" % HERE)
+print("wrote scene_features.fbx in %s" % HERE)

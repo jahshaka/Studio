@@ -17,6 +17,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -88,7 +89,29 @@ int main(int argc, char **argv)
     project.setProjectGuid(QStringLiteral("proj-scene-import-0001"));
     AssetImportService service(&db, &project);
 
-    const QString fbx = QString(JAHSHAKA_TEST_SOURCE_DIR) + "/tests/importer/fixtures/scene_features.fbx";
+    // The fixture beside its textures, in a directory of our own: the textures are written
+    // here (fixtures/make_scene_fbx.py's header says what each one is), never tracked.
+    QTemporaryDir work;
+    const QString fbx = work.path() + "/scene_features.fbx";
+    QFile::copy(QString(JAHSHAKA_TEST_SOURCE_DIR) + "/tests/importer/fixtures/scene_features.fbx", fbx);
+    QDir(work.path()).mkpath("Textures");
+    const QString tex = work.path() + "/Textures/";
+    {
+        QImage base(8, 8, QImage::Format_RGB32);
+        base.fill(QColor(200, 180, 160));
+        QImage rough(8, 8, QImage::Format_Grayscale8);
+        rough.fill(96);
+        QImage metal(8, 8, QImage::Format_Grayscale8);
+        metal.fill(255);
+        QImage leaf(8, 8, QImage::Format_ARGB32);
+        for (int y = 0; y < 8; ++y)
+            for (int x = 0; x < 8; ++x)
+                leaf.setPixel(x, y, (std::fabs(x - 3.5) + std::fabs(y - 3.5) <= 4.0)
+                                        ? qRgba(40, 140, 30, 255) : qRgba(40, 140, 30, 0));
+        CHECK(base.save(tex + "CubeMat_BaseColor.png") && rough.save(tex + "CubeMat_Specular_roughness.png")
+                  && metal.save(tex + "CubeMat_Specular_metallic.png") && leaf.save(tex + "LeafMat_BaseColor.png"),
+              QStringLiteral("the fixture's textures written beside it"));
+    }
     ImportRequest request;
     request.sourcePath = fbx;
     request.typeHint = static_cast<int>(ModelTypes::Mesh);

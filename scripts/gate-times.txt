@@ -331,6 +331,7 @@ importer.fbx 0.00  ship 3a0422b4e (2026-10-13)
 importer.glb 0.66  quiet n=46
 importer.materials 1.77  quiet n=40
 importer.meshformats 1.76  quiet n=42
+importer.scene 0.09  solo n=3 (BISTRO-IMPORT-1, 2026-10-14)
 importer.security 0.10  ship 3a0422b4e (2026-10-13)
 importer.texture_guids 0.07  quiet n=32
 input.actions 0.00  ship 3a0422b4e (2026-10-13)
