@@ -48,6 +48,13 @@ public:
     /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a test-and-tool
     /// readback: the engine flushes and downloads a whole cascade volume.
     Q_INVOKABLE QVariantMap giVoxelStats(const QVariantMap &params = QVariantMap());
+    /// THE GATHER-HITS READBACK (FAR-SUN-1): what answered the screen-probe gather's rays
+    /// under a screen rectangle — counts and mean radiance per source (the arm
+    /// "gather.hitsReadback" on).
+    Q_INVOKABLE QVariantMap gatherHits(const QVariantMap &params = QVariantMap());
+    /// ONE CASCADE'S STORE AT WORLD POINTS (FAR-SUN-1): the voxel texels a point falls in,
+    /// read back whole (a test-and-tool readback, like giVoxelStats).
+    Q_INVOKABLE QVariantMap giVoxelRead(const QVariantMap &params);
     /// THE VISIBILITY BUFFER'S SPLIT AND DECODE BUCKETS (ATOM S3-DRAW).
     Q_INVOKABLE QVariantMap atomStatus();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.

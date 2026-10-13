@@ -176,7 +176,8 @@ void EditorPage::build(const Deps &deps)
         photonGroup->setExclusive(true);
         const QStringList photonLabels = { tr("Off"), tr("Voxels"), tr("Probes"), tr("Cards"),
                                            tr("Screen Probes"), tr("Diffuse GI Only"),
-                                           tr("Reflections Only"), tr("Ray Hits") };
+                                           tr("Reflections Only"), tr("Ray Hits"), tr("Gather Hits") };
+        static_assert(jahshaka::engine::kPhotonViewCount == 9, "one label per PhotonView, in its order");
         for (int mode = 0; mode < photonLabels.size(); ++mode) {
             QAction *action = photonMenu->addAction(photonLabels[mode]);
             action->setCheckable(true);
