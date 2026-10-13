@@ -156,7 +156,7 @@ jah_gpu_row(perf.hide_soak CLASS app TIER epic NEEDS photon bloom ssao smaa plan
 set_tests_properties(perf.hide_soak PROPERTIES
     ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_hide_soak
-    LABELS "perf;measure"
+    LABELS "perf"
     TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
@@ -187,10 +187,32 @@ jah_no_display(perf.pacing)
 set(_cb_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle)
 set(JAH_TEST_BUNDLE ${_cb_home}/bundle)
 configure_file(capture_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js @ONLY)
+add_executable(test_capture_bundle test_capture_bundle.cpp)
+set_target_properties(test_capture_bundle PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # Qt6::Network and the shared MCP harness (tests/support/mcpharness.h, included
 # by path): phase 2 drives a REAL window close (app.quit over MCP) with a
 # capture running, which is the path --script can never take.
 find_package(Qt6 REQUIRED COMPONENTS Network)
+target_link_libraries(test_capture_bundle PRIVATE Qt6::Core Qt6::Network)
+target_compile_definitions(test_capture_bundle PRIVATE
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+    JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
+    JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
+# NEEDS photon (DBUILD-FIX-1): the bundle's events.jsonl must carry a gi.rebuild, and the only gi.*
+# event the engine files is the VCT arm's rebuild (OgreGi.cpp, MonitorEventKind::GiRebuild). NEEDS
+# NONE switched Photon OFF (worldmodes::applyTestTier), where world.gi({quality}) writes a field
+# nothing renders and refreshGi is a no-op — the row was red 3/3 from TEST-NEEDS-1's declaration on.
+# TIER low keeps it cheap: Photon Low runs at Low quality, so the script's quality:"medium" is a
+# change of the arm's shape — a from-scratch rebuild (low:photon = 2 tokens, as low:none).
+jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS photon COMMAND test_capture_bundle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(perf.capture_bundle PROPERTIES
+    LABELS "perf"
+    # 420 -> 900: phase 2 boots the real binary TWICE more (the window-close
+    # case and the default-capture-root check), each a cold-cache engine start.
+    TIMEOUT 900)
 
 # perf.capture_off_is_free — off costs nothing, and the state machine's edges
 # (refusals, the early stop, the return to exactly the state it started in).
@@ -230,11 +252,20 @@ if(TEST perf.capture_off_is_free)
     jah_fresh_home_fixture(perf.capture_off_is_free.fresh_home perfCaptureOffIsFreeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off" WARM LABELS "perf")
     set_property(TEST perf.capture_off_is_free APPEND PROPERTY FIXTURES_REQUIRED perfCaptureOffIsFreeFreshHome)
 endif()
+if(TEST perf.capture_bundle)
+    jah_fresh_home_fixture(perf.capture_bundle.capture_bundle.fresh_home perfCaptureBundleCaptureBundleFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle" WARM LABELS "perf")
+    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureBundleFreshHome)
+endif()
+if(TEST perf.capture_bundle)
+    jah_fresh_home_fixture(perf.capture_bundle.capture_quit.fresh_home perfCaptureBundleCaptureQuitFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_quit" WARM LABELS "perf")
+    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureQuitFreshHome)
+endif()
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
+        "perf.capture_bundle=1051"
         "perf.capture_off_is_free=663"
         "perf.drag_mirror_room=964"
         "perf.epic_steady_state=1024"

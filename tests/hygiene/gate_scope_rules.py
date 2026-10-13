@@ -287,8 +287,9 @@ def speed_cases(source, build):
     S = sel(["tests/gi/test_gi_cliff.cpp"])
     check("gi.cliff" in S.selected, "10. tests/gi/test_gi_cliff.cpp selects its own row gi.cliff (%d rows)" % len(S.selected))
     # 11. THE SUBJECTS SELECT THEIR GUARDS (the suites audit's S1/S2)
-    for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("defaults.exposure_plane",)),
-                       ("irisgl/import/meshbake.cpp", ("engine.lod_rule_parity",)),
+    for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
+                       ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
+                       ("src/services/projectarchiver.cpp", ("archive.responsive",)),
                        ("src/services/avatarassets.cpp", ("avatar.responsive",)),
                        ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",))):
         S = sel([path])

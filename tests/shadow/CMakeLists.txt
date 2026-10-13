@@ -54,6 +54,9 @@ target_compile_definitions(test_shadow_maps PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_shadow_maps PRIVATE JahshakaEngine)
 add_dependencies(test_shadow_maps JahshakaEngineMedia)
+jah_gpu_row(lights.shadows CLASS engine COMMAND test_shadow_maps
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # shadow.atlas_rebuilds — THE HITCH COUNTER (T3x, E2 review / ledger 104/121).
 # ITS OWN PROCESS on purpose: what it asserts is what an OPEN costs, and an
@@ -132,7 +135,7 @@ jah_gpu_row(shadow.cutout_caster.churn CLASS app TIER epic NEEDS photon bloom ss
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine;measure" TIMEOUT 2100)
+set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine" TIMEOUT 2100)
 jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -140,7 +143,7 @@ jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine;measure" TIMEOUT 1950)
+set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine" TIMEOUT 1950)
 # gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
@@ -154,7 +157,7 @@ jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon bloom ssao smaa pla
                  ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(gpu.cutout_soak PROPERTIES
-    LABELS "engine;measure" TIMEOUT 1800
+    LABELS "engine" TIMEOUT 1800
     ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
     PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
     FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
@@ -164,15 +167,16 @@ set_tests_properties(gpu.cutout_soak PROPERTIES
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "gpu.cutout_soak=11260"
+        "lights.shadows=832"
         "shadow.atlas_binding=166"
         "shadow.atlas_rebuilds=640"
         "shadow.cache_kinds=36"
         "shadow.cutout_caster=1552"
-        "shadow.cutout_caster.churn=15520" # ten processes of shadow.cutout_caster
+        "shadow.cutout_caster.churn=15520"   # ten processes of shadow.cutout_caster
         "shadow.helper_casters=8"
         "shadow.layout=0"
         "shadow.two_sided_caster=1107"
-        "shadow.two_sided_caster.churn=11070" # ten processes of shadow.two_sided_caster
+        "shadow.two_sided_caster.churn=11070"   # ten processes of shadow.two_sided_caster
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

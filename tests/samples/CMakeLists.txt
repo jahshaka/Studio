@@ -67,6 +67,28 @@ endforeach()
 configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
+jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting)
+jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
+         WORKING_DIRECTORY ${_shome}/run)
+set_tests_properties(samples.session PROPERTIES
+    ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED samples_home_session
+    LABELS "scripting"
+    TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+
+# samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
+# across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
+# scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
+# scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): STAGE-CLOSE.
+jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# TESTING-CLEANUP-2B item 2: TIMEOUT 1940 = 6 x the run log's quiet median 322.1 s (31 quiet PASS runs since 2026-10-01, worst 838.8 s);
+# declared 1800 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting" TIMEOUT 1940)
 
 # samples.archive_fidelity.Tornado — LIVE-PERSIST-1, rewritten by TESTING-SPEED-B2 against the ARCHIVE'S OWN
 # INVARIANTS (no reference picture: tests/samples/data/tornado_reference.jpg and its metric deleted, forward-only):
@@ -123,4 +145,10 @@ if(TEST samples.cleanstart.Tornado)
 endif()
 if(TEST samples.cleanstart.World_Background)
     set_property(TEST samples.cleanstart.World_Background PROPERTY JAHSHAKA_TEST_FRAMES 1466)
+endif()
+if(TEST samples.mirror_room_boots)
+    set_property(TEST samples.mirror_room_boots PROPERTY JAHSHAKA_TEST_FRAMES 11348)
+endif()
+if(TEST samples.session)
+    set_property(TEST samples.session PROPERTY JAHSHAKA_TEST_FRAMES 1046)
 endif()

@@ -23,6 +23,15 @@ tree and the build's registration, each with its name in the failure line:
      (read from the property); the rows without it are listed in tests/hygiene/frames_pending.txt — a row without
      FRAMES the list does not name is RED, and a listed row that states FRAMES (or is gone) is RED until the list drops
      it (the ratchet only tightens; `--trim-frames-pending` drops them).
+  R10 ONE FIXTURE CONFIG (FIXTURE-CONFIG-1). No test source under tests/ constructs a
+     `jahshaka::engine::EngineConfig` except tests/support/enginetesthelpers.h: every engine fixture takes its config
+     from `enginetest::testEngineConfig(logFile, EngineOverrides)`, the one place the harness sets what every fixture
+     shares (the BOOT lane's shader cache). Read from the source with comments and strings blanked: an EngineConfig
+     temporary (`EngineConfig{}`, `EngineConfig()`, `new EngineConfig`), a variable default- or brace-constructed
+     (`EngineConfig cfg;`, `EngineConfig cfg{...}`, `EngineConfig cfg = {...}`), or a write to a field only an
+     EngineConfig has (pluginDir, hlmsMediaDir, shaderCacheDir, asyncShaderThreads, optimizeShadowMeshes, logSink,
+     headless, logFile, vr.enabled) is RED. A variable or a return INITIALISED from a call (the helper, a suite's own
+     wrapper of it) is not a construction. RED ON BASE b96b95c00: 814 sites in 196 files.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -176,6 +185,51 @@ def _base_pending(source):
     return mb, [x for x in (l.split("#", 1)[0].strip() for l in p.stdout.splitlines()) if x]
 
 
+R10_HELPER = os.path.join("tests", "support", "enginetesthelpers.h")
+R10_EXTS = (".cpp", ".cc", ".cxx", ".h", ".hpp")
+_R10_BLANK = re.compile(r'R"([^(\s]*)\((?:.|\n)*?\)\1"|//[^\n]*|/\*(?:.|\n)*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'')
+_R10_TYPE = re.compile(r"(?<![\w])EngineConfig\b")
+_R10_TEMP = re.compile(r"\s*[({]")
+_R10_VAR = re.compile(r"\s*\w+\s*(;|\{|\[|,|=\s*\{)")
+_R10_NEW = re.compile(r"\bnew\s+(?:\w+::)*$")
+_R10_FIELD = re.compile(r"(?:\.|->)\s*(pluginDir|hlmsMediaDir|shaderCacheDir|asyncShaderThreads|optimizeShadowMeshes|logSink|"
+                        r"headless|logFile|vr\s*\.\s*enabled)\s*=(?!=)")
+
+
+def _r10_blank(text):
+    """The source with every comment and string literal (raw strings too) blanked, newlines kept (line numbers hold)."""
+    return _R10_BLANK.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+
+
+def r10_bad(files):
+    """[file:line] of every EngineConfig built outside the helper. `files`: {relative path: text}."""
+    bad = []
+    for name, text in sorted(files.items()):
+        if os.path.normpath(name) == R10_HELPER or not name.endswith(R10_EXTS):
+            continue
+        code = _r10_blank(text)
+        hits = set()
+        for m in _R10_TYPE.finditer(code):
+            rest = code[m.end():m.end() + 200]
+            if _R10_TEMP.match(rest) or _R10_VAR.match(rest) or _R10_NEW.search(code[max(0, m.start() - 40):m.start()]):
+                hits.add(code.count("\n", 0, m.start()) + 1)
+        for m in _R10_FIELD.finditer(code):
+            hits.add(code.count("\n", 0, m.start()) + 1)
+        bad += ["%s:%d" % (name, n) for n in sorted(hits)]
+    return bad
+
+
+def r10_files(source):
+    """{path relative to the source: text} of every C++ source under tests/."""
+    out = {}
+    for root, _dirs, names in os.walk(os.path.join(source, "tests")):
+        for n in names:
+            if n.endswith(R10_EXTS):
+                p = os.path.join(root, n)
+                out[os.path.relpath(p, source)] = open(p, errors="replace").read()
+    return out
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -222,6 +276,19 @@ def the_rules_catch():
     check(not new and not stale and new2 == ["n"] and not stale2 and not new3 and stale3 == ["a", "gone"],
           "R7 flags a GPU row without FRAMES that the ratchet does not list (a NEW row), and a listed row that states "
           "FRAMES or is gone (the ratchet tightens); a CPU row needs none")
+    h = "tests/support/enginetesthelpers.h"
+    check(r10_bad({"tests/a/x.cpp": "int f() {\n    EngineConfig cfg;\n    cfg.pluginDir = P;\n}"}) == ["tests/a/x.cpp:2", "tests/a/x.cpp:3"]
+          and r10_bad({"tests/a/y.cpp": "auto c = jahshaka::engine::EngineConfig{};"}) == ["tests/a/y.cpp:1"]
+          and r10_bad({"tests/a/n.cpp": "auto *c = new jahshaka::engine::EngineConfig;"}) == ["tests/a/n.cpp:1"]
+          and r10_bad({"tests/a/z.cpp": "auto c = testEngineConfig(\"l\");\nc.headless = true;\nc.vr.enabled = true;"})
+          == ["tests/a/z.cpp:2", "tests/a/z.cpp:3"]
+          and not r10_bad({h: "EngineConfig cfg;\ncfg.pluginDir = P;"})
+          and not r10_bad({"tests/a/w.cpp": "// EngineConfig cfg;\nconst char *s = \"EngineConfig c; c.logFile = x;\";\n"
+                                            "EngineConfig testConfig() { return enginetest::testEngineConfig(\"l\"); }\n"
+                                            "EngineConfig cfg = config(\"l\");\nconst auto cfg2 = enginetest::testEngineConfig("
+                                            "\"l\", enginetest::EngineOverrides().headless());\nbool b = cfg.headless == true;"}),
+          "R10 flags an EngineConfig built outside the helper (a default/brace variable, a temporary, a new, a field write), "
+          "not the helper itself, a comment, a string, a wrapper of the helper or a read")
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
@@ -356,6 +423,9 @@ def main(source, build):
         check(not grown, "R7 the ratchet never loosens: frames_pending.txt lists no name its copy at the merge-base with "
               "main (%s) does not (%s)" % ((mb or "none")[:9] if base_pending is not None else
                                              "no copy there: the lane that writes it", grown[:8]))
+    bad = r10_bad(r10_files(source))
+    check(not bad, "R10 one fixture config: no test source builds an EngineConfig outside %s (%d sites: %s)"
+          % (R10_HELPER, len(bad), bad[:8]))
     if FAILURES:
         print("source.testing_rules: FAILED (%d)" % len(FAILURES))
         return 1

@@ -31,6 +31,17 @@ set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(hdr.drag_stable PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 
 if(JAHSHAKA_ASAN)
+    jahshaka_hdr_test(test_hdr_drag_asan test_hdr_drag.cpp)
+    target_link_libraries(test_hdr_drag_asan PRIVATE JahshakaEngineAsan)
+    target_compile_options(test_hdr_drag_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_hdr_drag_asan PRIVATE -fsanitize=address)
+    jah_gpu_row(hdr.drag_stable_asan CLASS engine COMMAND test_hdr_drag_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
+    # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 endif()
 
 # THE HISTOGRAM METER'S ARITHMETIC (EXPOSURE-2). The companion of the suite
@@ -45,6 +56,15 @@ set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
 set_tests_properties(hdr.meter PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 
 if(JAHSHAKA_ASAN)
+    jahshaka_hdr_test(test_hdr_meter_asan test_hdr_meter.cpp)
+    target_link_libraries(test_hdr_meter_asan PRIVATE JahshakaEngineAsan)
+    target_compile_options(test_hdr_meter_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
+    jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(hdr.meter_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 endif()
 
 # THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, fork feab041c6 (was 0079)). A

@@ -107,6 +107,7 @@
    "old": "    const Vec3 upW{ 0.f, 1.f, 0.f };\n",
    "new": "    const Vec3 upW{ 0.f, 0.f, 1.f };\n",
    "must": [
+    "engine.atom_parity",
     "engine.window",
     "defaults.exposure_plane",
     "distortion.engine",
@@ -118,7 +119,10 @@
    "file": "irisgl/engine/include/jahshaka/engine/Types.h",
    "old": "    float halfDepth = 0.0f;       ///< half the depth range the capture must cover\n",
    "new": "    float halfDepth = 0.5f;       ///< half the depth range the capture must cover\n",
-   "must": [],
+   "must": [
+    "gi.speckle",
+    "gi.contact_occlusion"
+   ],
    "note": "the Fable read's case; vr.grab_maths stays reached through src/scripting/modules/assetsapi.cpp (it names MeshCardDesc; test_vr_grab links it)",
    "must_not": [
     "ui.presets_favorites"
@@ -160,7 +164,9 @@
    "old": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm}\n",
    "new": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm} --tsa\n",
    "must": [
-    "gi.gather_deterministic"
+    "gi.gather_plane",
+    "gi.gather_deterministic",
+    "gi.gather_cards"
    ],
    "rewritten_by": "TESTING-SPEED-A fix round: T3's loop-variable proof on kept rows (gi.gather_plane / _deterministic / _cards)"
   },

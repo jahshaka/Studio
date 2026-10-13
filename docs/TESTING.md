@@ -21,7 +21,9 @@ JAH_POOL_ARMS=gi_verbs.gi_status DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --outpu
 
 A row is a seconds-long GUARD of a named behaviour under its budget (a fixture or a CPU row 10 s, an app row 60 s;
 `source.row_budget` holds every row at its price in `scripts/gate-times.txt`), or it is labelled `measure` (a timing,
-soak, churn or scale row) and runs only at the sprint's ship, alone on the card.
+soak, churn or scale row, or a guard over its budget — `JAH_MEASURE_ROWS` in `tests/CMakeLists.txt`) and runs only at
+the sprint's ship, alone on the card. A guard is never deleted for its price: a pool over 60 s is split by its arms, a
+row over its budget is rewritten to it or becomes a measure.
 
 ## 2. How a test is shaped
 

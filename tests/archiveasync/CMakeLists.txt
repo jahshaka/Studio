@@ -30,6 +30,13 @@ target_compile_definitions(test_archive_responsive PRIVATE
 # budget 70 s (the ROWS table; solo median 68.4 s on 2026-10-12: scripts/gate-times.txt).
 set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
 file(MAKE_DIRECTORY ${_archive_home}/run)
+jah_gpu_row(archive.responsive CLASS app TIER epic NEEDS photon COMMAND test_archive_responsive
+         WORKING_DIRECTORY ${_archive_home}/run)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 460 = 6 x the run log's quiet median 75.1 s (42 quiet PASS runs since 2026-10-01, worst 546.5 s);
+# declared 300 was below the policy, honest only with the +900 s widening (now deleted).
+set_tests_properties(archive.responsive PROPERTIES
+    ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/.local/share/Jahshaka"
+    TIMEOUT 460 LABELS "archive")
 # archive.responsive.timing — THE UI-GAP BUDGETS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
 # GPU-timing lock; the push row above asserts everything else and prints the gaps.
@@ -44,13 +51,17 @@ set_tests_properties(archive.responsive.timing PROPERTIES
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked( archive.responsive.timing) # spawns the app: see jah_tsan_blocked
+jah_tsan_blocked(archive.responsive archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+if(TEST archive.responsive)
+    jah_fresh_home_fixture(archive.responsive.fresh_home archiveResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive" WARM LABELS "archive")
+    set_property(TEST archive.responsive APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveFreshHome)
+endif()
 if(TEST archive.responsive.timing)
     jah_fresh_home_fixture(archive.responsive.timing.fresh_home archiveResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing" WARM LABELS "archive")
     set_property(TEST archive.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveTimingFreshHome)
@@ -60,6 +71,9 @@ endif()
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. 0 = the row renders none.
+if(TEST archive.responsive)
+    set_property(TEST archive.responsive PROPERTY JAHSHAKA_TEST_FRAMES 1129)
+endif()
 if(TEST archive.responsive.timing)
     set_property(TEST archive.responsive.timing PROPERTY JAHSHAKA_TEST_FRAMES 1099)
 endif()

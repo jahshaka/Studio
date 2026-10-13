@@ -44,6 +44,16 @@ function(jahshaka_engine_test target)
     set_tests_properties(${target} PROPERTIES TIMEOUT 120 LABELS "engine")
 endfunction()
 
+jahshaka_engine_test(test_engine)
+# TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
+# declared 120 was below the policy, honest only with the +900 s widening (now deleted).
+# budget 20 s: the measurement (TESTING-SPEED-B3) — 96 cases, 2,882 frames, 15.9-16.1 s at load 6 (42-51 s loaded at the
+# base; 39 s quiet): every auto-exposure wait is FRAMES now (settleExposure: rendered until the measured exposure stops
+# moving — 192 frames to converge measured_exposure's chain — in place of wall-clock renderFor seconds with an 8 ms sleep
+# a frame), and the heavy-frame case builds its ~640 M triangles a frame from a 2.5 M shell.
+set_tests_properties(test_engine PROPERTIES TIMEOUT 240)
+target_link_libraries(test_engine PRIVATE JahshakaEngine)
+
 # THE HEADLESS BOOT (SPECS/SCENEGRAPH_SPEC.md §3b): EngineConfig::headless, i.e.
 # RenderSystem_NULL. The only suite in the tree that runs with NO DISPLAY AT ALL
 # — ENVIRONMENT_MODIFICATION strips DISPLAY from its environment, so a green run
@@ -252,6 +262,19 @@ if(JAHSHAKA_ASAN)
     target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)
 
+    jahshaka_engine_test(test_engine_asan)
+    target_link_libraries(test_engine_asan PRIVATE JahshakaEngineAsan)
+    # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
+    # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
+    # Use-after-free / overflow detection is the point here and stays on.
+    # TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (40 quiet PASS runs since 2026-10-01, worst 88.4 s);
+    # declared 420 was below the policy, honest only with the +900 s widening (now deleted).
+    # STAGE-CLOSE (TESTING-SPEED-B3): an ASAN twin keeps its row and moves to the stage close; test_engine
+    # (the same suite, uninstrumented) is the merge tier's.
+    set_tests_properties(test_engine_asan PROPERTIES
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430 LABELS "engine")
+    target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
 
 # engine.media_check (FORWARD-ONLY-1 D2): the staged tonemap media check fires at
@@ -282,9 +305,11 @@ foreach(_row_frames
         "engine.headless=0"
         "engine.lod_hysteresis=265"
         "engine.media_check=0"
-        "engine.oom_is_not_loss=20" # counted from the source (it _exits: no meter report)
+        "engine.oom_is_not_loss=20"   # counted from the source (it _exits: no meter report)
         "engine.window=65"
         "meshbake.shadow_vao_alias=3"
+        "test_engine=2882"
+        "test_engine_asan=2882"   # its plain twin's (the ASan runtime refuses the frame meter)
         "test_engine_recreate=48"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

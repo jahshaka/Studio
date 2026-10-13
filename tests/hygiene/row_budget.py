@@ -3,8 +3,9 @@
 
 ONE RULE: every kept guard — every registered row but a `measure` row (it runs at the sprint's ship only) — is held
 against its class's budget at its price in scripts/gate-times.txt: a fixture or a CPU row 10 s, an app row (CLASS
-app|vr|selftest, a pool) 60 s. A guard over its budget is RED: rewritten to its budget or deleted, never excused —
-there is no "by design". An unpriced guard is source.testing_rules' R2. Fed a violation first (a lint that cannot
+app|vr|selftest, a pool) 60 s. A guard over its budget is RED: rewritten to its budget, split (a pool by its arms),
+or labelled `measure` (tests/CMakeLists.txt's JAH_MEASURE_ROWS: a guard of a named behaviour is never deleted for its
+price) — never excused, there is no "by design". An unpriced guard is source.testing_rules' R2. Fed a violation first (a lint that cannot
 fail guards nothing).
 
 Run: row_budget.py <source-dir> <build-dir>

@@ -131,7 +131,20 @@ jah_pool_arm(editor undo_macro ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_undo_macr
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
 # driven through the verbs against the real database and a real save/reopen.
 jah_pool_arm(editor fragments ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_fragments.js 3)
+# PBR material persistence: container applies (imported-model roots), saved
+# material assets by guid, and the full save/close/open round-trip of every
+# PBR property (the owner-reported "materials lost on reopen" data loss).
+jah_pool_arm(shading pbr_materials ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbr_materials.js 9)
 
+# THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
+# owner found it working for a material made from an image and dead for the
+# tray and the Materials module; it was one QVariant static-type mismatch, and
+# nothing covered it. Drives material.preview/endPreview for four sources and
+# asserts the whole contract: restore on move, restore on end, no undo step, no
+# dirty flag, a save during a preview writes the ORIGINAL, a locked node
+# refuses, an unresolvable payload refuses, and a preset apply reuses its one
+# project row instead of minting a new one per apply.
+jah_pool_arm(shading_b material_preview ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_preview.js 9)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
@@ -149,7 +162,61 @@ jah_pool_arm(atom atom_draw ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_draw.js
 # four GI re-solves (one per turn of the first cube) and seven settled shots.
 # 71 s solo on the rig; 400 s is the gate-load headroom.
 jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js 49)
+# HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
+# roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
+# plus the generic enum row they forced (alphaMode rides it now too). Asserts
+# the DEFAULTS are the renderer's own, which is the byte-identical-pixels
+# argument expressed as a test.
+jah_pool_arm(shading_c pbs_knobs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbs_knobs.js 7)
+# HLMS_ADOPTION_SPEC P4a (§6.5): the UNLIT shading model — the renderer's other
+# material family, reached through the same declared-row/material.set path
+# everything else uses. Asserts it reaches PIXELS (an unlit surface renders its
+# authored colour, a lit one does not), that the switch is one undo step, and
+# that every value the family cannot use survives the round trip.
+jah_pool_arm(shading_c shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shading_model.js 15)
+# MATERIAL_GAPS_SPEC GAP 1: the per-material SPECULAR / FRESNEL WORKFLOW. The
+# I-1 fence lives here — metalness and F0 are the SAME float in the renderer's
+# datablock and our engine is built with NDEBUG, so nothing but a dumpDatablock
+# assertion notices a push that writes both. Also asserts Metallic is still the
+# default (the renderer's own default is Specular; ours is what every existing
+# material has), the enum accepts its vocabulary BY NAME, and the workflow
+# reaches pixels.
+jah_pool_arm(shading_b workflows ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflows.js 12)
+# MATERIAL_GAPS_SPEC GAP 1 ACCEPTANCE (§2.7): Ogre's own PbsMaterials 8x8
+# roughness x fresnel grid, rebuilt FROM OUR DOCUMENT MODEL through the verbs.
+# Deterministic by construction — one directional light, no sky, GI off, raw
+# (post-chain-free) readbacks and a FIXED camera — and asserted as monotonic
+# relations inside one frame plus a metallic-workflow CONTROL, never as absolute
+# colours.
+jah_pool_arm(shading_b workflow_grid ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflow_grid.js 4)
 
+# MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
+# toMaterial/save/regenerate; baked maps land inside the project folder (and
+# so ride the recursive .jaf zip).
+jah_pool_arm(shading bake_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_bake_pipeline.js 5)
+# HLMS_ADOPTION P5: a GENERATED SHADER PIECE end to end — the emitter's verdict
+# through graph.emitInfo, the content-addressed cache file, the piece riding a
+# real scene material to the renderer, and the save/close/open round trip that
+# proves re-emission is deterministic.
+jah_pool_arm(shading custom_piece ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_custom_piece.js 4)
+# TORNADO-1 G7: world.shaderTime pins the shader clock — t=0 and t=1 differ, t=1
+# twice is the identical frame; null frees it; a negative t is refused.
+jah_pool_arm(shading_d shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_time.js 8)
+# TORNADO-1: a live graph material applied FROM THE LIBRARY keeps its generated
+# pieces (they travel with the material's definition) and animates.
+jah_pool_arm(shading_d live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
+# material.live_roundtrip — LIVE-PERSIST-1: ANY live graph material is a complete, persistent
+# bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
+# its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
+# HOME/XDG_CACHE_HOME; the frames agree and the cut-out is visible (a solid control frame).
+jah_gpu_row(material.live_roundtrip CLASS app TIER epic NEEDS photon
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
+                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
+                 ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
 # scripting.e2e.photon_pin_read — WORLD-MODE-1 (brief §2): the scene READER drops a stored `photon`
 # pin. Two processes: a scene saved at Epic with Photon Low gets `worldOverrides.photon = 1` written
 # into its blob by hand; the reopen reads no pin, an honest Custom, and a re-pick that moves Photon;
@@ -221,6 +288,33 @@ jah_pool_arm(gi_verbs gi_status ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_statu
 # world.gi({gather:false}) A/B moves it). Its own ctest name in the gi family
 # (the brief's), the scripting harness's home and data root.
 jah_pool_arm(gi_verbs_b gather_default ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js 17)
+# THE SURPRISE MOVER (REALTIME_REFLECTIONS_SPEC §3.3.3, owner decision O3): an
+# object nobody marked as moving starts moving during PLAY. It moves smoothly,
+# is treated as movable from that frame, leaves its old bounce light behind
+# until play stops, and the author is warned ONCE by name — and, the claim that
+# matters, world.giStatus().rebuilds does not move while it happens (option B
+# was a half-second freeze at that exact moment). Engine UP, not --headless:
+# editor.mirrorStats() and world.giStatus() are measurements of the renderer.
+jah_pool_arm(gi_movers_b mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility_play.js 11)
+
+# WHAT THE MIRROR LOOKS AT, THROUGH THE REAL APP
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md, owner option A). The C++ suites prove the two
+# halves in isolation — document.dirty_list that the change list behaves,
+# mirror.dirty_equals_full that what it carries is ENOUGH. This one proves it in
+# the shipped path: the editor viewport's own mirror, driven by the same verbs a
+# user's actions go through. A still scene visits ZERO objects; one move is a
+# list of one; hiding a group is its subtree (the F6 contract); a material edit
+# reaches the object that draws it without that object having changed; and the
+# always-on verifier finds NOTHING behind any of it.
+jah_pool_arm(gi_movers_b dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirty_mirror.js 9)
+
+# A MOVABLE LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK (round-2 review F1 of
+# lane ENGINE-4). The engine's light-only injection is deliberately cheap while
+# something moves (one bounce, coarse march) and must be the full count on the
+# frame the motion ends — and for a MOVABLE lamp the mirror is the only thing
+# that can say when that is, because this path arms no settle at all. Engine UP:
+# the assertion is a picture.
+jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_movable_lamp_rest.js 13)
 
 # THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
 # (ENGINE_CACHE_POLICY_SPEC P2/P4, fork 6130df9d1 (was 0025)). The home is WIPED before
@@ -252,6 +346,10 @@ jah_pool_arm(gi_verbs_b gi_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_bou
 # intensity 20 at 0.3 m is lit and no darker than at 2 (it drew every probe black; gi.probe_nan
 # holds the field's own half).
 jah_pool_arm(gi_verbs probe_nan_view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_probe_nan_view.js 20)
+# gi_verbs.contact_band — SSAO-DOUBLE-1: no second occlusion over the GI. A cube on the default and
+# on a white floor at Epic and High: the contact band within 2 codes of the mid-face control (was
+# -11 / -13 under the SSAO multiply); with Photon off the pinned SSAO still darkens it (> 5 codes).
+jah_pool_arm(gi_verbs_stage contact_band ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_contact_band.js 95)
 # gi_verbs.ssr_off_ray_tier — D4-PHOTON-TIERS fix round (F2/F3): a document's SSR OFF is honoured
 # at a ray tier (no trace runs), and the row offers exactly "Off" and a disabled "Traced" there.
 jah_pool_arm(gi_verbs ssr_off_ray_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_off_ray_tier.js 15)
@@ -261,15 +359,18 @@ jah_pool_arm(gi_verbs ssr_off_ray_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_s
 # runs neither. A pixel claim, in the Epic pool.
 set(JAH_OFFSCREEN_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/e2e_offscreen_contract.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscreen_contract.js @ONLY)
+jah_pool_arm(gi_verbs_stage offscreen_contract ${CMAKE_CURRENT_BINARY_DIR}/e2e_offscreen_contract.js 60)
 # gi_verbs.pcc_budget — PCC-BUDGET-1: the probe grid under the tier's WHOLE-grid VRAM budget on
 # Showroom 2 with the rays off (Epic keeps the measured 32, High cuts to its budget's 19), the
 # total asserted by the renderer's arithmetic and by the texture manager.
 set(JAH_PCC_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/e2e_pcc_budget.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js @ONLY)
+jah_pool_arm(gi_verbs_stage pcc_budget ${CMAKE_CURRENT_BINARY_DIR}/e2e_pcc_budget.js 60)
 # gi_verbs.planar_records — PLANAR-RECORDS-1: the hit decode's list on the Mirror Room at Epic
 # and on a planar mirror floor under 30 movers — no record dropped, the counts printed.
 set(JAH_PLANAR_RECORDS_MIRROR "${CMAKE_SOURCE_DIR}/scenes/Mirror Room.zip")
 configure_file(scripts/e2e_planar_records.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js @ONLY)
+jah_pool_arm(gi_verbs_stage planar_records ${CMAKE_CURRENT_BINARY_DIR}/e2e_planar_records.js 40)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
 # giStatus().rebuilds and the whole giStatus reading are unchanged, and the
@@ -358,6 +459,13 @@ jah_pool_arm(world_sky_b height_fog ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_heig
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
 jah_pool_arm(world_light sun_contact ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sun_contact.js 16)
+# THE SUN'S SHADOW IS THE SPHERE'S PROJECTION (SHADOW-FIT-1, the owner's smoke bug
+# #1): on the Basic template (a floor that casts nothing) a sphere at four heights
+# under three suns throws exactly its closed-form ellipse, in the "scene" and the
+# "viewport" grades (helpers hidden / kept), and a cube anywhere leaves it alone.
+# Red before the fork's Concentric receiver fold: the near splits' far plane sat
+# at the casters' box and cut the footprint or dropped it.
+jah_pool_arm(world_light_stage shadow_fit_receivers ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_fit_receivers.js 66)
 # A WORLD ROW SHOWS WHAT A VERB WROTE (SMALL-FIXES-3): every World section that
 # shows a sceneprops key (or a World Mode registry row) re-reads it on a
 # changed external write — one verb, then the row read with no gesture between.
@@ -441,6 +549,18 @@ jah_lsan_blocked(scripting.e2e.pump_defer)   # spawns the app
 # nothing here. The rig actually moving is `vr.input_session`; the panel is
 # `ui.vr_panel`.
 jah_pool_arm(world_sky_c world_vr ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_vr.js 10)   # not vr_noruntime: its session override has no release without a session, and the VR arms read the defaults
+# THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1) — the document half of the
+# knob the owner picks from: three spellings, the refusals, one undo step per
+# call, save/close/open, and the two properties that make it safe to ship
+# unchosen (the default is the shipped march, and no World Mode touches it).
+# The pixels are `ssr.rings`.
+jah_pool_arm(gi_movers ssr_march ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_march.js 6)
+# A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1) — the document half: the key,
+# its refusals, one undo step per call, save/close/open, the two giStatus
+# readings, and the two properties that make it safe to ship unchosen (the
+# default is today's behaviour and no World Mode touches it). The counters and
+# the pixels are gi.drag_mover.
+jah_pool_arm(gi_movers drag_mover ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_drag_mover.js 7)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a
@@ -979,6 +1099,7 @@ set_tests_properties(scripting.e2e.ray_row_norays PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
     LABELS "scripting"
     TIMEOUT 240)
+jah_pool_arm(gi_movers_b ray_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js 14)
 
 # OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
 # renameFolder/removeFolder + node.setFolder/folder. The two LAWS are the point
@@ -998,6 +1119,7 @@ jah_lsan_lane(scripting.engine)
 # The suites NOT listed here (full_surface, samples, image_plane, import_render,
 # shader_thumbnail, avatar, skinning, physics, particles, …) render pixels and
 # keep their display requirement, honestly and permanently.
+
 
 # The player-editor space round trip on the two scenes that exposed the
 # graph-ownership defect (2026-09-05): particle systems and the planar pass
@@ -1173,7 +1295,16 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
+jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
+jah_gpu_row(gi.chain_converge_scenes CLASS app TIER high NEEDS photon bloom ssao smaa planar
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(gi.chain_converge_scenes PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED chain_converge_scenes_home
+    LABELS "scripting"
+    TIMEOUT 600)
 
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
 # used to be refused with a wrong message, the type-filtered listing, the
@@ -1354,6 +1485,16 @@ jah_pool_arm(doc ogre_samples ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_sampl
 # at a third of the launches.
 configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
+jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS scripting)
+jah_gpu_row(scripting.e2e.ogre_ports CLASS app TIER document
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
+         WORKING_DIRECTORY ${_home}/run)
+# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED scripting_home_ogre_ports
+    LABELS "scripting"
+    TIMEOUT 420)
 
 # MATERIAL_GAPS_SPEC GAP 2 (P6 + P7): DETAIL LAYERS end to end, and the §3.7
 # acceptance port — Ogre's own `Marble` material (detail_map0 MRAMOR6X6.jpg at
@@ -1365,6 +1506,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
 # scale is the detail-tiling knob, and — the byte-identical argument as a test —
 # that an unauthored layer at its defaults changes nothing.
 configure_file(scripts/e2e_detail_layers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js @ONLY)
+jah_pool_arm(shading_d detail_layers ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js 6)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-1: LIVE TEXTURES — pixels a producer writes at
 # runtime, catalogued as a session-only asset kind so material.set can resolve
@@ -1504,6 +1646,19 @@ set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
     LABELS "scripting"
     TIMEOUT 540)
 
+# WHAT A SCREENSHOT IS A PICTURE OF (SS1, owner 2026-09-13 — "match the
+# screenshot to the scene properly"). The four ScreenshotGrade modes through
+# editor.screenshot: the plain readback the whole pixel corpus asserts does not
+# move; a world with HDR off photographs ungraded; the World's exposure reaches
+# both the scene grade and the thumbnail grade; the chain (SSR above all) is in
+# the user's picture; and a MOVABLE object is in it.
+#
+# ENGINE-UP AND ON-SCREEN, deliberately not --headless: the scene grade's
+# exposure is read off the VIEWPORT's converged luminance history, so the suite
+# is only meaningful with a real viewport rendering real frames. Four settle()
+# runs of 240 frames at Epic is what the timeout is for.
+jah_pool_arm(world_light_stage screenshot_grades ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js 61)
+
 # ATOM STAGE 1 — DETERMINISTIC LEVEL SELECTION (SPECS/NANITE_SPEC.md §7.3).
 # The import-time LOD chain, end to end: assets.meshLods reports what the bake
 # built — BOTH lengths, the measured `bound` the renderer selects on and the
@@ -1531,6 +1686,7 @@ jah_pool_arm(atom atom_lods ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js 26)
 # enough to carry a chain, which is what makes the card's LOD level mean
 # something).
 configure_file(scripts/e2e_surface_cards.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js @ONLY)
+jah_pool_arm(gi_movers surface_cards ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js 2)
 
 # ---------------------------------------------------------------------------
 # THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
@@ -1856,22 +2012,33 @@ jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
 jah_add_pool(gi_verbs TIER document   LABELS scripting)
 jah_add_pool(gi_verbs_b TIER document   LABELS scripting)
+jah_add_pool(gi_verbs_stage TIER document   LABELS scripting)   # Showroom 2 / Mirror Room imports + contact_band (68 s alone)
+jah_add_pool(gi_movers TIER document   LABELS scripting)
+# pool.gi_movers split by its arms' seconds (TESTING-SIMPLE: 89 s whole)
+jah_add_pool(gi_movers_b TIER document   LABELS scripting)
 jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(editor_view TIER document   LABELS scripting)
 jah_add_pool(editor_view_b TIER document   LABELS scripting)
 jah_add_pool(editor_view_c TIER document   LABELS scripting)
+jah_add_pool(shading TIER document   LABELS scripting)
+# pool.shading split by its arms' seconds (TESTING-SIMPLE: 155 s whole, every pool row an app row under 60 s)
+jah_add_pool(shading_b TIER document   LABELS scripting)
+jah_add_pool(shading_c TIER document   LABELS scripting)
+jah_add_pool(shading_d TIER document   LABELS scripting)
 jah_add_pool(shading_live TIER document   LABELS scripting)
 jah_add_pool(shading_live_b TIER document   LABELS scripting)
 jah_add_pool(world_sky TIER document   LABELS scripting)
 jah_add_pool(world_sky_b TIER document   LABELS scripting)
 jah_add_pool(world_sky_c TIER document   LABELS scripting)
 jah_add_pool(world_light TIER document   LABELS scripting)
+jah_add_pool(world_light_stage TIER document   LABELS scripting)   # shadow_fit_receivers (100 s) + screenshot_grades (69 s): each alone over the budget
 jah_add_pool(player TIER low NEEDS NONE NEEDS_WHY "player verbs and frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(assets_import TIER low NEEDS NONE NEEDS_WHY "imports render non-black at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(vr_noruntime TIER low NEEDS NONE TEST_WINDOW LABELS scripting
     BASELINE ${CMAKE_CURRENT_SOURCE_DIR}/scripts/pool_baseline_vr_noruntime.js)   # injected hands + gizmo mode, after every arm
 jah_add_pool(avatar_anim TIER low NEEDS NONE NEEDS_WHY "skinning and rig frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(atom TIER document   LABELS scripting)
+
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -1914,6 +2081,9 @@ endif()
 if(TEST gi.pcc_mirror.ray_tier)
     set_property(TEST gi.pcc_mirror.ray_tier PROPERTY JAHSHAKA_TEST_FRAMES 1242)
 endif()
+if(TEST material.live_roundtrip)
+    set_property(TEST material.live_roundtrip PROPERTY JAHSHAKA_TEST_FRAMES 2342)
+endif()
 if(TEST pool.assets_import)
     set_property(TEST pool.assets_import PROPERTY JAHSHAKA_TEST_FRAMES 1557)
 endif()
@@ -1941,14 +2111,23 @@ endif()
 if(TEST pool.editor_view_c)
     set_property(TEST pool.editor_view_c PROPERTY JAHSHAKA_TEST_FRAMES 1129)
 endif()
+if(TEST pool.gi_movers)
+    set_property(TEST pool.gi_movers PROPERTY JAHSHAKA_TEST_FRAMES 1858)
+endif()
 if(TEST pool.gi_verbs)
     set_property(TEST pool.gi_verbs PROPERTY JAHSHAKA_TEST_FRAMES 1486)
 endif()
 if(TEST pool.gi_verbs_b)
     set_property(TEST pool.gi_verbs_b PROPERTY JAHSHAKA_TEST_FRAMES 1669)
 endif()
+if(TEST pool.gi_verbs_stage)
+    set_property(TEST pool.gi_verbs_stage PROPERTY JAHSHAKA_TEST_FRAMES 6729)
+endif()
 if(TEST pool.player)
     set_property(TEST pool.player PROPERTY JAHSHAKA_TEST_FRAMES 2335)
+endif()
+if(TEST pool.shading)
+    set_property(TEST pool.shading PROPERTY JAHSHAKA_TEST_FRAMES 2700)
 endif()
 if(TEST pool.shading_live)
     set_property(TEST pool.shading_live PROPERTY JAHSHAKA_TEST_FRAMES 2779)
@@ -1961,6 +2140,9 @@ if(TEST pool.vr_noruntime)
 endif()
 if(TEST pool.world_light)
     set_property(TEST pool.world_light PROPERTY JAHSHAKA_TEST_FRAMES 2493)
+endif()
+if(TEST pool.world_light_stage)
+    set_property(TEST pool.world_light_stage PROPERTY JAHSHAKA_TEST_FRAMES 19483)
 endif()
 if(TEST pool.world_sky)
     set_property(TEST pool.world_sky PROPERTY JAHSHAKA_TEST_FRAMES 3942)
@@ -2003,6 +2185,9 @@ if(TEST scripting.e2e.material_tabs)
 endif()
 if(TEST scripting.e2e.material_tabs.relaunch)
     set_property(TEST scripting.e2e.material_tabs.relaunch PROPERTY JAHSHAKA_TEST_FRAMES 32)
+endif()
+if(TEST scripting.e2e.ogre_ports)
+    set_property(TEST scripting.e2e.ogre_ports PROPERTY JAHSHAKA_TEST_FRAMES 1591)
 endif()
 if(TEST scripting.e2e.one_asset)
     set_property(TEST scripting.e2e.one_asset PROPERTY JAHSHAKA_TEST_FRAMES 1)

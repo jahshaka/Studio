@@ -768,6 +768,7 @@ endfunction()
 
 add_subdirectory(engine)
 add_subdirectory(document)
+add_subdirectory(math)
 add_subdirectory(mirror)
 add_subdirectory(particles)
 add_subdirectory(picking)
@@ -806,6 +807,7 @@ add_subdirectory(audiopeaks)
 add_subdirectory(scripting)
 add_subdirectory(capture)
 add_subdirectory(api)
+add_subdirectory(reopen)
 add_subdirectory(services)
 add_subdirectory(perf)
 add_subdirectory(commands)
@@ -1052,3 +1054,147 @@ function(jah_data_pass _dir)
     endforeach()
 endfunction()
 jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
+
+# THE MEASURES BY PRICE (TESTING-SIMPLE; DOCS/PROCESS.md, Testing): every guard of a named behaviour whose price
+# (scripts/gate-times.txt, its lowest measurement of record) is over its budget — a fixture or a CPU row 10 s, an app row
+# 60 s — every soak, churn and scale row, and the setup whose every consumer is one of them: labelled `measure`, run at the sprint's ship only, alone on the card, never
+# served. A guard is never lost for its price: a row rewritten to its budget leaves this list (its line in gate-times.txt
+# from its own solo run).
+set(JAH_MEASURE_ROWS
+    app.device_loss_end
+    app.input_keys.fresh_home
+    app.play_select.fresh_home
+    app.shutdown_order.timing.fresh_home
+    archive.responsive
+    archive.responsive.fresh_home
+    archive.responsive.timing.fresh_home
+    atom.cluster_crack
+    atom.cluster_cut
+    atom.coverage_trace
+    atom.dag_bound_bar
+    atom.dag_chain_validate
+    atom.decode_exact
+    atom.dolly_gate
+    atom.lod_bound_bar
+    atom.lod_switch
+    atom.lod_switch.fixture
+    atom.occlusion_exact
+    atom.removechild_leak
+    avatar.responsive.timing.fresh_home
+    bake.determinism
+    bundle.writer
+    engine.atom_draw
+    engine.atom_parity
+    engine.particles_pfx2_asan
+    engine.planar_asan
+    gi.cascades_asan
+    gi.cast_shadow_gi
+    gi.chain_converge_scenes
+    gi.chain_converge_scenes.fresh_home
+    gi.contact_occlusion
+    gi.ddgi
+    gi.far_sun_clutter
+    gi.far_sun_share
+    gi.field_alias
+    gi.field_thin_wall
+    gi.gather
+    gi.gather_cards
+    gi.gather_estimator
+    gi.gather_plane
+    gi.gather_plane_target
+    gi.gather_plane_weight
+    gi.gather_reference
+    gi.gather_reference_target
+    gi.gather_stable
+    gi.hit_shade
+    gi.probe_inputs
+    gi.reflect_fog
+    gi.reflect_mover
+    gi.rt_alpha_tested
+    gi.rt_reflect_asan
+    gi.speckle
+    gi.voxel_coverage
+    gpu.cutout_soak
+    hdr.drag_stable_asan
+    hdr.meter_asan
+    lights.shadows
+    material.live_roundtrip
+    math.parity
+    mirror.settle_incremental
+    mirror.settle_thumbnails
+    open.responsive.timing.fresh_home
+    perf.capture_bundle
+    perf.capture_bundle.capture_bundle.fresh_home
+    perf.capture_bundle.capture_quit.fresh_home
+    perf.capture_off_is_free.fresh_home
+    perf.freshhome.drag_mirror_room
+    perf.freshhome.epic_steady_state
+    perf.freshhome.hide_soak
+    perf.hide_soak
+    pool.gi_verbs_stage
+    pool.world_light_stage
+    samples.freshhome.session
+    samples.mirror_room_boots
+    samples.session
+    scale.assets
+    scale.atlas
+    scale.bake
+    scale.far_field
+    scale.hit_list
+    scale.levels
+    scale.library.fixture
+    scale.lights
+    scale.occlusion
+    scale.residency
+    scene.reopen_fidelity
+    scene.reopen_fidelity.fresh_home
+    scripting.e2e.ogre_ports
+    scripting.freshhome.ogre_ports
+    shader.async_soak
+    shader.live_compiles
+    shader.sample_opens_quiet
+    shadercache.app.churn
+    shadercache.container
+    shadercache.container_asan
+    shadercache.engine_pipelines
+    shadow.atom_parity
+    shadow.cutout_caster.churn
+    shadow.two_sided_caster.churn
+    skeletal.gpu_parity
+    ssr.engine_asan
+    test_engine
+    test_engine_asan
+    threading.freshhome.import_soak
+    threading.freshhome.newproject_stall_timing
+    threading.gi_resolve
+    threading.import_soak
+    threading.import_soak.no_groupless_texture
+    threading.mode
+    vr.eye_grade
+    vr.eye_grade.fresh_home
+    vr.frame_budget.fresh_home
+    vr.gather_stereo
+    vr.session
+)
+set_property(GLOBAL PROPERTY JAH_MEASURE_SEEN "")
+function(jah_measure_pass _dir)
+    get_property(_tests DIRECTORY "${_dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        if(_t IN_LIST JAH_MEASURE_ROWS)
+            set_property(TEST ${_t} DIRECTORY "${_dir}" APPEND PROPERTY LABELS measure)
+            set_property(GLOBAL APPEND PROPERTY JAH_MEASURE_SEEN ${_t})
+        endif()
+    endforeach()
+    get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_sub IN LISTS _subs)
+        jah_measure_pass("${_sub}")
+    endforeach()
+endfunction()
+jah_measure_pass("${CMAKE_CURRENT_SOURCE_DIR}")
+get_property(_seen GLOBAL PROPERTY JAH_MEASURE_SEEN)
+foreach(_t IN LISTS JAH_MEASURE_ROWS)
+    if(NOT _t IN_LIST _seen)
+        message(WARNING "JAH_MEASURE_ROWS names ${_t}, which this build does not register")
+    endif()
+endforeach()
+

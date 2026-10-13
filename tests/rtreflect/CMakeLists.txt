@@ -130,6 +130,28 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES JAHSHAKA_TEST_FRAMES 885)
 
+# A MOVING OBJECT'S REFLECTIONS (REFLECT-MOVERS-1): a sphere on a circle over a
+# glossy floor, a mirror floor, and a glossy sphere — the moving frame against
+# the settled one at the same pose, against the still case's same error.
+add_executable(test_reflect_mover test_reflect_mover.cpp)
+set_target_properties(test_reflect_mover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_reflect_mover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_mover JahshakaEngineMedia)
+target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
+# BUDGET 40 s: THE MEASUREMENT (TESTING-SPEED-B1, the lead 2026-10-12) — kept unchanged: its two 90-frame settles hold a reference that is still
+# converging at frame 90; a shorter settle loosens every gated error (spikes/testing-speed-b1/reflect_mover-settle.txt).
+jah_gpu_row(gi.reflect_mover CLASS engine COMMAND test_reflect_mover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_mover PROPERTIES JAHSHAKA_TEST_FRAMES 11664)
+
 # A REFLECTION IS FOGGED ALONG ITS OWN PATH (PHOTON-I-1 fix 5): a mirror's off-screen
 # reflection of an emissive wall against the wall seen from the mirror's virtual eye,
 # under no medium, the World fog and the height fog.
@@ -145,6 +167,10 @@ target_compile_definitions(test_reflect_fog PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_reflect_fog JahshakaEngineMedia)
 target_link_libraries(test_reflect_fog PRIVATE JahshakaEngine)
+jah_gpu_row(gi.reflect_fog CLASS engine COMMAND test_reflect_fog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_fog PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_fog PROPERTIES JAHSHAKA_TEST_FRAMES 3360)
 # ...and the paths a machine without ray queries reflects through: the screen march
 # alone and the voxel march (the same law, JahSsrResolve_ps.glsl / PhotonVct).
 jah_gpu_row(gi.reflect_fog_norays CLASS engine COMMAND test_reflect_fog
@@ -196,7 +222,46 @@ set_tests_properties(gi.rt_reflect_cost PROPERTIES
 set_tests_properties(gi.rt_reflect_cost PROPERTIES JAHSHAKA_TEST_FRAMES 361)
 
 if(JAHSHAKA_ASAN)
+    # THE SANITISED TWIN for the new pass. `protect_shadow_gap=0` is already in
+    # JAH_ASAN_ENGINE_OPTIONS and is load-bearing here: the NVIDIA driver
+    # refuses vkCreateDevice with the ray-tracing feature bits enabled under
+    # ASan's default shadow gap (PHOTON R1, deviation (a)) — with the gap
+    # unprotected the device comes up and the 1,900-line raw-Vulkan tier gets
+    # the coverage R1 had to do without.
+    jahshaka_rt_reflect_test(test_rt_reflect_asan)
+    target_link_libraries(test_rt_reflect_asan PRIVATE JahshakaEngineAsan)
+    target_compile_options(test_rt_reflect_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_rt_reflect_asan PRIVATE -fsanitize=address)
+    jah_gpu_row(gi.rt_reflect_asan CLASS engine COMMAND test_rt_reflect_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_asan PROPERTIES
+                         TIMEOUT 180 LABELS "engine"
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(gi.rt_reflect_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1435)
 endif()
+
+# A CUT-OUT IS GEOMETRY WITH HOLES FOR THE RAYS TOO (REFLECT-MOVERS-2): a fence
+# with a Cutout mask — its ray shadow, its card sun term and its ray reflection
+# carry the mask's coverage, not the quad's.
+add_executable(test_rt_alpha_tested test_rt_alpha_tested.cpp)
+set_target_properties(test_rt_alpha_tested PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_rt_alpha_tested PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_rt_alpha_tested JahshakaEngineMedia)
+# the engine-private scene: the two-submesh fence (OgreScene::appendSubmesh)
+target_include_directories(test_rt_alpha_tested PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_link_libraries(test_rt_alpha_tested PRIVATE JahshakaEngine OgreNext)
+jah_gpu_row(gi.rt_alpha_tested CLASS engine COMMAND test_rt_alpha_tested
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_alpha_tested PROPERTIES TIMEOUT 240 LABELS "engine")
+set_tests_properties(gi.rt_alpha_tested PROPERTIES JAHSHAKA_TEST_FRAMES 844)
 
 # THE RAY TIER'S LEVEL CAP (architecture audit D1): a mesh deeper than the GPU scene's
 # eight levels is traced at level 7 at most, so its hits decode against its own rows —

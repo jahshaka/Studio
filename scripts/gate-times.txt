@@ -9,6 +9,7 @@ api.contract 3.40  ship 3a0422b4e (2026-10-13)
 app.cli_options 0.00  ship 3a0422b4e (2026-10-13)
 app.data_root 17.20  ship 3a0422b4e (2026-10-13)
 app.data_root.fresh_home 0.01  quiet n=3
+app.device_loss_end 60.00  ship 3a0422b4e (2026-10-13)
 app.engine_selftest_validation 43.43  quiet n=46; budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it
 app.first_launch 0.00  ship 3a0422b4e (2026-10-13)
 app.help_exits 0.30  quiet n=46
@@ -34,6 +35,8 @@ app.update_check 0.97  quiet n=25
 app.update_check.timing 1.54  all n=2
 app.watchdog_stall 39.98  quiet n=45
 archive.closure 0.10  ship 3a0422b4e (2026-10-13)
+archive.responsive 68.36  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted); budget 70 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12)
+archive.responsive.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing 49.60  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing.fresh_home 0.02  quiet n=3
 assets.cas 0.08  quiet n=33
@@ -44,7 +47,19 @@ assets.metadata 0.06  quiet n=32
 assets.paths 0.00  ship 3a0422b4e (2026-10-13)
 assets.torn_write 0.00  ship 3a0422b4e (2026-10-13)
 assets.tray 0.10  ship 3a0422b4e (2026-10-13)
+atom.cluster_crack 62.28  quiet n=20
+atom.cluster_cut 39.73  quiet n=19
+atom.coverage_trace 178.60  ship 3a0422b4e (2026-10-13)
 atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5
+atom.dag_bound_bar 18.70  quiet n=30
+atom.dag_chain_validate 12.07  quiet n=44
+atom.decode_exact 22.44  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+atom.dolly_gate 27.89  quiet n=40
+atom.lod_bound_bar 11.36  quiet n=30
+atom.lod_switch 237.65  quiet n=43
+atom.lod_switch.fixture 0.05  quiet n=52
+atom.occlusion_exact 11.19  quiet n=45
+atom.removechild_leak 13.70  ship 3a0422b4e (2026-10-13)
 atom.two_sided 3.22  quiet n=44
 atom.words_still 2.04  quiet n=42
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)
@@ -59,6 +74,8 @@ avatar.responsive 48.07  quiet n=41
 avatar.responsive.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 avatar.responsive.timing 34.90  ship 3a0422b4e (2026-10-13)
 avatar.responsive.timing.fresh_home 0.02  quiet n=3
+bake.determinism 64.78  quiet n=32
+bundle.writer 21.13  quiet n=24
 cameras.body 1.57  quiet n=48
 cameras.document 0.00  ship 3a0422b4e (2026-10-13)
 cameras.exposure 4.31  quiet n=47
@@ -104,8 +121,10 @@ document.reader_defaults 0.00  ship 3a0422b4e (2026-10-13)
 document.simulation_clock 0.00  ship 3a0422b4e (2026-10-13)
 document.sky_write 0.04  quiet n=46
 drawers.db 0.00  ship 3a0422b4e (2026-10-13)
+engine.atom_draw 28.50  ship 3a0422b4e (2026-10-13)
 engine.atom_negative_control_validation 2.56  quiet n=43
 engine.atom_negative_control_validation_lavapipe 3.58  quiet n=42
+engine.atom_parity 30.50  ship 3a0422b4e (2026-10-13)
 engine.atom_parity_validation 3.31  quiet n=44
 engine.descriptor_pools 3.90  quiet n=43
 engine.error_pump 1.18  quiet n=44
@@ -120,7 +139,9 @@ engine.lod_rule_parity 5.19  quiet n=44
 engine.media_check 2.01  quiet n=41
 engine.oom_is_not_loss 2.64  quiet n=45
 engine.particles_pfx2 1.94  quiet n=42
+engine.particles_pfx2_asan 11.59  quiet n=41
 engine.planar 1.97  quiet n=39
+engine.planar_asan 10.52  quiet n=39
 engine.tlas_compute 2.39  quiet n=44
 engine.voxel_reader_parity 3.33  quiet n=40
 engine.window 1.86  quiet n=43
@@ -152,7 +173,11 @@ gi.cascade_determinism 3.08  quiet n=46
 gi.cascade_dirty 2.72  quiet n=46
 gi.cascade_lod 2.64  quiet n=44
 gi.cascades 7.85  quiet n=43
+gi.cascades_asan 23.23  quiet n=41
+gi.cast_shadow_gi 51.95  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.chain_converge 9.21  quiet n=46
+gi.chain_converge_scenes 96.34  quiet n=20
+gi.chain_converge_scenes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.chain_face 7.27  quiet n=42
 gi.cliff 6.66  quiet n=40
 gi.coalesce 5.28  quiet n=44
@@ -160,6 +185,8 @@ gi.cone_emitter 3.47  quiet n=40
 gi.cone_integrator_parity 3.47  quiet n=42
 gi.cone_integrator_parity_offaxis 2.20  quiet n=12
 gi.cone_skip 5.68  quiet n=19
+gi.contact_occlusion 25.60  ship 3a0422b4e (2026-10-13)
+gi.ddgi 10.32  quiet n=41
 gi.ddgi_ambient 5.05  quiet n=42
 gi.ddgi_edge 3.70  quiet n=42
 gi.drag_cadence 6.04  quiet n=46
@@ -168,27 +195,41 @@ gi.env_cone 5.17  quiet n=42
 gi.env_one 6.95  quiet n=40
 gi.env_ray_match 5.21  quiet n=43
 gi.far_blas 3.86  quiet n=43
+gi.far_sun_clutter 106.29  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_clutter_c3 5.62  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (5.50/5.62/5.67)
+gi.far_sun_share 104.33  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_share_c3 4.96  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (4.87/4.96/5.03)
+gi.field_alias 72.80  ship 3a0422b4e (2026-10-13)
 gi.field_edge 8.02  quiet n=29
 gi.field_follows 6.14  quiet n=45
 gi.field_follows.timing 5.40  ship 3a0422b4e (2026-10-13)
 gi.field_scroll 12.66  quiet n=45
+gi.field_thin_wall 16.92  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
+gi.gather 13.70  ship 3a0422b4e (2026-10-13)
 gi.gather_adaptive_fair 3.00  quiet n=31
+gi.gather_cards 12.49  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2); budget 15 s: the measurement (the lead 2026-10-12)
 gi.gather_cost 26.90  ship 3a0422b4e (2026-10-13)
 gi.gather_deterministic 8.71  quiet n=41
 gi.gather_edge 9.11  quiet n=42
+gi.gather_estimator 15.54  hand: TESTING-SPEED-B1 fix round (ABBA + the error bar, 1270 frames), 2026-10-12 2x:xx, box busy; budget 15 s: the measurement (the lead 2026-10-12; <= 10 s warm)
 gi.gather_glass 6.10  ship 3a0422b4e (2026-10-13)
 gi.gather_hits_view 2.56  hand: FAR-SUN-1 2026-10-13, the first-readback wait (5 frames), n=1
 gi.gather_letterbox 7.15  quiet n=41
 gi.gather_motion 5.78  quiet n=46
 gi.gather_nest 7.20  ship 3a0422b4e (2026-10-13)
 gi.gather_norays 2.58  quiet n=40
+gi.gather_plane 17.34  quiet n=41
+gi.gather_plane_target 17.21  quiet n=40
+gi.gather_plane_weight 12.80  ship 3a0422b4e (2026-10-13)
+gi.gather_reference 14.90  ship 3a0422b4e (2026-10-13)
+gi.gather_reference_target 15.20  ship 3a0422b4e (2026-10-13)
 gi.gather_sky 7.03  quiet n=43
+gi.gather_stable 10.90  ship 3a0422b4e (2026-10-13)
 gi.gather_trace 4.90  ship 3a0422b4e (2026-10-13)
 gi.hidden_volume 7.80  ship 3a0422b4e (2026-10-13)
 gi.hit_offscreen_lights 2.17  quiet n=43
 gi.hit_planar 6.21  quiet n=42
+gi.hit_shade 15.20  ship 3a0422b4e (2026-10-13)
 gi.hit_voxel 4.60  ship 3a0422b4e (2026-10-13)
 gi.hit_voxel_view 4.43  quiet n=41
 gi.id_depth 4.81  quiet n=37
@@ -208,6 +249,7 @@ gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
+gi.probe_inputs 11.39  quiet n=44
 gi.probe_nan 5.64  quiet n=41
 gi.probe_open 7.70  ship 3a0422b4e (2026-10-13)
 gi.probe_visibility 3.33  quiet n=41
@@ -217,15 +259,19 @@ gi.rayquery_asan 9.73  quiet n=41
 gi.rayquery_norays 1.25  quiet n=43
 gi.readout_async 5.80  ship 3a0422b4e (2026-10-13)
 gi.reenable 4.07  quiet n=41
+gi.reflect_fog 10.40  ship 3a0422b4e (2026-10-13)
 gi.reflect_fog_norays 4.86  quiet n=37
 gi.reflect_metal_hit 7.40  hand: REFLECT-FIX-1 one solo run of the registered command at 22129c289 on :73 (the frame-count run, 2026-10-13)
 gi.reflect_motion 5.70  ship 3a0422b4e (2026-10-13)
 gi.reflect_motion_norays 4.67  quiet n=43
+gi.reflect_mover 34.39  quiet n=40; budget 40 s: the measurement (TESTING-SPEED-B1, the lead 2026-10-12; unchanged)
 gi.reflect_no_helpers 4.30  ship 3a0422b4e (2026-10-13)
 gi.reflect_uncover 4.10  ship 3a0422b4e (2026-10-13)
 gi.reflect_uncover_norays 3.60  hand: REFLECT-FIX-1 one solo run of the registered command at 22129c289 on :73 (the frame-count run, 2026-10-13)
 gi.region_replace 5.36  quiet n=42
+gi.rt_alpha_tested 17.91  quiet n=43
 gi.rt_reflect 4.92  quiet n=40
+gi.rt_reflect_asan 16.07  quiet n=41
 gi.rt_reflect_cost 2.85  quiet n=45
 gi.rt_reflect_format_lavapipe 1.39  quiet n=41
 gi.rt_reflect_format_refused_lavapipe 0.99  quiet n=41
@@ -240,6 +286,7 @@ gi.skin_rays_mirror 4.83  quiet n=40
 gi.skin_rays_norays 1.52  quiet n=42
 gi.sky_light 4.60  quiet n=44
 gi.socket_camera 4.48  quiet n=4
+gi.speckle 17.73  hand: TESTING-SPEED-B1 rewrite, 2nd run 2026-10-12 20:0x, box load ~8 (spikes/testing-speed-b1/price2)
 gi.store_contrast 6.20  ship 3a0422b4e (2026-10-13)
 gi.stream_edit 3.94  quiet n=40
 gi.sun_contact 1.92  quiet n=43
@@ -249,6 +296,7 @@ gi.sun_contact_norays 1.80  quiet n=43
 gi.tiers 0.06  quiet n=45
 gi.volume_edge 2.12  quiet n=42
 gi.volume_edge_spec_target 2.11  quiet n=42
+gi.voxel_coverage 44.23  quiet n=42
 gi.voxel_emissive 6.75  quiet n=39
 gi.voxel_feed 3.03  quiet n=40
 gi.voxel_lab 1.45  quiet n=34
@@ -270,7 +318,9 @@ hdr.display_encode 1.88  quiet n=40
 hdr.dither 1.56  quiet n=42
 hdr.dither_asan 9.30  quiet n=39
 hdr.drag_stable 7.69  quiet n=41
+hdr.drag_stable_asan 18.48  quiet n=41
 hdr.meter 9.00  ship 3a0422b4e (2026-10-13)
+hdr.meter_asan 21.39  quiet n=41
 import.async 0.20  ship 3a0422b4e (2026-10-13)
 import.shutdown 33.63  quiet n=43
 import.shutdown.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
@@ -293,6 +343,7 @@ lights.icons 1.74  quiet n=45
 lights.masks 1.79  quiet n=44
 lights.sealed_room 1.60  quiet n=41
 lights.secondary_directional 1.74  quiet n=43
+lights.shadows 11.60  ship 3a0422b4e (2026-10-13)
 lod.padding_untouched 0.00  ship 3a0422b4e (2026-10-13)
 log.core 0.40  ship 3a0422b4e (2026-10-13)
 log.engine 15.75  quiet n=46
@@ -303,9 +354,11 @@ log.perf 36.70  ship 3a0422b4e (2026-10-13)
 log.perf.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 looks.engine 1.73  quiet n=43
 looks.engine_asan 9.59  quiet n=42
+material.live_roundtrip 85.25  quiet n=7
 materialpreview.engine 2.55  quiet n=46
 materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 materials.members 0.06  quiet n=33
+math.parity 20.37  quiet n=23
 mcp.e2e 28.30  ship 3a0422b4e (2026-10-13)
 mcp.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 meshbake.archive_bakes 41.00  ship 3a0422b4e (2026-10-13)
@@ -328,6 +381,8 @@ mirror.document_to_engine 9.72  quiet n=43
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
 mirror.scale 1.85  quiet n=48
+mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
+mirror.settle_thumbnails 11.12  hand: MIRROR-SETTLE-1's runs at B=24, 2026-10-11 (11.03, 11.20 s), n=2 median
 mirror.skinned_outline 1.38  quiet n=44
 mirror.sun_night 2.98  quiet n=45
 mirror.vr_proxies 1.79  quiet n=46
@@ -338,6 +393,9 @@ open.responsive.timing 100.80  ship 3a0422b4e (2026-10-13)
 open.responsive.timing.fresh_home 0.01  quiet n=4
 particles.document_to_engine 1.49  quiet n=43
 particles.fire_shape 1.45  quiet n=45
+perf.capture_bundle 61.05  hand: DBUILD-FIX-1 re-declared TIER low NEEDS photon (2026-10-11), one admitted run on :81 (the n=42 median 64.69 was NEEDS NONE)
+perf.capture_bundle.capture_bundle.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+perf.capture_bundle.capture_quit.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 perf.capture_off_is_free 12.90  ship 3a0422b4e (2026-10-13)
 perf.capture_off_is_free.fresh_home 0.01  quiet n=7
 perf.drag_mirror_room 33.49  quiet n=47
@@ -483,6 +541,15 @@ pool.editor_view_c::play_select 3.33  solo median of 3, 2026-10-12 (TESTING-SPEE
 pool.editor_view_c::presentation_state 3.01  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.editor_view_c::render_stats 2.08  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.editor_view_c::scene_issues 1.24  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_movers 27.24  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.gi_movers::drag_mover 3.30  ship 3a0422b4e (2026-10-13)
+pool.gi_movers::movable_lamp_rest 10.96  quiet n=46
+pool.gi_movers::ssr_march 3.00  ship 3a0422b4e (2026-10-13)
+pool.gi_movers::surface_cards 1.14  quiet n=44
+pool.gi_movers_b 29.22  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.gi_movers_b::dirty_mirror 6.39  quiet n=46
+pool.gi_movers_b::mobility_play 9.48  quiet n=46
+pool.gi_movers_b::ray_row 8.12  quiet n=44
 pool.gi_verbs 32.23  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs::gi_status 18.72  quiet n=47
 pool.gi_verbs::gi_voxel_store 6.05  quiet n=47
@@ -497,6 +564,11 @@ pool.gi_verbs_b::gather_hits_verbs 1.55  hand: FAR-SUN-1 2026-10-13, the pool's 
 pool.gi_verbs_b::gather_row 0.73  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_b::gi_bounds 1.97  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_b::gi_ddgi 1.81  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_stage 121.60  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_stage::contact_band 67.55  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_stage::offscreen_contract 13.21  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_stage::pcc_budget 16.93  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_stage::planar_records 10.37  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.player 38.31  quiet n=50
 pool.player::fixed_clock 5.97  quiet n=49
 pool.player::play_fly 0.74  quiet n=44
@@ -505,6 +577,21 @@ pool.player::possession 3.39  quiet n=48
 pool.player::scene_switch_after_play 1.90  ship 3a0422b4e (2026-10-13)
 pool.player::space_switch 11.90  ship 3a0422b4e (2026-10-13)
 pool.runner 37.10  ship 3a0422b4e (2026-10-13)
+pool.shading 21.11  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.shading::bake_pipeline 3.93  quiet n=44
+pool.shading::custom_piece 2.49  quiet n=45
+pool.shading::pbr_materials 6.19  quiet n=47
+pool.shading_b 26.97  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.shading_b::material_preview 4.63  quiet n=47
+pool.shading_b::workflow_grid 3.55  quiet n=47
+pool.shading_b::workflows 9.39  quiet n=44
+pool.shading_c 24.50  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.shading_c::pbs_knobs 5.98  quiet n=44
+pool.shading_c::shading_model 7.91  quiet n=45
+pool.shading_d 24.82  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.shading_d::detail_layers 5.33  quiet n=47
+pool.shading_d::live_material_apply 3.57  quiet n=14
+pool.shading_d::shader_time 3.76  quiet n=14
 pool.shading_live 51.62  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.shading_live::cube_shade 42.03  quiet n=44
 pool.shading_live_b 29.05  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
@@ -520,6 +607,12 @@ pool.vr_noruntime::vr_hands 0.34  quiet n=48
 pool.vr_noruntime::vr_input_headless 1.06  quiet n=49
 pool.vr_noruntime::vr_teleport 0.42  quiet n=49
 pool.vr_noruntime::vr_verbs 0.60  ship 3a0422b4e (2026-10-13)
+pool.vr_session 49.07  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.vr_session::photon_view 6.76  quiet n=49
+pool.vr_session::verbs_session 26.10  ship 3a0422b4e (2026-10-13)
+pool.vr_session_b 38.22  solo, split by its arms (TESTING-SIMPLE, 2026-10-13)
+pool.vr_session_b::player_session 20.73  quiet n=49
+pool.vr_session_b::sample_open 8.61  quiet n=48
 pool.vr_validation 55.20  ship 3a0422b4e (2026-10-13)
 pool.vr_validation::validation_proof 0.00  ship 3a0422b4e (2026-10-13)
 pool.vr_validation::verbs_session 32.20  ship 3a0422b4e (2026-10-13)
@@ -527,6 +620,9 @@ pool.world_light 33.15  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, adm
 pool.world_light::light_masks 11.02  quiet n=43
 pool.world_light::sun_contact 10.86  quiet n=42
 pool.world_light::sun_light 33.09  quiet n=43
+pool.world_light_stage 143.97  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.world_light_stage::screenshot_grades 64.07  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.world_light_stage::shadow_fit_receivers 66.78  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.world_sky 44.09  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.world_sky::default_ground 45.50  ship 3a0422b4e (2026-10-13)
 pool.world_sky::world_rows_follow 0.89  quiet n=43
@@ -560,12 +656,18 @@ samples.freshhome.Showroom_2 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.Skeletal_Animation 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.Tornado 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.World_Background 0.00  ship 3a0422b4e (2026-10-13)
+samples.freshhome.session 0.00  ship 3a0422b4e (2026-10-13)
+samples.mirror_room_boots 322.06  quiet n=31
+samples.session 78.50  ship 3a0422b4e (2026-10-13)
 scale.cpu_walks 15.07  quiet n=46
 scale.gpu_coverage 11.99  quiet n=25
 scale.library 14.60  ship 3a0422b4e (2026-10-13)
 scale.library.fixture 0.06  quiet n=101
 scale.lights 16.50  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+scale.occlusion 38.40  ship 3a0422b4e (2026-10-13)
 scale.shadow_cut 27.18  quiet n=48
+scene.reopen_fidelity 74.07  quiet n=45
+scene.reopen_fidelity.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scenegraph.baseline 0.00  ship 3a0422b4e (2026-10-13)
 scenegraph.benchmark 283.84  hand: a recorded stage-close run (spikes/) (no PASS run in the log)
 scenegraph.smoke 9.43  quiet n=47
@@ -590,6 +692,7 @@ scripting.e2e.material_share_import.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.material_tabs 13.12  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 scripting.e2e.material_tabs.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.material_tabs.relaunch 5.50  ship 3a0422b4e (2026-10-13)
+scripting.e2e.ogre_ports 68.21  quiet n=46
 scripting.e2e.one_asset 6.80  ship 3a0422b4e (2026-10-13)
 scripting.e2e.one_asset.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.perf_capture_frames 23.60  ship 3a0422b4e (2026-10-13)
@@ -627,6 +730,7 @@ scripting.e2e.thumbnails_order.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tray_panel 34.60  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tray_panel.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.engine 0.67  quiet n=34
+scripting.freshhome.ogre_ports 0.00  ship 3a0422b4e (2026-10-13)
 scripting.live 10.56  quiet n=49
 scripting.live_off 11.39  quiet n=49
 services.animation_undo 0.00  ship 3a0422b4e (2026-10-13)
@@ -640,8 +744,13 @@ services.selection_set 0.00  ship 3a0422b4e (2026-10-13)
 settings.store 0.56  quiet n=12
 shader.async_after_open 34.26  median of 4, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shader.async_soak 104.91  quiet n=3
+shader.live_compiles 91.32  quiet n=18
+shader.sample_opens_quiet 181.10  ship 3a0422b4e (2026-10-13)
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadercache.app.churn 64.28  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
+shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
+shadercache.engine_pipelines 11.27  quiet n=36
 shadercache.warmup 1.60  quiet n=46
 shadercache.warmup_pass 1.73  quiet n=45
 shadergraph.ao_removed 0.00  ship 3a0422b4e (2026-10-13)
@@ -658,6 +767,7 @@ shadergraph.selection 0.06  quiet n=31
 shadow.atlas_binding 1.76  quiet n=44
 shadow.atlas_rebuilds 2.38  quiet n=39
 shadow.atom_cut 8.61  quiet n=46
+shadow.atom_parity 18.84  quiet n=44
 shadow.cache_kinds 4.38  quiet n=42
 shadow.caster_first_frame 8.71  quiet n=46
 shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
@@ -672,6 +782,7 @@ shortcuts.registry 0.00  ship 3a0422b4e (2026-10-13)
 skeletal.clip_extract 0.05  quiet n=45
 skeletal.cpu_skinning 1.58  quiet n=44
 skeletal.gpu_clips 1.52  quiet n=44
+skeletal.gpu_parity 10.31  quiet n=43
 skeletal.library_import 0.00  ship 3a0422b4e (2026-10-13)
 skeletal.multi_avatar 0.00  ship 3a0422b4e (2026-10-13)
 skeletal.rig_translation 1.46  quiet n=44
@@ -713,7 +824,10 @@ source.shell_boundaries 0.26  quiet n=58
 source.testing_rules 0.57  quiet n=56
 ssr.edge 1.92  quiet n=40
 ssr.engine 5.82  quiet n=39
+ssr.engine_asan 19.66  quiet n=39
 ssr.rings 1.73  quiet n=38
+test_engine 15.99  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+test_engine_asan 71.07  quiet n=40
 test_engine_recreate 4.18  quiet n=44
 theme.manager 0.08  quiet n=25
 theme.no_raw_sheets 0.05  quiet n=35
@@ -724,10 +838,12 @@ threading.freshhome.import_soak 0.00  ship 3a0422b4e (2026-10-13)
 threading.freshhome.newproject_stall 0.00  ship 3a0422b4e (2026-10-13)
 threading.freshhome.newproject_stall_timing 0.00  ship 3a0422b4e (2026-10-13)
 threading.freshhome.texture_wait_watchdog 0.00  ship 3a0422b4e (2026-10-13)
+threading.gi_resolve 108.65  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 threading.import_soak 42.59  quiet n=50
 threading.import_soak.no_groupless_texture 0.00  ship 3a0422b4e (2026-10-13)
+threading.mode 99.39  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 threading.newproject_stall 38.65  quiet n=50
-threading.newproject_stall.no_groupless_texture 0.01  quiet n=48
+threading.newproject_stall.no_groupless_texture 0.00  ship 3a0422b4e (2026-10-13)
 threading.newproject_stall.timing 14.72  hand: its TESTING-DEBTS-1 dev run (the fixture: a wipe) (no PASS run in the log)
 threading.staging_race 1.63  quiet n=47
 threading.texture_wait_watchdog 21.60  ship 3a0422b4e (2026-10-13)
@@ -776,8 +892,11 @@ ui.tree_scroll 0.06  quiet n=47
 ui.vr_panel 0.00  ship 3a0422b4e (2026-10-13)
 ui.window_minimum 10.63  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.window_minimum.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+vr.eye_grade 137.48  quiet n=41
+vr.eye_grade.fresh_home 0.01  quiet n=3
 vr.frame_budget 102.30  ship 3a0422b4e (2026-10-13)
 vr.frame_budget.fresh_home 0.01  quiet n=4
+vr.gather_stereo 77.24  quiet n=43
 vr.grab_maths 0.00  ship 3a0422b4e (2026-10-13)
 vr.input_session 44.02  quiet n=54
 vr.input_session.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
@@ -785,6 +904,7 @@ vr.mirror_live 53.86  quiet n=46
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.no_picture_start 51.09  quiet n=49
 vr.no_picture_start.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+vr.session 63.49  quiet n=44
 vr.session_undithered 6.51  quiet n=45
 vr.start_broken 34.51  quiet n=19
 vr.start_broken.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
