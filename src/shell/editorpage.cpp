@@ -485,7 +485,7 @@ void EditorPage::build(const Deps &deps)
     // signals are the drag-and-drop route and nothing else, so this is where
     // "the point under the cursor" becomes "the surface under the cursor";
     // assets.addToScene and the menus keep placing the pivot.
-    connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString, bool v, iris::Vec3 pos, QString guid, QString) {
+    connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](bool v, iris::Vec3 pos, QString guid) {
         mServices->sceneEdit->addMaterialMesh(v, pos, guid, surfaceplacement::Placement::OnSurface);
     });
 

@@ -341,10 +341,14 @@ QString AssetImportService::summaryText(const QString &fileName, const ImportRes
                  .arg(s.value("movable").toInt()).arg(s.value("static").toInt());
     if (const int n = s.value("lights").toInt()) parts << QStringLiteral("%1 light(s)").arg(n);
     if (const int n = s.value("cameras").toInt()) parts << QStringLiteral("%1 camera(s)").arg(n);
+    if (const int n = s.value("animatedNodes").toInt())
+        parts << QStringLiteral("%1 animated node(s) playing their own animation").arg(n);
     if (const int n = s.value("cutouts").toInt()) parts << QStringLiteral("%1 cutout mesh(es)").arg(n);
     if (const int n = s.value("glass").toInt()) parts << QStringLiteral("%1 glass mesh(es)").arg(n);
     const double scale = s.value("contentScale").toDouble(1.0);
     if (scale != 1.0) parts << QStringLiteral("the file's nodes scale its geometry by %1").arg(scale);
+    const QString lightUnits = s.value("lightUnits").toString();
+    if (!lightUnits.isEmpty()) parts << lightUnits;
     const QJsonArray missing = s.value("missingMaps").toArray();
     QString text = QStringLiteral("%1: %2").arg(fileName, parts.join(QStringLiteral(", ")));
     if (!missing.isEmpty()) {

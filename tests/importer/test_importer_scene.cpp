@@ -11,7 +11,7 @@
 //
 // The base's numbers (82d38ccb5, measured by this suite before the fix) are in each
 // row's comment: every row but the 2 m box and the opaque cube was RED there
-// (14 reds of the 16 rows on the base).
+// (18 reds of the 20 rows on the base).
 #include <QApplication>
 #include <QColor>
 #include <QDir>
@@ -30,6 +30,7 @@
 #include "../support/documentgraph.h"
 #include "data/database/database.h"
 #include "data/project.h"
+#include "irisgl/document/animation/animation.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/assethelper.h"
@@ -234,6 +235,37 @@ int main(int argc, char **argv)
     CHECK(summary.value("movable").toInt(-1) == movable && summary.value("static").toInt(-1) == fixed,
           QStringLiteral("the import summary says how many of each (%1 movable / %2 static)")
               .arg(summary.value("movable").toInt(-1)).arg(summary.value("static").toInt(-1)));
+
+    // ---- STAGE 3b: THE FILE'S NODE ANIMATION PLAYS ---------------------------
+    std::printf("--- stage 3b: the Take plays on the node it keys\n");
+    // The Take keys a node no rig owns: its channel is the Spinner's own property
+    // animation, and the root carries no clip. Base (and stage 3): the clip sat on the
+    // root, the Spinner had no animation of its own and nothing ever played it.
+    iris::SceneNodePtr spinner;
+    std::function<void(const iris::SceneNodePtr &)> findSpinner = [&](const iris::SceneNodePtr &n) {
+        if (n->getName() == "Spinner") spinner = n;
+        for (const auto &c : n->children()) findSpinner(c);
+    };
+    findSpinner(node);
+    const bool ownTrack = spinner && spinner->getAnimation()
+                          && spinner->getAnimation()->hasPropertyAnim("position");
+    CHECK(ownTrack, QStringLiteral("the Spinner plays its own position track (%1)").arg(ownTrack));
+    CHECK(node->getAnimations().isEmpty(),
+          QStringLiteral("the root carries no clip (%1)").arg(node->getAnimations().size()));
+    // ...and it PLAYS: the pose moves over frames (the Take's x keys 0 -> 1 -> 0 over 1 s,
+    // sampled at frames 0 and 30 of the fixed 1/60 s step).
+    float x0 = -1, x30 = -1;
+    if (ownTrack) {
+        node->updateAnimation(0.0f);
+        x0 = spinner->getLocalPos().x();
+        node->updateAnimation(30.0f / 60.0f);
+        x30 = spinner->getLocalPos().x();
+    }
+    CHECK(std::fabs(x0) < 1e-4 && std::fabs(x30 - 1.0) < 1e-3,
+          QStringLiteral("...a pose that changes over frames (x %1 at frame 0, %2 at frame 30)").arg(x0).arg(x30));
+    // ...and the blob keeps it: the placed Spinner carries the animation.
+    const int blobAnims = findNode(blob, "Spinner").value("animations").toArray().size();
+    CHECK(blobAnims == 1, QStringLiteral("the asset's definition carries the Spinner's animation (%1)").arg(blobAnims));
 
     node.reset();
     scene.reset();

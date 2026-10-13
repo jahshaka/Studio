@@ -39,6 +39,14 @@ iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project
 /// them for any cube.
 iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project);
 
+/// THE TEMPLATE'S DEFAULT SUN, still as the template made it (BISTRO-IMPORT-1 stage 3b):
+/// a directional light named kSunName at kSunPosition, pitched kSunPitchDegrees, white,
+/// intensity 1. A default is a default — a model placed with its OWN directional light
+/// (an FBX scene's authored sun; the owner's answer 7: "the file's directional IS the
+/// sun") replaces it (SceneEditService::addMaterialMesh). A sun the user has touched in
+/// any of those rows is theirs, and is never replaced.
+bool isDefaultSun(const iris::LightNodePtr &light);
+
 }   // namespace scenetemplate
 
 #endif   // SCENETEMPLATEBUILDER_H

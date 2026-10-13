@@ -257,7 +257,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         return false;
     }
     out.metadata = modelStats;
-    out.metadata[QStringLiteral("importSummary")] = importSummaryOf(node, missingMaps);
+    QJsonObject summary = importSummaryOf(node, missingMaps);
+    for (const char *key : { "lightUnits", "animatedNodes" })
+        if (out.metadata.contains(QLatin1String(key)))
+            summary[QLatin1String(key)] = out.metadata.take(QLatin1String(key));
+    out.metadata[QStringLiteral("importSummary")] = summary;
 
     // The source model file — recorded under BOTH the Object guid and the Mesh
     // member guid (same content id: the CAS dedups). Scene instantiation

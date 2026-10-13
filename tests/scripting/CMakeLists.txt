@@ -1402,6 +1402,10 @@ jah_no_display(
 # --headless.
 configure_file(scripts/e2e_glb_textures.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js @ONLY)
 jah_pool_arm(doc_assets glb_textures ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js 1 HEADLESS)
+# import_sun — BISTRO-IMPORT-1 stage 3b: a placed model's own directional light replaces
+# the template's default sun (one undo step), the summary says it; projectGuid is the project's.
+configure_file(scripts/e2e_import_sun.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_sun.js @ONLY)
+jah_pool_arm(doc_assets import_sun ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_sun.js 1 HEADLESS)
 
 # AVATAR_RIG_PERF_SPEC §3.5: the rig-cost read surface, in the real binary with
 # the ENGINE UP — `available` is half of what the suite checks, and a headless

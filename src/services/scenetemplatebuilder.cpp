@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/scenetemplatebuilder.h"
 
 #include <QColor>
+#include <cmath>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -143,8 +144,9 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName("Directional Light");
-    dlight->setLocalPos(iris::Vec3(4, 4, 0));
+    dlight->setName(QString::fromLatin1(scenetemplate::kSunName));
+    dlight->setLocalPos(iris::Vec3(scenetemplate::kSunPosition[0], scenetemplate::kSunPosition[1],
+                                   scenetemplate::kSunPosition[2]));
     // THE SUN HIGH AND BEHIND THE DEFAULT CAMERA (SKY-DEFAULTS-1; Unreal's default
     // class): 50 degrees of elevation, and its azimuth the camera's back — the
     // editor camera stands at (0, 5, 14) looking at the origin, down -Z, so the
@@ -216,6 +218,19 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     scene->heightFog.enabled = true;
 
     return scene;
+}
+
+bool isDefaultSun(const iris::LightNodePtr &light)
+{
+    if (!light || light->lightType != iris::LightType::Directional) return false;
+    if (light->getName() != QLatin1String(kSunName)) return false;
+    const iris::Vec3 p = light->getLocalPos();
+    const iris::Quat want = iris::Quat::fromEulerAngles(kSunPitchDegrees, 0, 0);
+    const float aligned = std::fabs(iris::Quat::dotProduct(light->getLocalRot().normalized(), want));
+    return std::fabs(p.x() - kSunPosition[0]) < 1e-4f && std::fabs(p.y() - kSunPosition[1]) < 1e-4f
+        && std::fabs(p.z() - kSunPosition[2]) < 1e-4f && std::fabs(aligned - 1.0f) < 1e-5f
+        && std::fabs(light->intensity - 1.0f) < 1e-6f && light->color == QColor(255, 255, 255)
+        && light->forwardShadingPriority == 0;
 }
 
 }   // namespace scenetemplate

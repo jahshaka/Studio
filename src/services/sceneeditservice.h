@@ -245,6 +245,10 @@ public:
     /// placed root's name is the asset's own, written at import (BISTRO-IMPORT-1).
     void addMaterialMesh(bool ignore, iris::Vec3 position, const QString &guid,
                          surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
+    /// What the last addMaterialMesh did with the scene's SUN, in words (empty when it
+    /// did nothing): the file's sun replaced the template's default, or ties the
+    /// scene's own. assets.importAndPlace returns it in its summary.
+    QString lastPlacementNote() const { return mLastPlacementNote; }
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid,
                                 QString assetName);
 
@@ -571,6 +575,7 @@ signals:
     void materialApplied(const QString &presetType);
 
 private:
+    QString mLastPlacementNote;
     /// copyMaterialIntoProject's two halves: every refusal is asked in the
     /// first (so a drop never opens an undo macro it cannot fill), the push in
     /// the second.

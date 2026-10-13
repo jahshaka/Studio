@@ -1657,13 +1657,14 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 		// dialog opened under a quitting app holds its teardown (import.shutdown).
 		if (cancelled) importSummaries.clear();
 		if (!importSummaries.isEmpty()) {
-			// Opened, never exec'd: the summary informs and must not hold the
-			// event loop (a scripted or batch import keeps running under it).
 			auto *box = new QMessageBox(QMessageBox::Information, tr("Import summary"),
 			                            importSummaries.join(QStringLiteral("\n\n")),
 			                            QMessageBox::Ok, this);
+			// NON-MODAL (stage 3b): a summary is information — it neither blocks
+			// the window nor holds the event loop (a toast is for fixable errors).
 			box->setAttribute(Qt::WA_DeleteOnClose);
-			box->open();
+			box->setWindowModality(Qt::NonModal);
+			box->show();
 			importSummaries.clear();
 		}
 

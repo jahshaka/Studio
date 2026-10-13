@@ -336,7 +336,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "A model already pivoted at its base is not lifted, "
           "so nothing is lifted twice.",
           Needs::Document },
-        { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId, summary: {movable, static, meshes, lights, cameras, cutouts, glass, contentScale, missingMaps}}",
+        { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId, summary: {movable, static, meshes, animatedNodes, lights, cameras, lightUnits, cutouts, glass, contentScale, missingMaps, sun}}",
           "THE way to get a model file on disk into the open scene, in one call: it runs the one "
           "import pipeline (assets.importFile), pins the result into the open project "
           "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow "
@@ -1655,9 +1655,10 @@ QVariantMap AssetsApi::importAndPlace(const QString &path, const QVariantMap &op
     // WHAT THE MODEL BROUGHT (BISTRO-IMPORT-1): the import summary the row records —
     // movable/static counts, lights, cameras, cutouts, glass, the file's own content
     // scale and every map it named that was not found (assets.metadata carries the same).
+    QVariantMap summary;
     if (host.db)
-        out["summary"] = AssetMetadata::ensure(host.db, assetGuid)
-                             .value(QStringLiteral("importSummary")).toObject().toVariantMap();
+        summary = AssetMetadata::ensure(host.db, assetGuid)
+                      .value(QStringLiteral("importSummary")).toObject().toVariantMap();
 
     const auto record = host.db ? host.db->fetchAsset(assetGuid) : AssetRecord();
     if (record.type != static_cast<int>(ModelTypes::Object)) {
@@ -1669,16 +1670,22 @@ QVariantMap AssetsApi::importAndPlace(const QString &path, const QVariantMap &op
     }
 
     // 2. pin it into the open project (reference-with-pin: same guid back).
-    const QString projectGuid = addToProject(assetGuid);
-    if (projectGuid.isEmpty()) return out;
-    out["projectGuid"] = projectGuid;
+    // The pin answers with the ASSET's guid (reference-with-pin: the same guid back);
+    // `projectGuid` is the PROJECT's, as its name says (it returned the asset's).
+    if (addToProject(assetGuid).isEmpty()) return out;
+    out["projectGuid"] = host.project->getProjectGuid();
 
     // 3. place it — the only undoable step.
     QVariantMap placeOptions;
     if (options.contains("position")) placeOptions["position"] = options.value("position");
-    const QString nodeId = addToScene(projectGuid, placeOptions);
+    const QString nodeId = addToScene(assetGuid, placeOptions);
     if (nodeId.isEmpty()) return out;
     out["nodeId"] = nodeId;
+    // ...and what the placement did with the scene's sun (the file's replaced the
+    // template's default, or ties the scene's own) — SceneEditService::addMaterialMesh.
+    const QString sun = host.services->sceneEdit->lastPlacementNote();
+    if (!sun.isEmpty()) summary["sun"] = sun;
+    out["summary"] = summary;
     return out;
 }
 

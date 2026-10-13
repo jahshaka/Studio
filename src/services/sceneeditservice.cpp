@@ -601,7 +601,49 @@ void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const Q
     // at all, so nothing is lifted twice (services/surfaceplacement.h).
     surfaceplacement::place(node, position, placement);
 
-    addNodeToScene(node, ignore);
+    // THE FILE'S SUN IS THE SUN (BISTRO-IMPORT-1 stage 3b; the owner's answer 7). A
+    // model that brings its own directional light (an FBX scene's authored sun) REPLACES
+    // the template's default sun, untouched as the template made it (a default is a
+    // default; scenetemplate::isDefaultSun) — one undo step with the placement. A sun the
+    // user made or changed is never removed: the file's then TIES it at priority 0 and
+    // the `sun.tie` scene-issue line says so (the one-sun rule). Said either way.
+    mLastPlacementNote.clear();
+    QList<iris::LightNodePtr> fileSuns;
+    std::function<void(const iris::SceneNodePtr &)> findSuns = [&](const iris::SceneNodePtr &n) {
+        if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
+            auto light = n.staticCast<iris::LightNode>();
+            if (light->lightType == iris::LightType::Directional) fileSuns.append(light);
+        }
+        for (const auto &c : n->children()) findSuns(c);
+    };
+    findSuns(node);
+    QList<iris::LightNodePtr> defaults, ties;
+    if (!fileSuns.isEmpty() && scene()) {
+        const auto root = scene()->getRootNode();
+        for (const auto &light : scene()->directionalLights()) {
+            if (light->getParent() == root && scenetemplate::isDefaultSun(light)) defaults.append(light);
+            else if (light->forwardShadingPriority == fileSuns.first()->forwardShadingPriority)
+                ties.append(light);
+        }
+    }
+    if (!defaults.isEmpty()) {
+        undo->stack()->beginMacro(QObject::tr("Add %1").arg(node->getName()));
+        for (const auto &light : defaults) deleteNode(light);
+        addNodeToScene(node, ignore);
+        undo->stack()->endMacro();
+        mLastPlacementNote = QObject::tr("the file's sun \"%1\" replaced the template's default sun")
+                                 .arg(fileSuns.first()->getName());
+    } else {
+        addNodeToScene(node, ignore);
+        if (!ties.isEmpty())
+            mLastPlacementNote =
+                QObject::tr("the file's sun \"%1\" ties the scene's sun \"%2\" at forward shading "
+                            "priority %3 - give one of them another priority (the scene-issue line names it)")
+                    .arg(fileSuns.first()->getName(), ties.first()->getName())
+                    .arg(fileSuns.first()->forwardShadingPriority);
+    }
+    if (!mLastPlacementNote.isEmpty())
+        irisLog(QStringLiteral("placement: %1: %2").arg(node->getName(), mLastPlacementNote));
 }
 
 iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
