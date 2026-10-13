@@ -586,11 +586,29 @@ int modeHits(Fixture &f)
 int modeContrast(Fixture &f)
 {
     if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
-    // A BLACK PATCH of floor, 4 x 4 m, flush with the grey floor's top, in the sunlit strip
-    // beside sunlit grey floor; seen from the far camera (cascade 3).
-    MeshData md = enginetest::unitCubeMesh();
-    const Vec3 patchC(9.0f, 0.005f, -6.0f);
-    addBox(f, patchC, Vec3(4.0f, 0.01f, 4.0f), f.black, false);
+    // A BLACK PATCH of floor, 6 x 6 m, its top flush with the grey floor's, in the sunlit strip beside
+    // sunlit grey floor; seen from the far camera (cascade 3, 1.875 m cells). THE SIZE IS THE
+    // QUESTION'S (FAR-SUN-1 C.2): the hits counted lie within 1 m of its centre, so every texel that
+    // holds them lies wholly inside the patch (1 + 1.875 < 3) and the STORE there is black - what the
+    // row then measures is the READ: a kernel the size of the hit's footprint reads black, one that
+    // takes metres of neighbours reads the grey round the patch. (At 4 x 4 m, hits within 1.5 m, the
+    // texels at the hits straddled the edge: a PERFECT point read of the store returned 0.201 of the
+    // grey, so no read could meet the bar - measured, the row's "store at the same hits" line.)
+    // The patch REPLACES the floor where it lies (the grey floor is four boxes round a hole): a black
+    // sheet laid on the grey floor kept the grey top hidden under it in the same texels, and the store
+    // averaged it in (0.147 of the grey at hits wholly inside the patch).
+    const Vec3 patchC(8.6f, -0.1f, -6.5f);
+    const float px0 = patchC.x - 3.0f, px1 = patchC.x + 3.0f, pz0 = patchC.z - 3.0f, pz1 = patchC.z + 3.0f;
+    f.s->setNodeVisible(f.floor, false);
+    f.boxes.erase(f.boxes.begin());
+    const auto greyFloor = [&](float x0, float x1, float z0, float z1) {
+        addBox(f, Vec3(0.5f * (x0 + x1), -0.1f, 0.5f * (z0 + z1)), Vec3(x1 - x0, 0.2f, z1 - z0), f.grey, true);
+    };
+    greyFloor(-25.0f, 25.0f, pz1, 25.0f);
+    greyFloor(-25.0f, 25.0f, -25.0f, pz0);
+    greyFloor(-25.0f, px0, pz0, pz1);
+    greyFloor(px1, 25.0f, pz0, pz1);
+    addBox(f, patchC, Vec3(6.0f, 0.2f, 6.0f), f.black, false);
     f.s->setGlobalIllumination(highGi());
     f.view->setCamera(enginetest::testCameraDescLookAt(kFarCam, kTarget));
     // THE CASCADES FIRST: the voxels are built (their pipelines compile off the frame - ASYNC-SHADERS-1) and
@@ -598,11 +616,26 @@ int modeContrast(Fixture &f)
     // patch exactly and proves nothing about the store (the row read 0.00000 on the decode once).
     GiVoxelVolume probe;
     for (int i = 0; i < 1200 && !(f.s->giVoxelVolume(3, probe) && probe.available); ++i) render(f.e, 1);
-    CHECK(probe.available, "cascade 3 is built (its volume reads back)");
+    CHECK_MSG(probe.available, "cascade 3 is built (its volume reads back; %zu cascades)",
+              f.s->giStatus().cascades.size());
     settled(f);
+    // THE STORE AT REST, read once: what a PERFECT point read returns at each counted hit is its own
+    // texel's light (the store's resolution, not the read's kernel) - printed beside the read.
+    GiVoxelVolume rest;
+    const bool haveRest = f.s->giVoxelVolume(3, rest) && rest.available;
+    const auto storeAt = [&](const float *hp) {
+        if (!haveRest) return 0.0;
+        const int ix = int(std::floor((hp[0] - rest.origin[0]) / rest.cell[0]));
+        const int iy = int(std::floor((hp[1] + 1e-3f - rest.origin[1]) / rest.cell[1]));
+        const int iz = int(std::floor((hp[2] - rest.origin[2]) / rest.cell[2]));
+        if (ix < 0 || iy < 0 || iz < 0 || ix >= rest.width || iy >= rest.height || iz >= rest.depth) return 0.0;
+        const size_t i = (size_t(iz) * rest.height * rest.width + size_t(iy) * rest.width + size_t(ix)) * 4u;
+        const double a = rest.light[i + 3];
+        return a > 0.0 ? double(rest.light[i + 1]) / a / std::max(double(rest.multiplier), 1e-9) : 0.0;
+    };
     f.e->setArm("gather.hitsReadback", 1.0);
     render(f.e, 4);
-    double litSum = 0.0, blackSum = 0.0;
+    double litSum = 0.0, blackSum = 0.0, litStore = 0.0, blackStore = 0.0;
     unsigned litN = 0u, blackN = 0u, otherSource = 0u;
     for (int k = 0; k < 16; ++k) {
         render(f.e, 1);
@@ -613,8 +646,11 @@ int modeContrast(Fixture &f)
             if (r.source != GatherRay::Voxel || r.cascade != 3) { ++otherSource; continue; }
             const double l = 0.2126 * r.radiance[0] + 0.7152 * r.radiance[1] + 0.0722 * r.radiance[2];
             const float x = r.hitPos[0], z = r.hitPos[2];
-            if (std::fabs(x - patchC.x) < 1.5f && std::fabs(z - patchC.z) < 1.5f) { blackSum += l; ++blackN; }
-            else if (x > 6.5f && x < 11.5f && z > -3.0f && z < 9.0f && r.sunVisibility > 0.5f) { litSum += l; ++litN; }
+            if (std::fabs(x - patchC.x) < 1.0f && std::fabs(z - patchC.z) < 1.0f) {
+                blackSum += l; blackStore += storeAt(r.hitPos); ++blackN;
+            } else if (x > 6.5f && x < 11.5f && z > -1.0f && z < 9.0f && r.sunVisibility > 0.5f) {
+                litSum += l; litStore += storeAt(r.hitPos); ++litN;
+            }
         }
     }
     f.e->setArm("gather.hitsReadback", 0.0);
@@ -622,6 +658,9 @@ int modeContrast(Fixture &f)
     std::printf("   gather hits on the floor, answered by cascade 3: sunlit grey %.5f (%u rays), the black patch %.5f "
                 "(%u rays); the closed form says %.5f and 0 (%u floor hits answered otherwise)\n", lit, litN, black,
                 blackN, floorRadiance(), otherSource);
+    std::printf("   the STORE at the same hits (each hit's own cascade-3 texel, green over opacity): sunlit grey %.5f, the "
+                "black patch %.5f = %.3f of it (a perfect point read's answer)\n", litN ? litStore / litN : 0.0,
+                blackN ? blackStore / blackN : 0.0, litStore > 0.0 ? (blackStore / std::max(blackN, 1u)) / (litStore / litN) : 0.0);
     // ...and the STORE's own texels in cascade 3 (the read is separated from the write).
     GiVoxelVolume vol;
     if (f.s->giVoxelVolume(3, vol) && vol.available) {
