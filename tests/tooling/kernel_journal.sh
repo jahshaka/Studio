@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# devprocess.kernel_journal — THE KERNEL'S WORD IS READABLE (lane GATE-ADMIT-1; TESTING_GATE §4b).
-# scripts/kernel_xid.py — THE one reader, used by every GPU row's admission (vram_tokens.py), the
-# pools (run_pool.py) and the runner's ship — reads GPU faults (`NVRM: Xid … pid=N`) from the kernel journal
+# devprocess.kernel_journal — THE KERNEL'S WORD IS READABLE (lane GATE-ADMIT-1).
+# scripts/kernel_xid.py — THE one reader, used by the card's lock (gpu-exclusive.sh, after every run) and the
+# pools (run_pool.py) — reads GPU faults (`NVRM: Xid … pid=N`) from the kernel journal
 # to turn a device loss into a named red; on a box where this user cannot read it, each prints a
 # FINDING and carries on, and THIS row is the one red that says so, with the fix.
 # Linux only (macOS has no NVRM log: skipped, exit 77). Never sudo.

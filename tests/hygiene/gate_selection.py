@@ -187,11 +187,8 @@ def tooling_cases(gs, graph, build, inv0):
     product path (gate-scope.py NON_PRODUCT is the list of the paths that are NOT; everything else is) selects the hygiene + tooling rows, the runner's own self-test and the rows whose declaration
     or command changed — never an app or compiled product row, never the smoke pair; ONE product path makes it a
     product diff and the selection is the whole union again.
-    RED ON BASE (b0a3b1f3c): no such rule — scripts/vram_tokens.py alone selected 9 product rows (tests/app's
-    app rows through its area rule's `app` directory: app.input_keys, app.play_select, app.startup_quiet, …), a
-    test source alone added the product smoke pair (app.startup_quiet + api.contract), and batch A's range
-    (71ad53fd5..ca110eea3) without its two build files selected 71 rows / ~16 min at -j4 (61 / ~13 min now; the
-    WHOLE range is the MERGE tier either way: its top CMakeLists.txt include() is a product build file)."""
+    RED ON BASE (b0a3b1f3c): no such rule — a tooling script alone selected 9 product rows, a test source alone added
+    the product smoke pair."""
     print("\ntooling-only diffs (TESTING_V3 §1.3.4):")
     def sel(files):
         return gs.select(files, None, build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)

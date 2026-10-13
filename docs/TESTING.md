@@ -1,42 +1,27 @@
 # Testing Jahshaka — the developer's guide
 
-Read this first. It says how to run the tests on your change, how a test is shaped, how to
-add one, how to read a red, and how the rig works. `docs/TESTING_GATE.md` is the gate's
-CONTRACT (the tiers, the flake protocol, the numbers); this file is how to live with it.
-
-Part one (this lane, SUITE-POOL-1): running, shapes, adding, the rig, reading a red.
-Part two (MODULAR-GATE-1): how a change selects its tests.
+How to run the tests on your change, how a test is shaped, how to add one, how to read a red, and how the rig works.
+WHEN tests run and who runs them is the process (`DOCS/PROCESS.md` in the lead repo, its tools `spec.sh` and
+`sprint.sh`); this page is about the tests themselves.
 
 ## 1. Running the tests
 
 Everything runs from a configured build dir (`build-linux` in your tree) on YOUR OWN X
-display — never the desktop's `:0` (§4). The four commands you need:
+display — never the desktop's `:0` (§4):
 
 ```bash
-# the scoped gate on your change: what it selects, why, and then it runs it
-scripts/gate-scope.sh <base>..HEAD --run
-
+# what your change reaches, by subsystem, and the ctest command of each (spec.sh touched prints the same)
+scripts/gate-scope.sh <base>..HEAD
 # one ctest row
 DISPLAY=:NN ctest -R '^scripting\.e2e\.mobility$' --output-on-failure
-
-# one POOL row (every arm), and ONE ARM of it (the solo retry)
+# one POOL row (every arm), and ONE ARM of it
 DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
 JAH_POOL_ARMS=gi_verbs.gi_status DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
-
-# the MERGE tier (the full run) — the commands are printed by the script, never typed by hand:
-# the parallel phase, then the timing rows serially
-python3 scripts/gate-scope.py --merge-tier
-python3 scripts/gate-scope.py --merge-tier-serial
 ```
 
-**The tiers and when each runs** (the contract is `TESTING_GATE.md` §1):
-
-| tier | what | when |
-|---|---|---|
-| SCOPED | what `gate-scope.sh` selects for your diff, as ctest rows and pool ARMS | every lane, on its own change |
-| MERGE | every row except the stage-close/target labels | a stage close, a fork pin bump, a fallback |
-| PUSH | MERGE + the four `--engine-selftest` hash lines | once per phase, before the push |
-| STAGE-CLOSE | the wall-clock/GPU-budget bars and soaks (label `stage-close`), `gate-scope.py --stage-close-tier` | one batch in the gate slot, started by the lead at every stage close and before every push |
+A row is a seconds-long GUARD of a named behaviour under its budget (a fixture or a CPU row 10 s, an app row 60 s;
+`source.row_budget` holds every row at its price in `scripts/gate-times.txt`), or it is labelled `measure` (a timing,
+soak, churn or scale row) and runs only at the sprint's ship, alone on the card.
 
 ## 2. How a test is shaped
 
@@ -100,9 +85,9 @@ solo retry: JAH_POOL_ARMS=gi_verbs.gi_bounds ctest -R '^pool\.gi_verbs$'
   arm. A name the pool does not have is a `FAIL` of its own ("no such arm"), never a silent
   pass. So a selector runs "arms a and b of pool p, all of pool q" as ONE ctest invocation:
   `JAH_POOL_ARMS=p.a,p.b ctest -R '^pool\.(p|q)$'`;
-- the run log (§7) records one line per arm from the driver's `ARM` lines — the one channel.
+- the run log (`scripts/gate_runlog.py`) records one line per arm from the driver's `ARM` lines — the one channel.
 
-**THE POOL'S DECLARATION** (lanes TEST-TIER-1, TEST-NEEDS-1; `docs/TESTING_GATE.md` §4b). Every
+**THE POOL'S DECLARATION** (TEST-TIER-1, TEST-NEEDS-1; `tests/support/test_boot.cmake`). Every
 engine-up pool — like every row that starts the app — declares what its process boots,
 `jah_add_pool(<pool> TIER <low|medium|high|epic> NEEDS <photon bloom ssao smaa planar…>|NONE …)` or
 `TIER document`, and it is the PROCESS's, never the document's:
@@ -119,12 +104,10 @@ engine-up pool — like every row that starts the app — declares what its proc
 An arm that needs more than its pool keeps MOVES to a pool that keeps it — never mix (a Low pool must never host a
 GI assertion: the irradiance field and the chain differ by tier). At every boot the pool prints
 `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` — the boot footprint
-through `app.memoryStats`/`app.textureMemory` and the process's own `nvidia-smi` line — and the
-run log records it on the pool's row (`mem`). THE LEAK PROBE: after every arm's baseline (the
+through `app.memoryStats`/`app.textureMemory` and the process's own `nvidia-smi` line. THE LEAK PROBE: after every arm's baseline (the
 project closed, the deferred deletes delivered) the pool prints `MEM <pool>.<arm> gpuPoolUsed=<MB>
-textures=<MB>`, recorded on the arm's record, so a process's VRAM across its arms is a curve in the
-run log; when the last arm's figure exceeds the first's by more than the largest single step, the
-driver prints the FINDING line `LEAK <pool> +<MB> over <n> arms` (the row's `leak`) — not a red. A `--script` row takes the same switch as
+textures=<MB>`, so a process's VRAM across its arms is a curve in its output; when the last arm's figure exceeds the first's by more than the largest single step, the
+driver prints the FINDING line `LEAK <pool> +<MB> over <n> arms` — not a red. A `--script` row takes the same switch as
 `JAHSHAKA_TEST_TIER=low` in its ENVIRONMENT (the flag wins where both are given).
 
 A pool's arms SHARE its home (fresh every run, the shader cache kept warm), so an arm never
@@ -153,14 +136,14 @@ names which:
 - something the process LATCHES AT BOOT: an environment variable (`JAHSHAKA_NO_RAY_QUERY`,
   `JAHSHAKA_TEST_NO_EDITOR_BOOT`, `JAHSHAKA_PLAYER_TEST_NO_ATTACH`…), a flag (`--vr`,
   `--script-live`), a Monado session;
-- a TIMING measurement: it runs under the GPU lock (`jah_gpu_exclusive_test`, §4);
+- a TIMING measurement: a `measure` row under the card's lock (`jah_gpu_exclusive_test`, §4);
 - a PRIVATE DISPLAY (an xinput/xdotool driver) or an MCP driver that restarts the app;
 - a CRASH-CLASS CHURN (a soak whose subject is the process dying).
 
-Engine and unit binaries keep one row per claim — their boot is cheap. A lane's "named
-acceptance tests" are arm names (`gi_verbs.my_claim`) as often as row names.
+Engine and unit binaries keep one row per claim — their boot is cheap. A spec's acceptance tests are arm names
+(`gi_verbs.my_claim`) as often as row names.
 
-**A row that boots Vulkan declares its VRAM class** (`TESTING_GATE.md` §4b): register it with
+**A row that boots Vulkan declares its class** (the card's slots, `tests/cmake/vram_rows.cmake`): register it with
 `jah_gpu_row(<row> CLASS app|selftest|engine|vr COMMAND …)` instead of `add_test(NAME <row>
 COMMAND …)` — `app` for a `Jahshaka` process, `engine` for an engine/Qt suite binary, `vr` for a
 Monado row. A row that boots no Vulkan is a plain `add_test` with `jah_no_display()`. A pool
@@ -177,16 +160,11 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
 - **`--data-root <dir>` / `JAHSHAKA_DATA_ROOT`** moves the settings file, the library, the
   asset store and the shader cache together. Every suite sets its own; set it for any app you
   start by hand, or you write the build tree's shared `jahsettings.ini`.
-- **The GPU-timing admission.** A suite that measures TIME or a GPU BUDGET runs through
-  `scripts/gpu-exclusive.sh`, which takes EVERY VRAM token (below): nothing else is on the card
-  while it measures. It is registered with `jah_gpu_exclusive_test()` and nothing else uses it. A
-  measurement you run by hand wraps its app in the same script.
-- **The VRAM budget.** Every Vulkan row takes box-wide tokens before it starts
-  (`scripts/gpu-admit.sh`, 11 tokens shared by every lane's gate): a row that does not fit
-  WAITS — its output then carries `vram: waiting for <k> tokens, <n> free` — instead of dying of
-  `VK_ERROR_OUT_OF_DEVICE_MEMORY`. Gate at `-j4` whoever else is gating; there is no `-j2`
-  rule. `scripts/gpu-admit.sh status` shows who holds what. A long hand-started app run on a
-  box where gates are running takes its tokens too: `scripts/gpu-admit.sh 2 -- ./Jahshaka …`.
+- **The card's lock.** `scripts/gpu-exclusive.sh <command>` runs a command holding the ONE lock on the GPU (a flock;
+  the verbs hold it around their ctest runs, a measuring row registered with `jah_gpu_exclusive_test()` takes it
+  itself, an app or measurement you run by hand wraps itself in it). Inside one ctest, every GPU row takes its
+  class's slots of the card (8: a fixture 1, an app row 2, a measuring row all 8), so `ctest -j8` keeps each class
+  to its width.
 - **Priority.** Builds run under `nice -n 19 ionice -c 3`; ctest and hand-started app instances
   under `nice -n 19` ONLY (IONICE-1: the root disk's mq-deadline ages an idle-class read 10 s, and
   a 0.1 s script under `ionice -c 3` took 60 s). A person's live app always wins the CPU.
@@ -205,10 +183,8 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
    `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$' --output-on-failure`.
    Green alone and red in its pool, three times, is a STATE LEAK between arms: fix the arm's
    baseline (what it assumes about the library or a setting), never the budget.
-3. **The contention protocol** (`TESTING_GATE.md` §4): a red on the documented contention list
-   is retried SOLO up to three times; 3/3 green is environmental WITH the evidence string in the
-   report. A red with an Xid from its pid in the kernel log is never environmental. A report
-   without a verdict per red is not a gate.
+3. **No red is explained away.** A red is fixed where it is found — never a retry that hides it, a widened TIMEOUT
+   or a loosened bar. A red with an Xid from its pid in the kernel log is never environmental.
 
 ## 6. Tests count frames, never wall-clock
 
@@ -216,63 +192,14 @@ The engine has no wall clock: it steps a fixed 1/60 s per frame. A test waits fo
 stepping frames (`editor.frame(n)`) and reading until the value stops moving — never by
 sleeping a number of milliseconds and hoping. A test that measures time warms up first (the
 first seconds of a process are the shader-compile storm), runs under the GPU lock, and its
-millisecond bars run in the stage-close batch; the per-merge tiers assert counts. The `<ms>` on an ARM line is
+millisecond bars are `measure` rows (the sprint's ship); the guards assert counts. The `<ms>` on an ARM line is
 a report for the scheduler, never an assertion.
 
-## 7. The run log and the merge refusal
+## 7. What your change reaches, and why
 
-**Every gate leaves a record.** Whatever runs a gate — `scripts/gate-scope.sh <range> --run`,
-its solo retries (`--solo <suite>`), the runner's merge run and attribution (`runner.sh merge`), and the hand tiers
-(`scripts/gate_runlog.py run --tier <tier> -- <ctest …>`) — appends one JSON line per ctest row
-to `~/Developer/testing/runs/<date>-<tier>-<tip>.jsonl`, and ONE MORE PER ARM of every pool it
-ran, read from the pool's `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>` lines (an arm that
-began and never ended is its `CRASH`). A record says what ran (row, arm, verdict, seconds, the
-GPU ms or target value it printed), why it was selected, at which tip (the Studio sha, the
-irisgl sha, the fork, and whether either tree was dirty), and on what box state (the load over
-the suite's own window, the -j, the display, the sibling ctests, the GPU clocks). The scripts
-write it; nobody edits it. The field list is `~/Developer/testing/runs/README.md`.
-
-**What it is for.** The timings a selection prints (`gate-scope.py`'s estimate) and
-`scripts/gate-times.txt` come from it (`--record-times`); `gate_runlog.py longest` lists the
-week's longest rows and arms (the next pool split, the next slow arm to re-measure);
-`gate_runlog.py load-reds` lists what went red in a gate and green alone at the same tip, with
-the load each ran under — the contention class by fact, not by memory. A run from an older
-ctest log can be added with `gate_runlog.py import <log> --tier … --tip …` (marked `import`).
-
-**The merge refusal.** `scripts/ci-gate-check.sh <base>..<tip>` re-derives your change's
-selection with the same code your gate ran, and reads the log: every selected row — and, for a
-pool selected in part, every selected ARM — needs a record AT THE TIP whose latest verdict is
-PASS, from a clean tree whose irisgl is the one the tip pins. It exits 0 with a one-line "N
-row(s) green" or 1 naming what is missing or red. So:
-
-- run your gate on the COMMITTED tip (a dirty tree's records do not count, and a later commit
-  is a new tip with no records);
-- a red fixed by a retry is fine — the solo retry's PASS is the latest record, and the red
-  stays beside it for the reviewer (`TESTING_GATE.md` §4);
-- a selection that is the whole tier (a fallback, a fork pin) needs a green record for every
-  tier row: run the tier through `gate_runlog.py run`, or the check refuses.
-
-A hook or a CI job calls the same script; it needs no server, only the log directory.
-
-## 8. What your change selects, and why
-
-### The one command
-
-Before you ask for a merge, from your tree's top, on your own display:
-
-```bash
-DISPLAY=:NN scripts/gate-scope.sh <your base>..HEAD --run
-```
-
-It prints what your change selects and why, runs exactly that, and writes every result into
-the run log. That is your gate. You never pick suites by hand and you never widen the selection
-"to be safe" — if it looks wrong, read on.
-
-A merge is refused without it: `scripts/ci-gate-check.sh <base>..HEAD` checks the run log for a
-green record of every test your change selects, at your exact commit, from a clean tree, and says
-which are missing or red. The rules behind the gate are checked by the `source.testing_rules`
-test (a timing test outside the GPU lock, a copied tier command, a `RUN_SERIAL` without its
-reason, a test nothing can select): if it goes red on your change, its line names the rule.
+`scripts/gate-scope.sh <base>..HEAD` prints what your change reaches and why, by subsystem, and the ctest command of
+each; it runs nothing. You never pick rows by hand and never widen the selection "to be safe" — if it looks wrong, the
+selector is corrected (`scripts/gate-scope.py`) and the diff becomes a case in `tests/hygiene/gate_selection_cases.json`.
 
 ### How the selection is made
 
@@ -298,8 +225,7 @@ fresh from your build and your diff every time.
 
 CMake changes are read the same way: a changed `add_test` selects its test, a changed
 `target_compile_options(x …)` selects what target `x` ends up in, a new test directory selects
-its tests. A setting at the top of the build (a global flag) reaches everything, so it selects
-the full tier — and says so.
+its tests. A setting at the top of the build (a global flag) reaches every row, and says so.
 
 ### Reading the print
 
@@ -313,23 +239,7 @@ Every touched file gets a line saying what it reached and through what:
 ```
 
 and every selected test says why it is there (`[relinks test_mesh_bake]`, `symbol StageMs`,
-`rule ^irisgl/import/ [module assets]`). The last lines are the size — `N of M tier rows, ~S of
-~T suite-seconds` — and the exact `ctest` line that runs.
-
-### When the full tier runs instead
-
-You do not run the full tier for your lane. It runs:
-
-| when | what | who |
-|---|---|---|
-| your change bumps the Ogre fork pin | the MERGE tier, selected by rule (an Ogre change reaches everything) | you, through the same command |
-| a stage closes (a plan row and all its fix lanes merged) | the MERGE tier on the merged tip, in a fresh worktree | the lead |
-| every night | the MERGE tier + the millisecond bars | the lead / CI |
-| a phase ends | the PUSH tier (MERGE + the four selftest hashes), then the push | the lead |
-
-If the tool prints **FALLBACK → MERGE TIER**, one of your paths has no rule, no symbol and no
-build-graph owner (a new kind of file). The run is the full tier this time; tell the lead which
-path it named — it gets a rule.
+`rule ^irisgl/import/ [module assets]`), and each subsystem ends with its exact `ctest` line.
 
 ### When a test you expected is missing, or one you did not expect is there
 
@@ -338,41 +248,13 @@ path it named — it gets a rule.
   directory's area includes that family. It runs. If the reason is wrong, that is a defect in
   the selector — report it, do not skip the test.
 - **Expected test missing:** run it yourself as well (`DISPLAY=:NN ctest -R '^name$'`) and
-  report the missing selection. If a later tier (a stage close, the stage-close batch) goes red on a test your
+  report the missing selection. If a later run (the merge, the ship) goes red on a test your
   selection did not include, that is a **selector defect**: it is fixed in
-  `scripts/gate-scope.py` and your lane's diff becomes a new case in
+  `scripts/gate-scope.py` and your spec's diff becomes a new case in
   `tests/hygiene/gate_selection_cases.json`, which the `gate.selection` test replays on every
   change to the tool. The selector learns from facts, not from a wider rule.
 
-### Two lanes that touched the same files
-
-There is no joint run for you to do: the lead gates ready lanes TOGETHER as one batch candidate
-(`docs/TESTING_GATE.md` §3c), so two lanes on one file family are gated on the tree that holds both.
-You run your brief's named acceptance tests and your subject suite; a batch red is attributed to
-the lane whose own tip makes it.
-
-### A red in your gate
-
-A red you caused is fixed; then re-run only the failures and the selection of the fix
-(`scripts/gate-scope.sh <pre-fix>..<post-fix> --run`), never the whole gate again. A red that
-looks like load (a timing bar, a known contention test) is retried alone, three times:
-
-```bash
-DISPLAY=:NN scripts/gate-scope.sh --solo <suite> --times 3
-```
-
-Three greens alone = environmental, and the run log now shows the red and the three greens side
-by side with the load each ran under. Anything else is real.
-
-### The run log
-
-Every gate run leaves one line per test in `~/Developer/testing/runs/` (date, tier, tip): the
-verdict, the time, the load, why it was selected. It is how the testing rules get re-read against
-facts. `scripts/gate_runlog.py longest` lists this week's longest tests; `scripts/gate_runlog.py
-load-reds` lists the tests that went red in a gate and green alone. The fields are in that
-directory's `README.md`.
-
-## 9. The engine's environment switches (ENV-SWEEP-2)
+## 8. The engine's environment switches (ENV-SWEEP-2)
 
 An environment variable read inside `irisgl/engine/src` is a MEASUREMENT switch or a
 test door, never a product mode: every one below has a reader in the tree (the suite or
