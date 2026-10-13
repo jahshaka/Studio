@@ -306,17 +306,22 @@ target_link_libraries(test_reflect_uncover PRIVATE JahshakaEngine)
 jah_gpu_row(gi.reflect_uncover CLASS engine COMMAND test_reflect_uncover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_uncover PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_uncover PROPERTIES JAHSHAKA_TEST_FRAMES 322)
 jah_gpu_row(gi.reflect_uncover_norays CLASS engine COMMAND test_reflect_uncover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_uncover_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+set_tests_properties(gi.reflect_uncover_norays PROPERTIES JAHSHAKA_TEST_FRAMES 322)
 jah_gpu_row(gi.reflect_no_helpers CLASS engine COMMAND test_reflect_uncover --helpers
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_no_helpers PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_no_helpers PROPERTIES JAHSHAKA_TEST_FRAMES 360)
 jah_gpu_row(gi.cards_move_keep CLASS engine COMMAND test_reflect_uncover --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cards_move_keep PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.cards_move_keep PROPERTIES JAHSHAKA_TEST_FRAMES 352)
 jah_gpu_row(gi.reflect_metal_hit CLASS engine COMMAND test_reflect_uncover --metal
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_metal_hit PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.reflect_metal_hit PROPERTIES JAHSHAKA_TEST_FRAMES 2340)
