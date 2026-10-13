@@ -138,6 +138,10 @@ struct Env {
     View *envView = nullptr;
     /// A measurement's own post flags over the world's description (W7's HZB).
     std::function<void(PostFxDesc &)> fxOverride;
+    /// The scene's worker threads (Engine::createScene): 0 = the engine's default (2).
+    /// A row that measures a walk the scene's pool runs sets the EDITOR's count
+    /// (bridge/sceneworkerthreads.h, the Primary tier) — the scene the owner works in.
+    unsigned sceneWorkers = 0;
 };
 
 /// Boot the engine with ONE view of `w` x `h` (1920x1080 = the rig's law) on the
