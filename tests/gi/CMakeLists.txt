@@ -96,7 +96,7 @@ target_compile_definitions(test_gi_ambient PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_ambient PRIVATE JahshakaEngine)
 add_dependencies(test_gi_ambient JahshakaEngineMedia)
-jah_gpu_row(gi.ambient CLASS engine COMMAND test_gi_ambient
+jah_gpu_row(gi.ambient CLASS engine COLD "counts the compiles an ambient drag causes, a warm cache would load them and hide a new variant" COMMAND test_gi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.ambient PROPERTIES JAHSHAKA_TEST_FRAMES 19)

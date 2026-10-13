@@ -20,7 +20,7 @@ target_compile_definitions(test_shader_cache PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_shader_cache PRIVATE JahshakaEngine)
 add_dependencies(test_shader_cache JahshakaEngineMedia)
-jah_gpu_row(shadercache.container CLASS engine COMMAND test_shader_cache
+jah_gpu_row(shadercache.container CLASS engine COLD "the cache is the subject — the suite states its own dir and attacks it" COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run
 # log's SLOT-ERA quiet PASS runs, since 2026-10-09 18:00, taken as the gate runs the row): WARM, n=5 — gate
@@ -32,7 +32,7 @@ set_tests_properties(shadercache.container PROPERTIES TIMEOUT 320 LABELS "shader
 # A pipeline the engine builds lazily reaches the disk (PIPELINE-CACHE-1 fix round):
 # three engine processes against one directory, the driver's own disk cache off so
 # the pipeline layer is the only thing that can make the third one warm.
-jah_gpu_row(shadercache.engine_pipelines CLASS engine COMMAND test_shader_cache --engine-pipelines
+jah_gpu_row(shadercache.engine_pipelines CLASS engine COLD "the cache is the subject — three processes on the suite's own dir" COMMAND test_shader_cache --engine-pipelines
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.engine_pipelines PROPERTIES TIMEOUT 300 LABELS "shadercache"
     ENVIRONMENT "__GL_SHADER_DISK_CACHE=0")
@@ -55,7 +55,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_shader_cache_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_shader_cache_asan PRIVATE JahshakaEngineAsan)
     add_dependencies(test_shader_cache_asan JahshakaEngineMedia)
-    jah_gpu_row(shadercache.container_asan CLASS engine COMMAND test_shader_cache_asan --corruption-only
+    jah_gpu_row(shadercache.container_asan CLASS engine COLD "the cache is the subject — the suite states its own dir and attacks it" COMMAND test_shader_cache_asan --corruption-only
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     # LeakSanitizer off for the same reason tests/engine turns it off: the only
@@ -179,7 +179,7 @@ target_compile_definitions(test_warm_up PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_warm_up PRIVATE JahshakaEngine)
 add_dependencies(test_warm_up JahshakaEngineMedia)
-jah_gpu_row(shadercache.warmup CLASS engine COMMAND test_warm_up
+jah_gpu_row(shadercache.warmup CLASS engine COLD "counts what the warm-up compiles (shaderCacheOff in code)" COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercache")
 
@@ -192,12 +192,30 @@ set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercac
 # this twin is what keeps the code honest and measures what it buys: case 6
 # compiles a permutation parked behind the camera here and zero in the default
 # run above. Its own working directory: both runs write an Ogre log.
-jah_gpu_row(shadercache.warmup_pass CLASS engine COMMAND test_warm_up
+jah_gpu_row(shadercache.warmup_pass CLASS engine COLD "counts what the warm-up pass compiles (shaderCacheOff in code)" COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 set_tests_properties(shadercache.warmup_pass PROPERTIES
     ENVIRONMENT "JAHSHAKA_WARMUP_PASS=1"
     TIMEOUT 120 LABELS "shadercache")
+
+# shadercache.fixture_warm — AN ENGINE FIXTURE BOOTS ON THE WARM SHARED CACHE, AND A CUSTOM PIECE NEVER COSTS IT
+# (ENGINE-UPGRADE-1 stage 1, BOOT): three boots in one process through the fixture helper, the first with a material
+# carrying a custom piece only it registers; the second and third compile NOTHING and load >= 80 shaders from the cache. Red on
+# the base twice over (no cache for a fixture; a piece's entry dropped the whole cache). A law in counts; 9 frames.
+add_executable(test_fixture_warm test_fixture_warm.cpp)
+set_target_properties(test_fixture_warm PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_fixture_warm PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_fixture_warm PRIVATE JahshakaEngine)
+add_dependencies(test_fixture_warm JahshakaEngineMedia)
+jah_gpu_row(shadercache.fixture_warm CLASS engine FRAMES 9 COMMAND test_fixture_warm
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.fixture_warm PROPERTIES TIMEOUT 60 LABELS "shadercache")
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of

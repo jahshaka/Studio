@@ -759,6 +759,7 @@ shadercache.app.churn 64.28  median of 2, loaded box, 2026-10-12; re-price solo 
 shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
 shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
 shadercache.engine_pipelines 11.27  quiet n=36
+shadercache.fixture_warm 1.44  solo, warm shared cache, the card lock held (EU-1 stage 1, 2026-10-13; 1.99 cold-first)
 shadercache.warmup 1.60  quiet n=46
 shadercache.warmup_pass 1.73  quiet n=45
 shadergraph.ao_removed 0.00  ship 3a0422b4e (2026-10-13)
