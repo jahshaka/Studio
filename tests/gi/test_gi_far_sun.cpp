@@ -53,15 +53,21 @@
 //                                   a share of the RAW coverage sums against 0.07716 alone (red);
 //                                   0.07729 with the share of the capped sums
 //                                   (spikes/far-sun-1/logs/d-red.log, f1-red.log, f1-green.log).
+//   diag       (no row)           — FAR-SUN-2's per-ray instrument (a measure, run by hand): every
+//                                   voxel-answered gather ray against its own hit's exact direct
+//                                   light, the store at the hit and the cell means, by cascade.
 // Paired arms in one process; settled in FRAMES (the gather's rest), never in seconds.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -84,7 +90,7 @@ namespace {
 
 void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
-constexpr unsigned kSize = 768u;
+unsigned kSize = 768u;   ///< the view (square); --size for the far-cascade rows
 constexpr float kFov = 45.0f;
 constexpr double kPi = 3.14159265358979323846;
 
@@ -100,32 +106,25 @@ struct Box {
     bool floor = false;   ///< the one surface that is not black
 };
 
-/// Nearest hit of a ray against the fixture's boxes: the box index and the distance (-1 = none).
-int nearest(const Vec3 &o, const Vec3 &d, const std::vector<Box> &boxes, float &tHit)
+/// The ray's slab interval against a box, clipped at 0: false where it misses, else its entry t0.
+bool slabEntry(const Vec3 &o, const Vec3 &d, const enginetest::AnalyticBox &b, float &t0)
 {
-    int best = -1;
-    tHit = 1e30f;
-    for (size_t i = 0; i < boxes.size(); ++i) {
-        const enginetest::AnalyticBox &b = boxes[i].b;
-        float t0 = 0.0f, t1 = 1e30f;
-        const float O[3] = { o.x, o.y, o.z }, D[3] = { d.x, d.y, d.z };
-        const float A[3] = { b.mn.x, b.mn.y, b.mn.z }, B[3] = { b.mx.x, b.mx.y, b.mx.z };
-        bool miss = false;
-        for (int a = 0; a < 3 && !miss; ++a) {
-            if (std::fabs(D[a]) < 1e-12f) {
-                if (O[a] < A[a] || O[a] > B[a]) miss = true;
-                continue;
-            }
-            float ta = (A[a] - O[a]) / D[a], tb = (B[a] - O[a]) / D[a];
-            if (ta > tb) std::swap(ta, tb);
-            t0 = std::max(t0, ta);
-            t1 = std::min(t1, tb);
-            if (t0 > t1) miss = true;
+    t0 = 0.0f;
+    float t1 = 1e30f;
+    const float O[3] = { o.x, o.y, o.z }, D[3] = { d.x, d.y, d.z };
+    const float A[3] = { b.mn.x, b.mn.y, b.mn.z }, B[3] = { b.mx.x, b.mx.y, b.mx.z };
+    for (int a = 0; a < 3; ++a) {
+        if (std::fabs(D[a]) < 1e-12f) {
+            if (O[a] < A[a] || O[a] > B[a]) return false;
+            continue;
         }
-        if (miss || t0 <= 1e-5f) continue;
-        if (t0 < tHit) { tHit = t0; best = int(i); }
+        float ta = (A[a] - O[a]) / D[a], tb = (B[a] - O[a]) / D[a];
+        if (ta > tb) std::swap(ta, tb);
+        t0 = std::max(t0, ta);
+        t1 = std::min(t1, tb);
+        if (t0 > t1) return false;
     }
-    return best;
+    return true;
 }
 
 bool sunlit(const Vec3 &p, const std::vector<Box> &boxes)
@@ -135,10 +134,79 @@ bool sunlit(const Vec3 &p, const std::vector<Box> &boxes)
     return true;
 }
 
+/// THE CLOSED FORM'S ACCELERATION (FAR-CASCADE-FIXTURE: the 80 m canyon's terrace is 2,576 boxes, a
+/// closed form of 25,600 rays a wall point against every one of them at -O0 is minutes): the boxes in
+/// runs of 16 consecutive indices (the terrace adds them table by table, so a run is a few metres of
+/// street) and the runs in groups of 16, each under the union of its members. A union the ray misses,
+/// or enters at or past the nearest hit so far, holds no box the ray meets first: a union's slab planes
+/// are the extremes of its members', and float subtraction and division are monotonic, so its entry is
+/// <= every member's and its exit >= every member's. The answers are THE PLAIN LOOPS' TO THE BIT
+/// (nearest() in index order, a tie to the lower index; sunlit() any hit) - the closed form is
+/// unchanged in form.
+struct BoxSet {
+    static constexpr size_t kRun = 16;
+    const std::vector<Box> &boxes;
+    std::vector<enginetest::AnalyticBox> runs, groups;   ///< groups: kRun runs each
+    static void grow(enginetest::AnalyticBox &u, const enginetest::AnalyticBox &m)
+    {
+        u.mn = Vec3(std::min(u.mn.x, m.mn.x), std::min(u.mn.y, m.mn.y), std::min(u.mn.z, m.mn.z));
+        u.mx = Vec3(std::max(u.mx.x, m.mx.x), std::max(u.mx.y, m.mx.y), std::max(u.mx.z, m.mx.z));
+    }
+    explicit BoxSet(const std::vector<Box> &b) : boxes(b)
+    {
+        for (size_t i = 0; i < b.size(); i += kRun) {
+            enginetest::AnalyticBox u = b[i].b;
+            for (size_t j = i + 1; j < std::min(b.size(), i + kRun); ++j) grow(u, b[j].b);
+            runs.push_back(u);
+        }
+        for (size_t r = 0; r < runs.size(); r += kRun) {
+            enginetest::AnalyticBox u = runs[r];
+            for (size_t j = r + 1; j < std::min(runs.size(), r + kRun); ++j) grow(u, runs[j]);
+            groups.push_back(u);
+        }
+    }
+    /// [first, end) of the children of node k at a level holding `count` children in all
+    static size_t childEnd(size_t k, size_t count) { return std::min(count, (k + 1) * kRun); }
+};
+
+int nearest(const Vec3 &o, const Vec3 &d, const BoxSet &set, float &tHit)
+{
+    int best = -1;
+    tHit = 1e30f;
+    for (size_t g = 0; g < set.groups.size(); ++g) {
+        float tg;
+        if (!slabEntry(o, d, set.groups[g], tg) || tg >= tHit) continue;
+        for (size_t r = g * BoxSet::kRun; r < BoxSet::childEnd(g, set.runs.size()); ++r) {
+            float tr;
+            if (!slabEntry(o, d, set.runs[r], tr) || tr >= tHit) continue;
+            for (size_t i = r * BoxSet::kRun; i < BoxSet::childEnd(r, set.boxes.size()); ++i) {
+                float t0;
+                if (!slabEntry(o, d, set.boxes[i].b, t0) || t0 <= 1e-5f) continue;
+                if (t0 < tHit) { tHit = t0; best = int(i); }
+            }
+        }
+    }
+    return best;
+}
+
+bool sunlit(const Vec3 &p, const BoxSet &set)
+{
+    for (size_t g = 0; g < set.groups.size(); ++g) {
+        if (!enginetest::rayHitsBox(p, kToSun, set.groups[g])) continue;
+        for (size_t r = g * BoxSet::kRun; r < BoxSet::childEnd(g, set.runs.size()); ++r) {
+            if (!enginetest::rayHitsBox(p, kToSun, set.runs[r])) continue;
+            for (size_t i = r * BoxSet::kRun; i < BoxSet::childEnd(r, set.boxes.size()); ++i)
+                if (enginetest::rayHitsBox(p, kToSun, set.boxes[i].b)) return false;
+        }
+    }
+    return true;
+}
+
 /// F(p): the cosine-weighted fraction of the hemisphere about +x at p that lands on the SUNLIT
 /// TOP of the floor box (a stratified n x n quadrature).
 double sunlitFloorFraction(const Vec3 &p, const std::vector<Box> &boxes, int n = 160)
 {
+    const BoxSet set(boxes);
     unsigned lit = 0u, total = 0u;
     for (int i = 0; i < n; ++i)
         for (int j = 0; j < n; ++j) {
@@ -148,11 +216,11 @@ double sunlitFloorFraction(const Vec3 &p, const std::vector<Box> &boxes, int n =
             const Vec3 d(float(std::sqrt(1.0 - u1)), float(r * std::cos(ph)), float(r * std::sin(ph)));
             ++total;
             float t;
-            const int k = nearest(p, d, boxes, t);
+            const int k = nearest(p, d, set, t);
             if (k < 0 || !boxes[size_t(k)].floor) continue;
             const Vec3 h(p.x + d.x * t, p.y + d.y * t, p.z + d.z * t);
             if (h.y < -1e-3f) continue;   // the floor's side, not its top
-            if (sunlit(Vec3(h.x, h.y + 1e-3f, h.z), boxes)) ++lit;
+            if (sunlit(Vec3(h.x, h.y + 1e-3f, h.z), set)) ++lit;
         }
     return total ? double(lit) / double(total) : 0.0;
 }
@@ -162,6 +230,16 @@ double sunlitFloorFraction(const Vec3 &p, const std::vector<Box> &boxes, int n =
 /// sunlit, 0 elsewhere (the walls are black, there is no sky). E/pi(p) is exactly this mean.
 double expectedEoverPi(const Vec3 &p, const std::vector<Box> &boxes, int n = 160)
 {
+    const BoxSet set(boxes);
+    // the lobe's albedo at each face's sun cosine, computed once a cosine (an exact memo: the six face
+    // normals give at most six cosines, and disneyDiffuseAlbedo is a 64-step integral)
+    std::vector<std::pair<double, double>> albedoMemo;
+    const auto albedoAt = [&](double c) {
+        for (const auto &m : albedoMemo)
+            if (m.first == c) return m.second;
+        albedoMemo.push_back({ c, enginetest::disneyDiffuseAlbedo(c, 1.0) });
+        return albedoMemo.back().second;
+    };
     double sum = 0.0;
     unsigned total = 0u;
     for (int i = 0; i < n; ++i)
@@ -171,7 +249,7 @@ double expectedEoverPi(const Vec3 &p, const std::vector<Box> &boxes, int n = 160
             const Vec3 d(float(std::sqrt(1.0 - u1)), float(r * std::cos(ph)), float(r * std::sin(ph)));
             ++total;
             float t;
-            const int k = nearest(p, d, boxes, t);
+            const int k = nearest(p, d, set, t);
             if (k < 0 || !boxes[size_t(k)].floor) continue;
             const Vec3 h(p.x + d.x * t, p.y + d.y * t, p.z + d.z * t);
             // the face hit: the slab boundary the point lies on
@@ -186,8 +264,8 @@ double expectedEoverPi(const Vec3 &p, const std::vector<Box> &boxes, int n = 160
             else nrmF.z = -1.0f;
             const double c = nrmF.x * kToSun.x + nrmF.y * kToSun.y + nrmF.z * kToSun.z;
             if (!(c > 0.0)) continue;
-            if (!sunlit(Vec3(h.x + nrmF.x * e, h.y + nrmF.y * e, h.z + nrmF.z * e), boxes)) continue;
-            sum += double(kFloorAlbedo) * double(kSunIntensity) * c * enginetest::disneyDiffuseAlbedo(c, 1.0);
+            if (!sunlit(Vec3(h.x + nrmF.x * e, h.y + nrmF.y * e, h.z + nrmF.z * e), set)) continue;
+            sum += double(kFloorAlbedo) * double(kSunIntensity) * c * albedoAt(c);
         }
     return total ? sum / double(total) : 0.0;
 }
@@ -257,8 +335,16 @@ NodeId addBox(Fixture &f, const Vec3 &c, const Vec3 &size, MaterialId m, bool is
     return n;
 }
 
-/// THE CANYON: a 50 m floor (grey), the receiving wall facing +x at x = 0 (10 m tall, 20 m
-/// long), the opposite wall at x = 12 — both walls BLACK. The Basic control's shape
+/// THE CANYON'S LENGTH (--length <m>, FAR-CASCADE-FIXTURE): the walls' extent along the street (z),
+/// 20 m by default (every row written before the far-cascade rows: the walls 20 m long, z -10 .. 10);
+/// the far-cascade rows run 80 m. The terrace is tiled along the whole street.
+float gLength = 20.0f;
+
+/// The floor's extent along the street: 15 m past either end of the walls, never under 50 m.
+float floorLength() { return std::max(50.0f, gLength + 30.0f); }
+
+/// THE CANYON: a 50 m x floorLength() floor (grey), the receiving wall facing +x at x = 0 (10 m
+/// tall, gLength long), the opposite wall at x = 12 — both walls BLACK. The Basic control's shape
 /// (spikes/bistro-hits-1/scratch/ctlz.js) with the floor the one light source.
 bool buildCanyon(Fixture &f)
 {
@@ -268,9 +354,9 @@ bool buildCanyon(Fixture &f)
     f.grey = matte(f.s, kFloorAlbedo);
     f.black = matte(f.s, 0.0f);
     if (!f.cube || !f.grey || !f.black) return false;
-    f.floor = addBox(f, Vec3(0.0f, -0.1f, 0.0f), Vec3(50.0f, 0.2f, 50.0f), f.grey, true);
-    addBox(f, Vec3(-0.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, 20.0f), f.black, false);
-    addBox(f, Vec3(12.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, 20.0f), f.black, false);
+    f.floor = addBox(f, Vec3(0.0f, -0.1f, 0.0f), Vec3(50.0f, 0.2f, floorLength()), f.grey, true);
+    addBox(f, Vec3(-0.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, gLength), f.black, false);
+    addBox(f, Vec3(12.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, gLength), f.black, false);
     LightDesc l;
     l.type = LightType::Directional;
     l.colour = Colour(1.f, 1.f, 1.f);
@@ -328,18 +414,49 @@ GiParams highGi(unsigned bounces = 1u)
     return gi;
 }
 
+unsigned gSettleMin = 60u;   ///< the frames a settle renders before it reads the rest
+unsigned gFrames = 0u;       ///< every frame the settles rendered (printed by the far-cascade rows)
+/// THE SETTLE TRACE (a measure, FAR-CASCADE-FIXTURE): FARSUN_SETTLE_TRACE=1 prints each settle's frames
+/// and the clock, =2 every frame's rest count and the wall's mean (these points seen from this camera).
+std::vector<Vec3> gTraceWall;
+Vec3 gTraceCam;
+
 /// Renders until the gather has HELD its rest mean (the picture is a function of the scene and
 /// the camera), then returns the last readback.
 GatherStatus settled(Fixture &f)
 {
     GatherStatus g;
-    for (int i = 0; i < 600; ++i) {
+    unsigned i = 0u;
+    const bool perFrame = std::getenv("FARSUN_SETTLE_TRACE") && std::string(std::getenv("FARSUN_SETTLE_TRACE")) == "2";
+    for (; i < 600u; ++i) {
         f.e->renderOneFrame();
-        if (i < 60) continue;
+        if (perFrame) {
+            const GatherStatus t = f.s->giStatus().gather;
+            double sum = 0.0;
+            int n = 0;
+            for (const Vec3 &p : gTraceWall) {
+                double px, py;
+                if (t.irradiance.empty() || t.irradianceW != kSize || !project(gTraceCam, Vec3(0.0f, 4.0f, 0.0f) /* kTarget */, p, px, py))
+                    continue;
+                const float *q = &t.irradiance[(size_t(py) * t.irradianceW + size_t(px)) * 4u];
+                if (q[3] < 0.5f) continue;
+                sum += 0.2126 * q[0] + 0.7152 * q[1] + 0.0722 * q[2];
+                ++n;
+            }
+            std::printf("     frame %u at %.3f s: rest %u settle %u atRest %d wall mean %.5f (%d)\n", i, std::chrono::duration<double>(
+                std::chrono::steady_clock::now().time_since_epoch()).count(), t.restFrames, t.settleFrames,
+                int(f.s->giStatus().giAtRest), n ? sum / n : -1.0, n);
+        }
+        if (i < gSettleMin) continue;
         g = f.s->giStatus().gather;
         if (g.restFrames > g.settleFrames + 4u && !g.irradiance.empty() && f.s->giStatus().giAtRest) break;
     }
     render(f.e, 4);
+    gFrames += i + 1u + 4u;
+    if (std::getenv("FARSUN_SETTLE_TRACE"))
+        std::printf("   SETTLE %u frames (rest %u, settle %u) at %.2f s\n", i + 1u + 4u, f.s->giStatus().gather.restFrames,
+                    f.s->giStatus().gather.settleFrames,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
     return f.s->giStatus().gather;
 }
 
@@ -375,8 +492,10 @@ std::vector<Vec3> wallPoints()
 const Vec3 kFarCam(8.0f, 5.0f, 40.0f), kNearCam(8.0f, 5.0f, 12.0f), kTarget(0.0f, 4.0f, 0.0f);
 
 /// One camera's ratio: (gathered E/pi with the grey floor - with a black floor) / the closed
-/// form, over the wall points both arms see. `perPoint` printed.
-double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose = true)
+/// form, over the wall points both arms see. `perPoint` printed. Without `darkArm` the dark arm is
+/// not rendered and reads 0 - what it measures where the grey surfaces are the scene's only light
+/// (no sky, no ambient, black walls: 0.00000 at every wall point, the 80 m canyon at cascade 3).
+double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose = true, bool darkArm = true)
 {
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
     // THE DARK ARM blackens EVERY grey surface (the floor and the clutter): the closed form counts
@@ -387,13 +506,16 @@ double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose =
     };
     paint(f.grey);
     const GatherStatus lit = settled(f);
-    paint(f.black);
-    const GatherStatus dark = settled(f);
-    paint(f.grey);
+    GatherStatus dark;
+    if (darkArm) {
+        paint(f.black);
+        dark = settled(f);
+        paint(f.grey);
+    }
     double sm = 0.0, se = 0.0;
     int n = 0;
     for (const Vec3 &p : wallPoints()) {
-        const double a = gatheredAt(lit, cam, kTarget, p), b = gatheredAt(dark, cam, kTarget, p);
+        const double a = gatheredAt(lit, cam, kTarget, p), b = darkArm ? gatheredAt(dark, cam, kTarget, p) : 0.0;
         if (a < 0.0 || b < 0.0) continue;
         const double expect = expectedEoverPi(p, f.boxes);
         if (verbose)
@@ -415,6 +537,35 @@ void printCascades(Scene *s)
     for (size_t i = 0; i < g.cascades.size(); ++i)
         std::printf("   cascade %zu: cell %.3f m, centre (%.1f, %.1f, %.1f)\n", i, double(g.cascades[i].cell),
                     double(g.cascades[i].centre.x), double(g.cascades[i].centre.y), double(g.cascades[i].centre.z));
+}
+
+/// THE TERRACE (C.3; modeShare's clutter arm and FAR-SUN-2's diagnostic): 4 rows of tables on a 1.7 m
+/// pitch along the street, two chairs each, every face grey (see modeShare for the shape's
+/// reasoning). The rows are TILED along the canyon: as many tables as fit 1.5 m inside either end,
+/// centred - 11 a row at the default 20 m (z -8.5 .. 8.5, the terrace every earlier row measured),
+/// 46 at 80 m.
+void addTerrace(Fixture &f)
+{
+    const auto clutterBox = [&](const Vec3 &c, const Vec3 &size) {
+        f.greys.push_back(addBox(f, c, size, f.grey, true));
+    };
+    const int perRow = int(std::floor((gLength - 3.0f) / 1.7f + 1e-3f)) + 1;
+    const float z0 = -(float(perRow - 1) * 1.7f) * 0.5f;
+    for (int ix = 0; ix < 4; ++ix)
+        for (int iz = 0; iz < perRow; ++iz) {
+            const float x = 5.6f + 1.6f * float(ix), z = z0 + 1.7f * float(iz);
+            clutterBox(Vec3(x, 0.74f, z), Vec3(0.7f, 0.04f, 0.7f));
+            clutterBox(Vec3(x, 0.36f, z), Vec3(0.08f, 0.72f, 0.08f));
+            for (int side = -1; side <= 1; side += 2) {
+                const float cz = z + float(side) * 0.55f;
+                clutterBox(Vec3(x, 0.45f, cz), Vec3(0.42f, 0.04f, 0.42f));
+                clutterBox(Vec3(x, 0.695f, cz + float(side) * 0.195f), Vec3(0.42f, 0.45f, 0.03f));
+                for (int lx = -1; lx <= 1; lx += 2)
+                    for (int lz = -1; lz <= 1; lz += 2)
+                        clutterBox(Vec3(x + float(lx) * 0.18f, 0.215f, cz + float(lz) * 0.18f),
+                                   Vec3(0.03f, 0.43f, 0.03f));
+            }
+        }
 }
 
 int modeShare(Fixture &f, bool clutter)
@@ -452,29 +603,177 @@ int modeShare(Fixture &f, bool clutter)
     // in the closed form; the floor under them is in their shadow; a cascade-3 cell of the street
     // (1.875 m) holds a table, its chairs' backs and legs, and the floor - tops facing the sun, sides
     // facing every way, undersides dark, the merge's one normal turned off the street's.
-    const auto clutterBox = [&](const Vec3 &c, const Vec3 &size) {
-        f.greys.push_back(addBox(f, c, size, f.grey, true));
-    };
-    for (int ix = 0; ix < 4; ++ix)
-        for (int iz = 0; iz < 11; ++iz) {
-            const float x = 5.6f + 1.6f * float(ix), z = -8.5f + 1.7f * float(iz);
-            clutterBox(Vec3(x, 0.74f, z), Vec3(0.7f, 0.04f, 0.7f));
-            clutterBox(Vec3(x, 0.36f, z), Vec3(0.08f, 0.72f, 0.08f));
-            for (int side = -1; side <= 1; side += 2) {
-                const float cz = z + float(side) * 0.55f;
-                clutterBox(Vec3(x, 0.45f, cz), Vec3(0.42f, 0.04f, 0.42f));
-                clutterBox(Vec3(x, 0.695f, cz + float(side) * 0.195f), Vec3(0.42f, 0.45f, 0.03f));
-                for (int lx = -1; lx <= 1; lx += 2)
-                    for (int lz = -1; lz <= 1; lz += 2)
-                        clutterBox(Vec3(x + float(lx) * 0.18f, 0.215f, cz + float(lz) * 0.18f),
-                                   Vec3(0.03f, 0.43f, 0.03f));
-            }
-        }
+    addTerrace(f);
     std::printf("   the terrace: %zu grey clutter boxes\n", f.greys.size());
     const double cluttered = shareRatio(f, kFarCam, "CLUTTER", false);
     CHECK_MSG(clean > 0.0 && cluttered > 0.0 && cluttered / clean >= 0.90 && cluttered / clean <= 1.10,
               "STREET CLUTTER IS COUNTED AS WHAT IT IS: the cluttered canyon reads %.3f of its closed form against "
               "the clean %.3f (bar +-10 %%)", cluttered, clean);
+    return 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// gi.far_sun_share_c3 / gi.far_sun_clutter_c3 — THE FAR CASCADES, IN SECONDS (FAR-CASCADE-FIXTURE).
+// The canyon at --length 80 (the terrace tiled along it), the camera on the street's axis at the
+// pose --pose c2|c3 picks (poseCam; the rows run c3: the wall points and the floor their rays land
+// on all in cascade 3), every wall point's distance from the camera and its cascade printed. One
+// claim a row: the wall's share reads its closed form within 0.90-1.10 - the clean canyon (share_c3)
+// and the terrace (clutter_c3, the store's dilution where it is largest: 1.875 m cells). Both at
+// bounces 0, the direct store alone: the terrace's closed form is single-scatter, and the clean
+// canyon has nothing to exchange (the floor sees black walls and no sky), so 0 and 1 are one light.
+
+/// LAMBERT'S POLYGON FORM FACTOR (the hand integral): from a differential area at p with unit normal
+/// n to a planar polygon wholly in front of it, F = (1 / 2 pi) |sum_i gamma_i n . u_i|, with v_i the
+/// vertices from p, gamma_i the angle between v_i and v_i+1 and u_i the unit normal of their plane.
+double lambertFormFactor(const double p[3], const double n[3], const std::vector<std::array<double, 2>> &floorPoly)
+{
+    double sum = 0.0;
+    const size_t m = floorPoly.size();
+    for (size_t i = 0; i < m; ++i) {
+        const auto &a = floorPoly[i], &b = floorPoly[(i + 1) % m];
+        const double va[3] = { a[0] - p[0], 0.0 - p[1], a[1] - p[2] }, vb[3] = { b[0] - p[0], 0.0 - p[1], b[1] - p[2] };
+        const double c[3] = { va[1] * vb[2] - va[2] * vb[1], va[2] * vb[0] - va[0] * vb[2], va[0] * vb[1] - va[1] * vb[0] };
+        const double cl = std::sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+        if (cl < 1e-15) continue;
+        const double la = std::sqrt(va[0] * va[0] + va[1] * va[1] + va[2] * va[2]);
+        const double lb = std::sqrt(vb[0] * vb[0] + vb[1] * vb[1] + vb[2] * vb[2]);
+        const double gamma = std::acos(std::max(-1.0, std::min(1.0, (va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2]) / (la * lb))));
+        sum += gamma * (n[0] * c[0] + n[1] * c[1] + n[2] * c[2]) / cl;
+    }
+    return std::fabs(sum) / (2.0 * kPi);
+}
+
+/// A floor polygon (x, z) clipped to the half-plane a x + b z + c >= 0 (Sutherland-Hodgman, one edge).
+std::vector<std::array<double, 2>> clipFloor(const std::vector<std::array<double, 2>> &poly, double a, double b, double c)
+{
+    std::vector<std::array<double, 2>> out;
+    for (size_t i = 0; i < poly.size(); ++i) {
+        const auto &p = poly[i], &q = poly[(i + 1) % poly.size()];
+        const double dp = a * p[0] + b * p[1] + c, dq = a * q[0] + b * q[1] + c;
+        if (dp >= 0.0) out.push_back(p);
+        if ((dp >= 0.0) != (dq >= 0.0)) {
+            const double t = dp / (dp - dq);
+            out.push_back({ p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1]) });
+        }
+    }
+    return out;
+}
+
+/// THE CLEAN CANYON BY HAND, at a wall point p (x = 0.01, under the walls' top, |z| < gLength / 2):
+/// E/pi(p) = L_floor x the form factor of the SUNLIT FLOOR p sees, every piece a polygon -
+///   A   the sunlit strip inside the canyon: x from the receiving wall's shadow edge (its 10 m top
+///       over tan 61 deg = 5.543 m) to the opposite wall (12), z over the walls' length;
+///   B+- past either end of the walls (no wall shades it, the sun travels along x): x from p's
+///       plane to 12, z from the end to the floor's end - between the walls' planes, so nothing
+///       stands between p and it;
+///   C+- past either end, beyond the opposite wall's plane (x 12 .. 25): seen where p's ray clears
+///       the wall's end - the line through p and the wall's end corner (12, +-L/2), clipped.
+/// The floor under the walls, the floor behind the opposite wall inside its length and behind p's
+/// plane are not seen; the floor's side faces turn away from p. The closed form (expectedEoverPi,
+/// a 160 x 160 stratified quadrature of rays against the analytic boxes) must agree within its own
+/// quadrature error.
+double cleanCanyonByHand(const Vec3 &pw)
+{
+    const double p[3] = { pw.x, pw.y, pw.z }, n[3] = { 1.0, 0.0, 0.0 };
+    const double half = 0.5 * double(gLength), zEnd = 0.5 * double(floorLength());
+    const double xs = 10.0 / std::tan(kSunElev);
+    using Poly = std::vector<std::array<double, 2>>;
+    double F = lambertFormFactor(p, n, Poly{ { xs, -half }, { 12.0, -half }, { 12.0, half }, { xs, half } });
+    for (int side = -1; side <= 1; side += 2) {
+        const double s = double(side);
+        // B: x p.x .. 12, z from the end outwards (as s z from half to zEnd)
+        F += lambertFormFactor(p, n, Poly{ { p[0], s * half }, { 12.0, s * half }, { 12.0, s * zEnd }, { p[0], s * zEnd } });
+        // C: x 12 .. 25 past the end, where s z >= s p.z + (half - s p.z) (x - p.x) / (12 - p.x)
+        const double k = (half - s * p[2]) / (12.0 - p[0]);
+        Poly c = { { 12.0, s * half }, { 25.0, s * half }, { 25.0, s * zEnd }, { 12.0, s * zEnd } };
+        c = clipFloor(c, -k, s, -(s * p[2]) + k * p[0]);   // s z - s p.z - k (x - p.x) >= 0
+        if (c.size() >= 3) F += lambertFormFactor(p, n, c);
+    }
+    return floorRadiance() * F;
+}
+
+/// THE POSES (on the street's axis, x 8, y 5, looking at the wall's middle; the High tier's cascades
+/// are camera-centred boxes of half-extent 2.5 / 5 / 15 / 60 m, cells 0.078 / 0.156 / 0.469 / 1.875 m):
+///   c2  8 m down the street: every wall point in cascade 2 (4 .. 12 m off along z, 8 m across);
+///   c3  40 m down the street: the wall points AND the floor their rays land on (x 0 .. 12,
+///       z -12 .. 12) past cascade 2's 15 m and inside cascade 3's 60 m.
+/// No pose holds the measured wall in cascade 1: its box is 10 m across, the wall points span 8 m
+/// and a camera that sees them all through 45 degrees stands 10 m off them.
+Vec3 poseCam(const std::string &pose)
+{
+    if (pose == "c2") return Vec3(8.0f, 5.0f, 8.0f);
+    if (pose == "c3") return Vec3(8.0f, 5.0f, 40.0f);
+    return Vec3(8.0f, 5.0f, float(std::atof(pose.c_str())));   // a number: the camera's z (a measure)
+}
+std::string gPose = "c3";
+
+/// The finest cascade whose box holds w (-1 = none).
+int cascadeOf(const GiStatus &g, const Vec3 &w)
+{
+    for (size_t i = 0; i < g.cascades.size(); ++i) {
+        const auto &c = g.cascades[i];
+        if (std::fabs(w.x - c.centre.x) <= c.halfSize && std::fabs(w.y - c.centre.y) <= c.halfSize &&
+            std::fabs(w.z - c.centre.z) <= c.halfSize)
+            return int(i);
+    }
+    return -1;
+}
+
+int modeCascade(Fixture &f, bool clutter)
+{
+    if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
+    if (clutter) addTerrace(f);
+    f.s->setGlobalIllumination(highGi(0u));
+    GatherTuning t;
+    t.readback = true;
+    f.s->setGatherTuning(t);
+    const Vec3 cam = poseCam(gPose);
+    std::printf("   the canyon %.0f m long (floor %.0f m), %s, %zu boxes; pose %s camera (%.0f, %.0f, %.0f)\n", double(gLength),
+                double(floorLength()), clutter ? "the terrace tiled" : "clean", f.boxes.size(), gPose.c_str(), double(cam.x),
+                double(cam.y), double(cam.z));
+    gTraceWall = wallPoints();
+    gTraceCam = cam;
+    // ONE ARM, SETTLED BY THE GATHER'S OWN REST: the grey surfaces are the only light (the dark arm
+    // reads 0.00000 at every wall point - the rows before this one measure it), and the settle reads
+    // the held rest mean the first frame the rest law allows (restFrames > settleFrames + 4), with no
+    // floor of frames under it: measured, the wall's mean holds its rest value from the 20th frame.
+    gSettleMin = 0u;
+    const double ratio = shareRatio(f, cam, clutter ? "TERRACE" : "CLEAN  ", true, false);
+    if (std::getenv("FARSUN_SETTLE_TRACE"))
+        std::printf("   SHARE DONE at %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
+    // THE POSE: where the measured wall and the floor its rays land on lie
+    const GiStatus g = f.s->giStatus();
+    printCascades(f.s);
+    const int want = gPose == "c2" ? 2 : 3;   // a numeric pose is held to cascade 3
+    bool inPose = true;
+    for (const Vec3 &p : wallPoints()) {
+        const double d = std::sqrt(double(p.x - cam.x) * (p.x - cam.x) + double(p.y - cam.y) * (p.y - cam.y) +
+                                   double(p.z - cam.z) * (p.z - cam.z));
+        const int c = cascadeOf(g, p);
+        std::printf("     wall (%.1f, %.1f): %.1f m from the camera, cascade %d\n", double(p.y), double(p.z), d, c);
+        inPose = inPose && c == want;
+    }
+    for (const Vec3 &q : { Vec3(0.5f, 0.0f, -12.0f), Vec3(12.0f, 0.0f, -12.0f), Vec3(0.5f, 0.0f, 12.0f), Vec3(12.0f, 0.0f, 12.0f) }) {
+        const double d = std::sqrt(double(q.x - cam.x) * (q.x - cam.x) + double(q.y - cam.y) * (q.y - cam.y) +
+                                   double(q.z - cam.z) * (q.z - cam.z));
+        const int c = cascadeOf(g, q);
+        std::printf("     floor footprint (%.1f, %.1f): %.1f m from the camera, cascade %d\n", double(q.x), double(q.z), d, c);
+        if (want == 3) inPose = inPose && c == want;   // cascade 2's 30 m box cannot hold the 24 m footprint and the wall
+    }
+    CHECK_MSG(inPose, "THE POSE: the wall points%s are in cascade %d", want == 3 ? " and the floor their rays land on" : "", want);
+    if (!clutter) {
+        // THE HAND INTEGRAL at one wall point: the closed form is exact at this length
+        const Vec3 p(0.01f, 6.0f, 0.0f);
+        const double quad = expectedEoverPi(p, f.boxes), hand = cleanCanyonByHand(p);
+        std::printf("   THE HAND INTEGRAL at the wall (6, 0): Lambert's polygons %.6f, the closed form %.6f (%.4f)\n", hand, quad,
+                    hand > 0 ? quad / hand : 0.0);
+        CHECK_MSG(hand > 0.0 && std::fabs(quad / hand - 1.0) <= 0.01,
+                  "THE CLOSED FORM IS EXACT AT %.0f m: it reads %.4f of the hand integral (bar +-1 %%, the quadrature's own error)",
+                  double(gLength), hand > 0 ? quad / hand : 0.0);
+    }
+    CHECK_MSG(ratio >= 0.90 && ratio <= 1.10,
+              "THE FAR CASCADE READS THE LAW: the %s canyon's wall, its rays answered in cascade %d, reads %.3f of its closed "
+              "form (bar 0.90-1.10)", clutter ? "terraced" : "clean", want, ratio);
     return 0;
 }
 
@@ -716,10 +1015,337 @@ int modeContrast(Fixture &f)
 
 }   // namespace
 
+// ---------------------------------------------------------------------------------------------
+// FAR-SUN-2 — THE PER-RAY MEASURE (a `measure` INSTRUMENT, run by hand and at the ship, never a merge
+// row; spikes/far-sun-2/NOTES.md). mode "diag": the canyon (FARSUN_SCENE=terrace|clean), per camera
+// (FARSUN_CAMS far,near,mid): the wall's share / closed form, the count of rays per source, then
+// EVERY voxel-answered gather ray against ITS OWN hit's exact direct radiance (rho I cos DA(cos) x
+// the hit's GPU sun ray; the grey/black face found from the analytic boxes), by cascade, face
+// class and lit/shaded; the STORE at each hit (giVoxelVolume: the level-0 texel, the
+// side facing the hit) against the hit's truth AND against the CELL MEANS of the exact direct
+// light over the texel's faces: of the hit's half-axis (what a per-half store could hold) and of
+// all its faces (what an isotropic mean holds).
+namespace diag {
+
+double faceRad(const Box &b, double cosL) { return (b.floor && cosL > 0.0) ? double(kFloorAlbedo) * double(kSunIntensity) * cosL * enginetest::disneyDiffuseAlbedo(cosL, 1.0) : 0.0; }
+
+/// the box whose surface lies nearest p (0 = inside or on it)
+int boxAt(const Vec3 &p, const std::vector<Box> &boxes)
+{
+    int best = -1;
+    double bd = 1e30;
+    for (size_t i = 0; i < boxes.size(); ++i) {
+        const auto &b = boxes[i].b;
+        const double P[3] = { p.x, p.y, p.z }, A[3] = { b.mn.x, b.mn.y, b.mn.z }, B[3] = { b.mx.x, b.mx.y, b.mx.z };
+        double d2 = 0.0;
+        for (int a = 0; a < 3; ++a) {
+            const double e = std::max({ A[a] - P[a], 0.0, P[a] - B[a] });
+            d2 += e * e;
+        }
+        if (d2 < bd) { bd = d2; best = int(i); }
+    }
+    return best;
+}
+
+struct CellMean { double half[6] = {}, halfA[6] = {}, all = 0.0, allA = 0.0; };
+
+/// The exact direct radiance's area means over the faces inside cell [c0, c1) (half-open), per
+/// half-axis (q = h * 3 + a; h 0 the faces looking +a) and over all of them; 4 x 4 samples a face.
+CellMean cellMean(const double c0[3], const double c1[3], const std::vector<Box> &boxes)
+{
+    CellMean m;
+    for (const Box &bx : boxes) {
+        const double A[3] = { bx.b.mn.x, bx.b.mn.y, bx.b.mn.z }, B[3] = { bx.b.mx.x, bx.b.mx.y, bx.b.mx.z };
+        for (int a = 0; a < 3; ++a)
+            for (int h = 0; h < 2; ++h) {
+                const double pl = h == 0 ? B[a] : A[a];
+                if (!(pl >= c0[a] && pl < c1[a])) continue;
+                const int u = (a + 1) % 3, v = (a + 2) % 3;
+                const double u0 = std::max(A[u], c0[u]), u1 = std::min(B[u], c1[u]);
+                const double v0 = std::max(A[v], c0[v]), v1 = std::min(B[v], c1[v]);
+                if (!(u1 > u0 && v1 > v0)) continue;
+                const double area = (u1 - u0) * (v1 - v0);
+                double n[3] = { 0, 0, 0 };
+                n[a] = h == 0 ? 1.0 : -1.0;
+                const double cosL = n[0] * kToSun.x + n[1] * kToSun.y + n[2] * kToSun.z;
+                double sum = 0.0;
+                if (bx.floor && cosL > 0.0) {
+                    const double L = faceRad(bx, cosL);
+                    int lit = 0;
+                    for (int i = 0; i < 4; ++i)
+                        for (int j = 0; j < 4; ++j) {
+                            double P[3];
+                            P[a] = pl + n[a] * 1e-3;
+                            P[u] = u0 + (u1 - u0) * (i + 0.5) / 4.0;
+                            P[v] = v0 + (v1 - v0) * (j + 0.5) / 4.0;
+                            if (sunlit(Vec3(float(P[0]), float(P[1]), float(P[2])), boxes)) ++lit;
+                        }
+                    sum = L * lit / 16.0;
+                }
+                const int q = h * 3 + a;
+                m.half[q] += sum * area;
+                m.halfA[q] += area;
+                m.all += sum * area;
+                m.allA += area;
+            }
+    }
+    return m;
+}
+
+struct Acc { double n = 0, read = 0, truth = 0, store = 0, cellHalf = 0, cellAll = 0; };
+
+double lumOf(const float *c) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+
+} // namespace diag
+
+int modeDiag(Fixture &f)
+{
+    using namespace diag;
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
+    if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
+    const char *sceneEnv = std::getenv("FARSUN_SCENE");
+    const bool terrace = !sceneEnv || std::string(sceneEnv) != "clean";
+    const char *bEnv = std::getenv("FARSUN_BOUNCES");
+    f.s->setGlobalIllumination(highGi(bEnv ? unsigned(std::atoi(bEnv)) : 0u));
+    GatherTuning t;
+    t.readback = true;
+    f.s->setGatherTuning(t);
+    // FARSUN_PRECLEAN=1: the clean canyon settled first and the terrace added after (gi.far_sun_clutter's order)
+    if (std::getenv("FARSUN_PRECLEAN")) std::printf("   PRECLEAN clean %.3f\n", shareRatio(f, kFarCam, "PRECLEAN", false));
+    if (terrace) addTerrace(f);
+    const std::vector<int> arms = { 0 };   // the shipped read (the stage-1 arms are reverted)
+    std::vector<std::pair<std::string, Vec3>> cams;
+    {
+        const char *e = std::getenv("FARSUN_CAMS");
+        const std::string c = e ? e : "far";
+        if (c.find("far") != std::string::npos) cams.push_back({ "far", kFarCam });
+        if (c.find("near") != std::string::npos) cams.push_back({ "near", kNearCam });
+        if (c.find("mid") != std::string::npos) cams.push_back({ "mid", Vec3(8.0f, 5.0f, 24.0f) });
+        // the far-cascade poses (FAR-CASCADE-FIXTURE; meant for --length 80)
+        for (const char *pose : { "c2", "c3" })
+            if (c.find(pose) != std::string::npos) cams.push_back({ pose, poseCam(pose) });
+    }
+    if (const char *dEnv = std::getenv("FARSUN_DECODE")) f.e->setArm("gather.decodeHits", std::atof(dEnv));
+    std::printf("   DIAG scene %s, bounces %s, %zu boxes, the canyon %.0f m\n", terrace ? "terrace" : "clean", bEnv ? bEnv : "0",
+                f.boxes.size(), double(gLength));
+    for (const auto &cam : cams) {
+        for (int arm : arms) {
+            char lbl[64];
+            std::snprintf(lbl, sizeof lbl, "%s", cam.first.c_str());
+            const double ratio = shareRatio(f, cam.second, lbl, false);
+            printCascades(f.s);
+            // THE PER-RAY READING: shareRatio ends on the dark arm and repaints grey - settle the grey
+            // store again before a ray is read (a record of a frame the store was still rebuilding reads it black)
+            settled(f);
+            f.e->setArm("gather.hitsReadback", 1.0);
+            std::map<std::string, Acc> acc;
+            std::vector<GatherRay> rays;
+            unsigned lastFrame = 0u, raysPer = 64u;
+            unsigned long long sourceCount[7] = {};
+            unsigned stride = 8u;
+            std::vector<GatherRay> wallRays;
+            for (int i = 0; i < 40 && rays.size() < 120000u; ++i) {
+                render(f.e, 1);
+                const GatherStatus g = f.s->giStatus().gather;
+                if (g.rays.empty() || g.raysFrame == lastFrame) continue;
+                lastFrame = g.raysFrame;
+                raysPer = g.raysPerProbe ? g.raysPerProbe : raysPer;
+                for (const GatherRay &r : g.rays)
+                    if (r.source < 7u && r.distance > 0.0f) ++sourceCount[r.source];
+                // THE WALL'S OWN PROBES (the cells over the share's wall points, +-1): every hit ray
+                // of theirs, whatever answered it - what the share integrates
+                stride = g.stride ? g.stride : stride;
+                for (const GatherRay &r : g.rays) {
+                    if (!(r.distance > 0.0f) || r.source == GatherRay::Sky || r.source == GatherRay::None) continue;
+                    bool onWall = false;
+                    for (const Vec3 &wp : wallPoints()) {
+                        double px, py;
+                        if (!project(cam.second, kTarget, wp, px, py)) continue;
+                        const int cx = int(px) / int(stride), cy = int(py) / int(stride);
+                        if (std::abs(int(r.cellX) - cx) <= 1 && std::abs(int(r.cellY) - cy) <= 1) { onWall = true; break; }
+                    }
+                    if (onWall) wallRays.push_back(r);
+                }
+                for (const GatherRay &r : g.rays)
+                    if ((r.source == GatherRay::Voxel || (std::getenv("FARSUN_DECODE") && r.source == GatherRay::Decode)) && r.distance > 0.0f) rays.push_back(r);
+            }
+            f.e->setArm("gather.hitsReadback", 0.0);
+            // THE STORE at the hits (arm 0 only)
+            std::vector<GiVoxelVolume> vols(4);
+            if (arm == 0)
+                for (int c = 0; c < 4; ++c) {
+                    f.s->giVoxelVolume(c, vols[size_t(c)]);
+                    const GiVoxelVolume &v = vols[size_t(c)];
+                    std::printf("   store c%d: available %d %dx%dx%d light %zu back %zu normal %zu covP %zu direct %zu\n", c, int(v.available),
+                                v.width, v.height, v.depth, v.light.size(), v.lightBack.size(), v.normal.size(), v.coverageP.size(),
+                                v.direct.size());
+                    // THE STORE'S OWN CONSISTENCY: where nothing bounced (bounces 0, no sky) the total IS the direct
+                    // volume at level 0 - texels where they differ, and by how much (luminance, k units)
+                    if (v.direct.size() == v.light.size()) {
+                        size_t differ = 0, filled = 0;
+                        double sumT = 0.0, sumD = 0.0, worst = 0.0;
+                        for (size_t i = 0; i + 3 < v.light.size(); i += 4) {
+                            if (!(v.light[i + 3] > 0.0f)) continue;
+                            ++filled;
+                            const double lt = lumOf(&v.light[i]), ld = lumOf(&v.direct[i]);
+                            sumT += lt; sumD += ld;
+                            if (std::fabs(lt - ld) > 1e-3 * std::max(lt, 1e-3)) { ++differ; worst = std::max(worst, std::fabs(lt - ld)); }
+                        }
+                        std::printf("   STORE T vs D c%d: %zu filled texels, %zu differ, sum T %.4f sum D %.4f, worst |T-D| %.5f\n", c,
+                                    filled, differ, sumT, sumD, worst);
+                    }
+                }
+            std::map<long long, CellMean> cellCache;
+            std::vector<double> cells;
+            for (const auto &cs : f.s->giStatus().cascades) cells.push_back(double(cs.cell));
+            unsigned agreeVis = 0u, nVis = 0u;
+            for (const GatherRay &r : rays) {
+                const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+                double n[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+                const double nl = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                if (nl < 0.5) continue;
+                for (double &x : n) x /= nl;
+                const int bi = boxAt(p, f.boxes);
+                if (bi < 0) continue;
+                const Box &bx = f.boxes[size_t(bi)];
+                const double cosL = n[0] * kToSun.x + n[1] * kToSun.y + n[2] * kToSun.z;
+                const double truth = faceRad(bx, cosL) * double(r.sunVisibility);
+                const bool aLit = sunlit(Vec3(float(p.x + n[0] * 0.02), float(p.y + n[1] * 0.02), float(p.z + n[2] * 0.02)), f.boxes);
+                if (cosL > 0.0) { ++nVis; agreeVis += (aLit == (r.sunVisibility > 0.5f)) ? 1u : 0u; }
+                const double read = lumOf(r.radiance);
+                const char *face = n[1] > 0.7 ? "up" : (n[1] < -0.7 ? "down" : "side");
+                const char *lit = r.sunVisibility > 0.5f && cosL > 0.0 ? "lit" : "shade";
+                const char *mat = bx.floor ? (bi == 0 ? "floor" : "clutter") : "black";
+                const int an = std::fabs(n[0]) >= std::fabs(n[1]) ? (std::fabs(n[0]) >= std::fabs(n[2]) ? 0 : 2)
+                                                                  : (std::fabs(n[1]) >= std::fabs(n[2]) ? 1 : 2);
+                const int hq = (n[an] > 0.0 ? 0 : 1) * 3 + an;
+                // the store and the cell means at this hit (arm 0)
+                double store = -1.0, cHalf = -1.0, cAll = -1.0;
+                const GiVoxelVolume &vol = vols[size_t(std::min<int>(r.cascade, 3))];
+                const size_t nvox = size_t(vol.width) * size_t(vol.height) * size_t(vol.depth) * 4u;
+                if (arm == 0 && vol.available && vol.lightBack.size() == nvox && vol.light.size() == nvox &&
+                    vol.normal.size() == nvox && vol.coverageP.size() == nvox && vol.coverageN.size() == nvox) {
+                    const double P[3] = { p.x, p.y, p.z };
+                    int ix[3];
+                    for (int a = 0; a < 3; ++a) ix[a] = int(std::floor((P[a] - vol.origin[a]) / vol.cell[a]));
+                    // the texel along the normal's axis that holds the surface: the larger coverage of its half
+                    double best = -1.0;
+                    int pick[3] = { ix[0], ix[1], ix[2] };
+                    for (int d = -1; d <= 1; ++d) {
+                        int jx[3] = { ix[0], ix[1], ix[2] };
+                        jx[an] += d;
+                        if (jx[0] < 0 || jx[1] < 0 || jx[2] < 0 || jx[0] >= vol.width || jx[1] >= vol.height || jx[2] >= vol.depth) continue;
+                        const size_t i = (size_t(jx[2]) * size_t(vol.height) + size_t(jx[1])) * size_t(vol.width) + size_t(jx[0]);
+                        const double cov = (hq < 3 ? vol.coverageP : vol.coverageN)[i * 4 + size_t(an)];
+                        if (cov > best + 1e-6) { best = cov; pick[0] = jx[0]; pick[1] = jx[1]; pick[2] = jx[2]; }
+                    }
+                    if (best < 0.0) goto noStore;
+                    {
+                    const size_t i = (size_t(pick[2]) * size_t(vol.height) + size_t(pick[1])) * size_t(vol.width) + size_t(pick[0]);
+                    const double c = vol.light[i * 4 + 3], k = vol.multiplier > 0 ? vol.multiplier : 1.0;
+                    if (c > 0.0) {
+                        const float *L = &vol.light[i * 4], *Bk = &vol.lightBack[i * 4];
+                        const double mean = lumOf(L) / c / k, back = lumOf(Bk) / c / k;
+                        const double vn[3] = { vol.normal[i * 4] * 2.0 - 1.0, vol.normal[i * 4 + 1] * 2.0 - 1.0, vol.normal[i * 4 + 2] * 2.0 - 1.0 };
+                        const bool agree = vn[0] * n[0] + vn[1] * n[1] + vn[2] * n[2] >= 0.0;
+                        store = std::max(agree ? 2.0 * mean - back : back, 0.0);
+                    }
+                    const long long key = (((long long)std::min<int>(r.cascade, 3) * 4096 + pick[0]) * 4096 + pick[1]) * 4096 + pick[2];
+                    auto it = cellCache.find(key);
+                    if (it == cellCache.end()) {
+                        double c0[3], c1[3];
+                        for (int a = 0; a < 3; ++a) {
+                            c0[a] = vol.origin[a] + pick[a] * double(vol.cell[a]);
+                            c1[a] = c0[a] + double(vol.cell[a]);
+                        }
+                        it = cellCache.emplace(key, cellMean(c0, c1, f.boxes)).first;
+                    }
+                    const CellMean &cm = it->second;
+                    cHalf = cm.halfA[hq] > 0.0 ? cm.half[hq] / cm.halfA[hq] : 0.0;
+                    cAll = cm.allA > 0.0 ? cm.all / cm.allA : 0.0;
+                    }
+                }
+                noStore:
+                const std::string cas = "c" + std::to_string(int(r.cascade));
+                // the read's path (jahVoxelSample): the directional chain when the footprint's lod > 0.5
+                const double cell = r.cascade < cells.size() ? cells[r.cascade] : 1.0;
+                const double lod = std::log2(std::max(double(r.distance) * std::sqrt(2.0 / raysPer), cell) / cell);
+                const char *path = lod > 0.5 ? "dir" : "iso";
+                for (const std::string &k : { cas + "|all", cas + "|" + face, cas + "|" + face + "|" + lit,
+                                              cas + "|" + mat + "|" + lit, cas + "|" + path + "|" + lit }) {
+                    Acc &a = acc[k];
+                    a.n += 1;
+                    a.read += read;
+                    a.truth += truth;
+                    if (store >= 0.0) { a.store += store; a.cellHalf += cHalf; a.cellAll += cAll; }
+                }
+            }
+            std::printf("   PERRAY %s: share/closed %.3f, %zu voxel rays, sun ray agrees with the analytic box test on %.3f\n",
+                        lbl, ratio, rays.size(), nVis ? double(agreeVis) / nVis : 0.0);
+            {   // the wall's probes: sum read / sum truth over their hit rays (the share's own rays), and BY CASCADE
+                double sr = 0.0, st = 0.0, n = 0.0, srV = 0.0, stV = 0.0;
+                double cN[8] = {}, cR[8] = {}, cT[8] = {}, cDist[8] = {};
+                for (const GatherRay &r : wallRays) {
+                    const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+                    double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+                    const double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+                    if (nl < 0.5) continue;
+                    const int bi = boxAt(p, f.boxes);
+                    if (bi < 0) continue;
+                    const double cosL = (nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z) / nl;
+                    const double truth = faceRad(f.boxes[size_t(bi)], cosL) * double(r.sunVisibility);
+                    // the probe's projection: the ray's re-weight times its cosine to the wall's normal (+x;
+                    // the probe stands on the wall, so the hit's x over its distance)
+                    const double wgt = double(r.weight) * std::max(0.0, double(r.hitPos[0]) / std::max(double(r.distance), 1e-3));
+                    sr += wgt * lumOf(r.radiance);
+                    st += wgt * truth;
+                    n += 1;
+                    if (r.source == GatherRay::Voxel) { srV += wgt * lumOf(r.radiance); stV += wgt * truth; }
+                    const int ci = std::min<int>(r.cascade, 7);
+                    cN[ci] += 1;
+                    cR[ci] += wgt * lumOf(r.radiance);
+                    cT[ci] += wgt * truth;
+                    cDist[ci] += std::sqrt(double(p.x - cam.second.x) * (p.x - cam.second.x) + double(p.y - cam.second.y) * (p.y - cam.second.y) +
+                                           double(p.z - cam.second.z) * (p.z - cam.second.z));
+                }
+                std::printf("   WALL PROBES %s: %.0f hit rays, read/truth %.3f (voxel-answered %.3f)\n", lbl, n,
+                            st > 0 ? sr / st : -1.0, stV > 0 ? srV / stV : -1.0);
+                for (int ci = 0; ci < 8; ++ci)
+                    if (cN[ci] > 0)
+                        std::printf("     WALL PROBES %s c%d: %.0f hit rays, the hit %.1f m from the camera on average, read/truth %.3f\n",
+                                    lbl, ci, cN[ci], cDist[ci] / cN[ci], cT[ci] > 0 ? cR[ci] / cT[ci] : -1.0);
+            }
+            std::printf("   SOURCES %s: hits answered by card %llu, voxel %llu, decode %llu, far decode %llu, dropped %llu\n", lbl,
+                        sourceCount[1], sourceCount[2], sourceCount[4], sourceCount[5], sourceCount[6]);
+            for (const auto &kv : acc) {
+                const Acc &a = kv.second;
+                if (a.n < 30) continue;
+                std::printf("     %-22s n %6.0f  read %.4f  truth %.4f  read/truth %6.3f", kv.first.c_str(), a.n, a.read / a.n,
+                            a.truth / a.n, a.truth > 0 ? a.read / a.truth : -1.0);
+                if (arm == 0)
+                    std::printf("  | store %.4f cellHalf %.4f cellAll %.4f  store/truth %6.3f store/cellHalf %6.3f read/store %6.3f",
+                                a.store / a.n, a.cellHalf / a.n, a.cellAll / a.n, a.truth > 0 ? a.store / a.truth : -1.0,
+                                a.cellHalf > 0 ? a.store / a.cellHalf : -1.0, a.store > 0 ? a.read / a.store : -1.0);
+                std::printf("\n");
+            }
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "share";
     gVoxelRoute = argc > 2 && std::string(argv[2]) == "voxels";
+    for (int i = 3; i + 1 < argc; ++i) {
+        if (std::string(argv[i]) == "--length") gLength = float(std::atof(argv[i + 1]));
+        if (std::string(argv[i]) == "--pose") gPose = argv[i + 1];
+        if (std::string(argv[i]) == "--size") kSize = unsigned(std::atoi(argv[i + 1]));
+    }
+    if (const char *m = std::getenv("FARSUN_SETTLE_MIN")) gSettleMin = unsigned(std::atoi(m));
+    if (!(gLength >= 12.0f)) { std::printf("FAIL: --length %.1f (at least 12 m)\n", double(gLength)); return 1; }
+    if (kSize < 128u) { std::printf("FAIL: --size %u (at least 128)\n", kSize); return 1; }
+    if (std::getenv("FARSUN_SETTLE_TRACE")) std::printf("   START at %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
     if (gVoxelRoute) std::printf("   THE VOXEL ROUTE: cards off, every hit read from the cascades\n");
     Fixture f;
     if (!boot(f, ("test-gi-far-sun-" + mode + "-ogre.log").c_str())) return 1;
@@ -734,8 +1360,18 @@ int main(int argc, char **argv)
     else if (mode == "castshadow") rc = modeCastShadow(f);
     else if (mode == "hits") rc = modeHits(f);
     else if (mode == "contrast") rc = modeContrast(f);
+    else if (mode == "diag") rc = modeDiag(f);
+    else if (mode == "cshare") rc = modeCascade(f, false);
+    else if (mode == "cclutter") rc = modeCascade(f, true);
     else { std::printf("FAIL: unknown mode %s\n", mode.c_str()); return 1; }
+    if (mode == "cshare" || mode == "cclutter") std::printf("   frames rendered by the settles: %u\n", gFrames);
+    const auto stamp = [](const char *what) {
+        if (std::getenv("FARSUN_SETTLE_TRACE"))
+            std::printf("   %s at %.2f s\n", what, std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
+    };
+    stamp("MODE DONE");
     gEngine.reset();
+    stamp("ENGINE GONE");
     if (rc) return rc;
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
