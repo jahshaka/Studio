@@ -2357,14 +2357,18 @@ target_link_libraries(test_gi_far_sun PRIVATE JahshakaEngine)
 add_dependencies(test_gi_far_sun JahshakaEngineMedia)
 # The VOXEL ROUTE (cards off) is the one the static Bistro's street takes; the rows that
 # measure the cascades' store and read run it (the shipped canyon is all cards).
-foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels" "far_sun_clutter:clutter:voxels"
-                              "store_contrast:contrast:voxels" "gather_hits_view:hits:shipped"
-                              "cast_shadow_gi:castshadow:voxels")
+# name:mode:route:FRAMES - the frames each row renders, COUNTED on the Debug tree (the B1 counter,
+# spikes/testing-speed-b1/framecount, LD_PRELOAD; spikes/far-sun-1/logs/framecount.txt, 2026-10-13).
+foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels:260" "far_sun_clutter:clutter:voxels:260"
+                              "store_contrast:contrast:voxels:625" "gather_hits_view:hits:shipped:91"
+                              "cast_shadow_gi:castshadow:voxels:260")
     string(REPLACE ":" ";" _far_sun_pair "${_far_sun_row}")
     list(GET _far_sun_pair 0 _far_sun_name)
     list(GET _far_sun_pair 1 _far_sun_mode)
     list(GET _far_sun_pair 2 _far_sun_route)
+    list(GET _far_sun_pair 3 _far_sun_frames)
     jah_gpu_row(gi.${_far_sun_name} CLASS engine TOKENS 2 COMMAND test_gi_far_sun ${_far_sun_mode} ${_far_sun_route}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.${_far_sun_name} PROPERTIES TIMEOUT 300 LABELS "engine")
+    set_tests_properties(gi.${_far_sun_name} PROPERTIES TIMEOUT 300 LABELS "engine"
+                         JAHSHAKA_TEST_FRAMES ${_far_sun_frames})
 endforeach()
