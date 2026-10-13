@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
 #include "irisgl/import/modelsceneinfo.h"
+#include "irisgl/import/scenelights.h"
 #include <QSqlDatabase>
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
@@ -257,6 +258,17 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
 
     // Import-time metadata (ASSET_DRAWERS_SPEC addendum): count from the
     // scene just parsed — no second parse of the file, ever.
+    if (node && ssource->hasScene()) {
+        // THE FILE'S LIGHTS AND CAMERAS are document nodes (BISTRO-IMPORT-1,
+        // irisgl/import/scenelights.h): placed by the file's own transform chain.
+        iris::adoptLightsAndCameras(*ssource, node);
+        // THE ROOT TAKES THE ASSET'S NAME — the Object row's own (assetimporters.cpp:
+        // the file's base name). assimp names every FBX root "RootNode", so three
+        // placed models were three rows of "RootNode" in the outliner.
+        const QString assetName = QFileInfo(filePath).baseName();
+        if (!assetName.isEmpty()) node->setName(assetName);
+    }
+
     if (modelStats && ssource->hasScene())
         *modelStats = AssetMetadata::forModelScene(iris::ModelSceneInfo::fromSource(*ssource),
                                                    filePath);

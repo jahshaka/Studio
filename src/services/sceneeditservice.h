@@ -241,9 +241,9 @@ public:
     /// bake landed while it was out of the scene: its placeholder clips bound and its geometry set,
     /// as the landing would have done. Returns how many clips and meshes it completed.
     int completeLandedContent(const iris::SceneNodePtr &root);
-    /// Instantiates a stored object asset (drag-drop / assets.addToScene).
-    void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
-                         const QString &guid, const QString &assetName,
+    /// Instantiates a stored object asset (drag-drop / assets.addToScene). The
+    /// placed root's name is the asset's own, written at import (BISTRO-IMPORT-1).
+    void addMaterialMesh(bool ignore, iris::Vec3 position, const QString &guid,
                          surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid,
                                 QString assetName);

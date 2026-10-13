@@ -559,12 +559,9 @@ int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString 
     return swapped;
 }
 
-void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
-                                       const QString &guid, const QString &assetName,
+void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const QString &guid,
                                        surfaceplacement::Placement placement)
 {
-    Q_UNUSED(path);
-    Q_UNUSED(assetName);
     auto document = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
     auto reader = new SceneReader;
