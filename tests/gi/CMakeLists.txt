@@ -2405,3 +2405,18 @@ foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels:260:stage" "far_sun_cl
     set_tests_properties(gi.${_far_sun_name} PROPERTIES TIMEOUT 300 LABELS "${_far_sun_labels}"
                          JAHSHAKA_TEST_FRAMES ${_far_sun_frames})
 endforeach()
+# FAR-CASCADE-FIXTURE: THE FAR CASCADES IN SECONDS - the canyon 80 m long (the terrace tiled along it), the camera
+# 40 m down the street: the wall and the floor its rays land on in cascade 3 (1.875 m cells), the wall's share
+# against its closed form (0.90-1.10). A 384 px view (the frame's cost is per pixel: 0.28 s at 768, 0.07 s at 384,
+# Debug), ONE arm settled by the gather's own rest law: 27 frames, counted (the rest law met at the 23rd, + 4).
+# name:mode:FRAMES. Fixtures: seconds, merge rows.
+foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cclutter:27")
+    string(REPLACE ":" ";" _far_c3_pair "${_far_c3_row}")
+    list(GET _far_c3_pair 0 _far_c3_name)
+    list(GET _far_c3_pair 1 _far_c3_mode)
+    list(GET _far_c3_pair 2 _far_c3_frames)
+    jah_gpu_row(gi.${_far_c3_name} CLASS engine TOKENS 2 FRAMES ${_far_c3_frames}
+                COMMAND test_gi_far_sun ${_far_c3_mode} voxels --length 80 --pose c3 --size 384
+                WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.${_far_c3_name} PROPERTIES TIMEOUT 120 LABELS "engine")
+endforeach()
