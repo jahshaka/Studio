@@ -821,12 +821,14 @@ int modeDiag(Fixture &f)
     if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
     const char *sceneEnv = std::getenv("FARSUN_SCENE");
     const bool terrace = !sceneEnv || std::string(sceneEnv) != "clean";
-    if (terrace) addTerrace(f);
     const char *bEnv = std::getenv("FARSUN_BOUNCES");
     f.s->setGlobalIllumination(highGi(bEnv ? unsigned(std::atoi(bEnv)) : 0u));
     GatherTuning t;
     t.readback = true;
     f.s->setGatherTuning(t);
+    // FARSUN_PRECLEAN=1: the clean canyon settled first and the terrace added after (gi.far_sun_clutter's order)
+    if (std::getenv("FARSUN_PRECLEAN")) std::printf("   PRECLEAN clean %.3f\n", shareRatio(f, kFarCam, "PRECLEAN", false));
+    if (terrace) addTerrace(f);
     const std::vector<int> arms = { 0 };   // the shipped read (the stage-1 arms are reverted)
     std::vector<std::pair<std::string, Vec3>> cams;
     {
@@ -887,8 +889,24 @@ int modeDiag(Fixture &f)
                 for (int c = 0; c < 4; ++c) {
                     f.s->giVoxelVolume(c, vols[size_t(c)]);
                     const GiVoxelVolume &v = vols[size_t(c)];
-                    std::printf("   store c%d: available %d %dx%dx%d light %zu back %zu normal %zu covP %zu\n", c, int(v.available),
-                                v.width, v.height, v.depth, v.light.size(), v.lightBack.size(), v.normal.size(), v.coverageP.size());
+                    std::printf("   store c%d: available %d %dx%dx%d light %zu back %zu normal %zu covP %zu direct %zu\n", c, int(v.available),
+                                v.width, v.height, v.depth, v.light.size(), v.lightBack.size(), v.normal.size(), v.coverageP.size(),
+                                v.direct.size());
+                    // THE STORE'S OWN CONSISTENCY: where nothing bounced (bounces 0, no sky) the total IS the direct
+                    // volume at level 0 - texels where they differ, and by how much (luminance, k units)
+                    if (v.direct.size() == v.light.size()) {
+                        size_t differ = 0, filled = 0;
+                        double sumT = 0.0, sumD = 0.0, worst = 0.0;
+                        for (size_t i = 0; i + 3 < v.light.size(); i += 4) {
+                            if (!(v.light[i + 3] > 0.0f)) continue;
+                            ++filled;
+                            const double lt = lumOf(&v.light[i]), ld = lumOf(&v.direct[i]);
+                            sumT += lt; sumD += ld;
+                            if (std::fabs(lt - ld) > 1e-3 * std::max(lt, 1e-3)) { ++differ; worst = std::max(worst, std::fabs(lt - ld)); }
+                        }
+                        std::printf("   STORE T vs D c%d: %zu filled texels, %zu differ, sum T %.4f sum D %.4f, worst |T-D| %.5f\n", c,
+                                    filled, differ, sumT, sumD, worst);
+                    }
                 }
             std::map<long long, CellMean> cellCache;
             std::vector<double> cells;
