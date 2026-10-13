@@ -8,17 +8,19 @@
 //       the same number of engine pushes at both scales.
 //   (B) THE DELETE + RE-ADD PATH, removeChild then addChild (the bench's c.reparent_500): sync() visits 502, evicts
 //       500, mirrors N + 502 nodes after; the engine destroys and re-creates exactly 500 Items and asks the GI side
-//       for AT MOST ONE invalidation for the whole sync.
-//   (C) THE COMMAND'S REAL CALL, addChild(fragment, keepTransform=true): visits 502, the fragment is static again
-//       after (rule 4 demotes it, the hint re-promotes it inside the same addChild), no settle owed; the static
-//       switches it cost are printed (the lead's bar) and equal at both scales.
+//       for AT MOST ONE invalidation for the whole sync, and the mirror runs no O(every entry) reclaim sweep (the
+//       resources released are re-taken in the same sync — stage 2b).
+//   (C) THE COMMAND'S REAL CALL, addChild(fragment, keepTransform=true): visits 502, the fragment is still static
+//       after, no settle owed, and NOT ONE class switch — the keepTransform write re-expresses the pose in the new
+//       parent's space (graph::ReexpressScope), it moves nothing, so it changes no staticness.
 //
 // RED ON THE BASE (82d38ccb5), measured: (A) and (C) visited 563,752 at 1k and 4,501,252 at 10k — every re-adopted
 // node's attach re-asserted its material's shading model, setShadingModel's idempotent success read as a switch, and
 // every other user of the material was queued (SceneMirror::visitNode, shadingModelOf now asked first); (B) asked for
 // 1,000 GI invalidations (one per released node, one per attach) and its removeChild scanned the whole mesh registry
 // once per node below the fragment's root (iris::Scene::removeNode recursed under SceneNode::removeFromScene's own
-// recursion). Renders no frame: the mirror's sync is the subject.
+// recursion); (C) cost 1,000 class switches (rule 4 demoted the 500-node fragment on the keepTransform write and the
+// hint re-promoted it — stage 2b). Renders no frame: the mirror's sync is the subject.
 #include <QGuiApplication>
 #include <cstdio>
 #include <cstdlib>
@@ -125,6 +127,7 @@ struct Counts {
     std::string walk;
     bool settleOwed = false;
     unsigned long long itemsDestroyed = 0, itemsCreated = 0, giInvalidations = 0, staticSwitches = 0;
+    quint64 reclaimSweeps = 0;
 };
 
 template <typename Edit>
@@ -134,10 +137,12 @@ Counts measure(World &w, Edit edit)
     const quint64 pushes0 = w.mirror->visitPushCount();
     const SceneChangeStats cs0 = w.target->changeStats();
     const unsigned long long sw0 = iris::graph::staticSwitchCount();
+    const quint64 sweeps0 = w.mirror->reclaimSweepCount();
     edit();
     c.visited = w.mirror->sync();
     const SceneChangeStats cs1 = w.target->changeStats();
     c.staticSwitches = iris::graph::staticSwitchCount() - sw0;
+    c.reclaimSweeps = w.mirror->reclaimSweepCount() - sweeps0;
     c.evicted = w.mirror->evictedNodeCount();
     c.materials = w.mirror->materialBuildCount();
     c.pushes = w.mirror->visitPushCount() - pushes0;
@@ -148,10 +153,11 @@ Counts measure(World &w, Edit edit)
     c.itemsCreated = cs1.itemsCreated - cs0.itemsCreated;
     c.giInvalidations = cs1.giInvalidations - cs0.giInvalidations;
     std::printf("    [%5d] visited=%d evicted=%llu materials=%llu pushes=%llu mirrored=%llu walk=%s settleOwed=%d "
-                "itemsDestroyed=%llu itemsCreated=%llu giInvalidations=%llu staticSwitches=%llu\n",
+                "itemsDestroyed=%llu itemsCreated=%llu giInvalidations=%llu staticSwitches=%llu reclaimSweeps=%llu\n",
                 w.n, c.visited, (unsigned long long)c.evicted, (unsigned long long)c.materials,
                 (unsigned long long)c.pushes, (unsigned long long)c.mirrored, c.walk.c_str(), int(c.settleOwed),
-                c.itemsDestroyed, c.itemsCreated, c.giInvalidations, c.staticSwitches);
+                c.itemsDestroyed, c.itemsCreated, c.giInvalidations, c.staticSwitches,
+                (unsigned long long)c.reclaimSweeps);
     std::fflush(stdout);
     return c;
 }
@@ -204,14 +210,16 @@ int main(int argc, char **argv)
               b[k].itemsDestroyed, b[k].itemsCreated);
         CHECK(b[k].giInvalidations <= 1, "(B %d) ONE GI invalidation for the whole sync, at most (read %llu)",
               scales[k], b[k].giInvalidations);
+        CHECK(b[k].reclaimSweeps == 0, "(B %d) no O(scene) reclaim sweep: the same mesh and material dropped and re-taken "
+              "(read %llu sweeps)", scales[k], (unsigned long long)b[k].reclaimSweeps);
         // (C) hostA -> hostB with keepTransform: the reparent command's own call
         c[k] = measure(w, [&] { w.hostB->addChild(w.fragment, true); });
         CHECK(c[k].visited == kExpectedVisits, "(C %d) the command's move visits exactly %d nodes (read %d)",
               scales[k], kExpectedVisits, c[k].visited);
         CHECK(fragmentStatic(w) && !c[k].settleOwed, "(C %d) the fragment is static again after, no settle owed",
               scales[k]);
-        std::printf("    (C %d) static switches the keepTransform move cost: %llu (the bar is the lead's)\n", scales[k],
-                    c[k].staticSwitches);
+        CHECK(c[k].staticSwitches == 0, "(C %d) a move changes poses, never staticness: 0 class switches (read %llu)",
+              scales[k], c[k].staticSwitches);
         w.mirror->setSource(iris::ScenePtr());
         engine->destroyScene(w.target);
     }

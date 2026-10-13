@@ -11,7 +11,8 @@
 //   4. ...and the piece cost its OWN entries only: boot two's Ogre log (the fixture's own file, the cache's evidence —
 //      the counters above come from the same sentences) names the dropped entries (>= 1) and the loaded rest (>= 1),
 //      and never "load failed";
-//   5. a third boot, the same scene again, compiles nothing either: boot two left the cache whole.
+//   5. a third boot, the same scene again, compiles nothing either: boot two left the cache whole;
+//   6. boot three's load keeps aside as many piece entries as boot two's did: a save without the piece wrote them back.
 // On the base (82d38ccb5) this row is RED twice over, measured 2026-10-13 with this file built against the base's
 // libJahshakaEngined.a and Ogre install (a13a57617):
 //   - as the base is (the hook a no-op): no cache at all — boot two compiled=89 fromCache=0, boot three compiled=89;
@@ -39,6 +40,31 @@ static int gFailures = 0;
     else { std::printf("FAIL: "); std::printf(__VA_ARGS__); std::printf("\n"); ++gFailures; } std::fflush(stdout); } while (0)
 
 namespace {
+
+/// The fixture's own Ogre log (the last boot's: Ogre truncates it per Root), and the disk cache's one line about
+/// pieces not registered yet: the entries it kept aside (dropped from this load) and the ones it loaded.
+struct PieceLine { bool read = false; bool loadFailed = false; bool exceptionLogged = false; unsigned dropped = 0, kept = 0; };
+PieceLine readPieceLine()
+{
+    PieceLine out;
+    std::ifstream log("test_fixture_warm-ogre.log");
+    std::stringstream ss;
+    ss << log.rdbuf();
+    const std::string text = ss.str();
+    out.read = !text.empty();
+    out.loadFailed = text.find("shader cache: load failed") != std::string::npos;
+    out.exceptionLogged = text.find("Cannot locate resource") != std::string::npos || text.find("not found!") != std::string::npos;
+    const std::string key = "HlmsDiskCache: ";
+    for (size_t at = text.find(key); at != std::string::npos; at = text.find(key, at + 1)) {
+        unsigned p = 0, d = 0, k = 0;
+        if (std::sscanf(text.c_str() + at, "HlmsDiskCache: %u custom piece file(s) not registered yet; dropped %u "
+                                            "entries that use a missing custom piece file; %u load.", &p, &d, &k) == 3) {
+            out.dropped += d;
+            out.kept += k;
+        }
+    }
+    return out;
+}
 
 /// One boot: a 64x64 offscreen view of a lit cube; `piecePath` non-empty = a second cube whose material carries
 /// that pixel piece. Three frames, the cache saved and its write waited for, the stats returned.
@@ -125,27 +151,13 @@ int main()
     CHECK(two.loadedThisRun >= 80, "boot two loaded its shaders from the cache: loadedThisRun = %u (the bar: >= 80)",
           two.loadedThisRun);
     // 4. the piece's entries dropped, the rest of the Hlms cache loaded — read from boot two's own Ogre log
-    {
-        std::ifstream log("test_fixture_warm-ogre.log");
-        std::stringstream ss;
-        ss << log.rdbuf();
-        const std::string text = ss.str();
-        unsigned dropped = 0, kept = 0;
-        const std::string key = "HlmsDiskCache: dropped ";
-        for (size_t at = text.find(key); at != std::string::npos; at = text.find(key, at + 1)) {
-            unsigned d = 0, k = 0;
-            if (std::sscanf(text.c_str() + at, "HlmsDiskCache: dropped %u entries that use a missing custom piece "
-                                                "file; %u load.", &d, &k) == 2) {
-                dropped += d;
-                kept += k;
-            }
-        }
-        CHECK(!text.empty(), "boot two's Ogre log was read (test_fixture_warm-ogre.log)");
-        CHECK(text.find("shader cache: load failed") == std::string::npos,
-              "boot two's cache load did not fail (no \"load failed ... starting cold\")");
-        CHECK(dropped >= 1 && kept >= 1,
-              "the missing piece cost its own entries only: %u dropped, %u loaded (the bar: >= 1 and >= 1)", dropped, kept);
-    }
+    const PieceLine two4 = readPieceLine();
+    CHECK(two4.read, "boot two's Ogre log was read (test_fixture_warm-ogre.log)");
+    CHECK(!two4.loadFailed, "boot two's cache load did not fail (no \"load failed ... starting cold\")");
+    CHECK(two4.dropped >= 1 && two4.kept >= 1,
+          "the missing piece cost its own entries only: %u dropped, %u loaded (the bar: >= 1 and >= 1)", two4.dropped,
+          two4.kept);
+    CHECK(!two4.exceptionLogged, "a piece not registered yet is asked about quietly: no exception logged for it");
     // 5. ...and boot two left the cache whole: a third boot, the same scene, compiles nothing either. (A failed load
     //    keeps what it already read in memory — the base's boot two compiled 0 — but the writer WIPED the files and
     //    saved only what it could; the cost lands on the NEXT boot.)
@@ -154,6 +166,13 @@ int main()
           three.compiledThisRun);
     CHECK(three.loadedThisRun >= 80, "boot three loaded its shaders from the cache: loadedThisRun = %u (the bar: >= 80)",
           three.loadedThisRun);
+    // 6. THE PIECE'S ENTRIES SURVIVED BOOT TWO'S SAVE (stage 2b, fork 9d42c2f08): a boot that never registered the
+    //    piece wrote its entries back (Hlms::mDiskCacheDeferred), so boot three's load finds them again — the same
+    //    count kept aside. Before, boot two's save evicted them (boot three's log: no such line, 0 kept aside).
+    const PieceLine three6 = readPieceLine();
+    CHECK(three6.dropped == two4.dropped,
+          "a save without the piece keeps the piece's entries: boot three kept aside %u, boot two %u (the bar: equal)",
+          three6.dropped, two4.dropped);
     std::printf("shadercache.fixture_warm: %s\n", gFailures ? "FAILED" : "PASSED");
     return gFailures ? 1 : 0;
 }

@@ -201,7 +201,7 @@ set_tests_properties(shadercache.warmup_pass PROPERTIES
 
 # shadercache.fixture_warm — AN ENGINE FIXTURE BOOTS ON THE WARM SHARED CACHE, AND A CUSTOM PIECE NEVER COSTS IT
 # (ENGINE-UPGRADE-1 stage 1, BOOT): three boots in one process through the fixture helper, the first with a material
-# carrying a custom piece only it registers; the second and third compile NOTHING and load >= 80 shaders from the cache. Red on
+# carrying a custom piece only it registers; the second and third compile NOTHING and load >= 80 shaders from the cache, and a save without the piece keeps its entries. Red on
 # the base twice over (no cache for a fixture; a piece's entry dropped the whole cache). A law in counts; 9 frames.
 add_executable(test_fixture_warm test_fixture_warm.cpp)
 set_target_properties(test_fixture_warm PROPERTIES
