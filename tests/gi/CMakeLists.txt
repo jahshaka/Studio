@@ -2326,3 +2326,10 @@ foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cc
                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.${_far_c3_name} PROPERTIES TIMEOUT 120 LABELS "engine")
 endforeach()
+# FAR-SUN-2: gi.far_sun_lamp - A LAMP AND A GLOW AT THE HIT: no sun, a point lamp and an emissive crate in the canyon;
+# every voxel-answered gather ray against its exact radiance (the lamp's falloff x cos x DA x its shadow, + the glow),
+# paired on the same rays with the measuring arm gi.hitDirect = 0 (nothing darkens). A guard: seconds, a 384 px view.
+jah_gpu_row(gi.far_sun_lamp CLASS engine TOKENS 2 FRAMES 190
+            COMMAND test_gi_far_sun lamp voxels --size 384
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.far_sun_lamp PROPERTIES TIMEOUT 120 LABELS "engine")

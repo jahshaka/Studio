@@ -603,6 +603,8 @@ int modeShare(Fixture &f, bool clutter)
     addTerrace(f);
     std::printf("   the terrace: %zu grey clutter boxes\n", f.greys.size());
     const double cluttered = shareRatio(f, kFarCam, "CLUTTER", false);
+    CHECK_MSG(cluttered >= 0.90 && cluttered <= 1.10,
+              "THE TERRACE READS ITS CLOSED FORM: %.3f of the single-scatter closed form (bar 0.90-1.10)", cluttered);
     CHECK_MSG(clean > 0.0 && cluttered > 0.0 && cluttered / clean >= 0.90 && cluttered / clean <= 1.10,
               "STREET CLUTTER IS COUNTED AS WHAT IT IS: the cluttered canyon reads %.3f of its closed form against "
               "the clean %.3f (bar +-10 %%)", cluttered, clean);
@@ -1123,6 +1125,7 @@ int modeDiag(Fixture &f)
             if (c.find(pose) != std::string::npos) cams.push_back({ pose, poseCam(pose) });
     }
     if (const char *dEnv = std::getenv("FARSUN_DECODE")) f.e->setArm("gather.decodeHits", std::atof(dEnv));
+    if (const char *hEnv = std::getenv("FARSUN_HITDIRECT")) f.e->setArm("gi.hitDirect", std::atof(hEnv));
     std::printf("   DIAG scene %s, bounces %s, %zu boxes, the canyon %.0f m\n", terrace ? "terrace" : "clean", bEnv ? bEnv : "0",
                 f.boxes.size(), double(gLength));
     for (const auto &cam : cams) {
@@ -1330,6 +1333,189 @@ int modeDiag(Fixture &f)
     return 0;
 }
 
+// ---------------------------------------------------------------------------------------------
+// gi.far_sun_lamp — A LAMP AND AN EMISSIVE SURFACE, AT THE HIT (FAR-SUN-2 stage 2). The store's direct
+// volume holds EVERY light and the emissive surfaces, and a voxel-answered hit now takes all of its
+// direct light at the hit (jah_rq_hit_direct.glsl) - so a lamp-lit scene must read its lamp and its
+// glow there, exactly. The canyon with NO SUN: a point lamp (intensity 8, range 15, source radius
+// 0.1) 2.5 m over the floor, and a grey crate on the floor that GLOWS (emissive 0.5). Bounces 0, the
+// direct store alone, the voxel route, rays through their texels' centres (identical rays in both
+// arms). Every voxel-answered gather ray against its own hit's exact radiance: rho I falloff(d) cos
+// DA(cos) V (the analytic shadow test towards the lamp) plus the emissive on the crate. Paired with
+// the measuring arm "gi.hitDirect" = 0 (the store whole) in one process.
+//   1. the lamp-lit floor hits read their exact direct term within 0.90-1.10
+//   2. the glowing crate's hits read their exact radiance (emissive + the lamp on it) within 0.90-1.10
+//   3. NOTHING DARKENS: the mean over every voxel-answered hit reads at least 0.90 of the store's
+//      (the same rays; the store is a cell mean of the same light)
+namespace lamp {
+const Vec3 kLampPos(6.0f, 2.5f, 0.0f);
+constexpr float kLampI = 8.0f, kLampRange = 15.0f, kLampSrc = 0.1f, kGlow = 0.5f;
+const Vec3 kCrateC(8.0f, 0.4f, -2.5f), kCrateSize(0.8f, 0.8f, 0.8f);
+
+double falloff(double d) {
+    const double x = d / kLampRange, x2 = x * x;
+    double w = std::max(0.0, std::min(1.0, 1.0 - x2 * x2));
+    w *= w;
+    return w / std::max(d * d, double(kLampSrc) * kLampSrc);
+}
+/// The lamp visible from p (the segment p -> lamp misses every box)?
+bool lampVisible(const Vec3 &p, const std::vector<Box> &boxes) {
+    const Vec3 d(kLampPos.x - p.x, kLampPos.y - p.y, kLampPos.z - p.z);
+    const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    const Vec3 u(d.x / len, d.y / len, d.z / len);
+    float t;
+    const int k = nearest(p, u, BoxSet(boxes), t);
+    return k < 0 || t >= len;
+}
+struct Acc { double n = 0, read = 0, base = 0, truth = 0; };
+} // namespace lamp
+
+int modeLamp(Fixture &f)
+{
+    using namespace lamp;
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = enginetest::boxCards(0.5f);
+    f.cube = f.s->createMesh(md);
+    f.grey = matte(f.s, kFloorAlbedo);
+    f.black = matte(f.s, 0.0f);
+    PbrParams glow;
+    glow.albedo = Colour(kFloorAlbedo, kFloorAlbedo, kFloorAlbedo);
+    glow.roughness = 1.0f;
+    glow.workflow = PbrParams::Workflow::Specular;
+    glow.ior = 1.0f;
+    glow.specularColour = Colour(0.0f, 0.0f, 0.0f);
+    glow.emissive = Colour(kGlow, kGlow, kGlow);
+    const MaterialId glowMat = f.s->createPbrMaterial(glow);
+    if (!f.cube || !f.grey || !f.black || !glowMat) { std::printf("FAIL: the materials\n"); return 1; }
+    f.floor = addBox(f, Vec3(0.0f, -0.1f, 0.0f), Vec3(50.0f, 0.2f, 50.0f), f.grey, true);
+    addBox(f, Vec3(-0.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, 20.0f), f.black, false);
+    addBox(f, Vec3(12.25f, 5.0f, 0.0f), Vec3(0.5f, 10.0f, 20.0f), f.black, false);
+    addBox(f, kCrateC, kCrateSize, glowMat, true);
+    const size_t crate = f.boxes.size() - 1u;
+    const NodeId lampNode = f.s->createNode();
+    f.s->setNodeTransform(lampNode, kLampPos, Quat(), Vec3(1.0f, 1.0f, 1.0f));
+    LightDesc l;
+    l.type = LightType::Point;
+    l.intensity = kLampI;
+    l.range = kLampRange;
+    l.sourceRadius = kLampSrc;
+    if (!f.s->setLight(lampNode, l)) { std::printf("FAIL: the lamp\n"); return 1; }
+    f.s->setGlobalIllumination(highGi(0u));
+    GatherTuning t;
+    t.readback = true;
+    t.rayJitterOff = true;
+    f.s->setGatherTuning(t);
+    const Vec3 cam = kNearCam;
+    f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
+    // the rays of one arm: [cell, ray] -> the record
+    const auto rays = [&](double arm) {
+        f.e->setArm("gi.hitDirect", arm);
+        settled(f);
+        f.e->setArm("gather.hitsReadback", 1.0);
+        std::map<long long, GatherRay> out;
+        unsigned last = 0u;
+        for (int i = 0; i < 30 && out.size() < 200000u; ++i) {
+            render(f.e, 1);
+            const GatherStatus g = f.s->giStatus().gather;
+            if (g.rays.empty() || g.raysFrame == last) continue;
+            last = g.raysFrame;
+            for (const GatherRay &r : g.rays)
+                if (r.source == GatherRay::Voxel && r.distance > 0.0f)
+                    out[((long long)r.cellY * 65536 + r.cellX) * 256 + r.ray] = r;
+        }
+        f.e->setArm("gather.hitsReadback", 0.0);
+        return out;
+    };
+    const std::map<long long, GatherRay> base = rays(0.0), now = rays(1.0);
+    f.e->setArm("gi.hitDirect", 1.0);
+    std::map<std::string, Acc> acc;
+    for (const auto &kv : now) {
+        const auto b = base.find(kv.first);
+        if (b == base.end()) continue;
+        const GatherRay &r = kv.second;
+        const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+        double n[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+        const double nl = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+        if (nl < 0.5) continue;
+        for (double &x : n) x /= nl;
+        const int bi = diag::boxAt(p, f.boxes);
+        if (bi < 0) continue;
+        const Box &bx = f.boxes[size_t(bi)];
+        const Vec3 q(float(p.x + n[0] * 0.02), float(p.y + n[1] * 0.02), float(p.z + n[2] * 0.02));
+        const double dx = kLampPos.x - q.x, dy = kLampPos.y - q.y, dz = kLampPos.z - q.z;
+        const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const double c = (n[0] * dx + n[1] * dy + n[2] * dz) / d;
+        const bool vis = c > 0.0 && lampVisible(q, f.boxes);
+        double truth = (bx.floor && vis) ? double(kFloorAlbedo) * kLampI * falloff(d) * c * enginetest::disneyDiffuseAlbedo(c, 1.0) : 0.0;
+        if (size_t(bi) == crate) truth += kGlow;
+        const char *cls = size_t(bi) == crate ? "crate" : (bx.floor ? (vis ? "floor lit" : "floor shaded") : "black wall");
+        for (const std::string &k : { std::string(cls), std::string("all") }) {
+            Acc &a = acc[k];
+            a.n += 1;
+            a.read += diag::lumOf(r.radiance);
+            a.base += diag::lumOf(b->second.radiance);
+            a.truth += truth;
+        }
+    }
+    for (const auto &kv : acc) {
+        const Acc &a = kv.second;
+        std::printf("   %-13s n %6.0f  read %.4f (store whole %.4f)  truth %.4f  read/truth %.3f  store/truth %.3f\n",
+                    kv.first.c_str(), a.n, a.read / a.n, a.base / a.n, a.truth / a.n, a.truth > 0 ? a.read / a.truth : -1.0,
+                    a.truth > 0 ? a.base / a.truth : -1.0);
+    }
+    const auto ratio = [&](const char *k) { const Acc &a = acc[k]; return a.truth > 0 && a.n >= 50 ? a.read / a.truth : -1.0; };
+    const double lit = ratio("floor lit"), glowR = ratio("crate");
+    const Acc &all = acc["all"];
+    const double kept = all.base > 0 ? all.read / all.base : -1.0;
+    CHECK_MSG(lit >= 0.90 && lit <= 1.10, "THE LAMP AT THE HIT: the lamp-lit floor's voxel-answered hits read %.3f of their exact "
+              "direct term (bar 0.90-1.10; %.0f hits)", lit, acc["floor lit"].n);
+    CHECK_MSG(glowR >= 0.90 && glowR <= 1.10, "THE GLOW AT THE HIT: the emissive crate's hits read %.3f of their exact radiance "
+              "(emissive + the lamp; bar 0.90-1.10; %.0f hits)", glowR, acc["crate"].n);
+    std::printf("   frames rendered (the view's counter): %u\n", f.s->giStatus().gather.frame);
+    CHECK_MSG(kept >= 0.90, "NOTHING DARKENS: over every voxel-answered hit (%.0f, the same rays) the hit reads %.3f of the "
+              "store whole (bar >= 0.90)", all.n, kept);
+    return 0;
+}
+
+/// THE COST (FAR-SUN-2; a `measure` instrument, no ctest row): the gather's trace GPU ms on the terrace (far camera, the voxel
+/// route, bounces 0), the arm "gi.hitDirect" 1 against 0, ABBA twice, 60 frames a block after 10, the camera nudged 1 cm every
+/// frame so the gather traces every frame.
+int modeCost(Fixture &f)
+{
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
+    if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
+    addTerrace(f);
+    f.s->setGlobalIllumination(highGi(0u));
+    settled(f);
+    int k = 0;
+    const auto nudge = [&]() {
+        k ^= 1;
+        f.view->setCamera(enginetest::testCameraDescLookAt(Vec3(kFarCam.x + 0.01f * float(k), kFarCam.y, kFarCam.z), kTarget));
+    };
+    const auto block = [&](double arm) {
+        f.e->setArm("gi.hitDirect", arm);
+        for (int i = 0; i < 10; ++i) { nudge(); render(f.e, 1); }
+        double s = 0.0;
+        int n = 0;
+        for (int i = 0; i < 60; ++i) {
+            nudge();
+            render(f.e, 1);
+            const float ms = f.s->giStatus().gather.traceMs;
+            if (ms > 0.0f) { s += ms; ++n; }
+        }
+        return n ? s / n : -1.0;
+    };
+    f.e->setFrameMonitor(MonitorLevel::Review);   // the GPU timestamps (the pass's own timer)
+    render(f.e, 4);
+    std::printf("   COST trace ms (terrace, far):");
+    for (double arm : { 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0 }) std::printf(" %s %.4f", arm > 0.5 ? "on" : "off", block(arm));
+    std::printf("\n");
+    f.e->setFrameMonitor(MonitorLevel::Off);
+    f.e->setArm("gi.hitDirect", 1.0);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "share";
@@ -1358,6 +1544,8 @@ int main(int argc, char **argv)
     else if (mode == "hits") rc = modeHits(f);
     else if (mode == "contrast") rc = modeContrast(f);
     else if (mode == "diag") rc = modeDiag(f);
+    else if (mode == "lamp") rc = modeLamp(f);
+    else if (mode == "cost") rc = modeCost(f);
     else if (mode == "cshare") rc = modeCascade(f, false);
     else if (mode == "cclutter") rc = modeCascade(f, true);
     else { std::printf("FAIL: unknown mode %s\n", mode.c_str()); return 1; }
