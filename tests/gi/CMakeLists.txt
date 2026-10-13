@@ -1861,7 +1861,8 @@ set_tests_properties(gi.voxel_feed PROPERTIES JAHSHAKA_TEST_FRAMES 38)
 # call submits it either (Engine::queueSubmissionTag unchanged across every call - a
 # structural no-submit check, no clock), the feed's readings land, and the newest
 # gather's reading lands within 6 frames once the walk stops. In the gi_chain family
-# like every cascade suite.
+# like every cascade suite. FRAMES 140 = 2 + 8 (the chain builds) + the 120-frame walk + the
+# drain (a few) + the landing (<= 6).
 add_executable(test_gi_readout_async test_gi_readout_async.cpp)
 set_target_properties(test_gi_readout_async PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1874,7 +1875,7 @@ target_compile_definitions(test_gi_readout_async PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_readout_async PRIVATE JahshakaEngine)
 add_dependencies(test_gi_readout_async JahshakaEngineMedia)
-jah_gpu_row(gi.readout_async CLASS engine COMMAND test_gi_readout_async
+jah_gpu_row(gi.readout_async CLASS engine FRAMES 140 COMMAND test_gi_readout_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.readout_async PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
