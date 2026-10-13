@@ -1237,6 +1237,12 @@ public:
     /// cannot have one — has to ask first. False on every viewport that does
     /// not implement renderFrames at all.
     virtual bool canRenderFrames() const { return false; }
+    /// THE OPEN RUNNER'S SLICE-BOUNDARY FRAME (ProjectRunner::setSliceBoundary):
+    /// one frame like renderFrames(1), except that its mirror sync builds one
+    /// frame's share of new meshes, as a driver tick does (BISTRO-ENGINE-1
+    /// stage 5: the owner's open blocked 2.2 s in SceneMirror::toMeshData on
+    /// one boundary frame). What it leaves arrives on the driver's ticks.
+    virtual void renderBoundaryFrame() { renderFrames(1); }
 
 
     // ---- the "nothing is presenting" cover ----
@@ -1439,8 +1445,9 @@ public:
         unsigned gi = 0;              ///< stages of the first lighting arm left
         unsigned shadersThisLoad = 0; ///< compiled since this load began
         unsigned texturesThisLoad = 0;///< the most this load has waited on at once
-        /// Anything at all still arriving — `shaders || textures || gi`.
-        bool any() const { return shaders || textures || gi; }
+        unsigned meshes = 0;          ///< mesh nodes the mirror's budget left for later ticks
+        /// Anything at all still arriving — `shaders || textures || gi || meshes`.
+        bool any() const { return shaders || textures || gi || meshes; }
     };
     virtual StreamingPending streamingPending() const { return StreamingPending(); }
     /// WHICH COVER IS UP, as a word: "none", "loading" or "noscene". The

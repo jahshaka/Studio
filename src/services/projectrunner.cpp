@@ -372,7 +372,7 @@ void ProjectRunner::startRunnerIfNeeded()
 	mRunner->setSliceBoundary([this]() {
 		LoadTimeline::Accumulate row(QStringLiteral("slice:boundaryFrame"));
 		if (mViewport && mViewport->canRenderFrames()) {
-			mViewport->renderFrames(1);
+			mViewport->renderBoundaryFrame();
 			++mSliceBoundaryFrames;
 			return;
 		}

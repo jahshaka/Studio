@@ -507,6 +507,28 @@ jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+# scripting.e2e.arriving_line — BISTRO-ENGINE-1 stage 5 (findings 9, 11): an open
+# of 120 distinct meshes streams them on the DRIVER's frames (pending.meshes > 0
+# after the reveal, the line names them) and the arriving line ends within 3
+# driver frames of the last frame that owed anything. A harness: a script's own
+# frames are never driver frames.
+add_executable(test_arriving_line test_arriving_line.cpp)
+set_target_properties(test_arriving_line PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_arriving_line PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_arriving_line PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_arriving_line PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_arriving_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-arriving_line)
+file(MAKE_DIRECTORY ${_arriving_home}/run)
+jah_gpu_row(scripting.e2e.arriving_line CLASS app TIER low NEEDS NONE COMMAND test_arriving_line
+         WORKING_DIRECTORY ${_arriving_home}/run)
+set_tests_properties(scripting.e2e.arriving_line PROPERTIES
+    ENVIRONMENT "HOME=${_arriving_home};JAHSHAKA_DATA_ROOT=${_arriving_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "scripting")
+jah_tsan_blocked(scripting.e2e.arriving_line)   # spawns the app
+jah_lsan_blocked(scripting.e2e.arriving_line)   # spawns the app
 # scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
 # (STUDIO-D1 fix round; services/uithreadwait.h). Arm 1, in-process: an MCP
 # request landing in a real operation's pump with no MCP dispatch running is
