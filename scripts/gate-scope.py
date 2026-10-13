@@ -91,6 +91,9 @@ ENGINE_SUBSYSTEMS = [
     (r"media/Hlms/Jahshaka/Jah(Bloom|DisplayEncode|HdrMeter|Srgb|Screen)|src/OgreChain\.cpp$",
      ["hdr", "ssr", "looks", "*picture", "defaults", "engine.atom_draw", "engine.atom_parity"],
      "the post chain (bloom, encode, meter)"),
+    # THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST; round 21): every world-lighting consumer reads its lights from it — the
+    # voxels' light injection and the cards' relight (gi), Atom's hit decode (atom); the light rows and scale.lights
+    (r"SceneLightList", ["lights", "scale.lights", "gi", "atom"], "the scene's one light list"),
     # Photon: the voxel chain, the cascades, the gather, the cards, the probes, the irradiance field
     # (+ the screenshot rows: the GI lights every pixel a picture row compares — CONTACT-OCCLUSION-1's GI change went red on
     # pool.world_sky's clouds_2d arm and atom.occlusion_exact_app, gate_selection_cases.json; the hdr/ssr/looks fixtures,
@@ -2121,13 +2124,20 @@ class Selection:
             # A DATA MEMBER declared on a changed line (`std::vector<GatherRay> rays;`, `unsigned raysFrame = 0u;`) is a
             # USE only as a member — `.rays`, `->rays`, `::rays`; a parameter or local of the same word is another
             # name (round 15: OgreRayQuery.cpp's `const std::vector<float> &rays` is not GatherStatus::rays)
-            hl = set()
-            for _os, _oc, ns, nc in gate_graph.hunks_of(self.revs.diff_u0(p)):
+            hl, hla = set(), set()
+            for os_, oc_, ns, nc in gate_graph.hunks_of(self.revs.diff_u0(p)):
                 hl |= set(range(ns - 1, ns - 1 + nc))
-            bl = gate_graph.strip_cxx(b)
-            members = {m_.group(1) for k in hl if k < len(bl)
-                       for m_ in [re.search(r"^\s*[\w:<>,\s\*&]+?[\s\*&>]([a-z]\w*)\s*(?:=[^;]*|\{[^;]*\}|\[[^;]*\])?\s*;",
-                                            bl[k])] if m_} & set(ids | new_ids)
+                hla |= set(range(os_ - 1, os_ - 1 + oc_))
+            mrx = re.compile(r"^\s*[\w:<>,\s\*&]+?[\s\*&>]([a-z]\w*)\s*(?:=[^;]*|\{[^;]*\}|\[[^;]*\])?\s*;")
+            # (round 21: a member REMOVED counts too — SurfaceCache.h's `lights` of the relight view)
+            members = set()
+            for txt_, rows_ in ((gate_graph.strip_cxx(b), hl), (gate_graph.strip_cxx(a), hla)):
+                for k in rows_:
+                    if k < len(txt_):
+                        m_ = mrx.search(txt_[k])
+                        if m_:
+                            members.add(m_.group(1))
+            members &= set(ids | new_ids)
             if members:
                 txts = {}
                 for f in list(naming):

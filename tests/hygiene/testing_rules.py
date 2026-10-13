@@ -302,6 +302,27 @@ def fresh_home_behaves(source):
         check(r.returncode == 3 and gone(home)
               and os.path.isfile(os.path.join(td, ".evidence", "home-a", "run", "x.png")),
               "fresh_home: a red run keeps its exit code and MOVES its home to the evidence")
+        # ROUND 21: A HYGIENE ROW'S TOY TREE LIVES OUTSIDE THE BUILD TREE — gate.tokens_by_needs run with BIN = a scratch
+        # "build"; the scratch is walked for CTestTestfile.cmake WHILE it runs (as gate_graph.ctest_inventory walks the
+        # real build under parallel ctest): no toy file ever appears there (NONDET-TESTING-RULES-TOY-RACE-1)
+        tbn = os.path.join(os.path.abspath(source), "tests", "hygiene", "tokens_by_needs.cmake")
+        if os.path.isfile(tbn):
+            sb = os.path.join(td, "walked-build")
+            os.makedirs(sb)
+            env_ = dict(os.environ, TMPDIR=os.path.join(td, "toy-tmp"))
+            os.makedirs(env_["TMPDIR"])
+            pr = subprocess.Popen(["cmake", "-DSRC=" + os.path.join(os.path.abspath(source), "tests"), "-DBIN=" + sb,
+                                   "-P", tbn], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env_, text=True)
+            seen = set()
+            while pr.poll() is None:
+                for dp, _, fs in os.walk(sb):
+                    if "CTestTestfile.cmake" in fs:
+                        seen.add(os.path.relpath(dp, sb))
+            outp = pr.stdout.read()
+            check(pr.returncode == 0 and not seen and not os.listdir(env_["TMPDIR"]),
+                  "round 21: gate.tokens_by_needs builds its toy OUTSIDE the walked build tree (TMPDIR) and removes it: "
+                  "a walk of the build during its run sees no toy CTestTestfile (rc %s, seen %s%s)"
+                  % (pr.returncode, sorted(seen)[:3], "" if pr.returncode == 0 else "; " + outp[-200:]))
         # ROUND 14 ADDENDUM 2: A FIXTURE'S SETUP keeps what its THEN wrote (the consumer reads it); the CONSUMER's green exit
         # (--after) wipes the home
         fx = os.path.join(td, "x", "e2e-home-fixture")
