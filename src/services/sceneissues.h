@@ -64,6 +64,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QWeakPointer>
@@ -71,6 +72,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 #include <QVector>
 
+#include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 
 #include "io/missingclipref.h"
@@ -162,19 +164,19 @@ public:
     ///     per mesh node, naming each missing slot and file; it clears when
     ///     the file returns or the slot is re-linked.
     ///
-    /// THE WALKS ARE DRIVEN BY CHANGE, NOT BY THE CLOCK (BISTRO-ENGINE-1 stage
-    /// 5). The two conditions that need a walk over every node — `shadow.leak`
-    /// (each solid node's box) and `texture.missing` (every mesh's material) —
-    /// cost ~0.2 s of UI thread at 6,000 meshes in a Debug build, and the
-    /// editor calls this once a second, so an idle editor holding a big scene
-    /// froze for a fifth of every second (the owner's Bistro session: 218
-    /// heartbeat lines of ~430 ms). Each walk now runs only when what it reads
-    /// can have moved: the scene's change serials (NodeDirtySet::changeSerial
-    /// for the leak — boxes move with transforms —, contentSerial for the
-    /// textures — a transform cannot unbind a texture), the materials' global
-    /// revision, the disk (the directory watcher, and the minute's re-stat of
-    /// the paths already asked), a different scene, or a line of its kind
-    /// cleared from outside. Between walks the last walk's lines stay live.
+    /// THE NODE CHECKS FOLLOW THE DOCUMENT'S OWN DIRT, NEVER THE CLOCK
+    /// (BISTRO-ENGINE-1 stage 5, finding 14). The two node conditions —
+    /// `shadow.leak` (each solid node's world box) and `texture.missing` (each
+    /// mesh's material) — used to walk the whole scene on every call, and the
+    /// editor calls this once a second: ~0.2 s of UI thread per second at
+    /// 6,000 meshes in a Debug build (the owner's Bistro session, 218 heartbeat
+    /// lines of ~430 ms). Each node's answer is now CACHED, and a pass
+    /// re-checks only the nodes the document says were written since the last
+    /// pass — a tap on the node graph's write journal (graph::openJournalTap:
+    /// a moved node with its subtree, a written node alone) — plus the nodes
+    /// whose material's revision moved or whose texture file the disk
+    /// reported. No write = no node visited. A whole walk only for a new
+    /// scene, or when the journal cannot name what was written.
     /// The light-list conditions (`sun.tie`, `sky.duplicate`) and the machine
     /// ones (`rays.absent`, `vr.colour`) are O(lights) and run every pass.
     int scan(const iris::ScenePtr &scene);
@@ -185,10 +187,11 @@ public:
     struct ScanStats
     {
         int passes = 0;          ///< scan() calls with a scene, ever
-        int walks = 0;           ///< passes that walked any node, ever
-        bool leakWalked = false;
-        bool texturesWalked = false;
-        int nodesVisited = 0;    ///< nodes the last pass visited
+        int walks = 0;           ///< passes that visited any node, ever
+        bool fullWalk = false;   ///< the last pass walked the whole scene
+        bool leakEvaluated = false;   ///< the last pass re-tested the lamps against the boxes
+        int nodesVisited = 0;    ///< nodes the last pass re-checked
+        qint64 visitedTotal = 0; ///< nodes re-checked by every pass, ever
     };
     ScanStats lastScan() const { return mStats; }
 
@@ -205,25 +208,41 @@ private:
     bool textureExists(const QString &path);
     void forgetTextureDir(const QString &dir);
     /// The minute's backstop (see kTextureRecheckScans): re-asks the disk
-    /// about every path already cached and reports whether any answer flipped.
-    bool restatTextures();
+    /// about every path already cached ON A WORKER, and hands the answers
+    /// that flipped back to the UI thread (mFlippedPaths).
+    void startTextureRestat();
     QHash<QString, bool> mTextureExists;
     QFileSystemWatcher *mTextureDirs = nullptr;
     int mScansSinceRecheck = 0;
-    /// The disk moved under a cached answer since the last texture walk.
-    bool mDiskChanged = true;
+    bool mRestatRunning = false;
+    /// Paths whose answer the disk may have changed since the last pass.
+    QSet<QString> mFlippedPaths;
 
-    // What the last walk of each kind saw, and the lines it justified (kept
-    // live while the walk is skipped). A weak pointer, not an address: a new
-    // scene allocated where the old one was is still a new scene.
-    QWeakPointer<iris::Scene> mLeakScene, mTextureScene;
-    unsigned long long mLeakSerial = 0, mTextureSerial = 0;
-    quint64 mTextureMaterials = 0;
-    QStringList mLeakLive, mTextureLive;
+    /// ONE NODE'S CACHED ANSWERS. Keyed by the node's address, held weakly:
+    /// a dead or departed node is dropped, never followed.
+    struct NodeCheck
+    {
+        QWeakPointer<iris::SceneNode> node;
+        bool blocker = false;          ///< visible, casts a shadow, has a box
+        iris::Vec3 mn, mx;             ///< its world box (blockers only)
+        QWeakPointer<iris::Material> material;
+        quint32 materialRevision = 0;
+        QStringList paths;             ///< the texture files the check asked about
+        SceneIssue texture;            ///< its texture.missing line (id empty = none)
+    };
+    QHash<const iris::SceneNode *, NodeCheck> mChecks;
+    QWeakPointer<iris::Scene> mCheckedScene;
+    int mTap = -1;
+    quint64 mMaterialsSeen = 0;
+    bool mLeakDirty = true;
+    QHash<QString, SceneIssue> mLeakLines;   ///< by issue id
     ScanStats mStats;
-    /// Forget every walk's memo: the next pass walks.
+    /// Re-derives one node's cached answers (and raises/updates its line).
+    void checkNode(iris::SceneNode *node);
+    /// Drops every node of `node`'s subtree from the cache.
+    void forgetSubtree(iris::SceneNode *node);
+    /// Forget every cached answer: the next pass walks the whole scene.
     void forgetWalks();
-
     QVector<SceneIssue> mIssues;
 };
 

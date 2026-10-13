@@ -813,7 +813,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "(editor.checkScene) does this for its own kinds by itself, which is how a line leaves "
           "the viewport's error area — there is no dismiss. False when there is no such issue.",
           Needs::Document },
-        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...], walked:{leak, textures, nodes, passes, walks}}",
+        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...], walked:{full, leak, nodes, visited, passes, walks}}",
           "Runs the scene checker once against the open scene and returns what is live afterwards "
           "— the same thing the editor does on a timer, exposed so a script or a test can drive "
           "it. The conditions it knows (SceneIssues::scan): \"sun.tie\", two directional "
@@ -828,14 +828,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "so this is safe to "
           "call as often as you like. `raised` names the issues this call raised for the first "
           "time (empty on a second identical call — the never-repeat rule), and `list` is every "
-          "live issue in the order the error area lists them. THE WALKS FOLLOW CHANGE, NOT THE "
-          "CLOCK: the two conditions that visit every node (\"shadow.leak\", \"texture.missing\") "
-          "walk only when what they read can have moved since their last walk — a node change "
-          "(the leak: any; the textures: any but a transform write), a material edit, the disk, "
-          "another scene, or one of their lines cleared by editor.clearIssue — and their lines "
-          "stay live in between. `walked` says what THIS pass did: `leak` / `textures` whether "
-          "each walk ran, `nodes` how many nodes it visited (0 for an idle pass), `passes` and "
-          "`walks` the totals since launch.",
+          "live issue in the order the error area lists them. THE NODE CHECKS FOLLOW THE "
+          "DOCUMENT'S WRITES, NOT THE CLOCK: each node's answers (\"shadow.leak\"'s box, "
+          "\"texture.missing\"'s files) are cached, and a pass re-checks only the nodes the "
+          "node graph's write journal names as written since the last pass (a moved node with "
+          "its subtree), those whose material changed and those whose file the disk reported "
+          "— nothing written, nothing visited. `walked` says what THIS pass did: `full` whether "
+          "it walked the whole scene (a new scene), `leak` whether it re-tested the lamps "
+          "against the boxes, `nodes` how many nodes it re-checked (0 for an idle pass); "
+          "`visited`, `passes` and `walks` the totals since launch (the editor's own 1 Hz pass "
+          "included).",
           Needs::Document },
         { "issueBar", "editor.issueBar() -> {editorActive, exists, visible, rows, lines, buttons}",
           "WHERE THE SCENE-ERROR AREA IS ON SCREEN. The bar is a frameless, "
@@ -3085,9 +3087,10 @@ QVariantMap EditorApi::checkScene()
     for (const auto &i : store.issues())
         if (!before.contains(i.id)) raised.append(i.id);
     const SceneIssues::ScanStats stats = store.lastScan();
-    const QVariantMap walked{ { QStringLiteral("leak"), stats.leakWalked },
-                              { QStringLiteral("textures"), stats.texturesWalked },
+    const QVariantMap walked{ { QStringLiteral("full"), stats.fullWalk },
+                              { QStringLiteral("leak"), stats.leakEvaluated },
                               { QStringLiteral("nodes"), stats.nodesVisited },
+                              { QStringLiteral("visited"), double(stats.visitedTotal) },
                               { QStringLiteral("passes"), stats.passes },
                               { QStringLiteral("walks"), stats.walks } };
     return QVariantMap{ { QStringLiteral("issues"), store.count() },

@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include <QDateTime>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QHash>
 #include <QSet>
 #include <QVector>
@@ -24,13 +26,16 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/material.h"
+#include "irisgl/core/geometry/aabb.h"
+#include "irisgl/core/math/mat4.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "services/sceneextents.h"
 #include "bridge/enginehost.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -64,30 +69,6 @@ int machineRayTracing()
     // row's promise to say so applies to it.
     if (!engine->rayTracing()) return 0;
     return engine->rayQueryAvailable() ? 1 : 0;
-}
-
-/// Every mesh node under `root` that actually blocks light: visible, and a
-/// shadow caster. (The templates' floors cast no shadow, so they are not
-/// blockers by the same rule as any node with its caster row off.)
-void collectBlockers(const iris::SceneNodePtr &node, QList<iris::SceneNodePtr> &out)
-{
-    if (!node) return;
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh && node->isVisible() &&
-        node->getShadowCastingEnabled())
-        out.append(node);
-    for (const auto &child : node->children()) collectBlockers(child, out);
-}
-
-/// Every mesh node under `node` that holds a material — the nodes whose
-/// texture files the mirror loads.
-void collectMaterialNodes(const iris::SceneNodePtr &node, QList<iris::MeshNode *> &out)
-{
-    if (!node) return;
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto *mesh = static_cast<iris::MeshNode *>(node.data());
-        if (mesh->getMaterial()) out.append(mesh);
-    }
-    for (const auto &child : node->children()) collectMaterialNodes(child, out);
 }
 
 /// A texture slot's name as the material panel's rows say it ("u_baseColorMap"
@@ -199,12 +180,13 @@ bool SceneIssues::update(const QString &id, const QString &message)
 // holds a texture: a file deleted or put back is a directory change, so the
 // next scan re-asks — raise and clear stay within ONE scan of the event).
 //
-// A SLOW FULL RE-CHECK every kTextureRecheckScans passes (60 = one minute at
-// the editor's 1 Hz) forgets the whole cache: the backstop for what a watcher
-// cannot see — a network filesystem whose remote changes produce no local
-// event, a directory that did not exist to be watched (its file then shows up
-// within a minute), and a watcher the system refused (inotify limits). It is
-// also when the cache sheds paths no material names any more.
+// A SLOW RE-CHECK every kTextureRecheckScans passes (60 = one minute at the
+// editor's 1 Hz) re-asks the disk about every cached path ON A WORKER
+// (startTextureRestat): the backstop for what a watcher cannot see — a network
+// filesystem whose remote changes produce no local event, a directory that did
+// not exist to be watched (its file then shows up within a minute), and a
+// watcher the system refused (inotify limits). The cache is no longer shed (a
+// path no material names any more costs one stat a minute, on the worker).
 static constexpr int kTextureRecheckScans = 60;
 
 bool SceneIssues::textureExists(const QString &path)
@@ -229,48 +211,70 @@ void SceneIssues::forgetTextureDir(const QString &dir)
 {
     for (auto it = mTextureExists.begin(); it != mTextureExists.end();) {
         if (QFileInfo(it.key()).absolutePath() == dir) {
+            mFlippedPaths.insert(it.key());   // the next pass re-checks its users
             it = mTextureExists.erase(it);
-            mDiskChanged = true;   // the next pass walks the textures again
         } else {
             ++it;
         }
     }
 }
 
-// THE MINUTE'S RE-CHECK, WITHOUT THE WALK. It used to forget the whole cache,
-// which made the next pass walk every mesh to ask again; the answers that can
-// have changed are exactly the paths already cached, so it re-asks THOSE (the
-// same disk traffic as before) and a walk follows only when one flipped. A
+// THE MINUTE'S RE-CHECK, WITHOUT THE WALK AND OFF THE UI THREAD. It used to
+// forget the whole cache, which made the next pass walk every mesh to ask
+// again; the answers that can have changed are exactly the paths already
+// cached, so a worker re-asks THOSE (the same disk traffic as before — and a
+// network mount's stall is the worker's, never the editor's) and hands back
+// the ones that flipped. Their users are re-checked by the next pass. A
 // directory the watcher does not hold (it did not exist, or the system refused
 // it) is offered to the watcher again on the way.
-bool SceneIssues::restatTextures()
+void SceneIssues::startTextureRestat()
 {
-    bool flipped = false;
+    if (mRestatRunning || mTextureExists.isEmpty()) return;
+    mRestatRunning = true;
+    const QHash<QString, bool> asked = mTextureExists;
     QSet<QString> watched;
     if (mTextureDirs) {
         const QStringList dirs = mTextureDirs->directories();
         watched = QSet<QString>(dirs.begin(), dirs.end());
     }
-    for (auto it = mTextureExists.begin(); it != mTextureExists.end(); ++it) {
-        const QFileInfo info(it.key());
-        const bool exists = info.exists();
-        if (exists != it.value()) { it.value() = exists; flipped = true; }
-        const QString dir = info.absolutePath();
-        if (mTextureDirs && !watched.contains(dir) && QFileInfo(dir).isDir()) {
-            mTextureDirs->addPath(dir);
-            watched.insert(dir);
+    using Answer = QPair<QHash<QString, bool>, QStringList>;   // flipped paths, dirs to watch
+    auto *watcher = new QFutureWatcher<Answer>(this);
+    connect(watcher, &QFutureWatcher<Answer>::finished, this, [this, watcher]() {
+        const Answer a = watcher->result();
+        watcher->deleteLater();
+        mRestatRunning = false;
+        for (auto it = a.first.constBegin(); it != a.first.constEnd(); ++it) {
+            const auto known = mTextureExists.find(it.key());
+            if (known == mTextureExists.end()) continue;   // forgotten meanwhile
+            known.value() = it.value();
+            mFlippedPaths.insert(it.key());
         }
-    }
-    return flipped;
+        if (mTextureDirs)
+            for (const QString &dir : a.second) mTextureDirs->addPath(dir);
+    });
+    watcher->setFuture(QtConcurrent::run([asked, watched]() {
+        Answer a;
+        QSet<QString> offered;
+        for (auto it = asked.constBegin(); it != asked.constEnd(); ++it) {
+            const QFileInfo info(it.key());
+            const bool exists = info.exists();
+            if (exists != it.value()) a.first.insert(it.key(), exists);
+            const QString dir = info.absolutePath();
+            if (!watched.contains(dir) && !offered.contains(dir) && QFileInfo(dir).isDir()) {
+                offered.insert(dir);
+                a.second << dir;
+            }
+        }
+        return a;
+    }));
 }
 
 void SceneIssues::forgetWalks()
 {
-    mLeakScene.clear();
-    mTextureScene.clear();
-    mLeakLive.clear();
-    mTextureLive.clear();
-    mDiskChanged = true;
+    mChecks.clear();
+    mCheckedScene.clear();
+    mLeakLines.clear();
+    mLeakDirty = true;
 }
 
 int SceneIssues::clearKind(const QString &kind)
@@ -365,6 +369,118 @@ QVariantList SceneIssues::toVariant() const
 
 int SceneIssues::count() const { return mIssues.size(); }
 
+// ONE NODE'S ANSWERS. A blocker's box is its OWN mesh's (the eight corners of
+// the mesh's bounds through the node's world matrix): a child is a blocker of
+// its own when it casts. The texture line is the same existence test the
+// mirror makes (SceneMirror::textureFor: a Qt resource and a live texture have
+// no file and are not ours to judge), over every texture slot of the node's
+// material; ONE line per node, naming each slot and its file, so the user fixes
+// the object, not a list of paths. The disk is asked through textureExists:
+// once per new path, again only when its directory changes or the minute's
+// re-stat reports it flipped.
+void SceneIssues::checkNode(iris::SceneNode *node)
+{
+    ++mStats.nodesVisited;
+    ++mStats.visitedTotal;
+    mLeakDirty = true;   // a box, a lamp or a flag may have moved
+    const iris::SceneNodeType type = node->getSceneNodeType();
+    if (type != iris::SceneNodeType::Mesh && type != iris::SceneNodeType::ParticleSystem) {
+        mChecks.remove(node);
+        return;
+    }
+    NodeCheck c;
+    c.node = node->sharedFromThis().toWeakRef();
+    QStringList missing;
+    if (type == iris::SceneNodeType::Mesh) {
+        auto *meshNode = static_cast<iris::MeshNode *>(node);
+        if (node->isVisible() && node->getShadowCastingEnabled() && meshNode->getMesh()) {
+            const iris::AABB local = meshNode->getMesh()->getAABB();
+            const iris::Vec3 lo = local.getMin(), hi = local.getMax();
+            const iris::Mat4 m = node->getGlobalTransform();
+            iris::Vec3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
+            for (int k = 0; k < 8; ++k) {
+                const iris::Vec3 p = m * iris::Vec3((k & 1) ? hi.x() : lo.x(), (k & 2) ? hi.y() : lo.y(),
+                                                     (k & 4) ? hi.z() : lo.z());
+                mn = iris::Vec3(qMin(mn.x(), p.x()), qMin(mn.y(), p.y()), qMin(mn.z(), p.z()));
+                mx = iris::Vec3(qMax(mx.x(), p.x()), qMax(mx.y(), p.y()), qMax(mx.z(), p.z()));
+            }
+            c.blocker = true;
+            c.mn = mn;
+            c.mx = mx;
+        }
+        const iris::MaterialPtr material = meshNode->getMaterial();
+        if (material) {
+            c.material = material.toWeakRef();
+            c.materialRevision = material->revision();
+            for (auto it = material->textures.constBegin(); it != material->textures.constEnd(); ++it) {
+                if (!it.value()) continue;
+                const QString &path = it.value()->source;
+                if (path.isEmpty() || path.startsWith(QLatin1Char(':')) ||
+                    iris::LiveTextures::isLiveRef(path))
+                    continue;
+                c.paths << path;
+                if (textureExists(path)) continue;
+                missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
+            }
+            // A ROW THAT NAMES AN ASSET THE STORE COULD NOT RESOLVE (TEX-REF-1):
+            // the reader keeps the guid with no file bound, so the next save
+            // writes the same reference back — and this says so, by the asset
+            // the scene names (there is no file name to show: there is no file).
+            for (iris::Property *prop : material->properties) {
+                if (!prop || prop->type != iris::PropertyType::Texture) continue;
+                const QString guid = material->textureGuid(prop->name);
+                if (guid.isEmpty() || material->textures.value(QStringLiteral("u_") + prop->name))
+                    continue;
+                missing << tr("%1 (asset %2: not in this library's store)")
+                               .arg(textureSlotName(QStringLiteral("u_") + prop->name), guid);
+            }
+        }
+        if (!missing.isEmpty()) {
+            c.texture.kind = QStringLiteral("texture.missing");
+            c.texture.node = node->getGUID();
+            c.texture.nodeName = node->getName();
+            c.texture.message = (missing.size() == 1
+                ? tr("\"%1\" uses a texture file that is missing: %2.")
+                : tr("\"%1\" uses texture files that are missing: %2."))
+                                    .arg(node->getName(), missing.join(QStringLiteral(", ")));
+            c.texture.action = tr("Re-import the missing file, or re-link the material's texture to a "
+                                  "file that exists. Until then the surface renders without it.");
+        }
+    } else {
+        // AN EMITTER'S IMAGE, the same rule (TEX-REF-1): a billboard image the
+        // scene names by guid and the store could not resolve.
+        auto *ps = static_cast<iris::ParticleSystemNode *>(node);
+        if (!ps->textureGuid.isEmpty() && !ps->texture) {
+            c.texture.kind = QStringLiteral("texture.missing");
+            c.texture.node = ps->getGUID();
+            c.texture.nodeName = ps->getName();
+            c.texture.message = tr("\"%1\" uses a texture file that is missing: Particle "
+                                   "Image (asset %2: not in this library's store).")
+                                    .arg(ps->getName(), ps->textureGuid);
+            c.texture.action = tr("Re-import the missing image, or pick another one for the "
+                                  "emitter. Until then its particles draw untextured.");
+        }
+    }
+    if (!c.texture.kind.isEmpty()) {
+        c.texture.id = c.texture.kind + QLatin1Char(':') + c.texture.node;
+        // THE WORDING FOLLOWS THE DISK: a second slot going missing, or one of
+        // two coming back, is the same issue said again — updated in place,
+        // never a second row (raise() of a live id is a no-op).
+        if (indexOf(c.texture.id) >= 0) update(c.texture.id, c.texture.message);
+        else raise(c.texture);
+    }
+    if (!c.blocker && c.material.isNull() && c.texture.id.isEmpty()) mChecks.remove(node);
+    else mChecks.insert(node, c);
+}
+
+void SceneIssues::forgetSubtree(iris::SceneNode *node)
+{
+    if (mChecks.remove(node)) mLeakDirty = true;
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i)
+        if (iris::SceneNode *c = node->childAt(i)) forgetSubtree(c);
+}
+
 // ---------------------------------------------------------------------------
 // THE SCANNER
 // ---------------------------------------------------------------------------
@@ -377,17 +493,100 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
 {
     if (!scene) { reset(); return 0; }
 
-    QStringList live;      // the ids this pass justifies
+    QSet<QString> live;    // the ids this pass justifies
     ++mStats.passes;
-    mStats.leakWalked = mStats.texturesWalked = false;
+    mStats.fullWalk = mStats.leakEvaluated = false;
     mStats.nodesVisited = 0;
-    // A line of a walked kind that somebody cleared (editor.clearIssue) is
-    // re-raised by the next walk if its condition still holds — so its
-    // absence forces that walk, exactly as the clock did.
-    const auto clearedFromOutside = [this](const QStringList &ids) {
-        for (const QString &id : ids)
-            if (indexOf(id) < 0) return true;
-        return false;
+
+    // ---- THE NODE CHECKS: what the document wrote since the last pass ------
+    // The tap on the node graph's write journal names every document node
+    // written since the last drain (graph::openJournalTap). A MOVED node is
+    // re-checked with its subtree (its world pose moved theirs); a WRITTEN one
+    // alone (a material swap, a flag, a parameter: its own answers); a node no
+    // longer in this scene leaves the cache with its subtree. Then the nodes
+    // whose material's revision moved, and those whose texture file the disk
+    // reported. Nothing written = nothing visited.
+    {
+        if (mTap < 0) mTap = iris::graph::openJournalTap();
+        std::vector<iris::graph::NodeHandle> moved, written;
+        const iris::graph::TapDrain drain = iris::graph::drainJournalTap(mTap, moved, written);
+        if (++mScansSinceRecheck >= kTextureRecheckScans) {
+            mScansSinceRecheck = 0;
+            startTextureRestat();
+        }
+        const iris::Scene *const here = scene.data();
+        QSet<const iris::SceneNode *> visited;
+        std::function<void(iris::SceneNode *)> walk = [&](iris::SceneNode *n) {
+            if (!n || visited.contains(n)) return;
+            visited.insert(n);
+            checkNode(n);
+            const int kids = n->childCount();
+            for (int i = 0; i < kids; ++i) walk(n->childAt(i));
+        };
+        const auto inScene = [here](iris::SceneNode *n) { return n && n->getScene().data() == here; };
+        if (mCheckedScene.toStrongRef() != scene || !drain.complete) {
+            // A NEW SCENE, or a write the journal cannot name (an engine-owned
+            // node): the one whole walk.
+            forgetWalks();
+            mStats.fullWalk = true;
+            walk(scene->getRootNode().data());
+            mCheckedScene = scene;
+            mMaterialsSeen = iris::Material::globalRevision();
+            mFlippedPaths.clear();
+        } else {
+            for (iris::graph::NodeHandle h : moved) {
+                iris::SceneNode *n = iris::graph::ownerOf(h);
+                if (inScene(n)) walk(n);
+                else if (n) forgetSubtree(n);
+            }
+            for (iris::graph::NodeHandle h : written) {
+                iris::SceneNode *n = iris::graph::ownerOf(h);
+                if (!inScene(n)) { if (n) forgetSubtree(n); continue; }
+                if (visited.contains(n)) continue;
+                visited.insert(n);
+                checkNode(n);
+            }
+            // Destroyed since their write: their entries hold dead weak refs.
+            if (drain.gone) {
+                for (auto it = mChecks.begin(); it != mChecks.end();) {
+                    if (it->node.isNull()) { it = mChecks.erase(it); mLeakDirty = true; }
+                    else ++it;
+                }
+            }
+            QVector<iris::SceneNodePtr> again;
+            const quint64 materials = iris::Material::globalRevision();
+            if (materials != mMaterialsSeen) {
+                mMaterialsSeen = materials;
+                for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it) {
+                    const iris::MaterialPtr m = it->material.toStrongRef();
+                    if (m && m->revision() != it->materialRevision) {
+                        if (iris::SceneNodePtr n = it->node.toStrongRef()) again << n;
+                    }
+                }
+            }
+            if (!mFlippedPaths.isEmpty()) {
+                for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it)
+                    for (const QString &path : it->paths)
+                        if (mFlippedPaths.contains(path)) {
+                            if (iris::SceneNodePtr n = it->node.toStrongRef()) again << n;
+                            break;
+                        }
+                mFlippedPaths.clear();
+            }
+            for (const iris::SceneNodePtr &n : std::as_const(again)) {
+                if (visited.contains(n.data()) || !inScene(n.data())) continue;
+                visited.insert(n.data());
+                checkNode(n.data());
+            }
+        }
+    }
+    // The ids up now, once per pass (raise() of a live id is a no-op, but it
+    // asks by a linear search).
+    QSet<QString> up;
+    for (const SceneIssue &i : std::as_const(mIssues)) up.insert(i.id);
+    const auto keepUp = [&](const SceneIssue &issue) {
+        if (!up.contains(issue.id)) { raise(issue); up.insert(issue.id); }
+        live.insert(issue.id);
     };
 
     // ---- sun.tie: two directional lights claim the same priority ----------
@@ -420,7 +619,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                                   "that casts a shadow.");
                 issue.id = issue.kind + QLatin1Char(':') + issue.node;
                 raise(issue);
-                live << issue.id;
+                live.insert(issue.id);
             }
         }
     }
@@ -453,7 +652,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                                   "competing.");
                 issue.id = issue.kind + QLatin1Char(':') + issue.node;
                 raise(issue);
-                live << issue.id;
+                live.insert(issue.id);
             }
         }
     }
@@ -463,10 +662,10 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // nothing in the editor ever said so (SUN_AND_LIGHT_DEFAULTS §0). This is a
     // deliberately cheap PROXY — it reports a light that CAN shine through
     // something, not a proof that a pixel is wrong — so it names one blocker
-    // per light and stops.
+    // per light: the NEAREST box its reach touches. The boxes are the node
+    // checks' (each blocker's own world box, refreshed when the node is
+    // written); the lamps are re-tested only when a check moved one.
     {
-        // THE LIGHTS THAT CAN LEAK FIRST — O(lights). With none there is
-        // nothing to walk, which is every scene without an unshadowed lamp.
         QList<iris::LightNodePtr> leakers;
         for (const auto &light : scene->lights) {
             if (light.isNull() || !light->isVisible()) continue;
@@ -477,63 +676,51 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 continue;
             leakers.append(light);
         }
-        const unsigned long long serial = scene->dirtySet()->changeSerial();
         if (leakers.isEmpty()) {
-            // Nothing to report, and nothing remembered: the pass that next
-            // finds a leaker walks.
-            mLeakLive.clear();
-            mLeakScene.clear();
-        } else if (mLeakScene.toStrongRef() != scene || serial != mLeakSerial ||
-                   clearedFromOutside(mLeakLive)) {
-            // THE BOXES MOVE WITH TRANSFORMS, so this walk keys on the serial
-            // that every change moves (an animated scene with an unshadowed
-            // lamp walks each pass — the condition is about where things are).
-            QStringList leakLive;
-            QList<iris::SceneNodePtr> blockers;
-            collectBlockers(scene->getRootNode(), blockers);
-            mStats.leakWalked = true;
-            mStats.nodesVisited += blockers.size();
-            // The boxes ONCE, not once per light: this runs on a timer in the
-            // editor, and the owner's box is CPU-bound on the frame.
-            struct Blocker { iris::SceneNodePtr node; iris::Vec3 mn, mx; };
-            QVector<Blocker> boxes;
-            boxes.reserve(blockers.size());
-            for (const auto &blocker : blockers) {
-                Blocker b;
-                b.node = blocker;
-                if (!sceneextents::worldAabb(QList<iris::SceneNodePtr>{ blocker }, false, b.mn, b.mx))
-                    continue;
-                boxes.append(b);
-            }
+            mLeakLines.clear();
+        } else if (mLeakDirty) {
+            mStats.leakEvaluated = true;
+            mLeakLines.clear();
             for (const auto &light : leakers) {
                 const iris::Vec3 pos = light->getGlobalPosition();
                 const float reach = qMax(0.01f, light->distance);
-                for (const auto &b : boxes) {
-                    const iris::SceneNodePtr &blocker = b.node;
-                    // Inside the thing is not "through" it (a lamp modelled into a
-                    // fitting, a bulb inside a shade).
-                    if (boxContains(pos, b.mn, b.mx)) continue;
-                    if (!sphereTouchesBox(pos, reach, b.mn, b.mx)) continue;
-                    SceneIssue issue;
-                    issue.kind = QStringLiteral("shadow.leak");
-                    issue.node = light->getGUID();
-                    issue.nodeName = light->getName();
-                    issue.message = tr("\"%1\" casts no shadow, and its light reaches straight "
-                                       "through \"%2\".")
-                                        .arg(light->getName(), blocker->getName());
-                    issue.action = tr("Set this light's Shadow Type to Soft so the geometry blocks "
-                                      "it, or reduce its Range so it no longer reaches that far.");
-                    issue.id = issue.kind + QLatin1Char(':') + issue.node;
-                    raise(issue);
-                    leakLive << issue.id;
-                    break;
+                const NodeCheck *nearest = nullptr;
+                iris::SceneNodePtr nearestNode;
+                float nearestD2 = 0.0f;
+                for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it) {
+                    const NodeCheck &c = *it;
+                    if (!c.blocker) continue;
+                    // Inside the thing is not "through" it (a lamp modelled into
+                    // a fitting, a bulb inside a shade).
+                    if (boxContains(pos, c.mn, c.mx)) continue;
+                    if (!sphereTouchesBox(pos, reach, c.mn, c.mx)) continue;
+                    const iris::SceneNodePtr n = c.node.toStrongRef();
+                    if (!n) continue;
+                    const float dx = qMax(0.0f, qMax(c.mn.x() - pos.x(), pos.x() - c.mx.x()));
+                    const float dy = qMax(0.0f, qMax(c.mn.y() - pos.y(), pos.y() - c.mx.y()));
+                    const float dz = qMax(0.0f, qMax(c.mn.z() - pos.z(), pos.z() - c.mx.z()));
+                    const float d2 = dx * dx + dy * dy + dz * dz;
+                    if (nearest && (d2 > nearestD2 ||
+                                    (d2 == nearestD2 && n->getGUID() >= nearestNode->getGUID())))
+                        continue;
+                    nearest = &c; nearestNode = n; nearestD2 = d2;
                 }
+                if (!nearest) continue;
+                SceneIssue issue;
+                issue.kind = QStringLiteral("shadow.leak");
+                issue.node = light->getGUID();
+                issue.nodeName = light->getName();
+                issue.message = tr("\"%1\" casts no shadow, and its light reaches straight "
+                                   "through \"%2\".")
+                                    .arg(light->getName(), nearestNode->getName());
+                issue.action = tr("Set this light's Shadow Type to Soft so the geometry blocks "
+                                  "it, or reduce its Range so it no longer reaches that far.");
+                issue.id = issue.kind + QLatin1Char(':') + issue.node;
+                mLeakLines.insert(issue.id, issue);
             }
-            mLeakScene = scene;
-            mLeakSerial = serial;
-            mLeakLive = leakLive;
         }
-        live << mLeakLive;
+        mLeakDirty = false;
+        for (const SceneIssue &issue : std::as_const(mLeakLines)) keepUp(issue);
     }
 
     // ---- rays.absent: the project asked for rays this machine has not -----
@@ -557,7 +744,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                               "should simply use rays wherever they exist.");
             issue.id = issue.kind;
             raise(issue);
-            live << issue.id;
+            live.insert(issue.id);
         }
     }
 
@@ -590,7 +777,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                               "causes it, and nothing in the project can correct it.");
             issue.id = issue.kind;
             raise(issue);
-            live << issue.id;
+            live.insert(issue.id);
         }
     }
 
@@ -599,113 +786,10 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // deleted, a project opened on another machine), and the mirror's answer
     // to a path that does not exist is to bind nothing — the surface renders
     // untextured and the only trace was one engine error string nobody reads
-    // (TEXTURE-FAIL-ISSUE-1). The same existence test the mirror makes
-    // (SceneMirror::textureFor: a Qt resource and a live texture have no file
-    // and are not ours to judge), over every texture slot of every material a
-    // mesh node holds; ONE line per node, naming each slot and its file, so
-    // the user fixes the object, not a list of paths. The disk is asked
-    // through textureExists (above): once per new path, again only when its
-    // directory changes or the minute's full re-check comes round.
-    {
-        // The minute's backstop re-asks the disk about the paths it already
-        // knows (restatTextures); a walk follows only when an answer flipped.
-        if (++mScansSinceRecheck >= kTextureRecheckScans) {
-            mScansSinceRecheck = 0;
-            if (restatTextures()) mDiskChanged = true;
-        }
-        // WHAT THE SCENE HOLDS, not where it is: a move, a hide or a flag
-        // cannot unbind a texture, so this walk keys on the content serial (a
-        // node added or removed, a mesh or material swapped, a parameter), the
-        // materials' global revision and the disk.
-        const unsigned long long serial = scene->dirtySet()->contentSerial();
-        const quint64 materials = iris::Material::globalRevision();
-        if (mTextureScene.toStrongRef() != scene || serial != mTextureSerial ||
-            materials != mTextureMaterials || mDiskChanged || clearedFromOutside(mTextureLive)) {
-            mStats.texturesWalked = true;
-            mDiskChanged = false;
-            QStringList textureLive;
-            QList<iris::MeshNode *> meshes;
-            collectMaterialNodes(scene->getRootNode(), meshes);
-            mStats.nodesVisited += meshes.size();
-            for (iris::MeshNode *mesh : std::as_const(meshes)) {
-                const iris::MaterialPtr material = mesh->getMaterial();
-                QStringList missing;
-                for (auto it = material->textures.constBegin(); it != material->textures.constEnd();
-                     ++it) {
-                    if (!it.value()) continue;
-                    const QString &path = it.value()->source;
-                    if (path.isEmpty() || path.startsWith(QLatin1Char(':')) ||
-                        iris::LiveTextures::isLiveRef(path))
-                        continue;
-                    if (textureExists(path)) continue;
-                    missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
-                }
-                // A ROW THAT NAMES AN ASSET THE STORE COULD NOT RESOLVE (TEX-REF-1):
-                // the reader keeps the guid with no file bound, so the next save
-                // writes the same reference back — and this says so, by the asset
-                // the scene names (there is no file name to show: there is no file).
-                for (iris::Property *prop : material->properties) {
-                    if (!prop || prop->type != iris::PropertyType::Texture) continue;
-                    const QString guid = material->textureGuid(prop->name);
-                    if (guid.isEmpty() || material->textures.value(QStringLiteral("u_") + prop->name))
-                        continue;
-                    missing << tr("%1 (asset %2: not in this library's store)")
-                                   .arg(textureSlotName(QStringLiteral("u_") + prop->name), guid);
-                }
-                if (missing.isEmpty()) continue;
-                SceneIssue issue;
-                issue.kind = QStringLiteral("texture.missing");
-                issue.node = mesh->getGUID();
-                issue.nodeName = mesh->getName();
-                issue.message = (missing.size() == 1
-                    ? tr("\"%1\" uses a texture file that is missing: %2.")
-                    : tr("\"%1\" uses texture files that are missing: %2."))
-                                    .arg(mesh->getName(), missing.join(QStringLiteral(", ")));
-                issue.action = tr("Re-import the missing file, or re-link the material's texture to a "
-                                  "file that exists. Until then the surface renders without it.");
-                issue.id = issue.kind + QLatin1Char(':') + issue.node;
-                // THE WORDING FOLLOWS THE DISK: a second slot going missing, or one
-                // of two coming back, is the same issue said again — updated in
-                // place, never a second row (raise() of a live id is a no-op).
-                if (indexOf(issue.id) >= 0) update(issue.id, issue.message);
-                else raise(issue);
-                textureLive << issue.id;
-            }
-
-            // AN EMITTER'S IMAGE, the same rule (TEX-REF-1): a billboard image the
-            // scene names by guid and the store could not resolve.
-            std::function<void(const iris::SceneNodePtr &)> emitters =
-                [&](const iris::SceneNodePtr &node) {
-                if (!node) return;
-                if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
-                    auto *ps = static_cast<iris::ParticleSystemNode *>(node.data());
-                    if (!ps->textureGuid.isEmpty() && !ps->texture) {
-                        SceneIssue issue;
-                        issue.kind = QStringLiteral("texture.missing");
-                        issue.node = ps->getGUID();
-                        issue.nodeName = ps->getName();
-                        issue.message = tr("\"%1\" uses a texture file that is missing: Particle "
-                                           "Image (asset %2: not in this library's store).")
-                                            .arg(ps->getName(), ps->textureGuid);
-                        issue.action = tr("Re-import the missing image, or pick another one for the "
-                                          "emitter. Until then its particles draw untextured.");
-                        issue.id = issue.kind + QLatin1Char(':') + issue.node;
-                        if (indexOf(issue.id) >= 0) update(issue.id, issue.message);
-                        else raise(issue);
-                        textureLive << issue.id;
-                    }
-                }
-                ++mStats.nodesVisited;
-                for (const auto &child : node->children()) emitters(child);
-            };
-            emitters(scene->getRootNode());
-            mTextureScene = scene;
-            mTextureSerial = serial;
-            mTextureMaterials = materials;
-            mTextureLive = textureLive;
-        }
-        live << mTextureLive;
-    }
+    // (TEXTURE-FAIL-ISSUE-1). Decided per node by checkNode (below) when the
+    // node, its material or one of its files changes; here the lines are kept.
+    for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it)
+        if (!it->texture.id.isEmpty()) keepUp(it->texture);
 
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
@@ -723,6 +807,6 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         removed = true;            // ONE signal for the whole pass, not one per row
     }
     if (removed) emit changed();
-    if (mStats.leakWalked || mStats.texturesWalked) ++mStats.walks;
+    if (mStats.nodesVisited || mStats.leakEvaluated) ++mStats.walks;
     return mIssues.size();
 }
