@@ -417,6 +417,8 @@ def _defect_problems(e):
         elif not (isinstance(e.get("enrolled"), dict) and all(e["enrolled"].get(k) for k in ("by", "rate", "census", "date"))):
             bad.append("a nondeterminism entry is either single-use (uses: 1, suspects, census) or ENROLLED by the lead "
                        "(enrolled {by, rate, census, date})")
+    if e.get("build") is not None and e.get("build") not in ("debug", "asan", "tsan"):
+        bad.append(f"build '{e.get('build')}' is not one of debug|asan|tsan (the build kind it was measured under)")
     st = e["state"]
     if not (st in ("open", "retired") or (isinstance(st, dict) and isinstance(st.get("fixed"), dict) and isinstance(st["fixed"].get("tip"), str)
                                            and st["fixed"]["tip"])):

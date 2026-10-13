@@ -281,6 +281,43 @@ def _sha(r):
     return (r.get("tip") or {}).get("studio")
 
 
+# THE BUILD KIND (round 18): an entry is a fact of the build it was measured under — `build: debug | asan | tsan` (absent =
+# debug). A run reads ONLY its own build kind's entries (a Debug merge never serves a row KNOWN on an LSan/TSan entry; the
+# ship's sanitizer tiers read theirs); OTHER_KIND keeps the rest for the door's message.
+BUILD_KINDS = ("debug", "asan", "tsan")
+OTHER_KIND = {}
+
+
+def build_kind(build):
+    """debug | asan | tsan of a run: JAH_BUILD_KIND / --build-kind when given (a sanitizer tier run IN the Debug build —
+    the LSan preload of scripts/sanitize.sh — is an asan run), else the build dir's CMakeCache (JAHSHAKA_TSAN ON: tsan;
+    else debug)."""
+    k = os.environ.get("JAH_BUILD_KIND")
+    if k:
+        if k not in BUILD_KINDS:
+            raise SystemExit(f"JAH_BUILD_KIND / --build-kind '{k}' is not one of {'|'.join(BUILD_KINDS)}")
+        return k
+    import gate_graph
+    c = gate_graph._cache_entries(build) or {}
+    on = lambda k: str((c.get(k) or ("", ""))[1]).upper() in ("ON", "1", "TRUE", "YES")
+    # (JAHSHAKA_ASAN is ON in the daily Debug build too: it only adds the engine tests' ASan twins — never the kind; an
+    # LSan/ASan tier says --build-kind asan)
+    return "tsan" if on("JAHSHAKA_TSAN") else "debug"
+
+
+def defects_of_kind(defects, kind):
+    """The registry entries of ONE build kind (round 18); the others go to OTHER_KIND (id -> its kind)."""
+    OTHER_KIND.clear()
+    out = {}
+    for i, e in (defects or {}).items():
+        k = e.get("build") or "debug"
+        if k == kind:
+            out[i] = e
+        else:
+            OTHER_KIND[i] = k
+    return out
+
+
 class KnownRegistry:
     """A MERGE'S KNOWN ROW (round 14: at a merge the door arbitrates nothing): any row with an OPEN registry entry naming it
     — served as KNOWN at the select (never run), passed by the merge's judge. The push and the stage close keep every
@@ -303,6 +340,9 @@ def _real(m, row, reds, solos, defects, tip_recs, base_recs, tip_sha=None, mode=
         base_recs = base_recs()
     did = m.group(1)
     e = (defects or {}).get(did)
+    if e is None and did in OTHER_KIND:
+        return False, (f"real:{did} is a {OTHER_KIND[did]} build's entry — this run's build reads its own kind's entries "
+                       f"only (round 18)"), False
     if e is None:
         return False, f"real:{did} is not in the defect registry (testing/defects.json) — register it first", False
     if row not in e["rows"]:
@@ -1057,6 +1097,7 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
     defects, problem = gate_runlog.defects_load()
     if defects is None:
         return None, [f"{problem} — the door cannot check a verdict without it (JAH_DEFECTS_FILE overrides)"]
+    defects = defects_of_kind(defects, build_kind(build))        # THE BUILD KIND (round 18): this build's entries only
     base, tip = rng.split("..", 1)
     tip_sha = subprocess.run(["git", "rev-parse", tip], cwd=gs.ROOT, capture_output=True, text=True).stdout.strip()
     if not tip_sha:
@@ -1467,6 +1508,7 @@ def plan(rng, build, gs=None, named=(), lane=None, full=False):
     defects, problem = gate_runlog.defects_load()
     if defects is None:
         raise SystemExit(f"select: {problem}")
+    defects = defects_of_kind(defects, build_kind(build))        # THE BUILD KIND (round 18): this build's entries only
     base, tip = rng.split("..", 1)
     tip_sha = _git(["rev-parse", tip], gs.ROOT)
     base_sha = _git(["rev-parse", base], gs.ROOT)
@@ -1553,6 +1595,9 @@ def main():
                          "default universe is the range's REACH + the --named rows (TESTING-SPEED-A item 1)")
     ap.add_argument("--plan", action="store_true",
                     help="print the merge run's row set as JSON (`runner.sh select`): run (with reasons) and served")
+    ap.add_argument("--build-kind", default=None, choices=BUILD_KINDS,
+                    help="the run's BUILD KIND (round 18; default: the build's CMakeCache — JAHSHAKA_TSAN ON: tsan, else debug): the "
+                         "registry's entries of that kind only answer it")
     ap.add_argument("--since", default=None, metavar="ISO",
                     help="a MERGE's judge reads the records written since this instant (the merge run's start): THIS "
                          "run's records only (round 14)")
@@ -1564,6 +1609,8 @@ def main():
                     help="record a verdict per red row (`<row or pool.arm>=<the reader's text>`) in the run log, "
                          "then re-check; it clears only the reds logged before it (repeatable)")
     a = ap.parse_args()
+    if a.build_kind:
+        os.environ["JAH_BUILD_KIND"] = a.build_kind
     verdicts = None
     if a.verdict:
         verdicts = {}

@@ -831,7 +831,9 @@ def data_set(test, roots, _memo=None, hashed=True):
     elif not files and not none:
         # A ROW THAT NAMES NO DATA AND DECLARES NONE HAS THE EMPTY DATA SET (the lead, TESTING-SPEED-A round 15): its hash
         # is the empty set's — equal while it still names none — never "unknown" (its records then never served)
-        out.update(hash=EMPTY_DATA_HASH, why=None, undeclared=True)
+        out.update(hash=EMPTY_DATA_HASH, undeclared=True,
+                   why="THE EMPTY SET: it names no data and its CMake declares none (comparable: equal while it still "
+                       "names none; DATA NONE says it outright, else the sets it reads)")
     else:
         out.update(hash=_sha256("".join(f"{k}\0{v}\n" for k, v in sorted(files.items())).encode()), why=None)
     return out
