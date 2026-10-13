@@ -170,10 +170,7 @@ double ramp(const char *arm, const std::vector<float> &values, F expected)
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-hdr-display-encode-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-hdr-display-encode-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     gEngine = engine.get();

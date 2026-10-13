@@ -79,10 +79,7 @@ static SkyDesc atmosphereSky(float haze, float elevationDeg)
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-env-layout-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-env-layout-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     View *view = engine->createOffscreenView("env", 128, 128, Colour(0, 0, 0));

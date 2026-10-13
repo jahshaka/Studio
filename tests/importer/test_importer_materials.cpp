@@ -69,6 +69,7 @@
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include "bridge/enginethumbnailrenderer.h"
 #include "io/scenewriter.h"
@@ -161,10 +162,7 @@ int main(int argc, char **argv)
     // needs BOTH halves — imported documents AND pixels — so the document graph
     // is staged onto the ONE engine (Ogre::Root is a singleton), created first
     // and destroyed last.
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_importer_materials-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_importer_materials-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }

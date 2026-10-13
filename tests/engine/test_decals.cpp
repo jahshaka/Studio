@@ -25,6 +25,7 @@
 // Runtime requirements are tests/engine's: a reachable DISPLAY and a Vulkan
 // driver (lavapipe is fine).
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
@@ -168,10 +169,7 @@ static MeshData boxMesh(float hx, float hy, float hz)
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-decals-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-decals-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 

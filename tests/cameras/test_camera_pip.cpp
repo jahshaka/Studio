@@ -63,6 +63,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
 
@@ -185,10 +186,7 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_camera_pip-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_camera_pip-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

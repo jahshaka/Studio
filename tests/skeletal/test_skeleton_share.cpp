@@ -35,6 +35,7 @@
 // the rendered arm of the rig-perf gate; everything structural is here.
 
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
@@ -101,11 +102,9 @@ ClipDesc oneClip(const std::string &id, int bone)
 
 int main()
 {
-    EngineConfig cfg;
-    cfg.headless = true;                 // NULL render system: no display, no GPU
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_skeleton_share-ogre.log";
+    // headless: NULL render system — no display, no GPU
+    const auto cfg = enginetest::testEngineConfig("test_skeleton_share-ogre.log",
+                                                  enginetest::EngineOverrides().headless());
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "headless engine");

@@ -122,10 +122,7 @@ static bool gNoRays = false;
 static bool makeFixture(Fixture &f, const char *name)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = std::string("test-") + name + "-ogre.log";
+    const auto cfg = enginetest::testEngineConfig(std::string("test-") + name + "-ogre.log");
     f.engine = Engine::create(cfg, err);
     if (!f.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
     f.engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -1250,10 +1247,7 @@ static int caseLightingIndirect()
     const double kConv = hemiOverHeadOn(1.0);
     std::printf("    the card's hemispherical-mean albedo over the head-on pixel's, r = 1: %.4f\n", kConv);
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-cardlightingindirect-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-cardlightingindirect-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -1606,10 +1600,7 @@ static int caseConeParity(bool offAxisTarget)
     const unsigned kPx = 256u;
     const double kConv = hemiOverHeadOn(1.0);   // the card's convention (hemiOverHeadOn)
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-coneparity-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-coneparity-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -2288,10 +2279,7 @@ static int caseView()
 {
     const unsigned kPx = 256u;
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-cardview-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-cardview-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

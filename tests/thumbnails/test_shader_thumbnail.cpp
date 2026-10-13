@@ -41,6 +41,7 @@
 #include <QJsonArray>
 #include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "../support/testmesh.h"
 
 using namespace jahshaka::engine;
@@ -179,10 +180,7 @@ int main(int argc, char **argv)
     }
 
     // ---- engine: the preview sphere ----
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_shader_thumbnail-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_shader_thumbnail-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine");

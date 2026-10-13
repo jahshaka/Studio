@@ -24,6 +24,7 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "bridge/enginematerialpreviewscene.h"
 
 // Materials Evaluator phase 3: a graph baked by GraphBaker must reach pixels.
@@ -79,10 +80,7 @@ int main(int argc, char **argv)
     // (the app reads them from its seeded library; tests/support/testmesh.h).
     testmesh::installShippedResolver();
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_engine_material_preview-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_engine_material_preview-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

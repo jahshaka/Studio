@@ -55,11 +55,7 @@ std::unique_ptr<Engine> gEngine;
 std::string gDir;
 
 EngineConfig testConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_live_paths-ogre.log";
-    return cfg;
+    return enginetest::testEngineConfig("test_live_paths-ogre.log");
 }
 
 /// A unit quad in the XY plane facing +Z, UVs 0..1 — the subject every row

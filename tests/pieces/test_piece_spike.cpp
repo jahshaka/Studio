@@ -76,11 +76,7 @@ std::unique_ptr<Engine> gEngine;
 std::string gDir;   // scratch directory for piece files
 
 EngineConfig testConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_piece_spike-ogre.log";
-    return cfg;
+    return enginetest::testEngineConfig("test_piece_spike-ogre.log");
 }
 
 struct Fixture {

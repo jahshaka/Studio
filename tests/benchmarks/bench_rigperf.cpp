@@ -185,10 +185,7 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "bench_rigperf-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("bench_rigperf-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

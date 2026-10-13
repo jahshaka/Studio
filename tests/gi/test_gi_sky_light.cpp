@@ -35,6 +35,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
 
@@ -55,10 +56,7 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
 
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-sky-light-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-gi-sky-light-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 

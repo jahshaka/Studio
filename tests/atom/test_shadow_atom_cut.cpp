@@ -725,12 +725,9 @@ int main(int argc, char **argv)
     const std::string mode = argc > 1 ? argv[1] : "--cut";
     if (!loadFixtures()) { std::printf("FAIL: the fixtures (the shipped models did not bake)\n"); return 1; }
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
+    const auto cfg = enginetest::testEngineConfig(mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
                   : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"
-                                            : "test-shadow-atom-cut-ogre.log";
+                                            : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

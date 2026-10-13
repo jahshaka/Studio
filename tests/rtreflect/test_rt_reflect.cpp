@@ -220,10 +220,7 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--env-ray-match") == 0) wantEnvMatch = true;
     }
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantEnvMatch ? "test-rt-reflect-env-match-ogre.log"
+    const auto cfg = enginetest::testEngineConfig(wantEnvMatch ? "test-rt-reflect-env-match-ogre.log"
                   : wantFormat ? (getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT")
                                     ? "test-rt-reflect-format-refused-ogre.log"
                                     : "test-rt-reflect-format-ogre.log")
@@ -231,7 +228,7 @@ int main(int argc, char **argv)
                   : wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
                                              : "test-rt-reflect-lamp-ogre.log")
                   : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
-                                                    : "test-rt-reflect-ogre.log";
+                                                    : "test-rt-reflect-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

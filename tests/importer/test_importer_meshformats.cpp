@@ -59,6 +59,7 @@
 #include "irisgl/import/importflags.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include "bridge/enginethumbnailrenderer.h"
 #include "data/constants.h"
@@ -368,10 +369,7 @@ int main(int argc, char **argv)
     // renders both formats and asserts something other than the background is
     // on screen.
     {
-        EngineConfig cfg;
-        cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-        cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-        cfg.logFile = "test_importer_meshformats-ogre.log";
+        const auto cfg = enginetest::testEngineConfig("test_importer_meshformats-ogre.log");
         std::string err;
         std::shared_ptr<Engine> engine = Engine::create(cfg, err);
         CHECK(engine != nullptr, "6: engine created");

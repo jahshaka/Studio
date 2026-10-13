@@ -76,13 +76,11 @@ int main() {
         std::printf("route: %s\n", gWarmUpPass ? "CompositorPassWarmUp (opt-in)"
                                                : "full-frame (shipped default)");
     }
-    EngineConfig cfg;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_warm_up-ogre.log";
     // The persistent cache stays OFF: this suite is about WHEN shaders are
     // built, not about where they are stored, and a warm cache on disk would
     // make every count zero and every assertion vacuous.
+    const auto cfg = enginetest::testEngineConfig("test_warm_up-ogre.log",
+                                                  enginetest::EngineOverrides().shaderCacheOff());
     std::string error;
     gEngine = Engine::create(cfg, error);
     if (!gEngine) { std::printf("FAIL: engine create: %s\n", error.c_str()); return 1; }

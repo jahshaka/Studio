@@ -34,6 +34,7 @@
 // before any verb, panel or document field is designed around it.
 #include "EnginePrivate.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "../support/validationproof.h"
 
 #include <atomic>
@@ -314,11 +315,7 @@ static unsigned long long checksum(const Image &img)
 
 static EngineConfig config(const char *log)
 {
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = log;
-    return cfg;
+    return enginetest::testEngineConfig(log);
 }
 
 // ---------------------------------------------------------------------------

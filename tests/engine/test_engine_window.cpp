@@ -92,11 +92,9 @@ int main() {
         return 1;
     }
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_engine_window-ogre.log";
-    cfg.display = static_cast<NativeDisplayHandle>(reinterpret_cast<unsigned long long>(host.display));
+    const auto cfg = enginetest::testEngineConfig("test_engine_window-ogre.log",
+        enginetest::EngineOverrides().display(
+            static_cast<NativeDisplayHandle>(reinterpret_cast<unsigned long long>(host.display))));
 
     std::string error;
     auto engine = Engine::create(cfg, error);

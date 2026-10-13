@@ -78,12 +78,8 @@ constexpr unsigned kEyeW = 500u, kEyeH = 300u;
 constexpr unsigned kStride = 16u;   // the tier table's gather stride at High
 
 EngineConfig vrConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_vr_gather-ogre.log";
-    cfg.vr.enabled   = true;   // any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
-    return cfg;
+    // vr: enabled, any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
+    return enginetest::testEngineConfig("test_vr_gather-ogre.log", enginetest::EngineOverrides().vr());
 }
 
 PbrParams matte(const Colour &albedo) {

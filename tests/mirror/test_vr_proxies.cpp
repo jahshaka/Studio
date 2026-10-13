@@ -61,6 +61,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -77,10 +78,7 @@ int main(int argc, char **argv)
     // (the app reads them from its seeded library; tests/support/testmesh.h).
     testmesh::installShippedResolver();
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_vr_proxies-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_vr_proxies-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

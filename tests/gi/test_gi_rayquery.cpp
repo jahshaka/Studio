@@ -168,15 +168,12 @@ static bool imagesEqual(const Image &a, const Image &b)
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     // A LOG PER RUN. Three ctest entries share this binary and this working
     // directory (rays on, rays off, and the sanitised twin); one log name would
     // have them clobbering each other's evidence whenever two run at once.
-    cfg.logFile = getenv("JAHSHAKA_NO_RAY_QUERY")
+    const auto cfg = enginetest::testEngineConfig(getenv("JAHSHAKA_NO_RAY_QUERY")
                       ? "test-gi-rayquery-" JAH_RQ_LOG_TAG "-norays-ogre.log"
-                      : "test-gi-rayquery-" JAH_RQ_LOG_TAG "-ogre.log";
+                      : "test-gi-rayquery-" JAH_RQ_LOG_TAG "-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

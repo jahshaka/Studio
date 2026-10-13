@@ -2024,16 +2024,13 @@ static int costLampsMain(Engine *e)
 int main(int argc, char **argv)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
     const bool worldLights = argc > 1 && std::strcmp(argv[1], "--offscreen-lights") == 0;
     const bool planarPinned = argc > 1 && std::strcmp(argv[1], "--planar-pinned") == 0;
     const bool planar = planarPinned || (argc > 1 && std::strcmp(argv[1], "--planar") == 0);
     const bool voxelView = argc > 1 && std::strcmp(argv[1], "--voxel-view") == 0;
-    cfg.logFile = cost ? "test-gi-hit-shade-cost-ogre.log"
-                       : (argc > 1 ? "test-gi-hit-shade-mode-ogre.log" : "test-gi-hit-shade-ogre.log");
+    const auto cfg = enginetest::testEngineConfig(cost ? "test-gi-hit-shade-cost-ogre.log"
+                       : (argc > 1 ? "test-gi-hit-shade-mode-ogre.log" : "test-gi-hit-shade-ogre.log"));
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

@@ -55,12 +55,8 @@ namespace {
 std::string gCacheDir;
 
 EngineConfig cacheConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir      = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir   = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile        = "test_shader_cache-ogre.log";
-    cfg.shaderCacheDir = gCacheDir;
-    return cfg;
+    return enginetest::testEngineConfig("test_shader_cache-ogre.log",
+                                        enginetest::EngineOverrides().shaderCacheDir(gCacheDir));
 }
 
 /// One full engine lifetime with the cache on: create, render enough to compile
