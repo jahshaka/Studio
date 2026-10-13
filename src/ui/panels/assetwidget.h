@@ -381,6 +381,7 @@ private:
 	// pin + refresh back on the UI thread. One batch at a time.
 	ImportBatchRunner *importRunner = nullptr;
 	QStringList importErrors;
+	QStringList importSummaries;   // BISTRO-IMPORT-1: each model's summary, shown after the batch
 	/// MODELS IMPORTED HERE STILL OWE A THUMBNAIL (THUMBS-1 item 3). The
 	/// editor tray's import ran the pipeline and pinned the row and then
 	/// stopped — it never asked for the render the Assets page's tail asks

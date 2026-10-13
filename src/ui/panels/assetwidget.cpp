@@ -2020,6 +2020,9 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 				    QFileInfo(request.sourcePath).fileName(), result.error));
 			return;
 		}
+		const QString summary =
+		    AssetImportService::summaryText(QFileInfo(request.sourcePath).fileName(), result);
+		if (!summary.isEmpty()) importSummaries.append(summary);
 		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project, ProjectAssets::AddKind::Direct);
 		if (!pinned.ok()) importErrors.append(pinned.error);
 		// THE SAME TAIL THE ASSETS PAGE RUNS (THUMBS-1 item 3): a model's
@@ -2050,6 +2053,21 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 			QMessageBox::warning(this, tr("Import"),
 			                     importErrors.join(QStringLiteral("\n")), QMessageBox::Ok);
 			importErrors.clear();
+		}
+		// WHAT THE MODELS BROUGHT (BISTRO-IMPORT-1): every map they named and we could
+		// not find, said by name, and what is movable — never silent on a success.
+		// Not on a CANCELLED batch: a cancel is the user's or the app's quit, and a
+		// dialog opened under a quitting app holds its teardown (import.shutdown).
+		if (cancelled) importSummaries.clear();
+		if (!importSummaries.isEmpty()) {
+			// Opened, never exec'd: the summary informs and must not hold the
+			// event loop (a scripted or batch import keeps running under it).
+			auto *box = new QMessageBox(QMessageBox::Information, tr("Import summary"),
+			                            importSummaries.join(QStringLiteral("\n\n")),
+			                            QMessageBox::Ok, this);
+			box->setAttribute(Qt::WA_DeleteOnClose);
+			box->open();
+			importSummaries.clear();
 		}
 		populateAssetTree(false);
 		updateAssetView(assetItem.selectedGuid, activeFilter);

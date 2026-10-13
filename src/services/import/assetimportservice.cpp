@@ -320,6 +320,9 @@ void AssetImportService::logImportRecord(const ImportRequest &request, const Imp
                     .arg(result.bakeStages.isEmpty()
                              ? QString()
                              : QStringLiteral(" — bake: %1").arg(result.bakeStages)));
+        const QString summary = summaryText(source, result);
+        if (!summary.isEmpty())
+            JAH_LOG(JahLog::assets, Display, QStringLiteral("import summary: %1").arg(summary));
         for (const QString &w : result.warnings)
             JAH_LOG(JahLog::assets, Warning, QStringLiteral("import '%1': %2").arg(source, w));
     } else {
@@ -327,6 +330,28 @@ void AssetImportService::logImportRecord(const ImportRequest &request, const Imp
                 QStringLiteral("import: '%1' FAILED after %2 ms — %3")
                     .arg(source).arg(elapsedMs).arg(result.error));
     }
+}
+
+QString AssetImportService::summaryText(const QString &fileName, const ImportResult &result)
+{
+    const QJsonObject s = result.metadata.value(QStringLiteral("importSummary")).toObject();
+    if (!result.ok() || s.isEmpty()) return QString();
+    QStringList parts;
+    parts << QStringLiteral("%1 movable, %2 static")
+                 .arg(s.value("movable").toInt()).arg(s.value("static").toInt());
+    if (const int n = s.value("lights").toInt()) parts << QStringLiteral("%1 light(s)").arg(n);
+    if (const int n = s.value("cameras").toInt()) parts << QStringLiteral("%1 camera(s)").arg(n);
+    if (const int n = s.value("cutouts").toInt()) parts << QStringLiteral("%1 cutout mesh(es)").arg(n);
+    if (const int n = s.value("glass").toInt()) parts << QStringLiteral("%1 glass mesh(es)").arg(n);
+    const double scale = s.value("contentScale").toDouble(1.0);
+    if (scale != 1.0) parts << QStringLiteral("the file's nodes scale its geometry by %1").arg(scale);
+    const QJsonArray missing = s.value("missingMaps").toArray();
+    QString text = QStringLiteral("%1: %2").arg(fileName, parts.join(QStringLiteral(", ")));
+    if (!missing.isEmpty()) {
+        text += QStringLiteral("; %1 map(s) not found:").arg(missing.size());
+        for (const QJsonValue &m : missing) text += QStringLiteral("\n  ") + m.toString();
+    }
+    return text;
 }
 
 PreparedImport AssetImportService::prepare(const ImportRequest &request,

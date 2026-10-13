@@ -75,6 +75,11 @@ namespace BuiltinMaterials {
 iris::PbrMaterialPtr fromMeshData(const iris::MeshMaterialData &data)
 {
     auto mat = iris::PbrMaterial::create();
+    // THE SOURCE'S COVERAGE (BISTRO-IMPORT-1): a cutout, a glass and its alpha, read
+    // by MaterialHelper from the file's own facts — on both arms below.
+    mat->setValue(QStringLiteral("alphaMode"), data.alphaMode);
+    mat->setValue(QStringLiteral("alpha"), data.alpha);
+    mat->setValue(QStringLiteral("alphaCutoff"), data.alphaCutoff);
     auto bindIfFile = [&mat](const QString &row, const QString &path) {
         if (!path.isEmpty() && QFileInfo(path).isFile()) mat->setValue(row, path);
     };

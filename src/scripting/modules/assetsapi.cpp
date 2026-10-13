@@ -336,7 +336,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "A model already pivoted at its base is not lifted, "
           "so nothing is lifted twice.",
           Needs::Document },
-        { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId}",
+        { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId, summary: {movable, static, meshes, lights, cameras, cutouts, glass, contentScale, missingMaps}}",
           "THE way to get a model file on disk into the open scene, in one call: it runs the one "
           "import pipeline (assets.importFile), pins the result into the open project "
           "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow "
@@ -1589,9 +1589,8 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
     const auto placement = onSurface ? surfaceplacement::Placement::OnSurface
                                      : surfaceplacement::Placement::Pivot;
     host.services->selection->select(iris::SceneNodePtr());
-    host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
-                                              vecFromJs(options.value("position")), guid,
-                                              record.name, placement);
+    host.services->sceneEdit->addMaterialMesh(hasPosition, vecFromJs(options.value("position")),
+                                              guid, placement);
     auto node = host.services->selection->selected();
     if (!node) {
         fail("assets.addToScene: the asset could not be instantiated");
@@ -1653,6 +1652,12 @@ QVariantMap AssetsApi::importAndPlace(const QString &path, const QVariantMap &op
     const QString assetGuid = importFile(path, drawerId);
     if (assetGuid.isEmpty()) return out;   // importFile already threw
     out["assetGuid"] = assetGuid;
+    // WHAT THE MODEL BROUGHT (BISTRO-IMPORT-1): the import summary the row records —
+    // movable/static counts, lights, cameras, cutouts, glass, the file's own content
+    // scale and every map it named that was not found (assets.metadata carries the same).
+    if (host.db)
+        out["summary"] = AssetMetadata::ensure(host.db, assetGuid)
+                             .value(QStringLiteral("importSummary")).toObject().toVariantMap();
 
     const auto record = host.db ? host.db->fetchAsset(assetGuid) : AssetRecord();
     if (record.type != static_cast<int>(ModelTypes::Object)) {
