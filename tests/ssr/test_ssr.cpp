@@ -271,10 +271,7 @@ static float measure(Engine *e, View *v, const char *what, int frames = 3, Image
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-ssr-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-ssr-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 

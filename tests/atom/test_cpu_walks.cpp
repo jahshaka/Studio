@@ -77,10 +77,7 @@ static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneF
 static std::unique_ptr<Engine> boot(const char *log)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = log;
+    const auto cfg = enginetest::testEngineConfig(log);
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return nullptr; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

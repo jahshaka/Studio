@@ -197,17 +197,14 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_gpu_clips-ogre.log";
     // Every "padded to" line the engine logs (OgreClips.cpp kMinClipLength):
     // the smoke L10 item 2 block below asserts a one-frame Mixamo clip never
     // produces one. Installed through the config so no line is missed.
     static std::vector<std::string> sPadLines;
-    cfg.logSink = [](int, const std::string &message) {
-        if (message.find("padded to") != std::string::npos) sPadLines.push_back(message);
-    };
+    const auto cfg = enginetest::testEngineConfig("test_gpu_clips-ogre.log",
+        enginetest::EngineOverrides().logSink([](int, const std::string &message) {
+            if (message.find("padded to") != std::string::npos) sPadLines.push_back(message);
+        }));
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

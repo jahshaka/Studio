@@ -64,6 +64,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
 #include "viewport/freecamerapolicy.h"
@@ -143,10 +144,7 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_editor_player_parity-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_editor_player_parity-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

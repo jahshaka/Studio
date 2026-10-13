@@ -210,10 +210,7 @@ static const unsigned kWallX = 64, kWallY = 20;
 static int runHashChild()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-ddgi-child-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-child-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("HASH ERROR %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -271,10 +268,7 @@ static void lightWrite(Scene *s, NodeId light)
 static int runCellSweep()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-ddgi-sweep-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-sweep-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -330,10 +324,7 @@ int main(int argc, char **argv)
     if (argc > 1 && std::strcmp(argv[1], "--cell-sweep") == 0) return runCellSweep();
 
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-ddgi-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     // FIXED DELTA, before the first frame: nothing in this suite may depend on

@@ -643,10 +643,7 @@ int main(int argc, char **argv)
     std::printf("== gi.field_%s: the irradiance field's estimator on a one-voxel emissive wall\n",
                 mode == "alias" ? "alias" : "thin_wall");
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = mode == "alias" ? "test-gi-field-alias-ogre.log" : "test-gi-field-thin-wall-ogre.log";
+    const auto cfg = enginetest::testEngineConfig(mode == "alias" ? "test-gi-field-alias-ogre.log" : "test-gi-field-thin-wall-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

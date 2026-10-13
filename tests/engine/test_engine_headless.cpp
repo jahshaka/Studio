@@ -22,6 +22,7 @@
 //
 // Links JahshakaEngine ONLY: no Qt, no app, no Ogre header.
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -81,14 +82,10 @@ int main() {
                     "ctest entry unsets it so the claim is actually tested.\n", d);
     }
 
-    EngineConfig cfg;
-    cfg.headless     = true;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_engine_headless-ogre.log";
-    // Deliberately configured: the engine must REFUSE to persist a shader cache
-    // written by the NULL render system (a real device would be offered it).
-    cfg.shaderCacheDir = "headless-cache-must-not-exist";
+    // The cache dir is deliberately configured: the engine must REFUSE to persist
+    // a shader cache written by the NULL render system (a real device would be offered it).
+    const auto cfg = enginetest::testEngineConfig("test_engine_headless-ogre.log",
+        enginetest::EngineOverrides().headless().shaderCacheDir("headless-cache-must-not-exist"));
 
     std::string error;
     std::unique_ptr<Engine> engine = Engine::create(cfg, error);

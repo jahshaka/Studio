@@ -10,6 +10,7 @@
 //      half-initialised engine drawing without its shadow node);
 //   3. the untouched media creates a view (the positive control).
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -53,10 +54,7 @@ static std::string firstViewError(const std::string &mediaDir, const char *log, 
                                   std::string *second)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = mediaDir;
-    cfg.logFile = log;
+    const auto cfg = enginetest::testEngineConfig(log, enginetest::EngineOverrides().hlmsMediaDir(mediaDir));
     auto engine = Engine::create(cfg, err);
     if (!engine) return "engine create: " + err;
     View *view = engine->createOffscreenView("media_check", 64, 64, Colour(0, 0, 0, 1));

@@ -41,6 +41,7 @@
 #include <functional>
 #include <fstream>
 #include <random>
+#include "../support/enginetesthelpers.h"
 
 namespace scale {
 
@@ -417,17 +418,15 @@ bool boot(Env &env, const char *logFile, int w, int h)
 {
     const bool window = qgetenv("JAH_SCALE_WINDOW") == "1";
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = logFile;
+    NativeDisplayHandle display = 0;
     if (window) {
         if (!openRigWindow(unsigned(w), unsigned(h), &env.xDisplay, &env.xWindow)) {
             std::printf("FAIL: no X display (DISPLAY must name the rig's Xvfb)\n");
             return false;
         }
-        cfg.display = static_cast<NativeDisplayHandle>(reinterpret_cast<unsigned long long>(env.xDisplay));
+        display = static_cast<NativeDisplayHandle>(reinterpret_cast<unsigned long long>(env.xDisplay));
     }
+    const auto cfg = enginetest::testEngineConfig(logFile, enginetest::EngineOverrides().display(display));
     env.engine = Engine::create(cfg, err);
     if (!env.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
     // WIRED EXACTLY AS THE APP WIRES IT (src/bridge/enginehost.cpp): the document's

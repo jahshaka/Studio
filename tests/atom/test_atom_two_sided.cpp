@@ -231,10 +231,7 @@ int main()
                 "against stock PBS (mean <= %.1f code, <= %.1f %% beyond %d), the closed mesh's ids, the shadow\n",
                 kMeanBar, kTailBar * 100.0, kTailCodes);
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-atom-two-sided-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-atom-two-sided-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

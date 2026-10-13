@@ -107,10 +107,7 @@ static int costMain(Engine *e);
 int main(int argc, char **argv)
 {
     const bool wantCost = argc > 1 && !std::strcmp(argv[1], "--cost");
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantCost ? "test-gi-cards-mover-cost-ogre.log" : "test-gi-cards-mover-ogre.log";
+    const auto cfg = enginetest::testEngineConfig(wantCost ? "test-gi-cards-mover-cost-ogre.log" : "test-gi-cards-mover-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }

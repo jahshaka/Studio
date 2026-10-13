@@ -44,6 +44,7 @@
 #include "bridge/avatarpreviewscene.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "../support/testmesh.h"
 #include "avatarfixtures.h"
@@ -151,10 +152,7 @@ int main(int argc, char **argv)
     // (the app reads them from its seeded library; tests/support/testmesh.h).
     testmesh::installShippedResolver();
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_avatar_preview-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_avatar_preview-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

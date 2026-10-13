@@ -482,10 +482,7 @@ int main()
     std::printf("== engine.atom_negative_control: Ogre's next pass is byte-identical with our pipeline "
                 "bound in the same frame, %d frames\n", kFrames);
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-atom-negative-control-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-atom-negative-control-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

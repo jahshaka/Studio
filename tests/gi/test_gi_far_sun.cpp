@@ -372,10 +372,7 @@ std::unique_ptr<Engine> gEngine;
 bool boot(Fixture &f, const char *log)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = log;
+    const auto cfg = enginetest::testEngineConfig(log);
     std::unique_ptr<Engine> &engine = gEngine;
     engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }

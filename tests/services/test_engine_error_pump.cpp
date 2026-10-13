@@ -28,6 +28,7 @@
 #include <string>
 
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "services/engineerrorpump.h"
 
 using namespace jahshaka::engine;
@@ -128,10 +129,7 @@ int main(int argc, char **argv)
     testRateLimiter();
 
     // ---- half 1: the boundary ------------------------------------------------
-    EngineConfig cfg;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_engine_error_pump-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_engine_error_pump-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

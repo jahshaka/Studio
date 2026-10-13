@@ -24,10 +24,7 @@ int main(int argc, char **argv)
 {
     const float T = argc > 1 ? float(std::atof(argv[1])) : 0.5f;
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "voxel-leak-trace-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("voxel-leak-trace-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

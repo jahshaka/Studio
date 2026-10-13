@@ -31,6 +31,7 @@
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "wiredocumentgraph.h"
 #include "jahshaka/engine/Engine.h"
+#include "enginetesthelpers.h"
 
 namespace enginetest {
 
@@ -38,11 +39,8 @@ class DocumentGraph {
 public:
     explicit DocumentGraph(const char *logFile = "document-graph-ogre.log")
     {
-        jahshaka::engine::EngineConfig cfg;
-        cfg.headless = true;   // RenderSystem_NULL: no display, no device, no window
-        cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-        cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-        cfg.logFile = logFile;
+        // headless: RenderSystem_NULL — no display, no device, no window
+        const auto cfg = testEngineConfig(logFile, EngineOverrides().headless());
         mEngine = jahshaka::engine::Engine::create(cfg, mError);
         // Wired exactly as the app wires it (EngineHost): wiredocumentgraph.h.
         if (mEngine) wireDocumentGraph(mEngine.get());

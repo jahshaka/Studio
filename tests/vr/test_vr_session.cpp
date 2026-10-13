@@ -73,12 +73,8 @@ int gFailures = 0, gChecks = 0;
     do { const bool ok_ = (cond); CHECK(ok_); if (!ok_) return 1; } while (0)
 
 EngineConfig vrConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_vr_session-ogre.log";
-    cfg.vr.enabled   = true;   // any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
-    return cfg;
+    // vr: enabled, any runtime: the runner names it (JAH_VR_EXPECT_RUNTIME)
+    return enginetest::testEngineConfig("test_vr_session-ogre.log", enginetest::EngineOverrides().vr());
 }
 
 /// A scene with something in it that has PARALLAX: three cubes at three depths,

@@ -323,12 +323,9 @@ int main(int argc, char **argv)
         else if (!std::strcmp(argv[i], "--chars") && i + 1 < argc) costChars = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--rings") && i + 1 < argc) costRings = unsigned(std::atoi(argv[++i]));
     }
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantCost ? "test-gi-skin-rays-cost-ogre.log"
+    const auto cfg = enginetest::testEngineConfig(wantCost ? "test-gi-skin-rays-cost-ogre.log"
                   : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-gi-skin-rays-norays-ogre.log"
-                                                    : "test-gi-skin-rays-ogre.log";
+                                                    : "test-gi-skin-rays-ogre.log");
     std::string err;
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }

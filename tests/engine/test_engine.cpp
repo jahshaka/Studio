@@ -59,11 +59,7 @@ int gChecks   = 0;
     } while (0)
 
 EngineConfig testConfig() {
-    EngineConfig cfg;
-    cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile      = "test_engine-ogre.log";
-    return cfg;
+    return enginetest::testEngineConfig("test_engine-ogre.log");
 }
 
 /// ONE Engine for the whole process. Tests do not each create their own: Ogre's

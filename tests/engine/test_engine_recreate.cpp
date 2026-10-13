@@ -84,10 +84,7 @@ static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {
 }
 
 static bool runOnce(int iteration) {
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_engine_recreate-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_engine_recreate-ogre.log");
     std::string error;
     auto e = Engine::create(cfg, error);
     char msg[128];

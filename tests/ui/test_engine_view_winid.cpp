@@ -21,6 +21,7 @@
 
 #include "viewport/engineviewwidget.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <QGuiApplication>
 #include <QtGui/qguiapplication_platform.h>
@@ -64,11 +65,8 @@ void TestEngineViewWinId::initTestCase()
 {
     QVERIFY2(QGuiApplication::platformName() == QLatin1String("xcb"),
              "this suite is about native X windows and needs the xcb plugin");
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_engine_view_winid-ogre.log";
-    cfg.display = static_cast<NativeDisplayHandle>(qtDisplay());
+    const auto cfg = enginetest::testEngineConfig("test_engine_view_winid-ogre.log",
+        enginetest::EngineOverrides().display(static_cast<NativeDisplayHandle>(qtDisplay())));
     QVERIFY2(cfg.display != 0, "no X display from the platform plugin");
     std::string error;
     mEngine = Engine::create(cfg, error);

@@ -101,10 +101,7 @@ double squareMean(const ImageF &img, float x, float z, float h)
 int main()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-field-edge-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-gi-field-edge-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();

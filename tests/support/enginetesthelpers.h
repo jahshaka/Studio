@@ -19,6 +19,9 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
@@ -27,6 +30,74 @@
 namespace enginetest {
 
 using namespace jahshaka::engine;
+
+/// THE ONE FIXTURE CONFIG (FIXTURE-CONFIG-1): every engine fixture's EngineConfig is
+/// built here and nowhere else (source.testing_rules R10). What every fixture shared —
+/// the render-system plugins and the Hlms media of the build (JAHSHAKA_TEST_PLUGIN_DIR /
+/// JAHSHAKA_TEST_MEDIA_DIR, each suite's compile definitions), every other field at
+/// its EngineConfig default — is set here; what a fixture says differently it says
+/// through EngineOverrides, ONE shape for all of them:
+///
+///     auto cfg = enginetest::testEngineConfig("test-x-ogre.log");
+///     auto cfg = enginetest::testEngineConfig("test-y-ogre.log",
+///                                            enginetest::EngineOverrides().headless());
+///
+/// A fixture whose SUBJECT is a config field states it here too, never around the
+/// helper: test_shader_cache's cache dir (shaderCacheDir), test_warm_up's cache kept
+/// OFF (shaderCacheOff), test_engine_headless's refused dir.
+struct EngineOverrides {
+    /// The NULL render system (EngineConfig::headless).
+    EngineOverrides &headless() { mHeadless = true; return *this; }
+    /// The host's display connection, for an on-screen View (EngineConfig::display).
+    EngineOverrides &display(NativeDisplayHandle d) { mDisplay = d; return *this; }
+    /// The process's VR policy enabled, any runtime (EngineConfig::vr.enabled).
+    EngineOverrides &vr() { mVr = true; return *this; }
+    /// The boot-time log sink (EngineConfig::logSink).
+    EngineOverrides &logSink(EngineLogSink sink) { mLogSink = std::move(sink); return *this; }
+    /// A media dir other than the build's (EngineConfig::hlmsMediaDir).
+    EngineOverrides &hlmsMediaDir(std::string dir) { mHlmsMediaDir = std::move(dir); return *this; }
+    /// The fixture's OWN persistent shader cache (EngineConfig::shaderCacheDir).
+    EngineOverrides &shaderCacheDir(std::string dir) { mShaderCacheDir = std::move(dir); return *this; }
+    /// The persistent shader cache OFF on purpose — whatever the harness hook would set.
+    EngineOverrides &shaderCacheOff() { mShaderCacheDir = std::string(); return *this; }
+
+    bool mHeadless = false;
+    NativeDisplayHandle mDisplay = 0;
+    bool mVr = false;
+    EngineLogSink mLogSink;
+    std::optional<std::string> mHlmsMediaDir;
+    std::optional<std::string> mShaderCacheDir;   ///< unset = the harness's choice (the hook)
+};
+
+/// THE HARNESS HOOK: where the harness will set what every fixture shares and no
+/// fixture states — the fixtures' shared shader cache dir (TESTING-SPEED-BOOT). It runs
+/// BEFORE a fixture's overrides, so a fixture that states its cache (shaderCacheDir /
+/// shaderCacheOff) always wins. It does NOTHING yet: FIXTURE-CONFIG-1 changes no
+/// fixture's config.
+inline void applyHarnessDefaults(EngineConfig &cfg)
+{
+    (void)cfg;
+}
+
+#if defined(JAHSHAKA_TEST_PLUGIN_DIR) && defined(JAHSHAKA_TEST_MEDIA_DIR)
+/// The fixture's EngineConfig: the shared defaults, the harness hook, then the
+/// fixture's overrides. `logFile` is every fixture's own (each names its log).
+inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides &o = EngineOverrides())
+{
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = std::move(logFile);
+    applyHarnessDefaults(cfg);
+    if (o.mHeadless) cfg.headless = true;
+    if (o.mDisplay) cfg.display = o.mDisplay;
+    if (o.mVr) cfg.vr.enabled = true;
+    if (o.mLogSink) cfg.logSink = o.mLogSink;
+    if (o.mHlmsMediaDir) cfg.hlmsMediaDir = *o.mHlmsMediaDir;
+    if (o.mShaderCacheDir) cfg.shaderCacheDir = *o.mShaderCacheDir;
+    return cfg;
+}
+#endif
 
 /// THE VOXEL READ-BACK LANDS A FEW FRAMES LATE (VOXEL-READOUT-1): a cascade's
 /// `items`, `attached`, `voxelLevels`, `voxelTriangles`, `voxelRecords` and

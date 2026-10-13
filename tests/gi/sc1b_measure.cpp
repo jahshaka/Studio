@@ -93,10 +93,7 @@ static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &w
 static int showroomArm(bool lampShadows, bool sunShadow)
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "sc1b-showroom-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("sc1b-showroom-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -264,10 +261,7 @@ int main(int argc, char **argv)
     const bool shadows = argc > 2 ? (std::atoi(argv[2]) != 0) : true;
 
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "sc1b-measure-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("sc1b-measure-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

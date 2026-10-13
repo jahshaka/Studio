@@ -83,10 +83,7 @@ static void endLikeAHost(const char *why)
 static int inRecordChild()
 {
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-engine-oom-in-record-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-engine-oom-in-record-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("CHILD-FAIL: engine create: %s\n", err.c_str()); return 2; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -154,10 +151,7 @@ int main(int argc, char **argv)
     }
 
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-engine-oom-is-not-loss-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test-engine-oom-is-not-loss-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

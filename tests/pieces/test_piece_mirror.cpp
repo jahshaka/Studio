@@ -21,6 +21,7 @@
 #include <cstdio>
 
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include "bridge/enginematerialpreviewscene.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -119,10 +120,7 @@ int main(int argc, char **argv)
     testmesh::installShippedResolver();
     QTemporaryDir tmp;
 
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_piece_mirror-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_piece_mirror-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");

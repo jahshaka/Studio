@@ -205,10 +205,7 @@ int main(int argc, char **argv)
                         : "the ORDINARY row -- no regression while red, and the cascades follow "
                           "the camera");
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = gTarget ? "test-gi-chain-face-target-ogre.log" : "test-gi-chain-face-ogre.log";
+    const auto cfg = enginetest::testEngineConfig(gTarget ? "test-gi-chain-face-target-ogre.log" : "test-gi-chain-face-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);

@@ -25,6 +25,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -84,7 +85,7 @@ int main(int argc, char **argv)
     // The preview docks' and the VR slot's seed keys, from the fixture files
     // (the app reads them from its seeded library; tests/support/testmesh.h).
     testmesh::installShippedResolver();
-    EngineConfig cfg; cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR; cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR; cfg.logFile = "test_thumbnails-ogre.log";
+    const auto cfg = enginetest::testEngineConfig("test_thumbnails-ogre.log");
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine"); if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }

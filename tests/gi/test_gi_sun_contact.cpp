@@ -1088,11 +1088,8 @@ int main(int argc, char **argv)
     const bool legsOnly = argc > 1 && std::strcmp(argv[1], "--legs") == 0;
     const char *dumpDir = std::getenv("JAH_SUN_CONTACT_DUMP");   // evidence pictures, a tool
     std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
     const bool raysWanted = !getenv("JAHSHAKA_NO_RAY_QUERY");
-    cfg.logFile = raysWanted ? "test-sun-contact-ogre.log" : "test-sun-contact-norays-ogre.log";
+    const auto cfg = enginetest::testEngineConfig(raysWanted ? "test-sun-contact-ogre.log" : "test-sun-contact-norays-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
