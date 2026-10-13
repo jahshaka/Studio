@@ -379,7 +379,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "The rectangle {x, y, w, h} is a fraction of the viewport (0..1; the whole view by default): every UNIFORM probe whose cell centre lies inside it counts, all of its rays (an adaptive probe, a cell's second, is not read back). 'minDistance' / 'maxDistance' (metres) keep only the rays whose hit lies that far (the sky has no distance and is kept by neither). "
           "'sources' has one entry per answer — 'card' (the hit surface's card), 'voxel' (the cascade chain; its 'cascades' are the counts by the FINEST cascade that answered, innermost first), 'sky' (the ray escaped), 'decode' (a hit-list record the visibility-buffer decode shaded), 'decodeFar' (a record past the near length, the mesh's coarsest level), 'dropped' (a record the full list dropped: 0 radiance) — each {count, share (of the rays counted), luminance (the mean Rec.709 luminance of the radiance the rays RETURNED, read after the decode's write-back), radiance {r, g, b}, distance (the mean hit distance)}. "
           "'sunlitUp', 'shadedUp' and 'other' split the HITS by what they landed on: an upward-facing surface (the hit normal's y above 0.7) where the hit's own sun ray reached the sun, one where it did not, and everything else — each {count, sources: {name: {count, luminance}}}: the reading that says what a ray on the sunlit street returned and who answered it. "
-          "'probes' is how many probes the rectangle held and 'rays' the rays counted; 'frame' which gather frame it is of. {rays: N} also returns the first N counted rays one by one as 'samples' — {source, cascade, cell, radiance [r, g, b], distance, hit [x, y, z] (half precision), normalY, sun} — for a caller that classifies the hits itself (a document raycast at each hit).",
+          "'probes' is how many probes the rectangle held and 'rays' the rays counted; 'frame' which gather frame it is of. {rays: N} also returns the first N counted rays one by one as 'samples' — {source, cascade, cell, radiance [r, g, b], distance, hit [x, y, z] (half precision), normal [x, y, z] (the hit's geometric normal, snorm8), sun} — for a caller that classifies the hits itself (a document raycast at each hit).",
           Needs::Document },
         { "giVoxelRead", "world.giVoxelRead({cascade, points: [{x, y, z}, ...]}) -> {available, cascade, cell, origin, multiplier, points: [{index, light, radiance, back, albedo, normal, coverageP, coverageN}]}",
           "ONE CASCADE'S STORE AT WORLD POINTS — the voxel texel each point falls in, as it is STORED (before any read's kernel). A TEST AND TOOL verb: the renderer flushes and downloads the cascade's level-0 volumes whole (like world.giVoxelStats). Per point: 'index' [i, j, k] (null outside the cascade), 'light' the total light texel [r, g, b, a] in the store's units (premultiplied by the voxel's opacity a, times 'multiplier'), 'radiance' the surface radiance it stands for (rgb / a / multiplier), 'back' the same for the voxel's back side (the anisotropic tiers), 'albedo' [r, g, b, opacity], 'normal' the voxeliser's normal [x, y, z biased 0.5 + 0.5 n, 1 = two-sided], 'coverageP' / 'coverageN' the per-axis coverage of the faces looking +a / -a. 'cell' and 'origin' are the cascade's lattice in metres.",
@@ -1856,7 +1856,7 @@ QVariantMap WorldApi::gatherHits(const QVariantMap &params)
                 { QStringLiteral("radiance"), QVariantList{ r.radiance[0], r.radiance[1], r.radiance[2] } },
                 { QStringLiteral("distance"), r.distance },
                 { QStringLiteral("hit"), QVariantList{ r.hitPos[0], r.hitPos[1], r.hitPos[2] } },
-                { QStringLiteral("normalY"), r.hitNormalY },
+                { QStringLiteral("normal"), QVariantList{ r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] } },
                 { QStringLiteral("sun"), r.sunVisibility } });
         const double lum = 0.2126 * r.radiance[0] + 0.7152 * r.radiance[1] + 0.0722 * r.radiance[2];
         const auto add = [&](Acc &a) {
@@ -1866,7 +1866,7 @@ QVariantMap WorldApi::gatherHits(const QVariantMap &params)
         };
         add(src[r.source]);
         if (isHit) {
-            const int c = r.hitNormalY > 0.7f ? (r.sunVisibility > 0.5f ? 0 : 1) : 2;
+            const int c = r.hitNormal[1] > 0.7f ? (r.sunVisibility > 0.5f ? 0 : 1) : 2;
             add(cls[c][r.source]);
         }
     }

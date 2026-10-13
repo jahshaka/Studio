@@ -23,10 +23,13 @@
 //                                   Bistro 0.216 x 1.0 x 0.875 x 0.816 (the sun's colour) x 0.743
 //                                   = 0.114 (a camera pixel is NOT the law: it carries the lobe's
 //                                   view term, 1.27x at Bistro's ORCA view). Wall points h >= 4 m.
-//   clutter    gi.far_sun_clutter — the Bistro's dilution: sixty grey raised slabs (lit tops, dark
-//                                   undersides) in front of the wall; the ratio to the closed form
-//                                   (which counts every face of them) within 0.90-1.10 of the clean
-//                                   arm's.
+//   clutter    gi.far_sun_clutter — the Bistro's dilution: a cafe TERRACE in front of the wall
+//                                   (grey tables and chairs - tops, seats, backs, legs: lit tops,
+//                                   sides facing every way, dark undersides, the floor under them
+//                                   shaded - several pieces inside every cascade-3 cell of the
+//                                   street, the shape of Bistro's chairs and tables); the ratio to
+//                                   the closed form (which counts every face of them, exact
+//                                   geometry) within 0.90-1.10 of the clean arm's.
 //   contrast   gi.store_contrast  — a black floor patch beside the sunlit grey floor, both in
 //                                   cascade 3: what a gather ray reads at the black patch is
 //                                   < 0.15 of what it reads on the sunlit grey (the store's own
@@ -226,6 +229,7 @@ struct Fixture {
     MeshId cube = 0;
     MaterialId grey = 0, black = 0;
     NodeId floor = 0;
+    std::vector<NodeId> greys;   ///< every grey node but the floor (the clutter): black in the dark arm
     std::vector<Box> boxes;   ///< the analytic twin of everything attached
 };
 
@@ -366,11 +370,17 @@ double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose =
 {
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
     const double L = floorRadiance();
-    f.s->attachMesh(f.floor, f.cube, f.grey);
+    // THE DARK ARM blackens EVERY grey surface (the floor and the clutter): the closed form counts
+    // the light of all of them, so the measured share must be all of them too.
+    const auto paint = [&](MaterialId m) {
+        f.s->attachMesh(f.floor, f.cube, m);
+        for (NodeId n : f.greys) f.s->attachMesh(n, f.cube, m);
+    };
+    paint(f.grey);
     const GatherStatus lit = settled(f);
-    f.s->attachMesh(f.floor, f.cube, f.black);
+    paint(f.black);
     const GatherStatus dark = settled(f);
-    f.s->attachMesh(f.floor, f.cube, f.grey);
+    paint(f.grey);
     double sm = 0.0, se = 0.0;
     int n = 0;
     for (const Vec3 &p : wallPoints()) {
@@ -421,17 +431,33 @@ int modeShare(Fixture &f, bool clutter)
         return 0;
     }
     const double clean = shareRatio(f, kFarCam, "CLEAN  ", false);
-    // STREET CLUTTER, THE BISTRO'S SHAPE: GREY and LIT tops over DARK undersides - sixty raised
-    // grey slabs (table and seat tops, 0.3-0.6 m square, 5 cm thick, 0.4-0.8 m up, a fixed
-    // scatter) in front of the wall. The closed form counts every face of them: the lit tops
-    // and sun-facing sides add light, the undersides are dark, the floor under them shaded.
-    unsigned seed = 12345u;
-    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
-    for (int i = 0; i < 60; ++i) {
-        const float sz = 0.3f + 0.3f * rnd();
-        const Vec3 c(0.8f + 10.4f * rnd(), 0.4f + 0.4f * rnd(), -9.0f + 18.0f * rnd());
-        addBox(f, c, Vec3(sz, 0.05f, sz), f.grey, true);
-    }
+    // STREET CLUTTER, THE BISTRO'S SHAPE (C.3, RESUME item 3: raised slabs did NOT reproduce it - grey
+    // slabs read 0.96 of the clean arm): a cafe TERRACE across the canyon's floor, 4 rows x 11 tables
+    // on a 1.6 m x 1.7 m grid, every table with two chairs facing it from +-z. A table: a 0.7 m square
+    // top (4 cm, 0.72-0.76 m up) on a 8 cm pedestal; a chair: a 0.42 m seat (0.43-0.47 m up) on four
+    // 3 cm legs, a back 0.45 m tall on the side away from the table. Every face of them is grey and
+    // in the closed form; the floor under them is in their shadow; a cascade-3 cell of the street
+    // (1.875 m) holds a table, its chairs' backs and legs, and the floor - tops facing the sun, sides
+    // facing every way, undersides dark, the merge's one normal turned off the street's.
+    const auto clutterBox = [&](const Vec3 &c, const Vec3 &size) {
+        f.greys.push_back(addBox(f, c, size, f.grey, true));
+    };
+    for (int ix = 0; ix < 4; ++ix)
+        for (int iz = 0; iz < 11; ++iz) {
+            const float x = 5.6f + 1.6f * float(ix), z = -8.5f + 1.7f * float(iz);
+            clutterBox(Vec3(x, 0.74f, z), Vec3(0.7f, 0.04f, 0.7f));
+            clutterBox(Vec3(x, 0.36f, z), Vec3(0.08f, 0.72f, 0.08f));
+            for (int side = -1; side <= 1; side += 2) {
+                const float cz = z + float(side) * 0.55f;
+                clutterBox(Vec3(x, 0.45f, cz), Vec3(0.42f, 0.04f, 0.42f));
+                clutterBox(Vec3(x, 0.695f, cz + float(side) * 0.195f), Vec3(0.42f, 0.45f, 0.03f));
+                for (int lx = -1; lx <= 1; lx += 2)
+                    for (int lz = -1; lz <= 1; lz += 2)
+                        clutterBox(Vec3(x + float(lx) * 0.18f, 0.215f, cz + float(lz) * 0.18f),
+                                   Vec3(0.03f, 0.43f, 0.03f));
+            }
+        }
+    std::printf("   the terrace: %zu grey clutter boxes\n", f.greys.size());
     const double cluttered = shareRatio(f, kFarCam, "CLUTTER", false);
     CHECK_MSG(clean > 0.0 && cluttered > 0.0 && cluttered / clean >= 0.90 && cluttered / clean <= 1.10,
               "STREET CLUTTER IS COUNTED AS WHAT IT IS: the cluttered canyon reads %.3f of its closed form against "
@@ -567,15 +593,24 @@ int modeContrast(Fixture &f)
     addBox(f, patchC, Vec3(4.0f, 0.01f, 4.0f), f.black, false);
     f.s->setGlobalIllumination(highGi());
     f.view->setCamera(enginetest::testCameraDescLookAt(kFarCam, kTarget));
+    // THE CASCADES FIRST: the voxels are built (their pipelines compile off the frame - ASYNC-SHADERS-1) and
+    // the GI at rest before a ray is counted; until then a hit is answered by the decode, which shades the
+    // patch exactly and proves nothing about the store (the row read 0.00000 on the decode once).
+    GiVoxelVolume probe;
+    for (int i = 0; i < 1200 && !(f.s->giVoxelVolume(3, probe) && probe.available); ++i) render(f.e, 1);
+    CHECK(probe.available, "cascade 3 is built (its volume reads back)");
+    settled(f);
     f.e->setArm("gather.hitsReadback", 1.0);
-    render(f.e, 120);
+    render(f.e, 4);
     double litSum = 0.0, blackSum = 0.0;
-    unsigned litN = 0u, blackN = 0u;
+    unsigned litN = 0u, blackN = 0u, otherSource = 0u;
     for (int k = 0; k < 16; ++k) {
         render(f.e, 1);
         const GatherStatus g = f.s->giStatus().gather;
         for (const GatherRay &r : g.rays) {
-            if (r.distance <= 0.0f || r.hitNormalY < 0.7f || std::fabs(r.hitPos[1]) > 0.1f) continue;
+            if (r.distance <= 0.0f || r.hitNormal[1] < 0.7f || std::fabs(r.hitPos[1]) > 0.1f) continue;
+            // THE VOXEL ROUTE'S CASCADE 3 ONLY: what this row measures is the coarse store and its read
+            if (r.source != GatherRay::Voxel || r.cascade != 3) { ++otherSource; continue; }
             const double l = 0.2126 * r.radiance[0] + 0.7152 * r.radiance[1] + 0.0722 * r.radiance[2];
             const float x = r.hitPos[0], z = r.hitPos[2];
             if (std::fabs(x - patchC.x) < 1.5f && std::fabs(z - patchC.z) < 1.5f) { blackSum += l; ++blackN; }
@@ -584,8 +619,9 @@ int modeContrast(Fixture &f)
     }
     f.e->setArm("gather.hitsReadback", 0.0);
     const double lit = litN ? litSum / litN : 0.0, black = blackN ? blackSum / blackN : 0.0;
-    std::printf("   gather hits on the floor: sunlit grey %.5f (%u rays), the black patch %.5f (%u rays); the closed "
-                "form says %.5f and 0\n", lit, litN, black, blackN, floorRadiance());
+    std::printf("   gather hits on the floor, answered by cascade 3: sunlit grey %.5f (%u rays), the black patch %.5f "
+                "(%u rays); the closed form says %.5f and 0 (%u floor hits answered otherwise)\n", lit, litN, black,
+                blackN, floorRadiance(), otherSource);
     // ...and the STORE's own texels in cascade 3 (the read is separated from the write).
     GiVoxelVolume vol;
     if (f.s->giVoxelVolume(3, vol) && vol.available) {
