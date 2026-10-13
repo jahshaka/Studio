@@ -36,7 +36,10 @@ def load_gs():
 
 
 def _git(args, cwd):
-    r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    try:
+        r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    except OSError:                  # a tree without irisgl (a toy)
+        return ""
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
