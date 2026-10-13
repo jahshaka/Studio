@@ -184,7 +184,7 @@ def _when(r):
     return gate_runlog.instant(r.get("ts"))
 
 
-NEVER_RAN = ("NOADMIT", "NOTRUN")
+NEVER_RAN = ("NOADMIT", "NOTRUN", "NEVER-RAN")   # NEVER-RAN: a lane row whose queue job never started it (round 20)
 HARD = ("LOST", "OOM", "CRASH")          # never cleared by solos, never by `contention:`
 
 # THE VERDICT DOOR (TESTING_V3_SPEC §1.4; lane VERDICT-1 + the lead's band-aid addendum): a verdict clears an open red
@@ -1126,6 +1126,9 @@ def check(rng, build, gs=None, verdicts=None, mode="merge", lane=None, stage_clo
             # A STAGE-CLOSE ROW NEVER RUNS IN A MERGE (round 14 addendum): named, reached or otherwise — the lane's
             # self-audit record is its proof, the ship runs it
             need = [k for k in need if not (S.inv.get(k[0], {}).get("labels", set()) & gs.STAGE_CLOSE_LABELS)]
+        if mode == "merge" and not full:
+            # THE ONE UNIVERSE (round 19): the select's plan and this judge read the same inventory — the merge compares
+            print(f"ci-gate-check: UNIVERSE {len(need)} key(s) of the reach")
     pin = _git(["rev-parse", f"{tip_sha}:irisgl"], gs.ROOT)
     label = lambda k: f"{k[0]}{' :: ' + k[1] if k[1] else ''}"
     # THE RANGE'S EARLIER COMMITS, and EVERY ANCESTOR of the tip holding records (the serving candidates, RUNNER-A2), with
