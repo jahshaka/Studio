@@ -39,25 +39,8 @@ set_tests_properties(threading.staging_race PROPERTIES
 # raced on.
 jah_tsan_lane(threading.staging_race)
 
-# threading.mode (gate G1-c) and threading.gi_resolve — THE TWO COMPILE PAIRS, ONE ROW EACH
-# (TESTING-SPEED-B3; they were three ctest entries each: the parallel half, the _serial half and a
-# _pixels byte compare between their fixtures).
-#
-# The subject is a COMPARISON: the same scene opened once with the editor scene's real worker pool and
-# once with it pinned to a single thread (JAHSHAKA_SCENE_THREADS=1, read once at scene creation:
-# src/bridge/sceneworkerthreads.h), and the claim is that threaded and serial shader compilation produce
-# IDENTICAL pixels. tests/threading/pair.sh runs BOTH halves in sequence in one row:
-#   * TWO VIRGIN HOMEs, one per half (fresh_home.sh, the one wipe). Both halves must COMPILE, and a
-#     shared HOME would leave the second reading the first one's shader cache — turning the "it really
-#     compiled" assertion into a no-op and the serial half into no serial compile at all.
-#   * ENGINE UP (no --headless): the whole subject is shader compilation during a rendered frame.
-#   * BOTH HALVES EVERY RUN, nothing stored: the gi_resolve defect (COLDGI) showed in the SERIAL half,
-#     and a stored hash of either half would be a frozen picture against forward-building.
-#   * the compare is `cmp` on the two 640x360 PNGs — byte for byte, no tolerance.
-# STAGE-CLOSE (the ROWS table: a pair of Epic opens compiling cold is the ship's guard; the merge tier's
-# probe of the mode-2 flag is the lead's follow-up). RESOURCE_LOCK threading: the two pair rows never
-# compile beside each other (GATE-SPEED-1's verdict, spikes/gate-speed-1/); the COST starts the chain early.
-set(JAH_COST_THREADING 80000)
+# (threading.mode and threading.gi_resolve, the cold Epic compile pairs at 99-109 s, were over an app row's 60 s and are
+# deleted: TESTING-SIMPLE.)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 # threading.import_soak / threading.newproject_stall — THE TWO HANGS
 # (defect wave 2026-09-08; the mechanisms are in the scripts' own headers).
@@ -173,6 +156,13 @@ set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
     DEPENDS threading.import_soak FIXTURES_REQUIRED "threading_home_import_soak;threading_run_import_soak"
     LABELS "threading;measure" TIMEOUT 60)
 
+add_test(NAME threading.newproject_stall.no_groupless_texture
+         COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
+                 -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
+set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
+    DEPENDS threading.newproject_stall FIXTURES_REQUIRED "threading_home_newproject_stall;threading_run_newproject_stall"
+    LABELS "threading" TIMEOUT 60)
+
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
@@ -187,6 +177,7 @@ set_property(TEST threading.newproject_stall APPEND PROPERTY FIXTURES_SETUP thre
 foreach(_row_frames
         "threading.import_soak=550"
         "threading.import_soak.no_groupless_texture=0"
+        "threading.newproject_stall.no_groupless_texture=0"
         "threading.newproject_stall=494"
         "threading.newproject_stall.timing=500"
         "threading.staging_race=255"

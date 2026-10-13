@@ -727,6 +727,7 @@ threading.freshhome.texture_wait_watchdog 0.00  ship 3a0422b4e (2026-10-13)
 threading.import_soak 42.59  quiet n=50
 threading.import_soak.no_groupless_texture 0.00  ship 3a0422b4e (2026-10-13)
 threading.newproject_stall 38.65  quiet n=50
+threading.newproject_stall.no_groupless_texture 0.01  quiet n=48
 threading.newproject_stall.timing 14.72  hand: its TESTING-DEBTS-1 dev run (the fixture: a wipe) (no PASS run in the log)
 threading.staging_race 1.63  quiet n=47
 threading.texture_wait_watchdog 21.60  ship 3a0422b4e (2026-10-13)
