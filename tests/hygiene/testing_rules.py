@@ -302,6 +302,18 @@ def fresh_home_behaves(source):
         check(r.returncode == 3 and gone(home)
               and os.path.isfile(os.path.join(td, ".evidence", "home-a", "run", "x.png")),
               "fresh_home: a red run keeps its exit code and MOVES its home to the evidence")
+        # ROUND 14 ADDENDUM 2: A FIXTURE'S SETUP keeps what its THEN wrote (the consumer reads it); the CONSUMER's green exit
+        # (--after) wipes the home
+        fx = os.path.join(td, "x", "e2e-home-fixture")
+        r = subprocess.run(["sh", fh, "--setup", fx, "--", "sh", "-c", "echo standin > %s/lod_standin.obj" % fx],
+                           capture_output=True, text=True)
+        kept = os.path.isfile(os.path.join(fx, "lod_standin.obj"))
+        c = subprocess.run(["sh", "-c", "test -f %s/lod_standin.obj" % fx])
+        a = subprocess.run(["sh", fh, "--after", "0", fx], capture_output=True, text=True)
+        check(r.returncode == 0 and kept and c.returncode == 0 and a.returncode == 0
+              and not os.path.exists(os.path.join(fx, "lod_standin.obj")),
+              "fresh_home: a FIXTURE SETUP (--setup) keeps the file its THEN wrote for the consumer; the consumer's green "
+              "exit (--after 0) wipes the home (kept %s)" % kept)
         # ROUND 5: A ROW'S WORKING DIRECTORY SURVIVES THE WIPE — a toy pool whose ctest WORKING_DIRECTORY is <home>/run
         ph = os.path.join(td, "x", "pool-home-toy")
         os.makedirs(os.path.join(ph, "run"))
@@ -402,6 +414,18 @@ def main(source, build):
     raw, rc = gs.gate_graph.ctest_inventory(build)
     bad = r6_bad(json.loads(raw or "{}").get("tests", [])) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R6 a row that DEPENDS on another row's run requires a fixture that run sets up %s" % bad[:8])
+    # ROUND 14 ADDENDUM 2: THE WIPE AFTER is the home's LAST use only — never on a row that sets up a fixture (its files are
+    # another row's input: threading.mode's shot, a parent run's logs) and never on a home wipe's own setup row
+    def _props(t):
+        return {p.get("name"): p.get("value") for p in t.get("properties", []) or []}
+    wipe_bad = []
+    for t in (json.loads(raw or "{}").get("tests", []) if rc == 0 else []):
+        pr = _props(t)
+        env = " ".join(str(x) for x in (pr.get("ENVIRONMENT_MODIFICATION") or []))
+        if "JAH_WIPE_AFTER" in env and pr.get("FIXTURES_SETUP"):
+            wipe_bad.append(t.get("name"))
+    check(not wipe_bad, "R9 no row that SETS UP a fixture wipes its home on exit (JAH_WIPE_AFTER): its files are another "
+          "row's input %s" % wipe_bad[:8])
 
     tests = json.loads(raw or "{}").get("tests", []) if rc == 0 else []
     pend_path = os.path.join(source, "tests", "hygiene", "frames_pending.txt")
