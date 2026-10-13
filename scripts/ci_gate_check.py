@@ -318,6 +318,19 @@ def defects_of_kind(defects, kind):
     return out
 
 
+def known_of_kind(rows, kind):
+    """{row: the id of an OPEN registry entry OF THIS BUILD KIND naming it, or None} — the ship's sanitizer phases ask it
+    (round 25: an LSan run in the Debug build is `asan`, the TSan build's `tsan`); None for every row without a registry."""
+    defects, _ = gate_runlog.defects_load()
+    reg = KnownRegistry(defects_of_kind(defects or {}, kind))
+    out = {}
+    for r in rows:
+        e = next((x for x in reg.defects.values() if r in (x.get("rows") or [])
+                  and gate_runlog.defect_state(x) == "open"), None)
+        out[r] = e.get("id") if e else None
+    return out
+
+
 class KnownRegistry:
     """A MERGE'S KNOWN ROW (round 14: at a merge the door arbitrates nothing): any row with an OPEN registry entry naming it
     — served as KNOWN at the select (never run), passed by the merge's judge. The push and the stage close keep every
