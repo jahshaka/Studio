@@ -27,14 +27,21 @@
 //                                   (grey tables and chairs - tops, seats, backs, legs: lit tops,
 //                                   sides facing every way, dark undersides, the floor under them
 //                                   shaded - several pieces inside every cascade-3 cell of the
-//                                   street, the shape of Bistro's chairs and tables); the ratio to
+//                                   street, the shape of Bistro's chairs and tables); its ratio to
 //                                   the closed form (which counts every face of them, exact
 //                                   geometry, SINGLE SCATTER - so this mode runs bounces 0, the
-//                                   direct store alone) within 0.90-1.10 of the clean arm's. RED
-//                                   (VOXEL-STORE-OVERCOUNT-1, registered): terrace 1.235 against
-//                                   clean 0.963 at bounces 0 and at bounces 1 alike (the shipped
-//                                   bounce adds no grey-to-grey light here: no sky, one bounce =
-//                                   the direct store), so the over-count is the store's.
+//                                   direct store alone) within 0.90-1.10, and within 0.90-1.10 of
+//                                   the clean arm's. GREEN since FAR-SUN-2 (a voxel-answered hit's
+//                                   direct light computed AT THE HIT, jah_rq_hit_direct.glsl):
+//                                   terrace 1.060, clean 1.025-1.070 (the store read whole: 1.235 /
+//                                   0.963 - a lit face read its cell's mean, a shaded one the lit
+//                                   floor's light). The wall's own probes' rays read 0.999 of
+//                                   their truth: the rest is the gather's integration, not the
+//                                   store (spikes/far-sun-2/NOTES.md sections 10, 17).
+//   lamp       gi.far_sun_lamp    — no sun: a point lamp and a glowing crate; every voxel-answered
+//                                   gather ray against its exact radiance (the lamp's falloff x cos
+//                                   x DA x its shadow, + the glow), paired with the arm gi.hitDirect
+//                                   = 0 on the same rays (nothing darkens).
 //   contrast   gi.store_contrast  — a black floor patch beside the sunlit grey floor, both in
 //                                   cascade 3: what a gather ray reads at the black patch is
 //                                   < 0.15 of what it reads on the sunlit grey (the store's own
@@ -1350,7 +1357,7 @@ int modeDiag(Fixture &f)
 namespace lamp {
 const Vec3 kLampPos(6.0f, 2.5f, 0.0f);
 constexpr float kLampI = 8.0f, kLampRange = 15.0f, kLampSrc = 0.1f, kGlow = 0.5f;
-const Vec3 kCrateC(8.0f, 0.4f, -2.5f), kCrateSize(0.8f, 0.8f, 0.8f);
+const Vec3 kCrateC(8.0f, 0.6f, -2.5f), kCrateSize(1.2f, 1.2f, 1.2f);
 
 double falloff(double d) {
     const double x = d / kLampRange, x2 = x * x;
@@ -1408,6 +1415,8 @@ int modeLamp(Fixture &f)
     f.s->setGatherTuning(t);
     const Vec3 cam = kNearCam;
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
+    // THE SETTLE BY THE GATHER'S OWN REST LAW alone (modeCascade's rule): no floor of frames under it
+    gSettleMin = 0u;
     // the rays of one arm: [cell, ray] -> the record
     const auto rays = [&](double arm) {
         f.e->setArm("gi.hitDirect", arm);
@@ -1415,7 +1424,7 @@ int modeLamp(Fixture &f)
         f.e->setArm("gather.hitsReadback", 1.0);
         std::map<long long, GatherRay> out;
         unsigned last = 0u;
-        for (int i = 0; i < 30 && out.size() < 200000u; ++i) {
+        for (int i = 0; i < 10 && out.empty(); ++i) {   // rays through texel centres: one frame's records are the set
             render(f.e, 1);
             const GatherStatus g = f.s->giStatus().gather;
             if (g.rays.empty() || g.raysFrame == last) continue;

@@ -197,6 +197,7 @@ gi.env_ray_match 5.21  quiet n=43
 gi.far_blas 3.86  quiet n=43
 gi.far_sun_clutter 106.29  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_clutter_c3 5.62  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (5.50/5.62/5.67)
+gi.far_sun_lamp 6.11  hand: FAR-SUN-2 solo under gpu-exclusive, n=3 (6.07/6.11/6.12)
 gi.far_sun_share 104.33  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_share_c3 4.96  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (4.87/4.96/5.03)
 gi.field_alias 72.80  ship 3a0422b4e (2026-10-13)
