@@ -30,7 +30,10 @@ if(NOT EXISTS "${BINARYCREATOR_PATH}")
 endif()
 
 if(NOT BINARYCREATOR_PATH OR NOT EXISTS "${BINARYCREATOR_PATH}")
-    message(FATAL_ERROR "binarycreator not found. Please install Qt Installer Framework or set BINARYCREATOR_PATH.")
+    # The installer is a packaging target, never a configure gate: without the Qt Installer
+    # Framework the Release binary still configures and builds; create_installer is not defined.
+    message(STATUS "installer skipped: binarycreator not found (install the Qt Installer Framework or set BINARYCREATOR_PATH)")
+    return()
 endif()
 
 message(STATUS "Using binarycreator at: ${BINARYCREATOR_PATH}")
