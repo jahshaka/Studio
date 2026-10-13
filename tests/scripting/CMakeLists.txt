@@ -400,6 +400,10 @@ jah_pool_arm(gi_verbs gi_voxel_store ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_
 # table is the Studio registry's and a second copy of it is the defect this
 # lane deleted five of.
 jah_pool_arm(gi_verbs_b field_every_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_field_every_tier.js 20)
+# FAR-SUN-1: world.gatherHits and world.giVoxelRead from a script on the Basic template - each
+# answer's shape (the fields, the counts where the scene has rays, the voxel read's cell answers);
+# the API-first law's test for the two instrument verbs (photon.view drove them until B1 deleted it).
+jah_pool_arm(gi_verbs_b gather_hits_verbs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_hits_verbs.js 2)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip

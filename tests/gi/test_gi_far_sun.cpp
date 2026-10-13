@@ -563,9 +563,11 @@ int modeHits(Fixture &f)
     // (photonViewRefusal speaks for PRESENTING views; an offscreen suite view is not one, so it
     // reads "nowhere to paint" here - the picture below is the proof the view paints.)
     f.s->setPhotonView(PhotonView::GatherHits);
-    render(f.e, 90);
+    // THE FIRST READBACK, in frames (FAR-SUN-1 2026-10-13: a fixed 90-frame settle cut): the
+    // instrument names every ray of the frame it read, whatever the GI's rest - the row waits for
+    // the first frame the readback holds, nothing longer.
     GatherStatus g;
-    for (int i = 0; i < 20 && g.rays.empty(); ++i) {
+    for (int i = 0; i < 120 && g.rays.empty(); ++i) {
         render(f.e, 1);
         g = f.s->giStatus().gather;
     }

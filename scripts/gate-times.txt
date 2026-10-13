@@ -228,7 +228,7 @@ gi.gather_deterministic 8.71  quiet n=41
 gi.gather_edge 9.11  quiet n=42
 gi.gather_estimator 15.54  hand: TESTING-SPEED-B1 fix round (ABBA + the error bar, 1270 frames), 2026-10-12 2x:xx, box busy; budget 15 s: the measurement (the lead 2026-10-12; <= 10 s warm)
 gi.gather_glass 6.52  quiet n=40
-gi.gather_hits_view 11.26  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
+gi.gather_hits_view 2.56  hand: FAR-SUN-1 2026-10-13, the first-readback wait (5 frames), n=1
 gi.gather_letterbox 7.15  quiet n=41
 gi.gather_motion 5.78  quiet n=46
 gi.gather_nest 9.11  quiet n=43
@@ -569,6 +569,7 @@ pool.gi_verbs_b 34.77  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admi
 pool.gi_verbs_b::field_every_tier 12.21  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_b::gather_default 5.95  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_b::gather_row 0.73  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
+pool.gi_verbs_b::gather_hits_verbs 1.55  hand: FAR-SUN-1 2026-10-13, the pool's own ARM line (1549 ms), n=1
 pool.gi_verbs_b::gi_bounds 1.97  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_b::gi_ddgi 1.81  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
 pool.gi_verbs_stage 121.60  solo median of 3, 2026-10-12 (TESTING-SPEED-B2, -j1, admitted, the wait subtracted)
