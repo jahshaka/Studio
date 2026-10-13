@@ -494,26 +494,6 @@ def defects_load(log=sys.stderr):
     return out, None
 
 
-def contention_of(defects):
-    """THE CONTENTION CLASS: {row: its STANDING entry} — open, ENROLLED `nondeterminism` entries whose recheck
-    date has not passed (a single-use NOT REPRODUCED entry is never the class)."""
-    out = {}
-    for e in (defects or {}).values():
-        if (e["kind"] == "nondeterminism" and defect_state(e) == "open" and e.get("enrolled")
-                and not recheck_past(e)):
-            for r in e["rows"]:
-                out.setdefault(r, e)
-    return out
-
-
-def contention_list():
-    """{row: one line} of the contention class (the registry's open nondeterminism entries), or None when the
-    registry cannot be read (defects_load says why) — gate-scope.sh --solo's reader."""
-    d, _ = defects_load()
-    if d is None: return None
-    return {r: f"{e['id']}: {e['cause']} [{defect_date(e)}; recheck: {e['recheck']}]" for r, e in contention_of(d).items()}
-
-
 def lanes_of(r):
     """The lanes a record belongs to: its `lanes` list (forward only — a record without it belongs to no lane for the
     judge)."""
@@ -963,19 +943,6 @@ def census(own_root=None, mem=None, ctests=None):
     return {"gpu_apps": apps, "gpu_competitors": comp,
             "baseline": baseline_file() if base is not None else "MISSING: only our own GPU processes counted",
             "other_ctests": oc, "builds": builds_outside(own_root), "psi10_mem": m.get("psi10"), "psi10_io": _psi("io")}
-
-
-def competitors(c):
-    """The census's competitors as words ([] = none measured)."""
-    c = c or {}
-    out = []
-    if c.get("gpu_competitors"): out.append("%d GPU process(es) competing (%s)" % (
-        len(c["gpu_competitors"]), ", ".join(f"{a['name']}:{a['pid']}" for a in c["gpu_competitors"][:3])))
-    if (c.get("other_ctests") or 0) > 0: out.append(f"{c['other_ctests']} sibling ctest(s)")
-    if (c.get("builds") or 0) > 0: out.append(f"{c['builds']} build process(es) outside the gate")
-    for k in ("psi10_mem", "psi10_io"):
-        if (c.get(k) or 0) >= CENSUS_PSI: out.append(f"{k.split('_')[1]} pressure {c[k]} %")
-    return out
 
 
 # QUIET (RUNNER-A1; TESTING_RUNNER_SPEC §3.1): a record ran on a QUIET box when NOTHING ELSE competed — no sibling ctest,

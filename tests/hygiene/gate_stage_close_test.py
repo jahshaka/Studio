@@ -15,10 +15,9 @@ scoped gate only when the diff touches its OWN subject.
        `stage-close` row and no other, the quiet-box and timing ones only in the
        -j1 phase; the MERGE tier selects none of them;
     6. the retired tier flag is refused, and the refusal names `--stage-close-tier`.
-    7. THE STAGE-CLOSE JUDGE (ci_gate_check.py --stage-close <tip>) refuses a push / stage close while a
-       stage-close row has no record at the tip or is red (a prose verdict is refused by the door; a later
-       green run at the tip does not erase the red), and accepts when every row is green (a private run log
-       and an empty defect registry; this build's stage-close rows).
+    7. THE STAGE-CLOSE SELECTION (ci_gate_check.py --stage-close <tip>; the one judge) refuses while a
+       stage-close row never ran or is red with no entry / verdict; the lead's verdict makes it KNOWN; the newest
+       record at the tip decides (a private run log and an empty defect registry; this build's stage-close rows).
   labels — the tree: no retired label or word (OLD below) in tests/, scripts/ or docs/ (git ls-files); and in
     this build the shadow casters' gate rows run ONE process without the label, their `.churn` twins
     TEN with `stage-close` + `engine`.
@@ -199,23 +198,25 @@ def judge_cases(source, build, scratch, rows):
                             "--stage-close", "--build", build] + list(extra), cwd=source, capture_output=True,
                            text=True, env=env)
         return r.returncode, r.stdout + r.stderr
-    rc, out = judge("--mode", "merge")
-    check(rc == 2 and "never merge" in out, "--stage-close with --mode merge is refused, never ignored (exit %d)" % rc)
     rc, out = judge()
-    check(rc == 1 and "no record" in out, "no record at the tip: REFUSED (exit %d)" % rc)
+    check(rc == 1 and "NEVER RAN" in out, "no record at the tip: NEVER-RAN [OWED], REFUSED (exit %d)" % rc)
     for n in rows:
         rec(n, "PASS", "2026-10-09T10:00:00+00:00")
     rc, out = judge()
-    check(rc == 0 and "%d row(s) green" % len(rows) in out, "every stage-close row green: accepted (exit %d)" % rc)
+    check(rc == 0 and ("%d row(s) — %d green" % (len(rows), len(rows))) in out,
+          "every stage-close row green: accepted (exit %d)" % rc)
     rec(rows[0], "FAIL", "2026-10-09T11:00:00+00:00")
     rc, out = judge()
     check(rc == 1 and "RED " + rows[0] in out, "one red stage-close row BLOCKS (exit %d)" % rc)
-    rc, out = judge("--verdict", rows[0] + "=a toy verdict")
-    check(rc == 1 and "VERDICT REFUSED" in out, "...and a prose verdict does not answer it: the door refuses (exit %d)" % rc)
-    rec(rows[0], "PASS", "2026-10-09T12:00:00+00:00")
-    rec(rows[0], "PASS", "2026-10-09T12:05:00+00:00")
+    rc, out = judge("--verdict", rows[0] + "=a toy verdict: the lead read it")
+    check(rc == 0 and "KNOWN " + rows[0] in out, "...the lead's verdict answers it: KNOWN, accepted — the one judge, "
+          "round 27 (exit %d)" % rc)
+    rec(rows[0], "FAIL", "2099-10-09T13:00:00+00:00")         # (after the verdict, which is stamped now)
     rc, out = judge()
-    check(rc == 1, "a later green run at the same tip does not erase the red (exit %d)" % rc)
+    check(rc == 1, "...a red after the verdict blocks again (exit %d)" % rc)
+    rec(rows[0], "PASS", "2099-10-09T14:00:00+00:00")
+    rc, out = judge()
+    check(rc == 0, "...a later green run at the tip answers it: the newest record decides (exit %d)" % rc)
 
 
 def label_cases(source, build):

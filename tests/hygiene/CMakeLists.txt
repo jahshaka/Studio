@@ -178,11 +178,10 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/no_renders_tracked.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_renders_tracked PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.no_renders_tracked)
-    # gate.ci_check — THE MERGE REFUSAL (MODULAR-GATE-1 T6; the flake law since TEST-SELECTOR-1):
-    # scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip
-    # and its reds are answered — 3/3 solo for a contention-class suite, a recorded verdict for any
-    # other; a fork pin bump needs the whole tier (a recorded range against a private run log and a
-    # private contention list; ~15 s).
+    # gate.ci_check — THE REFUSAL (MODULAR-GATE-1 T6; the one judge since TESTING-SPEED-A round 27):
+    # scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip and
+    # each red is KNOWN or carries the lead's verdict; the records' tree, the fork pin's component reach
+    # (a recorded range against a private run log and registry; ~15 s).
     add_test(NAME gate.ci_check
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ci_gate_check_test.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
@@ -210,13 +209,10 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.cost)
-    # gate.verdict_door / noadmit_pool / carried_red / contention_shape / log_schema2 — THE JUDGE'S FOUR
-    # DOORS (VERDICT-1 + GATE-LOG-1; ONE_PICTURE_SPEC H1/H2; TESTING_GATE §4): a verdict clears a red only
-    # through a registered fact (real:<id> of testing/defects.json, proved at a later sha that reaches the row or
-    # KNOWN RED on the base; contention: on an enrolled row with a competitor census + 3/3; xid-read: only on an
-    # unreadable journal); an all-NOADMIT pool never ran; a lane's own records carry their open reds; the
-    # registry's shape (a bad entry quarantined); schema 2's fields and gate-report.py (on the box's archive:
-    # the preflight's numbers). Toy logs, a private run log / registry / token dir (~5-50 s each).
+    # gate.verdict_door / noadmit_pool / contention_shape / log_schema2 — THE ONE JUDGE (TESTING-SPEED-A round 27;
+    # TESTING_GATE §4): green passes; a red is KNOWN by an open entry of the run's build kind or the lead's verdict,
+    # else refused; never-ran is owed; nothing carried; an all-NOADMIT pool never ran; the registry's shape (a bad
+    # entry quarantined); schema 2's fields and gate-report.py. Toy logs, a private run log / registry / token dir.
     add_test(NAME gate.verdict_door
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" verdict_door
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
@@ -227,11 +223,6 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(gate.noadmit_pool PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
     jah_no_display(gate.noadmit_pool)
-    add_test(NAME gate.carried_red
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" carried_red
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.carried_red PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.carried_red)
     add_test(NAME gate.contention_shape
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" contention_shape
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")

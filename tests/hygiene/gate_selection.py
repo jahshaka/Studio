@@ -524,7 +524,18 @@ def main(source, build):
         else:
             check(not S.fallback, "%s: no fallback (%s)" % (c["lane"], S.fallback[:2]))
         if c.get("whole_tier"):
-            check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
+            # THE CASE'S PREMISE IS THIS CHECKOUT'S (a fork diff it CANNOT read): a clone that holds the rebased-away commit
+            # reads it, and the selector's rule for a readable pin move is its component reach — asked as such, said
+            fb = S.fork_bump or {}
+            fork = os.path.join(source, "irisgl", "thirdparty", "ogre-next")
+            readable = bool(fb.get("old") and fb.get("new")) and all(
+                subprocess.run(["git", "-C", fork, "cat-file", "-e", x + "^{commit}"], capture_output=True).returncode == 0
+                for x in (fb["old"], fb["new"]))
+            if readable and not S.full_tier and fb.get("files") is not None:
+                check(True, "%s: this checkout's fork clone READS the diff (%s..%s): selected by its component reach (the "
+                      "case's tier rule is for a clone that cannot)" % (c["lane"], fb["old"][:9], fb["new"][:9]))
+            else:
+                check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
         if c.get("fork_reach"):
             # T2: a pin bump selects by the fork diff's reach, never the tier (that runs once, at the merge)
             check(bool(S.fork_bump) and not S.full_tier and (S.fork_bump or {}).get("files") is not None,
