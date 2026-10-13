@@ -45,7 +45,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(looks.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 81)

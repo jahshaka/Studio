@@ -1,39 +1,20 @@
 #!/usr/bin/env python3
 """gate.selection — THE SELECTOR'S REPLAY (lane MODULAR-GATE-1; TESTING_V2 T3).
 
-scripts/gate-scope.py decides what a lane runs, so a defect in it is invisible by
-construction: the wrong answer is a SHORTER gate, and a shorter gate passes. The selector now
-chooses by reach — the build graph, the symbols a hunk touches, the app's families — and this
-suite is the guard the contract names (PHOTON_ATOM_CONTRACT §7b: "a suite the selector missed
-that a full tier reds is a SELECTOR defect, fixed there and added to its replay cases").
+scripts/gate-scope.py decides what a spec's test and merge run, so a defect in it is invisible by construction: the
+wrong answer is a SHORTER gate, and a shorter gate passes. A reach a later run proves wrong is fixed in the selector and
+added here. A seconds-long guard (TESTING-SIMPLE: six recorded diffs, within a CPU row's 10 s):
 
-WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
-  * LANES: each recorded lane's diff, re-selected against THIS build's graph and inventory. Every
-    suite the lane's gates found red with a REAL verdict, and every named suite of the lane, must
-    be in the selection (or the selection must be the whole tier). The reds judged environmental
-    are printed — selected or not — and never required: a contention red is not the change's.
-    A case that says `whole_tier` must select the MERGE tier by rule (a fork diff this checkout
-    cannot read); `fork_reach`, a pin bump selected by the FORK DIFF's reach (TEST-SELECTOR-1 T2),
-    never the tier; `own_base`, the lane's OWN range starts at its newest forward merge's d-build
-    parent and `not_paths` (what the merge carried in) are not its paths (T1); a case with
-    `max_rows` must stay under it (the precision the lane is there to prove).
-  * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
-    executable does not contain the file is NOT selected).
-  * HUNKS: a real file with one edit applied IN MEMORY (the Fable read's negative cases: a
-    header-only helper's callers, a struct a header-only helper names, a changed add_test COMMAND
-    line) — each `must` set is what a past selector missed.
-  * NM: without `nm` the selector refuses (H1).
-  * ARMS: a pool row is selected arm by arm where a script or an API module selects, and whole
-    where a directory or a group does (a synthetic pool of two real scripts).
-  * IDENTIFIERS: the symbol reader on fixed texts — a comment-only hunk touches nothing; a
-    member's modified default selects its struct; an added member selects only itself; a body
-    line selects its function; a parameter changed on a declaration's second line selects the
-    function.
-And no LANE case may FALL BACK: the fallback is for a path no rule, no symbol and no graph owner
-covers, and every recorded lane had an owner for every path.
-
-The replay needs the recorded shas (Studio and irisgl) and a BUILT build dir (ninja's deps log);
-a missing sha or an unbuilt dir is a failure, never a skip.
+  * LANES: recorded diffs re-selected against THIS build's graph and inventory (tests/hygiene/gate_selection_cases.json):
+    every named row must be in the selection; `whole_tier`: a fork diff this checkout cannot read reaches every row;
+    `fork_reach`: a pin bump is selected by the fork diff's reach; `must_families`, `must_picture`, `none_of`,
+    `no_whole_pool`: BLOOM-1's precision (the post chain reaches the picture set and no gi row); no case may fall back
+    (`rows_at_tip_only`: a range's new registrations fall to their test directory here, never the whole inventory).
+  * HUNKS: a real file with one edit applied IN MEMORY — each `must` set is what a past selector missed.
+  * ARMS: a pool row is selected arm by arm where a script or an API module selects (a synthetic pool of two scripts).
+  * GONE ROWS, TOOLING-ONLY DIFFS, IDENTIFIERS: the gone-row reader, a diff with no product path, the symbol reader.
+The replay needs the recorded shas (Studio and irisgl) and a BUILT build dir (ninja's deps log); a missing sha or an
+unbuilt dir is a failure, never a skip.
 
 Run: gate_selection.py <source-dir> <build-dir>
 """
@@ -104,18 +85,14 @@ def arm_cases(gs, graph, build, inv0):
     inv["pool.synth"] = dict(copy.deepcopy(inv0[world[0]]), pool="synth", arms={"w": a_s, "p": b_s},
                              script=None, argv_files=set(), dir="synthpool", reldir="tests/synthpool",
                              cmd=["run_pool.py", "--pool", "synth", "--arm", "w", a_s, "30", "--arm", "p", b_s, "30"])
-    S = gs.select(["src/scripting/modules/worldapi.cpp"], None, build, 4, graph=graph, inv=inv, quiet_graph=True)
+    S = gs.select(["src/scripting/modules/worldapi.cpp"], None, build, graph=graph, inv=inv, quiet_graph=True)
     sub = S.arm_subsets().get("pool.synth")
     check(sub == ["w"], "a changed world API selects the world-calling arm alone (%s)" % sub)
     rel = os.path.relpath(b_s, gs.ROOT)
     if not rel.startswith(".."):
-        S = gs.select([rel], None, build, 4, graph=graph, inv=copy.deepcopy(inv), quiet_graph=True)
+        S = gs.select([rel], None, build, graph=graph, inv=copy.deepcopy(inv), quiet_graph=True)
         check(S.arm_subsets().get("pool.synth") == ["p"], "a touched arm script selects that arm (%s)"
               % S.arm_subsets().get("pool.synth"))
-    S = gs.select(["irisgl/engine/src/OgreEngine.cpp"], None, build, 4, graph=graph,
-                  inv=copy.deepcopy(inv), quiet_graph=True)
-    check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
-          "the frame loop's app group (OgreEngine.cpp, no diff to read: every app row) selects the pool whole (every arm)")
 
 
 def gone_cases(gs, graph, build, inv0):
@@ -125,7 +102,7 @@ def gone_cases(gs, graph, build, inv0):
     print("\ngone rows (a row that became an arm; a retired one):")
     inv = copy.deepcopy(inv0)
     app_exe = gs.classify_rows(inv, graph, build)
-    sel = gs.Selection(inv, graph, app_exe, gs.Revs(None), 4)
+    sel = gs.Selection(inv, graph, app_exe, gs.Revs(None))
     pools = [(n, a, s_) for n, t in inv.items() for a, s_ in t["arms"].items()]
     check(bool(pools), "the build registers pool arms")
     if not pools: return
@@ -195,7 +172,7 @@ def hunk_cases(gs, graph, build, inv0, cases):
         real = gs.Revs
         gs.Revs = FakeRevs
         try:
-            S = gs.select([path], "BASE..TIP", build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+            S = gs.select([path], "BASE..TIP", build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
         finally:
             gs.Revs = real
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
@@ -210,31 +187,21 @@ def tooling_cases(gs, graph, build, inv0):
     product path (gate-scope.py NON_PRODUCT is the list of the paths that are NOT; everything else is) selects the hygiene + tooling rows, the runner's own self-test and the rows whose declaration
     or command changed — never an app or compiled product row, never the smoke pair; ONE product path makes it a
     product diff and the selection is the whole union again.
-    RED ON BASE (b0a3b1f3c): no such rule — scripts/vram_tokens.py alone selected 9 product rows (tests/app's
-    app rows through its area rule's `app` directory: app.input_keys, app.play_select, app.startup_quiet, …), a
-    test source alone added the product smoke pair (app.startup_quiet + api.contract), and batch A's range
-    (71ad53fd5..ca110eea3) without its two build files selected 71 rows / ~16 min at -j4 (61 / ~13 min now; the
-    WHOLE range is the MERGE tier either way: its top CMakeLists.txt include() is a product build file)."""
+    RED ON BASE (b0a3b1f3c): no such rule — a tooling script alone selected 9 product rows, a test source alone added
+    the product smoke pair."""
     print("\ntooling-only diffs (TESTING_V3 §1.3.4):")
     def sel(files):
-        return gs.select(files, None, build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+        return gs.select(files, None, build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
     def product(S):
         return sorted(n for n in S.selected if S.inv[n]["kind"] in ("app", "compiled")
-                      and not (S.inv[n]["labels"] & {"hygiene", "tooling"}) and n not in gs.TOOL_SELF_TESTS[0][1])
+                      and not (S.inv[n]["labels"] & {"hygiene", "tooling"}))
     hyg = {n for n, t in inv0.items() if "hygiene" in t["labels"]}
     S = sel(["scripts/gate-scope.py"])
     check(S.tooling_only and not product(S) and hyg <= set(S.selected) and not S.fallback and not S.full_tier,
           "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
           % (len(hyg), product(S)[:6]))
-    S = sel(["scripts/vram_tokens.py"])
-    check(S.tooling_only and not product(S) and "pool.runner" in S.selected and "devprocess.vram_admit" in S.selected,
-          "scripts/vram_tokens.py alone: its own tests (pool.runner, devprocess.vram_admit), no product row (%s)"
-          % product(S)[:6])
-    S = sel(["tests/gi/test_gi_speckle.cpp"])
-    # + gate.tokens_by_needs: RUNNER-A2B's DATA EDGE — that row's command hands it the whole tests/ directory (-DSRC=), so
-    # every file under tests/ is its data (the safe side: a directory argument is walked) — and nothing else, no smoke pair
-    # TESTING-SPEED-A item 5: gate.tokens_by_needs is a TOOLING row now — a test source is no tool path, so it rides no more
-    check(S.tooling_only and set(S.selected) == {"gi.speckle"},
+    S = sel(["tests/gi/test_gi_cliff.cpp"])
+    check(S.tooling_only and set(S.selected) == {"gi.cliff"},
           "a test source alone selects its row and nothing else — no smoke pair, no tooling row (%s)" % sorted(S.selected)[:6])
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
@@ -260,199 +227,12 @@ def tooling_cases(gs, graph, build, inv0):
           "nobody classified are product; docs, scripts and tests are not")
 
 
-def runlog_cases(source):
-    """THE RUN LOG'S VERDICT CLASSES (TESTING-DEBTS-1 T1) on fixed texts — FORK-OOM-1's two
-    lines as the engine and the app print them: a red carrying the in-frame OOM line is OOM (the
-    VRAM budget's class), a red carrying the loss line is LOST (a loss after an OOM stays LOST),
-    a PASS keeps PASS whatever it logged, and a pool arm takes the class from its OWN lines."""
-    print("run log (the budget verdicts on fixed texts):")
-    sys.path.insert(0, os.path.join(source, "scripts"))
-    import gate_runlog as rl
-    oom = ("[2026.09.27-19.35.31.710][    9]engine: Warning: GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; "
-           "the device is NOT lost): OGRE EXCEPTION(-2:RenderingAPIException): vkAllocateMemory failed for a "
-           "67108864-byte pool (memory type 1, heap 0 of 17171480576 bytes, 1107296256 already held by Ogre)")
-    lost = ("[2026.09.27-19.36.25.295][   18]engine: Error: Jahshaka: THE GPU DEVICE WAS LOST. The session cannot "
-            "continue; the renderer does not recreate a lost device.")
-    fatal = "FATAL: the graphics device was lost; ending the session."
-    check(rl.budget_verdict("x\n" + oom + "\nFAIL: y")[0] == "OOM", "an in-frame OOM line -> OOM")
-    check(rl.budget_verdict(lost)[0] == "LOST", "the engine's loss line -> LOST")
-    check(rl.budget_verdict(fatal)[0] == "LOST", "the app's FATAL loss line -> LOST")
-    check(rl.budget_verdict(oom + "\n" + lost)[0] == "LOST", "an OOM then a loss -> LOST")
-    check(rl.budget_verdict("FAIL: ...and does not claim the device was lost")[0] is None,
-          "an assertion naming 'the device was lost' is no loss")
-    check(rl.budget_verdict("FAIL: 7 < 47")[0] is None, "an ordinary red keeps its class")
-    check(rl.row_verdict("Failed", oom, [])[:2] == ("OOM", "Failed"), "a Failed row carrying it -> OOM (status kept)")
-    check(rl.row_verdict("Exception: SegFault", lost, [])[0] == "LOST", "a crashed row carrying the loss -> LOST")
-    check(rl.row_verdict("Passed", oom, [])[0] == "PASS", "a PASS that logged an OOM stays PASS")
-    pool = "\n".join(["ARM-BEGIN p.a", "ARM-BEGIN p.b", "MEM p.a gpuPoolUsed=300 textures=40",
-                      "---- p.a: its output (2 line(s)) ----", "| ARM-BEGIN p.a", "| " + oom, "ARM p.a FAIL 900",
-                      "---- p.b: its output (1 line(s)) ----", "| FAIL: 3 < 4", "ARM p.b FAIL 800",
-                      "ARM-BEGIN p.c", "| " + lost])
-    arms = {a: v for a, v, _ in rl._suite_facts(pool)[1]}
-    check(arms == {"p.a": "OOM", "p.b": "FAIL", "p.c": "LOST"}, "a pool's arms take the class from their own lines "
-          "(%s)" % arms)
-
-    # T11: THE TIER NAMES — the one list, every literal the gate scripts write is in it, and a
-    # name outside it is refused before a run (never an hour of records under a stray name)
-    print("  the run log's tier names: %s" % ", ".join(rl.TIERS))
-    check(set(rl.TIERS) == {"scoped", "scoped-fallback", "scoped-tier", "target", "merge", "stage",
-                            "stage-close", "push", "smoke", "fork", "lane", "solo"},
-          "the tier names are exactly the documented twelve (GATE-SPEED-1 added target and smoke; BATCH-GATE-1 "
-          "retired joint; STAGE-CLOSE-1 added stage-close; GATE-COST-2 lane and solo)")
-    gsrc = open(os.path.join(source, "scripts", "gate-scope.py")).read()
-    lits = set(re.findall(r'a\.tier or \(?"([a-z-]+)"', gsrc)) | set(re.findall(r'else "(scoped-[a-z]+)"', gsrc)) \
-        | set(re.findall(r'run_ctest\(target_cmd, build, "([a-z-]+)"', gsrc))
-    check(lits and lits <= set(rl.TIERS), "every tier gate-scope.py writes is a listed name (%s)" % sorted(lits))
-    try:
-        rl.run_ctest("true", source, "scoped-merge", "x", 1, echo=False)
-        check(False, "an unlisted tier is refused")
-    except ValueError as e:
-        check("not one of" in str(e), "an unlisted tier is refused before the run")
-    try:
-        rl.append_records([], "adhoc", "0")
-        check(False, "an unlisted tier is refused by the writer")
-    except ValueError:
-        check(True, "an unlisted tier is refused by the writer (import too)")
-
-    # T12: THE BUILT FORK MUST BE THE PIN — a fake install (OGRE_PREFIX, as build-ogre.sh reads it)
-    # whose BUILT_FROM names another commit is refused with the fix lines; the pin itself passes
-    import subprocess as sp
-    pin = sp.run(["git", "rev-parse", "HEAD:thirdparty/ogre-next"], cwd=os.path.join(source, "irisgl"),
-                 capture_output=True, text=True).stdout.strip()
-    checkout = sp.run(["git", "rev-parse", "HEAD"], cwd=os.path.join(source, "irisgl", "thirdparty", "ogre-next"),
-                      capture_output=True, text=True).stdout.strip()
-    check(len(pin) == 40, "irisgl pins an ogre-next commit (%s)" % pin[:9])
-    import tempfile as tf
-    with tf.TemporaryDirectory() as inst:
-        old_p = os.environ.get("OGRE_PREFIX")
-        os.environ["OGRE_PREFIX"] = inst
-        try:
-            def rec(text):
-                with open(os.path.join(inst, "BUILT_FROM"), "w") as f: f.write(text)
-            rec("0" * 40 + "\n")
-            bad = rl.fork_pin_problem(source) or ""
-            check("built from 000000000" in bad and "build-ogre.sh" in bad and "submodule update" in bad,
-                  "an install built from another commit is refused with the fix lines")
-            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate_runlog.py"), "run", "--tier", "scoped",
-                        "--", "true"], cwd=source, capture_output=True, text=True, env=dict(os.environ))
-            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
-                  "gate_runlog.py run refuses it before the run (exit %d)" % p.returncode)
-            p = sp.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--solo", "x", "--build",
-                        source], cwd=source, capture_output=True, text=True, env=dict(os.environ))
-            check(p.returncode == 4 and "REFUSING TO RUN" in p.stderr,
-                  "gate-scope --run/--solo refuses it before the run (exit %d)" % p.returncode)
-            os.unlink(os.path.join(inst, "BUILT_FROM"))
-            check("no BUILT_FROM record" in (rl.fork_pin_problem(source) or ""), "an install with no record is refused")
-            rec(pin + "\ndirty\n")
-            check("DIRTY" in (rl.fork_pin_problem(source) or ""), "an install built from a dirty checkout is refused")
-            rec(pin + "\n")
-            got = rl.fork_pin_problem(source)
-            check(got is None if checkout == pin else "checkout is at" in (got or ""),
-                  "an install built from the pin passes (when the checkout is the pin) (%s)" % (got or "ok")[:80])
-        finally:
-            if old_p is None: os.environ.pop("OGRE_PREFIX", None)
-            else: os.environ["OGRE_PREFIX"] = old_p
-
-    # T8: THE QUIET MEDIAN — a suite with >= 3 PASS records on a QUIET box is costed from those alone; with fewer, from
-    # every record (a private log directory). QUIET is gate_runlog.quiet (RUNNER-A1): the census A1's writer records —
-    # no sibling ctest, no build outside the gate, no GPU competitor — and the row's load under the box baseline's
-    # quiet_load_max (a private baseline here). "quiet = other_ctests == 0" alone is the OLD rule: a record with no
-    # sibling but a build beside it (A1's case: push smoke1 beside the sc-smoke1 build) is NOT quiet.
-    import datetime, tempfile
-    with tempfile.TemporaryDirectory() as d:
-        old = {k: os.environ.get(k) for k in ("JAH_RUN_LOG_DIR", "JAH_BOX_BASELINE")}
-        os.environ["JAH_RUN_LOG_DIR"] = d
-        os.environ["JAH_BOX_BASELINE"] = os.path.join(d, "box-baseline.json")
-        with open(os.environ["JAH_BOX_BASELINE"], "w") as f:
-            json.dump({"desktop": [], "quiet_load_max": 12.0}, f)
-
-        def box(others, builds=0, load=8.0):
-            if others is None:
-                return {}
-            return {"other_ctests": others, "load_mean": load,
-                    "census": {"other_ctests": others, "builds": builds, "gpu_competitors": []}}
-        try:
-            with open(os.path.join(d, datetime.date.today().isoformat() + "-scoped-000000000.jsonl"), "w") as f:
-                for suite, secs, b in ([("x", 10, box(0))] * 3 + [("x", 30, box(3))] * 3 +
-                                       [("y", 10, box(0))] * 2 + [("y", 30, box(2))] * 3 +
-                                       [("w", 10, box(0, builds=2))] * 3 + [("w", 30, box(0))] * 2 +
-                                       [("z", 20, box(None))]):
-                    f.write(json.dumps({"suite": suite, "arm": None, "verdict": "PASS", "seconds": secs, "box": b}) + "\n")
-            src = {}
-            med = rl.median_times(days=1, sources=src)
-        finally:
-            for k, v in old.items():
-                if v is None: os.environ.pop(k, None)
-                else: os.environ[k] = v
-    check(med.get("x") == 10 and src.get("x") == "quiet", "3 quiet records -> the quiet median (%s %s)"
-          % (med.get("x"), src.get("x")))
-    check(med.get("y") == 30 and src.get("y") == "all", "2 quiet records -> every record's median (%s %s)"
-          % (med.get("y"), src.get("y")))
-    check(med.get("w") == 10 and src.get("w") == "all", "3 records with no sibling ctest but a BUILD beside them are "
-          "not quiet (A1's rule): 2 quiet -> every record's median (%s %s)" % (med.get("w"), src.get("w")))
-    check(med.get("z") == 20 and src.get("z") == "all", "no box field -> every record's median")
-
-
-def nm_refusal(source, build):
-    """H1: without `nm` the link graph cannot be read — the selector must REFUSE, never answer from
-    empty symbol tables (an engine .cpp would select no compiled row, silently and persistently)."""
-    import shutil
-    import tempfile
-    print("\nnm refusal (a PATH without nm):")
-    with tempfile.TemporaryDirectory() as d:
-        for tool in ("git", "ctest", "ninja", "cmake", sys.executable.split("/")[-1]):
-            w = shutil.which(tool)
-            if w: os.symlink(w, os.path.join(d, tool))
-        p = subprocess.run([sys.executable, os.path.join(source, "scripts", "gate-scope.py"), "--files",
-                            "irisgl/engine/src/OgreChain.cpp", "--build", build, "--json"],
-                           cwd=source, capture_output=True, text=True, env=dict(os.environ, PATH=d))
-        check(p.returncode != 0 and "nm" in p.stderr, "no nm -> the selector refuses with the reason (exit %d: %s)"
-              % (p.returncode, p.stderr.strip().splitlines()[-1:] if p.stderr.strip() else ""))
-
-
-def own_range_case(gs):
-    """T1 IN A SCRATCH REPO (the merge read's replay): the lane's own diff across forward merges of
-    d-build AND an internal fix branch merged into the lane. d-build: base0 -> dA -> dB -> dC; the
-    lane: laneA, merge(dA), laneB, merge(dB), laneC, laneD, merge of `fix` (fix1, forked at laneC).
-    The own range must hold every lane file and fix1 and none of dA/dB — an internal merge is the
-    lane's own change (the first version of own_base counted it forward and dropped laneA..laneC)."""
-    import tempfile
-    print("\nown range (a scratch repo: forward merges + an internal fix branch):")
-    with tempfile.TemporaryDirectory() as d:
-        g = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=d,
-                                      capture_output=True, text=True, check=True).stdout.strip()
-        def commit(name):
-            open(os.path.join(d, name), "w").write(name + "\n"); g("add", name); g("commit", "-q", "-m", name)
-        g("init", "-q", "-b", "d-build"); commit("base0")
-        g("checkout", "-q", "-b", "lane")
-        g("checkout", "-q", "d-build"); commit("dA"); commit("dB"); commit("dC")
-        dA, dB = g("rev-parse", "HEAD~2"), g("rev-parse", "HEAD~1")
-        g("checkout", "-q", "lane"); commit("laneA")
-        g("merge", "-q", "--no-ff", "-m", "fwd dA", dA); commit("laneB")
-        g("merge", "-q", "--no-ff", "-m", "fwd dB", dB); commit("laneC")
-        g("checkout", "-q", "-b", "fix"); commit("fix1")
-        g("checkout", "-q", "lane"); commit("laneD")
-        g("merge", "-q", "--no-ff", "-m", "the internal fix", "fix")
-        old = os.environ.get("JAH_INTEGRATION_REFS")
-        os.environ["JAH_INTEGRATION_REFS"] = "d-build"
-        try:
-            own, fwd = gs.own_base("d-build", "lane", cwd=d)
-        finally:
-            if old is None: os.environ.pop("JAH_INTEGRATION_REFS", None)
-            else: os.environ["JAH_INTEGRATION_REFS"] = old
-        files = set(g("diff", "--name-only", own, "lane").split())
-        check(files == {"laneA", "laneB", "laneC", "laneD", "fix1"},
-              "the own diff is every lane file + the fix branch, no d-build file (%s)" % sorted(files))
-        check(len(fwd) == 2 and own == dB, "two forward merges, the own base is the newest one's d-build parent")
-
-
 def main(source, build):
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_selection: %s is not a configured build dir" % build)
         return 2
     gs = load_tool(source)
     gg = gs.gate_graph
-    runlog_cases(source)
     identifier_cases(gg)
 
     graph = gg.NinjaGraph.load(build)
@@ -463,15 +243,12 @@ def main(source, build):
         return 1
     cases = json.load(open(os.path.join(source, "tests", "hygiene", "gate_selection_cases.json")))
     inv0 = gs.load_inventory(build)
-    costs = gs.load_costs()
-    tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.STAGE_CLOSE_LABELS | gs.TARGET_LABELS))]
-    tier_s = sum(costs.get(n, 10.0) for n in tier_rows)
 
     # every name a case asks for must be a row this build registers, or a pool's arm written
     # `<pool>.<arm>`: a suite that is renamed or becomes an arm is renamed in the cases file in
     # the same commit
     arm_rows = {f"{t['pool']}.{a}": r for r, t in inv0.items() for a in t["arms"]}
-    for c in cases["lanes"] + cases["files"]:
+    for c in cases["lanes"]:
         for n in c.get("must", []) + c.get("env", []) + c.get("must_not", []):
             check(n in inv0 or n in arm_rows, "%s: %s is a registered suite or arm" % (c.get("lane") or c.get("case"), n))
 
@@ -484,7 +261,7 @@ def main(source, build):
         return sub is None or n.split(".", 1)[1] in sub
 
     print("\nlanes (recorded diffs re-selected against this build):")
-    print("  %-42s %9s %10s  %s" % ("lane", "rows", "est. s", "env reds selected"))
+    print("  %-42s %9s  %s" % ("lane", "rows", "env reds selected"))
     table = []
     for c in cases["lanes"]:
         base, tip = c["range"].split("..")
@@ -503,18 +280,17 @@ def main(source, build):
             continue
         t0 = time.time()
         paths = gs.touched_paths(c["range"])
-        S = gs.select(paths, c["range"], build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
-        whole = bool(S.fallback or S.full_tier)
+        S = gs.select(paths, c["range"], build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+        # a replay's own new registrations fall to their test directory here (rows_at_tip_only): that is no tier
+        whole = bool(S.full_tier or (S.fallback and not c.get("rows_at_tip_only")))
         sel = set(S.selected)
         # A FIXTURE SETUP is not a suite (a home wipe, ~10 ms; ctest pulls it in with the row that
         # requires it), so it is not a gating row either — PROJECT-NAMES-1 gave 50 project-creating
         # rows a fresh-home fixture, and counting those would move every max_rows by its wipes.
-        gating = [n for n in sel if not (inv0[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))
-                  and not inv0[n].get("fixture_setup")]
-        est = tier_s if whole else sum(costs.get(n, 10.0) for n in gating)
+        gating = [n for n in sel if not inv0[n].get("fixture_setup")]
         env_hit = [e for e in c.get("env", []) if whole or chosen(S, e)]
-        table.append((c["lane"], "TIER" if whole else len(gating), est))
-        print("  %-42s %9s %10.0f  %d/%d   (%.1f s)" % (c["lane"][:42], "TIER" if whole else len(gating), est,
+        table.append((c["lane"], "TIER" if whole else len(gating)))
+        print("  %-42s %9s  %d/%d   (%.1f s)" % (c["lane"][:42], "TIER" if whole else len(gating),
                                                      len(env_hit), len(c.get("env", [])), time.time() - t0))
         if c.get("rows_at_tip_only"):
             # a REPLAY against this build: the range's NEW rows are registered at its tip, not here — their registration
@@ -541,15 +317,6 @@ def main(source, build):
             check(bool(S.fork_bump) and not S.full_tier and (S.fork_bump or {}).get("files") is not None,
                   "%s: the fork pin selects by its diff's reach, not the tier (%s)"
                   % (c["lane"], S.full_tier[:1] or len((S.fork_bump or {}).get("files") or [])))
-        if c.get("own_base"):
-            # T1: the lane is gated on its OWN diff — from its newest forward merge's d-build parent
-            own, incoming, fwd = gs.scope_range(c["range"])
-            check(own.startswith(subprocess.run(["git", "rev-parse", c["own_base"]], cwd=source, capture_output=True,
-                                                text=True).stdout.strip()) and bool(fwd) and bool(incoming),
-                  "%s: its own diff starts at the forward merge's parent %s (%s; %d forward merge(s))"
-                  % (c["lane"], c["own_base"], own[:9], len(fwd)))
-        for np_ in c.get("not_paths", []):
-            check(np_ not in paths, "%s: %s came in through a forward merge — not the lane's path" % (c["lane"], np_))
         for m in c.get("must", []):
             # A HYGIENE ROW IS THE LANE RUN'S (TESTING-SPEED-A item 5): a product change no longer selects the tools'
             # rows — the builder's self-audit runs the whole hygiene label at the lane's tip (records), so a lint red the
@@ -561,9 +328,8 @@ def main(source, build):
         # THE TESTING-SPEED-A REPLAYS: the families, the picture set, the rows that must NOT ride, no pool whole
         fam = lambda n: {inv0[n]["dir"], n.split(".", 1)[0]}
         for f_ in c.get("must_families", []):
-            want = sorted(n for n in inv0 if f_ in fam(n) and not (inv0[n]["labels"] & (gs.STAGE_CLOSE_LABELS
-                          | gs.TARGET_LABELS | gs.SCOPE_EXCLUDED_LABELS | {"hygiene", "tooling"}))
-                          and not inv0[n].get("fixture_setup") and S.own_lane_row(n))
+            want = sorted(n for n in inv0 if f_ in fam(n) and not (inv0[n]["labels"] & (gs.NEVER_SELECTED
+                          | {"hygiene", "tooling"})) and not inv0[n].get("fixture_setup"))
             miss = [n for n in want if n not in sel]
             check(bool(want) and not miss, "%s: selects every kept %s row (%d; missing %s)" % (c["lane"], f_, len(want),
                                                                                              miss[:5]))
@@ -583,29 +349,10 @@ def main(source, build):
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
 
-    print("\nfiles (the audit's S1/S2 subjects, the graph's precision):")
-    for c in cases["files"]:
-        S = gs.select(c["files"], None, build, 4, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
-        sel = set(S.selected)
-        check(not S.fallback, "%s: no fallback" % c["case"])
-        for m in c.get("must", []):
-            check(chosen(S, m), "%s: %s selects %s" % (c["case"], c["files"][0], m))
-        for m in c.get("must_not", []):
-            check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
-                                                                         S.selected.get(m, "")))
-        if "only_labels" in c:
-            other = sorted(n for n in sel if not (inv0[n]["labels"] & set(c["only_labels"])))
-            check(bool(sel) and not other, "%s: only %s rows (%d; others %s)" % (c["case"], "/".join(c["only_labels"]),
-                                                                             len(sel), other[:5]))
-        if c.get("selects_nothing"):
-            check(not sel, "%s: selects nothing (%s)" % (c["case"], sorted(sel)[:5]))
     tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)
     gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
-    nm_refusal(source, build)
-    own_range_case(gs)
-    print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))
         return 1

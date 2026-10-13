@@ -110,7 +110,7 @@ add_test(NAME atom.cluster_cut COMMAND test_atom_cluster_cut
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_cut PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "meshbake;stage-close")
+    TIMEOUT 600 LABELS "meshbake")
 jah_no_display(atom.cluster_cut)
 
 # atom.cluster_crack — THE CUT, RENDERED (B2 §3): the uploaded stream checked
@@ -136,7 +136,7 @@ jah_gpu_row(atom.cluster_crack CLASS engine COMMAND test_atom_cluster_crack
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "engine;stage-close")
+    TIMEOUT 600 LABELS "engine")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
@@ -363,7 +363,7 @@ jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 12)
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
 configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
-jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting;stage-close")
+jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
 # The stand-in is written on the CPU (an .obj), so the fixture boots no Vulkan (GATE-ADMIT-1: no VRAM tokens).
 jah_no_display(atom.lod_switch.fixture)
 jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
@@ -377,7 +377,7 @@ jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
 # band's own fixture is engine.lod_hysteresis.
 set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 1560 LABELS "scripting;stage-close"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+    TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
 
 # atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh

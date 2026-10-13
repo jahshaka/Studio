@@ -20,8 +20,6 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 sed -e "s|@SRC@|$SRC|g" -e "s|@OUT@|$OUT|g" -e "s|@NAME@|${DEMO_NAME:-}|g" "$JS" > "$TMP/run.js"
 cd "$TMP"
-# A busy box can hold the VRAM queue longer than gpu-admit's default 900 s wait; a scene build is
-# worth waiting for, so the wait is two hours unless the caller says otherwise.
-export JAH_VRAM_WAIT=${JAH_VRAM_WAIT:-7200}
-DISPLAY=$DISP nice -n 19 ionice -c 3 "$TREE/scripts/gpu-admit.sh" "${DEMO_VRAM_TOKENS:-4}" -- \
+# The scene build holds the card (scripts/gpu-exclusive.sh, the one lock), waiting for it as long as it takes.
+DISPLAY=$DISP nice -n 19 ionice -c 3 "$TREE/scripts/gpu-exclusive.sh" --label demo-scene \
     "$BIN/Jahshaka" --data-root "$ROOT" --script "$TMP/run.js"

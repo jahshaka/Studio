@@ -272,7 +272,7 @@ if(JAHSHAKA_ASAN)
     # STAGE-CLOSE (TESTING-SPEED-B3): an ASAN twin keeps its row and moves to the stage close; test_engine
     # (the same suite, uninstrumented) is the merge tier's.
     set_tests_properties(test_engine_asan PROPERTIES
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430 LABELS "engine;stage-close")
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430 LABELS "engine")
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()

@@ -69,7 +69,7 @@ if(JAHSHAKA_ASAN)
     # keeps `shadercache` (its family: shadercache.app, .warmup and .warmup_pass stay in the merge tier).
     set_tests_properties(shadercache.container_asan PROPERTIES
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}"
-        TIMEOUT 1500 LABELS "shadercache;stage-close")
+        TIMEOUT 1500 LABELS "shadercache")
 endif()
 
 # The application-level contract: the verbs, --clear-shader-cache, and the
@@ -99,7 +99,7 @@ jah_gpu_row(shadercache.app CLASS app TIER document   COMMAND test_shader_cache_
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
 jah_gpu_row(shadercache.app.churn CLASS app TIER document   COMMAND test_shader_cache_app --churn
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.app.churn PROPERTIES TIMEOUT 600 LABELS "shadercache;stage-close")
+set_tests_properties(shadercache.app.churn PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
 # shader.live_compiles (SHADER-WARM-2): after the splash, nothing compiles on the UI
 # thread outside a compile window — a create/open in flight or a compile dialog
@@ -115,7 +115,7 @@ target_compile_definitions(test_live_compiles PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.live_compiles CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_live_compiles
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache;stage-close")
+set_tests_properties(shader.live_compiles PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
@@ -149,7 +149,7 @@ target_compile_definitions(test_sample_opens_quiet PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.sample_opens_quiet CLASS app TIER document   COMMAND test_sample_opens_quiet
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache;stage-close")
+set_tests_properties(shader.sample_opens_quiet PROPERTIES TIMEOUT 1800 LABELS "shadercache")
 
 # shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
@@ -164,7 +164,7 @@ target_compile_definitions(test_async_soak PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 jah_gpu_row(shader.async_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_soak
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache;stage-close")
+set_tests_properties(shader.async_soak PROPERTIES TIMEOUT 1200 LABELS "shadercache")
 
 # The per-scene PSO precache (SHADER_CACHE_SPEC.md §5), asserted by COUNTING
 # COMPILES: after View::warmUpShaders() the first real frame must compile

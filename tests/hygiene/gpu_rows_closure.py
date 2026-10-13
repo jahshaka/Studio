@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""source.gpu_rows_closure — EVERY VULKAN ROW TAKES THE VRAM BUDGET (lane GATE-ADMIT-1;
-docs/TESTING_GATE.md §4b).
+"""source.gpu_rows_closure — EVERY VULKAN ROW IS ON THE CARD'S SLOTS (lane GATE-ADMIT-1; TESTING-SIMPLE).
 
-The budget (scripts/gpu-admit.sh, 11 box-wide tokens) holds only if EVERY process that boots
-Vulkan in a test takes its tokens; one unregistered row is an allocation nobody counted, and
-the card over-fills exactly as it did on 2026-09-27 (47 VK_ERROR_OUT_OF_DEVICE_MEMORY reds). So
-the list is closed here, on what ctest will actually RUN (`ctest --show-only=json-v1`: every
+ctest keeps each class to its width on the card (tests/cmake/vram_rows.cmake: 8 slots; a fixture 1, an app row 2, a
+measuring row 8) only if EVERY process that boots Vulkan in a test is registered with its class; one unregistered row is
+an allocation nobody counted, and the card over-fills exactly as it did on 2026-09-27 (47 VK_ERROR_OUT_OF_DEVICE_MEMORY
+reds). So the list is closed here, on what ctest will actually RUN (`ctest --show-only=json-v1`: every
 row's resolved command, environment and properties), not on what a CMakeLists says:
 
   A row is a VULKAN ROW when its command (any word, or a path inside a word) or its ENVIRONMENT
@@ -30,11 +29,11 @@ row's resolved command, environment and properties), not on what a CMakeLists sa
   names whole and ldd each — 19.7 GB a run: 10 s on a warm page cache, 120 s (its TIMEOUT) when
   lane builds had evicted it, with nothing printed (22 TIMEOUT + 5 FAIL in 252 runs). Output is
   line-buffered now, so a killed row still shows what it printed.
-  A row is REGISTERED when its command runs scripts/gpu-admit.sh (jah_gpu_row,
-  jah_gpu_exclusive_test) or the pool driver with `--vram-tokens` (jah_add_pool).
+  A row is REGISTERED when it carries the test property JAH_CLASS (jah_gpu_row, jah_gpu_exclusive_test,
+  jah_add_pool: tests/cmake/vram_rows.cmake sets it beside the row's slots).
   THE CHECK: Vulkan rows minus registered rows = EMPTY, and every row that runs an APP process
-  (the app, a harness that spawns it) declared an app-sized class (app/selftest/vr, read from
-  its `--label <row>:<class>`). Each offender is named with the CMakeLists line that registered it.
+  (the app, a harness that spawns it) declared an app-sized class (app/selftest/vr, its JAH_CLASS).
+  Each offender is named with the CMakeLists line that registered it.
 
 --self-test runs the detector on a SYNTHETIC ctest listing (an unregistered app row, a
 registered one, a no-display one) and fails unless exactly the unregistered row is named — so a
@@ -187,15 +186,6 @@ def read_harnesses(build, app):
 APP_CLASSES = ("app", "selftest", "vr")
 
 
-def admitted_class(words):
-    """The class a gpu-admit.sh row declared (its `--label <row>:<class>`), else None."""
-    if "--label" in words:
-        lab = words[words.index("--label") + 1]
-        if ":" in lab:
-            return lab.rsplit(":", 1)[1]
-    return None
-
-
 def props_of(test):
     return {p["name"]: p["value"] for p in test.get("properties", [])}
 
@@ -214,9 +204,7 @@ def classify(test, app, harnesses):
     envmod = as_list(props.get("ENVIRONMENT_MODIFICATION"))
     env = as_list(props.get("ENVIRONMENT"))
     words = [str(w) for w in cmd]
-    # gpu-exclusive.sh IS the admission too (TEST-SELECTOR-1 G1+G2): a timing row takes ALL tokens
-    registered = any(os.path.basename(w) in ("gpu-admit.sh", "gpu-exclusive.sh") for w in words) or (
-        any(os.path.basename(w) == "run_pool.py" for w in words) and "--vram-tokens" in words)
+    registered = bool(props.get("JAH_CLASS"))
     nodisplay = any(re.match(r"^DISPLAY=unset:", e) for e in envmod)
     if nodisplay:
         return False, registered, "jah_no_display"
@@ -273,26 +261,18 @@ def check(listing, app, harnesses, out):
             vulkan += 1
             if r:
                 reg += 1
-                cls = admitted_class(words)
+                cls = props_of(t).get("JAH_CLASS")
                 if why.startswith("APP ") and cls is not None and cls not in APP_CLASSES:
                     undersized.append((t["name"], why[4:], cls, site(t, listing)))
             else:
                 missing.append((t["name"], why, site(t, listing)))
         if v and r:
-            k = None
-            if "--vram-tokens" in words:
-                k = words[words.index("--vram-tokens") + 1]
-            else:
-                for i, w in enumerate(words):
-                    if os.path.basename(w) == "gpu-exclusive.sh":
-                        k = "all"; break
-                    if os.path.basename(w) == "gpu-admit.sh" and i + 1 < len(words):
-                        k = words[i + 1]; break
+            k = props_of(t).get("JAH_CLASS")
             by_class[k] = by_class.get(k, 0) + 1
-    out.write("gpu_rows_closure: %d rows; %d registered through the VRAM budget; %d unregistered "
+    out.write("gpu_rows_closure: %d rows; %d registered on the card's slots; %d unregistered "
               "row(s) boot Vulkan = MISSING\n" % (len(rows), reg, len(missing)))
-    out.write("gpu_rows_closure: registered rows by tokens: %s\n"
-              % ", ".join("%s token(s): %d" % (k, n) for k, n in sorted(by_class.items(), key=lambda x: str(x[0]))))
+    out.write("gpu_rows_closure: registered rows by class: %s\n"
+              % ", ".join("%s: %d" % (k, n) for k, n in sorted(by_class.items(), key=lambda x: str(x[0]))))
     for name, why, where in missing:
         out.write("  MISSING %s (runs %s) — registered at %s: use jah_gpu_row(%s CLASS …) or, if it "
                   "boots no Vulkan, jah_no_display(%s)\n" % (name, why, where, name, name))
@@ -306,22 +286,20 @@ def check(listing, app, harnesses, out):
 def self_test(app, out):
     synthetic = {"tests": [
         {"name": "synthetic.unregistered_app", "command": [app, "--script", "/nonexistent.js"]},
-        {"name": "synthetic.registered_app", "command": ["/x/scripts/gpu-admit.sh", "2", "--label", "r", "--", app]},
+        {"name": "synthetic.registered_app", "command": [app], "properties": [{"name": "JAH_CLASS", "value": "app"}]},
         {"name": "synthetic.no_display", "command": [app, "--dump-api-docs"],
          "properties": [{"name": "ENVIRONMENT_MODIFICATION", "value": ["DISPLAY=unset:"]}]},
         {"name": "synthetic.pool_unregistered", "command": ["/usr/bin/sh", "/x/fresh_home.sh", "--", "/usr/bin/python3",
                                                             "/x/tests/support/run_pool.py", "--pool", "p", "--app", app]},
         {"name": "synthetic.pool_registered", "command": ["/usr/bin/python3", "/x/tests/support/run_pool.py",
-                                                          "--vram-tokens", "2", "--app", app]},
+                                                          "--app", app], "properties": [{"name": "JAH_CLASS", "value": "app"}]},
         {"name": "synthetic.shell_only", "command": ["/usr/bin/sh", "-c", "true"]},
-        {"name": "synthetic.app_as_engine", "command": ["/x/scripts/gpu-admit.sh", "1", "--label",
-                                                        "synthetic.app_as_engine:engine", "--", app, "--script", "x.js"]},
+        {"name": "synthetic.app_as_engine", "command": [app, "--script", "x.js"], "properties": [{"name": "JAH_CLASS", "value": "engine"}]},
         # a HARNESS (a CMake-listed JAHSHAKA_BINARY target) spawns the app: unregistered, and
         # registered under an engine-sized class — both named
         {"name": "synthetic.harness_unregistered", "command": ["/x/tests/ui/test_synthetic_harness"]},
-        {"name": "synthetic.harness_as_engine", "command": ["/x/scripts/gpu-admit.sh", "1", "--label",
-                                                            "synthetic.harness_as_engine:engine", "--",
-                                                            "/x/tests/ui/test_synthetic_harness"]},
+        {"name": "synthetic.harness_as_engine", "command": ["/x/tests/ui/test_synthetic_harness"],
+         "properties": [{"name": "JAH_CLASS", "value": "engine"}]},
     ]}
     # an UNREGISTERED row whose binary links Ogre through its DT_NEEDED closure (not the app, not a
     # harness): the ELF-header path itself. The engine library the app loads stands in for it.

@@ -19,7 +19,7 @@ prints one line per arm; this driver owns what the app cannot:
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
   * THE TIER (TEST-TIER-1, TEST-NEEDS-1). The pool's declaration (`TIER` + `NEEDS`,
-    tests/support/vram_tokens.cmake) rides the ROW'S ENVIRONMENT — JAHSHAKA_TEST_TIER and
+    tests/support/test_boot.cmake) rides the ROW'S ENVIRONMENT — JAHSHAKA_TEST_TIER and
     JAHSHAKA_TEST_NEEDS reach every process this driver starts, which boots that World Mode
     with only the named features on (services/testtier.h); the driver passes no tier of its
     own. At every boot the app prints `POOL-MEM <pool> gpuPoolUsed=<MB>
@@ -36,14 +36,6 @@ prints one line per arm; this driver owns what the app cannot:
     excluded) is `LEAK <pool> +<MB> over <n> arms`. And an arm whose figure passes 3x its
     process's boot is `OVER <pool>.<arm> gpuPoolUsed=<MB> tier=<t> boot=<MB>` (a pixel claim
     wrongly in a Low pool). All three are findings, never a red (the first runs decide).
-  * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: the POOL
-    holds k box-wide VRAM tokens (scripts/vram_tokens.py — the same flock files as
-    scripts/gpu-admit.sh) for its WHOLE run, taken once before its first process and inherited by
-    every app process it starts (a restart included); released when the pool ends (TESTING-CLEANUP-2B
-    delta F-C1: per process, a token taken by someone else between process N and N+1 turned every
-    remaining arm NOADMIT — inside a gate the admission no longer waits — and a partly-NOADMIT pool
-    read as a red; the honest unit is the pool). All or nothing; short of them the pool never ran:
-    every arm `NOADMIT` (the helper's line as why), the row NOADMIT, re-queued by the gate.
   * THE KERNEL'S WORD (GPU_LOSS_AUDIT_2026-09-27 B: a device loss is not always a red arm). After
     each process ends, the driver reads the kernel journal since its launch (`journalctl -k`,
     readable by the adm group, never sudo) and a `NVRM: Xid` line from THAT process's pid turns
@@ -60,7 +52,7 @@ prints one line per arm; this driver owns what the app cannot:
 
 Usage:
   run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
-              [--boot-budget <s>] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
+              [--boot-budget <s>] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
 --baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
@@ -77,7 +69,6 @@ import threading
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
-import vram_tokens  # noqa: E402  (scripts/vram_tokens.py — THE box-wide VRAM budget)
 import kernel_xid   # noqa: E402  (scripts/kernel_xid.py — THE one reader of the kernel's GPU faults)
 
 ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
@@ -94,7 +85,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": [], "baseline": None, "vram": 0}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -111,8 +102,6 @@ def parse(argv):
             opt["headless"] = True; i += 1
         elif a == "--arms":
             opt["arms"] = [x for x in argv[i + 1].split(",") if x]; i += 2
-        elif a == "--vram-tokens":
-            opt["vram"] = int(argv[i + 1]); i += 2
         elif a == "--boot-budget":
             opt["boot"] = float(argv[i + 1]); i += 2
         elif a == "--arm":
@@ -289,16 +278,6 @@ def main():
     remaining = list(arms)
     process = 0
     restarts = 0
-    # THE POOL'S TOKENS, ONCE (see THE VRAM BUDGET above): held to the pool's end, every process inherits them
-    try:
-        tokens = vram_tokens.acquire(opt["vram"], "pool.%s" % pool, log=sys.stdout)
-    except vram_tokens.AdmitTimeout as e:
-        say("pool: %s — %s" % (pool, e))
-        for n, _, _ in remaining:
-            settle(n, "NOADMIT", 0, "never ran: %s" % e, now=True)
-        remaining = []
-        tokens = []
-
     while remaining:
         process += 1
         spec = ",".join("%s=%s" % (n, p) for n, p, _ in remaining)
@@ -314,18 +293,15 @@ def main():
         plog = open(logname, "w")
         say("pool: %s process %d output -> %s" % (pool, process, os.path.abspath(logname)))
         boot = []
-        # THE VRAM BUDGET: the pool's tokens (taken once, above), inherited by this process
         env = dict(os.environ)
         # NOBODY ANSWERS A DIALOG HERE (TESTING-CLEANUP-2): a device loss ends a pool's app at once
         # (exit 3), never through the user's 60 s dialog bound (src/viewport/devicelossend.h).
         env["JAHSHAKA_NO_DEVICE_LOSS_DIALOG"] = "1"
-        if tokens:
-            env["JAH_VRAM_HELD"] = str(len(tokens))
         started = time.monotonic()
         since = time.time()
         begins = []             # (epoch, arm) of every ARM-BEGIN in this process
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                preexec_fn=child_setup, pass_fds=tokens, env=env)
+                                preexec_fn=child_setup, env=env)
         q = queue.Queue()
         t = threading.Thread(target=reader, args=(proc.stdout, q), daemon=True)
         t.start()
@@ -452,7 +428,6 @@ def main():
             say("POOL %s RESTART %d — the process ended with %d arm(s) left (%s); restarting from %s"
                 % (pool, restarts, len(remaining), how, remaining[0][0]))
 
-    vram_tokens.release(tokens)       # the pool's tokens end with the pool (its fds would die with the driver anyway)
     say("")
     say("POOL %s VERDICTS (%d process(es), %d restart(s))" % (pool, process, restarts))
     bad = []

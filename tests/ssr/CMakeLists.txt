@@ -53,7 +53,7 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     # ...and the same ruling for the sanitised twin (see ssr.engine above).
-    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
     set_tests_properties(ssr.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 endif()

@@ -144,7 +144,7 @@ jah_pool_arm(shading pbr_materials ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbr_m
 # dirty flag, a save during a preview writes the ORIGINAL, a locked node
 # refuses, an unresolvable payload refuses, and a preset apply reuses its one
 # project row instead of minting a new one per apply.
-jah_pool_arm(shading material_preview ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_preview.js 9)
+jah_pool_arm(shading_b material_preview ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_preview.js 9)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
@@ -167,13 +167,13 @@ jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cub
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
 # the DEFAULTS are the renderer's own, which is the byte-identical-pixels
 # argument expressed as a test.
-jah_pool_arm(shading pbs_knobs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbs_knobs.js 7)
+jah_pool_arm(shading_c pbs_knobs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbs_knobs.js 7)
 # HLMS_ADOPTION_SPEC P4a (§6.5): the UNLIT shading model — the renderer's other
 # material family, reached through the same declared-row/material.set path
 # everything else uses. Asserts it reaches PIXELS (an unlit surface renders its
 # authored colour, a lit one does not), that the switch is one undo step, and
 # that every value the family cannot use survives the round trip.
-jah_pool_arm(shading shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shading_model.js 15)
+jah_pool_arm(shading_c shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shading_model.js 15)
 # MATERIAL_GAPS_SPEC GAP 1: the per-material SPECULAR / FRESNEL WORKFLOW. The
 # I-1 fence lives here — metalness and F0 are the SAME float in the renderer's
 # datablock and our engine is built with NDEBUG, so nothing but a dumpDatablock
@@ -181,14 +181,14 @@ jah_pool_arm(shading shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadi
 # default (the renderer's own default is Specular; ours is what every existing
 # material has), the enum accepts its vocabulary BY NAME, and the workflow
 # reaches pixels.
-jah_pool_arm(shading workflows ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflows.js 12)
+jah_pool_arm(shading_b workflows ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflows.js 12)
 # MATERIAL_GAPS_SPEC GAP 1 ACCEPTANCE (§2.7): Ogre's own PbsMaterials 8x8
 # roughness x fresnel grid, rebuilt FROM OUR DOCUMENT MODEL through the verbs.
 # Deterministic by construction — one directional light, no sky, GI off, raw
 # (post-chain-free) readbacks and a FIXED camera — and asserted as monotonic
 # relations inside one frame plus a metallic-workflow CONTROL, never as absolute
 # colours.
-jah_pool_arm(shading workflow_grid ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflow_grid.js 4)
+jah_pool_arm(shading_b workflow_grid ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflow_grid.js 4)
 
 # MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
@@ -201,10 +201,10 @@ jah_pool_arm(shading bake_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_bake_
 jah_pool_arm(shading custom_piece ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_custom_piece.js 4)
 # TORNADO-1 G7: world.shaderTime pins the shader clock — t=0 and t=1 differ, t=1
 # twice is the identical frame; null frees it; a negative t is refused.
-jah_pool_arm(shading shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_time.js 8)
+jah_pool_arm(shading_d shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_time.js 8)
 # TORNADO-1: a live graph material applied FROM THE LIBRARY keeps its generated
 # pieces (they travel with the material's definition) and animates.
-jah_pool_arm(shading live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
+jah_pool_arm(shading_d live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
 # material.live_roundtrip — LIVE-PERSIST-1: ANY live graph material is a complete, persistent
 # bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
 # its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
@@ -216,7 +216,7 @@ jah_gpu_row(material.live_roundtrip CLASS app TIER epic NEEDS photon
                  ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting;stage-close" TIMEOUT 600)
+set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
 # scripting.e2e.photon_pin_read — WORLD-MODE-1 (brief §2): the scene READER drops a stored `photon`
 # pin. Two processes: a scene saved at Epic with Photon Low gets `worldOverrides.photon = 1` written
 # into its blob by hand; the reopen reads no pin, an honest Custom, and a re-pick that moves Photon;
@@ -245,7 +245,7 @@ jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app TIER 
     WORKING_DIRECTORY ${_ect_home}/run)
 set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
     ENVIRONMENT "HOME=${_ect_home};JAHSHAKA_DATA_ROOT=${_ect_home}/.local/share/Jahshaka"
-    LABELS "scripting;stage-close;quiet-box")
+    LABELS "scripting;measure")
 # smoke S15: every rotation ring clickable from every camera, asked through
 # editor.gizmoHitTest in the REAL viewport (gizmo.ring_pick covers the geometry
 # document-side).
@@ -295,7 +295,7 @@ jah_pool_arm(gi_verbs_b gather_default ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_g
 # matters, world.giStatus().rebuilds does not move while it happens (option B
 # was a half-second freeze at that exact moment). Engine UP, not --headless:
 # editor.mirrorStats() and world.giStatus() are measurements of the renderer.
-jah_pool_arm(gi_movers mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility_play.js 11)
+jah_pool_arm(gi_movers_b mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility_play.js 11)
 
 # WHAT THE MIRROR LOOKS AT, THROUGH THE REAL APP
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md, owner option A). The C++ suites prove the two
@@ -306,7 +306,7 @@ jah_pool_arm(gi_movers mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mob
 # list of one; hiding a group is its subtree (the F6 contract); a material edit
 # reaches the object that draws it without that object having changed; and the
 # always-on verifier finds NOTHING behind any of it.
-jah_pool_arm(gi_movers dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirty_mirror.js 9)
+jah_pool_arm(gi_movers_b dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirty_mirror.js 9)
 
 # A MOVABLE LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK (round-2 review F1 of
 # lane ENGINE-4). The engine's light-only injection is deliberately cheap while
@@ -1099,7 +1099,7 @@ set_tests_properties(scripting.e2e.ray_row_norays PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
     LABELS "scripting"
     TIMEOUT 240)
-jah_pool_arm(gi_movers ray_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js 14)
+jah_pool_arm(gi_movers_b ray_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js 14)
 
 # OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
 # renameFolder/removeFolder + node.setFolder/folder. The two LAWS are the point
@@ -1233,7 +1233,7 @@ jah_pool_arm(doc default_floor ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js 
 # A FRESH home per run: it asserts exact tile sets.
 configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
-jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS scripting stage-close)
+jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(scripting.e2e.tray_panel CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
@@ -1244,7 +1244,7 @@ jah_gpu_row(scripting.e2e.tray_panel CLASS app TIER low NEEDS NONE
 set_tests_properties(scripting.e2e.tray_panel PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED tray_panel_home
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 550)
 
 # gi.one_writer — ONE WRITER PER VOXEL VOLUME (PHOTON-WRITER-1): a drag and a
@@ -1254,7 +1254,7 @@ set_tests_properties(scripting.e2e.tray_panel PROPERTIES
 set(JAH_ONE_WRITER_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
-jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS scripting stage-close)
+jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.one_writer CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
@@ -1263,7 +1263,7 @@ jah_gpu_row(gi.one_writer CLASS app TIER epic NEEDS photon
 set_tests_properties(gi.one_writer PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_writer_home
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 300)
 
 # gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
@@ -1274,7 +1274,7 @@ set(JAH_PCC_RAY_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pcc_ray_tier)
 set(JAH_PCC_RAY_OUT "${_home}/run/")
 configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
-jah_fresh_home_fixture(gi.pcc_mirror.ray_tier.fresh_home pcc_ray_tier_home "${_home}" LABELS scripting stage-close)
+jah_fresh_home_fixture(gi.pcc_mirror.ray_tier.fresh_home pcc_ray_tier_home "${_home}" LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.pcc_mirror.ray_tier CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
@@ -1283,7 +1283,7 @@ jah_gpu_row(gi.pcc_mirror.ray_tier CLASS app TIER epic NEEDS photon
 set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED pcc_ray_tier_home
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 420)
 
 # gi.chain_converge_scenes — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT on the
@@ -1295,7 +1295,7 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
-jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;stage-close")
+jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.chain_converge_scenes CLASS app TIER high NEEDS photon bloom ssao smaa planar
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
@@ -1303,7 +1303,7 @@ jah_gpu_row(gi.chain_converge_scenes CLASS app TIER high NEEDS photon bloom ssao
 set_tests_properties(gi.chain_converge_scenes PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED chain_converge_scenes_home
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 600)
 
 # ANIMATION CLIPS AS A LIBRARY TYPE (ModelTypes::Animation): the import that
@@ -1485,7 +1485,7 @@ jah_pool_arm(doc ogre_samples ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_sampl
 # at a third of the launches.
 configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
-jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS scripting stage-close)
+jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS scripting)
 jah_gpu_row(scripting.e2e.ogre_ports CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1493,7 +1493,7 @@ jah_gpu_row(scripting.e2e.ogre_ports CLASS app TIER document
 set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED scripting_home_ogre_ports
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 420)
 
 # MATERIAL_GAPS_SPEC GAP 2 (P6 + P7): DETAIL LAYERS end to end, and the §3.7
@@ -1506,7 +1506,7 @@ set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
 # scale is the detail-tiling knob, and — the byte-identical argument as a test —
 # that an unauthored layer at its defaults changes nothing.
 configure_file(scripts/e2e_detail_layers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js @ONLY)
-jah_pool_arm(shading detail_layers ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js 6)
+jah_pool_arm(shading_d detail_layers ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js 6)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-1: LIVE TEXTURES — pixels a producer writes at
 # runtime, catalogued as a session-only asset kind so material.set can resolve
@@ -2012,20 +2012,26 @@ jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
 jah_add_pool(gi_verbs TIER document   LABELS scripting)
 jah_add_pool(gi_verbs_b TIER document   LABELS scripting)
-jah_add_pool(gi_verbs_stage TIER document   LABELS scripting stage-close)   # Showroom 2 / Mirror Room imports + contact_band (68 s alone)
+jah_add_pool(gi_verbs_stage TIER document   LABELS scripting)   # Showroom 2 / Mirror Room imports + contact_band (68 s alone)
 jah_add_pool(gi_movers TIER document   LABELS scripting)
+# pool.gi_movers split by its arms' seconds (TESTING-SIMPLE: 89 s whole)
+jah_add_pool(gi_movers_b TIER document   LABELS scripting)
 jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(editor_view TIER document   LABELS scripting)
 jah_add_pool(editor_view_b TIER document   LABELS scripting)
 jah_add_pool(editor_view_c TIER document   LABELS scripting)
 jah_add_pool(shading TIER document   LABELS scripting)
+# pool.shading split by its arms' seconds (TESTING-SIMPLE: 155 s whole, every pool row an app row under 60 s)
+jah_add_pool(shading_b TIER document   LABELS scripting)
+jah_add_pool(shading_c TIER document   LABELS scripting)
+jah_add_pool(shading_d TIER document   LABELS scripting)
 jah_add_pool(shading_live TIER document   LABELS scripting)
 jah_add_pool(shading_live_b TIER document   LABELS scripting)
 jah_add_pool(world_sky TIER document   LABELS scripting)
 jah_add_pool(world_sky_b TIER document   LABELS scripting)
 jah_add_pool(world_sky_c TIER document   LABELS scripting)
 jah_add_pool(world_light TIER document   LABELS scripting)
-jah_add_pool(world_light_stage TIER document   LABELS scripting stage-close)   # shadow_fit_receivers (100 s) + screenshot_grades (69 s): each alone over the budget
+jah_add_pool(world_light_stage TIER document   LABELS scripting)   # shadow_fit_receivers (100 s) + screenshot_grades (69 s): each alone over the budget
 jah_add_pool(player TIER low NEEDS NONE NEEDS_WHY "player verbs and frames at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(assets_import TIER low NEEDS NONE NEEDS_WHY "imports render non-black at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
 jah_add_pool(vr_noruntime TIER low NEEDS NONE TEST_WINDOW LABELS scripting

@@ -34,7 +34,7 @@ set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
 jah_gpu_exclusive_test(NAME engine.gpu_cull.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_cull.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
 
 # engine.lod_rule_parity — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
@@ -95,7 +95,7 @@ set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_exclusive_test(NAME chain.hzb.timing CLASS engine RUN_TIMEOUT 180 COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
 
 # engine.voxel_reader_parity — THE ONE VOXEL READER (PHOTON-READER-1): the same
 # cones through the same bound cascade chain, marched by a FRAGMENT program and

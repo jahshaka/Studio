@@ -1,33 +1,20 @@
 #!/usr/bin/env python3
-"""source.row_budget — A ROW RENDERS SECONDS (TESTING-SPEED-A item 7; SPECS/TESTING_SPEED_SPEC.md §2 A8).
+"""source.row_budget — A ROW IS A SECONDS-LONG GUARD (DOCS/PROCESS.md, Testing; TESTING-SIMPLE).
 
-The merge runs what a change reaches, in minutes — so a KEPT row is a seconds-long guard of a named behaviour: its
-measured price (scripts/gate-times.txt, the quiet median) is held against a BUDGET — the row's own (a KEEP:rewrite line of
-tests/hygiene/row_budgets.txt, the lead's ROWS table) or its class's: a fixture (CLASS engine|selftest, a CPU row) 10 s, an
-app row 60 s, a pool 60 s OF ARMS (the sum of its <pool>::<arm> prices, the boot on top) (the class read from the row's admission label `<row>:<class>`, a pool's `pool` label). A row over
-its budget is A RED OF THE ROW — cut its frames, split it, or move it to the stage close — never a widened budget.
-
-TWO SETS, PRINTED AND FAILED SEPARATELY (round 4, A): (1) the KEEP:rewrite rows over budget — RED BY DESIGN until
-TESTING-SPEED-B lands Part B (they are over by definition: that is why they are rewritten); this set alone is the by-design
-red the brief names and the delivery registers; (2) the OTHER kept rows over budget — NOT by design: a real red, printed as
-its own check with its list, which the lead registers at the delivery as owed to the sprint close's solo re-price (the
-prices of record are contention medians until then). The second set's check is printed FIRST, so the row's first FAIL
-line names it whenever it is non-empty: a known red registered for the first set never answers the second. Rows whose fate is MOVE:stage-close,
-THROW, SETUP or TOOLING are Part B's (moved, deleted, following their consumer, the tools' own); a stage-close / target /
-hygiene / tooling labelled row is not a merge row at all. Fed a violation first (a lint that cannot fail guards nothing).
+ONE RULE: every kept guard — every registered row but a `measure` row (it runs at the sprint's ship only) — is held
+against its class's budget at its price in scripts/gate-times.txt: a fixture or a CPU row 10 s, an app row (CLASS
+app|vr|selftest, a pool) 60 s. A guard over its budget is RED: rewritten to its budget, split (a pool by its arms),
+or labelled `measure` (tests/CMakeLists.txt's JAH_MEASURE_ROWS: a guard of a named behaviour is never deleted for its
+price) — never excused, there is no "by design". An unpriced guard is source.testing_rules' R2. Fed a violation first (a lint that cannot
+fail guards nothing).
 
 Run: row_budget.py <source-dir> <build-dir>
 """
 import json
 import os
-import re
-import subprocess
 import sys
 
-BUDGET = {"fixture": 10.0, "other": 10.0, "app": 60.0}
-NOT_KEPT = ("MOVE:stage-close", "THROW", "SETUP", "TOOLING")
-NOT_MERGE_LABELS = {"stage-close", "photon-target", "scale-target", "hygiene", "tooling", "quiet-box"}
-OWED_BY = "TESTING-SPEED-B"
+BUDGET = {"app": 60.0, "vr": 60.0, "selftest": 60.0}       # every other class (engine, a CPU row): 10 s
 FAILURES = []
 
 
@@ -37,23 +24,34 @@ def check(ok, what):
         FAILURES.append(what)
 
 
-def parse_budgets(text):
-    out = {}
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].split()
-        if len(line) == 4:
-            row, klass, fate, b = line
-            out[row] = (klass, fate, None if b == "-" else float(b))
-    return out
+def budget_of(name, props, cmd=()):
+    """An app row: CLASS app|vr|selftest, a pool, or a row whose command starts the app (a harness or a headless app row
+    registered by plain add_test); every other row 10 s."""
+    if name.startswith("pool.") or any(str(c).endswith("/bin/Jahshaka") for c in cmd):
+        return 60.0
+    return BUDGET.get(props.get("JAH_CLASS") or "", 10.0)
 
 
-def parse_prices(text):
-    out = {}
-    for line in text.splitlines():
-        if line.startswith("#") or not line.strip():
+def over(tests, prices):
+    """[(row, price, budget)] of the guards over their budgets. `tests`: ctest's json-v1 `tests`."""
+    out = []
+    for t in tests:
+        p = {x["name"]: x["value"] for x in t.get("properties", [])}
+        labels = p.get("LABELS") or []
+        labels = [labels] if isinstance(labels, str) else labels
+        if "measure" in labels or t["name"] not in prices:
             continue
+        b = budget_of(t["name"], p, t.get("command") or ())
+        if prices[t["name"]] > b:
+            out.append((t["name"], prices[t["name"]], b))
+    return sorted(out, key=lambda x: -x[1])
+
+
+def prices_of(path):
+    out = {}
+    for line in open(path, errors="replace"):
         p = line.split()
-        if len(p) >= 2:
+        if len(p) >= 2 and not line.startswith("#"):
             try:
                 out[p[0]] = float(p[1])
             except ValueError:
@@ -61,129 +59,29 @@ def parse_prices(text):
     return out
 
 
-def klass_of(t):
-    """fixture | app | other, from the row's command and labels."""
-    props = {p["name"]: p["value"] for p in t.get("properties", [])}
-    labels = props.get("LABELS") or []
-    labels = [labels] if isinstance(labels, str) else labels
-    cmd = " ".join(t.get("command") or [])
-    m = re.search(r"--label \S+:(\w+)", cmd)
-    if "pool" in labels or (m and m.group(1) in ("app", "vr")) or "bin/Jahshaka" in cmd:
-        return "app"
-    if m:
-        return "fixture"
-    return "other"
-
-
-def over(rows, budgets, prices):
-    """[(row, price, budget, fate)] of the kept merge rows over their budgets. `rows`: [(name, klass, labels)]."""
-    out = []
-    for name, klass, labels in rows:
-        if set(labels) & NOT_MERGE_LABELS or any(l.startswith("lane:") for l in labels):
-            continue                   # a lane's own row (tests/lanes/<LANE>/) goes at the lane's land — not a kept row
-        kb, fate, own = budgets.get(name, (klass, "KEEP", None))
-        if fate in NOT_KEPT:
-            continue
-        b = own if own is not None else BUDGET.get(klass, 10.0)
-        if "pool" in labels:
-            # THE POOL RULE (the lead, batch 2's read): a pool's budget is 60 s OF ARMS — the sum of its `<pool>::<arm>`
-            # price lines, the boot on top; never the whole row (pool.capture: 71.8 s whole, 51 s of arms: green). A pool
-            # with no arm price is not judged here (its arms are priced by --record-times)
-            arms = [v for k, v in prices.items() if k.startswith(name + "::")]
-            p = round(sum(arms), 2) if arms else None
-        else:
-            p = prices.get(name)
-        if p is not None and p > b:
-            out.append((name, p, b, fate))
-    return sorted(out)
-
-
 def main(source, build):
+    T = lambda n, **p: {"name": n, "properties": [{"name": k, "value": v} for k, v in p.items()]}
+    synth = [T("f.slow", JAH_CLASS="engine"), T("a.slow", JAH_CLASS="app"), T("a.ok", JAH_CLASS="app"),
+             T("m.long", JAH_CLASS="engine", LABELS=["measure"]), T("pool.p", JAH_CLASS="app"), T("lint")]
+    got = [n for n, _, _ in over(synth, {"f.slow": 12, "a.slow": 61, "a.ok": 59, "m.long": 500, "pool.p": 59,
+                                         "lint": 11})]
     print("the rule catches (synthetic):")
-    b = parse_budgets("a fixture KEEP -\nr app KEEP:rewrite 20\nm app MOVE:stage-close -\n")
-    rows = [("a", "fixture", []), ("r", "app", []), ("m", "app", []), ("n", "app", []), ("s", "fixture", ["stage-close"])]
-    got = over(rows, b, {"a": 12, "r": 25, "m": 900, "n": 61, "s": 99})
-    check([x[0] for x in got] == ["a", "n", "r"], "a fixture over 10 s, an app row over 60 s and a rewrite row over its "
-          "own 20 s are red; a row Part B moves and a stage-close row are not (%s)" % got)
-    check(not over([("r", "app", [])], b, {"r": 19}), "a rewrite row inside its own budget is green")
-    pr = {"pool.p": 71.8, "pool.p::a": 30.0, "pool.p::b": 21.0, "pool.q": 40.0, "pool.q::a": 45.0, "pool.q::b": 20.0}
-    got = over([("pool.p", "app", ["pool"]), ("pool.q", "app", ["pool"])], {}, pr)
-    check([x[0] for x in got] == ["pool.q"] and got[0][1] == 65.0,
-          "THE POOL RULE: a pool is judged by the SUM OF ITS ARMS against 60 s, never the whole row — pool.p (71.8 s whole, "
-          "51 s of arms) green, pool.q (40 s whole, 65 s of arms) red (%s)" % got)
+    check(sorted(got) == ["a.slow", "f.slow", "lint"], "a fixture over 10 s, an app row over 60 s and a CPU row over "
+          "10 s are red; an app row under 60 s, a pool under 60 s and a measure row are not (%s)" % got)
     sys.path.insert(0, os.path.join(source, "scripts"))
-    import gate_graph
-    raw, rc = gate_graph.ctest_inventory(build)
-    tests = json.loads(raw or "{}").get("tests", []) if rc == 0 else []
-    check(bool(tests), "the build registers rows (%d)" % len(tests))
-    rows = []
-    for t in tests:
-        props = {p["name"]: p["value"] for p in t.get("properties", [])}
-        labels = props.get("LABELS") or []
-        rows.append((t["name"], klass_of(t), [labels] if isinstance(labels, str) else labels))
-    budgets = parse_budgets(open(os.path.join(source, "tests", "hygiene", "row_budgets.txt")).read())
-    prices = parse_prices(open(os.path.join(source, "scripts", "gate-times.txt")).read())
-    bad = over(rows, budgets, prices)
-    rewrite = [x for x in bad if x[3] == "KEEP:rewrite"]
-    other = [x for x in bad if x[3] != "KEEP:rewrite"]
-    print("the tree: %d kept merge row(s) over budget — %d KEEP:rewrite (owed by %s), %d other"
-          % (len(bad), len(rewrite), OWED_BY, len(other)))
-    for title, set_ in (("OTHER kept rows over budget — NOT by design (a real red; registered at the delivery, owed to the "
-                         "sprint close's solo re-price):", other),
-                        ("KEEP:rewrite rows over budget — RED BY DESIGN (owed by %s):" % OWED_BY, rewrite)):
-        print(title)
-        for name, p, b_, fate in set_:
-            print("  OVER  %-48s %7.1f s > %5.1f s  (%s)" % (name, p, b_, fate))
-    check(not other, "every OTHER kept merge row (not KEEP:rewrite) is inside its budget — NOT by design: %d over (%s); the "
-          "lead registers them at the delivery, owed to the sprint close's solo re-price"
-          % (len(other), " ".join(x[0] for x in other)))
-    check(not rewrite, "every KEEP:rewrite row is inside its budget — RED BY DESIGN until %s lands Part B: %d over"
-          % (OWED_BY, len(rewrite)))
-    if FAILURES:
-        print("source.row_budget: FAILED (%d)" % len(FAILURES))
-        return 1
-    print("source.row_budget: PASSED")
-    return 0
-
-
-BUDGET_RX = re.compile(r"(?:<=|\u2264|\bbudget)\s*(\d+(?:\.\d+)?)\s*s\b")
-ROW_RX = re.compile(r"\|\s*([A-Za-z0-9_.:\-]+)\s*\|\s*(\w+)\s*\|\s*([\d.]+|-)\s*\|\s*([A-Za-z:\-]+)\s*\|(.*)\|\s*$")
-
-
-def generate(rows_md):
-    """row_budgets.txt FROM THE ROWS TABLE (the lead, batch 2's read: the table is the one source of budgets; this file is
-    generated, never hand-kept): `<row> <class> <fate> <budget s|->` per table row, the budget the LAST `<= N s` /
-    `budget N s` of a KEEP or KEEP:rewrite row's reason, `-` otherwise (its class's)."""
-    out, seen = [], set()
-    for line in open(rows_md, errors="replace"):
-        m = ROW_RX.match(line)
-        if not m or m.group(1) in seen or m.group(1) in ("row", "---"):
-            continue
-        name, klass, secs, fate, why = m.groups()
-        seen.add(name)
-        if secs == "-":
-            # a row the table prices "-" (a NEW row, no record yet): KEPT in the file, and SAID — never dropped silently
-            sys.stderr.write(f"row_budgets: WARN {name} has no seconds in the table (\"-\"): kept with its fate and budget\n")
-        b = "-"
-        if fate.startswith("KEEP"):
-            nums = BUDGET_RX.findall(why)
-            if nums:
-                b = ("%g" % float(nums[-1]))
-        out.append(f"{name} {klass} {fate} {b}")
-    return out
+    import gate_graph            # a listing from a copy of the CTestTestfile tree (never truncates a running gate's log)
+    tests = json.loads(gate_graph.ctest_inventory(build)[0] or "{}").get("tests", [])
+    check(len(tests) > 0, "the build registers rows (%d)" % len(tests))
+    bad = over(tests, prices_of(os.path.join(source, "scripts", "gate-times.txt")))
+    print("the tree:")
+    for n, p, b in bad:
+        print("  OVER  %-48s %7.1f s > %5.1f s" % (n, p, b))
+    check(not bad, "every kept guard is within its budget (%d over)" % len(bad))
+    print("source.row_budget: %s" % ("FAILED (%d)" % len(FAILURES) if FAILURES else "PASSED"))
+    return 1 if FAILURES else 0
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(line_buffering=True)
-    if sys.argv[1:2] == ["--generate"]:
-        # row_budget.py --generate <SPECS/TESTING_SPEED_ROWS.md> <tests/hygiene/row_budgets.txt>: the header kept
-        dst = sys.argv[3]
-        head = [l.rstrip("\n") for l in open(dst) if l.startswith("#")] if os.path.exists(dst) else []
-        body = generate(sys.argv[2])
-        open(dst, "w").write("\n".join(head + body) + "\n")
-        print("row_budgets: %d rows from %s (%d with their own budget)" % (len(body), sys.argv[2],
-                                                                          sum(1 for l in body if not l.endswith(" -"))))
-        sys.exit(0)
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)

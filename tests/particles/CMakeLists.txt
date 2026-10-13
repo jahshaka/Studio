@@ -64,7 +64,7 @@ if(JAHSHAKA_ASAN)
     # merge tier's.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}"
-        TIMEOUT 120 LABELS "particles;stage-close")
+        TIMEOUT 120 LABELS "particles")
 endif()
 
 # THE FIRE GATE (PARTICLES_FX2_SPEC §11 phase 3). Builds the SHIPPING fire preset

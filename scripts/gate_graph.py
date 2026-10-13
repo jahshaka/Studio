@@ -490,18 +490,9 @@ class NinjaGraph:
 
 
 def ctest_inventory(build):
-    """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree.
-    ctest opens <build>/Testing/Temporary/LastTest.log even for a listing, which TRUNCATES the log
-    of a gate still running in that dir (the suites audit proved it, GATE_AND_RIG) — and the
-    selector's own guards list the inventory from inside a gate. The copy answers the same
-    (backtraces and commands are absolute paths) and leaves the build dir's log alone.
-    Returns (stdout, returncode).
-
-    ONE LISTING PER BUILD STATE (TESTING-CLEANUP-2B H8b): the listing is cached in the build dir
-    (.gate-scope-inventory.json), keyed on the build dir's spelling, every CTestTestfile.cmake's mtime and size
-    and the mtime of ninja's log (a build changes which commands exist: ctest leaves out the command of an
-    executable that is not built yet). source.gate_scope_rules alone ran 34 selections a run, each one copying
-    the tree and running ctest."""
+    """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree (a listing in the
+    build dir itself truncates a running ctest's LastTest.log), cached per build state in .gate-scope-inventory.json
+    (every CTestTestfile's mtime and size, ninja's log). Returns (stdout, returncode)."""
     import hashlib
     import json as _json
     import shutil
@@ -535,7 +526,10 @@ def ctest_inventory(build):
             os.makedirs(os.path.join(tmp, rel), exist_ok=True)
             shutil.copy2(os.path.join(build, rel, "CTestTestfile.cmake"), os.path.join(tmp, rel, "CTestTestfile.cmake"))
         r = subprocess.run(["ctest", "--show-only=json-v1"], cwd=tmp, capture_output=True, text=True)
-        if r.returncode == 0 and r.stdout.strip():
+        # a listing with a row whose command is missing (an executable mid-link, a build killed half-way) is never
+        # cached: the next listing, after the build, must see the commands
+        if r.returncode == 0 and r.stdout.strip() and '"command"' in r.stdout and all(
+                "command" in t for t in _json.loads(r.stdout).get("tests", [])):
             try:
                 with open(cache + ".tmp", "w") as fh:
                     _json.dump({"key": key, "stdout": r.stdout}, fh)
@@ -551,7 +545,7 @@ def ctest_inventory(build):
 # Every run-log record carries what the row WAS when it ran: its declaration (ctest's properties and its command line) and
 # a hash of the data files its command names, so a later selection can tell "the row did not change" from "the row's
 # declaration or data moved" (§3.2). THE TREE ROOT IS STRIPPED (preflight 2, P12): ctest's command and WORKING_DIRECTORY
-# carry the worktree's path (rc-merge-<lane>/scripts/gpu-admit.sh, …/build-linux/tests/gi) — a raw hash would re-key every
+# carry the worktree's path (<worktree>/scripts/gpu-exclusive.sh, …/build-linux/tests/gi) — a raw hash would re-key every
 # row per tree. The paths are rewritten to `<root>` / `<build>` from the build's OWN CMakeCache (CMAKE_HOME_DIRECTORY,
 # CMAKE_CACHEFILE_DIR: a copied or moved build dir still names the tree it was configured in) and from the directory the
 # build sits in now; ctest_inventory's temporary copy (a row with no WORKING_DIRECTORY of its own defaults to the copy's
@@ -632,19 +626,16 @@ def _canon_json(v):
 
 def declaration(test, roots):
     """A ctest row's DECLARATION, the tree root stripped: {labels, timeout, tokens, run_serial, hash} — `hash` over
-    EVERY property but COST (scheduling only) and the whole command line, root-free; `tokens` = the VRAM tokens it
-    asks (`gpu-admit.sh <n>`, else its RESOURCE_GROUPS vram slots, else 0)."""
+    EVERY property but COST (scheduling only) and the whole command line, root-free; `tokens` = the card's slots it takes
+    (its RESOURCE_GROUPS vram slots, else 0)."""
     props = {p["name"]: p["value"] for p in test.get("properties", []) if p.get("name") not in _DECL_IGNORED}
     cmd = test.get("command") or []
     full = strip_roots({"command": cmd, "properties": props}, roots)
     tokens = 0
-    if cmd and os.path.basename(cmd[0]) == "gpu-admit.sh" and len(cmd) > 1 and str(cmd[1]).isdigit():
-        tokens = int(cmd[1])
-    else:
-        for g in props.get("RESOURCE_GROUPS") or []:
-            for r_ in (g or {}).get("requirements") or []:
-                if r_.get(".type") == "vram":
-                    tokens += int(r_.get("slots") or 0)
+    for g in props.get("RESOURCE_GROUPS") or []:
+        for r_ in (g or {}).get("requirements") or []:
+            if r_.get(".type") == "vram":
+                tokens += int(r_.get("slots") or 0)
     return {"labels": sorted(props.get("LABELS") or []), "timeout": props.get("TIMEOUT"),
             "tokens": tokens, "run_serial": bool(props.get("RUN_SERIAL")),
             "hash": _sha256(_canon_json(full).encode())}
@@ -679,7 +670,7 @@ DATA_SETS = {                                  # a named set -> the source-tree 
     "samples": ("scenes",),                    # every shipped sample (scenes/ beside the binary); samples/<name>: one
 }
 # THE HARNESS IS NOT DATA (the lead's read of RUNNER-A2B): a command-line path under these source-tree dirs is a wrapper of
-# the harness (scripts/gpu-admit.sh, scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
+# the harness (scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
 # a row's data known; the row's set is its real data arguments, its walked directories and its declared families only.
 HARNESS_DIRS = ("scripts/", "tests/support/")
 DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
@@ -878,153 +869,7 @@ def build_config(build, cache=None):
     return cfg, None
 
 
-_DECLARED_FROM = {}
-_RENDERING = ("app", "selftest", "engine", "vr")
-_LIBRARY = ("app", "vr", "headless")
-_CALL_KEYWORDS = {"CLASS", "TIER", "TOKENS", "WORKING_DIRECTORY", "NEEDS_WHY", "NEEDS", "COMMAND", "DATA", "TEST_WINDOW",
-                  "NAME", "RUN_TIMEOUT", "HEADLESS", "BASELINE", "LABELS", "ENV", "LAUNCHER", "APP_ARGS", "PROPS"}
-
-
-def declared_from(src, inventory=None, roots=None):
-    """{row: JAH_DATA value | None} — THE DECLARATIONS OF ANOTHER TREE laid over a build's rows: from a CONFIGURED build
-    (its inventory's JAH_DATA properties, exactly), or — `src` a SOURCE tree with no CMakeCache (the integration tree is
-    never configured) — from its CMake TEXT by declared_from_source over `inventory` (the build's own ctest json)."""
-    key = (os.path.abspath(src), id(inventory))
-    if key in _DECLARED_FROM:
-        return _DECLARED_FROM[key]
-    import json as _json
-    if os.path.isfile(os.path.join(src, "CMakeCache.txt")):
-        raw, _ = ctest_inventory(src)
-        out = {t["name"]: next((p["value"] for p in t.get("properties", []) if p.get("name") == DATA_PROPERTY), None)
-               for t in _json.loads(raw or "{}").get("tests", [])}
-    else:
-        out = declared_from_source(src, inventory or {}, roots)
-    _DECLARED_FROM[key] = out
-    return out
-
-
-def _cmake_list(text, var):
-    m = re.search(r"^\s*set\(\s*" + re.escape(var) + r"\s+([^)]*)\)", text, re.M)
-    return m.group(1).split() if m else []
-
-
-def _call_data(path, line, cache):
-    """The `DATA <sets…>` tokens of the macro CALL starting at <path>:<line> (the text up to its balanced paren)."""
-    if path not in cache:
-        try:
-            cache[path] = open(path, errors="replace").read().splitlines()
-        except OSError:
-            cache[path] = []
-    lines = cache[path]
-    if not (0 < line <= len(lines)):
-        return []
-    text, depth, started = "", 0, False
-    for l in lines[line - 1:line + 60]:
-        for ch in l.split("#", 1)[0] + "\n":
-            text += ch
-            if ch == "(":
-                depth += 1; started = True
-            elif ch == ")":
-                depth -= 1
-                if started and depth == 0:
-                    break
-        if started and depth == 0:
-            break
-    toks = re.findall(r'"[^"]*"|[^\s()]+', text)
-    out, on = [], False
-    for tk in toks:
-        bare = tk.strip('"')
-        if bare in _CALL_KEYWORDS:
-            on = bare == "DATA"; continue
-        if on:
-            out.append(bare)
-    return out
-
-
-def declared_from_source(src, inventory, roots=None):
-    """THE JAH_DATA DECLARATIONS FROM THE TREE'S CMAKE TEXT, without a configure (RUNNER-A2B follow-up): the rules of
-    tests/CMakeLists.txt's _jah_data and jah_data_pass, applied to a build's rows —
-      * a row's CLASS from its command line (gpu-admit.sh / gpu-exclusive.sh `--label <row>:<class>`; a pool's run_pool.py,
-        `--headless` or not): engine-media for a rendering class, library-template for app / vr / headless;
-      * the macro call's own `DATA` clause, read at the call site the inventory's backtrace names; a `${…}` it cannot
-        expand widens to the family's superset (`samples/${X}` -> `samples`: more reruns, never a wrong serving);
-      * a fresh-home wipe (tests/support/fresh_home.sh with FIXTURES_SETUP) is NONE;
-      * by directory: fixtures/<dir> where the source tree holds tests/<dir>/fixtures; `samples` for JAH_DATA_SAMPLE_DIRS;
-        NONE for an undeclared row of JAH_DATA_NONE_DIRS.
-    A tree whose tests/CMakeLists.txt has no jah_data_pass declares nothing ({}). Returns {row: "a;b" | None}."""
-    try:
-        top = open(os.path.join(src, "tests", "CMakeLists.txt"), errors="replace").read()
-    except OSError:
-        return {}
-    if "jah_data_pass" not in top:
-        return {}
-    sample_dirs, none_dirs = set(_cmake_list(top, "JAH_DATA_SAMPLE_DIRS")), set(_cmake_list(top, "JAH_DATA_NONE_DIRS"))
-    bt = inventory.get("backtraceGraph") or {}
-    files, nodes, commands = bt.get("files", []), bt.get("nodes", []), bt.get("commands", [])
-    croot = (roots or {}).get("root") or ""
-
-    def to_src(p):
-        if croot and (p == croot or p.startswith(croot + "/")):
-            return os.path.join(src, os.path.relpath(p, croot))
-        return p
-    cache, out = {}, {}
-    for t in inventory.get("tests", []):
-        props = {p["name"]: p["value"] for p in t.get("properties", [])}
-        cmd = [str(c) for c in (t.get("command") or [])]
-        fams = []
-        cls = None
-        # THE FRAMES (innermost first): (source file, line, the command that frame runs) — only a row the declaring
-        # macros REGISTERED carries their families (a row registered by plain add_test, whatever its command, does not)
-        frames, n = [], nodes[t["backtrace"]] if isinstance(t.get("backtrace"), int) and t["backtrace"] < len(nodes) else None
-        while n is not None:
-            if n.get("file") is not None and n["file"] < len(files):
-                c = commands[n["command"]].lower() if n.get("command") is not None and n["command"] < len(commands) else ""
-                frames.append((to_src(files[n["file"]]), n.get("line"), c))
-            n = nodes[n["parent"]] if "parent" in n else None
-        macro = next((c for _, _, c in frames if c in ("jah_gpu_row", "jah_gpu_exclusive_test", "jah_add_pool")), None)
-        wipe = any(c == "jah_fresh_home_fixture" for _, _, c in frames)
-        for i, c in enumerate(cmd if macro in ("jah_gpu_row", "jah_gpu_exclusive_test") else []):
-            if os.path.basename(c) in ("gpu-admit.sh", "gpu-exclusive.sh"):
-                j = cmd.index("--label", i) if "--label" in cmd[i:] else -1
-                if j > 0 and j + 1 < len(cmd) and ":" in cmd[j + 1]:
-                    cls = cmd[j + 1].rsplit(":", 1)[1]
-                break
-        if cls is None and macro == "jah_add_pool":
-            cls = "headless" if "--headless" in cmd else "app"
-        if cls in _RENDERING:
-            fams.append("engine-media")
-        if cls in _LIBRARY:
-            fams.append("library-template")
-        if wipe and macro is None:
-            fams.append("NONE")
-        # the call site's directory (the first frame in a tests/<dir>/ file) and the macro call's own DATA clause
-        tests_dir = os.path.join(src, "tests") + "/"
-        site = next(((f, l) for f, l, _ in frames if f.startswith(tests_dir) and os.path.dirname(f) != tests_dir.rstrip("/")),
-                    None)
-        if macro:
-            call = next(((f, l) for f, l, c in frames if c == macro and l), None)
-            for d in (_call_data(call[0], call[1], cache) if call else []):
-                fams.append("samples" if d.startswith("samples/") and "${" in d else d)
-        if site:
-            rel = os.path.relpath(os.path.dirname(site[0]), os.path.join(src, "tests"))
-            topd = rel.split("/", 1)[0]
-            add = []
-            if os.path.isdir(os.path.join(src, "tests", rel, "fixtures")):
-                add.append(f"fixtures/{rel}")
-            if topd in sample_dirs:
-                add.append("samples")
-            if not fams and not add and topd in none_dirs:
-                add.append("NONE")
-            fams += add
-        seen = []
-        for f in fams:
-            if f not in seen:
-                seen.append(f)
-        out[t["name"]] = ";".join(seen) or None
-    return out
-
-
-def row_facts(build, data_from=None, hashed=True):
+def row_facts(build, hashed=True):
     """({row: {labels, declaration, data_hash, data_why, data_dirs, data_declared, data_count, data_sources}}, roots) for
     every ctest row of <build> (its inventory:
     ctest_inventory, cached per build state), or ({}, None) when the build has none."""
@@ -1037,17 +882,8 @@ def row_facts(build, data_from=None, hashed=True):
         tests = inv.get("tests", [])
     except (OSError, ValueError):
         return {}, roots
-    if data_from is None and os.environ.get("JAH_DATA_DECLARED_FROM"):
-        # THE DECLARATIONS OF A NEWER TREE laid over this build's commands (a replay on a build configured before its
-        # tree declared its data: runner_select_test, data-audit's AFTER) — a configured build's, or a SOURCE tree's
-        # read from its CMake text (declared_from_source: no configure of the tree is ever needed)
-        data_from = declared_from(os.environ["JAH_DATA_DECLARED_FROM"], inv, roots)
     memo, out = {}, {}
     for t in tests:
-        if data_from is not None and t.get("name") in data_from:
-            # (the audit's AFTER: another inventory's JAH_DATA declarations laid over this build's commands)
-            t = dict(t, properties=[p for p in t.get("properties", []) if p.get("name") != DATA_PROPERTY]
-                     + ([{"name": DATA_PROPERTY, "value": data_from[t["name"]]}] if data_from[t["name"]] else []))
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
         d = data_set(t, roots, memo, hashed=hashed)
         if not hashed:                     # a selection's data edges: the dirs, nothing hashed (data_set's hashed=False)
@@ -1086,42 +922,41 @@ destroy apply valid state desc info text path file key keys id ids min max out a
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
+_CXX_SKIP = re.compile(r'//[^\n]*|/\*.*?(?:\*/|\Z)|"(?:\\.|[^"\\\n])*(?:"|(?=\n)|\Z)|\'(?:\\.|[^\'\\\n])*(?:\'|(?=\n)|\Z)',
+                       re.S)
+_STRIPPED = {}
+
+
+def _cxx_skip(m):
+    s = m.group(0)
+    if s[:2] == "//":
+        return ""
+    return "\n" * s.count("\n") if s[:2] == "/*" else s
+
+
 def strip_cxx(text):
     """Remove comments and collapse whitespace per line, keeping line structure. String and char
-    literals are kept (a changed string is a code change)."""
-    out, i, n = [], 0, len(text)
-    buf = []
-    state = None
-    while i < n:
-        c = text[i]
-        if state is None:
-            if c == "/" and i + 1 < n and text[i + 1] == "/":
-                j = text.find("\n", i)
-                i = n if j < 0 else j
-                continue
-            if c == "/" and i + 1 < n and text[i + 1] == "*":
-                j = text.find("*/", i + 2)
-                seg = text[i:(n if j < 0 else j + 2)]
-                buf.append("\n" * seg.count("\n"))
-                i = n if j < 0 else j + 2
-                continue
-            if c == '"' or c == "'":
-                # a raw string R"x( ... )x" is rare in our tree; treat as a normal literal
-                state = c
-            buf.append(c); i += 1
-            continue
-        # inside a literal
-        buf.append(c)
-        if c == "\\" and i + 1 < n:
-            buf.append(text[i + 1]); i += 2; continue
-        if c == state or c == "\n":
-            state = None
-        i += 1
-    for line in "".join(buf).split("\n"):
-        out.append(" ".join(line.split()))
-    return out
+    literals are kept (a changed string is a code change). Memoized: a selection strips the same file many times."""
+    key = hash(text)
+    if key not in _STRIPPED:
+        _STRIPPED[key] = [" ".join(l.split()) for l in _CXX_SKIP.sub(_cxx_skip, text).split("\n")]
+    return list(_STRIPPED[key])
 
 
+def _memo_lines(fn):
+    """A selection walks the same stripped file many times: the scope walks are pure functions of its lines."""
+    cache = {}
+
+    def wrapped(lines):
+        key = hash(tuple(lines))
+        if key not in cache:
+            cache[key] = fn(lines)
+        return cache[key]
+    wrapped.__name__, wrapped.__doc__ = fn.__name__, fn.__doc__
+    return wrapped
+
+
+@_memo_lines
 def _scopes(lines):
     """For every stripped line, the named scopes (struct/class/enum/union/function names) it sits
     in — innermost last. Namespaces are skipped (too broad to select anything)."""
@@ -1295,6 +1130,7 @@ def cxx_changed_identifiers(old_text, new_text, hunks=None):
     return ids, changed
 
 
+@_memo_lines
 def _function_depth(lines):
     """For every stripped line, True when it sits inside a function body."""
     res, stack, header = [], [], []
@@ -1409,6 +1245,7 @@ TARGET_CMDS = {"target_sources", "target_link_libraries", "target_compile_option
                "add_executable", "add_library", "add_dependencies", "add_custom_target"}
 
 
+@_memo_lines
 def _outer_scopes(lines):
     """For every stripped line, the OUTERMOST named scope it belongs to (a top-level function or class: the first named
     entry of the scope stack, namespaces and unnamed blocks skipped), or None at namespace scope. Unlike _scopes this
@@ -1529,15 +1366,6 @@ def new_scope_ids(old_text, new_text, hunks, ids):
     # NEW: never named by the old text, or DECLARED on an added line and on no removed one (an added member: code that
     # names it is in this change; code naming an older namesake still means the namesake)
     return out, {t for t in out if t not in old_words or (t in added and t not in removed)}
-
-
-def names_in_body(text, ids):
-    """True when `text` (a header) names one of `ids` INSIDE A FUNCTION BODY (an inline helper whose callers name the
-    helper, not the id) — a declaration alone (a parameter's type, a member) is named again by whoever uses it."""
-    lines = strip_cxx(text or "")
-    fd = _function_depth(lines)
-    rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b") if ids else None
-    return bool(rx) and any(fd[k] and rx.search(ln) for k, ln in enumerate(lines))
 
 
 def body_wrappers(text, ids):

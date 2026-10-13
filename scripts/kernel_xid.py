@@ -6,11 +6,8 @@ environmental — DOCS/traps/GATE_AND_RIG.md).
 The NVIDIA driver logs every GPU fault as `NVRM: Xid (PCI:…): <n>, pid=<pid>, name=<comm>, …` in
 the kernel ring. /dev/kmsg is not readable here (dmesg_restrict=1) and a test never sudos, so the
 journal is read (`journalctl -k`, readable by the adm / systemd-journal group). Its users:
-  * scripts/vram_tokens.py `admit` — EVERY Vulkan row (gpu-admit.sh / gpu-exclusive.sh): it runs
-    the row as its child, tracks the row's process tree, and after the row reads the Xids from any
-    pid of that tree since the launch; a fault turns the row red with the kernel's lines;
+  * scripts/gpu-exclusive.sh — the card's lock: after its command, the Xids since the command began, printed;
   * tests/support/run_pool.py — per app process, the Xid's second mapped to the arm that ran;
-  * scripts/lead/lib/runner/ship.py (`since <epoch>`) and the card queue's jobs — the Xids since the run began (never since boot).
 AN UNREADABLE JOURNAL IS A FINDING in every user (a printed line), never a red of every row: the
 one row that reds for it is devprocess.kernel_journal. macOS has no NVRM log (an empty answer).
 JAH_KERNEL_JOURNAL=<file> reads `journalctl -o short-unix` lines from a file instead (the tests).
@@ -21,7 +18,6 @@ import os
 import re
 import subprocess
 import sys
-import threading
 
 XID = re.compile(r"^(\d+(?:\.\d+)?)\s.*NVRM: Xid \([^)]*\): (\d+), pid=(\d+),")
 FINDING = ("FINDING: the kernel journal is unreadable (journalctl -k; the user is not in the "
@@ -62,65 +58,6 @@ def kernel_xids(since, pids=None):
         if m and float(m.group(1)) >= int(since) and (pids is None or int(m.group(3)) in pids):
             out.append((float(m.group(1)), int(m.group(2)), int(m.group(3)), line.strip()))
     return out
-
-
-def window(t0, t1):
-    """The journal window a read covered, as the run log and a verdict spell it: local ISO-8601
-    seconds, `<start>..<end>` (VERDICT-1 U3: a record's `xid.window`; the `xid-read:<window>` token)."""
-    import datetime
-    iso = lambda t: datetime.datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
-    return "%s..%s" % (iso(t0), iso(t1))
-
-
-def _proc_table():
-    """{pid: (ppid, pgid)} of every process now (Linux /proc); {} elsewhere."""
-    table = {}
-    try:
-        names = os.listdir("/proc")
-    except OSError:
-        return table
-    for n in names:
-        if not n.isdigit(): continue
-        try:
-            with open("/proc/%s/stat" % n) as f:
-                st = f.read()
-        except OSError:
-            continue
-        rest = st[st.rfind(")") + 2:].split()
-        try:
-            table[int(n)] = (int(rest[1]), int(rest[2]))
-        except (IndexError, ValueError):
-            pass
-    return table
-
-
-class TreeTracker(threading.Thread):
-    """Every pid of a process tree while it lives (the row, the app its harness spawned, the app a
-    pool restarts): /proc polled every `period` seconds, a pid kept once seen. A GPU process lives
-    seconds at least, so a one-second period misses none that can own a GPU context."""
-
-    def __init__(self, root, period=1.0):
-        super().__init__(daemon=True)
-        self.root, self.period = root, period
-        self.pids = {root}
-        self._stop = threading.Event()
-
-    def scan(self):
-        table = _proc_table()
-        grew = True
-        while grew:
-            grew = False
-            for pid, (ppid, pgid) in table.items():
-                if pid not in self.pids and (ppid in self.pids or pgid == self.root):
-                    self.pids.add(pid); grew = True
-
-    def run(self):
-        while not self._stop.is_set():
-            self.scan()
-            self._stop.wait(self.period)
-
-    def stop(self):
-        self._stop.set()
 
 
 def main(argv):

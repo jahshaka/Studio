@@ -72,7 +72,7 @@ foreach(_pair mode gi_resolve)
                      threading_${_pair}.png
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(threading.${_pair} PROPERTIES
-        LABELS "threading;stage-close" RESOURCE_LOCK threading COST ${JAH_COST_THREADING})
+        LABELS "threading" RESOURCE_LOCK threading COST ${JAH_COST_THREADING})
 endforeach()
 # TIMEOUTs: the two halves' old quiet medians summed, x 6 (mode 47 + 54 s, gi_resolve 41 + 52 s).
 set_tests_properties(threading.mode PROPERTIES TIMEOUT 610)
@@ -108,7 +108,7 @@ configure_file(newproject_stall.js.in ${CMAKE_CURRENT_BINARY_DIR}/newproject_sta
 set(_thr_home_soak ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_import_soak)
 set(_thr_home_stall ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_stall)
 
-jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading;stage-close")
+jah_fresh_home_fixture(threading.freshhome.import_soak threading_home_import_soak "${_thr_home_soak}" LABELS "threading")
 
 # NOT RUN_SERIAL (TEST_GATE_AUDIT.md §2, 2026-09-09) and not in the threading lock either.
 # The four compile halves above hold `RESOURCE_LOCK threading` (four Epic opens compiling
@@ -123,9 +123,9 @@ jah_gpu_row(threading.import_soak CLASS app TIER low NEEDS NONE NEEDS_WHY "the i
 set_tests_properties(threading.import_soak PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_soak};JAHSHAKA_DATA_ROOT=${_thr_home_soak}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_import_soak
-    LABELS "threading;stage-close" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
+    LABELS "threading" TIMEOUT 300)   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
 
-jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading;stage-close")
+jah_fresh_home_fixture(threading.freshhome.newproject_stall threading_home_newproject_stall "${_thr_home_stall}" LABELS "threading")
 
 # The push row: the counts, no lock (its millisecond bar is the .timing twin's, below).
 jah_gpu_row(threading.newproject_stall CLASS app TIER epic NEEDS photon bloom ssao smaa planar
@@ -136,7 +136,7 @@ set_tests_properties(threading.newproject_stall PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall};JAHSHAKA_DATA_ROOT=${_thr_home_stall}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall
     TIMEOUT 300   # the lock's RUN_TIMEOUT kept (measured 16.6-45.7 s solo: 6x = 275)
-    LABELS "threading;stage-close")
+    LABELS "threading")
 
 # threading.newproject_stall.timing — the first create's 1000 ms bar, stage-close (TESTING-DEBTS-1 T10,
 # D6B-GATE-SHAPE's pattern): the push row above keeps the counts (GI armed, restored, no
@@ -148,7 +148,7 @@ set(_thr_home_stall_t ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/newproject_stall.js.in
                   ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)
 jah_fresh_home_fixture(threading.freshhome.newproject_stall_timing threading_home_newproject_stall_timing
-                       "${_thr_home_stall_t}" LABELS "threading;stage-close")
+                       "${_thr_home_stall_t}" LABELS "threading")
 jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js
@@ -156,7 +156,7 @@ jah_gpu_exclusive_test(NAME threading.newproject_stall.timing CLASS app TIER epi
 set_tests_properties(threading.newproject_stall.timing PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall_t};JAHSHAKA_DATA_ROOT=${_thr_home_stall_t}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall_timing
-    LABELS "threading;stage-close;quiet-box" RUN_SERIAL TRUE)
+    LABELS "threading;measure" RUN_SERIAL TRUE)
 
 # threading.texture_wait_watchdog — the give-up path itself, under the engine's
 # JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only
@@ -166,7 +166,7 @@ set_tests_properties(threading.newproject_stall.timing PROPERTIES
 # would never end.
 set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_watchdog)
 
-jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading;stage-close")
+jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading")
 
 jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -175,7 +175,7 @@ jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
 set_tests_properties(threading.texture_wait_watchdog PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_wd};JAHSHAKA_DATA_ROOT=${_thr_home_wd}/.local/share/Jahshaka;JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
     FIXTURES_REQUIRED threading_home_texture_wait_watchdog
-    LABELS "threading;stage-close" TIMEOUT 240)
+    LABELS "threading" TIMEOUT 240)
 
 # The SEGV's precondition, greped off the logs both runs just wrote
 # (nogrouplesstexture.cmake carries the mechanism, and fails on an empty directory).
@@ -196,14 +196,14 @@ add_test(NAME threading.import_soak.no_groupless_texture
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
     DEPENDS threading.import_soak FIXTURES_REQUIRED "threading_home_import_soak;threading_run_import_soak"
-    LABELS "threading;stage-close" TIMEOUT 60)
+    LABELS "threading" TIMEOUT 60)
 
 add_test(NAME threading.newproject_stall.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
 set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
     DEPENDS threading.newproject_stall FIXTURES_REQUIRED "threading_home_newproject_stall;threading_run_newproject_stall"
-    LABELS "threading;stage-close" TIMEOUT 60)
+    LABELS "threading" TIMEOUT 60)
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.

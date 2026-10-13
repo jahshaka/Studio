@@ -38,7 +38,7 @@ if(JAHSHAKA_ASAN)
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     # STAGE-CLOSE (TESTING-SPEED-B3): the ASAN twin keeps its row at the stage close; engine.planar is
     # the merge tier's.
-    set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 120 LABELS "engine"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

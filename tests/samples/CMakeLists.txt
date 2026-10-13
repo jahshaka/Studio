@@ -42,7 +42,7 @@ foreach(SAMPLE IN LISTS _samples)
     # start: its library already holds the sample, its store already holds the
     # objects, and the import half of this gate would be testing a re-import.
     # The setup fixture wipes and recreates the directory before the test runs.
-    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS scripting stage-close)
+    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS scripting)
 
     jah_gpu_row(samples.cleanstart.${_slug} CLASS app TIER document
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -55,7 +55,7 @@ foreach(SAMPLE IN LISTS _samples)
     set_tests_properties(samples.cleanstart.${_slug} PROPERTIES
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         FIXTURES_REQUIRED samples_home_${_slug}
-        LABELS "scripting;stage-close"
+        LABELS "scripting"
         TIMEOUT 480)
 endforeach()
 
@@ -67,7 +67,7 @@ endforeach()
 configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting stage-close)
+jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting)
 jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
@@ -75,7 +75,7 @@ jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
 set_tests_properties(samples.session PROPERTIES
     ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED samples_home_session
-    LABELS "scripting;stage-close"
+    LABELS "scripting"
     TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
@@ -88,7 +88,7 @@ jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 # TESTING-CLEANUP-2B item 2: TIMEOUT 1940 = 6 x the run log's quiet median 322.1 s (31 quiet PASS runs since 2026-10-01, worst 838.8 s);
 # declared 1800 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting;stage-close" TIMEOUT 1940)
+set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting" TIMEOUT 1940)
 
 # samples.archive_fidelity.Tornado — LIVE-PERSIST-1, rewritten by TESTING-SPEED-B2 against the ARCHIVE'S OWN
 # INVARIANTS (no reference picture: tests/samples/data/tornado_reference.jpg and its metric deleted, forward-only):
@@ -109,7 +109,7 @@ jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
                  ${CMAKE_CURRENT_BINARY_DIR}/archive-fidelity-Tornado
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_invariants.py
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting;stage-close" TIMEOUT 480)
+set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting" TIMEOUT 480)
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,

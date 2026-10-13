@@ -202,44 +202,20 @@ check(len(mems["epic"]) == 1 and mems["epic"][0].endswith("tier=epic") and "gpuP
 rc4, out4 = run([sys.executable, driver, "--pool", "x", "--app", "true", "--tier", "low",
                  "--arm", "a", "x.js", "30"])
 check(rc4 == 2 and "--tier" in out4, "the driver takes no --tier: the declaration is the row's environment (exit %d)" % rc4)
-# ...and the run log reads the field (scripts/gate_runlog.py, the `mem` of a pool's row).
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(driver)))), "scripts"))
-import gate_runlog
-m = gate_runlog._mem_of("\n".join(mems["low"] + ["MEM tiered gpuPoolUsed=310 textures=41 processMiB=? tier=low"]))
-check(m is not None and m["gpuPoolUsedMB"] == 310 and m["tier"] == "low" and m["boots"] == 2,
-      "the run log records a pool row's MEM: the largest over its boots (%s)" % m)
-am = gate_runlog._arm_mems(outs["low"])
-lk = gate_runlog._leaks_of(outs["low"])
-check(am.get("tiered.a3") == {"gpuPoolUsedMB": 500, "texturesMB": 40} and lk == [{"riseMB": 60, "arms": 3}],
-      "...each arm's MEM on the arm's record, the LEAK on the row's (%s, %s)" % (am, lk))
-af = gate_runlog._arm_findings(outs["low"] + "\n" + out6)
-check(af.get("tiered.a2", {}).get("stepMB") == 680 and
-      af["tiered.a2"].get("over") == {"gpuPoolUsedMB": 1000, "tier": "low", "bootMB": 300},
-      "...a STEP and an OVER on the arm's record (%s)" % af)
-# ---- part 3: THE VRAM BUDGET and THE KERNEL'S WORD (lane GATE-ADMIT-1) --------------------
-# A private token directory (never the box's /tmp/jah-vram): the stand-in app reports the token
-# files IT holds open (inherited from the driver) and, in arm `xid`, writes a kernel-journal line
-# naming its own pid — the fake journal the driver reads through JAH_KERNEL_JOURNAL.
-import shutil, signal as _signal, time as _time
-vdir = tempfile.mkdtemp(prefix="pool-vram-")
+# ---- part 3: THE KERNEL'S WORD (lane GATE-ADMIT-1) --------------------
+# The stand-in app, in arm `xid`, writes a kernel-journal line naming its own pid — the fake journal the driver reads
+# through JAH_KERNEL_JOURNAL.
+import shutil
+vdir = tempfile.mkdtemp(prefix="pool-xid-")
 journal = os.path.join(vdir, "journal")
 open(journal, "w").close()
 fake = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
 fake.write(r'''#!/usr/bin/env python3
 import os, sys, time, signal
 a = sys.argv; spec = a[a.index("--scripts") + 1]; pool = a[a.index("--pool") + 1]
-def held():
-    out = []
-    for fd in os.listdir("/proc/self/fd"):
-        try: t = os.readlink("/proc/self/fd/" + fd)
-        except OSError: continue
-        if os.path.dirname(t) == os.environ["JAH_VRAM_DIR"] and os.path.basename(t).startswith("token."):
-            out.append(int(t.rsplit(".", 1)[1]))
-    return sorted(set(out))
 for e in spec.split(","):
     n = e.split("=", 1)[0]
     print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
-    print("tokens-held %s held-env %s" % (held(), os.environ.get("JAH_VRAM_HELD")), flush=True)
     if n == "xid":
         time.sleep(0.3)     # the driver stamps ARM-BEGIN when it READS it; the fault comes later
         with open(os.environ["JAH_KERNEL_JOURNAL"], "a") as j:
@@ -254,47 +230,28 @@ os.chmod(fake.name, 0o755)
 fargs = []
 for n in ("t1", "xid", "t2", "crash", "t3"):
     fargs += ["--arm", n, "x.js", "30"]
-admit = os.path.join(os.path.dirname(os.path.abspath(driver)), "..", "..", "scripts", "gpu-admit.sh")
-venv = {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": journal, "JAH_VRAM_DIR": vdir, "JAH_VRAM_TOKENS": "12"}
-e = dict(os.environ); e.update(venv); e.pop("JAH_VRAM_HELD", None)
-# a blocker holds 11 of the 12 tokens: the pool (2 tokens) must WAIT, then run once it is killed
-blocker = subprocess.Popen([admit, "11", "--label", "blocker", "--", "sleep", "300"], env=e,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-n = 0
-while n < 200 and len([f for f in os.listdir(vdir) if f.startswith("token.")]) < 12:
-    n += 1; _time.sleep(0.05)
+venv = {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": journal}
+e = dict(os.environ); e.update(venv)
 for f in glob.glob("pool-logs/*.log"): os.unlink(f)
-p = subprocess.Popen([sys.executable, driver, "--pool", "vram", "--app", fake.name, "--vram-tokens", "2",
+p = subprocess.Popen([sys.executable, driver, "--pool", "vram", "--app", fake.name,
                       "--boot-budget", "10"] + fargs, env=e, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                      text=True, errors="replace")
 lines = []
 for line in p.stdout:
     lines.append(line.rstrip("\n"))
-    if line.startswith("vram: waiting for 2 tokens"):
-        blocker.kill()      # SIGKILL: the kernel frees a killed holder's tokens
-        blocker.wait()
 rc = p.wait()
 out = "\n".join(lines)
 os.unlink(fake.name)
 show(out)
 v = verdicts(out)
-log = app_log()
-check("vram: waiting for 2 tokens, 1 free" in out,
-      "a pool process that cannot get its tokens WAITS, with the one wait line (not a run on a full card)")
-check("vram: admitted with 2 tokens 0,1" in out,
-      "...and a KILLED holder's tokens are free again: admitted on the lowest two, 0 and 1")
-check(log.count("tokens-held [0, 1] held-env 2") == 5,
-      "every arm's app process holds exactly its 2 tokens, inherited (%d of 5 arms)" % log.count("tokens-held [0, 1] held-env 2"))
 check(out.count("POOL vram RESTART ") == 1 and len(glob.glob("pool-logs/vram-process*.log")) == 2,
-      "the crash restarted the process once, and the restart INHERITED the pool's tokens (both processes held 0,1)")
+      "the crash restarted the process once")
 check(v.get("vram.xid", ("", ""))[0] == "CRASH" and v["vram.xid"][1].startswith("xid 13"),
       "a kernel Xid from the pool's pid is the running arm's `CRASH xid 13` (%s)" % (v.get("vram.xid"),))
 check(all(v.get("vram." + n, ("",))[0] == "PASS" for n in ("t1", "t2", "t3")),
       "the Xid is charged to the arm running at its second only (t1, t2, t3 PASS)")
 check(v.get("vram.crash", ("",))[0] == "CRASH", "the crash arm is still its own CRASH")
 check(not verdicts.twice, "every arm's verdict is ONE `ARM` line, the Xid override included (twice: %s)" % verdicts.twice)
-held_after = subprocess.run([admit, "status"], env=e, stdout=subprocess.PIPE, text=True).stdout
-check("vram: 0 of 12 tokens held" in held_after, "after the pool ends no token is held (the pool's hold ended with it)")
 # an unreadable journal is a RED, never a silent pass
 okapp = os.path.join(vdir, "okapp.py")
 with open(okapp, "w") as f:
@@ -302,7 +259,7 @@ with open(okapp, "w") as f:
             "print('ARM-BEGIN %s.a' % p, flush=True)\nprint('ARM %s.a PASS 1' % p, flush=True)\n")
 os.chmod(okapp, 0o755)
 rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", okapp, "--arm", "a", "x.js", "30"],
-                {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing"), "JAH_VRAM_DIR": vdir})
+                {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing")})
 check(rc3 == 0 and "FINDING: the kernel journal is unreadable" in out3 and "ARM nojournal.a PASS" in out3,
       "an unreadable kernel journal is a printed FINDING, not a red of the pool (devprocess.kernel_journal owns it)")
 shutil.rmtree(vdir, ignore_errors=True)

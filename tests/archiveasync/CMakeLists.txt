@@ -46,7 +46,7 @@ jah_gpu_exclusive_test(NAME archive.responsive.timing CLASS app TIER epic NEEDS 
          WORKING_DIRECTORY ${_archive_timing_home}/run)
 set_tests_properties(archive.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_archive_timing_home};JAHSHAKA_DATA_ROOT=${_archive_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "archive;stage-close;quiet-box")
+    LABELS "archive;measure")
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.

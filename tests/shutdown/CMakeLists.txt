@@ -31,7 +31,7 @@ jah_gpu_exclusive_test(NAME app.shutdown_order.timing CLASS app TIER epic NEEDS 
          WORKING_DIRECTORY ${_order_timing_home}/run)
 set_tests_properties(app.shutdown_order.timing PROPERTIES
     ENVIRONMENT "HOME=${_order_timing_home};JAHSHAKA_DATA_ROOT=${_order_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "shutdown;stage-close;quiet-box")
+    LABELS "shutdown;measure")
 
 # app.watchdog_stall — Lane 5: a 3 s UI-thread block produces exactly one
 # [warn] and a non-empty stack OF THE UI THREAD; a 100 ms block produces none.
@@ -62,7 +62,7 @@ jah_gpu_exclusive_test(NAME app.watchdog_stall CLASS app TIER low NEEDS NONE RUN
 set_tests_properties(app.watchdog_stall PROPERTIES
     ENVIRONMENT "HOME=${_watchdog_home};JAHSHAKA_DATA_ROOT=${_watchdog_home}/.local/share/Jahshaka"
     RUN_SERIAL TRUE
-    LABELS "shutdown;stage-close")
+    LABELS "shutdown")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy
@@ -100,7 +100,7 @@ add_test(NAME app.device_loss_end COMMAND test_device_loss_end
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set(_dle_home ${CMAKE_CURRENT_BINARY_DIR}/device-loss-end-home)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown;stage-close"
+set_tests_properties(app.device_loss_end PROPERTIES TIMEOUT 180 LABELS "shutdown"
     ENVIRONMENT "HOME=${_dle_home};JAHSHAKA_DATA_ROOT=${_dle_home}/.local/share/Jahshaka")
 jah_no_display(app.device_loss_end)
 

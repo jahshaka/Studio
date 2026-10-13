@@ -108,7 +108,7 @@ jah_gpu_exclusive_test(NAME meshbake.cards.timing CLASS none RUN_TIMEOUT 180 COM
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards.timing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.cards.timing;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.cards.timing/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "meshbake;stage-close;quiet-box")
+    LABELS "meshbake;measure")
 
 # THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — `atom.lod_bound_bar`. Every
 # level of the shipped primitives, the Stanford dragon and a scan stand-in (a floor,
@@ -237,7 +237,7 @@ add_test(NAME bake.determinism COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bak
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(bake.determinism PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism;JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism/.local/share/Jahshaka"
-    TIMEOUT 480 LABELS "meshbake;stage-close")
+    TIMEOUT 480 LABELS "meshbake")
 jah_no_display(bake.determinism)
 
 jah_no_display(meshbake.primitives_baked)
@@ -267,7 +267,7 @@ jah_gpu_row(meshbake.archive_bakes CLASS app TIER low NEEDS NONE
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(meshbake.archive_bakes PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
-    TIMEOUT 400 LABELS "meshbake;stage-close")
+    TIMEOUT 400 LABELS "meshbake")
 
 # meshbake.shipped_bakes (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
 # its seed BAKES every shipped mesh (the primitives, the Teapot, the preview
@@ -294,7 +294,7 @@ jah_gpu_row(meshbake.shipped_bakes CLASS vr TIER low NEEDS NONE
 set_tests_properties(meshbake.shipped_bakes PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_shipped_home};JAHSHAKA_DATA_ROOT=${_shipped_home}/data"
     RESOURCE_LOCK monado
-    TIMEOUT 400 LABELS "meshbake;stage-close")
+    TIMEOUT 400 LABELS "meshbake")
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -302,11 +302,11 @@ set_tests_properties(meshbake.shipped_bakes PROPERTIES
 # such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST meshbake.archive_bakes)
-    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS meshbake stage-close)
+    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS meshbake)
     set_property(TEST meshbake.archive_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeArchiveBakesFreshHome)
 endif()
 if(TEST meshbake.shipped_bakes)
-    jah_fresh_home_fixture(meshbake.shipped_bakes.fresh_home meshbakeShippedBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home" WARM LABELS meshbake stage-close)
+    jah_fresh_home_fixture(meshbake.shipped_bakes.fresh_home meshbakeShippedBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/shipped-bakes-home" WARM LABELS meshbake)
     set_property(TEST meshbake.shipped_bakes APPEND PROPERTY FIXTURES_REQUIRED meshbakeShippedBakesFreshHome)
 endif()
 

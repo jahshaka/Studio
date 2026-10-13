@@ -43,7 +43,7 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): distortion.engine is the merge row.
-    set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

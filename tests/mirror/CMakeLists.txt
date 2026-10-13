@@ -125,7 +125,7 @@ jah_gpu_row(mirror.settle_incremental CLASS engine COMMAND test_mirror_settle
 # Sample: n=2 quiet PASS runs at B=24 (71.59, 68.89 s; median 70.24, worst 71.59), warm, 2026-10-11 12:4x, quiet box
 # (no VRAM wait in these seconds).
 set_tests_properties(mirror.settle_incremental PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror;stage-close")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror")
 set_tests_properties(mirror.settle_incremental PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # mirror.settle_thumbnails — a settle is fed by ITS OWN document's writes:

@@ -202,7 +202,7 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share is the merge row.
-    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     jah_no_display(skeletal.share_asan)
 endif()

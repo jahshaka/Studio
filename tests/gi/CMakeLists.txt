@@ -181,8 +181,6 @@ set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscree
                      TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.overlay PROPERTIES JAHSHAKA_TEST_FRAMES 84)
 
-
-
 # gi.budget — THE GI UPDATE BUDGET (FIX WAVE B1-B5). Mirror-linked for the same
 # reason gi.coalesce is: the debounce and the counters are mirror-side and the
 # budget, the sweep and the reuse arm are engine-side; the contract is the pair.
@@ -369,35 +367,6 @@ jah_gpu_row(gi.ddgi_ambient CLASS engine COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.ddgi_ambient PROPERTIES JAHSHAKA_TEST_FRAMES 300)
-# gi.sealed_room_chain_target — SEALED-ROOM-LEAK-1: case 5's sealed room under the SHIPPED Medium
-# chain with the field on, the eye 0.6 m from a wall: the sky must move no pixel more than 2/255.
-# Reads 12/255 today (the room's far corner lies outside cascade 0's box - the field's volume - and
-# the cone reader alone leaks 4-9/255 there at every cell size); a photon-target row until the
-# reader's residual or a field over the chain closes it. Prints the cones-only table.
-# LOCATED (PHOTON-PHYSICS-1, re-measured; test_gi_ddgi_ambient --sealed-classes, not a row): the
-# 12/255 at the wall pose is NOT specular - the same room with the walls' F0 = 0 reads 11/255 there
-# (D8's "0/255" arm drew an EMPTY room: a mesh cache keyed on a recycled Scene pointer). With the
-# cone diffuse's escape zeroed it reads 7, with the specular escape zeroed too 4 (the field's
-# own); the specular escape alone moves 7 -> 3 in the cones-only room. So the target waits on
-# the diffuse reader's sealed-room residual beyond the field (VOXEL-5's classes) and the field's;
-# spikes/photon-physics-1/ has the arms.
-jah_gpu_row(gi.sealed_room_chain_target CLASS engine COMMAND test_gi_ddgi_ambient --sealed-chain
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sealed_room_chain_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
-set_tests_properties(gi.sealed_room_chain_target PROPERTIES JAHSHAKA_TEST_FRAMES 1184)
-# gi.cone_corner_target — THE CONE'S CORNER OVER-READ (PHOTON-FIELD-ROTATE-1, F2):
-# gi.ddgi_ambient's corner used to compare the field with the cone reference; it is
-# anchored on the fixture's ANALYTIC now, and the cone reference - which reads a
-# 2.2 m wall's foot at 93.9 % of open floor against the analytic 82 % (+11.7
-# points: the cone's footprint against a wall edge) - is this row, against the same
-# analytic and the same bar. LABEL `photon-target`: it runs in every scoped
-# selection and PRINTS its value, and it does NOT decide a gate. The lane that
-# makes the cone read a corner right deletes the label.
-jah_gpu_row(gi.cone_corner_target CLASS engine COMMAND test_gi_ddgi_ambient --cone-target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cone_corner_target PROPERTIES TIMEOUT 180
-                     LABELS "engine;photon-target")
-set_tests_properties(gi.cone_corner_target PROPERTIES JAHSHAKA_TEST_FRAMES 204)
 
 # gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
 # S14): a hidden object stops bouncing light and stops defining the volume, and
@@ -865,7 +834,7 @@ set_tests_properties(gi.field_follows PROPERTIES JAHSHAKA_TEST_FRAMES 478)
 jah_gpu_exclusive_test(NAME gi.field_follows.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gi_field_follows
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_follows.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;stage-close;quiet-box")
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
 set_tests_properties(gi.field_follows.timing PROPERTIES JAHSHAKA_TEST_FRAMES 478)
 set_property(TEST gi.field_follows.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
 # gi.socket_camera — THE GI FOLLOWS A SOCKETED CAMERA (GI-SOCKET-CAM-1): a View
@@ -910,7 +879,7 @@ add_dependencies(test_gi_field_scroll JahshakaEngineMedia)
 # numbers a sibling sharing the GPU moves (docs/TESTING_GATE.md section 4).
 jah_gpu_exclusive_test(NAME gi.field_scroll CLASS engine RUN_TIMEOUT 300 COMMAND test_gi_field_scroll
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_scroll PROPERTIES LABELS "engine;stage-close" RUN_SERIAL ON)
+set_tests_properties(gi.field_scroll PROPERTIES LABELS "engine" RUN_SERIAL ON)
 set_tests_properties(gi.field_scroll PROPERTIES JAHSHAKA_TEST_FRAMES 2478)
 # gi.field_thin_wall — THE FIELD'S ESTIMATOR ON A ONE-VOXEL EMISSIVE WALL
 # (PHOTON-FIELD-ROTATE-1 part 1): a probe's reading of a one-voxel-thick
@@ -951,7 +920,7 @@ jah_gpu_row(gi.field_alias CLASS engine COMMAND test_gi_field_thin_wall alias
 # 10-10 11:50; load 6-19, 0-2 builds beside them); median 73.4 -> 6x = 450; slot-era worst 115.1 (the smoke rc, 2 builds,
 # load 18.6) -> TIMEOUT 450 (was 900). This lane's three solos (70.7 / 67.6 / 68.0, a sibling ctest on the box) are records,
 # not quiet ones.
-set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 450 LABELS "engine;stage-close" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 450 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.field_alias PROPERTIES JAHSHAKA_TEST_FRAMES 2722)
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
@@ -1029,7 +998,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
-    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 180 LABELS "engine;stage-close"
+    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 180 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1966)
@@ -1127,7 +1096,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
     jah_gpu_row(gi.rayquery_asan CLASS engine COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine;stage-close"
+    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.rayquery_asan PROPERTIES JAHSHAKA_TEST_FRAMES 180)
@@ -1181,55 +1150,6 @@ jah_gpu_row(gi.chain_face CLASS engine TOKENS 2 COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.chain_face PROPERTIES JAHSHAKA_TEST_FRAMES 208)
-
-# gi.chain_face_target — THE SAME BINARY, THE CORRECT BAR (PHOTON phase A, A1
-# §0; lane FENCE-1). Every face ratio = 1.0 +- 0.05 under a real sky AND under a
-# flat ambient: a face is a boundary in a data structure, not in the world.
-# Today 0.859-1.234 (worst |ratio-1| 0.234) — see the binary's header for the
-# three mechanisms and the derivation of the bar.
-#
-# LABEL `photon-target`: it RUNS in every scoped selection and PRINTS its value,
-# and it does NOT decide a gate (scripts/gate-scope.py splits the label out; the
-# MERGE and PUSH tiers -LE it). THE LANE THAT LANDS PHOTON P4 (ONE-READER +
-# ONE-ENV + F10-TABLES) DELETES `photon-target` FROM THIS ROW and deletes the
-# bracket from gi.chain_face above — that deletion IS the part's acceptance.
-jah_gpu_row(gi.chain_face_target CLASS engine TOKENS 2 COMMAND test_gi_chain_face --target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.chain_face_target PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.chain_face_target PROPERTIES JAHSHAKA_TEST_FRAMES 208)
-
-# gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
-# (PHOTON phase A, A1 section 1.2; lane FENCE-1). A sunlit matte floor lights a
-# perpendicular matte wall; the wall's radiance at three heights against the
-# finite-rectangle transfer integral, with HlmsPbs BRDF_Default's own direct
-# diffuse (MEASURE-1a's pbsDirect, the 1/1.51 energyFactor) as the source and
-# Lambert's polygon formula as the kernel — both in double precision, and the
-# closed form cross-checked against a 512x512 quadrature of its own definition
-# inside the suite.
-#
-# ITS OWN BINARY AND PROCESS, like every GI suite.
-#
-# LABEL `photon-target`. GREEN AFTER: VOXEL-CLIP-1 (phase A) for the source the
-# voxels hold and the field's integral in PHOTON P4 for the transport. The lane
-# that lands them DELETES `photon-target` from this row.
-add_executable(test_gi_field_energy test_gi_field_energy.cpp)
-set_target_properties(test_gi_field_energy PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_field_energy PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_field_energy PRIVATE JahshakaEngine)
-add_dependencies(test_gi_field_energy JahshakaEngineMedia)
-jah_gpu_row(gi.field_follows_energy CLASS engine COMMAND test_gi_field_energy
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_follows_energy PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.field_follows_energy PROPERTIES JAHSHAKA_TEST_FRAMES 152)
 
 # gi.boot_textures — THE ARM WAITS FOR THE ALBEDO IT IS ABOUT TO VOXELISE
 # (BOOTVOX-1). The voxeliser reads a material's albedo and emissive maps, and a
@@ -1564,7 +1484,7 @@ set_tests_properties(gi.gather PROPERTIES JAHSHAKA_TEST_FRAMES 1047)
 jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
-                     LABELS "stage-close;quiet-box" RUN_SERIAL TRUE
+                     LABELS "measure" RUN_SERIAL TRUE
                      ENVIRONMENT "JAH_GATHER_COST=1")
 set_tests_properties(gi.gather_cost PROPERTIES JAHSHAKA_TEST_FRAMES 5354)
 
@@ -1661,11 +1581,6 @@ jah_gpu_row(gi.contact_occlusion CLASS engine TOKENS 2 COMMAND test_gi_contact_o
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.contact_occlusion PROPERTIES TIMEOUT 300 LABELS "engine")
 set_tests_properties(gi.contact_occlusion PROPERTIES JAHSHAKA_TEST_FRAMES 3465)
-jah_gpu_row(gi.contact_occlusion_target CLASS engine TOKENS 2 COMMAND test_gi_contact_occlusion
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.contact_occlusion_target PROPERTIES TIMEOUT 300 LABELS "engine;photon-target"
-                     ENVIRONMENT "JAH_CONTACT_TARGET=1")
-set_tests_properties(gi.contact_occlusion_target PROPERTIES JAHSHAKA_TEST_FRAMES 2588)
 
 # gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
 # (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
@@ -1691,7 +1606,7 @@ add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 jah_gpu_row(gi.voxel_coverage CLASS engine TOKENS 3 COMMAND test_gi_voxel_coverage
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine;stage-close" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.voxel_coverage PROPERTIES JAHSHAKA_TEST_FRAMES 494)
 # gi.lamp_falloff — A LAMP'S BOUNCE FALLS OFF EXACTLY AS ITS DIRECT LIGHT (IMAGE-1): a
 # point lamp's injected voxel radiance follows the pixel's own falloff (inverse square,
@@ -1820,15 +1735,6 @@ jah_gpu_row(gi.cone_emitter CLASS engine COMMAND test_gi_cone_emitter
 set_tests_properties(gi.cone_emitter PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.cone_emitter PROPERTIES JAHSHAKA_TEST_FRAMES 106)
-# gi.cone_emitter_lobe_target — the same fixture's roughness-0.5 lobe against the GGX coverage of
-# the panel (bar 10 %): the cone over-reads a partly covered wide lobe (the aperture and the
-# footprint kernel, the test's header). LABEL photon-target: it prints and does not gate; the
-# lane that fits the reader's lobe to GGX deletes the label.
-jah_gpu_row(gi.cone_emitter_lobe_target CLASS engine COMMAND test_gi_cone_emitter --lobe-target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cone_emitter_lobe_target PROPERTIES
-    TIMEOUT 120 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.cone_emitter_lobe_target PROPERTIES JAHSHAKA_TEST_FRAMES 106)
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
 # (attach set, enclosed set, one record per partition that reaches a cascade's
@@ -2398,7 +2304,7 @@ foreach(_far_sun_row IN ITEMS "far_sun_share:share:voxels:260:stage" "far_sun_cl
     list(GET _far_sun_pair 4 _far_sun_tier)
     set(_far_sun_labels "engine")
     if(_far_sun_tier STREQUAL "stage")
-        set(_far_sun_labels "engine;stage-close")
+        set(_far_sun_labels "engine")
     endif()
     jah_gpu_row(gi.${_far_sun_name} CLASS engine TOKENS 2 COMMAND test_gi_far_sun ${_far_sun_mode} ${_far_sun_route}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

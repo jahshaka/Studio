@@ -41,12 +41,15 @@ if(CMAKE_SCRIPT_MODE_FILE)
     # NOT dirt"). Read as dirt it stamped every build dirty=1 and the judge dropped a whole batch as STALE.
     # Only that path is excluded: any other change in irisgl (a source, another submodule) still reads dirty.
     _jah_head("${SRC}/irisgl" irisgl idirty ":(exclude)thirdparty/assimp")
+    # THE FORK is read apart (C3): irisgl's --ignore-submodules=dirty hides its working tree, and a record's fork is
+    # only the pin — so a fork edited in place, untracked files included, stamps fork_dirty=1 and is never served.
+    _jah_head("${SRC}/irisgl/thirdparty/ogre-next" fork fdirty)
     if(sdirty OR idirty)
         set(dirty 1)
     else()
         set(dirty 0)
     endif()
-    set(text "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\n")
+    set(text "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\nfork_dirty=${fdirty}\n")
     set(old "")
     if(EXISTS "${OUT}")
         file(READ "${OUT}" old)

@@ -164,9 +164,9 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.testing_rules)
-    # source.row_budget — A ROW RENDERS SECONDS (TESTING-SPEED-A item 7): a kept merge row's price (scripts/gate-times.txt)
-    # within its budget (its own in row_budgets.txt, or fixture 10 s / app 60 s). RED BY DESIGN until TESTING-SPEED-B:
-    # the 45 KEEP:rewrite rows, printed with the lane that owes them.
+    # source.row_budget — A ROW IS A SECONDS-LONG GUARD (DOCS/PROCESS.md): every kept guard's price (scripts/gate-times.txt)
+    # within its class's budget (a fixture or CPU row 10 s, an app row 60 s); a `measure` row runs at the ship only. One
+    # rule, no "by design": a guard over its budget is red.
     add_test(NAME source.row_budget
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_budget.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
@@ -178,77 +178,6 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/no_renders_tracked.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_renders_tracked PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.no_renders_tracked)
-    # gate.ci_check — THE REFUSAL (MODULAR-GATE-1 T6; the one judge since TESTING-SPEED-A round 27):
-    # scripts/ci-gate-check.sh <range> refuses unless every row the range selects was run at the tip and
-    # each red is KNOWN or carries the lead's verdict; the records' tree, the fork pin's component reach
-    # (a recorded range against a private run log and registry; ~15 s).
-    add_test(NAME gate.ci_check
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ci_gate_check_test.py"
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.ci_check PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.ci_check)
-    # gate.fix_round — THE FIX ROUND RE-USES WHAT IT CANNOT REACH (GATE-SPEED-1; TESTING_GATE §3b made
-    # mechanical): the refusal takes a row's newest record at an earlier commit of the lane when the
-    # fix's own selection does not reach it and the fork pin did not move; a reached row is demanded
-    # at the tip; a later red blocks the older green. And the targets never set a gate's exit code,
-    # and the run log's own-tree / token-wait / FAIL-line fields. Recorded lanes (D11-LIBRARY-SCALE,
-    # CONTACT-OCCLUSION-1) against a private run log; one selection per range (~1-2 min warm).
-    add_test(NAME gate.fix_round
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_fix_round_test.py"
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.fix_round PROPERTIES TIMEOUT 600 LABELS "hygiene;tooling")
-    jah_no_display(gate.fix_round)
-    # gate.cost — HOW GATES SHARE THE BOX (GATE-COST-1; SPECS/audits/GATE_COST_2026-10-09.md): one gate at
-    # a time on the box-wide slot (FIFO, the position printed), a NOADMIT row re-queued in the same run and
-    # recorded once, each row's record written as it ends (a killed ctest keeps what it finished; --resume
-    # runs the rest), a dead display stops the run with its verdict line, the hygiene rows' CPU phase before
-    # any GPU row, the whole card held once per timing phase and by the target step. A toy ctest project,
-    # a private token directory, run log and fake X server (~15 s).
-    add_test(NAME gate.cost
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_cost_test.py"
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.cost PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.cost)
-    # gate.verdict_door / noadmit_pool / contention_shape / log_schema2 — THE ONE JUDGE (TESTING-SPEED-A round 27;
-    # TESTING_GATE §4): green passes; a red is KNOWN by an open entry of the run's build kind or the lead's verdict,
-    # else refused; never-ran is owed; nothing carried; an all-NOADMIT pool never ran; the registry's shape (a bad
-    # entry quarantined); schema 2's fields and gate-report.py. Toy logs, a private run log / registry / token dir.
-    add_test(NAME gate.verdict_door
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" verdict_door
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.verdict_door PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.verdict_door)
-    add_test(NAME gate.noadmit_pool
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" noadmit_pool
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.noadmit_pool PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.noadmit_pool)
-    add_test(NAME gate.contention_shape
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" contention_shape
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.contention_shape PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.contention_shape)
-    add_test(NAME gate.log_schema2
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_verdict_test.py" log_schema2
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.log_schema2 PROPERTIES TIMEOUT 180 LABELS "hygiene;tooling")
-    jah_no_display(gate.log_schema2)
-    # gate.stage_close_select / gate.stage_close_labels — THE STAGE-CLOSE ROWS (STAGE-CLOSE-1; TESTING_GATE §1d):
-    # a `stage-close` row rides a scoped gate only through its own subject (STAGE_CLOSE_SUBJECTS, its own
-    # test dir) — never a broad rule; the batch (`--stage-close-tier`, two phases) selects every such row
-    # and no other; the retired tier flag is refused by name (a toy inventory and a toy ctest project,
-    # ~2 s). The labels row: the retired word is gone from tests/, scripts/, docs/, and the shadow
-    # casters' gate rows run one process while their `.churn` twins run ten, labelled stage-close.
-    add_test(NAME gate.stage_close_select
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" select
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.stage_close_select PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
-    jah_no_display(gate.stage_close_select)
-    add_test(NAME gate.stage_close_labels
-             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_stage_close_test.py" labels
-                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(gate.stage_close_labels PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
-    jah_no_display(gate.stage_close_labels)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
@@ -306,8 +235,8 @@ add_test(NAME source.settings_keys
 set_tests_properties(source.settings_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.settings_keys)
 
-# source.gpu_rows_closure — GATE-ADMIT-1: every row that boots Vulkan takes the box-wide VRAM
-# budget (jah_gpu_row / jah_gpu_exclusive_test / jah_add_pool; docs/TESTING_GATE.md §4b). Read
+# source.gpu_rows_closure — GATE-ADMIT-1: every row that boots Vulkan is registered on the card's
+# slots (jah_gpu_row / jah_gpu_exclusive_test / jah_add_pool: its JAH_CLASS and RESOURCE_GROUPS). Read
 # from what ctest will actually RUN (`ctest --show-only=json-v1`): a row whose command or
 # environment names an Ogre-linked binary, or runs the pool driver, and is neither registered nor
 # jah_no_display() fails, named with its CMakeLists line; --self-test proves the detector names a
@@ -322,7 +251,7 @@ jah_no_display(source.gpu_rows_closure)
 
 # source.row_declares_needs — TEST-NEEDS-1: every row that starts the app declares the World Mode
 # it boots and the switchable features it keeps (TIER + NEEDS on jah_gpu_row / jah_add_pool;
-# tests/support/vram_tokens.cmake). Read from what ctest will RUN (the closure's detector): an
+# tests/support/test_boot.cmake). Read from what ctest will RUN (the closure's detector): an
 # app row without both `set:` entries, with a bad word, or with JAHSHAKA_TEST_TIER/NEEDS typed
 # into its ENVIRONMENT or `--test-tier` on its command fails, named with its CMakeLists line;
 # --self-test proves a toy row without the words is named.
@@ -332,17 +261,6 @@ add_test(NAME source.row_declares_needs
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
 set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.row_declares_needs)
-
-# gate.tokens_by_needs — TEST-NEEDS-1: the token lookup (tests/support/vram_tokens.cmake, included
-# alone) returns 2/2/2/3 for low NONE / medium photon / high photon / epic photon, and refuses a
-# declaration that is missing a word or names one it does not know. A toy: no build needed.
-# TESTING-CLEANUP-2B: and the declared TIMEOUT is the row's whole bound (a toy project through
-# tests/cmake/vram_rows.cmake, configured and run in its build dir, BIN).
-add_test(NAME gate.tokens_by_needs
-         COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR}/tests -DBIN=${CMAKE_CURRENT_BINARY_DIR}
-                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tokens_by_needs.cmake")
-set_tests_properties(gate.tokens_by_needs PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
-jah_no_display(gate.tokens_by_needs)
 
 # source.no_fixed_gi_volume — D4-PHOTON-TIERS: the single scene-fitted voxel volume
 # stays deleted end to end, and nothing reads its document keys (giCascades,

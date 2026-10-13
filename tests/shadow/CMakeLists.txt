@@ -135,7 +135,7 @@ jah_gpu_row(shadow.cutout_caster.churn CLASS app TIER epic NEEDS photon bloom ss
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 2100)
+set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine" TIMEOUT 2100)
 jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -143,7 +143,7 @@ jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine;stage-close" TIMEOUT 1950)
+set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine" TIMEOUT 1950)
 # gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
@@ -157,7 +157,7 @@ jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon bloom ssao smaa pla
                  ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(gpu.cutout_soak PROPERTIES
-    LABELS "engine;stage-close" TIMEOUT 1800
+    LABELS "engine" TIMEOUT 1800
     ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
     PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
     FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
