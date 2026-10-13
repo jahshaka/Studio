@@ -476,6 +476,11 @@ jah_pool_arm(world_sky world_rows_follow ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 jah_pool_arm(editor_view_c scene_issues ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_issues.js 11)
+# AN IDLE EDITOR WALKS NOTHING (BISTRO-ENGINE-1 stage 5, finding 14): the scene
+# checker's node walks follow change, never the 1 Hz clock — an idle pass over a
+# thousand cubes visits 0 nodes, a move does not re-walk the textures, a lamp
+# without shadows makes the leak walk follow transforms (counts of nodes visited).
+jah_pool_arm(editor_view_c scene_issue_idle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_issue_idle.js 8)
 # TEXTURE-FAIL-ISSUE-1 (SMALL-FIXES-3): a material's texture file deleted on
 # disk under a running editor is a `texture.missing` scene issue — raised
 # within two scans, one per object, cleared when the file returns. A harness,

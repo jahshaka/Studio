@@ -65,6 +65,8 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QStringList>
+#include <QWeakPointer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -159,7 +161,36 @@ public:
     ///     (the document keeps the path; the mirror binds nothing). One issue
     ///     per mesh node, naming each missing slot and file; it clears when
     ///     the file returns or the slot is re-linked.
+    ///
+    /// THE WALKS ARE DRIVEN BY CHANGE, NOT BY THE CLOCK (BISTRO-ENGINE-1 stage
+    /// 5). The two conditions that need a walk over every node — `shadow.leak`
+    /// (each solid node's box) and `texture.missing` (every mesh's material) —
+    /// cost ~0.2 s of UI thread at 6,000 meshes in a Debug build, and the
+    /// editor calls this once a second, so an idle editor holding a big scene
+    /// froze for a fifth of every second (the owner's Bistro session: 218
+    /// heartbeat lines of ~430 ms). Each walk now runs only when what it reads
+    /// can have moved: the scene's change serials (NodeDirtySet::changeSerial
+    /// for the leak — boxes move with transforms —, contentSerial for the
+    /// textures — a transform cannot unbind a texture), the materials' global
+    /// revision, the disk (the directory watcher, and the minute's re-stat of
+    /// the paths already asked), a different scene, or a line of its kind
+    /// cleared from outside. Between walks the last walk's lines stay live.
+    /// The light-list conditions (`sun.tie`, `sky.duplicate`) and the machine
+    /// ones (`rays.absent`, `vr.colour`) are O(lights) and run every pass.
     int scan(const iris::ScenePtr &scene);
+
+    /// What the LAST scan() did — the seam the walk gating is tested through
+    /// (scripting.e2e.scene_issue_idle): the pass number, whether each walk
+    /// ran, and how many nodes the pass visited (0 for an idle pass).
+    struct ScanStats
+    {
+        int passes = 0;          ///< scan() calls with a scene, ever
+        int walks = 0;           ///< passes that walked any node, ever
+        bool leakWalked = false;
+        bool texturesWalked = false;
+        int nodesVisited = 0;    ///< nodes the last pass visited
+    };
+    ScanStats lastScan() const { return mStats; }
 
 signals:
     /// Anything changed: raised, cleared, reset.
@@ -173,9 +204,25 @@ private:
     /// watcher reports it changed, and wholesale every kTextureRecheckScans.
     bool textureExists(const QString &path);
     void forgetTextureDir(const QString &dir);
+    /// The minute's backstop (see kTextureRecheckScans): re-asks the disk
+    /// about every path already cached and reports whether any answer flipped.
+    bool restatTextures();
     QHash<QString, bool> mTextureExists;
     QFileSystemWatcher *mTextureDirs = nullptr;
     int mScansSinceRecheck = 0;
+    /// The disk moved under a cached answer since the last texture walk.
+    bool mDiskChanged = true;
+
+    // What the last walk of each kind saw, and the lines it justified (kept
+    // live while the walk is skipped). A weak pointer, not an address: a new
+    // scene allocated where the old one was is still a new scene.
+    QWeakPointer<iris::Scene> mLeakScene, mTextureScene;
+    unsigned long long mLeakSerial = 0, mTextureSerial = 0;
+    quint64 mTextureMaterials = 0;
+    QStringList mLeakLive, mTextureLive;
+    ScanStats mStats;
+    /// Forget every walk's memo: the next pass walks.
+    void forgetWalks();
 
     QVector<SceneIssue> mIssues;
 };
