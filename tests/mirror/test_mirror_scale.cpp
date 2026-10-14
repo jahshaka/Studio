@@ -179,11 +179,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    // A VIEW BEFORE THE FIRST DOCUMENT NODE. `iris::graph::stagingScene()`'s
-    // fallback refuses to build a scene manager until the backend has a window
-    // and the Hlms is registered (CLAUDE.md: a render window must exist before
-    // createSceneManager), and without it every node is born handle-less and
-    // every transform reads identity.
+    // The engine scene needs a View first (the device).
     View *view = engine->createOffscreenView("scale", 32, 32, Colour(0, 0, 0));
     CHECK(view != nullptr, "offscreen view (the graph device)");
     if (!view) return 1;

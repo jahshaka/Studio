@@ -530,7 +530,7 @@ int main()
     Ogre::TextureGpu *withTex = makeTarget("atomNegWith");
     Ogre::TextureGpu *withoutTex = makeTarget("atomNegWithout");
     Ogre::CompositorManager2 *cm = root.getCompositorManager2();
-    Ogre::SceneManager *sm = static_cast<Ogre::SceneManager *>(scene->nativeSceneManager());
+    Ogre::SceneManager *sm = static_cast<jahshaka::engine::detail::OgreScene *>(scene)->sceneManager();
     Ogre::Camera *cam = static_cast<OgreView *>(view)->camera();
     Ogre::CompositorWorkspace *withWs = cm->addWorkspace(sm, withTex, cam, defineArm(cm, "AtomNegWith", true), true);
     Ogre::CompositorWorkspace *withoutWs =

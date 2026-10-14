@@ -166,8 +166,6 @@ int main(int argc, char **argv)
     std::string err;
     std::shared_ptr<Engine> engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    iris::graph::setStagingScene(
-        reinterpret_cast<iris::graph::SceneHandle>(engine->documentGraphScene()));
 
     // ================= 1. the conversion formula =================
     // KHR_materials_pbrSpecularGlossiness appendix B, the same arithmetic
@@ -573,7 +571,6 @@ int main(int argc, char **argv)
 
     // Every document handle dies before the engine that owns it.
     imported.reset();
-    iris::graph::setStagingScene(nullptr);
     engine.reset();
 
     std::printf(failures ? "\nFAILED: %d checks\n" : "\nall checks passed\n", failures);

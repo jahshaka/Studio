@@ -102,12 +102,6 @@ int main() {
         CHECK_MSG(!st.enabled, "a NULL-render-system run must persist no shader cache");
     }
 
-    // ---- the document graph scene manager ----------------------------------
-    void *docScene = engine->documentGraphScene();
-    CHECK_MSG(docScene != nullptr, "documentGraphScene: %s", engine->lastError().c_str());
-    // Idempotent: one manager, however often it is asked for.
-    CHECK(engine->documentGraphScene() == docScene);
-
     // ---- views of both kinds refuse, with a reason --------------------------
     {
         View *onscreen = engine->createView("headless/onscreen", 0, 64, 64, Colour(0, 0, 0, 1));
@@ -123,8 +117,8 @@ int main() {
     }
 
     // ---- a Scene, with no View anywhere ------------------------------------
-    // (createScene needs the Hlms, which documentGraphScene registered — a
-    // headless host never creates a View, so this is the only way it gets one.)
+    // (createScene registers the Hlms itself on a headless engine — a headless
+    // host never creates a View.)
     Scene *scene = engine->createScene("headless/scene");
     if (!scene) {
         std::printf("FAIL: createScene: %s\n", engine->lastError().c_str());

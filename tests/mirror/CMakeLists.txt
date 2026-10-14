@@ -91,9 +91,10 @@ jah_gpu_row(mirror.frame_input CLASS engine FRAMES 34 COMMAND test_mirror_frame_
 set_tests_properties(mirror.frame_input PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
-# mirror.doc_store — THE DOCUMENT'S TRANSFORM STORE IS THE ENGINE'S TRUTH (ENGINE-UPGRADE-U2 stage 1, DOCSTORE): on a
-# 1,000-node fixture with non-uniform, mirrored and zero scales, every world from the store equals Ogre's derived
-# transform after the frame (1e-6) and every parent / child set equals Ogre's (the order is the store's: case H), after a
+# mirror.doc_store — THE DOCUMENT'S TRANSFORM STORE AND THE ENGINE'S OWN NODES AGREE (ENGINE-UPGRADE-U2): on a
+# 1,000-node fixture with non-uniform, mirrored and zero scales, every world from the store equals the engine node's
+# derived transform after the frame (1e-6; the engine composes it from the extract's LOCAL records) and every parent /
+# child set equals the engine's (the order is the store's: case H), after a
 # keepTransform reparent, a scale, a rotation, zero-scale parents and a sheared parent; the re-expression keeps the
 # world and stores no NaN (SC1-REEXPRESS-SCALE-1). 7 cases x 2 frames. Case H pins A REAL FIX: since SCENEGRAPH D2 the
 # document's sibling order WAS Ogre's child vector, and Ogre-Next's removeChild is swap-and-pop, so every reparent or
@@ -110,9 +111,11 @@ target_include_directories(test_doc_store PRIVATE ${CMAKE_SOURCE_DIR}
 target_compile_definitions(test_doc_store PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_include_directories(test_doc_store PRIVATE "${CMAKE_SOURCE_DIR}/irisgl/engine/src"
+    "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")   # EnginePrivate.h: the engine's own node for a NodeId
 target_link_libraries(test_doc_store PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)   # OgreNext: the engine's cached derived transform, read after a frame
 add_dependencies(test_doc_store JahshakaEngineMedia)
-jah_gpu_row(mirror.doc_store CLASS engine FRAMES 14 COMMAND test_doc_store
+jah_gpu_row(mirror.doc_store CLASS engine FRAMES 23 COMMAND test_doc_store
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.doc_store PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")

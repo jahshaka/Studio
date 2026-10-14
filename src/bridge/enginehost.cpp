@@ -361,26 +361,6 @@ bool EngineHost::start(QString &error)
     }
     mEngine = std::move(engine);
     mDriver = new EngineRenderDriver(mEngine.get());
-    // THE scene graph (SPECS/SCENEGRAPH_SPEC.md D2): a document node IS an
-    // engine node, so the document needs somewhere to put nodes that are not in
-    // any rendered scene yet. This is the first thing to happen after the engine
-    // exists and BEFORE the first document node — MainWindow's viewport creates
-    // the editor camera inside its own constructor, a few lines later.
-    //
-    // WHAT THIS COSTS, per boot mode (Engine::documentGraphScene):
-    //   * headless — nothing. The NULL render system made its own 1x1 window at
-    //     boot, so this only registers the Hlms and creates the scene manager.
-    //   * Vulkan — the backend has no render target yet, so it makes a
-    //     surfaceless one to hang the Hlms registration on, ahead of the
-    //     viewport's real window. That is NOT removable from here: the very
-    //     next thing MainWindow does is construct EngineSceneViewport, whose
-    //     constructor creates the editor CameraNode (resetEditorCam) while its
-    //     own View waits for showEvent. Deferring this call would only move the
-    //     surfaceless window a few lines later, to that camera. The ordering
-    //     ends when the viewport creates its View before its camera; the
-    //     engine side is already lazy and ready for it.
-    iris::graph::setStagingScene(
-        reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
 
     // (The transform-write counter is no longer handed over: the renderer learns what moved from each frame's
     // ChangeSet, which the mirror drains from the document's write journal — ENGINE-UPGRADE-1 U0 3b.)
@@ -530,10 +510,5 @@ void EngineHost::shutdown()
     // closes a window (a --script or --mcp run quits with its window still up).
     // Both are idempotent.
     EngineThumbnailRenderer::shutdown();
-    // The document's staging scene manager belongs to the Engine and dies with
-    // it; drop our reference to it so nothing walks a dead manager. (Every
-    // iris::graph entry point also tests Ogre::Root's liveness, because the
-    // Engine can outlive this call — the viewports hold their own shared_ptr.)
-    iris::graph::setStagingScene(nullptr);
     mEngine.reset();
 }

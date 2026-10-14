@@ -3,7 +3,6 @@
 #include "scale_world.h"
 
 #include "../support/proceduralshell.h"
-#include "../support/wiredocumentgraph.h"
 
 #include "irisgl/core/logger.h"
 #include "irisgl/document/assets/mesh.h"
@@ -434,7 +433,6 @@ bool boot(Env &env, const char *logFile, int w, int h)
     // nodes live in the engine's staging scene, and the renderer learns "nothing
     // moved" from the document's transform-write counter — without it every frame
     // re-scans every item (and a document write never moves the ray tier's epoch).
-    enginetest::wireDocumentGraph(env.engine.get());
     env.width = w;
     env.height = h;
     env.view = window ? env.engine->createView("scale", static_cast<NativeWindowHandle>(env.xWindow),
@@ -507,7 +505,6 @@ void shutdown(Env &env)
     env.mirror.reset();
     env.doc.reset();
     env.camera.reset();
-    enginetest::unwireDocumentGraph();
     env.engine.reset();
     if (env.xDisplay) {
         closeRigWindow(env.xDisplay, env.xWindow);

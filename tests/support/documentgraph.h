@@ -1,10 +1,7 @@
 #pragma once
-// THE DOCUMENT-ONLY ENGINE, in one place (SPECS/SCENEGRAPH_SPEC.md §3b, v2).
-//
-// Since the scene-graph swap an `iris::SceneNode` IS an `Ogre::SceneNode`: the
-// document has no transforms, no hierarchy and no storage of its own. So a
-// suite that only builds a DOCUMENT — no rendering, no pixels, no view — still
-// needs an engine to exist, because that is where its nodes live.
+// A HEADLESS ENGINE FOR A DOCUMENT SUITE, in one place. Since ENGINE-UPGRADE-U2 a document needs no engine at all
+// (iris::graph is the document's own store; the engine owns its own nodes): suites keep this where they also want an
+// engine Scene beside the document, or the engine's process state (the shader cache's NULL-run rule) under test.
 //
 // This boots one HEADLESS: `EngineConfig::headless`, i.e. Ogre's NULL render
 // system. It opens no display, needs no GPU and no driver, and creates no
@@ -21,15 +18,13 @@
 // with a reason (Types.h EngineConfig::headless). A suite that wants pixels is
 // not a document suite — it boots the real engine like every other engine suite.
 //
-// LIFETIME: declare it FIRST in main(), so it is destroyed LAST. Every document
-// object in the process holds handles into its scene managers.
+// LIFETIME: declare it FIRST in main(), so it is destroyed LAST.
 
 #include <cstdio>
 #include <memory>
 #include <string>
 
 #include "irisgl/document/scenegraph/nodegraph.h"
-#include "wiredocumentgraph.h"
 #include "jahshaka/engine/Engine.h"
 #include "enginetesthelpers.h"
 
@@ -42,13 +37,10 @@ public:
         // headless: RenderSystem_NULL — no display, no device, no window
         const auto cfg = testEngineConfig(logFile, EngineOverrides().headless());
         mEngine = jahshaka::engine::Engine::create(cfg, mError);
-        // Wired exactly as the app wires it (EngineHost): wiredocumentgraph.h.
-        if (mEngine) wireDocumentGraph(mEngine.get());
     }
 
     ~DocumentGraph()
     {
-        unwireDocumentGraph();
         mEngine.reset();
     }
 

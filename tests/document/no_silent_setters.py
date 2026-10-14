@@ -40,7 +40,8 @@ ALLOWED = {
     "setPlayMode": "iris::Scene, not a node",
     "setChangeObserver": "deleted; kept here so a re-introduction fails loudly",
     # Raw replay setters: the contract is "no side effects", the caller marks.
-    "_setGraphNode": "iris::graph's own migration hook; the adoption guard sees it",
+    "setSocketRider": "iris::graph's rider flag, set by the MIRROR that arms the rider (it needs no mark from "
+                      "itself); the world under it is invalidated by the flag",
     "_setFolderPath": "marks (listed for completeness)",
     "_clearStaticHint": "the GRAPH class only; no mirror latch reads it",
     "_setCountsAsMovement": "the transform-write EPOCH's exemption (nodegraph.h): read by "
@@ -58,7 +59,7 @@ ALLOWED = {
     # NOT NODES. These live under scenegraph/ but are scene-level or helper
     # state the mirror reads through its own signatures, not through a visit.
     "setSkyTextureSource": "iris::Scene's sky; applySky has its own signature",
-    "_setGraphEvacuationHook": "a callback slot on iris::Scene, not document state",
+    "_setMirrorEvacuationHook": "a callback slot on iris::Scene, not document state",
     "setPoseSource": "SocketResolver's pose callback; not a document node at all",
     "setStagingScene": "iris::graph's process-wide device handle",
     "setSkyTexture": "iris::Scene's sky; applySky keeps its own SkySource signature",

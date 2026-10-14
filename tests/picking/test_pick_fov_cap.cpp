@@ -151,12 +151,6 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-pick-fov-cap-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    // A document node IS an engine node (SCENEGRAPH_SPEC D2). This suite needs
-    // BOTH halves — pixels from the engine, rays from the document — and
-    // Ogre::Root is a singleton, so the document graph is staged onto the SAME
-    // engine rather than a second headless one.
-    iris::graph::setStagingScene(
-        reinterpret_cast<iris::graph::SceneHandle>(engine->documentGraphScene()));
 
     // ---- the scene: five emissive markers on a row, nothing else ------------
     Scene *s = engine->createScene("pickfov");
@@ -345,7 +339,6 @@ int main(int argc, char **argv)
     }
 
     engine->destroyScene(s);
-    iris::graph::setStagingScene(nullptr);
     engine.reset();
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");

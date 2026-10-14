@@ -1,7 +1,8 @@
-// mirror.doc_store — THE DOCUMENT'S TRANSFORM STORE IS THE ENGINE'S TRUTH, TO THE BIT (ENGINE-UPGRADE-U2 stage 1,
-// DOCSTORE). The document owns its transforms and its hierarchy again (nodegraph.h's store: local TRS, parent,
-// ordered children, a world derived by Ogre's own composition rule); stage 1 still writes every Ogre node in parallel
-// and the engine draws those. So, on a 1,000-node fixture with non-uniform scales, mirrored and rendered:
+// mirror.doc_store — THE DOCUMENT'S TRANSFORM STORE AND THE ENGINE'S OWN NODES AGREE (ENGINE-UPGRADE-U2). The
+// document owns its transforms and its hierarchy (nodegraph.h's store: local TRS, parent, ordered children, a world
+// derived by Ogre's own composition rule); the ENGINE owns its own nodes, told each written node's LOCAL transform,
+// parent and graph class through the frame record (the extract), composing the rest itself. So, on a 1,000-node
+// fixture with non-uniform scales, mirrored and rendered:
 //   * every node's WORLD from the store equals Ogre's derived transform after the frame (position per metre of scene,
 //     rotation per component, scale per unit of scale) to 1e-6 after a keepTransform reparent of 50 nodes,
 //     a non-uniform scale on 50, a rotation on 50, zero-scale parents, and a reparent into and out of them;
@@ -9,7 +10,9 @@
 //     Ogre's removeChild is swap-and-pop — and case H pins that a removal keeps it);
 //   * THE RE-EXPRESSION (SC1-REEXPRESS-SCALE-1): a keepTransform reparent under a rotated, non-uniformly scaled
 //     parent keeps the world pose; under a zero-scale parent it stores no NaN or infinity.
-// 2 FRAMES per case, 7 cases: 14 engine frames (H renders none). Law: equality with the engine, and the round trip of the inverse.
+// 2 FRAMES per case, 7 cases: 14 engine frames (H renders none); I renders 9 (the extract, counted). Law: equality with the engine, and the round trip of the inverse.
+// FIRST, before any Qt header: EnginePrivate.h names a `slots` variable Qt's keyword macro would eat.
+#include "EnginePrivate.h"   // OgreScene::node: the engine's own node for a NodeId (a suite read)
 #include <QGuiApplication>
 #include <cmath>
 #include <cstdio>
@@ -64,7 +67,10 @@ bool isUnder(const iris::SceneNode *n, const iris::SceneNode *ancestor)
     return false;
 }
 
-Ogre::SceneNode *ogre(const iris::SceneNode *n) { return reinterpret_cast<Ogre::SceneNode *>(n->graphNode()); }
+const SceneMirror *gMirror = nullptr;
+const jahshaka::engine::detail::OgreScene *gScene = nullptr;
+/// The ENGINE's own node for a document node (the mirror's NodeId -> the scene's Ogre node).
+Ogre::SceneNode *ogre(const iris::SceneNode *n) { return gScene->node(gMirror->engineNode(n)); }
 
 bool finite(const iris::Vec3 &v) { return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z()); }
 
@@ -105,26 +111,26 @@ Diff compare(const std::vector<iris::SceneNodePtr> &nodes)
     return d;
 }
 
-// Parent and children: the store's against Ogre's (document-owned Ogre children only). The children as a SET:
-// Ogre-Next's Node::removeChild is swap-and-pop (efficientVectorRemove, OgreNode.cpp:547), so Ogre's child ORDER is
-// not the document's after any removal — the store's order is (case H pins it).
+// Parent and children: the store's against the ENGINE's hierarchy (document-driven Ogre children only). The children
+// as a SET: Ogre-Next's Node::removeChild is swap-and-pop (efficientVectorRemove, OgreNode.cpp:547), so Ogre's child
+// ORDER is not the document's after any removal — the store's order is (case H pins it).
 int hierarchyMismatches(const std::vector<iris::SceneNodePtr> &nodes)
 {
     int bad = 0;
     for (const auto &n : nodes) {
         const Ogre::SceneNode *o = ogre(n.data());
-        const Ogre::Node *op = o->getParent();
-        iris::SceneNode *ogreParent =
-            op ? iris::graph::ownerOf(reinterpret_cast<iris::graph::NodeHandle>(
-                     const_cast<Ogre::SceneNode *>(static_cast<const Ogre::SceneNode *>(op))))
-               : nullptr;
-        if (ogreParent != n->getParent().data()) { ++bad; continue; }
-        std::vector<iris::SceneNode *> ogreKids, storeKids;
-        for (std::size_t i = 0; i < o->numChildren(); ++i)
-            if (iris::SceneNode *c = iris::graph::ownerOf(reinterpret_cast<iris::graph::NodeHandle>(
-                    static_cast<Ogre::SceneNode *>(const_cast<Ogre::Node *>(o->getChild(i))))))
-                ogreKids.push_back(c);
-        for (int i = 0; i < n->childCount(); ++i) storeKids.push_back(n->childAt(i));
+        if (!o) { ++bad; continue; }
+        const iris::SceneNode *sp = n->getParent().data();
+        const Ogre::Node *want = (sp && gMirror->engineNode(sp)) ? ogre(sp) : nullptr;   // null = the scene root
+        const Ogre::Node *got = o->getParent();
+        if (want ? got != want : (got && gMirror->engineNode(sp) != 0)) { ++bad; continue; }
+        std::vector<const Ogre::Node *> ogreKids, storeKids;
+        for (std::size_t i = 0; i < o->numChildren(); ++i) {
+            const Ogre::Node *c = o->getChild(i);
+            for (int k = 0; k < n->childCount(); ++k)
+                if (ogre(n->childAt(k)) == c) { ogreKids.push_back(c); break; }
+        }
+        for (int i = 0; i < n->childCount(); ++i) storeKids.push_back(ogre(n->childAt(i)));
         std::sort(ogreKids.begin(), ogreKids.end());
         std::sort(storeKids.begin(), storeKids.end());
         if (ogreKids != storeKids) ++bad;
@@ -172,6 +178,8 @@ int main(int argc, char **argv)
     }
     SceneMirror mirror(target);
     mirror.setSource(doc);
+    gMirror = &mirror;
+    gScene = static_cast<const jahshaka::engine::detail::OgreScene *>(target);
     auto frames = [&] { mirror.sync(); engine->renderOneFrame(); engine->renderOneFrame(); };
     auto verdict = [&](const char *tag) {
         const Diff d = compare(nodes);
@@ -301,6 +309,45 @@ int main(int argc, char **argv)
               "H a removal keeps the siblings' order (a c d; d's sibling index 2)");
         p->insertChild(0, k[1], true);
         CHECK(p->childAt(0) == k[1].data() && k[0]->siblingIndex() == 1, "H an insert at index 0 lands at 0");
+    }
+
+    // I: THE EXTRACT, COUNTED (U3's bar, the served half): the frame record carries one NodeRecord per WRITTEN node —
+    // a still frame none, one mover one, the root of a 10,000-node subtree one (its LOCAL transform; the engine
+    // composes the subtree itself) — and the subtree lands where the store says.
+    {
+        frames();                                                   // anything owed from H lands first
+        frames();
+        const unsigned still = engine->frameInputStatus().nodeRecords;
+        CHECK(still == 0, "I a still frame sends 0 node records (got %u)", still);
+        nodes[17]->setLocalPos(nodes[17]->getLocalPos() + iris::Vec3(0.1f, 0, 0));
+        mirror.sync(); engine->renderOneFrame();
+        const unsigned one = engine->frameInputStatus().nodeRecords;
+        CHECK(one == 1, "I one mover sends 1 node record (got %u)", one);
+        auto big = iris::SceneNode::create();
+        doc->getRootNode()->addChild(big, false);
+        std::vector<iris::SceneNodePtr> bigKids;
+        bigKids.reserve(10000);
+        for (int i = 0; i < 10000; ++i) {
+            auto c = iris::SceneNode::create();
+            c->setLocalPos(iris::Vec3(float(i % 100) * 0.1f, float(i / 100) * 0.1f, 0.0f));
+            big->addChild(c, false);
+            bigKids.push_back(c);
+        }
+        frames();                                                   // mirrored: 10,001 records, once
+        big->setLocalPos(iris::Vec3(5, 0, 0));
+        big->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 20.0f));
+        mirror.sync(); engine->renderOneFrame();
+        const unsigned rootMove = engine->frameInputStatus().nodeRecords;
+        engine->renderOneFrame();
+        CHECK(rootMove == 1, "I the root of a 10,000-node subtree written sends 1 node record (got %u)", rootMove);
+        double worst = 0;
+        for (const auto &c : bigKids) {
+            const iris::graph::Trs w = iris::graph::world(c->docNode());
+            const Ogre::Vector3 p = ogre(c.data())->_getDerivedPosition();
+            worst = std::max({ worst, std::fabs(double(w.pos.x()) - p.x), std::fabs(double(w.pos.y()) - p.y),
+                               std::fabs(double(w.pos.z()) - p.z) });
+        }
+        CHECK(worst <= 1e-5, "I ...and the engine composed the subtree where the store says (worst %.2e m)", worst);
     }
 
     mirror.setSource(nullptr);

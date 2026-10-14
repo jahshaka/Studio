@@ -158,7 +158,7 @@ _CHAIN = ["hdr", "looks", "ssr", "defaults", "*picture"]
 _REFL = ["ssr", "rtreflect", "mirror", "planar"]
 _NODES = ["engine", "mirror", "pieces", "atom"]
 OGRE_SCENE_FUNCTIONS = {
-    **{f: _CORE for f in ("OgreScene", "~OgreScene", "destroy", "sceneManager", "nativeSceneManager")},
+    **{f: _CORE for f in ("OgreScene", "~OgreScene", "destroy", "sceneManager")},
     "name": ["engine"],
     "engine": ["engine", "mirror"],   # the scene's engine: where the mirror submits the frame's input (U0 3a)
     **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
@@ -168,7 +168,9 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["gi", "sky", "lights"] for f in ("applyVctEnvironment", "applyCascadeEnvironment", "rayEnvironment",
                                             "noteEnvironmentChanged", "setEnvironmentLight")},
     **{f: _REFL for f in ("refreshEnvmapScale", "hasAuthoredReflectionMap", "envmapScaleForPass")},
-    **{f: _NODES for f in ("removeNode", "createNode", "adoptNode", "setNodeParent", "setNodeTransform", "registryNode",
+    **{f: _NODES for f in ("createDocumentNode", "applyNodeRecords", "enforceGraphClass", "switchNodeClass",
+                           "setOrientationExact", "publishFrame")},
+    **{f: _NODES for f in ("removeNode", "createNode", "setNodeParent", "setNodeTransform", "registryNode",
                            "releaseNode", "node", "track", "nodeWorldPose", "nodeWorldPoseDrawn", "itemVisibilityFlags",
                            "applyNodeVisibilityFlags", "inheritedShown", "applyShownSubtree", "setNodeVisible",
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},

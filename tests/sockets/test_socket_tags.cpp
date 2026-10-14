@@ -73,7 +73,6 @@ int main(int argc, char **argv)
     QGuiApplication app(argc, argv);
     enginetest::DocumentGraph dg("socket-tags-ogre.log");
     if (!dg.require()) return 1;
-    dg.engine()->documentGraphScene();
 
     // ---- A/B: the engine verbs, directly ---------------------------------
     {
@@ -188,7 +187,7 @@ int main(int argc, char **argv)
         CHECK(mirror.lastSocketDangling() == 0, "nothing dangled");
 
         // C. THE HIERARCHY CONTRACT: socketing is not a reparent.
-        CHECK(iris::graph::isSocketRider(sword->graphNode()), "the graph knows it is a rider");
+        CHECK(iris::graph::isSocketRider(sword->docNode()), "the graph knows it is a rider");
         CHECK(sword->getParent().data() == group.data(),
               "parentOf still answers the DOCUMENT parent, not the TagPoint");
         bool listed = false;
@@ -223,7 +222,7 @@ int main(int argc, char **argv)
             mirror.sync();
             mirror.sync();
             mirror.sync();
-            CHECK(!iris::graph::isSocketRider(sword->graphNode()),
+            CHECK(!iris::graph::isSocketRider(sword->docNode()),
                   "with no rig the rider is off its tag (the fallback drives it)");
             character->setMesh(rig);                    // ...and it comes back
             mirror.sync();
@@ -269,7 +268,7 @@ int main(int argc, char **argv)
             mirror.sync();
             CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) == 0,
                   "detaching from the socket takes the rider off its bone");
-            CHECK(!iris::graph::isSocketRider(sword->graphNode()),
+            CHECK(!iris::graph::isSocketRider(sword->docNode()),
                   "...and the shadow parent is gone");
             CHECK(sword->getParent().data() == group.data(),
                   "...while the document parent is unchanged");
@@ -339,7 +338,7 @@ int main(int argc, char **argv)
             mirror.sync();
             CHECK(scene->boneAttachment(mirror.engineNode(prop.data())) == 0,
                   "deleting the OWNER takes its riders off their bones");
-            CHECK(!iris::graph::isSocketRider(prop->graphNode()),
+            CHECK(!iris::graph::isSocketRider(prop->docNode()),
                   "...and the shadow parent goes with it");
         }
 
@@ -382,7 +381,7 @@ int main(int argc, char **argv)
         const iris::Vec3 p(world(0, 3), world(1, 3), world(2, 3));
         CHECK(std::fabs(p.y() - 1.0f) < 1e-3f,
               "with no engine rig the rider still lands on the bind-pose socket");
-        CHECK(!iris::graph::isSocketRider(rider->graphNode()),
+        CHECK(!iris::graph::isSocketRider(rider->docNode()),
               "...and no tag point was armed");
 
         // ---- AND A STILL RIDER MARKS NOTHING (lane ENGINE-7 item 4) -------
