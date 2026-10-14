@@ -14,8 +14,35 @@
 //      entered probes x the target samples, never a whole-grid refinement per scroll
 //      (RED ON THE BASE: 41,472 integrations in the walk and a whole-grid debt of
 //      129,024 more over the next 126 frames).
+//   S. (--stop, the row gi.field_variance_stop; ENGINE-UPGRADE-2B stage 4) THE PER-PROBE
+//      VARIANCE STOP against its oracle, in one process. The ORACLE first: the stop off
+//      (gi.fieldStopOff), the room converged to the target (25 samples), every probe's running
+//      mean read at every count n it passes through. Then the STOP: the field rebuilt with the
+//      stop on and converged. The rays' rotations are a function of the probe's lattice point
+//      and its sample index, so the stop's n samples ARE the oracle's first n. THE BARS, declared
+//      before the measurement:
+//        S1 the stop's estimate of every probe is the oracle's own running mean at the probe's
+//           count n, byte for byte (the stop changes WHEN a probe stops, never what it holds);
+//        S2 statistical - over the lit texels of the stopped probes, z = (stop - oracle 25) /
+//           (sigma sqrt(1/n - 1/25)), sigma the texel's one-sample deviation from the oracle's
+//           25 samples (its second moment; the difference of two nested means has that
+//           deviation): at least 93 % within |z| <= 2 (a Student t of 24 degrees of freedom
+//           covers 94.3 %; the slack is the 36 correlated texels of a probe);
+//        S3 the probes' stated errors hold AS A 2-SIGMA STATEMENT: at most 5 % of the stopped probes
+//           with a mean |z| over their lit texels above 2. (Declared first as "every probe at most
+//           2", on the belief that a probe's 36 texels are 36 draws whose mean |z| concentrates at
+//           0.80 - they are ONE draw: every texel integrates the same rays, so a probe's mean |z|
+//           is distributed as one |z| and 5 % of a correct estimator's probes exceed 2. Measured:
+//           7 of 8192 at a stop from 4 samples, 12 at 6, the oracle's own replay. The bar that
+//           could not be met by any estimator is restated here, flagged in the stage 4 report.)
+//        S3b the precision itself, at the same confidence: at least 95 % of the stopped probes' lit
+//           texels within e (0.16) of the oracle (the derivation's two sigma);
+//        S4 the probe work (the generation job's own count of integrations): the stop's at most
+//           half the oracle's (the instrument, --variance, predicts 5.9x less);
+//        S5 at rest after it: no integration in 30 frames, giAtRest.
 // Counts per frame, never clocks.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 
 #include <atomic>
@@ -95,6 +122,7 @@ int main(int argc, char **argv)
     // changed), the atlas read after every pass; each probe's per-sample values follow from its
     // running means (x_n = n m_n - (n - 1) m_{n-1}), and with them its standard error.
     const bool varianceArm = argc > 1 && std::string(argv[1]) == "--variance";
+    const bool stopArm = argc > 1 && std::string(argv[1]) == "--stop";
     const bool reachArm = (argc > 1 && std::string(argv[1]) == "--reach") || reachControl;
     const int reachBounces = argc > 2 ? std::atoi(argv[2]) : 1;
     std::string err;
@@ -135,15 +163,47 @@ int main(int argc, char **argv)
     gi.numBounces = reachArm ? reachBounces : 1;
     gi.ddgi = GiToggle::On;   // the field (the irradiance field's generation) is the subject
     if (reachArm) e->setArm("gi.fieldStatic", 1.0);
+    if (stopArm) e->setArm("gi.fieldStopOff", 1.0);   // the oracle first: every probe to the target
     s->setGlobalIllumination(gi);
     Vec3 cam(0.0f, 1.6f, 4.0f);
     enginetest::testCameraLookAt(view, cam, Vec3(0.0f, 1.0f, -4.0f));
+    // THE ORACLE'S RUNNING MEANS (--stop): every probe's tile (interior, raw RGBA16F) at the first
+    // frame its count reads n, n = 1..25.
+    const unsigned kOracleN = 25u;
+    std::vector<std::vector<unsigned char>> oracle;   // [probe * kOracleN + n - 1] = the tile's bytes
+    unsigned oRes = 0, oBordered = 0, oWidth = 0, oBpp = 0, oProbes = 0;
+    const auto tileAt = [](const GiFieldAtlas &a, unsigned p, unsigned tx, unsigned ty) {
+        const unsigned b = a.irradBordered;
+        const unsigned x = (p * b) % a.irradWidth + 1u + tx, y = ((p * b) / a.irradWidth) * b + 1u + ty;
+        return (size_t(y) * a.irradWidth + x) * a.irradBytesPerTexel;
+    };
+    const auto captureOracle = [&]() {
+        GiFieldAtlas a;
+        if (!s->giFieldAtlas(a) || !a.available) return;
+        if (!oProbes) {
+            oProbes = a.probes[0] * a.probes[1] * a.probes[2];
+            oBordered = a.irradBordered; oRes = oBordered - 2u; oWidth = a.irradWidth; oBpp = a.irradBytesPerTexel;
+            oracle.assign(size_t(oProbes) * kOracleN, std::vector<unsigned char>());
+        }
+        for (unsigned p = 0; p < oProbes; ++p) {
+            const unsigned short *h = reinterpret_cast<const unsigned short *>(&a.irradiance[tileAt(a, p, 0, 0)]);
+            const float nf = halfToFloat(h[3]);
+            const unsigned n = unsigned(nf + 0.5f);
+            if (n < 1u || n > kOracleN) continue;
+            std::vector<unsigned char> &slot = oracle[size_t(p) * kOracleN + n - 1u];
+            if (!slot.empty()) continue;
+            slot.resize(size_t(oRes) * oRes * oBpp);
+            for (unsigned ty = 0; ty < oRes; ++ty)
+                std::memcpy(&slot[size_t(ty) * oRes * oBpp], &a.irradiance[tileAt(a, p, 0, ty)], size_t(oRes) * oBpp);
+        }
+    };
     // CONVERGE: render until the field has no work for 30 frames running (bounded).
     e->setFrameMonitor(MonitorLevel::Review);
     int quiet = 0, settle = 0;
     unsigned settleWork = 0;
     for (; settle < 1200 && quiet < 30; ++settle) {
         e->renderOneFrame();
+        if (stopArm) captureOracle();
         std::vector<FrameRecord> recs;
         e->takeFrameRecords(recs);
         const FieldWork w = fieldWork(recs);
@@ -157,6 +217,137 @@ int main(int argc, char **argv)
                 g0.ifdProbesPerFrame);
     CHECK(g0.ifdBound && g0.ifdProbes > 0, "the scene's irradiance field is live (not vacuous)");
 
+    if (stopArm) {
+        const PhotonFieldStatus fo = photonFieldStatus(*s);
+        std::printf("   THE ORACLE (the stop off): converged in %d frames, %llu integrations, %u probes\n", settle,
+                    fo.integrations, fo.probes);
+        CHECK(fo.field && fo.stopMinSamples == 0u, "the oracle's field runs with the stop off");
+        // THE STOP: the field rebuilt with the stop on (the arm reads at the build: the field off, then on).
+        e->setArm("gi.fieldStopOff", 0.0);
+        e->renderOneFrame();
+        GiParams off = gi;
+        off.ddgi = GiToggle::Off;
+        s->setGlobalIllumination(off);
+        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        s->setGlobalIllumination(gi);
+        int sq = 0, sf = 0;
+        for (; sf < 1200 && sq < 30; ++sf) {
+            e->renderOneFrame();
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            const FieldWork w = fieldWork(recs);
+            sq = (w.frames && !w.framesWithWork) ? sq + int(w.frames) : (w.frames ? 0 : sq);
+        }
+        const PhotonFieldStatus fs = photonFieldStatus(*s);
+        std::printf("   THE STOP (n >= %u, the 95 %% t interval / mean <= %.2f): converged in %d frames, %llu integrations, %u of %u "
+                    "probes stopped\n", fs.stopMinSamples, double(fs.stopPrecision), sf, fs.integrations,
+                    fs.probesStopped, fs.probes);
+        CHECK(fs.field && fs.stopMinSamples > 0u, "the stop's field runs with the stop on");
+        CHECK(sq >= 30, "the stop's field converges and goes quiet");
+        GiFieldAtlas sa;
+        CHECK(s->giFieldAtlas(sa) && sa.available && oProbes &&
+                  sa.probes[0] * sa.probes[1] * sa.probes[2] == oProbes && sa.irradBordered == oBordered,
+              "the stop's atlas reads back, the oracle's layout");
+        // S5: at rest.
+        for (int i = 0; i < 30; ++i) e->renderOneFrame();
+        const PhotonFieldStatus fr = photonFieldStatus(*s);
+        std::printf("   at rest: %llu integrations in 30 frames, giAtRest %d\n", fr.integrations - fs.integrations,
+                    s->giStatus().giAtRest ? 1 : 0);
+        CHECK(fr.integrations == fs.integrations && s->giStatus().giAtRest,
+              "S5: AT REST after the stop: no integration in 30 frames, the scene at rest");
+        // S4: the work.
+        std::printf("   THE WORK: %llu integrations with the stop, %llu without (%.2fx less)\n", fs.integrations,
+                    fo.integrations, double(fo.integrations) / double(fs.integrations ? fs.integrations : 1));
+        CHECK(fs.integrations > 0 && 2u * fs.integrations <= fo.integrations,
+              "S4: THE STOP'S PROBE WORK is at most half the oracle's");
+        // S1 - S3, per probe.
+        const auto lumOf = [](const unsigned char *t) {
+            const unsigned short *h = reinterpret_cast<const unsigned short *>(t);
+            return 0.2126 * halfToFloat(h[0]) + 0.7152 * halfToFloat(h[1]) + 0.0722 * halfToFloat(h[2]);
+        };
+        unsigned replayed = 0, missing = 0, stoppedEarly = 0, badProbes = 0;
+        unsigned long long litTexels = 0, within2 = 0;
+        double worstMeanZ = 0.0, worstPrecision = 0.0;
+        unsigned long long withinE = 0;
+        std::vector<unsigned> byN(kOracleN + 1u, 0u);
+        const size_t tileBytes = size_t(oRes) * oRes * oBpp;
+        std::vector<unsigned char> st(tileBytes);
+        for (unsigned p = 0; p < oProbes; ++p) {
+            for (unsigned ty = 0; ty < oRes; ++ty)
+                std::memcpy(&st[size_t(ty) * oRes * oBpp], &sa.irradiance[tileAt(sa, p, 0, ty)], size_t(oRes) * oBpp);
+            const unsigned n = unsigned(halfToFloat(reinterpret_cast<const unsigned short *>(st.data())[3]) + 0.5f);
+            if (n >= 1u && n <= kOracleN) ++byN[n];
+            bool have = n >= 1u && n <= kOracleN;
+            for (unsigned k = 0; have && k < kOracleN; ++k) have = !oracle[size_t(p) * kOracleN + k].empty();
+            if (!have) { ++missing; continue; }
+            // S1: the oracle's own mean at n (the alpha included: the count).
+            if (std::memcmp(st.data(), oracle[size_t(p) * kOracleN + n - 1u].data(), tileBytes) == 0) ++replayed;
+            if (n >= kOracleN) continue;
+            ++stoppedEarly;
+            double sumZ = 0.0, worstStated = 0.0, worstTrue = 0.0, worstRel = 0.0, worstStatedErr = 0.0;
+            unsigned lit = 0, overStated = 0;
+            for (unsigned i = 0; i < oRes * oRes; ++i) {
+                double sum = 0.0, sum2 = 0.0, prev = 0.0, sumN = 0.0, sum2N = 0.0;
+                for (unsigned k = 1; k <= kOracleN; ++k) {
+                    const double m = lumOf(&oracle[size_t(p) * kOracleN + k - 1u][size_t(i) * oBpp]);
+                    const double x = double(k) * m - double(k - 1) * prev;   // the k-th sample
+                    prev = m;
+                    sum += x; sum2 += x * x;
+                    if (k <= n) { sumN += x; sum2N += x * x; }
+                }
+                const double mean = sum / kOracleN;
+                if (mean <= 1e-6) continue;   // unlit: no relative error to bound
+                const double sigma = std::sqrt(std::max(0.0, (sum2 - kOracleN * mean * mean) / (kOracleN - 1)));
+                const double sd = sigma * std::sqrt(1.0 / n - 1.0 / kOracleN);
+                const double diff = lumOf(&st[size_t(i) * oBpp]) - mean;
+                const double z = sd > 0.0 ? std::fabs(diff) / sd : (std::fabs(diff) <= 1e-3 * mean ? 0.0 : 99.0);
+                // THE STATED ERROR: what the stop itself computed from its n samples (2 SE of its mean).
+                const double meanN = sumN / n;
+                const double stated = 2.0 * std::sqrt(std::max(0.0, (sum2N - n * meanN * meanN) / (n - 1)) / n);
+                if (std::fabs(diff) > stated) ++overStated;
+                worstStated = std::max(worstStated, stated / mean);
+                worstTrue = std::max(worstTrue, 2.0 * sigma / std::sqrt(double(n)) / mean);
+                if (std::fabs(diff) / mean > worstRel) { worstRel = std::fabs(diff) / mean; worstStatedErr = stated / mean; }
+                worstPrecision = std::max(worstPrecision, std::fabs(diff) / mean);
+                if (std::fabs(diff) <= double(fs.stopPrecision) * mean) ++withinE;
+                ++litTexels;
+                ++lit;
+                if (z <= 2.0) ++within2;
+                sumZ += z;
+            }
+            const double meanZ = lit ? sumZ / lit : 0.0;
+            worstMeanZ = std::max(worstMeanZ, meanZ);
+            if (meanZ > 2.0) {
+                ++badProbes;
+                std::printf("   probe %u: n %u, mean |z| %.3f; 2 SE/mean as stated (its n samples) max %.4f, from the "
+                            "oracle's 25 max %.4f; worst |stop - oracle|/oracle %.4f (stated there %.4f); %u of %u texels "
+                            "outside their stated error\n", p, n, meanZ, worstStated, worstTrue, worstRel, worstStatedErr,
+                            overStated, lit);
+            }
+        }
+        std::printf("   the stop's counts:");
+        for (unsigned n = 1; n <= kOracleN; ++n) if (byN[n]) std::printf(" n=%u: %u", n, byN[n]);
+        std::printf("\n   %u probes stopped before the target; %u of %u replay the oracle's own mean at their n "
+                    "(%u without a full oracle record)\n", stoppedEarly, replayed, oProbes, missing);
+        std::printf("   STATISTICS over %llu lit texels of the stopped probes: %.2f %% within 2 sigma; the worst "
+                    "probe's mean |z| %.3f; %u probes over 2\n", litTexels,
+                    100.0 * double(within2) / double(litTexels ? litTexels : 1), worstMeanZ, badProbes);
+        CHECK(missing == 0u, "the oracle recorded every probe at every count (not vacuous)");
+        CHECK(stoppedEarly > 0u, "probes stop before the target (not vacuous)");
+        CHECK(replayed == oProbes, "S1: EVERY PROBE'S STOP ESTIMATE IS THE ORACLE'S OWN MEAN AT ITS COUNT, byte for byte");
+        CHECK(litTexels > 0 && 100u * within2 >= 93u * litTexels,
+              "S2: at least 93 % of the stopped probes' lit texels within 2 sigma of the 25-sample oracle");
+        CHECK(20u * badProbes <= stoppedEarly,
+              "S3: the stopped probes' stated errors hold as a 2-sigma statement (at most 5 % with a mean |z| over 2)");
+        std::printf("   THE PRECISION: %.3f %% of the stopped probes' lit texels within e = %.2f of the oracle; the "
+                    "worst %.4f\n", 100.0 * double(withinE) / double(litTexels ? litTexels : 1),
+                    double(fs.stopPrecision), worstPrecision);
+        CHECK(litTexels > 0 && 100u * withinE >= 95u * litTexels,
+              "S3b: at least 95 % of the stopped probes' lit texels within the precision e of the 25-sample oracle");
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::printf(failures ? "\n%d CHECK(S) FAILED\n" : "\nall checks passed\n", failures);
+        return failures ? 1 : 0;
+    }
     if (varianceArm) {
         // Settled already (above). Re-integrate with nothing changed, reading the atlas after
         // every pass: a pass is done when the refinements owed move (or the field goes quiet).
@@ -355,6 +546,7 @@ int main(int argc, char **argv)
         // move until it settles — its frames, its probe integrations, its GPU ms.
         for (int i = 0; i < 300; ++i) e->renderOneFrame();
         { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        const PhotonFieldStatus i0 = photonFieldStatus(*s);
         enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
         std::vector<FrameRecord> one;
         for (int f = 0; f < 240; ++f) {
@@ -365,6 +557,9 @@ int main(int argc, char **argv)
         }
         const GiStatus gs = s->giStatus();
         print("one still moved once", fieldWork(one));
+        const PhotonFieldStatus i1 = photonFieldStatus(*s);
+        std::printf("   the generation job's own count: %llu probe integrations (the stop %s, %u of %u probes stopped)\n",
+                    i1.integrations - i0.integrations, i1.stopMinSamples ? "on" : "off", i1.probesStopped, i1.probes);
         std::printf("   the field: %d probes (a whole re-integration is %d x the target %u samples)\n", gs.ifdProbes,
                     gs.ifdProbes, gs.ifdTargetSamples);
     }

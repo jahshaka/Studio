@@ -2408,3 +2408,11 @@ jah_gpu_row(gi.field_dependency CLASS engine COMMAND test_gi_field_dependency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_dependency PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.field_dependency PROPERTIES JAHSHAKA_TEST_FRAMES 476)   # counted from the source (<= 224 settle + 2 x 126)
+# gi.field_variance_stop — THE PER-PROBE VARIANCE STOP AGAINST ITS ORACLE (ENGINE-UPGRADE-2B stage 4):
+# the same room converged with the stop off (every probe to 25 samples, every running mean read), then
+# rebuilt with the stop on; S1-S5 in the source (the replay, the statistics, every probe's stated error,
+# the work, the rest).
+jah_gpu_row(gi.field_variance_stop CLASS engine COMMAND test_gi_field_dependency --stop
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_variance_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.field_variance_stop PROPERTIES JAHSHAKA_TEST_FRAMES 483)   # counted from the source (<= 224 oracle settle + 1 + 4 + <= 224 stop settle + 30)

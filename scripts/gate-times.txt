@@ -208,6 +208,7 @@ gi.far_sun_share 104.33  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_share_c3 4.96  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (4.87/4.96/5.03)
 gi.field_alias 72.80  ship 3a0422b4e (2026-10-13)
 gi.field_dependency 3.59  solo EU-2 stage 2 (2026-10-14)
+gi.field_variance_stop 7.61  spec EU-2B stage 4 (2026-10-14)
 gi.field_edge 8.02  quiet n=29
 gi.field_follows 6.14  quiet n=45
 gi.field_follows.timing 5.40  ship 3a0422b4e (2026-10-13)
