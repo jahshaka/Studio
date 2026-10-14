@@ -55,13 +55,11 @@ ALLOWED = {
     "setName": "both classes mark (SceneNode) / touch (Material)",
     "setGuid": "the material's asset guid; not a rendered field",
     "setRenderLayer": "retired with the legacy render list; nothing reads it",
-    "setBlendState": "iris::RenderStates, hashed through the material fingerprint",
     # NOT NODES. These live under scenegraph/ but are scene-level or helper
     # state the mirror reads through its own signatures, not through a visit.
     "setSkyTextureSource": "iris::Scene's sky; applySky has its own signature",
     "_setMirrorEvacuationHook": "a callback slot on iris::Scene, not document state",
     "setPoseSource": "SocketResolver's pose callback; not a document node at all",
-    "setStagingScene": "iris::graph's process-wide device handle",
     "setSkyTexture": "iris::Scene's sky; applySky keeps its own SkySource signature",
     "setSkyColor": "iris::Scene's sky; same signature",
     "setSkyRealistic": "iris::Scene's sky, and the ONE writer of the realistic dials "
@@ -70,16 +68,11 @@ ALLOWED = {
                        "change is seen without a mark, exactly like setSkyColor beside it. "
                        "It is also called from the Scene CONSTRUCTOR, before any dirty set "
                        "exists to mark into",
-    "setAmbientMusic": "audio; the renderer has no opinion about it",
-    "setAmbientMusicVolume": "audio",
     "setCamera": "iris::Scene's VIEWPORT camera — applyCamera pushes it every frame",
-    "setGraphScene": "the bind itself, and a bind is a full-walk trigger",
     "setOutlineWidth": "iris::Scene; syncHighlight pushes the outline on its own latch",
     "setOutlineColor": "iris::Scene; same",
     "setOutlinePrimaryColor": "iris::Scene; same",
     "setResolution": "iris::ShadowMap; LightNode::setShadowMapResolution is the marked wrapper",
-    "setRasterizerState": "iris::RenderStates, hashed through the material fingerprint",
-    "setDepthState": "iris::RenderStates, hashed through the material fingerprint",
 }
 
 MARKERS = ("notifyChanged", "markedParams", "notifyChangedSubtree", "touch()",

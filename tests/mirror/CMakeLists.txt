@@ -96,7 +96,10 @@ set_tests_properties(mirror.frame_input PROPERTIES
 # derived transform after the frame (1e-6; the engine composes it from the extract's LOCAL records) and every parent /
 # child set equals the engine's (the order is the store's: case H), after a
 # keepTransform reparent, a scale, a rotation, zero-scale parents and a sheared parent; the re-expression keeps the
-# world and stores no NaN (SC1-REEXPRESS-SCALE-1). 7 cases x 2 frames. Case H pins A REAL FIX: since SCENEGRAPH D2 the
+# world and stores no NaN (SC1-REEXPRESS-SCALE-1); case J: a reparent re-tells every document descendant its own graph
+# class (a Movable group under a static one keeps its mesh child dynamic and drawn where the store says; a static
+# group to the root keeps its child static — red before the stage-2 read's fix: the child drawn 2.25 m off, and the
+# static child left dynamic). Case H pins A REAL FIX: since SCENEGRAPH D2 the
 # document's sibling order WAS Ogre's child vector, and Ogre-Next's removeChild is swap-and-pop, so every reparent or
 # delete permuted the remaining siblings (the outliner's order, undo's sibling index, the order a file is saved in);
 # the store keeps the document's order.
@@ -115,7 +118,7 @@ target_include_directories(test_doc_store PRIVATE "${CMAKE_SOURCE_DIR}/irisgl/en
     "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")   # EnginePrivate.h: the engine's own node for a NodeId
 target_link_libraries(test_doc_store PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)   # OgreNext: the engine's cached derived transform, read after a frame
 add_dependencies(test_doc_store JahshakaEngineMedia)
-jah_gpu_row(mirror.doc_store CLASS engine FRAMES 23 COMMAND test_doc_store
+jah_gpu_row(mirror.doc_store CLASS engine FRAMES 37 COMMAND test_doc_store
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.doc_store PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")

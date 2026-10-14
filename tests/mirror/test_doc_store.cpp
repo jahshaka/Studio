@@ -29,6 +29,9 @@
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "../support/testmesh.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -348,6 +351,93 @@ int main(int argc, char **argv)
                                std::fabs(double(w.pos.z()) - p.z) });
         }
         CHECK(worst <= 1e-5, "I ...and the engine composed the subtree where the store says (worst %.2e m)", worst);
+    }
+
+    // J: A REPARENT RE-TELLS THE WHOLE SUBTREE ITS CLASS (the stage-2 read's defect). Ogre's Node::setParent migrates
+    // the reparented node's subtree into the new parent's memory manager and leaves the attachments where they were;
+    // each document descendant must get its OWN class back. (J1) a Movable group with a mesh child dragged under a
+    // static group: the child stays dynamic, Item and node, and after the group moves it DRAWS where the store says
+    // (red before the fix: the child left in the static manager under a dynamic parent, drawn at its old pose).
+    // (J2) the reverse: a static group with a mesh child moved from under a static group to the root keeps the child
+    // static (red before the fix: the child dynamic for good, the static multiplier lost).
+    {
+        const iris::MeshPtr cube = testmesh::load(":assets/models/cube.obj");
+        const iris::MaterialPtr mat = iris::PbrMaterial::create();
+        auto meshChild = [&](const iris::Vec3 &at) {
+            auto mn = iris::MeshNode::create();
+            mn->setMesh(cube);
+            mn->setMaterial(mat);
+            mn->setLocalPos(at);
+            return mn;
+        };
+        auto ground = iris::SceneNode::create();
+        auto groundKid = meshChild(iris::Vec3(0, -1, 0));
+        auto sg = iris::SceneNode::create();
+        auto sgKid = meshChild(iris::Vec3(0, 1, 0));
+        auto mover = iris::SceneNode::create();
+        auto moverKid = meshChild(iris::Vec3(1, 0, 0));
+        mover->setMobility(iris::Mobility::Movable);
+        ground->setLocalPos(iris::Vec3(0, 0, -4));
+        mover->setLocalPos(iris::Vec3(3, 0, 0));
+        doc->getRootNode()->addChild(ground, false);
+        ground->addChild(groundKid, false);
+        ground->addChild(sg, false);
+        sg->addChild(sgKid, false);
+        doc->getRootNode()->addChild(mover, false);
+        mover->addChild(moverKid, false);
+        ground->applyStaticDefaults();
+        mover->applyStaticDefaults();
+        for (int k = 0; k < 4000; ++k) {
+            mirror.sync();
+            engine->renderOneFrame();
+            if (k > 2 && !mirror.staticSettleInProgress()) break;
+        }
+        // The engine's class of a node and of its attachments, against the document's.
+        auto classAgrees = [&](const iris::SceneNodePtr &n) {
+            Ogre::SceneNode *o = ogre(n.data());
+            if (!o || o->isStatic() != n->isStaticInGraph()) return false;
+            for (size_t i = 0; i < o->numAttachedObjects(); ++i)
+                if (o->getAttachedObject(i)->isStatic() != o->isStatic()) return false;
+            return true;
+        };
+        CHECK(ground->isStaticInGraph() && sgKid->isStaticInGraph() && !mover->isStaticInGraph() &&
+                  !moverKid->isStaticInGraph() && classAgrees(ground) && classAgrees(sgKid) && classAgrees(mover) &&
+                  classAgrees(moverKid),
+              "J the fixture: a static group (static mesh child), a Movable group (dynamic mesh child), engine = document");
+        ground->addChild(mover, true);                          // the reparent command's own call
+        frames();
+        CHECK(!mover->isStaticInGraph() && !moverKid->isStaticInGraph() && classAgrees(mover) &&
+                  classAgrees(moverKid),
+              "J1 a Movable group dragged under a static group: it and its mesh child stay dynamic, node and Item "
+              "(engine child static: %d)", int(ogre(moverKid.data())->isStatic()));
+        for (int step = 1; step <= 3; ++step) {
+            mover->setLocalPos(mover->getLocalPos() + iris::Vec3(0.5f, 0.25f, 0));
+            frames();
+        }
+        {
+            Vec3 drawn; Quat qd;
+            const NodeId id = mirror.engineNode(moverKid.data());
+            const bool ok = id && target->nodeWorldPoseDrawn(id, drawn, qd);
+            const iris::graph::Trs w = iris::graph::world(moverKid->docNode());
+            const double e = std::fabs(double(w.pos.x()) - drawn.x) + std::fabs(double(w.pos.y()) - drawn.y) +
+                             std::fabs(double(w.pos.z()) - drawn.z);
+            CHECK(ok && e < 1e-4, "J1 ...the group moved three times: its child DRAWS where the store says "
+                  "(|drawn - store| = %.2e m)", e);
+        }
+        doc->getRootNode()->addChild(sg, false);                // a static group out to the root
+        frames();
+        CHECK(sg->isStaticInGraph() && sgKid->isStaticInGraph() && classAgrees(sg) && classAgrees(sgKid),
+              "J2 a static group moved to the root keeps its mesh child static, node and Item (engine child "
+              "static: %d)", int(ogre(sgKid.data())->isStatic()));
+        {
+            Vec3 drawn; Quat qd;
+            const NodeId id = mirror.engineNode(sgKid.data());
+            const bool ok = id && target->nodeWorldPoseDrawn(id, drawn, qd);
+            const iris::graph::Trs w = iris::graph::world(sgKid->docNode());
+            const double e = std::fabs(double(w.pos.x()) - drawn.x) + std::fabs(double(w.pos.y()) - drawn.y) +
+                             std::fabs(double(w.pos.z()) - drawn.z);
+            CHECK(ok && e < 1e-4, "J2 ...and draws where the store says (|drawn - store| = %.2e m)", e);
+        }
     }
 
     mirror.setSource(nullptr);

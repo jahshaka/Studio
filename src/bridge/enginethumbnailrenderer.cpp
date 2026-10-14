@@ -221,10 +221,10 @@ void EngineThumbnailRenderer::releaseSubject(bool sceneAlive)
     // destroyMaterial on the horizon and the GI-volume overlay, destroyMaterial
     // on the highlight, then releaseEntry for every entry). Calling it with the
     // Engine gone is a read-after-free where the present behaviour is one
-    // warning: ~SceneMirror takes the document out of the dead manager and
-    // iris::Scene::setGraphScene says so by design ("SceneMirror must unbind
-    // (setSource(null)) before Engine::destroyScene()", scene.cpp:1083-1093),
-    // dropping every stale handle instead of walking it.
+    // warning: ~SceneMirror lets go of the document (iris::Scene::bindMirror
+    // fires the old owner's evacuation hook) and drops every stale engine id
+    // instead of walking it — the mirror must unbind (setSource(null)) before
+    // Engine::destroyScene().
     //
     // AND NO SHIPPING PATH REACHES IT: EngineHost::shutdown calls
     // EngineThumbnailRenderer::shutdown() (enginehost.cpp:583) BEFORE
