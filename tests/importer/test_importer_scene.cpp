@@ -164,6 +164,38 @@ int main(int argc, char **argv)
           QStringLiteral("GlassBox: opacity 0.25 imports as Glass at alpha 0.25 (mode %1, alpha %2)")
               .arg(glassMode).arg(glassAlpha));
 
+    // (d) A BOUND MAP IS THE VALUE (BISTRO-FIXES-2 stage 1, the shadow audit's double
+    //     roughness). Every fixture material is a Phong with ShininessExponent 20, from
+    //     which assimp derives roughness 1 - sqrt(20)/10 = 0.5528; the renderer multiplies
+    //     factor x map, so a factor left beside the bound split pair counts twice.
+    //     Base: SpecCube roughness 0.5528 and metallic 0 (the product 0.208, not the
+    //     map's 0.376; the metallic map's 1 rendered as 0).
+    const double cubeRough = cube.value("roughness").toDouble(-1);
+    const double cubeMetal = cube.value("metallic").toDouble(-1);
+    CHECK(std::fabs(cubeRough - 1.0) < 1e-6 && std::fabs(cubeMetal - 1.0) < 1e-6,
+          QStringLiteral("SpecCube: under bound maps the factors are 1 (roughness %1, metallic %2)")
+              .arg(cubeRough).arg(cubeMetal));
+    // ...so the rendered product IS the map: factor x the roughness map's mean texel.
+    double roughMean = -1;
+    {
+        const QImage r = QImage(tex + "CubeMat_Specular_roughness.png").convertToFormat(QImage::Format_Grayscale8);
+        double sum = 0;
+        for (int y = 0; y < r.height(); ++y)
+            for (int x = 0; x < r.width(); ++x) sum += r.constScanLine(y)[x];
+        if (!r.isNull()) roughMean = sum / (255.0 * r.width() * r.height());
+    }
+    CHECK(std::fabs(cubeRough * roughMean - 96.0 / 255.0) < 1e-6,
+          QStringLiteral("SpecCube: the roughness product is the map's value (%1 x %2 = %3, the map 0.3765)")
+              .arg(cubeRough).arg(roughMean).arg(cubeRough * roughMean));
+    //     ...and with NO map the file's scalar stands. Base: 0.5528 and 0 (green there).
+    const QJsonObject leafMat = materialOf(blob, "LeafPlane");
+    const double leafRough = leafMat.value("roughness").toDouble(-1);
+    const double leafMetal = leafMat.value("metallic").toDouble(-1);
+    const double fromShininess = 1.0 - std::sqrt(20.0) / 10.0;
+    CHECK(std::fabs(leafRough - fromShininess) < 1e-5 && std::fabs(leafMetal) < 1e-6,
+          QStringLiteral("LeafPlane: no map, the file's scalars (roughness %1 = 1 - sqrt(20)/10, metallic %2)")
+              .arg(leafRough).arg(leafMetal));
+
     // ---- STAGE 2: THE SCENE --------------------------------------------------
     std::printf("--- stage 2: the scene\n");
     // (b) the root takes the asset's name. Base: "RootNode".
