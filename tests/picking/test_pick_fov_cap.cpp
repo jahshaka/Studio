@@ -211,7 +211,7 @@ int main(int argc, char **argv)
         view->setScene(s);
 
         // EXACTLY what the app pushes for its explorer (scenemirror.cpp
-        // applyCamera + enginesceneviewport freeCameraFramingAspect).
+        // buildCamera + enginesceneviewport freeCameraFramingAspect).
         CameraDesc cd;
         cd.position = kCamPos;
         cd.orientation = Quat();          // identity: looking down -Z

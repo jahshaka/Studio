@@ -790,16 +790,9 @@ static void scanCostCase(int n)
     EngineConfig cfg = config("spike-scancost.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
-    // THE MOVEMENT EPOCH (clean-2 lane, 2026-09-13). This harness writes every
-    // transform through the ENGINE (setNodeTransform), never through a document
-    // graph, so the host half of the epoch is a counter that never moves —
-    // which is exactly what `setTransformWriteCounter` is for. Without one the
-    // engine cannot know a host is not writing behind its back and scans every
-    // frame, so a pure-engine host has to say so.
-    // JAH_SCANCOST_NOEPOCH=1 withholds it, which is the A/B for the skip: the
-    // engine then scans every frame, as it did before the epoch existed.
-    static std::atomic<unsigned long long> noHostWrites{ 0 };
-    if (!std::getenv("JAH_SCANCOST_NOEPOCH")) engine->setTransformWriteCounter(&noHostWrites);
+    // THE MOVEMENT GATE (U0 3b): this harness writes every transform through the ENGINE (setNodeTransform), and the
+    // engine's scans re-read exactly what its writes name — nothing to install. (The JAH_SCANCOST_NOEPOCH A/B — the
+    // engine without a host counter, scanning every frame — is gone with the counter.)
     View *v = engine->createOffscreenView("spike", 64, 64, Colour(0, 0, 0));
     Scene *s = engine->createScene("scancost");
     v->setScene(s);

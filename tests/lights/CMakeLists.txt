@@ -61,7 +61,7 @@ target_compile_definitions(test_light_hygiene PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_light_hygiene PRIVATE JahshakaEngine)
 add_dependencies(test_light_hygiene JahshakaEngineMedia)
-jah_gpu_row(lights.hygiene CLASS engine COMMAND test_light_hygiene
+jah_gpu_row(lights.hygiene CLASS engine COLD "counts the compiles a light edit causes, a warm cache would load them and hide a new variant" COMMAND test_light_hygiene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.hygiene PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(lights.hygiene PROPERTIES JAHSHAKA_TEST_FRAMES 52)

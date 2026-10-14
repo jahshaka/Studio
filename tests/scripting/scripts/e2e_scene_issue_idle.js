@@ -8,7 +8,7 @@
 // build, which was the owner's Bistro session (218 heartbeat lines of ~430 ms,
 // once a second, with nothing moving). Each node's answers are now cached and a
 // pass re-checks only the nodes the document wrote — the node graph's write
-// journal, through a tap (graph::openJournalTap).
+// journal, through the checker's own cursor with the written half (graph::WriteJournalReader).
 //
 // COUNTS, NEVER TIME. `editor.checkScene()` is the timer's pass (one call, one
 // pass); its `walked.nodes` is what THAT pass re-checked, `walked.visited` the

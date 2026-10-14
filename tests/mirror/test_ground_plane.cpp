@@ -43,6 +43,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -97,7 +98,7 @@ int main(int argc, char **argv)
     planeMaterial->setValue("roughness", 1.0f);
     mirror.setGroundPlaneMaterial(planeMaterial);
     mirror.sync();
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     Image img;
     const auto renderN = [&](int n) {
@@ -217,7 +218,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0.0f, 0.0f, -8.0f));
         const auto shadowedPlanePixels = [&](int frames) {
             renderN(frames);
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::camera(view, cam));
             renderN(frames);
             std::vector<float> lum;
             for (unsigned y = 0; y < kSize; ++y)
@@ -256,7 +257,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0.0f, -3.0f, -6.0f));
         const auto boxTop = [&]() {
             renderN(8);
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::camera(view, cam));
             renderN(8);
             double sum = 0; int n = 0;
             for (unsigned y = kSize / 2 - 6; y < kSize / 2 + 6; ++y)
@@ -281,7 +282,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(0.0f, 1.6f, 0.0f));
         cam->lookAt(iris::Vec3(0.0f, 1.55f, -100.0f));
         renderN(4);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
     }
     mirror.setGroundPlane(false);
 
@@ -331,7 +332,7 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 1.0f, 0.0f));
     cam->lookAt(iris::Vec3(0.0f, 0.0f, -6.0f));
     renderN(8);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
     renderN(2);
 
     const auto centreIsSky = [&]() {

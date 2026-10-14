@@ -329,7 +329,7 @@ int main(int argc, char **argv)
     std::string err;
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     if (wantCost) return costMain(e, costChars, costRings);
     if (wantMirror) return mirrorMain(e);

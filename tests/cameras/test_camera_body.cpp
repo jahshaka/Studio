@@ -38,6 +38,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -120,7 +121,7 @@ int main(int argc, char **argv)
     Image img;
     auto frame = [&](Image &out) {
         mirror.sync();
-        mirror.applyCamera(editorCam, view);
+        mirror.sync(mirrorframe::camera(view, editorCam));
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(out);
     };
@@ -246,7 +247,7 @@ int main(int argc, char **argv)
     {
         auto frameThrough = [&](Image &out) {
             mirror.sync();
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::camera(view, cam));
             for (int i = 0; i < 2; ++i) engine->renderOneFrame();
             view->readPixels(out);
         };
@@ -298,7 +299,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0, 0, -1.5f));
         cam->focusDistance = 3.0f;
         cam->focusPlaneVisible = false;
-        // One SETTLING frame first. sync() runs before applyCamera inside
+        // One SETTLING frame first. sync() runs before buildCamera inside
         // frame(), so the first frame after the view stops rendering THROUGH
         // this camera still has its helpers hidden (a camera never draws
         // itself) — comparing against that frame would be comparing against a

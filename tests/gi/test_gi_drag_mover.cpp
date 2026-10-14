@@ -44,6 +44,7 @@
 // Its own binary like every GI suite. RUN_SERIAL because it counts per-frame
 // work.
 #include "jahshaka/engine/Engine.h"
+#include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -104,9 +105,11 @@ static void drag(Engine *e, Scene *s, NodeId node, Vec3 &pos, float step, int fr
 {
     for (int i = 0; i < frames; ++i) {
         pos.x += step;
+        enginetest::gesture(e, s, { node });     // the hand is on it (U0 3c: the host says so)
         enginetest::setNodePosition(s, node, pos);
         render(e, 1);
     }
+    enginetest::gesture(e, s, {});              // ...and lets go
 }
 
 int main()
@@ -115,7 +118,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-drag-mover-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("dragmover", kSize, kSize, Colour(0, 0, 0));
@@ -191,7 +194,16 @@ int main()
     // the rule off, and "the same pose reached both ways" means the same START
     // and the same steps, not merely the same number of them.
     const Vec3 gestureStart = propPos;
-    drag(e, s, prop, propPos, 0.08f, 40);
+    // THE FIRST FRAME OF THE GESTURE PROMOTES (U0 3c): the host says the hand is on it, so the first move is the
+    // drag — nothing waits for a second move to infer one.
+    propPos.x += 0.08f;
+    enginetest::gesture(e, s, { prop });
+    enginetest::setNodePosition(s, prop, propPos);
+    render(e, 1);
+    CHECK_MSG(s->giStatus().dragMovers == 1 && s->giStatus().gestureActive,
+              "the gesture's FIRST moved frame puts the object on the mover channel (dragMovers %d)",
+              s->giStatus().dragMovers);
+    drag(e, s, prop, propPos, 0.08f, 39);
     const GiStatus onMid = s->giStatus();
     const unsigned long long onDrag = cascadeRebuilds(onMid) - rebuildsBeforeOn;
     std::printf("   40 dragged frames: %llu cascade re-voxelisations, dragMovers %d\n",
@@ -209,7 +221,13 @@ int main()
     // CASE 4 — AND IT GOES BACK TO BEING STILL WORLD
     // =====================================================================
     std::printf("\n== case 4: the gesture ends ==\n");
-    render(e, 60);
+    // THE RELEASE DEMOTES ON ITS OWN FRAME (U0 3c): the record that ends the gesture is drained by the next frame,
+    // and that frame puts the object back — no quiet window inferred from motion.
+    render(e, 1);
+    CHECK_MSG(s->giStatus().dragMovers == 0 && !s->giStatus().gestureActive,
+              "the frame after the release, the object is still world again (dragMovers %d)",
+              s->giStatus().dragMovers);
+    render(e, 59);
     const GiStatus rest = s->giStatus();
     const unsigned long long onTotal = cascadeRebuilds(rest) - rebuildsBeforeOn;
     std::printf("   at rest: dragMovers %d, gestures %llu, re-voxelisations over the whole "

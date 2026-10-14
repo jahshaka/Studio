@@ -501,17 +501,18 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     mStats.nodesVisited = 0;
 
     // ---- THE NODE CHECKS: what the document wrote since the last pass ------
-    // The tap on the node graph's write journal names every document node
-    // written since the last drain (graph::openJournalTap). A MOVED node is
+    // This checker's cursor on the node graph's write journal names every
+    // document node written since its last take (graph::WriteJournalReader,
+    // with the journal's written half). A MOVED node is
     // re-checked with its subtree (its world pose moved theirs); a WRITTEN one
     // alone (a material swap, a flag, a parameter: its own answers); a node no
     // longer in this scene leaves the cache with its subtree. Then the nodes
     // whose material's revision moved, and those whose texture file the disk
     // reported. Nothing written = nothing visited.
     {
-        if (mTap < 0) mTap = iris::graph::openJournalTap();
         std::vector<iris::graph::NodeHandle> moved, written;
-        const iris::graph::TapDrain drain = iris::graph::drainJournalTap(mTap, moved, written);
+        int gone = 0;
+        const bool complete = mJournal.take(moved, written, &gone);
         if (++mScansSinceRecheck >= kTextureRecheckScans) {
             mScansSinceRecheck = 0;
             startTextureRestat();
@@ -526,7 +527,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             for (int i = 0; i < kids; ++i) walk(n->childAt(i));
         };
         const auto inScene = [here](iris::SceneNode *n) { return n && n->getScene().data() == here; };
-        if (mCheckedScene.toStrongRef() != scene || !drain.complete) {
+        if (mCheckedScene.toStrongRef() != scene || !complete) {
             // A NEW SCENE, or a write the journal cannot name (an engine-owned
             // node): the one whole walk.
             forgetWalks();
@@ -553,7 +554,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 checkNode(n);
             }
             // Destroyed since their write: their entries hold dead weak refs.
-            if (drain.gone) {
+            if (gone) {
                 for (auto it = mChecks.begin(); it != mChecks.end();) {
                     if (it->node.isNull()) { it = mChecks.erase(it); mLeakDirty = true; }
                     else ++it;

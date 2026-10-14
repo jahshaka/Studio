@@ -47,6 +47,7 @@
 // THE STARVATION BOUND: no pending card waits N = ceil(selected / traced a frame)
 // frames (exit 1 if one does).
 #include "jahshaka/engine/Engine.h"
+#include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -111,7 +112,7 @@ int main(int argc, char **argv)
     std::string err;
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     if (wantCost) return costMain(e);
 
@@ -439,6 +440,7 @@ int main(int argc, char **argv)
         int promotedAt = -1, lateDrag = 0, dragFrames = 0;
         for (int f = 0; f < 20; ++f) {
             stillZ -= 0.1f;
+            enginetest::gesture(e, s, { still });   // the hand is on it (U0 3c)
             enginetest::setNodePosition(s, still, Vec3(-0.6f, 0.6f, stillZ));
             render(e, 1);
             if (promotedAt < 0 && s->giStatus().dragMovers == 1) promotedAt = f;
@@ -446,6 +448,7 @@ int main(int argc, char **argv)
             ++dragFrames;
             if (!dark(stillZ)) ++lateDrag;
         }
+        enginetest::gesture(e, s, {});              // ...and lets go
         int demotedAt = -1, lateRest = 0, restFrames = 0;
         for (int f = 1; f <= 240; ++f) {
             render(e, 1);

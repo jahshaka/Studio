@@ -80,28 +80,28 @@ node.transform(lamp, { position: { x: 3, y: 4.5, z: 0 } });
 world.refreshGi();
 editor.frame(30);
 var reference = shot("lamp_rest_reference");
-var refSolves = editor.mirrorStats().giRefreshes;
+var refSolves = world.giStatus().scheduler.resolves;
 
 // ---- AND THE SAME POSE, TRAVELLED TO --------------------------------------
 node.transform(lamp, { position: { x: -3, y: 4.5, z: 0 } });
 world.refreshGi();
 editor.frame(30);
-var before = editor.mirrorStats();
+var before = world.giStatus().scheduler;
 for (var f = 1; f <= 60; ++f) {                 // 60 frames of travel
     node.transform(lamp, { position: { x: -3 + 0.1 * f, y: 4.5, z: 0 } });
     editor.frame(1);
 }
 editor.frame(40);                               // ...and let it rest
-var after = editor.mirrorStats();
+var after = world.giStatus().scheduler;
 var rested = shot("lamp_rest_travelled");
 
 console.log("light-only re-injects during and after the travel: " +
-            (after.giLightRefreshes - before.giLightRefreshes) +
-            " (of them AT REST: " + (after.giLightRefreshesAtRest - before.giLightRefreshesAtRest) +
-            "), full re-solves: " + (after.giRefreshes - before.giRefreshes));
-assert(after.giLightRefreshes - before.giLightRefreshes >= 2,
+            (after.lightTicks - before.lightTicks) +
+            " (of them AT REST: " + (after.lightTicksAtRest - before.lightTicksAtRest) +
+            "), full re-solves: " + (after.resolves - before.resolves));
+assert(after.lightTicks - before.lightTicks >= 2,
        "the mirror re-injected on its cadence while the lamp moved");
-assert(after.giRefreshes === before.giRefreshes,
+assert(after.resolves === before.resolves,
        "and NOT ONE full re-solve happened — that is O2, and it still holds");
 // THE FIX ITSELF. Every tick taken while the lamp was moving injected ONE
 // bounce; exactly one tick after it stopped must have run the scene's full
@@ -109,7 +109,7 @@ assert(after.giRefreshes === before.giRefreshes,
 // fails on the old code (measured: 0 at-rest ticks), and the pixel comparison
 // below is its second reading — deliberately, because the two pictures differ
 // by about 1/255 in a room like this and a probe test alone could not carry it.
-assert(after.giLightRefreshesAtRest - before.giLightRefreshesAtRest === 1,
+assert(after.lightTicksAtRest - before.lightTicksAtRest === 1,
        "and exactly ONE of those injections was the at-rest one, at the full bounce count");
 
 var worst = 0, worstProbe = 0;

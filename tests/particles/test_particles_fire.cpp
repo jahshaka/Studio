@@ -106,7 +106,7 @@ int main(int argc, char **argv)
     // Frame all of it: a plume clipped by the top of the image has no tip to
     // measure, and the first run of this gate found exactly that.
     enginetest::testCameraLookAt(view, Vec3(0, 2.0f, 6.5f), Vec3(0, 2.0f, 0));
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
 
     // ---- the SHIPPING recipe, through the document and the mirror ----------
     // WITH ITS TEXTURE, and the first run is why. An untextured particle is a
@@ -317,7 +317,7 @@ int main(int argc, char **argv)
     CHECK(movedPct > 5, "5. the flame moves — it is a simulation, not a frozen sprite");
 
     // ---- 6. it STOPS ------------------------------------------------------
-    engine->setFixedFrameDelta(0.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
     engine->renderOneFrame();
     Image f1, f2;
     view->readPixels(f1);
@@ -331,7 +331,7 @@ int main(int argc, char **argv)
         }
     std::printf("    frozen: %d pixels differ over 30 frames\n", frozenDiff);
     CHECK(frozenDiff == 0, "6. the clock at 0 freezes it exactly (not approximately)");
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
 
     mirror.setSource(nullptr);
     engine->destroyView(view);

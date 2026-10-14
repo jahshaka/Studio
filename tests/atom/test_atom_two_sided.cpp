@@ -234,7 +234,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-atom-two-sided-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Fixture F;
     F.e = engine.get();
     F.view = F.e->createOffscreenView("twosided", kW, kH, Colour(0, 0, 0));

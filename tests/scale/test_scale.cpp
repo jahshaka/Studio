@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "../support/gesture.h"
 
 #include "bridge/sceneworkerthreads.h"
 #include "jahshaka/engine/GpuSubstrate.h"
@@ -2266,10 +2267,12 @@ static int cpuWalksMain()
     };
     size_t frames = 0;
     auto measure = [&](const char *label, bool move) {
+        std::vector<double> giScan;   // THE GI WALK (giScanMicros: the last scan that RAN; 0 on a skipped frame)
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 120; ++f) {
                 if (move) mover->setLocalPos(home + iris::Vec3(0.02f * float(f % 2 ? 1 : -1), 0, 0));
                 frame(env, 1);
+                giScan.push_back(env.scene->giStatus().giScanMicros);
             }
         });
         std::array<double, 5> med{};
@@ -2291,6 +2294,9 @@ static int cpuWalksMain()
                     " | cards.lights %6.3f ms (medians; frames carrying each: %zu %zu %zu %zu %zu)\n",
                     label, recs.size(), med[0], med[1], med[2], med[3], med[4], seen[0], seen[1], seen[2], seen[3],
                     seen[4]);
+        std::printf("W13 %-10s gi walk (giScanMicros) median %8.1f us, max %8.1f us over %zu frames\n", label,
+                    giScan.empty() ? 0.0 : stats(giScan).median,
+                    giScan.empty() ? 0.0 : *std::max_element(giScan.begin(), giScan.end()), giScan.size());
         return med;
     };
     const Visits v0 = visits();
@@ -2645,8 +2651,8 @@ static int latticeOwedMain()
     }
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
-    // THE DRAG: one cube moved every frame for 60 frames — a still node moved on
-    // consecutive ticks IS the engine's drag (OgreGi.cpp:4053, MOVER-1's promotion) —
+    // THE DRAG: one cube moved every frame for 60 frames under the host's GESTURE (U0 3c: the record says
+    // it is held — MOVER-1's promotion) —
     // and the scene-graph updates the GI side adds per frame (the gi.sceneGraph monitor
     // stages, one per call). Two arms: the mover channel ON (the default, per project)
     // and OFF (giDragMoverChannel 0, the older behaviour a project may still choose).
@@ -2658,11 +2664,14 @@ static int latticeOwedMain()
         const iris::Vec3 p0 = cubeNode->getLocalPos();
         int dragMovers = 0;
         const auto drag = collect(env, [&] {
+            const jahshaka::engine::NodeId held = env.mirror->engineNode(cubeNode.data());
             for (int f = 0; f < 60; ++f) {
+                enginetest::gesture(env.engine.get(), env.scene, { held });   // the hand is on it (U0 3c)
                 cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));
                 frame(env, 1);
                 dragMovers = std::max(dragMovers, env.scene->giStatus().dragMovers);
             }
+            enginetest::gesture(env.engine.get(), env.scene, {});
         });
         std::vector<double> calls, ms;
         for (const FrameRecord &r : drag) {

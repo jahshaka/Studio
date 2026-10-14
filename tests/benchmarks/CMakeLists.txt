@@ -1,16 +1,9 @@
-# The scene-graph BENCHMARK GATE (SPECS/SCENEGRAPH_SPEC.md §6).
-#
-# One binary, two modes (the header comment of bench_scenegraph.cpp is the
-# reference):
-#   ./bench_scenegraph --assert          gating: stability bounds + numbers exist
-#   ./bench_scenegraph --record <file>   emits the JSON result/baseline file
-#
-# WHAT CTEST RUNS IS --assert ONLY, and deliberately so. A recorded number is
-# only comparable against numbers taken the same way on the same box; a gate
-# that rewrote the baseline every run would compare a machine to itself under
-# whatever load it happened to be under. The committed baseline
-# (tests/benchmarks/baseline-linux.json) is produced by hand, from a build made
-# WITHOUT any sanitizer, on a quiet box — see that file's `config` block.
+# The scene-graph BENCHMARK — a MEASURE (SPECS/SCENEGRAPH_SPEC.md; the header comment of bench_scenegraph.cpp is
+# the reference):
+#   ./bench_scenegraph --assert          the measure's own physics: every metric exists, its dispersion holds
+#   ./bench_scenegraph --record <file>   ...and the JSON result file (the evidence)
+# It compares against no recorded file (ENGINE-UPGRADE-1 stage 2 deleted scenegraph.baseline and
+# baseline-linux.json); the reparent's law in counts is mirror.reparent_local's.
 #
 # It links exactly what the mirror suite links (IrisGL + JahshakaEngine + the
 # mirror TU, which is not part of either library), because "document edit ->
@@ -21,15 +14,13 @@
 #   <bench>.benchmark  --assert  LABELS "stage-close;quiet-box" STAGE-CLOSE, RUN_SERIAL, the GPU lock
 #   <bench>.smoke      --smoke   LABELS "benchmark-smoke"   MERGE, parallel
 #
-# The full `--assert` run is a TIMING VERDICT: five minutes of scene-graph
-# measurement compared against a committed baseline, RUN_SERIAL because a
-# parallel ctest schedule turns its regress clause into random reds. A merge
+# The full `--assert` run is five minutes of scene-graph measurement, RUN_SERIAL because a parallel ctest
+# schedule turns its dispersion bars into random reds. A merge
 # gate paid the whole of that wall time (287 s recorded, 518 s in a live -j2
 # gate) for a verdict its own comment already disowns on a loaded box. What a
 # merge gate needs is the STRUCTURAL half — every document node reached the
 # engine, the static tags landed, a frame rendered — which is what `--smoke`
-# runs, at one scale, in about fifteen seconds, with no baseline compare and no
-# dispersion bound, so it neither needs nor deserves RUN_SERIAL.
+# runs, at one scale, in about fifteen seconds, with no dispersion bound, so it neither needs nor deserves RUN_SERIAL.
 #
 # The MERGE tier's -LE (`gate-scope.py --merge-tier`, label `stage-close`) therefore skips
 # the minutes and KEEPS the structure; the stage-close tier (`--stage-close-tier`) gets the
@@ -37,8 +28,8 @@
 # was also the tree's stage-close marker for rows that are not benchmarks at all.)
 find_package(Qt6 REQUIRED COMPONENTS Gui)
 
-# The fingerprint the baseline file records. Resolved at CONFIGURE time — a
-# baseline whose commit is unknown cannot be compared against anything.
+# The fingerprint the result file records. Resolved at CONFIGURE time — a
+# record whose commit is unknown says nothing about which build it measured.
 execute_process(COMMAND git -C "${CMAKE_SOURCE_DIR}" rev-parse --short=8 HEAD
                 OUTPUT_VARIABLE JAH_BENCH_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE
                 ERROR_QUIET)
@@ -62,14 +53,13 @@ target_compile_definitions(bench_scenegraph PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
     BENCH_GIT_COMMIT="${JAH_BENCH_COMMIT}"
     BENCH_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
-    BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
-    BENCH_BASELINE_FILE="${CMAKE_CURRENT_SOURCE_DIR}/baseline-linux.json")
+    BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
 # THE PHYSICS BARS (MIRROR-SETTLE-1 fix round 3): --assert asserts the dispersion bars and the settle slice's bound
-# only, and records the result file scenegraph.baseline compares (bench_scenegraph.cpp, "TWO ROWS").
+# only, and records its result file (the measure's evidence).
 jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
          --record "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -81,19 +71,7 @@ jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 C
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "measure"
-    RUN_SERIAL TRUE FIXTURES_SETUP scenegraph-result)
-
-# THE §6 TREND CHECK: the result file scenegraph.benchmark recorded against the committed baseline (28b91f49) —
-# two files, no engine, no display (jah_no_display: it boots nothing), red on any violated §6 clause. It reads the
-# quiet-box row's output, so it runs in the same phase; the fixture orders it after the run under any -j.
-# TIMEOUT (the policy, tests/CMakeLists.txt): max(6 x 0.018, 0.018) s -> the 120 s floor. Sample: n=3 runs of the
-# compare alone (0.018 / 0.018 / 0.017 s, median 0.018, worst 0.018), warm, 2026-10-11 08:3x, no sibling ctest.
-add_test(NAME scenegraph.baseline COMMAND bench_scenegraph --compare
-         "${CMAKE_CURRENT_SOURCE_DIR}/baseline-linux.json" "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scenegraph.baseline PROPERTIES
-    LABELS "measure" FIXTURES_REQUIRED scenegraph-result TIMEOUT 120)
-jah_no_display(scenegraph.baseline)
+    RUN_SERIAL TRUE)
 
 jah_gpu_row(scenegraph.smoke CLASS engine COMMAND bench_scenegraph --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
@@ -167,7 +145,6 @@ add_dependencies(atom_bound_measure JahshakaEngineMedia)
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "rigperf.smoke=39"
-        "scenegraph.baseline=0"
         "scenegraph.smoke=370"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

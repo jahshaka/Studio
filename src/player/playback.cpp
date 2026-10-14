@@ -237,7 +237,7 @@ void PlayBack::playScene()
 	// from frame one with nothing the user can release to stop it.
 	clearInputState();
 	// The DOCUMENT's play flag (CAMERAS_SPEC D6). It is what
-	// SceneMirror::applyCamera reads to decide whether the scene's active
+	// SceneMirror::buildCamera reads to decide whether the scene's active
 	// camera takes the view, and PlayBack is the one place both play paths —
 	// editor play-in-place and the player view — pass through. A PAUSED scene
 	// stays "playing": the shot must not cut back to the explorer on pause.

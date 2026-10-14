@@ -445,7 +445,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-contact-occlusion-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Fixture f;
     f.e = engine.get();
     CHECK(build(f), "the fixture builds (a floor, a 2 x 0.2 x 40 m wall, a 2 m cube, a constant sky)");

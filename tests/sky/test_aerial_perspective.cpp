@@ -180,7 +180,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-aerial-perspective-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
 
     Rig r;
     r.e = engine.get();

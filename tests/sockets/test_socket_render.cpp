@@ -5,7 +5,7 @@
 //
 //     engine SkeletonInstance (the pose)  ->  SceneMirror::boneWorldTransforms
 //     ->  iris::SocketResolver  ->  the attached CameraNode's transform
-//     ->  SceneMirror::applyCamera  ->  a rendered frame
+//     ->  SceneMirror::buildCamera  ->  a rendered frame
 //
 // and it asserts on the FRAME, because every link in that chain can be subtly
 // wrong (a missing mesh-node transform, bone-parent-local FK, the one-frame
@@ -47,6 +47,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include "../skeletal/armrig.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -144,7 +145,7 @@ int main(int argc, char **argv)
             mirror.sync();
             engine->renderOneFrame();
         }
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(out);
     };
@@ -233,7 +234,7 @@ int main(int argc, char **argv)
         const auto oneStep = [&](float t, Image &out) {
             doc->updateSceneAnimation(t);
             mirror.sync();
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::camera(view, cam));
             engine->renderOneFrame();
             view->readPixels(out);
         };

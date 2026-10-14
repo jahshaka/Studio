@@ -334,6 +334,19 @@ def fresh_home_behaves(source):
         check(r.returncode == 4 and os.path.isdir(os.path.join(ph, "run"))
               and os.path.isdir(os.path.join(td, ".evidence", "pool-home-toy")),
               "fresh_home: ...a red pool's home goes to the evidence and its working directory is re-created too")
+        # A KEYED CACHE (ENGINE-UPGRADE-1): --cache <key> promotes into and links from .shadercache-<key>, never the
+        # default one; a bad key is refused
+        hk = os.path.join(td, "x", "home-k")
+        wk = "mkdir -p %s/%s && head -c 8192 /dev/zero > %s/%s/k.bin" % (hk, cache, hk, cache)
+        r = subprocess.run(["sh", fh, "--warm", "--cache", "engine", hk, "--", "sh", "-c", wk], capture_output=True, text=True)
+        rk = subprocess.run(["sh", fh, "--warm", "--cache", "engine", hk, "--", "sh", "-c",
+                             "test -f %s/%s/k.bin && test ! -f %s/%s/a.bin" % (hk, cache, hk, cache)], capture_output=True)
+        bad = subprocess.run(["sh", fh, "--warm", "--cache", "../x", hk], capture_output=True)
+        check(r.returncode == 0 and os.path.isfile(os.path.join(td, ".shadercache-engine", "k.bin"))
+              and not os.path.isfile(os.path.join(td, ".shadercache", "k.bin")) and rk.returncode == 0
+              and bad.returncode == 2,
+              "fresh_home: --cache <key> keeps its own shared cache (.shadercache-<key>: promoted there, linked from there, "
+              "the default one untouched) and refuses a key outside [a-z0-9_] (%d %d %d)" % (r.returncode, rk.returncode, bad.returncode))
         procs = []
         for k in range(12):
             h = os.path.join(td, "x", "home-c%d" % k)

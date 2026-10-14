@@ -10,7 +10,7 @@
 // "materials -> editor". The binding is a POINTER; the arms were still valid.
 //
 // Asserted through the counters that would move if anything were rebuilt:
-// editor.mirrorStats().giPushes (the mirror's full pushes) and
+// world.giStatus().scheduler.pushes (the renderer's configuration pushes) and
 // world.giStatus().rebuilds (the engine's from-scratch builds), and the whole
 // giStatus reading before and after.
 //
@@ -81,7 +81,7 @@ var box = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 0 } });
 assert(box.length > 10, "a cube in the default scene");
 
 var st0 = settle("fresh project");
-var m0 = editor.mirrorStats();
+var m0 = world.giStatus().scheduler;
 console.log("before: " + JSON.stringify(st0) + " mirror " + JSON.stringify(m0));
 assert(st0.live === true, "giStatus is live");
 assert(st0.mode === "vct_pcc_hybrid", "the default project runs the VCT + probes hybrid");
@@ -101,7 +101,7 @@ assert(st0.vctBound, "the editor scene binds its own GI arms");
 assert(st0.probeCount > 0 && st0.probesDropped > 0 && st0.pccBound,
        "the probes that can see the scene's content are built and the rest dropped: " +
        JSON.stringify({ probes: st0.probeCount, dropped: st0.probesDropped }));
-assert(m0.available === true, "mirrorStats available");
+assert(world.giStatus().live === true, "giStatus is live");
 
 // ---- phase 1: editor -> assets / materials -> editor ------------------------
 ["assets", "materials"].forEach(function (page) {
@@ -109,11 +109,11 @@ assert(m0.available === true, "mirrorStats available");
     assert(app.space("editor"), "back to the editor");
     editor.frame(10);
     var st1 = world.giStatus();
-    var m1 = editor.mirrorStats();
+    var m1 = world.giStatus().scheduler;
     console.log("after " + page + ": " + JSON.stringify(st1) + " mirror " + JSON.stringify(m1));
-    assert(m1.giPushes === m0.giPushes,
-           page + " round trip: NO GI re-push (" + m0.giPushes + " -> " + m1.giPushes + ")");
-    assert(m1.giRefreshes === m0.giRefreshes, page + " round trip: no GI re-solve either");
+    assert(m1.pushes === m0.pushes,
+           page + " round trip: NO GI re-push (" + m0.pushes + " -> " + m1.pushes + ")");
+    assert(m1.resolves === m0.resolves, page + " round trip: no GI re-solve either");
     sameGi(st0, st1, page + " round trip");
     assert(st1.staleProbes === 0 && st1.probeCapturesLastFrame === 0,
            page + " round trip: nothing stale, nothing re-captured");
@@ -127,12 +127,12 @@ console.log("editor scene while the player runs: pccBound=" + inPlayer.pccBound 
             " vctBound=" + inPlayer.vctBound);
 assert(app.space("editor"), "back to the editor");
 var st2 = settle("player round trip");
-var m2 = editor.mirrorStats();
+var m2 = world.giStatus().scheduler;
 console.log("after player: " + JSON.stringify(st2) + " mirror " + JSON.stringify(m2));
 assert(st2.vctBound && st2.pccBound === st0.pccBound,
        "player round trip: the editor scene still binds its own GI arms");
-assert(m2.giPushes === m0.giPushes,
-       "player round trip: NO GI re-push from the mirror (" + m0.giPushes + " -> " + m2.giPushes + ")");
+assert(m2.pushes === m0.pushes,
+       "player round trip: NO GI re-push from the mirror (" + m0.pushes + " -> " + m2.pushes + ")");
 // ONE SCENE, SO NOTHING IS REBUILT (lane PLAYER-1). The header says what this
 // used to pin and why; a regression to the two-scene shape, or any other
 // from-scratch build on a page switch, fails here.

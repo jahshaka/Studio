@@ -221,7 +221,9 @@ editor.frame(300);
 /// Part two: the rays come off and the picture settles again. A separate
 /// evaluation because the screenshot between them is the RUNNER's.
 /// THE MOVER (TESTING-CLEANUP-2 H5): after B2, the rays back on and settled, then a glossy
-/// sphere moved 0.1 m a frame for 30 frames on the fixed clock; the runner shoots mid-move.
+/// sphere moved 0.1 m a frame for 30 frames on the fixed clock; the runner shoots mid-move. The sphere is DECLARED
+/// Movable (ENGINE-UPGRADE-1 U0 3c): a mover by declaration — the engine no longer guesses a drag from motion, and a
+/// script moving an undeclared still object is an edit each frame.
 const char *const kFixtureMoverScript = R"JS(
 if (world.rayTracing("auto") !== "auto") throw new Error("world.rayTracing(auto) refused");
 editor.frame(120);
@@ -229,6 +231,8 @@ var mover = scene.addPrimitive("sphere", { position: { x: -3, y: 0.6, z: 3 } });
 if (!mover) throw new Error("the mover sphere was not added");
 if (!material.set(mover, { baseColor: "#e04020", metallic: 0.0, roughness: 0.15 }))
     throw new Error("the mover's material was refused");
+if (node.setProperty(mover, "mobility", "movable") !== true)
+    throw new Error("the mover's Movable declaration was refused");
 editor.frame(30);
 for (var i = 1; i <= 30; ++i) {
     node.transform(mover, { position: { x: -3 + 0.1 * i, y: 0.6, z: 3 } });

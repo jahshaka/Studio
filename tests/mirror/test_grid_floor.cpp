@@ -59,6 +59,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -156,7 +157,7 @@ int main(int argc, char **argv)
     SceneMirror mirror(target);
     mirror.setSource(doc);
     mirror.sync();
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     auto render = [&](Image &img) {
         mirror.sync();
@@ -353,7 +354,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(0.0f, 20.0f, 0.0f));
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->update(0.0f);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         render(img);
         dump(img, "grid-ortho-top.png");
         const int fromAbove = count(img, isGrid);
@@ -366,7 +367,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(0.0f, 4.5f, 7.0f));
         cam->lookAt(iris::Vec3(0, 0.4f, 0));
         cam->update(0.0f);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
     }
 

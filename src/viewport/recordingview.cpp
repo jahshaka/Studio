@@ -30,13 +30,17 @@ jahshaka::engine::View *create(jahshaka::engine::Engine &engine, jahshaka::engin
     return rv;
 }
 
-void push(SceneMirror &mirror, jahshaka::engine::View *view, const iris::CameraNodePtr &camera,
-          float framingAspect)
+SceneMirror::FrameView frameView(jahshaka::engine::View *view, const iris::CameraNodePtr &camera,
+                                 float framingAspect)
 {
-    if (!view) return;
-    mirror.applySky(view);
-    mirror.applyViewEnvironment(view, camera, /*offscreenChain=*/true);
-    if (camera) mirror.applyCamera(camera, view, framingAspect);
+    SceneMirror::FrameView fv;
+    fv.view = view;
+    fv.sky = true;
+    fv.postFx = true;
+    fv.offscreenChain = true;
+    fv.camera = camera;
+    fv.framingAspect = framingAspect;
+    return fv;
 }
 
 }   // namespace recordingview

@@ -41,6 +41,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
     // (60) of the scene's drawn frames; two more for the sweep that ends it.
     const int kGrace = 62;
     frames(3);
-    mirror.applyEnvironment(view);
+    mirror.sync(mirrorframe::environment(view));
 
     // ---- 1. BOOKKEEPING ----------------------------------------------------
     CHECK(plane->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,

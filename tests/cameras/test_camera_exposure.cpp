@@ -58,6 +58,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -473,25 +474,25 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
              const char *label = nullptr)
 {
     mirror.sync();
-    // applySky BEFORE applyEnvironment, as every real host does. It is not
+    // buildSky BEFORE buildEnvironment, as every real host does. It is not
     // optional any more: the ambient is the SKY LIGHT reading the sky's own
-    // integral (SKY_LIGHT_SPEC.md §2), and the integral is applySky's — a
+    // integral (SKY_LIGHT_SPEC.md §2), and the integral is buildSky's — a
     // fixture that skipped it used to get the flat World colour and now gets no
     // ambient at all.
-    mirror.applySky(view);
-    mirror.applyEnvironment(view);
-    mirror.applyCamera(camera, view);
+    mirror.sync(mirrorframe::sky(view));
+    mirror.sync(mirrorframe::environment(view));
+    mirror.sync(mirrorframe::camera(view, camera));
     // ...AND THE ENVIRONMENT AGAIN, ONE FRAME LATER (SKY-GPU). The sky's own
     // light is the engine's now: it captures the sky it drew into a cubemap
     // inside the next rendered frame and integrates THAT, so the ambient a host
     // reads is the sky of the frame before — exactly like the IBL convolution,
     // which has always landed a frame late. Every real host calls
-    // applyEnvironment once per frame and never notices; this fixture pushes
+    // buildEnvironment once per frame and never notices; this fixture pushes
     // once and then renders hundreds of frames, so without these two lines the
     // FIRST shot of the run is the only one taken before the sky's light
     // arrives, and every later one is 2.5x brighter than it.
     gEngine->renderOneFrame();
-    mirror.applyEnvironment(view);
+    mirror.sync(mirrorframe::environment(view));
     if (optIn) {
         PostFxDesc fx = view->postFx();
         fx.allowOffscreen = true;
@@ -656,7 +657,7 @@ void partB()
 
     // ---- B2b: AN OVERRIDE MUST NOT CHURN THE COMPOSITOR -------------------
     // An enable-flag difference IS a workspace rebuild, and hosts call
-    // applyEnvironment and then applyCamera EVERY FRAME. If only one of the two
+    // buildEnvironment and then buildCamera EVERY FRAME. If only one of the two
     // substituted the camera's flags, the chain would be rebuilt twice a frame
     // for as long as an overriding camera was driving — invisible in a pixel
     // assertion and ruinous in the editor. Found while building this phase;
@@ -666,15 +667,15 @@ void partB()
         // Settle first: turning the override ON is legitimately one rebuild.
         for (int i = 0; i < 3; ++i) {
             mirror.sync();
-            mirror.applyEnvironment(view);
-            mirror.applyCamera(doc.camera, view);
+            mirror.sync(mirrorframe::environment(view));
+            mirror.sync(mirrorframe::camera(view, doc.camera));
             gEngine->renderOneFrame();
         }
         const unsigned before = view->workspaceGeneration();
         for (int i = 0; i < 10; ++i) {
             mirror.sync();
-            mirror.applyEnvironment(view);
-            mirror.applyCamera(doc.camera, view);
+            mirror.sync(mirrorframe::environment(view));
+            mirror.sync(mirrorframe::camera(view, doc.camera));
             gEngine->renderOneFrame();
         }
         const unsigned after = view->workspaceGeneration();

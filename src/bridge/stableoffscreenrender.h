@@ -51,7 +51,7 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
     // renderOneFrame because the engine consumes it and resets to Driver.
     auto markOffscreen = [engine] {
         if (framemonitor::active())
-            engine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
     };
     for (unsigned i = 0; i < minFrames; ++i) { markOffscreen(); engine->renderOneFrame(); ++rendered; }
     // renderOneFrame already waited at its head, so the counter read here is
@@ -91,17 +91,17 @@ inline unsigned settleStillPicture(jahshaka::engine::Engine *engine,
 {
     if (!engine || !scene || !scene->giStatus().gather.on) return 0u;
     const float delta = engine->fixedFrameDelta();
-    engine->setFixedFrameDelta(0.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
     unsigned n = 0u;
     auto frame = [&] {
         if (framemonitor::active())
-            engine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
         engine->renderOneFrame();
         ++n;
     };
     frame();
     while (n < cap && !scene->giStatus().giAtRest) frame();
-    engine->setFixedFrameDelta(delta);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(delta));
     return n;
 }
 

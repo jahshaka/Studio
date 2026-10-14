@@ -87,15 +87,9 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-engine-gi-scan-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    // THE HOST'S EPOCH HALF. A real host passes the document's process-wide
-    // counter; this suite passes one it owns and never bumps, which is the
-    // truthful statement here — nothing outside the engine writes a transform
-    // in this process.
-    static std::atomic<unsigned long long> hostWrites{ 0ull };
-    e->setTransformWriteCounter(&hostWrites);
 
     View *view = e->createOffscreenView("gi_scan", kSize, kSize, Colour(0.05f, 0.06f, 0.08f, 1.0f));
     if (!view) { std::printf("FAIL: offscreen view: %s\n", e->lastError().c_str()); return 1; }
@@ -285,7 +279,6 @@ int main()
               "...and the furniture is free at that scale too (10 frames, zero scans)");
     }
 
-    e->setTransformWriteCounter(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);
     std::printf("%s: %d failures\n", failures ? "FAIL" : "PASS", failures);

@@ -86,7 +86,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-reflect-fog-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = cost ? e->createOffscreenView("reflectfog-cost", 1920, 1080, Colour(0, 0, 0))
                       : e->createOffscreenView("reflectfog", kSize, kSize, Colour(0, 0, 0));

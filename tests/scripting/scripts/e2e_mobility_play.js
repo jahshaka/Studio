@@ -66,11 +66,11 @@ assert(world.giStatus().mobilityMisses === 0,
 // re-solve when the gesture settles. That is the control for the promotion case
 // below — the settle machinery is untouched, it is only mobility flips that no
 // longer reach it — and letting it land here is what keeps that window clean.
-var solvesAfterDrag = editor.mirrorStats().giRefreshes;
+var solvesAfterDrag = world.giStatus().scheduler.resolves;
 editor.frame(60);
-assert(editor.mirrorStats().giRefreshes === solvesAfterDrag + 1,
+assert(world.giStatus().scheduler.resolves === solvesAfterDrag + 1,
        "an editor drag of a STILL object still settles into exactly one re-solve [" +
-       solvesAfterDrag + " -> " + editor.mirrorStats().giRefreshes + "]");
+       solvesAfterDrag + " -> " + world.giStatus().scheduler.resolves + "]");
 
 // ---- play, and push the unmarked crate ----------------------------------
 var rebuildsBefore = world.giStatus().rebuilds;
@@ -114,11 +114,11 @@ assert(world.giStatus().mobilityRebuilds === 0,
 // full re-solve about a quarter of a second later: a hitch, at play, which is
 // the exact thing this program exists to remove. Sixty-plus frames is well past
 // both settle gates (15 frames / 250 ms).
-var solvesBefore = editor.mirrorStats().giRefreshes;
+var solvesBefore = world.giStatus().scheduler.resolves;
 var rebuildsNow = world.giStatus().rebuilds;
 editor.frame(90);
-assert(editor.mirrorStats().giRefreshes === solvesBefore,
-       "NO GI re-solve settles out of the promotion (" + editor.mirrorStats().giRefreshes +
+assert(world.giStatus().scheduler.resolves === solvesBefore,
+       "NO GI re-solve settles out of the promotion (" + world.giStatus().scheduler.resolves +
        " vs " + solvesBefore + ")");
 assert(world.giStatus().rebuilds === rebuildsNow,
        "...and no from-scratch rebuild either, 90 frames past the settle window");
@@ -153,7 +153,7 @@ assert(editor.stop() === true, "stopped");
 editor.frame(10);
 var reb0 = world.giStatus().rebuilds;
 var mob0 = world.giStatus().mobilityRebuilds;
-var solves0 = editor.mirrorStats().giRefreshes;
+var solves0 = world.giStatus().scheduler.resolves;
 assert(node.setProperty(prop, "mobility", "movable") === true, "mark the Crate Movable by hand");
 editor.frame(90);                       // well past both settle gates
 var after = world.giStatus();
@@ -169,8 +169,8 @@ assert(after.mobilityRebuilds === mob0 + 1,
 assert(after.rebuilds === reb0,
        "...and NOT ONE from-scratch GI rebuild, because the chain answers an edit " +
        "per cascade [" + reb0 + " -> " + after.rebuilds + "]");
-assert(editor.mirrorStats().giRefreshes === solves0,
-       "...and NO re-solve settled out of it on top [" + editor.mirrorStats().giRefreshes +
+assert(world.giStatus().scheduler.resolves === solves0,
+       "...and NO re-solve settled out of it on top [" + world.giStatus().scheduler.resolves +
        " vs " + solves0 + "]");
 editor.frame(60);
 assert(world.giStatus().rebuilds === reb0 && world.giStatus().mobilityRebuilds === mob0 + 1,

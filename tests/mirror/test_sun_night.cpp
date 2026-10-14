@@ -102,6 +102,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -203,14 +204,14 @@ int main(int argc, char **argv)
     SceneMirror mirror(target);
     mirror.setSource(doc);
     mirror.sync();
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
-    // `applySky` is not part of sync() — it is the host's own per-frame call
+    // `buildSky` is not part of sync() — it is the host's own per-frame call
     // (the editor viewport makes it), and it is what pushes the analytic sky
     // AND the sun disc. A render that forgets it draws the clear colour.
     auto render = [&](Image &img) {
         mirror.sync();
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
     };

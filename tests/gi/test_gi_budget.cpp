@@ -68,6 +68,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -190,12 +191,12 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 2.4f));
     cam->lookAt(iris::Vec3(0.0f, 2.0f, 0.0f));
     cam->update(0.0f);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     const auto frame = [&]() {
         doc->refresh();
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
     };
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
@@ -231,7 +232,7 @@ int main(int argc, char **argv)
     }
     const Colour pausedParked = mirrorPixel();
     show("budget 0, mover parked", pausedParked);
-    const quint64 refresh0 = mirror.giRefreshCount(), light0 = mirror.giLightRefreshCount();
+    const quint64 refresh0 = mirror.target()->giStatus().schedulerResolves, light0 = mirror.target()->giStatus().schedulerLightTicks;
     moveMover(kMoverOnRay);
     unsigned pausedCaptures = 0;
     for (int i = 0; i < 40; ++i) {
@@ -240,7 +241,7 @@ int main(int argc, char **argv)
     }
     const Colour pausedMoved = mirrorPixel();
     show("budget 0, mover ON the reflection ray", pausedMoved);
-    CHECK(mirror.giRefreshCount() == refresh0 && mirror.giLightRefreshCount() == light0,
+    CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 && mirror.target()->giStatus().schedulerLightTicks == light0,
           "budget 0: moving geometry costs no re-solve and no re-inject");
     // FROZEN = NOTHING WAS CAPTURED, counted (PHOTON-VOXEL-3 round 9). The mirror pixel is
     // the hybrid's blend of the probe with the cone-traced reflection, and the cone half
@@ -257,12 +258,12 @@ int main(int argc, char **argv)
     // refresh captures the whole grid at once, as it always did (P6 spreads
     // re-captures only where there IS a budget).
     {
-        const quint64 before = mirror.giRefreshCount();
+        const quint64 before = mirror.target()->giStatus().schedulerResolves;
         ++doc->giRefreshSerial;
         frame();
         const Colour refreshed = mirrorPixel();
         show("budget 0, after world.refreshGi()", refreshed);
-        CHECK(mirror.giRefreshCount() == before + 1, "budget 0: world.refreshGi() still re-solves");
+        CHECK(mirror.target()->giStatus().schedulerResolves == before + 1, "budget 0: world.refreshGi() still re-solves");
         // 0.3, not the 0.5 the two sweep cases below use: the separation this
         // one reads is +0.380 (r 0.051 g 0.431) since R5-ROOM moved the probe
         // grid off the retired room-measuring rule's region and onto the one
@@ -293,7 +294,7 @@ int main(int argc, char **argv)
     // is the only thing the grid has to catch up with.
     frames(30);
     CHECK(escene->giStatus().staleProbes == 0, "A: settled — no probe is stale before the move");
-    const quint64 refreshA = mirror.giRefreshCount(), lightA = mirror.giLightRefreshCount();
+    const quint64 refreshA = mirror.target()->giStatus().schedulerResolves, lightA = mirror.target()->giStatus().schedulerLightTicks;
     const unsigned long long serialA = escene->giStatus().staleSerial;
     moveMover(kMoverOnRay);
     frame();
@@ -314,8 +315,8 @@ int main(int argc, char **argv)
     show("budget 1, ONE frame after the move", afterOne);
     show("budget 1, a FULL SWEEP after the move", afterSweep);
     std::printf("   during the catch-up: full re-solves = %llu, light re-injects = %llu\n",
-                (unsigned long long)(mirror.giRefreshCount() - refreshA),
-                (unsigned long long)(mirror.giLightRefreshCount() - lightA));
+                (unsigned long long)(mirror.target()->giStatus().schedulerResolves - refreshA),
+                (unsigned long long)(mirror.target()->giStatus().schedulerLightTicks - lightA));
 
     // THE SWEEP GUARANTEE: within ceil(probes / budget) frames the whole grid
     // has re-captured, so the reflection is fully caught up.
@@ -329,7 +330,7 @@ int main(int argc, char **argv)
           "one frame of budget 1 has NOT caught up yet (the budget is a rate)");
     // B, first half: no full re-solve happened during the catch-up. The probes
     // did it on the budget, which is the entire point.
-    CHECK(mirror.giRefreshCount() == refreshA,
+    CHECK(mirror.target()->giStatus().schedulerResolves == refreshA,
           "the catch-up cost ZERO full GI re-solves (the probes did it on the budget)");
 
     // The same move at a budget of `kProbes` lands in ONE frame — the two
@@ -357,13 +358,13 @@ int main(int argc, char **argv)
     // =======================================================================
     std::printf("-- B: a 40-frame geometry drag\n");
     frames(30);                       // let the previous move settle completely
-    const quint64 refreshB = mirror.giRefreshCount(), lightB = mirror.giLightRefreshCount();
+    const quint64 refreshB = mirror.target()->giStatus().schedulerResolves, lightB = mirror.target()->giStatus().schedulerLightTicks;
     for (int f = 0; f < 40; ++f) {
         moveMover(kMoverOnRay - 0.06f * float(f));
         frame();
     }
-    const quint64 duringSolves = mirror.giRefreshCount() - refreshB;
-    const quint64 duringLight  = mirror.giLightRefreshCount() - lightB;
+    const quint64 duringSolves = mirror.target()->giStatus().schedulerResolves - refreshB;
+    const quint64 duringLight  = mirror.target()->giStatus().schedulerLightTicks - lightB;
     std::printf("   during the drag: full re-solves = %llu, light re-injects = %llu\n",
                 (unsigned long long)duringSolves, (unsigned long long)duringLight);
     CHECK(duringSolves == 0,
@@ -371,11 +372,11 @@ int main(int argc, char **argv)
     CHECK(duringLight > 0,
           "...and the cheap light re-inject runs during it (bounced light follows)");
     frames(25);                       // let go
-    const quint64 afterSolves = mirror.giRefreshCount() - refreshB;
+    const quint64 afterSolves = mirror.target()->giStatus().schedulerResolves - refreshB;
     std::printf("   after it stops: full re-solves = %llu\n", (unsigned long long)afterSolves);
     CHECK(afterSolves == 1, "letting go re-solves EXACTLY once for the whole drag");
     frames(25);
-    CHECK(mirror.giRefreshCount() - refreshB == 1,
+    CHECK(mirror.target()->giStatus().schedulerResolves - refreshB == 1,
           "...and never again while nothing moves (the re-solve is not self-sustaining)");
 
     // =======================================================================
@@ -391,7 +392,7 @@ int main(int argc, char **argv)
         engine->renderStats(rs);
         const unsigned long long draws0 = rs.draws;
         int capturingFrames = 0, drawMoves = 0, worstCaptures = 0;
-        const quint64 refreshE = mirror.giRefreshCount(), lightE = mirror.giLightRefreshCount();
+        const quint64 refreshE = mirror.target()->giStatus().schedulerResolves, lightE = mirror.target()->giStatus().schedulerLightTicks;
         for (int f = 0; f < 120; ++f) {
             frame();
             const GiStatus st = escene->giStatus();
@@ -406,7 +407,7 @@ int main(int argc, char **argv)
         CHECK(capturingFrames == 0,
               "E: 120 idle frames re-capture ZERO probes (probeCapturesLastFrame 0 every frame)");
         CHECK(drawMoves == 0, "E: ...and the frame's draw count never moves");
-        CHECK(mirror.giRefreshCount() == refreshE && mirror.giLightRefreshCount() == lightE,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refreshE && mirror.target()->giStatus().schedulerLightTicks == lightE,
               "E: ...and nothing re-solves or re-injects either");
     }
 

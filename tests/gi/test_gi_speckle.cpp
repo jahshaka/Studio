@@ -41,6 +41,7 @@
 // `JAH_SPECKLE_DUMP=1` writes each moving arm's worst pair (speckle-<arm>-a.ppm,
 // -b.ppm, and the x10 difference -d.ppm) into the working directory.
 #include "jahshaka/engine/Engine.h"
+#include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -252,6 +253,7 @@ static Run runArm(Fixture &f, const char *name, bool move, bool dump)
     Image prev, cur, worstA, worstB;
     for (int i = 0; i < 60; ++i) {
         const float y = move ? 1.2f + 0.6f * std::sin(float(i) * 2.0f * kPi / 40.0f) : 1.2f;
+        if (move) enginetest::gesture(f.e, f.s, { f.sphere });   // the hand moves it (U0 3c: the host says so)
         f.s->setNodeTransform(f.sphere, Vec3(0.0f, y, 0.0f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
         render(f.e, 1);
         f.view->readPixels(cur);
@@ -266,6 +268,7 @@ static Run runArm(Fixture &f, const char *name, bool move, bool dump)
         }
         std::swap(prev, cur);
     }
+    enginetest::gesture(f.e, f.s, {});
     const GiStatus g1 = f.s->giStatus();
     std::printf("   [%s] cards: %llu invalidated by a transform, %llu captures; cascade rebuilds %llu\n", name,
                 g1.cards.invalidTransform - g0.cards.invalidTransform, g1.cards.captures - g0.cards.captures,
@@ -421,7 +424,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-speckle-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     {
         View *probe = e->createOffscreenView("speckleprobe", 16, 16, Colour(0, 0, 0));

@@ -316,7 +316,7 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
     // EVERY sky type the mirror can render, which is every type the document
     // has: the old body handled colour/equirect/gradient and dropped realistic
     // and cubemap behind a "not on the engine yet" comment that had been false
-    // since the sky branches landed (scenemirror.cpp applySky) — so those two
+    // since the sky branches landed (scenemirror.cpp buildSky) — so those two
     // previewed as a flat background (VISUAL_PARITY re-audit F1). The switch
     // itself is skyassets::applyToScene, shared and testable; all this side
     // owns is turning a texture-asset guid into a path.

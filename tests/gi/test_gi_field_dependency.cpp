@@ -77,10 +77,8 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-gi-field-dependency-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
-    static std::atomic<unsigned long long> hostWrites{ 0ull };
-    e->setTransformWriteCounter(&hostWrites);
 
     View *view = e->createOffscreenView("fielddep", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("fielddep");
@@ -149,7 +147,6 @@ int main(int argc, char **argv)
                 for (int i = 0; i < 2; ++i)
                     enginetest::setNodePosition(s, stills[i], Vec3(-2.5f + 5.0f * float(i) + 0.4f * std::sin(0.05f * float(f)),
                                                                    0.5f, -3.0f));
-            hostWrites.fetch_add(1);
             e->renderOneFrame();
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);

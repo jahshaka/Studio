@@ -255,8 +255,8 @@ int main(int argc, char **argv)
 
     // --- A1.5: Scene::removeNode's typed registries. The four reverse lookups
     // became O(1) guid removals; the SEMANTICS asserted here are what must not
-    // change — the node leaves every registry it was in, its children leave
-    // with it, and removing a node the scene never had touches nothing.
+    // change — the node leaves every registry it was in, removeChild takes its
+    // children out with it, and removing a node the scene never had touches nothing.
     {
         auto s2 = iris::Scene::create();
         auto lamp = iris::LightNode::create();       lamp->setGUID("a15-light");
@@ -309,10 +309,14 @@ int main(int argc, char **argv)
         CHECK(s2->getActiveCameraGuid().isEmpty(),
               "A1.5: deleting the ACTIVE camera clears the active guid");
 
+        // ONE NODE (ENGINE-UPGRADE-1 stage 2): the subtree's walk is SceneNode::removeFromScene's, as setScene's is
+        // addNode's — removeNode recursing beside it removed a node at depth d d times, each repeat a reverse scan.
         s2->removeNode(mesh2);
-        CHECK(!s2->meshes.contains("a15-mesh") && !s2->meshes.contains("a15-child"),
-              "A1.5: removeNode recurses — the child left the mesh registry too");
-        CHECK(!s2->nodes.contains("a15-child"), "A1.5: and the node map");
+        CHECK(!s2->meshes.contains("a15-mesh") && s2->meshes.contains("a15-child"),
+              "A1.5: removeNode removes ONE node — its child is the caller's walk");
+        s2->getRootNode()->removeChild(mesh2);       // the document's own path out of the scene
+        CHECK(!s2->meshes.contains("a15-child") && !s2->nodes.contains("a15-child"),
+              "A1.5: removeChild takes the whole subtree out of the mesh registry and the node map");
         s2.reset();
     }
 

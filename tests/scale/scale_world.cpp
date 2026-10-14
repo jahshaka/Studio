@@ -42,6 +42,7 @@
 #include <fstream>
 #include <random>
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 namespace scale {
 
@@ -478,14 +479,14 @@ void frame(Env &env, int count)
             // mirror builds a fresh description each call, so pushing it onto the
             // measured view directly and then setting the flag would rebuild that
             // view's workspace twice a frame.
-            env.mirror->applyEnvironment(env.envView, env.engine.get());
+            env.mirror->sync(mirrorframe::environment(env.envView));
             PostFxDesc fx = env.envView->postFx();
             fx.allowOffscreen = true;
             if (env.fxOverride) env.fxOverride(fx);
             if (fx != env.view->postFx()) env.view->setPostFx(fx);
             if (env.view->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
         } else {
-            env.mirror->applyEnvironment(env.view, env.engine.get());
+            env.mirror->sync(mirrorframe::environment(env.view));
             if (env.fxOverride) {
                 // A MEASUREMENT'S OWN POST FLAGS (W7's depth pyramid) on a window
                 // view: pushed over the world's description after it — a rebuild
@@ -495,7 +496,7 @@ void frame(Env &env, int count)
                 if (fx != env.view->postFx()) env.view->setPostFx(fx);
             }
         }
-        env.mirror->applyCamera(env.camera, env.view);
+        env.mirror->sync(mirrorframe::camera(env.view, env.camera));
         env.engine->renderOneFrame();
     }
 }

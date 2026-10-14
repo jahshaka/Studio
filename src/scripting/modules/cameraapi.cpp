@@ -1069,7 +1069,7 @@ bool CameraApi::lookAt(const QString &id, const QVariant &target)
 // MECHANISM, and why it is not a new viewport method. EngineSceneViewport's
 // screenshot already renders the live engine scene into a THROWAWAY offscreen
 // view and points that view at whatever CameraNode the viewport currently holds
-// (`applyCamera(mEditorCam, shot)`). So the whole of "render through a
+// (`buildCamera(mEditorCam, shot)`). So the whole of "render through a
 // different camera" is: hand the viewport this camera for the duration of one
 // synchronous call, take the shot, hand back the one it had. Nothing renders in
 // between — there is no event loop turn inside takeScreenshot — so the user's
@@ -1132,7 +1132,7 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
         return out;
     }
 
-    // applyCamera SUBSTITUTES the scene's active camera while the document is
+    // buildCamera SUBSTITUTES the scene's active camera while the document is
     // playing (the D6 seam), which would silently photograph a different camera
     // than the one asked for. Point the active camera at this one for the
     // duration; nothing else can observe it inside a synchronous call.

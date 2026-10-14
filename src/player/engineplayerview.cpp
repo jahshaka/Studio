@@ -162,7 +162,7 @@ bool EnginePlayerView::start(QString *why)
     // IT SURVIVES THE CHAIN THIS VIEW DOES NOT HAVE YET (lead review round 2).
     // On the FIRST entry this view still carries the passthrough chain, which
     // has no seed pass at all, and the HDR chain is built by frame-1's
-    // applyEnvironment a moment later. The engine remembers a value it cannot
+    // buildEnvironment a moment later. The engine remembers a value it cannot
     // take yet and spends it on the chain it next builds, before that chain has
     // rendered anything — see View::seedExposureHistory.
     //
@@ -425,7 +425,7 @@ void EnginePlayerView::syncFrame()
     // labelled as the editor's loop.
     if (framemonitor::active())
         if (auto engine = EngineHost::instance().engine())
-            engine->setNextFrameCause(jahshaka::engine::FrameCause::Player);
+            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Player));
     mScene->step(-1.0f, width(), height());     // the wall clock, in the scene's timer
 }
 

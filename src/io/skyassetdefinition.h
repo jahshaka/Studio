@@ -43,7 +43,7 @@ namespace skyassets
 using TexturePathResolver = std::function<QString(const QString &guid)>;
 
 /// Writes `skyData` (one sky asset's stored definition, of type `type`) into
-/// `scene`'s live sky fields — exactly the fields SceneMirror::applySky polls.
+/// `scene`'s live sky fields — exactly the fields SceneMirror::buildSky polls.
 ///
 /// `textureDependees` is the asset's Texture dependee guids, used only as the
 /// fallback for an equirect definition written before the `equiSkyGuid` key

@@ -105,7 +105,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setFixedFrameDelta(1.0f / 60.0f);
+    e->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("field-edge", kSize, kSize, Colour(0, 0, 0));
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     view->setOffscreenContract(OffscreenContract::StillPicture);

@@ -53,10 +53,11 @@ namespace secondaryfx {
 /// caller that has not thought about it.
 /// Safe on a null view; safe to call every frame (an unchanged PostFxDesc never
 /// reaches the backend — OgreView::setPostFx early-outs on equality).
-inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
+/// THE DESCRIPTION'S FORM (U0 3a): a host building a frame's input grades the view's part of the record
+/// (SceneMirror::FrameView::finish), never the view on the spot — the drain would land the record's chain over it.
+/// The View* forms are for a view no record touches.
+inline void apply(jahshaka::engine::PostFxDesc &fx, bool enabled, float exposure)
 {
-    if (!view) return;
-    jahshaka::engine::PostFxDesc fx = view->postFx();
     // Only the three fields this surface is entitled to. Anything else the
     // scene's post-fx description pushed (bloom, SSAO, SMAA, SSR) stays off,
     // because `allowOffscreen` is what would have let it through and it is set
@@ -69,6 +70,13 @@ inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
     fx.smaaPreset   = -1;
     fx.ssr          = 0;
     fx.allowOffscreen = enabled;
+}
+
+inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
+{
+    if (!view) return;
+    jahshaka::engine::PostFxDesc fx = view->postFx();
+    apply(fx, enabled, exposure);
     view->setPostFx(fx);
 }
 
@@ -86,8 +94,8 @@ inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
 /// THIS IS THE OTHER ANSWER, and it is three decisions:
 ///
 ///  1. THE WHOLE CHAIN, AS THE WORLD HAS IT. `allowOffscreen` and nothing else
-///     — the description this view is already carrying is the one applyEnvironment
-///     and applyCamera pushed, i.e. the viewport's. We add no row and remove no
+///     — the description this view's part of the frame is already carrying is the
+///     one the mirror built for it (the world's chain and the camera's), i.e. the viewport's. We add no row and remove no
 ///     row, so "if the viewport shows it, the shot shows it" is structural
 ///     rather than a list somebody has to keep up to date.
 ///  2. HDR STAYS OFF WHEN THE WORLD HAS IT OFF. The thumbnail grade forces it
@@ -105,14 +113,18 @@ inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
 ///     `measured <= 0` (no on-screen view, no HDR on screen, nothing presented
 ///     yet) falls back to `exposure`'s grey card — the old behaviour, never an
 ///     ungraded surprise.
-inline void applyScene(jahshaka::engine::View *view, float measuredExposureScale) {
-    if (!view) return;
-    jahshaka::engine::PostFxDesc fx = view->postFx();
+inline void applyScene(jahshaka::engine::PostFxDesc &fx, float measuredExposureScale) {
     fx.allowOffscreen = true;
     if (fx.hdr) {
         fx.tonemapFixed  = true;
         fx.exposureScale = measuredExposureScale > 0.0f ? measuredExposureScale : 0.0f;
     }
+}
+
+inline void applyScene(jahshaka::engine::View *view, float measuredExposureScale) {
+    if (!view) return;
+    jahshaka::engine::PostFxDesc fx = view->postFx();
+    applyScene(fx, measuredExposureScale);
     view->setPostFx(fx);
 }
 

@@ -135,17 +135,17 @@ assert(st.probeRegionMin.x >= st.probeFitMin.x - 0.001 &&
 // ---- the refresh verb ----------------------------------------------------
 // Geometry that moves deliberately does NOT auto-refresh, so this is the only
 // way to make the solution agree with the scene again.
-var before = editor.mirrorStats();
-console.log("mirrorStats before refresh = " + JSON.stringify(before));
-assert(before.available === true, "mirrorStats is available");
+var before = world.giStatus().scheduler;
+console.log("the GI scheduler before refresh = " + JSON.stringify(before));
+assert(world.giStatus().live === true, "giStatus is live");
 assert(world.refreshGi(), "world.refreshGi()");
 editor.frame(3);
-var after = editor.mirrorStats();
-console.log("mirrorStats after refresh = " + JSON.stringify(after));
-assert(after.giRefreshes === before.giRefreshes + 1,
+var after = world.giStatus().scheduler;
+console.log("the GI scheduler after refresh = " + JSON.stringify(after));
+assert(after.resolves === before.resolves + 1,
        "world.refreshGi() re-solved exactly once");
 editor.frame(20);
-assert(editor.mirrorStats().giRefreshes === before.giRefreshes + 1,
+assert(world.giStatus().scheduler.resolves === before.resolves + 1,
        "...and only once per call, however long the scene then idles");
 
 assert(world.gi({ mode: "off" }), "world.gi(off)");

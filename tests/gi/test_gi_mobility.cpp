@@ -160,9 +160,19 @@ static void sectionA(Engine *engine)
     gi.updateBudget = 1;
     gi.testProbeRegionMin = Vec3(-4.6f, -0.6f, -4.6f);
     gi.testProbeRegionMax = Vec3(4.6f, 5.6f, 4.6f);
-    CHECK(s->setGlobalIllumination(gi), "the hybrid arm builds");
-
-    const auto frame = [&]() { engine->renderOneFrame(); };
+    // THE GI RIDES THE FRAME'S RECORD, as a host's does (U0 3c): every frame submits the scene's GI, so the engine's
+    // one scheduler (OgreScene::planGi) runs exactly as it does under a mirror — the A2/A3 settle claims read it.
+    const auto frame = [&]() {
+        jahshaka::engine::FrameInputScene part;
+        part.scene = s;
+        part.gi = gi;
+        jahshaka::engine::FrameInput in;
+        in.scenes.push_back(part);
+        engine->submitFrame(in);
+        engine->renderOneFrame();
+    };
+    frame();
+    CHECK(s->giStatus().schedulerPushes == 1, "the hybrid arm builds (one configuration, from the frame's record)");
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
     const auto worstOver = [&](int n) {
         int worst = 0;
@@ -188,7 +198,7 @@ static void sectionA(Engine *engine)
     // advancing every frame and a capture every frame for ever.)
     {
         const GiStatus before = s->giStatus();
-        const unsigned long long geomSig = s->giGeometrySignature();
+        const unsigned long long resolves0 = before.schedulerResolves;
         int captures = 0;
         for (int i = 0; i < 120; ++i) {
             const float t = float(i) * 0.04f;
@@ -204,8 +214,8 @@ static void sectionA(Engine *engine)
         CHECK(after.staleSerial == before.staleSerial,
               "...and stale NOTHING: the probe grid never hears about it");
         CHECK(after.rebuilds == before.rebuilds, "...and cost no from-scratch GI rebuild");
-        CHECK(s->giGeometrySignature() == geomSig,
-              "...and the GI geometry signature is CONSTANT (the host's settle is never armed)");
+        CHECK(!after.settlePending && after.schedulerResolves == resolves0,
+              "...and the GI scheduler's settle is never armed (no re-solve, nothing pending)");
         CHECK(s->mobilityStatus().mobilityRebuilds == 0,
               "...and no mobility rebuild (the class never changed)");
     }
@@ -213,14 +223,12 @@ static void sectionA(Engine *engine)
     // ---- A3: the STATIC twin still stales the grid, exactly as before ------
     {
         const unsigned long long serial = s->giStatus().staleSerial;
-        const unsigned long long geomSig = s->giGeometrySignature();
         s->setNodeTransform(stayer, Vec3(2.0f, 1.0f, -1.5f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
         frame();
         const GiStatus st = s->giStatus();
         CHECK(st.staleSerial > serial && st.lastStaleReason == GiStaleReason::Moved,
               "a STATIC object moving still stales the grid (reason %s)", reasonName(st.lastStaleReason));
-        CHECK(s->giGeometrySignature() != geomSig,
-              "...and still moves the geometry signature, so the host still re-solves on settle");
+        CHECK(st.settlePending, "...and arms the GI scheduler's settle, so it still re-solves once at rest");
         CHECK(worstOver(8) <= 1, "...and its catch-up never exceeds the budget");
         frames(20);
     }

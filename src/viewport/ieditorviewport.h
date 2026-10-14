@@ -855,6 +855,13 @@ public:
         /// being dragged right now, and how many such gestures have ENDED.
         int       dragMovers = 0;
         double    dragMoverGestures = 0.0;
+        /// THE ONE GI SCHEDULER (U0 3c; GiStatus::scheduler*): what decided WHEN the GI answered a change.
+        struct SchedulerInfo {
+            double pushes = 0.0, resolves = 0.0, lightTicks = 0.0, lightTicksAtRest = 0.0;
+            bool   settlePending = false;
+            int    settleStableFrames = 0;
+            bool   gestureActive = false;
+        } scheduler;
         /// THE SURFACE CACHE (SURFACE-CACHE phase 2). Restated in plain types
         /// rather than carried as the engine's own `CardCacheStatus`, for the
         /// same reason every other field of this struct is: `ieditorviewport.h`
@@ -1093,15 +1100,8 @@ public:
     /// than zero.
     struct MirrorStats {
         bool available = false;
-        quint64 giPushes = 0;      ///< SceneMirror::giPushCount()
-        quint64 giRefreshes = 0;   ///< SceneMirror::giRefreshCount()
-        /// SceneMirror::giLightRefreshCount() — the CHEAP light-only re-injects
-        /// that run while a light is being dragged, instead of the full
-        /// re-solves the drag used to cost (REFLECTIONS_ADOPTION_SPEC.md P2).
-        quint64 giLightRefreshes = 0;
-        /// ...of which the ones taken AT REST — the tick that ends a movable
-        /// lamp's travel and runs the scene's full bounce count (F1).
-        quint64 giLightRefreshesAtRest = 0;
+        // (The GI scheduler's counts — pushes, re-solves, light ticks — are the engine's since U0 3c:
+        //  world.giStatus().scheduler.)
         // ---- MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3, lane R1) -----------
         /// How many of the document's nodes resolved MOVABLE on the last sync —
         /// the mirror's own count, which is why it lives here and not in

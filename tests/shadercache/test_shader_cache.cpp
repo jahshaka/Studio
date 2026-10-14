@@ -619,7 +619,7 @@ static ShaderCacheStats enginePipelineCycle(const char *what) {
     std::string error;
     auto e = Engine::create(cacheConfig(), error);
     if (!e) { std::printf("FAIL: %s: Engine::create: %s\n", what, error.c_str()); ++gFailures; return stats; }
-    e->setFixedFrameDelta(1.0f / 60.0f);
+    e->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     View *v = e->createOffscreenView("view", 640, 360, Colour(0.45f, 0.55f, 0.70f));
     Scene *s = v ? e->createScene("scene") : nullptr;
     if (v && s) {

@@ -96,7 +96,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     const auto cfg = enginetest::testEngineConfig("sc1b-showroom-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("showroom", 1920u, 1080u, Colour(0, 0, 0));
     Scene *s = e->createScene("showroom");
@@ -264,7 +264,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("sc1b-measure-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("measure", 1920u, 1080u, Colour(0, 0, 0));
     Scene *s = e->createScene("measure");

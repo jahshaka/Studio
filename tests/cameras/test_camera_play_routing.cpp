@@ -1,10 +1,10 @@
 // The active camera takes the view WHEN PLAYING — in pixels (CAMERAS_SPEC D6).
 //
-// The seam is SceneMirror::applyCamera, which is "the ONLY way to move a View's
+// The seam is SceneMirror::buildCamera, which is "the ONLY way to move a View's
 // camera" (Engine.h). Phase 1 makes exactly one substitution there: when the
 // DOCUMENT says it is playing and an active camera is set, that camera's state
 // drives the view instead of whatever camera the caller passed. Everything the
-// editor and the player already do — the same three sync/applySky/applyCamera
+// editor and the player already do — the same three sync/buildSky/buildCamera
 // calls — is untouched.
 //
 // What this suite proves, with real frames from the real backend:
@@ -12,7 +12,7 @@
 //   * EDITING is unchanged. With an active camera set and the scene NOT
 //     playing, the view is still the explorer's. This is the assertion that
 //     stops phase 1 from taking the main viewport (pilot mode is phase 3).
-//   * PLAYING routes. Flip the document's play flag and the same applyCamera
+//   * PLAYING routes. Flip the document's play flag and the same buildCamera
 //     call renders the active camera's shot instead.
 //   * Clearing the active camera hands the view back.
 //   * A guid whose camera was deleted does not render through a corpse.
@@ -41,6 +41,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -124,14 +125,14 @@ int main(int argc, char **argv)
     Image img;
 
     // ---- 1. baseline: the explorer sees the cube --------------------------
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("explorer, not playing", img);
     CHECK(!isBlue(centre(img)), "the explorer camera sees the cube");
 
     // ---- 2. an active camera does NOT hijack EDITING ----------------------
     CHECK(doc->setActiveCamera(sceneCam->getGUID()), "scene camera armed as the active camera");
     CHECK(!doc->isPlaying(), "the document is not playing");
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("active camera set, EDITING", img);
     CHECK(!isBlue(centre(img)),
           "EDITING still renders the explorer's view — an active camera must not take the "
@@ -139,25 +140,25 @@ int main(int argc, char **argv)
 
     // ---- 3. play routes through the active camera -------------------------
     doc->setPlaying(true);
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("active camera set, PLAYING", img);
     CHECK(isBlue(centre(img)),
           "PLAY renders through the active camera (which is pointed at nothing) even though "
-          "applyCamera was handed the explorer");
+          "buildCamera was handed the explorer");
 
     // ---- 4. and follows it when it moves ----------------------------------
     sceneCam->lookAt(iris::Vec3(0, 0, 0));                // turn it back at the cube
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("active camera turned back", img);
     CHECK(!isBlue(centre(img)), "moving the ACTIVE camera moves the played view");
 
     // ---- 5. clearing it hands the view back -------------------------------
     sceneCam->lookAt(iris::Vec3(0.0f, 0.0f, 40.0f));      // away again
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img);
     CHECK(isBlue(centre(img)), "…and away again (the seam is live, not a one-shot)");
     CHECK(doc->setActiveCamera(QString()), "active camera cleared");
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("no active camera, PLAYING", img);
     CHECK(!isBlue(centre(img)),
           "with no active camera, play renders the free viewer again");
@@ -168,14 +169,14 @@ int main(int argc, char **argv)
     mirror.sync();
     CHECK(doc->getActiveCameraGuid().isEmpty(),
           "deleting the active camera cleared the choice (Scene::removeNode)");
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img); show("active camera deleted, PLAYING", img);
     CHECK(!isBlue(centre(img)),
           "play falls back to the free viewer instead of a camera that no longer exists");
 
     // ---- 7. stop playing ---------------------------------------------------
     doc->setPlaying(false);
-    mirror.applyCamera(editorCam, view);
+    mirror.sync(mirrorframe::camera(view, editorCam));
     frame(img);
     CHECK(!isBlue(centre(img)), "stopping play leaves the explorer in charge");
 

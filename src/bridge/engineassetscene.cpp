@@ -101,7 +101,7 @@ void EngineAssetScene::buildDocument()
     mDocument->sunDiscVisible = false;
     // (The dead `setAmbientColor` that stood here is GONE with the field —
     // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
-    // through Engine::setAmbient and never calls applyEnvironment, so the
+    // through Engine::setAmbient and never calls buildEnvironment, so the
     // document write reached nothing and always had.)
     mDocument->fogColor = QColor(25, 25, 25);
     mDocument->fogEnabled = false;
@@ -417,7 +417,7 @@ void EngineAssetScene::step(float dt, int width, int height)
     // A preview is a host of the engine's ONE frame delta too (A4.2): the
     // editor stops pushing when its page is hidden (a paused play leaves 0 in
     // force), so a preview re-arms the grid step or its particles stay frozen.
-    if (auto e = engine()) e->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
+    if (auto e = engine()) e->submitFrame(jahshaka::engine::FrameInput::delta(jahshaka::engine::Engine::kDefaultFrameDelta));
     pushFrame(mCamera, width, height);
 }
 
@@ -425,13 +425,18 @@ void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 {
     // The base has already made `shot` the current view.
     mDocument->refresh();
-    pushFrame(mCamera, width, height);
     // A PICTURE, NOT THE INSTRUMENT (SRGB-ENCODE-1): an offscreen view that does
     // not opt in is the linear Plain instrument, ~2.7 stops darker at mid grey than
     // every other tile. This shot is a tile, so it takes the THUMBNAIL grade — the
-    // grade every asset tile has, at the document's exposure, display-encoded.
-    // After pushFrame: the mirror's push rewrites the view's description.
-    secondaryfx::apply(shot, true, iris::lens::exposureStopsToChain(mDocument->exposure));
+    // grade every asset tile has, at the document's exposure, display-encoded —
+    // on the shot's part of the frame, over whatever the mirror built for it.
+    (void)shot;
+    const float exposure = iris::lens::exposureStopsToChain(mDocument->exposure);
+    pushFrame(mCamera, width, height, [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+        secondaryfx::apply(fx, true, exposure);
+        part.postFx = fx;
+    });
 }
 
 QImage EngineAssetScene::renderImage(int width, int height)

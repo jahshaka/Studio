@@ -1,16 +1,9 @@
-// The SCENE-GRAPH BENCHMARK GATE — SPECS/SCENEGRAPH_SPEC.md §6.
-//
-// WHY THIS EXISTS AT ALL. The scene-graph adoption program (owner decision D1)
-// accepts a performance case: Ogre-Next's SoA/threaded/SIMD graph replaces the
-// iris:: document graph, and "capturing those wins is a REQUIREMENT, not a
-// hope". A requirement nobody measured before the swap is a claim. So this
-// suite is built and RUN FIRST, on `ogre` HEAD, with v1 not written yet: it
-// records what the current graph costs into `baseline-linux.json`, and the same
-// binary re-run in v1's gate is what turns §6's acceptance line
-//
-//     "(a) and (b) improve at 10k+; nothing regresses >10% at 1k"
-//
-// into a number instead of an opinion.
+// The SCENE-GRAPH BENCHMARK — a MEASURE (SPECS/SCENEGRAPH_SPEC.md; DOCS/PROCESS.md: a row over its budget is a
+// `measure`, run at the sprint's close). It prints what the document -> engine scene graph costs at three scales and
+// asserts only its OWN physics: every metric exists, its dispersion holds (cv/rcv), the settle slice's worst stays
+// under kSettleSliceMaxMs. It compares against NO recorded file (ENGINE-UPGRADE-1 stage 2 deleted the §6 baseline
+// comparison and baseline-linux.json: an old-file wall-clock bar is forbidden). Its COUNTS laws live in guards:
+// mirror.reparent_local (a reparent costs the fragment, never the scene).
 //
 // WHAT IT MEASURES (§6's four metrics, plus two free ones worth having):
 //
@@ -108,37 +101,9 @@
 // The bounds are deliberately loose (see kCvMax/kRcvMax): this gate's job is to
 // catch "the numbers are noise", not to police a percent.
 //
-// RUN-TO-RUN REPRODUCIBILITY, measured rather than assumed: the committed
-// baseline was recorded twice back to back on a quiet box, and every one of the
-// 33 medians agreed within ±4.5% (most within ±2%, worst case
-// a.transform_update_all@10000 at -4.5% and e.build_doc@10000 at +3.9%). §6's
-// "nothing regresses >10% at 1k" therefore has roughly 3x margin over the
-// measurement itself — but only on this box, in this build type, quiet. A v1
-// comparison run while another worktree compiles is not evidence of anything.
-//
-// TWO ROWS, TWO QUESTIONS (MIRROR-SETTLE-1 fix round 3). This binary used to
-// answer both in one row, so a d-build regression against an old baseline kept
-// the physics bars from ever reading green:
-//   scenegraph.benchmark  `--assert --record <build>/scenegraph-result.json`:
-//                         the PHYSICS BARS — every metric exists, its cv/rcv
-//                         dispersion holds, the settle slice's worst stays
-//                         under kSettleSliceMaxMs — and the result file.
-//                         Nothing from the baseline is asserted here.
-//   scenegraph.baseline   `--compare baseline-linux.json <that result file>`:
-//                         the SCENEGRAPH_SPEC §6 TREND CHECK against the
-//                         recorded baseline (28b91f49), per metric, red on any
-//                         violated clause; no measurement of its own (ctest
-//                         fixture scenegraph-result orders it after the run).
-//   Whether a comparison with an old picture stands as a GATE under the
-//   forward-building law (tests guard physics and named behaviour) is the
-//   lead's question for the Engine Upgrade.
-//
 // MODES
 //   --assert            (default) run, print, assert the physics bars.
-//   --record <file>     ...and write the JSON baseline/result file.
-//   --compare <baseline> <result>
-//                       no run: compare two files, print the §6 verdict per
-//                       metric, exit non-zero on a violated clause.
+//   --record <file>     ...and write the JSON result file (the measure's evidence).
 //   --scales 1000,10000 override the scale list.
 //   --threads N         worker threads for each SCENE the sweep creates
 //                       (Engine::createScene). 0 = the engine default, which is
@@ -235,42 +200,6 @@ static constexpr double kCvMaxReparent  = 1.00;
 static constexpr double kSettleSliceMaxMs = 0.5;
 static constexpr double kRcvMaxReparent = 0.35;
 
-// THE §6 CLAUSES (SPECS/SCENEGRAPH_SPEC.md §6 acceptance), enforced by the row
-// scenegraph.baseline (compareFiles):
-//   * at scales >= kImproveFromScale, every a.* and b.* metric must IMPROVE
-//     (median lower than the baseline's) — §6 "(a) and (b) improve at 10k+";
-//   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
-//     "nothing regresses >10% at 1k".
-// WHAT THE ARMED GATE SAYS TODAY (v1 lane, 2026-09-05), recorded here because a
-// red gate whose reason is not written down gets tuned by the next person who
-// meets it:
-//
-//   §6's two clauses split. "(a) and (b) improve at 10k+" is met by a wide
-//   margin at every scale (a.* -19% to -37%, b.* -19% to -27%, d.anim_rig
-//   -50%). "Nothing regresses >10% at 1k" FAILS on exactly one metric:
-//   e.build_doc, at +17% (measured over six runs of one identical build:
-//   9.07 / 9.21 / 9.34 / 9.36 / 9.43 / 10.01 ms against a 7.956 ms baseline).
-//
-//   The reason is structural, not a defect: building a document now creates a
-//   real Ogre scene node per document node — ~1.9 us of scene-manager and SoA
-//   machinery where the old graph wrote three C++ members. About 40% of that is
-//   the RE-PARENT (Node::setParent migrates the node between depth levels of
-//   the NodeMemoryManager), which the universal "create it, configure it, THEN
-//   addChild it" call shape forces. Removing that needs deferred realization —
-//   holding a transient TRS on the handle until it has a parent — which is
-//   exactly the second transform store the design deleted, so it is a decision
-//   above this file, not a tweak.
-//
-//   What it costs is also handed straight back: e.first_sync falls by the same
-//   order (the mirror no longer creates a node per document node), so
-//   END-TO-END document build + first sync is flat — 1k +0.8%, 10k +0.6%,
-//   50k -2.2%.
-//
-//   Note also that e.build_doc and e.first_sync are SINGLE-SAMPLE metrics
-//   (addSingle, n = 1): they carry no dispersion, so the stability bounds above
-//   cannot say whether their measurement is usable at all.
-static constexpr int    kImproveFromScale = 10000;
-static constexpr double kMaxRegressPct    = 10.0;
 
 // ---------------------------------------------------------------------------
 // Sample statistics.
@@ -630,7 +559,7 @@ static std::string readCpuModel()
 static unsigned gWorkerThreads = 0;
 
 // ---------------------------------------------------------------------------
-// JSON: write the result file, and read a baseline back.
+// JSON: write the result file (the measure's evidence).
 
 static QJsonObject metricToJson(const Metric &m)
 {
@@ -713,75 +642,6 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     return true;
 }
 
-/// §6's acceptance, computed — the row scenegraph.baseline (MIRROR-SETTLE-1 fix round 3): a
-/// COMPARISON OF TWO FILES, the committed baseline and the result file scenegraph.benchmark
-/// recorded, with no measurement of its own. Returns the number of violated clauses (the exit code
-/// is non-zero on any), or -1 when a file cannot be read.
-static int compareFiles(const std::string &basePath, const std::string &resultPath)
-{
-    auto load = [](const std::string &path, QJsonObject &out) {
-        QFile f(QString::fromStdString(path));
-        if (!f.open(QIODevice::ReadOnly)) {
-            std::printf("FAIL: cannot read %s\n", path.c_str());
-            return false;
-        }
-        out = QJsonDocument::fromJson(f.readAll()).object();
-        if (out.value("metrics").toObject().isEmpty()) {
-            std::printf("FAIL: %s holds no metrics\n", path.c_str());
-            return false;
-        }
-        return true;
-    };
-    QJsonObject base, result;
-    if (!load(basePath, base) || !load(resultPath, result)) return -1;
-    const QJsonObject bm = base.value("metrics").toObject();
-    const QJsonObject rm = result.value("metrics").toObject();
-    std::printf("\n--- §6 comparison: %s (commit %s, %s) vs %s (commit %s, %s) ---\n", basePath.c_str(),
-                base.value("commit").toString().toUtf8().constData(),
-                base.value("config").toObject().value("build_type").toString().toUtf8().constData(),
-                resultPath.c_str(), result.value("commit").toString().toUtf8().constData(),
-                result.value("config").toObject().value("build_type").toString().toUtf8().constData());
-    int violations = 0, compared = 0;
-    for (auto it = rm.begin(); it != rm.end(); ++it) {
-        const std::string id = it.key().toStdString();
-        const QJsonObject nowByScale = it.value().toObject();
-        const QJsonObject baseByScale = bm.value(it.key()).toObject();
-        for (auto sc = nowByScale.begin(); sc != nowByScale.end(); ++sc) {
-            const QJsonValue v = baseByScale.value(sc.key());
-            if (!v.isObject()) continue;
-            const double b = v.toObject().value("median_ms").toDouble();
-            const double now = sc.value().toObject().value("median_ms").toDouble();
-            const int scale = sc.key().toInt();
-            if (b <= 0.0) continue;
-            ++compared;
-            const double pct = (now - b) / b * 100.0;
-            const bool gated = id.compare(0, 2, "a.") == 0 || id.compare(0, 2, "b.") == 0;
-            // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
-            // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
-            // document node costs ~+17% at 1k over three member writes, end-to-end
-            // build+first_sync is flat-to-better, and "we are all in on ogre...
-            // accept the costs, we can streamline over time." The setParent
-            // depth-migration (~40% of the cost) is the recorded streamlining
-            // candidate. Every other metric keeps the full 10% clause.
-            const bool regressExempt = id == "e.build_doc";
-            const char *verdict = "     ";
-            if (gated && scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
-            else if (!regressExempt && scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
-            else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
-            std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
-                        id.c_str(), scale, b, now, pct, verdict);
-            if (std::strcmp(verdict, "     ") != 0 && std::strcmp(verdict, "accepted-§6a") != 0)
-                std::printf("FAIL: %s@%d %s (base %.3f now %.3f, %+.1f%%)\n", id.c_str(), scale, verdict, b,
-                            now, pct);
-        }
-    }
-    if (compared == 0) {
-        std::printf("FAIL: no metric of %s is in the baseline\n", resultPath.c_str());
-        return -1;
-    }
-    std::printf("--- %d violation(s) over %d compared metric(s) ---\n", violations, compared);
-    return violations;
-}
 
 // ---------------------------------------------------------------------------
 
@@ -790,7 +650,6 @@ int main(int argc, char **argv)
     std::string recordPath;
     std::string note = "recorded by tests/benchmarks/bench_scenegraph.cpp";
     std::vector<int> scales{1000, 10000, 50000};
-    std::string compareBase, compareResult;
     bool quick = false;
     // --smoke: the STRUCTURAL half of this benchmark, at the smallest scale,
     // with no timing verdict of any kind (TEST_GATE_AUDIT.md §3). The full
@@ -799,15 +658,13 @@ int main(int argc, char **argv)
     // is the answer to "did every document node reach the engine, did the
     // static tags land, did a frame render" — which is three CHECKs that cost
     // fifteen seconds and do not care how loaded the box is. The dispersion
-    // bounds and the baseline comparison stay where they belong: on a quiet box,
-    // stage-close, under --assert.
+    // bounds stay where they belong: on a quiet box, at the close, under --assert.
     bool smoke = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--assert") {}   // the default: run, print, assert the physics bars
         else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
-        else if (a == "--compare" && i + 2 < argc) { compareBase = argv[++i]; compareResult = argv[++i]; }
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
         else if (a == "--smoke") { smoke = true; quick = true; scales = {1000}; }
@@ -817,18 +674,12 @@ int main(int argc, char **argv)
             std::string list = argv[++i], cur;
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
-            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] [--compare <baseline> <result>] "
+            std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] "
                         "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
             return 0;
         }
     }
 
-    // THE BASELINE ROW (scenegraph.baseline): two files, no engine, no measurement.
-    if (!compareBase.empty()) {
-        const int v = compareFiles(compareBase, compareResult);
-        std::printf("\n%s\n", v == 0 ? "PASSED (0 violations)" : "FAILED");
-        return v == 0 ? 0 : 1;
-    }
 
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
@@ -846,7 +697,7 @@ int main(int argc, char **argv)
     // offscreen frames are ~1 ms, so anything time-driven inside it would see a
     // different clock than a real editor. Deterministic here, like every other
     // headless suite (PFX2 fact, CLAUDE.md).
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     // ARM the geometry counters. Engine::renderStats is lazy by contract: the
     // FIRST call switches Ogre's per-draw counting on and reports zeros with
     // metricsRecording=false. Asking here, before anything is built, means
@@ -1268,18 +1119,44 @@ int main(int argc, char **argv)
         // (c) reparent a 500-node subtree, alternating between the two hosts.
         {
             const LoopBudget bRep{ 2, 10, quick ? 10 : 60, quick ? 400.0 : 2500.0 };
+            // THE SPLIT (ENGINE-UPGRADE-1 stage 2): `_sync` is the two document calls AND the mirror's sync —
+            // each timed on its own, and the first iteration's COUNTS printed (the mirror's walk, the engine's
+            // structural edits): the cause of a cost that grows with the scene is a count that does.
             auto st = runLoop(bRep, [&](int it, Recorder &rec) {
                 iris::SceneNodePtr from = (it % 2) ? s.hostB : s.hostA;
                 iris::SceneNodePtr to   = (it % 2) ? s.hostA : s.hostB;
+                const quint64 pushes0 = mirror.visitPushCount();
+                const SceneChangeStats cs0 = es->changeStats();
                 const auto t0 = Clock::now();
                 from->removeChild(s.subtree);
+                const auto t1 = Clock::now();
                 to->addChild(s.subtree, false);
-                mirror.sync();
+                const auto t2 = Clock::now();
+                const int visited = mirror.sync();
+                const auto t3 = Clock::now();
                 const double syncMs = msSince(t0);
+                const SceneChangeStats cs1 = es->changeStats();
                 engine->renderOneFrame();
+                rec.add("c.reparent_500_remove", std::chrono::duration<double, std::milli>(t1 - t0).count());
+                rec.add("c.reparent_500_add", std::chrono::duration<double, std::milli>(t2 - t1).count());
+                rec.add("c.reparent_500_mirror", std::chrono::duration<double, std::milli>(t3 - t2).count());
                 rec.add("c.reparent_500_sync", syncMs);
                 rec.add("c.reparent_500", msSince(t0));
+                if (it < 3)   // two warm-ups and the first measured iteration
+                    std::printf("COUNT c.reparent_500 scale=%d visited=%d dirty=%llu evicted=%llu pushes=%llu "
+                                "materials=%llu settleVisits=%u walk=%s itemsDestroyed=%llu itemsCreated=%llu "
+                                "giInvalidations=%llu probeRestarts=%llu\n",
+                                n, visited, (unsigned long long)mirror.dirtyNodeCount(),
+                                (unsigned long long)mirror.evictedNodeCount(),
+                                (unsigned long long)(mirror.visitPushCount() - pushes0),
+                                (unsigned long long)mirror.materialBuildCount(), unsigned(mirror.staticSettleVisits()),
+                                mirror.walkMode(), cs1.itemsDestroyed - cs0.itemsDestroyed,
+                                cs1.itemsCreated - cs0.itemsCreated, cs1.giInvalidations - cs0.giInvalidations,
+                                cs1.probeBuildRestarts - cs0.probeBuildRestarts);
             });
+            addMetric("c.reparent_500_remove", n, st["c.reparent_500_remove"], true);
+            addMetric("c.reparent_500_add", n, st["c.reparent_500_add"], true);
+            addMetric("c.reparent_500_mirror", n, st["c.reparent_500_mirror"], true);
             addMetric("c.reparent_500_sync", n, st["c.reparent_500_sync"], true);
             addMetric("c.reparent_500", n, st["c.reparent_500"], true);
         }

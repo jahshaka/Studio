@@ -378,7 +378,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-scene-switch-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     const Colour blue(0.12f, 0.22f, 0.85f), red(0.85f, 0.18f, 0.10f);

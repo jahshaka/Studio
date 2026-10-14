@@ -104,13 +104,18 @@ void EnginePreviewScene::release()
     mScene = nullptr;
 }
 
-void EnginePreviewScene::pushFrame(const iris::CameraNodePtr &camera, int width, int height)
+void EnginePreviewScene::pushFrame(const iris::CameraNodePtr &camera, int width, int height,
+                                   std::function<void(jahshaka::engine::FrameInputView &, jahshaka::engine::View *)> finish)
 {
     if (camera) camera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror && mView) {
-        mMirror->sync();
-        mMirror->applySky(mView);
-        if (camera) mMirror->applyCamera(camera, mView);
+        // The sky and the camera ride the frame's input (U0 3a).
+        SceneMirror::FrameView fv;
+        fv.view = mView;
+        fv.sky = true;
+        fv.camera = camera;
+        fv.finish = std::move(finish);
+        mMirror->sync(SceneMirror::FrameViews{ { fv } });
     }
 }
 

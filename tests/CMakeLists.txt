@@ -431,8 +431,19 @@ endfunction()
 # add_test() on the card's slots — the ONE way a row that boots Vulkan is registered (source.gpu_rows_closure fails a
 # Vulkan row that is not): its class (JAH_CLASS) and its slots (RESOURCE_GROUPS, tests/cmake/vram_rows.cmake). A TARGET
 # name as the first COMMAND word becomes $<TARGET_FILE:...>. A pool is registered by jah_add_pool.
+# CLASS engine BOOTS WARM (ENGINE-UPGRADE-1 stage 1, BOOT; DOCS/PROCESS.md: "every engine fixture boots on the shared warm
+# shader cache"): the row runs as `fresh_home.sh --warm --cache engine <this dir's build>/homes/<row> -- env
+# JAHSHAKA_SHADER_CACHE_DIR=<home>/.local/share/Jahshaka/shadercache JAH_TEXTURE_CACHE=0 <exe> …` — the fixtures' one
+# shared cache (<build>/tests/.shadercache-engine, keyed apart from the app rows' .shadercache: measured, the app rows'
+# union reached 268 MB = the engine's 256 MB cap and its replay cost a fixture 0.4-0.8 s a boot) hard-linked in, a green
+# run that grew it promoted, the home wiped after (a red one moved to the evidence); the fixture helper's hook (tests/support/enginetesthelpers.h applyHarnessDefaults) copies the
+# variable into the config, and a fixture that states its own cache (shaderCacheDir / shaderCacheOff) still wins. The
+# texture sidecar is OFF on engine rows (its key is a file's path; a shared one could serve a stale channel count). The
+# variables ride the COMMAND, never ENVIRONMENT: a later set_tests_properties(… ENVIRONMENT …) replaces that property.
+# COLD "<why>" — a row whose SUBJECT is the cold compile (a count of compiles a warm cache would hide, the cache itself):
+# no wrapper, no cache, the reason stated where the row is.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -462,7 +473,20 @@ function(jah_gpu_row _row)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
+    if(DEFINED G_COLD AND NOT G_CLASS STREQUAL "engine")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): COLD declares an ENGINE row cold; a ${G_CLASS} row's home is its own")
+    endif()
+    if("COLD" IN_LIST ARGN AND NOT G_COLD)
+        message(FATAL_ERROR "jah_gpu_row(${_row}): COLD needs its reason (COLD \"<why the row must compile cold>\")")
+    endif()
+    if(G_CLASS STREQUAL "engine" AND NOT G_COLD)
+        set(_home "${CMAKE_CURRENT_BINARY_DIR}/homes/${_row}")
+        add_test(NAME ${_row} COMMAND sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
+                 env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
+                 "${_exe}" ${G_COMMAND} ${_wd})
+    else()
+        add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
+    endif()
     if(DEFINED G_FRAMES)
         set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})
     endif()
@@ -481,7 +505,7 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the measuring list changes by a verdict only")
@@ -505,8 +529,21 @@ function(jah_gpu_exclusive_test)
     endif()
     # --run-timeout: the row's own budget, enforced by the wrapper from AFTER the lock's wait (a holder of the lock runs
     # it at once); ctest's TIMEOUT is the backstop: the budget + 30 s (timeout(1)'s kill grace).
+    # A CLASS engine measure boots warm like every engine row (jah_gpu_row's CLASS engine paragraph; COLD "<why>" opts out)
+    set(_warm)
+    if(DEFINED G_COLD AND NOT G_CLASS STREQUAL "engine")
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): COLD declares an ENGINE row cold")
+    endif()
+    if("COLD" IN_LIST ARGN AND NOT G_COLD)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): COLD needs its reason (COLD \"<why the row must compile cold>\")")
+    endif()
+    if(G_CLASS STREQUAL "engine" AND NOT G_COLD)
+        set(_home "${CMAKE_CURRENT_BINARY_DIR}/homes/${G_NAME}")
+        set(_warm sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
+                  env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0)
+    endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
-             --label ${G_NAME}:${G_CLASS} "${_exe}" ${G_COMMAND} ${_wd})
+             --label ${G_NAME}:${G_CLASS} ${_warm} "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
     _jah_data(${G_NAME} ${G_CLASS} ${G_DATA})

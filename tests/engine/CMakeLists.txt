@@ -200,6 +200,30 @@ set_tests_properties(engine.oom_is_not_loss PROPERTIES TIMEOUT 120 LABELS "engin
 # sides are asserted (furniture free, a real mover still counted) and the scan's
 # cost is measured in-process; JAH_VR_SCAN_BENCH=1 adds the 5k/10k arms, which
 # the gate does not run.
+# engine.frame_input_drain / engine.frame_input_settle — THE FRAME'S INPUT, DRAINED ONCE (ENGINE-UPGRADE-1 U0 3a):
+# FrameInput through Engine::submitFrame, applied at the top of renderOneFrame. Laws in counts (FrameInputStatus): one
+# submit then N frames = N drains (N-1 empty); two submits before a frame = one drain, the scene part replaced; an
+# unchanged record drains to nothing; a camera move is the per-view part only. --settle: one record or the identical
+# record every frame reach giAtRest in the same frames with the same GI scans (the record changes WHEN, not WHAT).
+add_executable(test_engine_frame_input test_engine_frame_input.cpp)
+set_target_properties(test_engine_frame_input PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_frame_input PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_frame_input PRIVATE JahshakaEngine)
+add_dependencies(test_engine_frame_input JahshakaEngineMedia)
+jah_gpu_row(engine.frame_input_drain CLASS engine FRAMES 14 COMMAND test_engine_frame_input --drain
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.frame_input_drain PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_gpu_row(engine.frame_input_settle CLASS engine FRAMES 8 COMMAND test_engine_frame_input --settle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
+set_tests_properties(engine.frame_input_settle PROPERTIES TIMEOUT 60 LABELS "engine"
+                     RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
 set_target_properties(test_engine_gi_scan PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON

@@ -485,7 +485,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-atom-negative-control-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("negative", kW, kH, Colour(0, 0, 0));
     Scene *scene = e->createScene("negative");

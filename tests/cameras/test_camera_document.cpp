@@ -327,7 +327,7 @@ int main(int argc, char **argv)
         CHECK(scene->getActiveCamera().isNull(), "and getActiveCamera() reports null");
 
         CHECK(!scene->isPlaying(),
-              "a scene is not playing by default (the flag applyCamera reads)");
+              "a scene is not playing by default (the flag buildCamera reads)");
         scene->setPlaying(true);
         CHECK(scene->isPlaying(), "setPlaying(true) is visible to the mirror");
     }

@@ -62,6 +62,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -115,7 +116,7 @@ int main(int argc, char **argv)
     SceneMirror mirror(target);
     mirror.setSource(doc);
     mirror.sync();
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     Image img;
     const auto renderN = [&](int n) {

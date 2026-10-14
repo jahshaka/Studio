@@ -22,9 +22,10 @@
 #include <string>
 
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/mirror/scenemirror.h"
 
 namespace jahshaka { namespace engine { class Engine; class Scene; class View; } }
-class SceneMirror;
+// (SceneMirror::FrameView is a nested type: the mirror header, not a forward declaration.)
 
 namespace recordingview {
 
@@ -39,12 +40,11 @@ jahshaka::engine::View *create(jahshaka::engine::Engine &engine, jahshaka::engin
                                const std::string &name, unsigned width, unsigned height,
                                bool helpers, QString *why);
 
-/// The per-frame push of the recording view, beside the editor's own: the sky,
-/// the per-view environment with the WHOLE chain in one push (offscreenChain),
-/// and the camera. Never applyEnvironment (its scene half counts GI settle
-/// frames and belongs to the editor's view alone).
-void push(SceneMirror &mirror, jahshaka::engine::View *view,
-          const iris::CameraNodePtr &camera, float framingAspect);
+/// The recording view's part of the frame (U0 3a: SceneMirror::sync's FrameViews), beside the editor's own: the
+/// sky, the per-view environment with the WHOLE chain in one record (offscreenChain), and the camera. Never the
+/// environment (its scene half counts GI settle frames and belongs to the editor's view alone).
+SceneMirror::FrameView frameView(jahshaka::engine::View *view, const iris::CameraNodePtr &camera,
+                                 float framingAspect);
 
 }   // namespace recordingview
 

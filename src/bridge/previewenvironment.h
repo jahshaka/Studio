@@ -25,7 +25,7 @@
 // nodes left in either preview document.
 //
 // WHY 8-BIT AND NOT A FLOAT HDRI. The sky an iris document can carry reaches
-// the engine through SceneMirror::applySky, and every upload path there —
+// the engine through SceneMirror::buildSky, and every upload path there —
 // loadTexture, createTexture, the live-texture path this uses — is 8-bit RGBA.
 // A float environment would need a new engine entry point (an out-of-lane
 // change), so the softboxes sit at the top of the LDR range (radiance 1.0) and
@@ -90,7 +90,7 @@ const float *ambientSh();
 /// Pushes the environment light's gain (1) into an engine Scene; the engine
 /// forms the diffuse nine bands from the sky it captured (Engine.h,
 /// setEnvironmentLight). The sky itself travels the ordinary way
-/// (SceneMirror::applySky).
+/// (SceneMirror::buildSky).
 void pushAmbient(jahshaka::engine::Scene *scene);
 
 /// THE PREVIEW'S EXPOSURE, in STOPS (iris::Scene::exposure's unit), DERIVED:

@@ -316,12 +316,43 @@ var reopened = scene.nodes();
 for (var j = 0; j < reopened.length; j++)
     if (reopened[j].type === "camera") reopenedCam = reopened[j].id;
 assert(reopenedCam !== null, "the camera reopened as a camera");
-node.transform(reopenedCam, { position: { x: 40, y: 40, z: 40 } });
+// THE REOPENED RIDER IS ON ITS SOCKET AT THE FILE'S OFFSET, and it is a rider like any other: a transform written on
+// it is the offset FROM the socket and STICKS (phase C's contract). This used to write (40,40,40) and expect it taken
+// back — which held only while a reopened rider sat on the bind-pose FALLBACK for its first frames (the open armed
+// the tag one sync late). The open's environment prime now runs a sync of its own (ENGINE-UPGRADE-1 U0 3a: the
+// environment leaves the mirror in the frame's record), so the rider is on its tag before the script's first line,
+// and the write sticks, exactly as phase C requires of every socketed node.
+var reopenedInfo = node.info(reopenedCam);
+assert(reopenedInfo.socket && reopenedInfo.socket.name === "head",
+       "a reopened socketed camera comes back ON its socket (" + JSON.stringify(reopenedInfo.socket) + ")");
+assert(dist(reopenedInfo.position, { x: 0, y: 0, z: 0 }) < 1e-4,
+       "…with the offset the FILE holds (" + JSON.stringify(reopenedInfo.position) + ")");
+node.transform(reopenedCam, { position: { x: 0, y: 0.25, z: 0 } });
 editor.frame(2);
-var back = node.info(reopenedCam).position;
-assert(dist(back, { x: 40, y: 40, z: 40 }) > 1.0,
-       "a reopened socketed camera comes back on its socket with the offset the FILE holds — " +
-       "not with the transform that was written on it before the save");
+assert(Math.abs(node.info(reopenedCam).position.y - 0.25) < 1e-3,
+       "…and a transform written on the reopened rider STICKS — the offset from the socket");
+node.transform(reopenedCam, { position: { x: 0, y: 0, z: 0 } });
+editor.frame(2);
+// ...AND THE MIRROR DRIVES IT (the 3a read, B): the three checks above hold for a rider that is never armed too (a
+// detached node keeps its local), so the proof is phase D's — what the reopened camera SEES follows the rig's pose.
+// The file holds the rig where phase D left it (away from the marker); taking it back to the origin puts the marker
+// in front of the head socket again, and the shot changes only if the camera hangs off the bone in the renderer.
+var reopenedRig = null;
+for (var k = 0; k < reopened.length; k++) {
+    var rb = node.boneNames(reopened[k].id);
+    if (rb && rb.length > 0) { reopenedRig = reopened[k].id; break; }
+}
+assert(reopenedRig !== null, "the rig reopened as a rig");
+var r1 = camera.screenshot(reopenedCam, "reopened_rig_moved.png", { width: 96, height: 96, probes: probes });
+node.transform(reopenedRig, { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } });
+editor.frame(2);
+var r2 = camera.screenshot(reopenedCam, "reopened_rig_at_origin.png", { width: 96, height: 96, probes: probes });
+console.log("reopened shot delta after moving the rig: " + pixelDelta(r1, r2));
+assert(pixelDelta(r1, r2) > 6,
+       "what the REOPENED socketed camera sees changed when the rig moved — the reopened rider is driven by its " +
+       "bone in the renderer, not merely recorded as attached");
+assert(dist(node.info(reopenedCam).position, { x: 0, y: 0, z: 0 }) < 1e-4,
+       "…while its own transform stayed the offset from the socket");
 
 // ---- detach leaves it where it was ---------------------------------------
 var parked = node.info(reopenedCam).position;

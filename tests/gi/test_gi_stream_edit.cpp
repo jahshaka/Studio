@@ -75,7 +75,7 @@ static const unsigned kSize = 128;
 /// frame — exactly as `EngineSceneViewport`'s driver tick does.
 static void frame(Engine *e, FramePace pace)
 {
-    e->setNextFramePace(pace);
+    e->submitFrame(jahshaka::engine::FrameInput::withPace(pace));
     e->renderOneFrame();
 }
 
@@ -115,7 +115,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-stream-edit-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("streamedit", kSize, kSize, Colour(0, 0, 0));

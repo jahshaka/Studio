@@ -24,6 +24,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -96,7 +97,7 @@ int main(int argc, char **argv)
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
     cam->setAspectRatio(1.0f);
     doc->getRootNode()->addChild(cam);
-    SceneMirror mirror(target); mirror.setSource(doc); mirror.sync(); mirror.applyCamera(cam, view);
+    SceneMirror mirror(target); mirror.setSource(doc); mirror.sync(); mirror.sync(mirrorframe::camera(view, cam));
 
     TranslationGizmo gizmo;                          // loads app/models/axis_*.obj (no GL needed)
     CHECK(gizmo.drawItems(iris::Vec3(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).isEmpty(), "nothing selected -> no items");
@@ -144,7 +145,7 @@ int main(int argc, char **argv)
         // picture with enough pixels in it to name a colour.
         View *big = engine->createOffscreenView("gizmo-planes", 512, 512, Colour(0.1f, 0.1f, 0.1f));
         big->setScene(target);
-        mirror.applyCamera(cam, big);
+        mirror.sync(mirrorframe::camera(big, cam));
         gizmo.setPickView(cam, 512.0f, 512.0f);
         gizmo.updateSize(cam);
         auto withPlanes = gizmo.drawItems(cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
@@ -178,7 +179,7 @@ int main(int argc, char **argv)
             CHECK(projected && isBg(c), "and it is an OUTLINE: the middle of the square is "
                                         "the background, not the handle's colour");
         }
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         engine->destroyView(big);
         // Back to the state the rest of the suite expects.
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
@@ -256,7 +257,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(5, 4, 5));
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->update(0.0f);
-        mirror.applyCamera(cam, ballView);
+        mirror.sync(mirrorframe::camera(ballView, cam));
         gizmo.setPickView(cam, 1024.0f, 1024.0f);
         gizmo.updateSize(cam);
         GizmoOverlay ballOverlay(target);
@@ -305,7 +306,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(savedPos);
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->update(0.0f);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         engine->destroyView(ballView);
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
         gizmo.updateSize(cam);
@@ -334,7 +335,7 @@ int main(int argc, char **argv)
             cam->setLocalPos(eyePos);
             cam->lookAt(iris::Vec3(0, 0, 0));
             cam->update(0.0f);
-            mirror.applyCamera(cam, depthView);
+            mirror.sync(mirrorframe::camera(depthView, cam));
             gizmo.setSelectedNode(node);
             gizmo.setPickView(cam, 256.0f, 256.0f);
             gizmo.updateSize(cam);
@@ -365,7 +366,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(savedPos);
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->update(0.0f);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         engine->destroyView(depthView);
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
         gizmo.updateSize(cam);
@@ -481,7 +482,7 @@ int main(int argc, char **argv)
     {
         View *big = engine->createOffscreenView("gizmo-drag", 512, 512, Colour(0.1f, 0.1f, 0.1f));
         big->setScene(target);
-        mirror.applyCamera(cam, big);
+        mirror.sync(mirrorframe::camera(big, cam));
         GizmoOverlay dragOverlay(target);
 
         RotationGizmo drag;
@@ -547,7 +548,7 @@ int main(int argc, char **argv)
             cam->setLocalPos(iris::Vec3(5, 4, 5));
             cam->lookAt(iris::Vec3(0, 0, 0));
             cam->update(0.0f);
-            mirror.applyCamera(cam, big);
+            mirror.sync(mirrorframe::camera(big, cam));
             RotationGizmo iso;
             iso.setSelectedNode(node);
             iso.setPickView(cam, 512.0f, 512.0f);
@@ -584,7 +585,7 @@ int main(int argc, char **argv)
               "and at release the marker is gone: the four rings (the three axis ones as two "
               "arc halves each) and nothing else");
         dragOverlay.clear();
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         engine->destroyView(big);
     }
 
@@ -604,7 +605,7 @@ int main(int argc, char **argv)
         View *blend = engine->createOffscreenView("gizmo-alpha", 256, 256,
                                                   Colour(0.1f, 0.1f, 0.1f));
         blend->setScene(target);
-        mirror.applyCamera(cam, blend);
+        mirror.sync(mirrorframe::camera(blend, cam));
         GizmoOverlay alphaOverlay(target);
 
         OneItemGizmo one;
@@ -673,7 +674,7 @@ int main(int argc, char **argv)
               "and the OPAQUE path is byte-identical across the round trip");
 
         alphaOverlay.clear();
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         engine->destroyView(blend);
     }
 
@@ -698,7 +699,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->update(0.0f);
         cam->setAspectRatio(1.0f);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         gizmo.setSelectedNode(node);
         gizmo.setPickView(cam, 128.0f, 128.0f);
         gizmo.updateSize(cam);
