@@ -2299,11 +2299,21 @@ static int cpuWalksMain()
                     giScan.empty() ? 0.0 : *std::max_element(giScan.begin(), giScan.end()), giScan.size());
         return med;
     };
+    // THE DIRTY SCAN'S WORK (ENGINE-UPGRADE-2B stage 2): the slots the walk compares and the
+    // flags words it recomputes, before and after each arm.
+    struct Walked { unsigned long long compared = 0, flags = 0; };
+    auto walked = [&] {
+        const GpuSubstrateStatus g = gpuSubstrateStatus(*env.scene);
+        return Walked{ g.slotsCompared, g.flagsRecomputed };
+    };
+    const Walked g0 = walked();
     const Visits v0 = visits();
     const auto still = measure("still", false);
     const Visits v1 = visits();
+    const Walked g1 = walked();
     const auto moving = measure("one mover", true);
     const Visits v2 = visits();
+    const Walked g2 = walked();
     const unsigned long long moverFrames = frames;   // frames of the mover arm (one moved slot each)
     std::printf("W13 visits  still: feed %llu, words %llu, ray tier %llu | mover (%llu frames, 1 mover): feed %llu, "
                 "words %llu, ray tier %llu\n",
@@ -2322,10 +2332,46 @@ static int cpuWalksMain()
                 v2.rays - v1.rays <= moverFrames,
             "W13 a MOVER frame visits at most the moved slot (feed %llu, words %llu, ray tier %llu over %llu frames)",
             v2.feed - v1.feed, v2.words - v1.words, v2.rays - v1.rays, moverFrames);
+    std::printf("W13 the dirty scan's work  still: %llu slots compared, %llu flags recomputed | mover (%llu frames): "
+                "%llu compared, %llu flags recomputed\n",
+                g1.compared - g0.compared, g1.flags - g0.flags, moverFrames, g2.compared - g1.compared,
+                g2.flags - g1.flags);
+    // THE BACKSTOP IS GONE (ENGINE-UPGRADE-2B stage 2): the walk visits the NAMED slots — the
+    // change set's moved subtrees and the engine's seams — so a still frame compares nothing
+    // and a one-mover frame compares the mover's subtree (one slot here) and recomputes at
+    // most its flags word. Red before: every slot's transform and the 9,999 unmoved slots'
+    // flags, on every mover frame.
+    REQUIRE(g1.compared == g0.compared && g1.flags == g0.flags,
+            "W13 a STILL frame at 10k: the dirty scan compares 0 slots and recomputes 0 flags (%llu, %llu)",
+            g1.compared - g0.compared, g1.flags - g0.flags);
+    REQUIRE(g2.compared - g1.compared <= moverFrames && g2.flags - g1.flags <= moverFrames,
+            "W13 a ONE-MOVER frame at 10k: the dirty scan compares at most the named slot and recomputes at most "
+            "its flags (%llu compared, %llu flags over %llu frames)",
+            g2.compared - g1.compared, g2.flags - g1.flags, moverFrames);
     REQUIRE(moving[0] <= kComposeBarMs,
             "W13 THE COMPOSE on a mover frame at 10k is at most %.1f ms (engine.gpuscene median %.3f ms; the "
             "substrate's walk on %u threads)",
             kComposeBarMs, moving[0], walkThreads);
+    // THE NAMED WALK'S PRICE, PAIRED (ENGINE-UPGRADE-2B stage 2): the dirty scan's stage on the
+    // one-mover frames with the measuring arm `gpuscene.wholeWalk` (the walk before: every slot,
+    // the flags backstop) against the shipped named walk, A B B A in this one process.
+    {
+        double arm[2][2] = {};   // [whole?][pass]
+        const int order[4] = { 1, 0, 0, 1 };
+        for (int p = 0; p < 4; ++p) {
+            env.engine->setArm("gpuscene.wholeWalk", double(order[p]));
+            frame(env, 2);   // latched, and the arm's first walk out of the way
+            const auto m = measure(order[p] ? "ab whole" : "ab named", true);
+            arm[order[p]][p < 2 ? 0 : 1] = m[0];
+        }
+        env.engine->setArm("gpuscene.wholeWalk", 0.0);
+        frame(env, 2);
+        std::printf("W13 ABBA the dirty scan (engine.gpuscene median, one mover at 10k): whole walk %.3f / %.3f ms, "
+                    "named walk %.3f / %.3f ms\n", arm[1][0], arm[1][1], arm[0][0], arm[0][1]);
+        target("W13", 0.5 * (arm[0][0] + arm[0][1]), "ms",
+               ("the dirty scan, the named walk (paired: the whole walk " +
+                std::to_string(0.5 * (arm[1][0] + arm[1][1])) + " ms)").c_str());
+    }
     for (int k = 0; k < 5; ++k) {
         const std::string what = std::string(kWhat[k]) + " (" + kWalks[k] + ") on a mover frame at 10k; still " +
                                  std::to_string(still[size_t(k)]) + " ms" +
