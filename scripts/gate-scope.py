@@ -182,8 +182,8 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["engine", "pieces", "perf"] for f in ("detachItem", "itemCount", "addObjectCounts")},
     "dropSkeletonFollowers": ["skeletal", "avatar"],
     **{f: ["gi", "rtreflect", "shadow"] for f in ("rayTracingResolved", "rayTracingResolvedFor", "setRayTracing")},
-    **{f: ["gi"] for f in ("walkCardLights", "updateSurfaceCache", "cardEligible", "cardColumnKey", "readCardTexel",
-                           "readCardAt", "dumpCardAtlas")},
+    **{f: ["gi"] for f in ("walkCardLights", "cardEligible", "cardColumnKey", "cardLightKey", "cardSceneFacts",
+                           "foldCardEnvironment", "cardCandidates", "readCardTexel", "readCardAt", "dumpCardAtlas")},
     "gpuSlotChanged": ["atom", "engine", "scale"],
     "query": ["engine", "picking"],
 }
