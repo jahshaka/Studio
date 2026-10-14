@@ -705,7 +705,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // own builder, with no project, so it writes nothing) pushed by a SceneMirror
     // configured as the editor configures its own (EngineSceneViewport::
     // ensureEngineScene / pushEditorHelpers), under the world's own environment
-    // (applyEnvironment — the same call the viewport makes every frame).
+    // (buildEnvironment — the same call the viewport makes every frame).
     if (runPass && warmView && db) {
         warmView->setScene(nullptr);
         if (warmScene) engine->destroyScene(warmScene);

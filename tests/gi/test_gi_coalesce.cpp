@@ -2,7 +2,7 @@
 // §5 / P2).
 //
 // The thing being prevented: with Auto Refresh on, a light whose transform
-// changes made SceneMirror::applyEnvironment call
+// changes made SceneMirror::buildEnvironment call
 // Scene::refreshGlobalIllumination() on THAT FRAME. For VCT that is a full
 // teardown plus a re-voxelize of every item; for the hybrid it is additionally
 // every probe re-rendered twice — 216 face renders at the shipped 18-probe grid

@@ -474,9 +474,9 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
              const char *label = nullptr)
 {
     mirror.sync();
-    // applySky BEFORE applyEnvironment, as every real host does. It is not
+    // buildSky BEFORE buildEnvironment, as every real host does. It is not
     // optional any more: the ambient is the SKY LIGHT reading the sky's own
-    // integral (SKY_LIGHT_SPEC.md §2), and the integral is applySky's — a
+    // integral (SKY_LIGHT_SPEC.md §2), and the integral is buildSky's — a
     // fixture that skipped it used to get the flat World colour and now gets no
     // ambient at all.
     mirror.sync(mirrorframe::sky(view));
@@ -487,7 +487,7 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     // inside the next rendered frame and integrates THAT, so the ambient a host
     // reads is the sky of the frame before — exactly like the IBL convolution,
     // which has always landed a frame late. Every real host calls
-    // applyEnvironment once per frame and never notices; this fixture pushes
+    // buildEnvironment once per frame and never notices; this fixture pushes
     // once and then renders hundreds of frames, so without these two lines the
     // FIRST shot of the run is the only one taken before the sky's light
     // arrives, and every later one is 2.5x brighter than it.
@@ -657,7 +657,7 @@ void partB()
 
     // ---- B2b: AN OVERRIDE MUST NOT CHURN THE COMPOSITOR -------------------
     // An enable-flag difference IS a workspace rebuild, and hosts call
-    // applyEnvironment and then applyCamera EVERY FRAME. If only one of the two
+    // buildEnvironment and then buildCamera EVERY FRAME. If only one of the two
     // substituted the camera's flags, the chain would be rebuilt twice a frame
     // for as long as an overriding camera was driving — invisible in a pixel
     // assertion and ruinous in the editor. Found while building this phase;

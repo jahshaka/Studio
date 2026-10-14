@@ -95,12 +95,12 @@ bool EnginePlayerScene::attach(View *view)
     mView->setHelpersVisible(false);
     // ONE CONVENTION for the shadow flag (audit F8): the editor viewport sets
     // it true before its first push, and this used to leave it false until
-    // applyEnvironment arrived on frame 1 — one guaranteed workspace rebuild per
+    // buildEnvironment arrived on frame 1 — one guaranteed workspace rebuild per
     // player page, every time. The document's own value follows immediately
-    // through applyEnvironment either way.
+    // through buildEnvironment either way.
     mView->setShadows(true);
     if (mView->scene() != mScene) mView->setScene(mScene);
-    // Some of what applyEnvironment pushes is PER VIEW (the whole post chain,
+    // Some of what buildEnvironment pushes is PER VIEW (the whole post chain,
     // MSAA, the shadow flag), and the mirror debounces on "already pushed" —
     // which is true, of the OTHER view. Dropping the latches is what makes the
     // player's own chain get built at all.
@@ -442,7 +442,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     }
     engine->destroyView(shot);
     // The mirror's per-view latches were just satisfied by a view that no longer
-    // exists (applyEnvironment/applySky above). Drop them so the next on-screen
+    // exists (buildEnvironment/buildSky above). Drop them so the next on-screen
     // frame — this page's, or the editor's — pushes its own chain again. Cheap:
     // every value below it is idempotent in the engine, and the GI half is a
     // binding re-assert, never a rebuild (SceneMirror::invalidateEnvironment).

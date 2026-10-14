@@ -412,7 +412,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     doc->setSkyColor(QColor(0, 0, 255));     // flat sky -> the view's clear colour
     // The DOCUMENT's ambient is what lights this scene now: the player pushes
-    // applyEnvironment, so the engine scene's hardcoded startup hemisphere is
+    // buildEnvironment, so the engine scene's hardcoded startup hemisphere is
     // overwritten on the first step (it used to survive, because the player
     // never pushed the world settings — the editor/player parity defect).
     //

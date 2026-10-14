@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     mirror.sync();
     mirror.sync(mirrorframe::camera(view, cam));
 
-    // `applySky` is not part of sync() — it is the host's own per-frame call
+    // `buildSky` is not part of sync() — it is the host's own per-frame call
     // (the editor viewport makes it), and it is what pushes the analytic sky
     // AND the sun disc. A render that forgets it draws the clear colour.
     auto render = [&](Image &img) {

@@ -66,7 +66,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     // "<sky>_<face>.<ext>" under bare catalog rows (no stored bytes, so a
     // project export left the sky behind), after first asking the catalog for
     // rows with those NAMES — the by-name lookup the whole round trip then
-    // depended on. An equirect "addSky/applySky" pair sat beside it with no
+    // depended on. An equirect "addSky/buildSky" pair sat beside it with no
     // caller and no data; it is gone too.
     // No library or no open project = nothing to pin the six faces into; say
     // so in the log rather than hand a null (or, before lane DBPTR-1, an

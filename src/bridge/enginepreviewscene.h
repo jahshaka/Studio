@@ -47,7 +47,7 @@
 //   (the base would need `bool ensureScene()` split out of attach()); its
 //   configureMirror would be `setSource(mDocument)` plus
 //   invalidateEnvironment(); configureView would be empty (the player takes
-//   shadows/ambient/fog/MSAA/GI from applyEnvironment, never from a hardcode);
+//   shadows/ambient/fog/MSAA/GI from buildEnvironment, never from a hardcode);
 //   releaseSubject would be empty; and its takeScreenshot would be a
 //   renderOffscreen() with a grade argument — which is the ONE thing the base
 //   would have to grow, since no preview grades its capture. Roughly 40 lines

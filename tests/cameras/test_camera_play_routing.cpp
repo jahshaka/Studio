@@ -1,10 +1,10 @@
 // The active camera takes the view WHEN PLAYING — in pixels (CAMERAS_SPEC D6).
 //
-// The seam is SceneMirror::applyCamera, which is "the ONLY way to move a View's
+// The seam is SceneMirror::buildCamera, which is "the ONLY way to move a View's
 // camera" (Engine.h). Phase 1 makes exactly one substitution there: when the
 // DOCUMENT says it is playing and an active camera is set, that camera's state
 // drives the view instead of whatever camera the caller passed. Everything the
-// editor and the player already do — the same three sync/applySky/applyCamera
+// editor and the player already do — the same three sync/buildSky/buildCamera
 // calls — is untouched.
 //
 // What this suite proves, with real frames from the real backend:
@@ -12,7 +12,7 @@
 //   * EDITING is unchanged. With an active camera set and the scene NOT
 //     playing, the view is still the explorer's. This is the assertion that
 //     stops phase 1 from taking the main viewport (pilot mode is phase 3).
-//   * PLAYING routes. Flip the document's play flag and the same applyCamera
+//   * PLAYING routes. Flip the document's play flag and the same buildCamera
 //     call renders the active camera's shot instead.
 //   * Clearing the active camera hands the view back.
 //   * A guid whose camera was deleted does not render through a corpse.
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     frame(img); show("active camera set, PLAYING", img);
     CHECK(isBlue(centre(img)),
           "PLAY renders through the active camera (which is pointed at nothing) even though "
-          "applyCamera was handed the explorer");
+          "buildCamera was handed the explorer");
 
     // ---- 4. and follows it when it moves ----------------------------------
     sceneCam->lookAt(iris::Vec3(0, 0, 0));                // turn it back at the cube

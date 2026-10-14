@@ -163,7 +163,7 @@ void AvatarPreviewModel::buildDocument()
     mDocument->sunDiscVisible = false;
     // NOTE: the room's ambient is the ENGINE scene's hemisphere
     // (AvatarPreviewScene::configureScene), not this: a preview host syncs the
-    // mirror but never calls applyEnvironment, so a preview document's ambient
+    // mirror but never calls buildEnvironment, so a preview document's ambient
     // reaches nothing. The dead `setAmbientColor` write that used to stand here
     // is GONE with the field (SKY_LIGHT_SPEC.md §5) — it was measured as dead
     // for the picture (smoke S10) and there is nothing to keep.

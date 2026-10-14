@@ -931,7 +931,7 @@ void EngineSceneViewport::bindViewToScene()
     // wearer's hands out of pictures that are not theirs.
     view()->setVrHelpersVisible(true);
     // AND THE MIRROR'S PER-VIEW LATCHES GO (the same line, for the same reason,
-    // as EnginePlayerScene::attach): part of what applyEnvironment pushes is per
+    // as EnginePlayerScene::attach): part of what buildEnvironment pushes is per
     // VIEW — the whole post chain, MSAA, the shadow flag — and the mirror
     // debounces on "already pushed", which may be true OF THE PLAYER'S VIEW.
     // Dropping the latches is what makes this view's chain get built at all when
@@ -2346,7 +2346,7 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
     // axis view re-arms the lock (cameraRotationLocked's pilot exception).
     applyRotationLock();
     // The engine's letterbox flag rides the CameraDesc, so it follows on the
-    // next applyCamera; nothing else here has to know about it.
+    // next buildCamera; nothing else here has to know about it.
     return true;
 }
 
@@ -3410,7 +3410,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     //
     // THE CAMERA TAKES THE SHOT'S ASPECT FOR THE WHOLE SHOT, gizmo or not
     // (lane L11, platform audit C2b.2). For a free camera the engine already
-    // resolves the frame from the shot's own target (OgreView::applyCamera),
+    // resolves the frame from the shot's own target (OgreView::buildCamera),
     // so this changes no pixel of the scene; what it changes is that every
     // DOCUMENT-side reader — the gizmo's screen-constant size, the camera's
     // own projMatrix — describes the picture being taken instead of the

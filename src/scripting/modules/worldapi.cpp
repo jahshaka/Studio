@@ -2801,7 +2801,7 @@ int WorldApi::setShadowResolution(int pixels)
 // value comes from the registry and an explicit set pins it exactly as
 // world.override would. Resolution and shadows are per-scene only: they follow
 // the budget unless pinned, which is how the mode tiers reach them without two
-// more dials in the World panel (see SceneMirror::applyEnvironment, which owns
+// more dials in the World panel (see SceneMirror::buildEnvironment, which owns
 // the same derivation on the engine side — this verb must agree with it).
 namespace {
 

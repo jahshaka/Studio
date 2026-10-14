@@ -1218,7 +1218,7 @@ int main(int argc, char **argv)
         // THE ENVIRONMENT LANDS ONE FRAME AFTER THE SKY (SKY-GPU), exactly like
         // the IBL convolution: the capture runs inside a rendered frame, so the
         // ambient a host reads is the sky of the frame before. Hosts push it
-        // every frame (applyEnvironment is per-frame work); a test that pushes
+        // every frame (buildEnvironment is per-frame work); a test that pushes
         // once and renders would be reading the PREVIOUS sky's light.
         const auto settleEnv = [&](int frames) {
             for (int i = 0; i < frames; ++i) {
@@ -1607,7 +1607,7 @@ int main(int argc, char **argv)
 
     // ---- an IDLE VCT scene never re-solves its GI (the debounce contract) ----
     //
-    // WHY THIS IS A GATE. applyEnvironment asks the engine to re-solve global
+    // WHY THIS IS A GATE. buildEnvironment asks the engine to re-solve global
     // illumination whenever the lights have moved, and for VCT "re-solve" means
     // tearing the voxelizer down and rebuilding it from every item in the scene
     // — hundreds of milliseconds on a real world. It is also INVISIBLE: a
@@ -1668,7 +1668,7 @@ int main(int argc, char **argv)
         mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
         const quint64 pushAfterFirst = mirror.giPushCount();
-        CHECK(pushAfterFirst == push0 + 1, "GI idle: the first applyEnvironment pushes VCT exactly once");
+        CHECK(pushAfterFirst == push0 + 1, "GI idle: the first environment record pushes VCT exactly once");
         CHECK(mirror.giRefreshCount() == refresh0, "GI idle: the first push is not also a refresh");
 
         // The world transforms the signature is built from, captured once.

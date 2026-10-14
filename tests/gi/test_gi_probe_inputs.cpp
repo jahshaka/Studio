@@ -197,8 +197,8 @@ int main(int argc, char **argv)
     mirror.sync(mirrorframe::camera(view, cam));
 
     // The viewport's per-frame order (EngineSceneViewport): sync, sky, then the
-    // world settings. applySky is its own host call, not part of
-    // applyEnvironment — without it no sky change would ever reach the engine.
+    // world settings. buildSky is its own host call, not part of
+    // buildEnvironment — without it no sky change would ever reach the engine.
     const auto frame = [&]() {
         doc->refresh();
         mirror.sync();

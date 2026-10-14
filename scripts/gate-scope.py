@@ -160,6 +160,7 @@ _NODES = ["engine", "mirror", "pieces", "atom"]
 OGRE_SCENE_FUNCTIONS = {
     **{f: _CORE for f in ("OgreScene", "~OgreScene", "destroy", "sceneManager", "nativeSceneManager")},
     "name": ["engine"],
+    "engine": ["engine", "mirror"],   # the scene's engine: where the mirror submits the frame's input (U0 3a)
     **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
                                          "setNodeCastShadow", "nodeCastShadow", "setLight", "removeLight", "ogreLight",
                                          "nodeOfLight")},
@@ -168,7 +169,7 @@ OGRE_SCENE_FUNCTIONS = {
                                             "noteEnvironmentChanged", "setEnvironmentLight")},
     **{f: _REFL for f in ("refreshEnvmapScale", "hasAuthoredReflectionMap", "envmapScaleForPass")},
     **{f: _NODES for f in ("removeNode", "createNode", "adoptNode", "setNodeParent", "setNodeTransform", "registryNode",
-                           "releaseNode", "node", "track", "nodeWorldPose", "itemVisibilityFlags",
+                           "releaseNode", "node", "track", "nodeWorldPose", "nodeWorldPoseDrawn", "itemVisibilityFlags",
                            "applyNodeVisibilityFlags", "inheritedShown", "applyShownSubtree", "setNodeVisible",
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},
     "particleVisibilityBits": ["particles", "engine"],
@@ -178,7 +179,7 @@ OGRE_SCENE_FUNCTIONS = {
                            "vrRayNodes", "setVrHandBoneNodes", "vrHandBoneNodes")},
     **{f: ["engine", "pieces", "perf"] for f in ("detachItem", "itemCount", "addObjectCounts")},
     "dropSkeletonFollowers": ["skeletal", "avatar"],
-    **{f: ["gi", "rtreflect", "shadow"] for f in ("rayTracingResolved", "setRayTracing")},
+    **{f: ["gi", "rtreflect", "shadow"] for f in ("rayTracingResolved", "rayTracingResolvedFor", "setRayTracing")},
     **{f: ["gi"] for f in ("walkCardLights", "updateSurfaceCache", "cardEligible", "cardColumnKey", "readCardTexel",
                            "readCardAt", "dumpCardAtlas")},
     "gpuSlotChanged": ["atom", "engine", "scale"],

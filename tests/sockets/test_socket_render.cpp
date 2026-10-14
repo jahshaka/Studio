@@ -5,7 +5,7 @@
 //
 //     engine SkeletonInstance (the pose)  ->  SceneMirror::boneWorldTransforms
 //     ->  iris::SocketResolver  ->  the attached CameraNode's transform
-//     ->  SceneMirror::applyCamera  ->  a rendered frame
+//     ->  SceneMirror::buildCamera  ->  a rendered frame
 //
 // and it asserts on the FRAME, because every link in that chain can be subtly
 // wrong (a missing mesh-node transform, bone-parent-local FK, the one-frame

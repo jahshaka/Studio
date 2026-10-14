@@ -316,12 +316,23 @@ var reopened = scene.nodes();
 for (var j = 0; j < reopened.length; j++)
     if (reopened[j].type === "camera") reopenedCam = reopened[j].id;
 assert(reopenedCam !== null, "the camera reopened as a camera");
-node.transform(reopenedCam, { position: { x: 40, y: 40, z: 40 } });
+// THE REOPENED RIDER IS ON ITS SOCKET AT THE FILE'S OFFSET, and it is a rider like any other: a transform written on
+// it is the offset FROM the socket and STICKS (phase C's contract). This used to write (40,40,40) and expect it taken
+// back — which held only while a reopened rider sat on the bind-pose FALLBACK for its first frames (the open armed
+// the tag one sync late). The open's environment prime now runs a sync of its own (ENGINE-UPGRADE-1 U0 3a: the
+// environment leaves the mirror in the frame's record), so the rider is on its tag before the script's first line,
+// and the write sticks, exactly as phase C requires of every socketed node.
+var reopenedInfo = node.info(reopenedCam);
+assert(reopenedInfo.socket && reopenedInfo.socket.name === "head",
+       "a reopened socketed camera comes back ON its socket (" + JSON.stringify(reopenedInfo.socket) + ")");
+assert(dist(reopenedInfo.position, { x: 0, y: 0, z: 0 }) < 1e-4,
+       "…with the offset the FILE holds (" + JSON.stringify(reopenedInfo.position) + ")");
+node.transform(reopenedCam, { position: { x: 0, y: 0.25, z: 0 } });
 editor.frame(2);
-var back = node.info(reopenedCam).position;
-assert(dist(back, { x: 40, y: 40, z: 40 }) > 1.0,
-       "a reopened socketed camera comes back on its socket with the offset the FILE holds — " +
-       "not with the transform that was written on it before the save");
+assert(Math.abs(node.info(reopenedCam).position.y - 0.25) < 1e-3,
+       "…and a transform written on the reopened rider STICKS — the offset from the socket");
+node.transform(reopenedCam, { position: { x: 0, y: 0, z: 0 } });
+editor.frame(2);
 
 // ---- detach leaves it where it was ---------------------------------------
 var parked = node.info(reopenedCam).position;

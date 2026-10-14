@@ -23,8 +23,8 @@
 //
 // The defect this suite exists to lock down (owner-sighted 2026-09-03, "dark in
 // the editor, blown out white in the player"): EnginePlayerScene::step() pushed
-// only sync + applySky + applyCamera, while EngineSceneViewport::syncFrame()
-// pushes sync + applySky + applyEnvironment + applyCamera. applyEnvironment is
+// only sync + buildSky + buildCamera, while EngineSceneViewport::syncFrame()
+// pushes sync + buildSky + buildEnvironment + buildCamera. buildEnvironment is
 // the World panel — ambient, shadows, MSAA, fog, GI, planar reflections AND the
 // post-processing chain (PostFxDesc: HDR + filmic tonemap, bloom, SSAO). With it
 // missing the player view kept a DEFAULT PostFxDesc, i.e. the passthrough
@@ -37,7 +37,7 @@
 //
 //   1. NEUTRAL (chain off, both sides): fog + ambient + shadow-toggle parity.
 //      These are scene/view state that an offscreen view honours, so a missing
-//      applyEnvironment shows up directly in the readback.
+//      buildEnvironment shows up directly in the readback.
 //   2. CHAIN ON (PostFxDesc::allowOffscreen forced on both views, the only way
 //      to pixel-test the chain at all — see the field's doc comment): the
 //      tonemap parity that IS the owner's symptom. What is forced is each view's
@@ -179,14 +179,14 @@ int main(int argc, char **argv)
     editorScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
 
     // ---- the document: a lit cube on a ground plane, a bright world ----------
-    // Every World-panel dial that applyEnvironment owns is moved OFF its default
-    // so that a path which skips applyEnvironment cannot accidentally agree.
+    // Every World-panel dial that buildEnvironment owns is moved OFF its default
+    // so that a path which skips buildEnvironment cannot accidentally agree.
     auto doc = iris::Scene::create();
     doc->setSkyColor(QColor(30, 40, 70));
     // STRONGLY TINTED AMBIENT, which is now a Sky Light (SKY_LIGHT_SPEC.md §2):
     // the tint multiplies the sky's own integral, so a red-tinted skylight over
-    // a blue sky is still a value applyEnvironment owns and a path that skips
-    // applyEnvironment still cannot agree by accident.
+    // a blue sky is still a value buildEnvironment owns and a path that skips
+    // buildEnvironment still cannot agree by accident.
     {
         auto skyLight = iris::LightNode::create();
         skyLight->setLightType(iris::LightType::Sky);
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
         doc->rootNode->addChild(skyLight);
     }
     doc->shadowEnabled  = true;
-    doc->fogEnabled     = true;                   // fog is applyEnvironment's, not applySky's
+    doc->fogEnabled     = true;                   // fog is the environment's, not the sky's
     doc->fogColor       = QColor(40, 220, 120);
     doc->fogDensity     = 0.06f;
     doc->hdrEnabled     = true;                   // THE symptom: filmic tonemap + auto exposure
@@ -495,7 +495,7 @@ int main(int argc, char **argv)
                       "a passthrough view has no exposure to read (the write cannot land yet)");
 
                 // NOW the HDR chain is built on both — in the app this is the
-                // host's first applyEnvironment, here the same description
+                // host's first buildEnvironment, here the same description
                 // pushed by hand (a fresh view's own PostFxDesc has no HDR in
                 // it at all) — and one frame is rendered.
                 const PostFxDesc worldFx = editorView->postFx();

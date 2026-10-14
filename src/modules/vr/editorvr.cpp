@@ -132,7 +132,7 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // AND THE WEARER SEES THE REFLECTIONS THE AUTHOR SEES (lane REFLECT-VR-1),
     // WITHOUT THIS HOST COPYING THE ROW (lane EYE-GRADE-1). The row is the
     // PROJECT's — the World panel's SSR row — and the session's View is no
-    // longer the one view no mirror reaches: `applyViewEnvironment` pushes the
+    // longer the one view no mirror reaches: `buildViewEnvironment` pushes the
     // project's whole post description into it every frame, exactly as into
     // this viewport's own view. A project at Low or Medium (row 0) asks for
     // none and pays for none, exactly as its desktop viewport does.
