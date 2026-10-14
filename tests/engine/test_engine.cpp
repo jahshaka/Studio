@@ -5864,7 +5864,7 @@ void monitor_off_is_inert() {
     MonitorEvent hook; hook.kind = MonitorEventKind::Host; hook.label = "ignored";
     fx.e->noteMonitorEvent(hook);
     fx.e->noteHostStage("ignored", 1.0f);
-    fx.e->setNextFrameCause(FrameCause::Scripted);
+    fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Scripted));
     render(fx.e);
     CHECK(fx.e->takeMonitorEvents(evs) == 0u);
     CHECK(fx.e->monitorStatus().framesRecorded == 0ull);
@@ -5918,7 +5918,7 @@ void monitor_passes_sum_to_the_frame() {
     std::vector<FrameRecord> recs;
     fx.e->takeFrameRecords(recs);
     recs.clear();
-    fx.e->setNextFrameCause(FrameCause::Driver);
+    fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Driver));
     // MOVE A CASTER so the measured frame re-renders the lamp's map: every
     // point/spot map is CACHED now (ENGINE_CACHE_POLICY_SPEC P2), so a truly
     // idle frame executes no shadow pass at all — which is the healthy state,

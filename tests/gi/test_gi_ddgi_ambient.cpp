@@ -552,7 +552,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-ambient-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     // NOT A ROW: `--sealed-classes` (SEALED-ROOM-CHAIN-1, D8) — which class the reader's
     // residual is: the same cones-only arm with the walls' specular removed (F0 = 0), and

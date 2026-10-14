@@ -109,7 +109,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         FrameMonitor::instance().noteTickStart(framemonitor::active() && mEngine
                                                && mEngine->hasEnabledViews());
         if (framemonitor::active() && mEngine)
-            mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Driver);
+            mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Driver));
         emit beforeFrame();
         // Nothing is showing anywhere — every viewport widget is hidden, so
         // every View is disabled (EngineViewWidget's show/hideEvent). Drawing

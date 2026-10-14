@@ -144,9 +144,9 @@ int main(int argc, char **argv)
     CHECK(std::fabs(engine->fixedFrameDelta() - Engine::kDefaultFrameDelta) < 1e-6f &&
           std::fabs(Engine::kDefaultFrameDelta - 1.0f / 60.0f) < 1e-6f,
           "the engine boots on the 1/60 s grid step (no wall clock)");
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     CHECK(std::fabs(engine->fixedFrameDelta() - 1.0f / 60.0f) < 1e-6f,
-          "setFixedFrameDelta takes effect");
+          "a submitted frame delta is the one the engine runs on");
 
     // ---- 0. The plugin is actually loaded -----------------------------------
     // Every emitter and affector FACTORY lives in Plugin_ParticleFX2. If the
@@ -264,12 +264,12 @@ int main(int argc, char **argv)
     }
 
     // ---- 3b. The clock: freeze and resume -----------------------------------
-    // setFixedFrameDelta(0) must stop the simulation dead — two captures 30
+    // a frame delta of 0 (FrameInput::frameDelta) must stop the simulation dead — two captures 30
     // frames apart become IDENTICAL, which is also the "it stops" half of the
     // fire gate in phase 3. It is process-wide (one frame-time source in the
     // backend), so the grid step is restored after.
     {
-        engine->setFixedFrameDelta(0.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
         warm(engine.get(), 2);
         Image frozenA, frozenB;
         view->readPixels(frozenA);
@@ -284,9 +284,9 @@ int main(int argc, char **argv)
             }
         std::printf("    frozen: %d pixels changed over 30 frames\n", moved);
         CHECK(countBright(frozenA) > 50, "the frozen plume is still on screen");
-        CHECK(moved == 0, "setFixedFrameDelta(0) freezes the simulation exactly");
+        CHECK(moved == 0, "a frame delta of 0 freezes the simulation exactly");
 
-        engine->setFixedFrameDelta(1.0f / 60.0f);   // resumes on the grid step
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));   // resumes on the grid step
         warm(engine.get(), 30);
         view->readPixels(img);
         int movedAgain = 0;

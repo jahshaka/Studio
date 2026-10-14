@@ -386,7 +386,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-rt-alpha-tested-ogre.log");
     f.engine = Engine::create(cfg, err);
     if (!f.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    f.engine->setFixedFrameDelta(1.0f / 60.0f);
+    f.engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     f.e = f.engine.get();
     f.view = f.e->createOffscreenView("rtalpha", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f));
     f.s = f.e->createScene("rtalpha");

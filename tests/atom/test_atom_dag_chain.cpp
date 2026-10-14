@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-atom-dag-chain-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     // THE ORDER THE ENGINE REQUIRES: a view before its scene (trap 1).
     View *view = engine->createOffscreenView("dag-chain", 320, 180, Colour(0, 0, 0));
     Scene *scene = engine->createScene("dag-chain");

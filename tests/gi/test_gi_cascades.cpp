@@ -112,7 +112,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-cascades-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     // A 4 km ground so a 1 km jump still lands on something, a wall to bounce

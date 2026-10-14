@@ -87,7 +87,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-engine-gi-scan-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     // THE HOST'S EPOCH HALF. A real host passes the document's process-wide

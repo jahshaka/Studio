@@ -71,7 +71,7 @@ int main(int argc, char **argv)
     // A fixed step, for the same reason engine.particles_pfx2 uses one: an
     // offscreen frame takes about a millisecond, so wall-clock frames buy
     // milliseconds of simulated fire and no assertion below would mean anything.
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Image img;
 
     // ---- Part 1: the billboard verbs, no document ----

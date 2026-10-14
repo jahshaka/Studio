@@ -19,9 +19,11 @@
 // every other user of the material was queued (SceneMirror::visitNode, shadingModelOf now asked first); (B) asked for
 // 1,000 GI invalidations (one per released node, one per attach) and its removeChild scanned the whole mesh registry
 // once per node below the fragment's root (iris::Scene::removeNode recursed under SceneNode::removeFromScene's own
-// recursion); (C) cost 1,000 class switches (rule 4 demoted the 500-node fragment on the keepTransform write and the
-// hint re-promoted it — stage 2b). Renders no frame: the mirror's sync is the subject.
+// recursion); (D) — a static fragment moved without keepTransform drew at its OLD world pose (Ogre refreshes a static
+// node only on a static dirty; attach issued none — stage 2b's read); (C) cost 1,000 class switches (rule 4 demoted the 500-node fragment on the keepTransform write and the
+// hint re-promoted it — stage 2b). Two frames per scale (the drawn-pose case); the mirror's sync is the subject.
 #include <QGuiApplication>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -192,8 +194,23 @@ int main(int argc, char **argv)
     for (int k = 0; k < 2; ++k) {
         World w;
         build(w, engine.get(), scales[k]);
+        view->setScene(w.target);
+        engine->renderOneFrame();
         // (A) hostA -> hostB, a same-scene move
         a[k] = measure(w, [&] { w.hostB->addChild(w.fragment, false); });
+        // (D) ...AND IT DRAWS WHERE IT NOW IS (stage 2b's read, item a): the static fragment kept its local and changed
+        // its parent, so its world moved; one frame later the pose the renderer DREW (the static pass's cached
+        // derived transform) is the new world pose, for the root and for a leaf deep in the fragment.
+        engine->renderOneFrame();
+        for (const iris::SceneNodePtr &n : { w.fragment, w.fragmentNodes.back() }) {
+            const NodeId id = w.mirror->engineNode(n.data());
+            Vec3 drawn, now; Quat qd, qn;
+            const bool ok = id && w.target->nodeWorldPoseDrawn(id, drawn, qd) && w.target->nodeWorldPose(id, now, qn);
+            const float err = std::fabs(drawn.x - now.x) + std::fabs(drawn.y - now.y) + std::fabs(drawn.z - now.z);
+            CHECK(ok && n->isStaticInGraph() && err < 1e-4f,
+                  "(D %d) the static %s draws at its new world pose a frame after the move (|drawn - now| = %g)",
+                  scales[k], n == w.fragment ? "fragment root" : "leaf", double(err));
+        }
         CHECK(a[k].visited == kExpectedVisits, "(A %d) the editor's move visits exactly %d nodes (read %d)",
               scales[k], kExpectedVisits, a[k].visited);
         CHECK(a[k].evicted == 0 && a[k].materials == 0 && a[k].walk == "dirty" && !a[k].settleOwed,
@@ -221,6 +238,7 @@ int main(int argc, char **argv)
         CHECK(c[k].staticSwitches == 0, "(C %d) a move changes poses, never staticness: 0 class switches (read %llu)",
               scales[k], c[k].staticSwitches);
         w.mirror->setSource(iris::ScenePtr());
+        view->setScene(nullptr);
         engine->destroyScene(w.target);
     }
     CHECK(a[0].pushes == a[1].pushes, "(A) the same engine pushes at 1k and 10k (%llu / %llu)",

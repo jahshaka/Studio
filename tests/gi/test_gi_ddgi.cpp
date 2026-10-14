@@ -32,7 +32,7 @@
 //      "the Engine is destroyed with a live bound field" and is asserted by
 //      this program exiting 0.
 //
-// Determinism discipline: setFixedFrameDelta, no wall-clock anywhere, and no
+// Determinism discipline: a fixed FrameInput::frameDelta, no wall-clock anywhere, and no
 // assertion reads a mid-convergence frame except the paused pair, which is
 // asserting exactly that nothing moved.
 // PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
@@ -213,7 +213,7 @@ static int runHashChild()
     const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-child-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("HASH ERROR %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Room r = buildRoom(engine.get());
     GiParams gi = vctBase();
     gi.ddgi = GiToggle::On;
@@ -271,7 +271,7 @@ static int runCellSweep()
     const auto cfg = enginetest::testEngineConfig("test-gi-ddgi-sweep-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     Room r = buildRoom(e);
     // SCENE RADIANCE (the float readback), a 5 x 5 patch: the 8-bit single pixel this sweep
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     // FIXED DELTA, before the first frame: nothing in this suite may depend on
     // how fast the box renders (the PFX2 wall-clock lesson).
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
 
     Room r = buildRoom(engine.get());
     Engine *e = engine.get();

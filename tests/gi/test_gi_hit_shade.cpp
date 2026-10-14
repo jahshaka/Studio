@@ -2033,7 +2033,7 @@ int main(int argc, char **argv)
                        : (argc > 1 ? "test-gi-hit-shade-mode-ogre.log" : "test-gi-hit-shade-ogre.log"));
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     {
         // The device exists with the first view (the startup-order law).

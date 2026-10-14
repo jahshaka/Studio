@@ -697,7 +697,7 @@ int main(int argc, char **argv)
     // offscreen frames are ~1 ms, so anything time-driven inside it would see a
     // different clock than a real editor. Deterministic here, like every other
     // headless suite (PFX2 fact, CLAUDE.md).
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     // ARM the geometry counters. Engine::renderStats is lazy by contract: the
     // FIRST call switches Ogre's per-draw counting on and reports zeros with
     // metricsRecording=false. Asking here, before anything is built, means

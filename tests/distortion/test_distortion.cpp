@@ -417,7 +417,7 @@ int main()
         // A 1/30 step spawns a cloud in 30 frames; the freeze below is a frame
         // delta of 0 (the engine has no wall clock — Engine.h "Simulation
         // clock"), and the step is re-armed after it.
-        engine->setFixedFrameDelta(1.0f / 30.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 30.0f));
 
         ParticleSystemDesc pd;
         pd.quota = 512;
@@ -445,7 +445,7 @@ int main()
         // Fill the box (30 frames at 400/s = a few hundred quads), then freeze.
         view->setPostFx(base);
         render(engine.get(), 30);
-        engine->setFixedFrameDelta(0.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
         render(engine.get(), 2);
         Image offBurst;
         REQUIRE(view->readPixels(offBurst));
@@ -488,9 +488,9 @@ int main()
         pd.additive = false;
         pd.alphaHash = false;
         REQUIRE(s->setParticleSystem(burst, pd));
-        engine->setFixedFrameDelta(1.0f / 30.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 30.0f));
         render(engine.get(), 30);
-        engine->setFixedFrameDelta(0.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
         render(engine.get(), 2);
         Image ordinaryOn;
         REQUIRE(view->readPixels(ordinaryOn));
@@ -511,7 +511,7 @@ int main()
                       "...and is NOT in the field: byte-identical with and without the pass "
                       "(%u px differ)", pixelDiff(ordinaryOn, ordinaryOff));
         }
-        engine->setFixedFrameDelta(Engine::kDefaultFrameDelta);   // back to the grid default
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(Engine::kDefaultFrameDelta));   // back to the grid default
         CHECK(s->removeParticleSystem(burst), "the burst is removed");
         s->removeNode(burst);
         s->setNodeVisible(emitter, true);

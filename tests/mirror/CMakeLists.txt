@@ -71,7 +71,7 @@ set_tests_properties(mirror.cull_twin PROPERTIES JAHSHAKA_TEST_FRAMES 652)
 
 # mirror.reparent_local — A REPARENT COSTS THE FRAGMENT, NEVER THE SCENE (ENGINE-UPGRADE-1 stage 2): one 500-node
 # fragment moved three ways inside a 1k and a 10k lattice; the same counts at both scales (the mirror's visits, the
-# engine's Items, ONE GI invalidation per sync, the static switches). A law in counts; renders no frame.
+# engine's Items, ONE GI invalidation per sync, the static switches, the drawn pose after a move). A law in counts; 4 frames.
 add_executable(test_mirror_reparent test_mirror_reparent.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_mirror_reparent PROPERTIES
@@ -86,7 +86,7 @@ target_compile_definitions(test_mirror_reparent PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_mirror_reparent PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_mirror_reparent JahshakaEngineMedia)
-jah_gpu_row(mirror.reparent_local CLASS engine FRAMES 0 COMMAND test_mirror_reparent
+jah_gpu_row(mirror.reparent_local CLASS engine FRAMES 4 COMMAND test_mirror_reparent
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.reparent_local PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

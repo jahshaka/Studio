@@ -83,7 +83,7 @@ struct Rig {
         const auto cfg = enginetest::testEngineConfig(log);
         engine = Engine::create(cfg, err);
         if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
-        engine->setFixedFrameDelta(1.0f / 60.0f);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
         view = engine->createOffscreenView("clouds", kSize, kSize, Colour(0, 0, 0));
         if (!view) { std::printf("FAIL: no offscreen view\n"); return false; }
         view->setOffscreenContract(OffscreenContract::StillPicture);

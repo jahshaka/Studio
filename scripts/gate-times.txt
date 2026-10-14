@@ -131,6 +131,8 @@ engine.atom_parity_validation 3.31  quiet n=44
 engine.descriptor_pools 3.90  quiet n=43
 engine.error_pump 1.18  quiet n=44
 engine.frame_catch 1.39  quiet n=44
+engine.frame_input_drain 1.64  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
+engine.frame_input_settle 1.91  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
 engine.gi_scan 2.38  quiet n=43
 engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)

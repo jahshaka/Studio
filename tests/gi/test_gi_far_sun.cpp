@@ -383,7 +383,7 @@ bool boot(Fixture &f, const char *log)
     std::unique_ptr<Engine> &engine = gEngine;
     engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     f.e = engine.get();
     f.view = f.e->createOffscreenView("farsun", kSize, kSize, Colour(0, 0, 0));
     if (!f.view) { std::printf("FAIL: view: %s\n", f.e->lastError().c_str()); return false; }

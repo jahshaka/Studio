@@ -125,7 +125,7 @@ static bool makeFixture(Fixture &f, const char *name)
     const auto cfg = enginetest::testEngineConfig(std::string("test-") + name + "-ogre.log");
     f.engine = Engine::create(cfg, err);
     if (!f.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
-    f.engine->setFixedFrameDelta(1.0f / 60.0f);
+    f.engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     f.e = f.engine.get();
     f.view = f.e->createOffscreenView(name, 192u, 192u, Colour(0, 0, 0));
     f.s = f.e->createScene(name);
@@ -1250,7 +1250,7 @@ static int caseLightingIndirect()
     const auto cfg = enginetest::testEngineConfig("test-cardlightingindirect-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("cardind", kPx, kPx, Colour(0, 0, 0));
     Scene *s = e->createScene("cardind");
@@ -1603,7 +1603,7 @@ static int caseConeParity(bool offAxisTarget)
     const auto cfg = enginetest::testEngineConfig("test-coneparity-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("coneparity", kPx, kPx, Colour(0, 0, 0));
     Scene *s = e->createScene("coneparity");
@@ -2282,7 +2282,7 @@ static int caseView()
     const auto cfg = enginetest::testEngineConfig("test-cardview-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("cardview", kPx, kPx, Colour(0, 0, 0));
     Scene *s = e->createScene("cardview");

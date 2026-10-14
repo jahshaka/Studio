@@ -646,7 +646,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig(mode == "alias" ? "test-gi-field-alias-ogre.log" : "test-gi-field-thin-wall-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Fixture f;
     CHECK(setup(f, engine.get()), "the chain, the field and the wall are up");
     if (!failures) {

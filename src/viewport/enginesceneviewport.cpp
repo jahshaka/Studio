@@ -168,7 +168,7 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // — one un-streamed frame per cover rise, which is exactly the
             // frame the whole arm used to land in.
             if (mEngine) {
-                mEngine->setNextFramePace(driverFramePace());
+                mEngine->submitFrame(jahshaka::engine::FrameInput::withPace(driverFramePace()));
                 // The window is spent by DRIVER frames of a REVEALED world —
                 // never by the load's own, which is what stops a slow load from
                 // consuming it before the user sees anything. `mWorldArriving`
@@ -2667,7 +2667,7 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     // exactly as it freezes the falling crate.
     mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
     if (mEngine)
-        mEngine->setFixedFrameDelta(mLastFrameDelta);
+        mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
 }
 
 // ---- THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2) --------------------------
@@ -3115,7 +3115,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         // reason). Set per iteration: the engine consumes the cause and resets
         // it to Driver on every frame.
         if (framemonitor::active())
-            mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Scripted);
+            mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Scripted));
         armRecordingFrame(recordable);
         mEngine->renderOneFrame();
         if (mRecordView) mRecordView->setEnabled(false);
@@ -3542,20 +3542,20 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
         const bool gathering = sc && sc->giStatus().gather.on;
         if (sc && (gathering || !sc->giStatus().giAtRest)) {
-            mEngine->setFixedFrameDelta(0.0f);
+            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
             // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
             // settle renders through the shot view, outside the driver's tick,
             // and the frame monitor must not read them as driven frames.
             const auto frame = [this] {
                 if (framemonitor::active())
-                    mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+                    mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
                 mEngine->renderOneFrame();
             };
             int i = 0;
             if (gathering) { frame(); ++i; }
             for (; i < cap && !sc->giStatus().giAtRest; ++i)
                 frame();
-            mEngine->setFixedFrameDelta(mLastFrameDelta);
+            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
         }
     }
     // Plus whatever the texture load-request counter still owes

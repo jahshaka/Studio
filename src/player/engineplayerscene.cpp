@@ -313,7 +313,7 @@ void EnginePlayerScene::step(float dt, int width, int height)
         mMirror->applyCamera(cam, mView, freecam::kFreeCameraFramingAspect);
     }
     if (auto engine = mEngine.lock())
-        engine->setFixedFrameDelta(simulated * mDocument->particleTimeScale);
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(simulated * mDocument->particleTimeScale));
 }
 
 PlayerVr *EnginePlayerScene::vr()
@@ -356,7 +356,7 @@ void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
         // the player is a later extension of the monitor's scope anyway
         // (RENDER_LOOP_MONITOR_SPEC SCOPE).
         if (framemonitor::active())
-            engine->setNextFrameCause(jahshaka::engine::FrameCause::Player);
+            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Player));
         engine->renderOneFrame();
     }
 }

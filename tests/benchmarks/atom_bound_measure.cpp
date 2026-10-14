@@ -170,7 +170,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("atom-bound-measure-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("atom", kW, kH, Colour(0.02f, 0.02f, 0.03f));
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }

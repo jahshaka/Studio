@@ -431,7 +431,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // Reproducible warm-up: the engine-side simulation (particles, shader
     // time) steps on the default grid for a thumbnail regardless of what the
     // last host left in force (A4.2 review S3).
-    engine->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(jahshaka::engine::Engine::kDefaultFrameDelta));
     // BOUND ONCE (PREVIEWENV-2 item a): the studio document is the same
     // document every time, and `setSource` is a full teardown-and-rebind even
     // when the answer is the same — the whole cost this lane is about.

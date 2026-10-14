@@ -85,7 +85,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-gi-cascade-bounce-bindings-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("bounce", kSize, kSize, Colour(0, 0, 0));

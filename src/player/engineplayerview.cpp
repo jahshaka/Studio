@@ -425,7 +425,7 @@ void EnginePlayerView::syncFrame()
     // labelled as the editor's loop.
     if (framemonitor::active())
         if (auto engine = EngineHost::instance().engine())
-            engine->setNextFrameCause(jahshaka::engine::FrameCause::Player);
+            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Player));
     mScene->step(-1.0f, width(), height());     // the wall clock, in the scene's timer
 }
 
