@@ -1,4 +1,4 @@
-# PHOTON'S MEMBERS (146) — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
+# PHOTON'S MEMBERS (145) — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
 # One data-member name per line; '#' starts a comment. Generated ONCE from the prefix family
 # (mGi/mProbe/mIfd/mPhoton/mCard/mVct/mFwd/mCascade/mScan/mDrag/mSun: 143 at f8c745483, by the
 # preflight's members2.py) and then edited by hand at both ends:
@@ -7,7 +7,8 @@
 #         mScanMarked, mScanReach, mScanKeys); THE WALK's own state — the walk is the scene's
 #         (walkItems: one walk for the GI and the shadow scan), so its gate and counters stay with
 #         it (mScanPendingGi, mScanFullGi, mScanTake, mScanSubset, mScanDeforming,
-#         mGiWalkedThisFrame, mGiScannedOnce, mGiScans, mGiScansFull, mGiScanMicros); the card
+#         mGiWalkedThisFrame, mGiScannedOnce, mGiScans, mGiScansFull, mGiScanMicros) and its GI
+#         record, the moved boxes included (stage 2: OgreScene::giWalk().movedBoxes); the card
 #         FEED, the GPU scene's observer that files the cache's candidates by the scene's own
 #         predicate (mCardFeed, mCardQuery); the scene's per-pass binding record, which binds the
 #         planar mirrors, the IBL mip count and the light list beside the GI arms (mGiBinding);
@@ -80,7 +81,6 @@ mGiItemsAppeared
 mGiLastItemCount
 mGiLitVolume
 mGiMaterialGeneration
-mGiMovedBoxes
 mGiPlan
 mGiProbeRegion
 mGiRebuilds
