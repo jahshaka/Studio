@@ -2,7 +2,7 @@
 //
 //   engine.frame_input_drain (--drain): one submit then N frames -> exactly N drains, N-1 of them empty, and the
 //     record's one changed field applied once; two submits before one frame -> ONE drain, the scene part REPLACED
-//     (replaced + 1) and the newest value the one in force; a record that changes nothing drains to nothing
+//     (scenePartsMerged + 1) and the newest value the one in force; a record that changes nothing drains to nothing
 //     (fieldsApplied == 0); a view's camera alone moves the per-view count only. Prints the drain's own cost.
 //   engine.frame_input_settle (--settle): THE RECORD CHANGES WHEN, NOT WHAT — the one-cascade arm with the gather
 //     on (test_engine_gi_scan's cascadeGi): the frames to giAtRest and the GI scans with ONE record then nothing
@@ -99,7 +99,7 @@ int drain(Engine *e)
     const FrameInputStatus s3 = e->frameInputStatus();
     CHECK(s3.drained - s2.drained == 1 && s3.drainedEmpty == s2.drainedEmpty,
           "two submits then one frame: ONE drain (%llu), not empty", s3.drained - s2.drained);
-    CHECK(s3.replaced - s2.replaced == 1, "...the scene part replaced by the newer (%llu)", s3.replaced - s2.replaced);
+    CHECK(s3.scenePartsMerged - s2.scenePartsMerged == 1, "...the scene part merged into the pending one, the newer winning (%llu)", s3.scenePartsMerged - s2.scenePartsMerged);
     e->submitFrame(sceneRecord(scene, fogB));
     e->renderOneFrame();
     CHECK(e->frameInputStatus().fieldsApplied == 0,

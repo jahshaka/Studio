@@ -333,6 +333,26 @@ assert(Math.abs(node.info(reopenedCam).position.y - 0.25) < 1e-3,
        "…and a transform written on the reopened rider STICKS — the offset from the socket");
 node.transform(reopenedCam, { position: { x: 0, y: 0, z: 0 } });
 editor.frame(2);
+// ...AND THE MIRROR DRIVES IT (the 3a read, B): the three checks above hold for a rider that is never armed too (a
+// detached node keeps its local), so the proof is phase D's — what the reopened camera SEES follows the rig's pose.
+// The file holds the rig where phase D left it (away from the marker); taking it back to the origin puts the marker
+// in front of the head socket again, and the shot changes only if the camera hangs off the bone in the renderer.
+var reopenedRig = null;
+for (var k = 0; k < reopened.length; k++) {
+    var rb = node.boneNames(reopened[k].id);
+    if (rb && rb.length > 0) { reopenedRig = reopened[k].id; break; }
+}
+assert(reopenedRig !== null, "the rig reopened as a rig");
+var r1 = camera.screenshot(reopenedCam, "reopened_rig_moved.png", { width: 96, height: 96, probes: probes });
+node.transform(reopenedRig, { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } });
+editor.frame(2);
+var r2 = camera.screenshot(reopenedCam, "reopened_rig_at_origin.png", { width: 96, height: 96, probes: probes });
+console.log("reopened shot delta after moving the rig: " + pixelDelta(r1, r2));
+assert(pixelDelta(r1, r2) > 6,
+       "what the REOPENED socketed camera sees changed when the rig moved — the reopened rider is driven by its " +
+       "bone in the renderer, not merely recorded as attached");
+assert(dist(node.info(reopenedCam).position, { x: 0, y: 0, z: 0 }) < 1e-4,
+       "…while its own transform stayed the offset from the socket");
 
 // ---- detach leaves it where it was ---------------------------------------
 var parked = node.info(reopenedCam).position;
