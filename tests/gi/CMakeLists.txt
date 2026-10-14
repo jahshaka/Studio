@@ -2411,7 +2411,9 @@ set_tests_properties(gi.field_dependency PROPERTIES JAHSHAKA_TEST_FRAMES 476)   
 # gi.field_variance_stop — THE PER-PROBE VARIANCE STOP AGAINST ITS ORACLE (ENGINE-UPGRADE-2B stage 4):
 # the same room converged with the stop off (every probe to 25 samples, every running mean read), then
 # rebuilt with the stop on; S1-S5 in the source (the replay, the statistics, every probe's stated error,
-# the work, the rest).
+# the work, the rest). The early end it measures trusts a read-back count of the stopped probes only when no
+# newer non-refining work (a scroll, a change, a re-placement) was DEFINED after the reading was asked for — a
+# stale "every probe stopped" once ended the very scroll that clears those stops (pool.world_sky_b found it).
 jah_gpu_row(gi.field_variance_stop CLASS engine COMMAND test_gi_field_dependency --stop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_variance_stop PROPERTIES TIMEOUT 60 LABELS "engine")

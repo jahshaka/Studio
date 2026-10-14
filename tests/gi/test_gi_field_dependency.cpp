@@ -40,6 +40,9 @@
 //        S4 the probe work (the generation job's own count of integrations): the stop's at most
 //           half the oracle's (the instrument, --variance, predicts 5.9x less);
 //        S5 at rest after it: no integration in 30 frames, giAtRest.
+//      The early end (every probe stopped: no refinement owed) trusts the read-back count only when
+//      no newer non-refining work was defined after the reading was asked for (the stale-reading
+//      guard: PhotonIrradianceField::noteEstimatesReplaced).
 // Counts per frame, never clocks.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
