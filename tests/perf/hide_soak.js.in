@@ -89,7 +89,7 @@ function reading(tag) {
         tag: tag,
         draws: rs.draws, batches: rs.batches, triangles: rs.submittedTriangles,
         instances: rs.instances,
-        rebuilds: gi.rebuilds, refreshes: ms.giRefreshes, pushes: ms.giPushes,
+        rebuilds: gi.rebuilds, refreshes: gi.scheduler.resolves, pushes: gi.scheduler.pushes,
         nodes: ms.nodesVisited, evicted: ms.evictedNodes,
         stale: gi.staleProbes, reason: gi.lastStaleReason
     };

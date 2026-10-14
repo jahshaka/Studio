@@ -73,6 +73,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/irisglfwd.h"
 
 #include "io/missingclipref.h"
@@ -172,8 +173,9 @@ public:
     /// 6,000 meshes in a Debug build (the owner's Bistro session, 218 heartbeat
     /// lines of ~430 ms). Each node's answer is now CACHED, and a pass
     /// re-checks only the nodes the document says were written since the last
-    /// pass — a tap on the node graph's write journal (graph::openJournalTap:
-    /// a moved node with its subtree, a written node alone) — plus the nodes
+    /// pass — its own cursor on the node graph's write journal (graph::
+    /// WriteJournalReader with the written half: a moved node with its subtree,
+    /// a written node alone) — plus the nodes
     /// whose material's revision moved or whose texture file the disk
     /// reported. No write = no node visited. A whole walk only for a new
     /// scene, or when the journal cannot name what was written.
@@ -232,7 +234,9 @@ private:
     };
     QHash<const iris::SceneNode *, NodeCheck> mChecks;
     QWeakPointer<iris::Scene> mCheckedScene;
-    int mTap = -1;
+    /// This checker's cursor on the write journal, with its WRITTEN half (every non-transform document write) —
+    /// one reader among the mirrors and the physics worlds, never a second record (ENGINE-UPGRADE-1's one journal).
+    iris::graph::WriteJournalReader mJournal{ true };
     quint64 mMaterialsSeen = 0;
     bool mLeakDirty = true;
     QHash<QString, SceneIssue> mLeakLines;   ///< by issue id

@@ -2673,12 +2673,14 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
     if (mEngine) {
         // ...AND THE USER'S GESTURE, AS THIS HOST KNOWS IT (U0 3a; read since 3c — the engine infers no drag from
-        // motion): a gizmo drag (this widget's or the wearer's — one gizmo per mode in the process) or a material
-        // hover preview, with the node it moves. Every frame, so the release lands on the frame it happens.
+        // motion): a gizmo DRAG (this widget's or the wearer's — one gizmo per mode in the process), with the node it
+        // moves. Only a drag: a material hover moves nothing (it rides the record as `materialPreview`), and naming
+        // the selected node under one would promote it if physics or a script moved it meanwhile (the 3c read, C).
+        // Every frame, so the release lands on the frame it happens.
         jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
         if (mEngineScene) {
             jahshaka::engine::FrameInputGesture gesture;
-            gesture.active = (mGizmo && mGizmo->isDragging()) || (mScene && mScene->materialPreviewDepth > 0);
+            gesture.active = mGizmo && mGizmo->isDragging();
             if (gesture.active && mSelectedNode && mMirror)
                 if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.data()))
                     gesture.nodes.push_back(id);

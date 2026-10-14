@@ -107,7 +107,7 @@ static bool boot(Rig &r, const char *log) {
     std::string err;
     r.engine = Engine::create(enginetest::testEngineConfig(log), err);
     if (!r.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
-    r.engine->setFixedFrameDelta(1.0f / 60.0f);
+    r.engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     r.view = r.engine->createOffscreenView("async", 160, 120, Colour(0.1f, 0.1f, 0.12f));
     r.scene = r.engine->createScene("async");
     if (!r.view || !r.scene) { std::printf("FAIL: view/scene\n"); return false; }

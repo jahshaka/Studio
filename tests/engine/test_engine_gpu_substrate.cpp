@@ -16,10 +16,9 @@
 //      moved every frame through cascade 0 re-voxelises it (the pre-frame gather reads
 //      the table: OgreGi.cpp gatherAndBuild, twice) and the frame reads it after the
 //      graph (OgreShadow.cpp) — three calls, ONE walk, the other two counted as the
-//      frame's later calls. Run twice: with no host transform counter (most fixtures;
-//      RED ON THE BASE — three scans a frame, GpuSceneStatus::scans, because without
-//      the epoch every call walked) and with the product's (one on the base too: the
-//      epoch already collapsed the calls there).
+//      frame's later calls. Run over two movers (RED ON THE BASE without the host counter
+//      — three scans a frame, GpuSceneStatus::scans, because without the epoch every call
+//      walked; since U0 3b the epoch is always the engine's own and always valid).
 //   2. ATOM'S WORDS STEP ONCE PER FRAME: the frame records' `engine.atomwords` stage
 //      (FrameRecord.stages) is filed once per frame. RED ON THE BASE: twice (before
 //      and after the ray tier).
@@ -85,13 +84,8 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-engine-gpu-substrate-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
-    // The host's transform-write counter: NOT installed for the first mover run (every
-    // fixture that installs none — the epoch is unavailable, and the base walked on
-    // every call), installed for the second (the product's configuration: the mirror
-    // installs it, which is what lets a still frame skip the walk at all).
-    static std::atomic<unsigned long long> hostWrites{ 0ull };
 
     View *view = e->createOffscreenView("substrate", kSize, kSize, Colour(0.05f, 0.06f, 0.08f, 1.0f));
     Scene *scene = e->createScene("substrate");
@@ -120,7 +114,8 @@ int main()
                 s0.copies, s0.framesInFlight, s0.workers);
     CHECK(s0.live, "the scene's substrate is live on a Vulkan boot");
 
-    // ---- 1 + 2 + 3. THE MOVER FRAMES, twice: no host counter, then the product's ----
+    // ---- 1 + 2 + 3. THE MOVER FRAMES, twice over two movers (since U0 3b there is no host counter to install or
+    // withhold: every write reaches the engine named, so both runs are the product's) ----
     const auto moverRun = [&](const char *tag, NodeId mover) {
         e->setFrameMonitor(MonitorLevel::Review);
         {
@@ -137,7 +132,6 @@ int main()
             const GpuSceneStatus a = scene->gpuSceneStatus();
             const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
             enginetest::setNodePosition(scene, mover, Vec3(0.3f * float(f % 4) - 0.45f, 0.3f, -0.5f));
-            hostWrites.fetch_add(1);
             e->renderOneFrame();
             const GpuSceneStatus b = scene->gpuSceneStatus();
             const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
@@ -183,10 +177,9 @@ int main()
     };
     CHECK(s0.framesInFlight >= 2u && s0.copies == s0.framesInFlight + 1u,
           "ONE INSTANCE-TABLE COPY PER FRAME IN FLIGHT, plus the one a frame writes");
-    moverRun("no host counter", cubes[27]);
-    e->setTransformWriteCounter(&hostWrites);
+    moverRun("mover 27", cubes[27]);
     for (int i = 0; i < 4; ++i) e->renderOneFrame();
-    moverRun("the product's counter", cubes[35]);
+    moverRun("mover 35", cubes[35]);
 
     // ---- 3b. EVERY COPY CATCHES UP ------------------------------------------------
     // The mover stops; the next writing frames go round the ring, and each copy they
@@ -201,7 +194,6 @@ int main()
             const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
             enginetest::setNodePosition(scene, walkers[k % walkers.size()],
                                         Vec3(-3.5f + float(k % 8), 0.6f + 0.05f * float(k), -3.5f));
-            hostWrites.fetch_add(1);
             e->renderOneFrame();
             const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
             if (after.copyWrites == before.copyWrites) continue;

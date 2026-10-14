@@ -59,11 +59,12 @@
 //   note at the bottom). The readback is also a free extra assertion: a
 //   readback that leaked its throwaway view would show up in `views`.
 //
-//   THE GI COUNTERS come from editor.mirrorStats(). A GI re-solve tears the
+//   THE GI COUNTERS come from world.giStatus().scheduler (the renderer's one GI
+//   scheduler since ENGINE-UPGRADE-1 U0 3c). A GI re-solve tears the
 //   voxelizer down and rebuilds it from every item in the scene, and it is
 //   invisible in pixels and in the document — a re-voxelized scene looks
 //   identical, it just costs a frame. "An idle scene re-solves ZERO times" is a
-//   contract of SceneMirror that only a counter can check.
+//   contract of the GI scheduler that only a counter can check.
 //
 // PROVEN TO CATCH THE CLASS: see the lane report. With a deliberate one-extra-
 // offscreen-view-per-frame leak injected into the viewport, this suite fails on
@@ -151,6 +152,7 @@ function takeSample(i) {
         triangles: geom.submittedTriangles,
         objects: app.engineObjects(),
         mirror: editor.mirrorStats(),
+        gi: world.giStatus().scheduler,
         driver: app.frameStats()
     };
     console.log("sample " + s.i + ": frameMs=" + s.frameMs.toFixed(3) +
@@ -158,7 +160,7 @@ function takeSample(i) {
                 " draws=" + s.draws + " batches=" + s.batches +
                 " tris=" + s.triangles +
                 " objects=" + J(s.objects) +
-                " gi={push:" + s.mirror.giPushes + ",refresh:" + s.mirror.giRefreshes + "}" +
+                " gi={push:" + s.gi.pushes + ",refresh:" + s.gi.resolves + "}" +
                 " driver={rendered:" + s.driver.rendered + ",workMs:" + s.driver.workMs + "}");
     return s;
 }
@@ -242,11 +244,11 @@ flat("datablocks", a.objects.datablocks, b.objects.datablocks);
 
 // 6. GI: an idle scene re-solves ZERO times. The delta, not the absolute —
 //    opening the world and applying Epic are real pushes and are allowed.
-assert(b.mirror.giRefreshes - a.mirror.giRefreshes === 0,
+assert(b.gi.resolves - a.gi.resolves === 0,
        "idle: the mirror asked for NO GI re-solve over " +
        ((LAST - FIRST) * FRAMES_PER_SAMPLE) + " frames (" +
-       a.mirror.giRefreshes + " -> " + b.mirror.giRefreshes + ")");
-console.log("gi pushes over the same window: " + a.mirror.giPushes + " -> " + b.mirror.giPushes);
+       a.gi.resolves + " -> " + b.gi.resolves + ")");
+console.log("gi pushes over the same window: " + a.gi.pushes + " -> " + b.gi.pushes);
 
 // 6b. THE MIRROR LOOKED AT NOTHING, and missed nothing while it did
 //     (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #4). An idle Epic scene
