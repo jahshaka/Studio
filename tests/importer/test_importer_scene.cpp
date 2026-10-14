@@ -198,6 +198,71 @@ int main(int argc, char **argv)
           QStringLiteral("LeafPlane: no map, the file's scalars (roughness %1 = 1 - sqrt(20)/10, metallic %2)")
               .arg(leafRough).arg(leafMetal));
 
+    // (e) SEPARATE metalness / roughness maps bind AS THEMSELVES (BISTRO-FIXES-2, the
+    //     read's hazard). Only glTF packs both into one image (assimp binds it to both
+    //     types); OBJ's map_Pr / map_Pm are single-channel maps of their own. Branch
+    //     before the fix: a grey map_Pr alone was split as a pack — its BLUE channel
+    //     bound as the metallic map ("PrOnly_rough_metallic.png") at factor 1, a rough
+    //     dielectric imported as metal; with both maps, map_Pr was dropped.
+    {
+        const auto writeObj = [&](const QString &stem, const QString &mtlBody) {
+            QFile obj(work.path() + "/" + stem + ".obj"), mtl(work.path() + "/" + stem + ".mtl");
+            const bool ok = obj.open(QIODevice::WriteOnly) && mtl.open(QIODevice::WriteOnly);
+            obj.write(QStringLiteral("mtllib %1.mtl\no %1\nv -1 0 -1\nv 1 0 -1\nv 1 0 1\nv -1 0 1\n"
+                                     "vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nvn 0 1 0\nusemtl %1Mat\n"
+                                     "f 1/1/1 4/4/1 3/3/1 2/2/1\n").arg(stem).toUtf8());
+            mtl.write((QStringLiteral("newmtl %1Mat\nKd 0.5 0.5 0.5\n").arg(stem) + mtlBody).toUtf8());
+            return ok;
+        };
+        const auto grey = [&](const QString &name, int v) {
+            QImage g(8, 8, QImage::Format_Grayscale8);
+            g.fill(v);
+            return g.save(work.path() + "/" + name);
+        };
+        CHECK(writeObj("PrOnly", "map_Pr PrOnly_rough.png\n") && grey("PrOnly_rough.png", 96)
+                  && writeObj("PrPm", "map_Pr PrPm_rough.png\nmap_Pm PrPm_metal.png\n")
+                  && grey("PrPm_rough.png", 120) && grey("PrPm_metal.png", 200),
+              QStringLiteral("the two OBJ fixtures written"));
+        const auto importObj = [&](const QString &stem, QJsonObject &values) {
+            ImportRequest r;
+            r.sourcePath = work.path() + "/" + stem + ".obj";
+            r.typeHint = static_cast<int>(ModelTypes::Mesh);
+            r.projectGuid = project.getProjectGuid();
+            const ImportResult res = service.import(r);
+            if (!res.ok()) return false;
+            const QJsonObject b = QJsonDocument::fromJson(db.fetchAssetData(res.assetGuid)).object();
+            std::function<QJsonObject(const QJsonObject &)> firstMat = [&](const QJsonObject &n) {
+                const QJsonObject m = n.value("material").toObject().value("values").toObject();
+                if (!m.isEmpty()) return m;
+                for (const QJsonValue &c : n.value("children").toArray()) {
+                    const QJsonObject hit = firstMat(c.toObject());
+                    if (!hit.isEmpty()) return hit;
+                }
+                return QJsonObject();
+            };
+            values = firstMat(b);
+            return !values.isEmpty();
+        };
+        const auto mapName = [&](const QJsonObject &v, const char *row) {
+            const QString guid = v.value(QLatin1String(row)).toString();
+            return guid.isEmpty() ? QString() : db.fetchAsset(guid).name;
+        };
+        QJsonObject pr, both;
+        CHECK(importObj("PrOnly", pr) && importObj("PrPm", both), QStringLiteral("the two OBJ fixtures imported"));
+        CHECK(mapName(pr, "roughnessMap") == "PrOnly_rough.png" && mapName(pr, "metallicMap").isEmpty()
+                  && std::fabs(pr.value("roughness").toDouble(-1) - 1.0) < 1e-6
+                  && std::fabs(pr.value("metallic").toDouble(-1)) < 1e-6,
+              QStringLiteral("OBJ map_Pr alone: roughness = the map (%1 x %2), no metallic map (\"%3\"), metallic %4")
+                  .arg(mapName(pr, "roughnessMap")).arg(pr.value("roughness").toDouble(-1))
+                  .arg(mapName(pr, "metallicMap")).arg(pr.value("metallic").toDouble(-1)));
+        CHECK(mapName(both, "roughnessMap") == "PrPm_rough.png" && mapName(both, "metallicMap") == "PrPm_metal.png"
+                  && std::fabs(both.value("roughness").toDouble(-1) - 1.0) < 1e-6
+                  && std::fabs(both.value("metallic").toDouble(-1) - 1.0) < 1e-6,
+              QStringLiteral("OBJ map_Pr + map_Pm: each bound as itself (%1, %2), factors %3 / %4")
+                  .arg(mapName(both, "roughnessMap"), mapName(both, "metallicMap"))
+                  .arg(both.value("roughness").toDouble(-1)).arg(both.value("metallic").toDouble(-1)));
+    }
+
     // ---- STAGE 2: THE SCENE --------------------------------------------------
     std::printf("--- stage 2: the scene\n");
     // (b) the root takes the asset's name. Base: "RootNode".
