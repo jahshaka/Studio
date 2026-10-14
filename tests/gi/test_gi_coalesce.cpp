@@ -46,6 +46,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -160,12 +161,12 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 4.0f, 6.0f));
     cam->lookAt(iris::Vec3(0.0f, 0.0f, -0.5f));
     cam->update(0.0f);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     const auto frame = [&]() {
         doc->refresh();
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
     };
     const auto floorPixel = [&]() {
@@ -218,14 +219,14 @@ int main(int argc, char **argv)
         // Arming the counter and adding the node are themselves changes: the
         // walks are on demand, so they run once more and then settle. THAT is
         // the baseline this measures from.
-        for (int f = 0; f < 5; ++f) { mirror.applyCamera(cam, view); frame(); }
+        for (int f = 0; f < 5; ++f) { mirror.sync(mirrorframe::camera(view, cam)); frame(); }
 
         const unsigned long long r0 = reads();
         const unsigned long long w0 = iris::graph::transformWrites();
         for (int f = 0; f < 30; ++f) {
             cam->setLocalPos(iris::Vec3(std::sin(float(f) * 0.2f) * 6.0f, 4.0f, 6.0f));
             cam->update(0.0f);
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::camera(view, cam));
             frame();
         }
         const unsigned long long flew = reads() - r0;

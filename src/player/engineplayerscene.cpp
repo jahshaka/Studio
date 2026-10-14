@@ -285,32 +285,35 @@ void EnginePlayerScene::step(float dt, int width, int height)
         // The Ground plane is an EDITOR widget (WORLD-MODEL-1): the finished
         // thing stands on what the scene holds.
         mMirror->setGroundPlane(false);
-        mMirror->sync();
-        // THE SAME THREE CALLS THE EDITOR VIEWPORT MAKES, IN THE SAME ORDER
-        // (EngineSceneViewport::syncFrame). applyEnvironment is what pushes the
-        // World panel — ambient (including the sky's own integral, which
-        // applySky has just recorded, so the order is load-bearing), shadows,
-        // MSAA, fog, GI, planar reflections and the post-processing chain
-        // (HDR + filmic tonemap, bloom, SSAO). Leaving it out gave the player a
-        // bare passthrough workspace: the scene's HDR values reached an LDR
-        // window untonemapped and clipped to white, while the editor showed the
-        // same scene filmic — the owner's "dark in the editor, blown out in the
-        // player".
-        mMirror->applySky(mView);
-        mMirror->applyEnvironment(mView, mEngine.lock().get());
-        // ...AND THE HEADSET'S EYES BESIDE IT (lane EYE-GRADE-1), through the
-        // PER-VIEW half — the session's View is a view of THIS scene and is
-        // graded by the same project, and it is the one view no mirror used to
-        // reach. Never a second applyEnvironment: that function's scene half
-        // counts GI settle frames and would reach its window twice as fast.
+        // THE SAME FRAME THE EDITOR VIEWPORT EMITS (EngineSceneViewport::syncFrame; U0 3a's one record): the sky,
+        // the environment — what pushes the World panel: ambient (including the sky's own integral, which the sky
+        // has just recorded, so the order inside the mirror is load-bearing), shadows, MSAA, fog, GI, planar
+        // reflections and the post-processing chain (HDR + filmic tonemap, bloom, SSAO); leaving it out gave the
+        // player a bare passthrough workspace (the owner's "dark in the editor, blown out in the player") — and the
+        // camera. The player's fly camera is a FREE camera and takes the wide-aspect framing hold; the mirror drops
+        // it by itself if the active-camera seam substitutes an AUTHORED camera underneath.
+        SceneMirror::FrameViews views;
+        {
+            SceneMirror::FrameView main;
+            main.view = mView;
+            main.environment = true;
+            main.sky = true;
+            main.camera = cam;
+            main.framingAspect = freecam::kFreeCameraFramingAspect;
+            views.views.push_back(main);
+        }
+        // ...AND THE HEADSET'S EYES BESIDE IT (lane EYE-GRADE-1): the per-view half only — never a second
+        // environment (its scene half counts GI settle frames); the rig owns the eyes' poses.
         if (auto engine = mEngine.lock())
-            if (jahshaka::engine::View *eyes = engine->vrView())
-                mMirror->applyViewEnvironment(eyes, cam);
-        // The player's fly camera is a FREE camera and takes the wide-aspect
-        // framing hold; applyCamera drops it by itself if the active-camera seam
-        // substitutes an AUTHORED camera underneath (a playing scene shooting
-        // through its own camera keeps that camera's lens exactly).
-        mMirror->applyCamera(cam, mView, freecam::kFreeCameraFramingAspect);
+            if (jahshaka::engine::View *eyes = engine->vrView()) {
+                SceneMirror::FrameView ev;
+                ev.view = eyes;
+                ev.postFx = true;
+                ev.camera = cam;
+                ev.pose = false;
+                views.views.push_back(ev);
+            }
+        mMirror->sync(views);
     }
     if (auto engine = mEngine.lock())
         engine->submitFrame(jahshaka::engine::FrameInput::delta(simulated * mDocument->particleTimeScale));
@@ -389,30 +392,33 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
         // project asked to hide is out of it too, at every grade.
         mMirror->setHideDefaultFloor(mDocument && mDocument->playerHidesFloor);
         mMirror->setGroundPlane(false);
-        mMirror->sync();
-        mMirror->applySky(shot);
-        mMirror->applyEnvironment(shot);
-        // The camera is copied at the shot's OWN aspect ratio, so a 16:9
-        // request off a square page does not photograph a squashed world.
+        // The camera is copied at the shot's OWN aspect ratio, so a 16:9 request off a square page does not
+        // photograph a squashed world — held for the sync that builds the shot's part of the frame.
         const float saved = cam->aspectRatio;
         cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-        mMirror->applyCamera(cam, shot, freecam::kFreeCameraFramingAspect);
+        SceneMirror::FrameView sv;
+        sv.view = shot;
+        sv.environment = true;
+        sv.sky = true;
+        sv.camera = cam;
+        sv.framingAspect = freecam::kFreeCameraFramingAspect;
+        // The grades (IEditorViewport::ScreenshotGrade), exactly as the editor's takeScreenshot resolves them — the
+        // player is the other space, not another policy — on the shot's part of the record.
+        sv.finish = [&](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+            if (grade == int(IEditorViewport::ScreenshotGrade::Scene)) {
+                // The player's on-screen view is the one that has been measuring this scene; the shot borrows its
+                // exposure (SS1). No view (the player page was never shown) falls back inside applyScene.
+                secondaryfx::applyScene(fx, mView ? mView->measuredExposureScale() : 0.0f);
+            } else if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
+                fx.allowOffscreen = true;
+            } else if (grade == int(IEditorViewport::ScreenshotGrade::Tonemap)) {
+                secondaryfx::apply(fx, true, fx.exposure);
+            }
+            part.postFx = fx;
+        };
+        mMirror->sync(SceneMirror::FrameViews{ { sv } });
         cam->setAspectRatio(saved);
-        // The grades (IEditorViewport::ScreenshotGrade), exactly as the editor's
-        // takeScreenshot resolves them — the player is the other space, not
-        // another policy.
-        if (grade == int(IEditorViewport::ScreenshotGrade::Scene)) {
-            // The player's on-screen view is the one that has been measuring
-            // this scene; the shot borrows its exposure (SS1). No view (the
-            // player page was never shown) falls back inside applyScene.
-            secondaryfx::applyScene(shot, mView ? mView->measuredExposureScale() : 0.0f);
-        } else if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
-            jahshaka::engine::PostFxDesc fx = shot->postFx();
-            fx.allowOffscreen = true;
-            shot->setPostFx(fx);
-        } else if (grade == int(IEditorViewport::ScreenshotGrade::Tonemap)) {
-            secondaryfx::apply(shot, true, shot->postFx().exposure);
-        }
     }
 
     // Quiet the on-screen views for the two forced frames (fps audit F5) —

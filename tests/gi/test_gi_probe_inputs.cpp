@@ -76,6 +76,7 @@ static bool writeSolidTga(const std::string &path, unsigned n,
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -193,7 +194,7 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 2.4f));
     cam->lookAt(iris::Vec3(0.0f, 2.0f, 0.0f));
     cam->update(0.0f);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     // The viewport's per-frame order (EngineSceneViewport): sync, sky, then the
     // world settings. applySky is its own host call, not part of
@@ -201,8 +202,8 @@ int main(int argc, char **argv)
     const auto frame = [&]() {
         doc->refresh();
         mirror.sync();
-        mirror.applySky(view);
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::sky(view));
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
     };
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };

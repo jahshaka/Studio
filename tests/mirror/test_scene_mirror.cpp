@@ -38,6 +38,7 @@
 #include "irisgl/document/scenegraph/scenepicking.h"
 #include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -376,7 +377,7 @@ int main(int argc, char **argv)
         doc->setSkyTexture(iris::Texture2D::createCubeMap(facePaths[0], facePaths[1], facePaths[2],
                                                           facePaths[3], facePaths[4], facePaths[5]));
         doc->skyType = iris::SkyType::CUBEMAP;
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         auto glassMat = iris::PbrMaterial::create();
         glassMat->setValue("baseColor", QColor(238, 244, 248));
         glassMat->setValue("roughness", 0.05f);
@@ -414,7 +415,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->skyColor = QColor(0, 0, 255);           // restore the suite's blue clear colour
         doc->setSkyTexture(iris::Texture2DPtr());
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 6; ++i) QFile::remove(facePaths[i]);
         QDir().rmdir(skyDir);
         meshNode2->setMaterial(resting);
@@ -551,19 +552,19 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 0.0f, 4.0f));       // straight in front, looking -Z
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
     doc->getRootNode()->addChild(cam);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document camera", img);
     CHECK(!isBlue(centre(img)), "document camera sees the cube");
     cam->setLocalPos(iris::Vec3(0.0f, 20.0f, 4.0f));      // way above: cube leaves the centre
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document camera moved", img);
     CHECK(isBlue(centre(img)), "moving the document camera moves the view");
 
     // ---- selection highlight (on-top wireframe) and light wires ----
     cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
     // A green cube under the strong white point light: nothing but the highlight can read as yellow.
     meshNode2->setMaterial(resting);
     auto countYellow = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++n; } return n; };
@@ -607,7 +608,7 @@ int main(int argc, char **argv)
     // before, only a single MeshNode selection drew anything.
     {
         cam->setLocalPos(iris::Vec3(0.0f, 0.8f, 5.0f)); cam->lookAt(iris::Vec3(0, 0, 0));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         auto group = iris::SceneNode::create();
         auto makePart = [&](float x) {
             auto part = iris::MeshNode::create();
@@ -641,7 +642,7 @@ int main(int argc, char **argv)
         view->readPixels(img);
         CHECK(countYellow(img) == 0, "group highlight cleared");
         cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
     }
 
     doc->getRootNode()->removeChild(meshNode2);
@@ -896,7 +897,7 @@ int main(int argc, char **argv)
         decalCam->setLocalPos(iris::Vec3(0, 6, 0));
         decalCam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -90.0f));
         decalCam->update(0.0f);
-        mirror.applyCamera(decalCam, view);
+        mirror.sync(mirrorframe::camera(view, decalCam));
 
         // The decal image: a solid red PNG written next to the test binary. The
         // node stores a RESOLVED PATH (the reader/edit service fills it from the
@@ -984,7 +985,7 @@ int main(int argc, char **argv)
         // Leave the scene as the sky tests below expect it.
         doc->getRootNode()->removeChild(floorNode);
         doc->getRootNode()->removeChild(sun);
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
     }
@@ -992,7 +993,7 @@ int main(int argc, char **argv)
     // ---- flat sky colour from the document becomes the background ----
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(200, 30, 200);
-    mirror.applySky(view);
+    mirror.sync(mirrorframe::sky(view));
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document sky colour", img);
     // A SINGLE_COLOR sky is a real sky now (SKY_LIGHT_SPEC.md §2) and its strip
@@ -1014,17 +1015,17 @@ int main(int argc, char **argv)
         doc->setSkyTexture(iris::Texture2D::createCubeMap(paths[5], paths[4], paths[2], paths[3], paths[1], paths[0]));
         doc->skyType = iris::SkyType::CUBEMAP;
         CHECK(doc->skyTexture && doc->skyTexture->isCubeMap(), "document cubemap keeps its six faces without GL");
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         // Look straight down +X with a narrow FOV: the +X face is red.
         cam->setLocalPos(iris::Vec3(0, 0, 0));
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), -90.0f));
         cam->angle = 20.0f;
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("cubemap sky +X", img);
         CHECK(centre(img).r > 0.8f && centre(img).g < 0.2f && centre(img).b < 0.2f, "+X face of the document cubemap is red");
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 90.0f));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("cubemap sky -X", img);
         CHECK(centre(img).g > 0.8f && centre(img).r < 0.2f && centre(img).b < 0.2f, "-X face is green");
@@ -1039,14 +1040,14 @@ int main(int argc, char **argv)
         doc->gradientMid = QColor(0, 255, 0);
         doc->gradientBot = QColor(0, 0, 255);
         doc->gradientOffset = 0.5f;
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 89.0f));   // look up
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("gradient sky zenith", img);
         CHECK(centre(img).r > 0.7f && centre(img).g < 0.35f, "gradient sky zenith is the top colour");
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -89.0f));  // look down
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("gradient sky nadir", img);
         CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
@@ -1068,10 +1069,10 @@ int main(int argc, char **argv)
         skySun->setLocalRot(iris::Quat());               // travels down -Y: sun at the zenith
         doc->getRootNode()->addChild(skySun);
         mirror.sync();
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         // Look toward the horizon: daytime sky pixels, blue over red, not black.
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 25.0f));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("analytic sky", img);
         const Colour day = centre(img);
@@ -1081,7 +1082,7 @@ int main(int argc, char **argv)
         // the horizon and the same view changes colour in the NEXT frame.
         skySun->setLocalRot(iris::Quat::fromEulerAngles(-89.0f, 0.0f, 0.0f));
         mirror.sync();
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("analytic sky, sunset", img);
         const Colour dusk = centre(img);
@@ -1094,18 +1095,18 @@ int main(int argc, char **argv)
         // just above the horizon, a hazy day whitens it. One parameter, one
         // visible answer, through the document's one writer.
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 5.0f));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         skySun->setLocalRot(iris::Quat::fromEulerAngles(-40.0f, 0.0f, 0.0f));
         iris::SkyRealistic dial = doc->skyRealistic;
         dial.sunHaze = 0.0f;
         doc->setSkyRealistic(dial);
-        mirror.sync(); mirror.applySky(view);
+        mirror.sync(); mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         const Colour thin = centre(img);
         dial.sunHaze = 8.0f;
         doc->setSkyRealistic(dial);
-        mirror.sync(); mirror.applySky(view);
+        mirror.sync(); mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("analytic sky, hazy", img);
         const Colour dense = centre(img);
@@ -1118,7 +1119,7 @@ int main(int argc, char **argv)
         // A SKY WITH NO SUN is the model's own night, not a crash and not a
         // failed texture (§3): a scene with no directional light is legal.
         doc->getRootNode()->removeChild(skySun);
-        mirror.sync(); mirror.applySky(view);
+        mirror.sync(); mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("analytic sky, no sun", img);
         const Colour night = centre(img);
@@ -1166,7 +1167,7 @@ int main(int argc, char **argv)
         const auto skyShOf = [&](const QString &path, float sh[27]) {
             doc->setSkyTexture(iris::Texture2D::load(path));
             doc->skyType = iris::SkyType::EQUIRECTANGULAR;
-            mirror.applySky(view);
+            mirror.sync(mirrorframe::sky(view));
             for (int i = 0; i < 3; ++i) engine->renderOneFrame();
             return target->skyAmbientSh(sh);
         };
@@ -1195,7 +1196,7 @@ int main(int argc, char **argv)
         // and compare against a flat grey Ambient Color, neither of which exists).
         doc->setSkyTexture(iris::Texture2D::load(redSkyPath));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         auto docSkyLight = iris::LightNode::create();
         docSkyLight->setName("Sky Light");
         docSkyLight->lightType = iris::LightType::Sky;
@@ -1211,8 +1212,8 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(1.6f, 2.6f, 1.6f));   // above: the top face fills the centre
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
-        mirror.applyCamera(cam, view);
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::camera(view, cam));
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync();
         // THE ENVIRONMENT LANDS ONE FRAME AFTER THE SKY (SKY-GPU), exactly like
         // the IBL convolution: the capture runs inside a rendered frame, so the
@@ -1221,7 +1222,7 @@ int main(int argc, char **argv)
         // once and renders would be reading the PREVIOUS sky's light.
         const auto settleEnv = [&](int frames) {
             for (int i = 0; i < frames; ++i) {
-                mirror.applyEnvironment(view, engine.get());
+                mirror.sync(mirrorframe::environment(view));
                 engine->renderOneFrame();
             }
         };
@@ -1249,7 +1250,7 @@ int main(int argc, char **argv)
         // BELOW the horizon (a different file, or Texture2D's path cache would
         // hand back the old image) and the top-lit face must fall dark.
         doc->setSkyTexture(iris::Texture2D::load(flipSkyPath));
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync();
         settleEnv(3);
         view->readPixels(img); show("matte cube, red BELOW", img);
@@ -1267,11 +1268,11 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(meshNode);
         QFile::remove(redSkyPath);
         QFile::remove(flipSkyPath);
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f));
         cam->lookAt(iris::Vec3(0, 0, 0));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
@@ -1285,7 +1286,7 @@ int main(int argc, char **argv)
         }
         doc->setSkyTexture(iris::Texture2D::load(eqPath));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         // A mirror-metal cube in near-darkness: everything it shows is reflection.
         target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
         auto chromeMat = iris::PbrMaterial::create();
@@ -1297,7 +1298,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f));
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("metal cube, equirect IBL", img);
         const Colour c = centre(img);
@@ -1312,7 +1313,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->skyColor = QColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("metal cube, blue colour sky", img);
         const Colour swapped = centre(img);
@@ -1322,7 +1323,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(meshNode);
         QFile::remove(eqPath);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
@@ -1362,9 +1363,9 @@ int main(int argc, char **argv)
         chrome->setValue("roughness", 0.1f);
         meshNode->setMaterial(chrome);
         doc->getRootNode()->addChild(meshNode);
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         for (int i = 0; i < 4; ++i) engine->renderOneFrame();
         Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
         show("gradient sky + chrome cube (settled)", before);
@@ -1386,8 +1387,8 @@ int main(int argc, char **argv)
         CHECK(target->skyAmbientSh(settledSh) && settledSh[0] > 0.0f,
               "...which it also integrates for the ambient");
         for (int i = 0; i < 5; ++i) {
-            mirror.applySky(view);
-            mirror.applyEnvironment(view, engine.get());
+            mirror.sync(mirrorframe::sky(view));
+            mirror.sync(mirrorframe::environment(view));
             mirror.sync();
             engine->renderOneFrame();
         }
@@ -1407,7 +1408,7 @@ int main(int argc, char **argv)
         meshNode->setMaterial(orange);
         doc->getRootNode()->removeChild(meshNode);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-        mirror.applySky(view);
+        mirror.sync(mirrorframe::sky(view));
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
@@ -1417,7 +1418,7 @@ int main(int argc, char **argv)
     {
         cam->setLocalPos(iris::Vec3(0.0f, 10.0f, 0.01f));
         cam->lookAt(iris::Vec3(0, 0, 0));
-        mirror.applyCamera(cam, view);
+        mirror.sync(mirrorframe::camera(view, cam));
         auto gridPixels = [&](float minR) {
             int count = 0;
             for (unsigned y = 0; y < img.height; ++y)
@@ -1573,7 +1574,7 @@ int main(int argc, char **argv)
             topCam->setLocalPos(iris::Vec3(0, 6, 0));
             topCam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -90.0f));
             topCam->update(0.0f);
-            mirror.applyCamera(topCam, view);
+            mirror.sync(mirrorframe::camera(view, topCam));
             mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
             view->readPixels(img);
             bare2 = centre(img);
@@ -1660,11 +1661,11 @@ int main(int argc, char **argv)
         auto gcam = iris::CameraNode::create();
         gcam->setLocalPos(iris::Vec3(0, 3, 5));
         gcam->update(0.0f);
-        mirror.applyCamera(gcam, view);
+        mirror.sync(mirrorframe::camera(view, gcam));
 
         const quint64 push0 = mirror.giPushCount(), refresh0 = mirror.giRefreshCount();
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
         const quint64 pushAfterFirst = mirror.giPushCount();
         CHECK(pushAfterFirst == push0 + 1, "GI idle: the first applyEnvironment pushes VCT exactly once");
@@ -1676,7 +1677,7 @@ int main(int argc, char **argv)
         bool stable = true;
         for (int f = 0; f < 60; ++f) {
             mirror.sync();
-            mirror.applyEnvironment(view, engine.get());
+            mirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
             if (!(gsun->getGlobalTransform() == sun0) || !(gpanel->getGlobalTransform() == panel0)) stable = false;
         }
@@ -1699,13 +1700,13 @@ int main(int argc, char **argv)
         // re-solve, and idleness afterwards — it just happens a few frames later.
         gpanel->setLocalPos(iris::Vec3(1.5f, 2.6f, 0.0f));
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
         CHECK(mirror.giRefreshCount() == refresh0,
               "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
-            mirror.applyEnvironment(view, engine.get());
+            mirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
         }
         CHECK(mirror.giRefreshCount() == refresh0 + 1,
@@ -1717,7 +1718,7 @@ int main(int argc, char **argv)
         for (int f = 0; f < 10; ++f) {
             gfloor->setLocalPos(iris::Vec3(0.0f, -0.01f * f, 0.0f));
             mirror.sync();
-            mirror.applyEnvironment(view, engine.get());
+            mirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
         }
         CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a MESH does not re-solve");
@@ -1757,7 +1758,7 @@ int main(int argc, char **argv)
             const auto settle = [&](int frames) {
                 for (int f = 0; f < frames; ++f) {
                     mirror.sync();
-                    mirror.applyEnvironment(view, engine.get());
+                    mirror.sync(mirrorframe::environment(view));
                     engine->renderOneFrame();
                 }
             };
@@ -1838,7 +1839,7 @@ int main(int argc, char **argv)
         // Leave the scene's GI as we found it.
         gdoc->giMode = iris::GiMode::OFF;
         mirror.sync();
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
         mirror.setLightWires(false);
     }
@@ -2025,10 +2026,10 @@ int main(int argc, char **argv)
         auto lcam = iris::CameraNode::create();
         lcam->setLocalPos(iris::Vec3(0, 3, 5));
         lcam->update(0.0f);
-        lampMirror.applyCamera(lcam, view);
+        lampMirror.sync(mirrorframe::camera(view, lcam));
         const auto tick = [&]() {
             lampMirror.sync();
-            lampMirror.applyEnvironment(view, engine.get());
+            lampMirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
         };
         tick();
@@ -2272,7 +2273,7 @@ int main(int argc, char **argv)
         sunMirror.setSource(sdoc);
         enginetest::testCameraLookAt(sunView, Vec3(0.0f, 4.0f, 4.0f), Vec3(0, -1, 0));
         sunMirror.sync();
-        sunMirror.applyEnvironment(sunView);
+        sunMirror.sync(mirrorframe::environment(sunView));
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         sunView->readPixels(img);
         const Colour high = centre(img);
@@ -2302,7 +2303,7 @@ int main(int argc, char **argv)
         sdoc->skyType = iris::SkyType::REALISTIC;
         const iris::Quat parked = sunLight->getGlobalRotation();
         sunMirror.sync();
-        sunMirror.applyEnvironment(sunView);
+        sunMirror.sync(mirrorframe::environment(sunView));
         const iris::Quat after = sunLight->getGlobalRotation();
         CHECK(qFuzzyCompare(parked.x(), after.x()) && qFuzzyCompare(parked.y(), after.y()) &&
               qFuzzyCompare(parked.z(), after.z()) && qFuzzyCompare(parked.scalar(), after.scalar()),
@@ -2433,7 +2434,7 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(cv3, Vec3(0.4f, 3.0f, 0.6f), Vec3(0, 0, 0));
         cm3.setSource(sdoc3);
         cm3.sync();
-        cm3.applyEnvironment(cv3);
+        cm3.sync(mirrorframe::environment(cv3));
         CHECK(cm3.engineNode(bare.data()) != 0, "no-material: the node has an engine node");
         for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
         cv3->readPixels(img); show("no material", img);
@@ -2518,7 +2519,7 @@ int main(int argc, char **argv)
               "cull import: the one-sided quad's node leaves the cull to its material");
         cm4.setSource(sdoc4);
         cm4.sync();
-        cm4.applyEnvironment(cv4);
+        cm4.sync(mirrorframe::environment(cv4));
         if (twoSided && oneSided) {
             // Each quad alone, from below (its own centre under the camera). DRAWN = the
             // picture differs from the same pose with the quad hidden.

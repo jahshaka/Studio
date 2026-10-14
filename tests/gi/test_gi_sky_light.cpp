@@ -36,6 +36,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -109,13 +110,13 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(0.0f, 0.0f, 6.0f));
     cam->lookAt(iris::Vec3(0.0f, 0.0f, 0.0f));
     cam->update(0.0f);
-    mirror.applyCamera(cam, view);
+    mirror.sync(mirrorframe::camera(view, cam));
 
     const auto frame = [&]() {
         doc->refresh();
         mirror.sync();
-        mirror.applySky(view);
-        mirror.applyEnvironment(view, engine.get());
+        mirror.sync(mirrorframe::sky(view));
+        mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
     };
     // Rows 108 and 148 are up the sphere's dome and down its underside, both on

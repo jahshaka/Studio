@@ -50,6 +50,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -258,15 +259,10 @@ struct Resolved { float exposure, lo, hi; bool fixed; };
 Resolved resolveThroughMirror(const iris::ScenePtr &doc, View *view, SceneMirror &mirror,
                               const iris::CameraNodePtr &camera)
 {
-    mirror.sync();
-    mirror.applySky(view);
-    mirror.applyEnvironment(view);
-    if (camera) mirror.applyCamera(camera, view);
-    // applyEnvironment layers the DRIVING camera's block over the world's, and
-    // the driving camera is what applyCamera just recorded — so the second call
-    // is what a real host's next frame does, and it is where a camera override
-    // actually lands.
-    mirror.applyEnvironment(view);
+    // ONE HOST FRAME (U0 3a): the sky, the environment and the camera in one record — the camera's block layered
+    // over the world's on the view's part — drained by the frame, then read.
+    mirror.sync(mirrorframe::world(view, camera));
+    gEngine->renderOneFrame();
     const PostFxDesc fx = view->postFx();
     return { fx.exposure, fx.exposureMin, fx.exposureMax, fx.tonemapFixed };
 }

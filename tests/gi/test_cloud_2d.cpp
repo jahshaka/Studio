@@ -48,6 +48,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -129,14 +130,14 @@ struct Rig {
         cam->setLocalPos(iris::Vec3(0.0f, 3.0f, 0.001f));
         cam->lookAt(iris::Vec3(0.0f, 0.0f, 0.0f));
         cam->update(0.0f);
-        mirror->applyCamera(cam, view);
+        mirror->sync(mirrorframe::camera(view, cam));
         return true;
     }
     void frame() {
         doc->refresh();
         mirror->sync();
-        mirror->applySky(view);
-        mirror->applyEnvironment(view, engine.get());
+        mirror->sync(mirrorframe::sky(view));
+        mirror->sync(mirrorframe::environment(view));
         engine->renderOneFrame();
     }
     // SETTLED = THE ENVIRONMENT HAS LANDED, counted in FRAMES: the realistic sky
@@ -636,7 +637,7 @@ int caseLook(const char *dir) {
     r.cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
     r.cam->lookAt(iris::Vec3(0.0f, 2.0f + std::tan(20.0f * float(M_PI) / 180.0f), -1.0f));
     r.cam->update(0.0f);
-    r.mirror->applyCamera(r.cam, r.view);
+    r.mirror->sync(mirrorframe::camera(r.view, r.cam));
     const float covers[] = { 0.3f, 0.5f, 0.8f };
     const float suns[2][2] = { { 25.0f, 180.0f }, { 60.0f, 0.0f } };
     for (const auto &sun : suns)
@@ -668,7 +669,7 @@ int caseBakeCost() {
     r.cam->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
     r.cam->lookAt(iris::Vec3(0.0f, 2.3f, -1.0f));
     r.cam->update(0.0f);
-    r.mirror->applyCamera(r.cam, r.view);
+    r.mirror->sync(mirrorframe::camera(r.view, r.cam));
     r.sunAt(40.0f, 0.0f);
     r.clouds(true, 0.5f, 1.0f);
     r.settle();

@@ -68,6 +68,7 @@
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
 #include "viewport/freecamerapolicy.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -118,9 +119,9 @@ static void editorFrame(SceneMirror &editorMirror, Engine &engine, View *editorV
                         const iris::CameraNodePtr &camera)
 {
     editorMirror.sync();
-    editorMirror.applySky(editorView);
-    editorMirror.applyEnvironment(editorView, &engine);
-    editorMirror.applyCamera(camera, editorView, freecam::kFreeCameraFramingAspect);
+    editorMirror.sync(mirrorframe::sky(editorView));
+    editorMirror.sync(mirrorframe::environment(editorView));
+    editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
     engine.renderOneFrame();
 }
 
@@ -133,9 +134,9 @@ static void frame(EnginePlayerScene &player, SceneMirror &editorMirror, Engine &
 {
     player.step(dt, W, H);
     editorMirror.sync();
-    editorMirror.applySky(editorView);
-    editorMirror.applyEnvironment(editorView, &engine);
-    editorMirror.applyCamera(camera, editorView, freecam::kFreeCameraFramingAspect);
+    editorMirror.sync(mirrorframe::sky(editorView));
+    editorMirror.sync(mirrorframe::environment(editorView));
+    editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
     engine.renderOneFrame();
 }
 
@@ -320,7 +321,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 8; ++i) {
                 engine->renderOneFrame();
                 // The mirrors must not push the un-forced description back.
-                editorMirror.applyCamera(camera, editorView);
+                editorMirror.sync(mirrorframe::camera(editorView, camera));
             }
             Image ec, pc;
             CHECK(editorView->readPixels(ec), "editor readback, chain on");
@@ -483,8 +484,8 @@ int main(int argc, char **argv)
             if (seeded && control) {
                 seeded->setScene(editorScene);
                 control->setScene(editorScene);
-                editorMirror.applyCamera(camera, seeded, freecam::kFreeCameraFramingAspect);
-                editorMirror.applyCamera(camera, control, freecam::kFreeCameraFramingAspect);
+                editorMirror.sync(mirrorframe::camera(seeded, camera, freecam::kFreeCameraFramingAspect));
+                editorMirror.sync(mirrorframe::camera(control, camera, freecam::kFreeCameraFramingAspect));
 
                 // A BRAND-NEW VIEW HAS THE PASSTHROUGH CHAIN and therefore no
                 // seed pass: this write cannot land yet, and there is nothing

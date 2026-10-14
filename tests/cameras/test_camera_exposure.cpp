@@ -58,6 +58,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -478,9 +479,9 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     // integral (SKY_LIGHT_SPEC.md §2), and the integral is applySky's — a
     // fixture that skipped it used to get the flat World colour and now gets no
     // ambient at all.
-    mirror.applySky(view);
-    mirror.applyEnvironment(view);
-    mirror.applyCamera(camera, view);
+    mirror.sync(mirrorframe::sky(view));
+    mirror.sync(mirrorframe::environment(view));
+    mirror.sync(mirrorframe::camera(view, camera));
     // ...AND THE ENVIRONMENT AGAIN, ONE FRAME LATER (SKY-GPU). The sky's own
     // light is the engine's now: it captures the sky it drew into a cubemap
     // inside the next rendered frame and integrates THAT, so the ambient a host
@@ -491,7 +492,7 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     // FIRST shot of the run is the only one taken before the sky's light
     // arrives, and every later one is 2.5x brighter than it.
     gEngine->renderOneFrame();
-    mirror.applyEnvironment(view);
+    mirror.sync(mirrorframe::environment(view));
     if (optIn) {
         PostFxDesc fx = view->postFx();
         fx.allowOffscreen = true;
@@ -666,15 +667,15 @@ void partB()
         // Settle first: turning the override ON is legitimately one rebuild.
         for (int i = 0; i < 3; ++i) {
             mirror.sync();
-            mirror.applyEnvironment(view);
-            mirror.applyCamera(doc.camera, view);
+            mirror.sync(mirrorframe::environment(view));
+            mirror.sync(mirrorframe::camera(view, doc.camera));
             gEngine->renderOneFrame();
         }
         const unsigned before = view->workspaceGeneration();
         for (int i = 0; i < 10; ++i) {
             mirror.sync();
-            mirror.applyEnvironment(view);
-            mirror.applyCamera(doc.camera, view);
+            mirror.sync(mirrorframe::environment(view));
+            mirror.sync(mirrorframe::camera(view, doc.camera));
             gEngine->renderOneFrame();
         }
         const unsigned after = view->workspaceGeneration();

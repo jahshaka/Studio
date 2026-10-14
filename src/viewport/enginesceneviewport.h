@@ -37,6 +37,7 @@ class OrbitalCameraController;
 #include <QPointF>
 #include <QHash>
 #include <functional>
+#include <optional>
 
 class EngineSceneViewport : public EngineViewWidget, public IEditorViewport
 {
@@ -813,12 +814,12 @@ private:
     /// end() when the page it is hosted on is left.
     std::function<void()> mVrPreviewEnds;
     /// THE RECORDING VIEW (VIDEO-REC-1): the recorder's own 1080p offscreen
-    /// view of this scene, pushed beside the viewport's every synced frame
-    /// (syncRecordingView), and the recorder's hooks for its life.
+    /// view of this scene, a part of every synced frame's input beside the
+    /// viewport's (syncFrame's FrameViews), and the recorder's hooks for its life.
     jahshaka::engine::View *mRecordView = nullptr;
     RecordingHooks mRecordHooks;
-    /// The per-frame push of the recording view (state only).
-    void syncRecordingView();
+    /// The new recording view's exposure seed, carried by its first record (0 = a plain reset).
+    std::optional<float> mRecordViewSeed;
     /// The recorder's frame hook at the frame's LAST moment before its render,
     /// and the recording view enabled only when the recorder draws this frame.
     void armRecordingFrame(bool recordable);

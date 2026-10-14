@@ -2608,7 +2608,41 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // import or an open at once — the rest arrive on the ticks after it.
         // Every other frame (a script's, a screenshot's) builds all it sees.
         if (mBudgetedSync) mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
-        mMirror->sync();
+        // THE FRAME'S INPUT, ONE EMIT (U0 3a): the sky, the environment and the camera of THIS view, the headset's
+        // eyes and the recorder's view all ride the mirror's one record — the engine applies it at the top of the
+        // next frame. (They were four verbs pushed on the spot, after the overlay; nothing between reads them.)
+        SceneMirror::FrameViews views;
+        {
+            SceneMirror::FrameView main;
+            main.view = view();
+            main.environment = true;
+            main.sky = true;
+            main.camera = viewCamera();
+            main.framingAspect = freeCameraFramingAspect();
+            views.views.push_back(main);
+        }
+        // ...AND THE HEADSET'S EYES, WHICH ARE A VIEW OF THIS SCENE TOO (lane EYE-GRADE-1): the per-view half only —
+        // never a second environment, whose scene half counts GI settle frames — under the SAME driving camera as
+        // the desktop view (the rig is placed on the camera a render of this scene looks through); the eyes' poses
+        // are the rig's, so the camera grades them and places nothing.
+        if (mEngine)
+            if (jahshaka::engine::View *eyes = mEngine->vrView()) {
+                SceneMirror::FrameView ev;
+                ev.view = eyes;
+                ev.postFx = true;
+                ev.camera = viewCamera();
+                ev.pose = false;
+                views.views.push_back(ev);
+            }
+        // THE RECORDER'S VIEW, BESIDE THIS ONE (VIDEO-REC-1): the same camera, sky and grade, every synced frame (the
+        // recorder arms at the frame's last moment, armRecordingFrame); its first record seeds its exposure.
+        if (mRecordView) {
+            SceneMirror::FrameView rv = recordingview::frameView(mRecordView, viewCamera(), freeCameraFramingAspect());
+            rv.seedExposure = mRecordViewSeed;
+            mRecordViewSeed.reset();
+            views.views.push_back(rv);
+        }
+        mMirror->sync(views);
         // ...and while meshes are still owed the world has not arrived: no
         // FIRST-TIME lighting arm over half a world (Scene::setLoading).
         if (mEngineScene) mEngineScene->setLoading(mWorldArriving || mMirror->attachesOwed() > 0);
@@ -2625,38 +2659,9 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     }
     overlayStage.end();
     {
-        // env: the sky and the environment push — where a synchronous GI
-        // rebuild happens, which is one of the "15 fps that feels like 15"
-        // candidates the monitor exists to tell apart (the engine tags the
-        // rebuild itself as an event with its cause).
-        framemonitor::Stage envStage("host.env");
-        if (mMirror) mMirror->applySky(view());
-        if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
-        // ...AND THE HEADSET'S EYES, WHICH ARE A VIEW OF THIS SCENE TOO (lane
-        // EYE-GRADE-1). The session makes its own View inside the engine, so it
-        // was the one view no mirror reached and the wearer got the renderer's
-        // defaults instead of the project's grade. It is pushed here, beside
-        // the desktop's, through the PER-VIEW half — never a second
-        // applyEnvironment, whose scene half counts GI settle frames.
-        //
-        // THE SAME DRIVING CAMERA as the desktop view, because it is the same
-        // shot: the rig is placed on the camera a render of this scene actually
-        // looks through (EditorVrPreview::begin's renderCamera rule), so a
-        // camera with its own exposure grades both pictures.
-        if (mMirror && mEngine)
-            if (jahshaka::engine::View *eyes = mEngine->vrView())
-                mMirror->applyViewEnvironment(eyes, viewCamera());
-    }
-    {
         framemonitor::Stage camStage("host.camera");
-        if (mMirror && viewCamera())
-            mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
         syncPip();
     }
-    // THE RECORDER'S VIEW, BESIDE THIS ONE (VIDEO-REC-1): the same camera, sky and
-    // grade, pushed every synced frame (the recorder arms at the frame's last
-    // moment, armRecordingFrame).
-    if (mRecordView) syncRecordingView();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine, which has NO clock
     // of its own (Engine.h "Simulation clock"): every frame is told how many
@@ -2666,8 +2671,18 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     // panel's odd frames, a paused scene) freezes the flame for that frame,
     // exactly as it freezes the falling crate.
     mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
-    if (mEngine)
-        mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
+    if (mEngine) {
+        // ...AND THE USER'S GESTURE, AS THIS HOST KNOWS IT (U0 3a: FrameInput::gesture): a gizmo drag (this widget's
+        // or the wearer's — one gizmo per mode in the process) or a material hover preview, with the node it moves.
+        // The engine's GI scheduler reads it from 3c on; until then it still infers a gesture from motion.
+        jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
+        jahshaka::engine::FrameInputGesture gesture;
+        gesture.active = (mGizmo && mGizmo->isDragging()) || (mScene && mScene->materialPreviewDepth > 0);
+        if (gesture.active && mSelectedNode && mMirror)
+            if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.data())) gesture.nodes.push_back(id);
+        frame.gesture = gesture;
+        mEngine->submitFrame(frame);
+    }
 }
 
 // ---- THE PRESENTED FRAME, READ BACK (CLOSE-SHOT-2) --------------------------
@@ -3429,6 +3444,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         mOverlay->update(mGizmo, gizmoRayPos, gizmoRayDir, gizmoViewDir);
     }
 
+    bool shotGiChanged = false;   // the shot's record changes the GI configuration (the settle below)
     if (mMirror) {
         if (hideHelpers) {
             // Game View's own answer, for the duration of one picture, through
@@ -3451,59 +3467,72 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // same thing in pushEditorHelpers; a shot does not go through it.
         mMirror->setHideDefaultFloor(false);
         mMirror->setGroundPlane(mShowGroundPlane);
-        mMirror->sync();
-        // The shot view starts with a hardcoded background; give it the document
-        // sky (flat colour) and world settings (shadows toggle) like the live view.
-        // Textured skies are scene geometry and show up regardless.
-        mMirror->applySky(shot);
-        mMirror->applyEnvironment(shot);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFramingAspect());
-        // applyEnvironment (and applyCamera, a line above) pushed the scene's
-        // post-fx description — the VIEWPORT's description — which an offscreen
-        // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
-        // `grade` is that opt-in, and IEditorViewport::ScreenshotGrade documents
-        // the four answers; this is where each one is carried out:
-        //   Plain     nothing at all — the neutral, exactly reproducible
-        //             readback every pixel suite asserts;
-        //   Tonemap   the deterministic filmic grade ONLY, at the SCENE's
-        //             exposure — the thumbnail picture;
-        //   Scene     the whole chain at the on-screen view's MEASURED
-        //             exposure — the editor's own picture, what a user gets;
-        //   Viewport  the whole chain with its own adaptive exposure re-seeded
-        //             from the description — what `postFx: true` has always
-        //             meant, and the door a pipped camera's exposure uses.
-        if (grade == ScreenshotGrade::Scene) {
-            // THE MEASURED EXPOSURE COMES FROM THE VIEW ON SCREEN, read here
-            // because this is the only place that has both views: the shot can
-            // never measure (two frames), the viewport has been measuring this
-            // same scene for as long as it has been open. 0 (no on-screen view,
-            // no HDR, nothing presented yet) falls back inside applyScene.
-            secondaryfx::applyScene(shot, view() ? view()->measuredExposureScale() : 0.0f);
-        } else if (grade == ScreenshotGrade::Viewport) {
-            jahshaka::engine::PostFxDesc fx = shot->postFx();
-            fx.allowOffscreen = true;
-            shot->setPostFx(fx);
-            // A ONE-SHOT RENDER CANNOT ADAPT (CAMERA_LENS_SPEC §4). The HDR
-            // chain's auto exposure is a temporal filter seeded at workspace
-            // build and converging at ~75%/s; this view lives for two frames,
-            // so without this the shot grades at the SEED and the exposure the
-            // caller asked for — the world's, or the driving camera's own —
-            // barely reaches the picture. Re-seeding from the description just
-            // pushed makes the first frame the right frame.
-            shot->resetExposureHistory();
-        } else if (grade == ScreenshotGrade::Tonemap) {
-            // ...at the SCENE's exposure, which is what the description
-            // applyEnvironment just pushed carries (SS1: this used to be the
-            // caller's default and the World's value was thrown away, so every
-            // regraded world photographed at +0.6).
-            secondaryfx::apply(shot, true, shot->postFx().exposure);
-        } else if (wantRadiance) {
-            // THE PLAIN PICTURE, KEPT IN FLOAT TOO (readRadianceWithNextScreenshot):
-            // honoured on an offscreen view whatever allowOffscreen says — it is a
-            // property of what the view keeps, not a post effect (PostFxDesc).
-            jahshaka::engine::PostFxDesc fx = shot->postFx();
-            fx.hdrReadback = true;
-            shot->setPostFx(fx);
+        // The shot view starts with a hardcoded background; its part of the frame gives it the document sky (flat
+        // colour), the world settings and the view camera like the live view's — drained on the shot's first frame,
+        // before its first render, where the four verbs used to land on the spot.
+        {
+            SceneMirror::FrameView sv;
+            sv.view = shot;
+            sv.environment = true;
+            sv.sky = true;
+            sv.camera = viewCamera();
+            sv.framingAspect = freeCameraFramingAspect();
+            sv.finish = [&](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+                // THE GRADE, ON THE SHOT'S PART OF THE RECORD (U0 3a): the description the mirror built for the shot
+                // (the world's chain and the camera's), opted in here — never on the view on the spot, which the
+                // drain would overwrite with the record's chain.
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                // The mirror built the scene's
+                // post-fx description — the VIEWPORT's description — which an offscreen
+                // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
+                // `grade` is that opt-in, and IEditorViewport::ScreenshotGrade documents
+                // the four answers; this is where each one is carried out:
+                //   Plain     nothing at all — the neutral, exactly reproducible
+                //             readback every pixel suite asserts;
+                //   Tonemap   the deterministic filmic grade ONLY, at the SCENE's
+                //             exposure — the thumbnail picture;
+                //   Scene     the whole chain at the on-screen view's MEASURED
+                //             exposure — the editor's own picture, what a user gets;
+                //   Viewport  the whole chain with its own adaptive exposure re-seeded
+                //             from the description — what `postFx: true` has always
+                //             meant, and the door a pipped camera's exposure uses.
+                if (grade == ScreenshotGrade::Scene) {
+                    // THE MEASURED EXPOSURE COMES FROM THE VIEW ON SCREEN, read here
+                    // because this is the only place that has both views: the shot can
+                    // never measure (two frames), the viewport has been measuring this
+                    // same scene for as long as it has been open. 0 (no on-screen view,
+                    // no HDR, nothing presented yet) falls back inside applyScene.
+                    secondaryfx::applyScene(fx, view() ? view()->measuredExposureScale() : 0.0f);
+                } else if (grade == ScreenshotGrade::Viewport) {
+                    fx.allowOffscreen = true;
+                    // A ONE-SHOT RENDER CANNOT ADAPT (CAMERA_LENS_SPEC §4). The HDR
+                    // chain's auto exposure is a temporal filter seeded at workspace
+                    // build and converging at ~75%/s; this view lives for two frames,
+                    // so without this the shot grades at the SEED and the exposure the
+                    // caller asked for — the world's, or the driving camera's own —
+                    // barely reaches the picture. Re-seeding from the description just
+                    // pushed makes the first frame the right frame.
+                    part.resetExposure = true;
+                } else if (grade == ScreenshotGrade::Tonemap) {
+                    // ...at the SCENE's exposure, which is what the description
+                    // the mirror built carries (SS1: this used to be the
+                    // caller's default and the World's value was thrown away, so every
+                    // regraded world photographed at +0.6).
+                    secondaryfx::apply(fx, true, fx.exposure);
+                } else if (wantRadiance) {
+                    // THE PLAIN PICTURE, KEPT IN FLOAT TOO (readRadianceWithNextScreenshot):
+                    // honoured on an offscreen view whatever allowOffscreen says — it is a
+                    // property of what the view keeps, not a post effect (PostFxDesc).
+                    fx.hdrReadback = true;
+                }
+                part.postFx = fx;
+            };
+            const quint64 giPushes = mMirror->giPushCount();
+            mMirror->sync(SceneMirror::FrameViews{ { sv } });
+            // A GI CONFIGURATION THIS SHOT'S RECORD CHANGES lands at the shot's first frame (U0 3a), so the settle
+            // below cannot read it yet: the shot draws that frame first and then waits for giAtRest, as a gathering
+            // scene does.
+            shotGiChanged = mMirror->giPushCount() != giPushes;
         }
     }
     // A screenshot is an offscreen render of this same scene: without this
@@ -3527,7 +3556,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // — at the verb's cap — rather than photographing the raw estimate.
     {
         jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
-        if (mShotSettleFrames <= 0 && sc0 && sc0->giStatus().gather.on) mShotSettleFrames = 2000;
+        if (mShotSettleFrames <= 0 && sc0 && (sc0->giStatus().gather.on || shotGiChanged)) mShotSettleFrames = 2000;
     }
     if (mShotSettleFrames > 0) {
         const int cap = mShotSettleFrames;
@@ -3540,7 +3569,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // waits for the ONE predicate as always; a scene that does not gather
         // takes exactly the path it always took.
         jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
-        const bool gathering = sc && sc->giStatus().gather.on;
+        const bool gathering = sc && (sc->giStatus().gather.on || shotGiChanged);
         if (sc && (gathering || !sc->giStatus().giAtRest)) {
             mEngine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
             // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
@@ -3650,20 +3679,11 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
     rv->setEnabled(false);
     mRecordView = rv;
     mRecordHooks = std::move(hooks);
-    // The first push now, so the seed below is derived from the right description.
-    if (mMirror) recordingview::push(*mMirror, rv, viewCamera(), freeCameraFramingAspect());
+    // ITS FIRST RECORD SEEDS IT (the next synced frame): the seed is derived from the view's chain, so it lands after
+    // the chain in the same drain (FrameInputView::seedExposure); 0 = no measure yet = a plain reset.
     const float measured = view()->measuredExposureScale();
-    if (measured > 0.0f) rv->seedExposureHistory(measured);
-    else rv->resetExposureHistory();
+    mRecordViewSeed = measured > 0.0f ? measured : 0.0f;
     return rv;
-}
-
-void EngineSceneViewport::syncRecordingView()
-{
-    if (!mRecordView) return;
-    // The per-view half only (never applyEnvironment twice: its scene half
-    // counts GI settle frames), the whole chain in ONE push.
-    if (mMirror) recordingview::push(*mMirror, mRecordView, viewCamera(), freeCameraFramingAspect());
 }
 
 void EngineSceneViewport::armRecordingFrame(bool recordable)
@@ -4483,17 +4503,17 @@ void EngineSceneViewport::primeSceneEnvironment()
     // A separate event-loop turn in the threaded open.
     if (!mScene || !view() || !mMirror || !mEngineScene) return;
     {
-        LoadTimeline::Accumulate sky(QStringLiteral("engine:applySky"));
-        mMirror->applySky(view());
+        // The sky, the world settings — and, at Epic, the VCT voxelize + light injection, the shadow atlas resize and
+        // the post chain's shader variants — and the camera: the frame's input, applied at the next frame's head.
+        LoadTimeline::Accumulate env(QStringLiteral("engine:environment"));
+        SceneMirror::FrameView main;
+        main.view = view();
+        main.environment = true;
+        main.sky = true;
+        main.camera = viewCamera();
+        main.framingAspect = freeCameraFramingAspect();
+        mMirror->sync(SceneMirror::FrameViews{ { main } });
     }
-    {
-        // The world settings — and, at Epic, the VCT voxelize + light
-        // injection, the shadow atlas resize and the post chain's shader
-        // variants.
-        LoadTimeline::Accumulate env(QStringLiteral("engine:applyEnvironment"));
-        mMirror->applyEnvironment(view(), mEngine.get());
-    }
-    if (viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
 }
 
 unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> &onCompile)

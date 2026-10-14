@@ -191,13 +191,20 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                                             : QList<iris::SceneNodePtr>{},
                                    selected);
         mirror.setGrid(true, SnapSettings::translateSize(), SceneMirror::GridPlane::Floor);
+        // ONE FRAME: the sky and the camera on the warm-up view (and the recorder's view when one is warming),
+        // in the frame's input (U0 3a).
+        SceneMirror::FrameView recorderView;   // empty unless the recorder warms (3)
         auto frame = [&]() {
-            mirror.sync();
+            SceneMirror::FrameView fv;
+            fv.view = view;
+            fv.sky = true;
+            fv.camera = camera;
+            SceneMirror::FrameViews views{ { fv } };
+            if (recorderView.view) views.views.push_back(recorderView);
+            mirror.sync(views);
             gizmo.updateSize(camera);
             overlay.update(selected ? &gizmo : nullptr, camera->getGlobalPosition(),
                            iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-            mirror.applySky(view);
-            mirror.applyCamera(camera, view);
             engine.renderOneFrame();
             ++frames;
             poll();
@@ -207,12 +214,20 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // (PostFxDesc::allowOffscreen) — measured: the editor's first frames then
         // compiled SMAA's three passes and the PBS permutations under them. The
         // screenshot's Scene grade is that opt-in (secondaryfx::applyScene), and it
-        // is pushed once: the mirror re-pushes its own description on every
-        // applyEnvironment, and the two flags alternating would rebuild the
-        // workspace every frame.
-        mirror.sync();
-        mirror.applyEnvironment(view, &engine);
-        secondaryfx::applyScene(view, 0.0f);
+        // rides the environment's own record (FrameView::finish): one description per
+        // record, so the two flags never alternate and the workspace is built once.
+        const auto environmentOnce = [&]() {
+            SceneMirror::FrameView ev;
+            ev.view = view;
+            ev.environment = true;
+            ev.finish = [](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                secondaryfx::applyScene(fx, 0.0f);
+                part.postFx = fx;
+            };
+            mirror.sync(SceneMirror::FrameViews{ { ev } });
+        };
+        environmentOnce();
         // (1) arriving: the parked arm, the way a create's first frames draw it.
         for (int i = 0; i < kWarmUpFrames; ++i) frame();
         // (2) on screen: the arm builds; until it is BOUND and nothing has compiled
@@ -262,9 +277,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 const worldmodes::PhotonTier tier = worldmodes::PhotonTier(t);
                 if (tier == born) continue;
                 worldmodes::setPhoton(doc, photonOn, tier);
-                mirror.sync();
-                mirror.applyEnvironment(view, &engine);
-                secondaryfx::applyScene(view, 0.0f);
+                environmentOnce();
                 AsyncShaderStats as = engine.asyncShaderStats();
                 unsigned long long lastDone = as.completed;
                 engine.shaderBuildProgress(c, f, e);
@@ -284,9 +297,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             }
             sweep.reset();
             worldmodes::setPhoton(doc, photonOn, born);
-            mirror.sync();
-            mirror.applyEnvironment(view, &engine);
-            secondaryfx::applyScene(view, 0.0f);
+            environmentOnce();
             for (int i = 0; i < kWarmUpFrames; ++i) frame();
         }
         // (3) the project tile's capture (CLOSE-SHOT-2: a save's tile is the view's
@@ -317,8 +328,8 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 unsigned last = c + f;
                 int quiet = 0;
                 jahshaka::engine::VideoFrameNv12 picture;
+                recorderView = recordingview::frameView(rv, camera, 0.0f);
                 for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
-                    recordingview::push(mirror, rv, camera, 0.0f);
                     rv->armVideoFrame(quint64(i));
                     frame();
                     while (rv->takeVideoFrame(picture, false)) {}
@@ -327,6 +338,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                     last = c + f;
                 }
                 while (rv->takeVideoFrame(picture, true)) {}
+                recorderView = SceneMirror::FrameView();
                 engine.destroyView(rv);
             } else {
                 qWarning("startup shader build: the recorder's view could not be made: %s", qPrintable(why));

@@ -389,6 +389,7 @@ mirror.dirty_equals_full 1.12  quiet n=44
 mirror.document_to_engine 9.72  quiet n=43
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
+mirror.frame_input 1.74  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
 mirror.reparent_local 2.30  solo, warm, the card lock held (EU-1 stage 2, 2026-10-13)
 mirror.scale 1.85  quiet n=48
 mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median

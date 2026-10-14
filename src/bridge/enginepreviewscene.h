@@ -62,6 +62,7 @@
 // No Ogre, no GL, no QWidget, no database: every subclass is testable headless
 // against an offscreen View.
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <QImage>
@@ -146,7 +147,10 @@ protected:
     /// The per-frame push every preview's step() ends with: aspect ratio from
     /// the view's pixels, then document -> engine, sky -> view, camera -> view.
     /// Does nothing without a bound View (there is nothing to push into).
-    void pushFrame(const iris::CameraNodePtr &camera, int width, int height);
+    /// `finish` (optional) is the host's last word on the view's part of the frame — a tile's grade (U0 3a: graded
+    /// on the record, never on the view on the spot, which the drain would overwrite).
+    void pushFrame(const iris::CameraNodePtr &camera, int width, int height,
+                   std::function<void(jahshaka::engine::FrameInputView &, jahshaka::engine::View *)> finish = {});
 
     /// Renders the current Scene into a THROWAWAY View of this size and reads
     /// it back. Works before the subject has ever been shown: with no Scene yet

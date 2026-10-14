@@ -274,17 +274,28 @@ void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)
     // avatar.snapshot: the second image came back byte-identical to the first.)
     step(0.0f, width, height);
     if (!mirror()) return;
-    mirror()->applySky(shot);
+    // THE SHOT'S PART OF THE FRAME (U0 3a): the sky, the model camera at the shot's aspect, and the grade — one
+    // record, drained at the shot's first frame.
+    SceneMirror::FrameView sv;
+    sv.view = shot;
+    sv.sky = true;
     if (mModel && mModel->camera()) {
         mModel->camera()->setAspectRatio(float(width) / float(height));
         mModel->camera()->update(0);
-        mirror()->applyCamera(mModel->camera(), shot);
+        sv.camera = mModel->camera();
     }
     // A PICTURE, NOT THE INSTRUMENT (SRGB-ENCODE-1): the thumbnail grade at the
     // avatar document's exposure, display-encoded like every other tile
     // (avatar.snapshot reports `encoding: "display"`).
-    if (mModel && mModel->document())
-        secondaryfx::apply(shot, true, iris::lens::exposureStopsToChain(mModel->document()->exposure));
+    if (mModel && mModel->document()) {
+        const float exposure = iris::lens::exposureStopsToChain(mModel->document()->exposure);
+        sv.finish = [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+            secondaryfx::apply(fx, true, exposure);
+            part.postFx = fx;
+        };
+    }
+    mirror()->sync(SceneMirror::FrameViews{ { sv } });
 }
 
 QImage AvatarPreviewScene::renderImage(int width, int height)

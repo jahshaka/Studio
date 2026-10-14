@@ -436,18 +436,26 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // document every time, and `setSource` is a full teardown-and-rebind even
     // when the answer is the same — the whole cost this lane is about.
     if (mirror()->source() != document) mirror()->setSource(document);
-    mirror()->sync();
+    // THE FRAME'S INPUT (U0 3a): the sky — the studio environment for every request (studioDocument) — the camera
+    // and the thumbnail grade, one record. (Composed below, emitted by the one sync.)
+    SceneMirror::FrameView fv;
+    fv.view = view();
+    fv.sky = true;
+    fv.camera = camera;
+    const float exposure = iris::lens::exposureStopsToChain(document->exposure);
+    fv.finish = [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+        secondaryfx::apply(fx, true, exposure);
+        part.postFx = fx;
+    };
+    mirror()->sync(SceneMirror::FrameViews{ { fv } });
     // THE SUBJECT'S OWN COST, captured where the counter means something: the
     // mirror zeroes its material-build counter at the top of every sync, and
     // this is the sync that mirrored the subject (thumbnails.studio_env's
     // growth arm reads it through held()).
     mLastRenderMaterialBuilds = mirror()->materialBuildCount();
-    // The sky — the studio environment for every request (studioDocument).
-    // NOT applyEnvironment, deliberately: the ambient is the environment's own
-    // (configureScene), and a thumbnail takes no shadow, GI or post row from a
-    // document it never had.
-    mirror()->applySky(view());
-    mirror()->applyCamera(camera, view());
+    // (The sky only — NOT the environment, deliberately: the ambient is the environment's own (configureScene), and
+    // a thumbnail takes no shadow, GI or post row from a document it never had.)
     // THE SECONDARY-SURFACE TONEMAP (bridge/secondarysurfacetonemap.h). A
     // thumbnail is a photograph of a world the viewport grades filmically; raw
     // linear radiance clipped to 8 bits made every brightly-lit asset a white
@@ -468,7 +476,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // exactly what MANUAL exposure now is on screen, so a manually exposed
     // world and its thumbnails agree by construction rather than by a derived
     // constant.
-    secondaryfx::apply(view(), true, iris::lens::exposureStopsToChain(document->exposure));
+    // (applied on the view's part of the record above — fv.finish)
 
     view()->setEnabled(true);
     // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame

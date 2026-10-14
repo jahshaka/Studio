@@ -64,6 +64,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -279,14 +280,20 @@ int main(int argc, char **argv)
         // here, so the world is pushed when it is dirty and not otherwise;
         // that is exactly what a stable document costs the editor.
         if (worldDirty) {
-            mirror.applyEnvironment(view);
-            PostFxDesc fx = view->postFx();
-            fx.allowOffscreen = true;
-            fx.tonemapFixed = true;
-            view->setPostFx(fx);
+            // ...on the world view's part of the frame's input (U0 3a), over the description the mirror built.
+            SceneMirror::FrameView ev;
+            ev.view = view;
+            ev.environment = true;
+            ev.finish = [](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
+                PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                fx.allowOffscreen = true;
+                fx.tonemapFixed = true;
+                part.postFx = fx;
+            };
+            mirror.sync(SceneMirror::FrameViews{ { ev } });
             worldDirty = false;
         }
-        mirror.applyCamera(editorCam, view);
+        mirror.sync(mirrorframe::camera(view, editorCam));
         ViewPipDesc pip;
         pip.enabled = pipOn;
         pip.allowOffscreen = true;              // offscreen is the only readable kind

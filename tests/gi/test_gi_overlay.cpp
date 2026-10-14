@@ -54,6 +54,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/mirrorframe.h"
 
 using namespace jahshaka::engine;
 
@@ -133,14 +134,14 @@ int main(int argc, char **argv)
         cam->lookAt(target);
         cam->update(0.0f);
         doc->refresh();
-        mirror.sync();
-        // applySky as well as applyEnvironment: without it the view renders the
-        // engine's default sky, which is bright, and every probe below would
-        // read 1.0 whatever the overlay did.
-        mirror.applySky(view);
-        mirror.applyEnvironment(view, engine.get());
-        mirror.applyCamera(cam, view);
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        // The sky as well as the environment: without it the view renders the engine's default sky, which is
+        // bright, and every probe below would read 1.0 whatever the overlay did. A HOST'S FRAMES — one record per
+        // frame (U0 3a): the overlay follows what the engine reports, which a GI switch moves at the drain, so it
+        // lands on the next frame's record, exactly as in the editor.
+        for (int i = 0; i < 3; ++i) {
+            mirror.sync(mirrorframe::world(view, cam));
+            engine->renderOneFrame();
+        }
         Image img; view->readPixels(img);
         // A 5x5 window: a one-pixel wireframe aimed at exactly can still land a
         // pixel off, and the assertion is "the wire is HERE", not "the
@@ -176,9 +177,9 @@ int main(int argc, char **argv)
         for (int f = 0; f < frames; ++f) {
             doc->refresh();
             mirror.sync();
-            mirror.applySky(view);
-            mirror.applyEnvironment(view, engine.get());
-            mirror.applyCamera(cam, view);
+            mirror.sync(mirrorframe::sky(view));
+            mirror.sync(mirrorframe::environment(view));
+            mirror.sync(mirrorframe::camera(view, cam));
             engine->renderOneFrame();
         }
     };
@@ -267,7 +268,7 @@ int main(int argc, char **argv)
     doc->giMode = iris::GiMode::OFF;
     doc->refresh();
     mirror.sync();
-    mirror.applyEnvironment(view, engine.get());
+    mirror.sync(mirrorframe::environment(view));
     mirror.setSource(iris::ScenePtr());
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
