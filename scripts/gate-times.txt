@@ -928,3 +928,5 @@ vr.warmup.timing 40.60  ship 3a0422b4e (2026-10-13)
 vr.warmup.timing.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.warmup_control 38.88  quiet n=43
 vr.warmup_control.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+mirror.attach_budget 1.78  spec BISTRO-ENGINE-1 b2835b6a8 (2026-10-14, the lowest of four runs)
+scripting.e2e.arriving_line 41.53  spec BISTRO-ENGINE-1 4a8ce40f2 (2026-10-14, the lowest of three runs of the reworked row)
