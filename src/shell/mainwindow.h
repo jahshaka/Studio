@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include <QVariantMap>
 #include <memory>
 #include "irisgl/irisglfwd.h"
-#include "irisgl/import/meshprewarm.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "ui/controls/fonticons.h"
@@ -443,9 +442,8 @@ private:
     void closeWorld(bool reopenInPlace) override;
     QStringList plannedSessionModelPaths() override;
     QStringList sessionAssetGuids() override;
-    void registerSessionAssets(const iris::MeshPrewarmPtr &prewarm) override;
-    void registerSessionAssetGuids(const QStringList &guids,
-                                   const iris::MeshPrewarmPtr &prewarm) override;
+    void registerSessionAssets() override;
+    void registerSessionAssetGuids(const QStringList &guids) override;
     void showOpenProgress(int percent, const QString &text) override;
     void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;

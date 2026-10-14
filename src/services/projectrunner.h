@@ -96,9 +96,8 @@ public:
         /// The project's session membership (the Desktop page's).
         virtual QStringList plannedSessionModelPaths() = 0;
         virtual QStringList sessionAssetGuids() = 0;
-        virtual void registerSessionAssets(const iris::MeshPrewarmPtr &prewarm) = 0;
-        virtual void registerSessionAssetGuids(const QStringList &guids,
-                                               const iris::MeshPrewarmPtr &prewarm) = 0;
+        virtual void registerSessionAssets() = 0;
+        virtual void registerSessionAssetGuids(const QStringList &guids) = 0;
         virtual void showOpenProgress(int percent, const QString &text) = 0;
         /// THE OPEN'S COMPILE LINE (SHADER-WARM-2): "Compiling shaders — n",
         /// called from INSIDE the warm-up frame after each shader it compiles on

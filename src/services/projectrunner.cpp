@@ -253,7 +253,7 @@ void ProjectRunner::open(bool playMode)
 	// pinned Object on this thread (deleted with this change).
 	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
 	AssetManager::clearAssetList();
-	mHost->registerSessionAssets(prewarm);
+	mHost->registerSessionAssets();
 
 	stageRead(prewarm);
 	stageBind(playMode);
@@ -427,7 +427,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 		slices.append({ QStringLiteral("Preparing assets (%1 of %2)…")
 		                    .arg(at + batch.size()).arg(sessionGuids.size()),
 		                pct, [this, batch]() {
-			mHost->registerSessionAssetGuids(batch, mRunner->prewarm());
+			mHost->registerSessionAssetGuids(batch);
 		} });
 	}
 	slices.append({ QStringLiteral("Reading the scene…"), 60,

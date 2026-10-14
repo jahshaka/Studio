@@ -1083,15 +1083,14 @@ QStringList MainWindow::sessionAssetGuids()
     return pmContainer ? pmContainer->sessionAssetGuids() : QStringList();
 }
 
-void MainWindow::registerSessionAssets(const iris::MeshPrewarmPtr &prewarm)
+void MainWindow::registerSessionAssets()
 {
-    if (pmContainer) pmContainer->registerProjectSessionAssets(prewarm);
+    if (pmContainer) pmContainer->registerProjectSessionAssets();
 }
 
-void MainWindow::registerSessionAssetGuids(const QStringList &guids,
-                                           const iris::MeshPrewarmPtr &prewarm)
+void MainWindow::registerSessionAssetGuids(const QStringList &guids)
 {
-    if (pmContainer) pmContainer->registerSessionAssetGuids(guids, prewarm);
+    if (pmContainer) pmContainer->registerSessionAssetGuids(guids);
 }
 
 void MainWindow::showOpenProgress(int percent, const QString &text)

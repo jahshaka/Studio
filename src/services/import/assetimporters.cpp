@@ -431,44 +431,19 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     out.deps.append({ static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
                       out.mainGuid, out.meshGuid, QString() });
 
-    // Session registration (post-commit). The live node's texture properties
-    // still point into the extraction staging dir, which dies with the import;
-    // re-point them at the durable CAS object paths (resolvable post-commit)
-    // so the session-registered asset renders for the rest of the session.
+    // Session registration (post-commit): the asset's guid, its name and its
+    // STORED bytes (the CAS object) — what the session list, the drag lookups
+    // and assets.list read. NO NODE: the registration used to carry the import's
+    // live fragment (re-pointed at the CAS textures), a value nothing reads,
+    // pinned in memory for the session (BISTRO-ENGINE-1, the 5d read's CRUD).
     const QString mainGuid = out.mainGuid;
     const QString fileName = sourceInfo.fileName();
-    out.registerSession = [node, mainGuid, fileName, textures]() {
-        QSqlDatabase conn = QSqlDatabase::database();
-        const QString root = AssetStorePaths::root();
-        std::function<void(iris::SceneNodePtr)> repoint = [&](iris::SceneNodePtr n) {
-            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                auto material = n.staticCast<iris::MeshNode>()->getMaterial();
-                if (material) for (auto prop : material->properties) {
-                    if (!prop || prop->type != iris::PropertyType::Texture) continue;
-                    const QString fn = QFileInfo(prop->getValue().toString()).fileName();
-                    if (fn.isEmpty()) continue;
-                    for (const auto &tex : textures) {
-                        if (tex.fileName != fn) continue;
-                        const QString path = AssetCas::resolveSource(conn, root, tex.guid);
-                        if (!path.isEmpty())
-                            material->setValue(prop->name, iris::Material::textureRef(path, tex.guid));
-                        break;
-                    }
-                }
-            }
-            for (auto &child : n->children()) repoint(child);
-        };
-        repoint(node);
-
+    out.registerSession = [mainGuid, fileName]() {
         auto *assetObject = new AssetNodeObject;
         assetObject->fileName = fileName;
         assetObject->assetGuid = mainGuid;
-        // The session registration points at the asset's STORED bytes (the
-        // CAS object), not at the retired <root>/<guid>/<name> view — this
-        // path is what the drag-drop and re-open paths open (deep audit
-        // 2026-09, area 6).
-        assetObject->path = AssetCas::resolveSource(conn, root, mainGuid);
-        assetObject->setValue(QVariant::fromValue(node));
+        assetObject->path = AssetCas::resolveSource(QSqlDatabase::database(),
+                                                    AssetStorePaths::root(), mainGuid);
         AssetManager::addAsset(assetObject);
     };
 

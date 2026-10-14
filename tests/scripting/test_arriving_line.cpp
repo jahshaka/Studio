@@ -123,9 +123,10 @@ int main(int argc, char **argv)
     const QString guid = made.toObject().value("guid").toString();
     CHECK(!guid.isEmpty(), "the world of 120 parts was made and saved");
 
-    // THE OPEN, watched frame by frame from outside. The deferral COUNT is read
-    // across it: a stream between two polls cannot be missed.
-    const double deferredBefore = readJson(mcp, QStringLiteral("editor.mirrorStats().attachesDeferred")).toDouble();
+    // THE OPEN, watched frame by frame from outside. The deferral COUNT and the
+    // line's mesh-naming COUNT are read after it: a stream between two polls
+    // cannot be missed. (Both are per world: the mirror and the load's sample
+    // are made anew with each world, so they count this open alone.)
     mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(guid));
     struct Sample { double frame; bool idle; bool owed; double meshes; QString line; };
     std::vector<Sample> samples;
@@ -159,7 +160,9 @@ int main(int argc, char **argv)
         if (x.idle && !x.owed && x.line.isEmpty() && gone < 0) gone = x.frame;
     }
     const double deferred =
-        readJson(mcp, QStringLiteral("editor.mirrorStats().attachesDeferred")).toDouble() - deferredBefore;
+        readJson(mcp, QStringLiteral("editor.mirrorStats().attachesDeferred")).toDouble();
+    const double namedLines =
+        readJson(mcp, QStringLiteral("editor.viewportState().indicatorMeshLines")).toDouble();
     std::printf("info: %zu samples; %.0f deferral(s) across the open; the settle counts from frame %.0f, "
                 "line gone at frame %.0f\n", samples.size(), deferred, settleFrom, gone);
     if (gone < 0 || settleFrom < 0 || gone - settleFrom > 3)
@@ -168,6 +171,8 @@ int main(int argc, char **argv)
                         int(x.owed), x.meshes, qUtf8Printable(x.line));
     CHECK(deferred >= 120 - 40, "the open's meshes streamed over several frames: ~200k vertices at 65,536 a "
                                 "frame defer most of the 120 parts at least once");
+    CHECK(namedLines >= 1, "...and the line named them ('meshes to come') on the frames that owed them");
+    std::printf("info: %.0f frame(s) named meshes to come\n", namedLines);
     CHECK(shaderTermHonest, "a shader term, when shown, is labelled as a count ('compiled')");
     CHECK(gone >= 0, "the line ended");
     CHECK(gone >= 0 && settleFrom >= 0 && gone - settleFrom <= 3,

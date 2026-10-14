@@ -4034,6 +4034,9 @@ void EngineSceneViewport::sampleStreamingWork(bool driverFrame)
         if (mStream.quietSamples >= kArrivalSettleSamples) mStream.arrived = true;
     }
     mStream.line = composeIndicatorLine(driverFrame);
+    if (!mStream.line.isEmpty() && mMirror && mMirror->attachesOwed() > 0 &&
+        mStream.line.contains(QLatin1String("meshes to come")))
+        ++mStream.meshLines;
 }
 
 IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const

@@ -1358,16 +1358,15 @@ QStringList ProjectManager::plannedSessionModelPaths()
     return paths;
 }
 
-void ProjectManager::registerProjectSessionAssets(const iris::MeshPrewarmPtr &prewarm)
+void ProjectManager::registerProjectSessionAssets()
 {
-	registerSessionAssetGuids(sessionAssetGuids(), prewarm);
+	registerSessionAssetGuids(sessionAssetGuids());
 }
 
-void ProjectManager::registerSessionAssetGuids(const QStringList &guids,
-                                               const iris::MeshPrewarmPtr &prewarm)
+void ProjectManager::registerSessionAssetGuids(const QStringList &guids)
 {
 	for (const QString &guid : guids)
-		ProjectAssets::registerSessionAsset(guid, db, project, prewarm);
+		ProjectAssets::registerSessionAsset(guid, db, project);
 	LoadTimeline::add(QStringLiteral("sessionAssets"), 0.0, guids.size());
 }
 

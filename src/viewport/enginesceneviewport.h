@@ -252,6 +252,7 @@ public:
     void stepFrames(int n, float dt) override;
     bool canRenderFrames() const override;
     void renderBoundaryFrame() override;
+    qulonglong indicatorMeshLines() const override { return mStream.meshLines; }
     MirrorStats mirrorStats() const override;
     RigStatsInfo rigStats() const override;
     QString dumpMaterial(const QString &nodeGuid) const override;
@@ -484,6 +485,8 @@ private:
         /// for this load and cannot come back — a texture arriving behind an
         /// asset drop later is not this world loading. True outside any load.
         bool     arrived = true;
+        /// Frames whose line named owed meshes (indicatorMeshLines).
+        qulonglong meshLines = 0;
     };
     /// THE SETTLE LAW, IN SAMPLES, NOT TIME (finding 11: the line used to live
     /// for kStreamFramesAfterReveal driver frames whenever anything — a shader

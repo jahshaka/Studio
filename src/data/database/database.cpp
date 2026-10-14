@@ -1898,9 +1898,8 @@ void Database::applyAssetScrubs(const QVector<PendingAssetScrub> &pending)
 {
     for (const PendingAssetScrub &item : pending) {
         // The registry OWNS its Assets (io/assetmanager.h, since the memory
-        // lane): dropping the pointer without deleting it leaks the Asset AND,
-        // for the payload-carrying subclasses, pins a whole SceneNodePtr mesh
-        // subtree for the life of the process. Backwards, because removing at
+        // lane): dropping the pointer without deleting it leaks the Asset.
+        // Backwards, because removing at
         // i and then advancing skips the next element.
         auto &assets = AssetManager::getAssets();
         for (int i = assets.count() - 1; i >= 0; --i) {

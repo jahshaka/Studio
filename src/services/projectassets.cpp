@@ -22,18 +22,13 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
-#include "io/builtinmaterials.h"
-#include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assetcas.h"
-#include "services/meshbakestore.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
-#include "services/loadtimeline.h"
 #include "services/materialbundle.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/import/meshbake.h"
 
 namespace {
 
@@ -137,11 +132,8 @@ QString ProjectAssets::objectSourcePath(const QString &guid, Database *db, Proje
                                    project->getProjectGuid(), guid);
 }
 
-bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
-                                         Project *project,
-                                         const iris::MeshPrewarmPtr &prewarm)
+bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Project *project)
 {
-    Q_UNUSED(prewarm);   // the registration reads no model (see the Object case)
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     if (sessionHas(guid)) return true;
     const auto memberRecord = db->fetchAsset(guid);

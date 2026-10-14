@@ -1467,6 +1467,12 @@ public:
     /// PRESENTS, not the raises, because a cover that was never presented was
     /// never on screen (that is the whole reason `presentCovered` exists).
     virtual qulonglong coversPresented() const { return 0; }
+    /// FRAMES WHOSE LINE NAMED MESHES STILL TO COME, since the current world
+    /// started loading (BISTRO-ENGINE-1): the frames that composed an indicator
+    /// line carrying the "meshes to come" term while the mirror owed meshes. A
+    /// count for the same reason as `coversPresented`: the stream is often over
+    /// before a caller outside the process gets a reading in.
+    virtual qulonglong indicatorMeshLines() const { return 0; }
     /// THE INDICATOR LINE this viewport is drawing at the bottom of the frame
     /// while a world streams in, or empty when it is drawing none. The same
     /// argument as `coverState`: a line whose whole job is to be read needs a
