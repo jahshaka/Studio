@@ -34,6 +34,9 @@
 //     query's visibility, strictly inside (0, open), and the share the query
 //     stopped is dark (the uniform enclosure's reading minus this one is the
 //     voxels' share, which the walls' L supplies).
+//   ONE WALL IN R — the grazing plate with a wall of radiance L filling its lobe's query,
+//     the hemisphere above open: the query stops more than the diffuse set, and the stopped
+//     share must still be lit at the query's share - the open grazing value.
 //   OPEN, GRAZING — the open plate seen 10 degrees above its surface: the query's cone
 //     reaches below the surface, a share the BRDF's masking already holds (no light
 //     arrives from below the horizon) - not the sky's occlusion: the GI-off value.
@@ -106,7 +109,8 @@ int main()
 
     // One scene: the uniform sky, the plate, and (when `box`) the box with its opening.
     struct Arm { double off = -1.0, cones = -1.0, field = -1.0; };
-    const auto runScene = [&](const char *name, int box /* 0 open, 1 emitting L, 2 dark */, bool grazing) {
+    const auto runScene = [&](const char *name, int box /* 0 open, 1 emitting L, 2 dark, 3 one wall in R */,
+                              bool grazing) {
         Arm a;
         Scene *s = e->createScene(name);
         char m[160];
@@ -127,7 +131,14 @@ int main()
             s->attachMesh(nd, cube, s->createPbrMaterial(p));
             s->setNodeTransform(nd, pos, Quat(), scale);
         };
-        if (box) {
+        if (box == 3) {
+            // ONE WALL IN THE REFLECTION, emitting L: standing on the plate 1.5 m beyond its centre (inside the
+            // camera-centred cascade, which ends 2 m past the plate centre), 12 m wide,
+            // 7.9 m tall - it fills the grazing view's 45-degree query, the hemisphere above open.
+            PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
+            wall.emissive = Colour(float(L), float(L), float(L));
+            slab(Vec3(0.0f, 4.05f, 1.75f), Vec3(12.0f, 7.9f, 0.5f), wall);
+        } else if (box) {
             PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
             if (box == 1) wall.emissive = Colour(float(L), float(L), float(L));
             slab(Vec3(0, -0.25f, 0), Vec3(9.0f, 0.5f, 9.0f), wall);
@@ -168,6 +179,7 @@ int main()
 
     const Arm open = runScene("open", 0, false);
     const Arm graze = runScene("grazing", 0, true);
+    const Arm wallR = runScene("wall in R", 3, true);
     const Arm lit = runScene("enclosure", 1, false);
     const Arm dark = runScene("shaded", 2, false);
     std::printf("   ROUGH METAL (0.74), a uniform sky of L = %.4f: open %.4f / %.4f (cones / field); the uniform "
@@ -187,6 +199,23 @@ int main()
                   graze.cones, graze.field, graze.off);
     CHECK(graze.off > 0.01 && std::fabs(graze.cones / graze.off - 1.0) < 0.01 &&
           std::fabs(graze.field / graze.off - 1.0) < 0.01, msg);
+    // ONE WALL IN THE REFLECTION (the read's W1): a facade of the sky's radiance fills the
+    // grazing lobe's query while the hemisphere stays mostly open - the query stops more than
+    // the diffuse set. Every direction still carries L: the open grazing value, never less (a
+    // stopped share lit at the diffuse set's occlusion instead of the query's under-counts it).
+    std::snprintf(msg, sizeof msg, "ONE WALL IN R, emitting L: the grazing plate reads the open value (cones %.4f, "
+                  "field %.4f / %.4f; bar 3 %%)", wallR.cones, wallR.field, graze.off);
+    CHECK(std::fabs(wallR.cones / graze.off - 1.0) <= 0.03 && std::fabs(wallR.field / graze.off - 1.0) <= 0.03, msg);
+    // THE VISIBILITY ITSELF (the read's W2): the query is a 45-degree cone up the plate's
+    // normal; the 3 x 3 m opening 4.9 m above the plate's top subtends 4 atan(ab / (d sqrt(a^2
+    // + b^2 + d^2))) = 0.343 sr of the cone's 2 pi (1 - cos 45) = 1.840 sr: 0.187. THE BAR,
+    // 0.06: at the ceiling the cone's footprint is about the cascade's whole extent (9.8 m
+    // across, 9 m at 64 cells: its last mips), so the march reads the opening as a density
+    // averaged over one or two texels - a third of the estimate.
+    const double a = 1.5, d = 4.9;
+    const double omegaOpening = 4.0 * std::atan(a * a / (d * std::sqrt(2.0 * a * a + d * d)));
+    const double omegaCone = 2.0 * 3.14159265358979 * (1.0 - std::sqrt(0.5));
+    const double visGeom = omegaOpening / omegaCone;
     for (int k = 0; k < 2; ++k) {
         const char *tag = k ? "the field" : "the cones";
         const double o = k ? open.field : open.cones;
@@ -198,6 +227,9 @@ int main()
         std::snprintf(msg, sizeof msg, "THE SHADED PLATE, %s: the sky only through the opening - the open value times "
                       "the query's visibility, strictly inside (0, open) (%.4f / %.4f)", tag, d, o);
         CHECK(d > 0.0 && d < 0.97 * o, msg);
+        std::snprintf(msg, sizeof msg, "THE SHADED PLATE, %s: the visibility is the opening's share of the 45-degree "
+                      "query (%.3f vs the solid angle's %.3f; bar 0.06)", tag, d / o, visGeom);
+        CHECK(std::fabs(d / o - visGeom) <= 0.06, msg);
         std::snprintf(msg, sizeof msg, "THE SHADED PLATE, %s: the share the query stopped is the dark walls' (the "
                       "enclosure's reading above the shaded one, %.4f > 0)", tag, u - d);
         CHECK(u - d > 0.03 * o, msg);
