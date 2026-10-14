@@ -197,7 +197,7 @@ void run(int checkEvery)
               "a sleeping body's node written behind its back is pinned back to the body");
     }
     {
-        // THE WRITE JOURNAL'S REACH (graph::writeJournal): a write to a node with
+        // THE WRITE JOURNAL'S REACH (the world's graph::WriteJournalReader): a write to a node with
         // NO body under it re-checks no sleeping body at all...
         pile.scene->advance(kDt);   // the frame after a check: settle the journal
         auto lonely = iris::SceneNode::create();
@@ -208,6 +208,25 @@ void run(int checkEvery)
         std::printf("    a write to a body-less node re-checked %d sleeping bodies\n",
                     env->lastWriteBackRechecks());
         CHECK(env->lastWriteBackRechecks() == 0, "a write to a node with no body under it re-checks 0 sleeping bodies");
+    }
+    {
+        // ...AND ANOTHER READER DRAINING THE SAME JOURNAL COSTS THE WORLD NOTHING (U0 3b): a mirror's emit takes its
+        // own cursor's writes between two document steps — under the old shared close that would have made the
+        // world's next look incomplete and re-checked EVERY sleeping body. Its own cursor: still 0.
+        iris::graph::WriteJournalReader mirrorLike;
+        std::vector<iris::graph::NodeHandle> seen;
+        mirrorLike.take(seen);                       // primed
+        pile.scene->advance(kDt);
+        auto lonely2 = iris::SceneNode::create();
+        pile.scene->getRootNode()->addChild(lonely2);
+        pile.scene->advance(kDt);
+        lonely2->setLocalPos(iris::Vec3(-3, 0, 0));
+        CHECK(mirrorLike.take(seen) && !seen.empty(), "the other reader's take names the write");
+        pile.scene->advance(kDt);
+        std::printf("    beside a second reader, a write to a body-less node re-checked %d sleeping bodies\n",
+                    env->lastWriteBackRechecks());
+        CHECK(env->lastWriteBackRechecks() == 0,
+              "a second reader taking the journal between steps leaves the world's re-check incremental (0)");
     }
     {
         // ...and a write to a body's ANCESTOR re-checks exactly that subtree's

@@ -198,13 +198,10 @@ int main(int argc, char **argv)
     // `giAabbReads` is the instrument: it counts world-AABB reads, i.e. exactly
     // the per-item work the epoch exists to skip.
     {
-        // THE COUNTER IS WIRED FOR THIS BLOCK ONLY. The rest of the suite runs
-        // WITHOUT one on purpose — that is the "no epoch, no skipping" half of
-        // the contract (giGeometrySignature's own note), and every drag
-        // assertion below depends on the walks running unconditionally. Here
-        // the epoch IS the subject, so it is armed exactly as the app arms it
-        // (EngineHost) and handed back before the drag.
-        engine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
+        // THE CHANGE SET IS THE SUBJECT (U0 3b; this block used to wire the host's transform counter for itself,
+        // and the rest of the suite ran without one — "no epoch, no skipping" — a mode that no longer exists: the
+        // engine's scans re-read exactly what the frame's ChangeSet and its own seams name, always).
+        const auto moved = [&]() { return engine->frameInputStatus().changesMoved; };
         const auto reads = [&]() { return escene->giStatus().giAabbReads; };
         // A GIZMO-SHAPED node: an engine-owned node carrying an UNLIT, on-top
         // (depth-test off) item, which is what createUnlitMaterial(_, false)
@@ -216,19 +213,21 @@ int main(int argc, char **argv)
             { Vec3(0, 0, 0), Vec3(0, 1, 0), Vec3(1, 0, 0) }, true);
         CHECK(furniture && furnMat && furnMesh && escene->attachMesh(furniture, furnMesh, furnMat),
               "an editor-furniture node (unlit, drawn on top) exists");
-        // Arming the counter and adding the node are themselves changes: the
-        // walks are on demand, so they run once more and then settle. THAT is
-        // the baseline this measures from.
+        // Adding the node is itself a change: the walks are on demand, so they run once more and then settle. THAT
+        // is the baseline this measures from.
         for (int f = 0; f < 5; ++f) { mirror.sync(mirrorframe::camera(view, cam)); frame(); }
 
         const unsigned long long r0 = reads();
         const unsigned long long w0 = iris::graph::transformWrites();
+        unsigned flightMoves = 0;
         for (int f = 0; f < 30; ++f) {
             cam->setLocalPos(iris::Vec3(std::sin(float(f) * 0.2f) * 6.0f, 4.0f, 6.0f));
             cam->update(0.0f);
             mirror.sync(mirrorframe::camera(view, cam));
             frame();
+            flightMoves += moved();
         }
+        CHECK(flightMoves == 0, "30 frames of flying the camera drain 30 EMPTY change sets (the viewer is no entry)");
         const unsigned long long flew = reads() - r0;
         std::printf("   30 flying frames cost %llu item-box reads (one walk of this scene is 4;"
                     " before this lane it was one walk per frame per signature)\n",
@@ -258,6 +257,7 @@ int main(int argc, char **argv)
         const unsigned long long r2 = reads();
         floor->setLocalPos(iris::Vec3(0.0f, -0.06f, 0.0f));
         frame();
+        CHECK(moved() == 1, "a MOVED OBJECT is ONE change-set entry (the floor, nothing else)");
         CHECK(reads() > r2, "a MOVED OBJECT still runs the walk");
         const unsigned long long r3 = reads();
         frame();
@@ -265,7 +265,6 @@ int main(int argc, char **argv)
         floor->setLocalPos(iris::Vec3(0.0f, -0.05f, 0.0f));
         frame();
         frame();
-        engine->setTransformWriteCounter(nullptr);
     }
 
     const Colour before = floorPixel();

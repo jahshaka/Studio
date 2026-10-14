@@ -188,7 +188,7 @@ static void sectionA(Engine *engine)
     // advancing every frame and a capture every frame for ever.)
     {
         const GiStatus before = s->giStatus();
-        const unsigned long long geomSig = s->giGeometrySignature();
+        const unsigned long long geomSig = s->giGeometrySignature(jahshaka::engine::ChangeSet());
         int captures = 0;
         for (int i = 0; i < 120; ++i) {
             const float t = float(i) * 0.04f;
@@ -204,7 +204,7 @@ static void sectionA(Engine *engine)
         CHECK(after.staleSerial == before.staleSerial,
               "...and stale NOTHING: the probe grid never hears about it");
         CHECK(after.rebuilds == before.rebuilds, "...and cost no from-scratch GI rebuild");
-        CHECK(s->giGeometrySignature() == geomSig,
+        CHECK(s->giGeometrySignature(jahshaka::engine::ChangeSet()) == geomSig,
               "...and the GI geometry signature is CONSTANT (the host's settle is never armed)");
         CHECK(s->mobilityStatus().mobilityRebuilds == 0,
               "...and no mobility rebuild (the class never changed)");
@@ -213,13 +213,13 @@ static void sectionA(Engine *engine)
     // ---- A3: the STATIC twin still stales the grid, exactly as before ------
     {
         const unsigned long long serial = s->giStatus().staleSerial;
-        const unsigned long long geomSig = s->giGeometrySignature();
+        const unsigned long long geomSig = s->giGeometrySignature(jahshaka::engine::ChangeSet());
         s->setNodeTransform(stayer, Vec3(2.0f, 1.0f, -1.5f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
         frame();
         const GiStatus st = s->giStatus();
         CHECK(st.staleSerial > serial && st.lastStaleReason == GiStaleReason::Moved,
               "a STATIC object moving still stales the grid (reason %s)", reasonName(st.lastStaleReason));
-        CHECK(s->giGeometrySignature() != geomSig,
+        CHECK(s->giGeometrySignature(jahshaka::engine::ChangeSet()) != geomSig,
               "...and still moves the geometry signature, so the host still re-solves on settle");
         CHECK(worstOver(8) <= 1, "...and its catch-up never exceeds the budget");
         frames(20);

@@ -137,9 +137,6 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-gi-probe-inputs-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    // THE HOST'S TRANSFORM-WRITE EPOCH, wired exactly as the app wires it
-    // (EngineHost): it is what lets the GI movement scan skip a still frame.
-    engine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
 
     View *view = engine->createOffscreenView("probe_inputs", 128, 128, Colour(0, 0, 0));
     Scene *escene = engine->createScene("probe_inputs");

@@ -2093,15 +2093,8 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-shadow-maps-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    // THE HOST'S TRANSFORM COUNTER (ENGINE-4 F5, and the same reason
-    // test_shadow_spike's scancost mode installs one): this suite writes every
-    // transform through the ENGINE, never through a document graph, so the
-    // host half of the movement epoch is a counter that never moves — and a
-    // host that says so is what lets the GI scan and the caster walk skip a
-    // still frame at all. Without it both walk every frame, as they always did,
-    // and T3z's statement could not be made.
-    static std::atomic<unsigned long long> noHostWrites{ 0 };
-    engine->setTransformWriteCounter(&noHostWrites);
+    // (No host counter to install since U0 3b: the engine's scans re-read only what was NAMED — its own writes and a
+    // drained ChangeSet — so a still frame is skipped by construction, which T3z states.)
     View *v = engine->createOffscreenView("shadowmaps", 200, 200, Colour(0, 0, 0));
     if (!v) { std::printf("FAIL: offscreen view\n"); return 1; }
 

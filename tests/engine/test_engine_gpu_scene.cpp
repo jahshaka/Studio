@@ -92,12 +92,6 @@ int main()
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    // The epoch's host half. This suite writes every transform through the
-    // engine's own verbs, which count themselves, so the counter is here only
-    // to make the epoch AVAILABLE — the still-frame gate does not engage
-    // without one.
-    static std::atomic<unsigned long long> hostWrites{ 0ull };
-    e->setTransformWriteCounter(&hostWrites);
 
     View *view = e->createOffscreenView("gpu_scene", kSize, kSize, Colour(0.05f, 0.06f, 0.08f, 1.0f));
     if (!view) { std::printf("FAIL: offscreen view: %s\n", e->lastError().c_str()); return 1; }
@@ -592,7 +586,6 @@ int main()
         }
     }
 
-    e->setTransformWriteCounter(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);
     std::printf("%s: %d failures\n", failures ? "FAIL" : "PASS", failures);
