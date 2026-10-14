@@ -279,6 +279,15 @@ add_test(NAME source.scene_no_friends
 set_tests_properties(source.scene_no_friends PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.scene_no_friends)
 
+# source.scene_no_photon_members — ENGINE-UPGRADE-2B stage 1: Photon's state lives in
+# PhotonComponent, not OgreScene — none of the COMMITTED NAMED LIST (photon_members.txt) is an
+# OgreScene member, every one is a PhotonComponent member. See the script.
+add_test(NAME source.scene_no_photon_members
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/scene_no_photon_members.py"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.scene_no_photon_members PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.scene_no_photon_members)
+
 # source.atom_no_registries — ENGINE-UPGRADE-2 stage 3: Atom's files keep no process-wide mutable
 # state (the pass provider aside): the scene's in its AtomComponent, a view's ring in the view, the
 # device's objects in HlmsAtom. See the script.

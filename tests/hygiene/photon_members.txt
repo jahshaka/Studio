@@ -1,0 +1,169 @@
+# PHOTON'S MEMBERS — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
+# One data-member name per line; '#' starts a comment. Generated ONCE from the prefix family
+# (mGi/mProbe/mIfd/mPhoton/mCard/mVct/mFwd/mCascade/mScan/mDrag/mSun: 143 at f8c745483, by the
+# preflight's members2.py) and then edited by hand at both ends:
+#   OUT — not Photon's: the sky's sun disc (mSunDisc, mSunDiscMaterial, mSunDiscCloudMaterial);
+#         the shadow scan's and the light census's (mScanPendingShadow, mScanPoints, mScanSpots,
+#         mScanMarked, mScanReach, mScanKeys); THE WALK's own state — the walk is the scene's
+#         (walkItems: one walk for the GI and the shadow scan), so its gate and counters stay with
+#         it (mScanPendingGi, mScanFullGi, mScanTake, mScanSubset, mScanDeforming,
+#         mGiWalkedThisFrame, mGiScannedOnce, mGiScans, mGiScansFull, mGiScanMicros); the card
+#         FEED, the GPU scene's observer that files the cache's candidates by the scene's own
+#         predicate (mCardFeed, mCardQuery); the scene's per-pass binding record, which binds the
+#         planar mirrors, the IBL mip count and the light list beside the GI arms (mGiBinding);
+#         and the component itself (mPhoton).
+#   IN  — Photon's, missed by the prefixes: the probe grid (mPcc + mPccStageOk, mPccNumProbes,
+#         mPccProbeRes, mPccProbeFormat, mPccWorkspaceName, mPccPhaseMs, mPccPhaseClock, mPccHdr,
+#         mPccShadowed, mPccCaptureSize), its budget (mProbesDropped, mProbesOverBudget,
+#         mProbesClampedToRegion, mPlacementCapturesThisFrame, mCubemapProbeSlots), the surface
+#         cache (mSurfaceCache), the staleness record (mLastStaleReason, mStaleSerial), the staged
+#         build's bracket (mInGiStage), the texture-residency wait (mMaterialsAwaitingTexture), the
+#         scheduler's geometry term (mGeomSig, mGeomSigEpoch, mGeomSigValid, mGeomSigMode) and the
+#         second declarators the prefix scan did not split (mProbeCamFar, mPhotonCardFrame).
+mCardCasters
+mCardLightFold
+mCardLightFoldValid
+mCardLightKey
+mCardLightKeyMovedLastFrame
+mCardMovers
+mCardMoverSlots
+mCardUploadSerialSeen
+mCascadeDeferrals
+mCascadeDirtyMajority
+mCascadeFailureLogged
+mCascadeFullRebuilds
+mCascadeVoxelLod
+mCubemapProbeSlots
+mDragMoverGestures
+mDragMovers
+mDragSettleOwed
+mFwdPlusBounds
+mFwdPlusBoundsEpoch
+mFwdPlusBoundsValid
+mFwdPlusMax
+mFwdPlusMin
+mFwdPlusTick
+mGeomSig
+mGeomSigEpoch
+mGeomSigMode
+mGeomSigValid
+mGi
+mGiAabbReads
+mGiBuildStage
+mGiBuiltMaterialGeneration
+mGiCachesDirty
+mGiCamera
+mGiCamPos
+mGiCamPosKnown
+mGiCascadeAwaitingCamera
+mGiCascadeDirtyAll
+mGiCascadeDirtyBoxes
+mGiChainProfileVr
+mGiChainSettles
+mGiChainShapeDirty
+mGiDeferralRetry
+mGiDeferrals
+mGiDriverStereo
+mGiEnvWaitFrames
+mGiFitBoxes
+mGiFitBoxesKey
+mGiFitBoxesValid
+mGiFitContentNow
+mGiInjectionCountFrame
+mGiInjectionRefusals
+mGiInjectionsPeak
+mGiInjectionsThisFrame
+mGiInvalidationPending
+mGiItemsAppeared
+mGiLastItemCount
+mGiLightWriteSerial
+mGiLitVolume
+mGiMaterialGeneration
+mGiMovedBoxes
+mGiPlan
+mGiProbeRegion
+mGiRebuilds
+mGiRestartPending
+mGiRestTicks
+mGiReusedLastRefresh
+mGiSettleCascades
+mGiSettlePayableFrames
+mGiSettleSerial
+mGiSettleStepsOwed
+mGiSettleTop
+mGiStageBuild
+mGiStagedVolume
+mGiTickOwed
+mGiVoxelTextureWaitFrames
+mGiVoxelTextureWaitGaveUp
+mIfd
+mIfdFollowOwed
+mIfdFollowReason
+mIfdFollows
+mIfdProbeCounts
+mIfdProbesDone
+mIfdProbesPerFrame
+mIfdReplacements
+mIfdScrolledProbes
+mIfdScrolls
+mIfdTotalProbes
+mIfdVolumeOrigin
+mIfdVolumeSize
+mInGiStage
+mLastStaleReason
+mMaterialsAwaitingTexture
+mPcc
+mPccCaptureSize
+mPccHdr
+mPccNumProbes
+mPccPhaseClock
+mPccPhaseMs
+mPccProbeFormat
+mPccProbeRes
+mPccShadowed
+mPccStageOk
+mPccWorkspaceName
+mPhotonCardFrame
+mPhotonCardGeneration
+mPhotonCards
+mPhotonCardVerts
+mPhotonIfd
+mPhotonView
+mPhotonViews
+mPhotonVoxelCascade
+mPhotonVoxelLighting
+mPhotonVoxelOrigin
+mPhotonVoxelSource
+mPhotonVoxelTex
+mPlacementCapturesThisFrame
+mProbeCamFar
+mProbeCamNear
+mProbeCapturesDeferred
+mProbeCapturesLastFrame
+mProbeCapturesTotal
+mProbeDeferredRun
+mProbeDirtiedThisFrame
+mProbeDragActive
+mProbeFitVolume
+mProbeFitVolumeValid
+mProbeGateCrossings
+mProbeMotionQuietFrames
+mProbeMotionRun
+mProbeOnlyChanged
+mProbePlacements
+mProbeReplacements
+mProbesClampedToRegion
+mProbesDropped
+mProbeSlots
+mProbesOverBudget
+mProbeStaleBeyondMotion
+mProbeUpdatesPerFrame
+mStaleSerial
+mSunContact
+mSurfaceCache
+mVctCascades
+mVctLighting
+mVctMaterialRefreshOwed
+mVctMaterialStore
+mVctPendingMaterialSlots
+mVctVoxelizer
