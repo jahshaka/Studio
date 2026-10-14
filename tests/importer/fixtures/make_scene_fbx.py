@@ -19,7 +19,8 @@ test_importer_scene.cpp asserts them as counts:
              UnitScaleFactor 100, as every Bistro file is) over Box2m, a 200 x 200 x 200
              cube carrying a RotationPivot and a ScalingPivot (assimp's $AssimpFbx$ pivot
              chain) -> exactly 2 m on a side.
-  SunLight   a directional light;  ShotCam  a camera.
+  SunLight   a directional light authored at 45 degrees of elevation through Maya's
+             PostRotation (-90, 0, 0) + Lcl Rotation;  ShotCam  a camera.
   Spinner    the ONE node the "Take 001" animation moves (a translation curve).
 
 The TEXTURES are not tracked (source.no_renders_tracked: no image in git outside the
@@ -171,8 +172,13 @@ model(1302, "Box2m", "Mesh", [T(10, 0, 20),
 material(1303, "Concrete", ['"DiffuseColor", "Color", "", "A",0.5,0.5,0.5'])
 conns += [("OO", 1300, 0), ("OO", 1302, 1300), ("OO", 1301, 1302), ("OO", 1303, 1302)]
 
-# ---- SunLight: one directional light -------------------------------------------
-model(1400, "SunLight", "Light", [T(0, 10, 0), R(-60, 30, 0)])
+# ---- SunLight: one directional light, oriented the way Maya writes it -----------
+# An FBX light shines down its local -Y; Maya's lights shine down -Z, so its exporter
+# writes PostRotation (-90, 0, 0) and the light's own Lcl Rotation (the Bistro's
+# directionalLight1: Lcl Rotation (-61.2, 0, 0) under the same PostRotation). This one is
+# authored at 45 degrees of elevation, yawed 30: it travels (-0.3536, -0.7071, -0.6124).
+model(1400, "SunLight", "Light", [T(0, 10, 0), R(-45, 30, 0),
+                                  '"PostRotation", "Vector3D", "Vector", "",-90,0,0'])
 w('\tNodeAttribute: 1401, "NodeAttribute::SunLight", "Light" {\n')
 props(['"Color", "Color", "", "A",1,0.9,0.8', '"LightType", "enum", "", "",1',
        '"Intensity", "Number", "", "A",300', '"CastShadows", "bool", "", "",1'])
