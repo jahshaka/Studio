@@ -930,3 +930,8 @@ vr.warmup_control 38.88  quiet n=43
 vr.warmup_control.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.attach_budget 1.78  spec BISTRO-ENGINE-1 b2835b6a8 (2026-10-14, the lowest of four runs)
 scripting.e2e.arriving_line 41.53  spec BISTRO-ENGINE-1 4a8ce40f2 (2026-10-14, the lowest of three runs of the reworked row)
+engine.async_graphics_check 1.91  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
+engine.async_queue 3.20  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
+engine.async_queue_nofamily 2.18  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
+engine.async_queue_validation 1.81  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
+engine.async_record 2.29  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
