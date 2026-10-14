@@ -263,9 +263,13 @@ int main(int argc, char **argv)
             integrations = photonFieldStatus(*s).integrations - t0.integrations;
             frames = f - q;
         };
-        unsigned long long tickOff = 0, tickOn = 0;
-        int tickOffFrames = 0, tickOnFrames = 0;
-        lightTick(tickOff, tickOffFrames);
+        // THE ORACLE'S TICK IS ITS BUILD'S WORK: with the stop off a light tick re-integrates the whole grid to the
+        // target exactly as the build does (measured once: 203,776 integrations over 203 frames against the build's
+        // 204,800), so the row compares the stop's tick with the oracle's build and does not pay a second 200-frame
+        // convergence (source.row_budget's 10 s).
+        unsigned long long tickOn = 0;
+        const unsigned long long tickOff = fo.integrations;
+        int tickOnFrames = 0;
         // THE STOP: the field rebuilt with the stop on (the arm reads at the build: the field off, then on).
         e->setArm("gi.fieldStopOff", 0.0);
         e->renderOneFrame();
@@ -310,9 +314,10 @@ int main(int argc, char **argv)
             CHECK(fs.integrations > 0 && 2u * fs.integrations <= fo.integrations,
                   "S4: THE STOP'S PROBE WORK is at most half the oracle's");
         // S6: THE RESET PATH STOPS LIKE THE BUILD - a light tick's re-integration with the stop on.
-        lightTick(tickOn, tickOnFrames);
-        std::printf("   A LIGHT TICK (the reset path): %llu integrations over %d frames with the stop, %llu over %d "
-                    "without (%.2fx less)\n", tickOn, tickOnFrames, tickOff, tickOffFrames,
+        if (!sliverArm) lightTick(tickOn, tickOnFrames);   // the sliver row asserts no work bar: it pays no tick
+        if (!sliverArm)
+        std::printf("   A LIGHT TICK (the reset path): %llu integrations over %d frames with the stop, against the "
+                    "oracle's %llu (%.2fx less)\n", tickOn, tickOnFrames, tickOff,
                     double(tickOff) / double(tickOn ? tickOn : 1));
         if (!sliverArm)
             CHECK(tickOn > 0 && 2u * tickOn <= tickOff, "S6: A LIGHT TICK'S RE-INTEGRATION STOPS too: at most half the oracle's work");

@@ -2417,7 +2417,7 @@ set_tests_properties(gi.field_dependency PROPERTIES JAHSHAKA_TEST_FRAMES 476)   
 jah_gpu_row(gi.field_variance_stop CLASS engine COMMAND test_gi_field_dependency --stop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_variance_stop PROPERTIES TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.field_variance_stop PROPERTIES JAHSHAKA_TEST_FRAMES 786)   # counted from the run (224 oracle settle + its light tick 233 + 1 + 4 + 158 stop settle + 30 + its tick 136)
+set_tests_properties(gi.field_variance_stop PROPERTIES JAHSHAKA_TEST_FRAMES 553)   # counted from the run (224 oracle settle + 1 + 4 + 158 stop settle + 30 + the stop's light tick 136)
 # gi.field_variance_stop_sliver — the same oracle bars on THE HEAVY TAIL: a dark room lit only by an emissive
 # sliver (a rare-and-bright integrand: the first samples of a probe can all miss it). It asserts the stop's
 # correctness (S1 the replay, S3b the precision, S5 the rest): a texel that has read no light keeps its probe to the
@@ -2425,4 +2425,4 @@ set_tests_properties(gi.field_variance_stop PROPERTIES JAHSHAKA_TEST_FRAMES 786)
 jah_gpu_row(gi.field_variance_stop_sliver CLASS engine COMMAND test_gi_field_dependency --stop-sliver
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_variance_stop_sliver PROPERTIES TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.field_variance_stop_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 979)   # counted from the run (224 + 233 + 1 + 4 + 254 + 30 + 233: the stop declines in the dark room)
+set_tests_properties(gi.field_variance_stop_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 513)   # counted from the run (224 + 1 + 4 + 254 + 30: the stop declines in the dark room; no tick)

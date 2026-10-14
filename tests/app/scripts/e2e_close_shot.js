@@ -41,6 +41,11 @@ assert(cube, "a cube in front of the editor camera");
 editor.frame(60, 1 / 60);
 editor.select(cube);
 editor.frame(4, 1 / 60);
+// THE SCENE AT REST FIRST (ENGINE-UPGRADE-2B stage 4): claim 1 compares the frames either side of the capture
+// byte for byte, and a frame whose GI is still working - the irradiance field's refinements, the gather's rest
+// after the field's last write - changes the picture by itself. Bounded, in frames.
+for (var settle = 0; settle < 600 && !world.giStatus().giAtRest; ++settle) editor.frame(1, 1 / 60);
+assert(world.giStatus().giAtRest, "the scene's GI is at rest before the captures");
 
 // ---- 1. the presented frame never changes; the capture drops the furniture ---
 var before = editor.presentedFrame("cs_before.png", { helpers: true });
