@@ -113,7 +113,7 @@ world.postFx({ contrast: 1.1, saturation: 0.9,        // 1 = neutral
                shadows: 0.5, highlights: -0.5,        // gains in stops on the darks / brights
                whiteTemperature: 5600, whiteTint: 0,  // kelvin; 6500 = neutral
                vignette: 0.3,
-               filmSlope: 0.88, filmToe: 0.55, filmShoulder: 0.26,
+               filmSlope: 0.88, filmToe: 0.3, filmShoulder: 0.26,
                filmBlackClip: 0, filmWhiteClip: 0.04 });   // Unreal's filmic defaults
 ```
 

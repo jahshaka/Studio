@@ -247,7 +247,7 @@
                           "const mat3 JAH_1T0 = mat3( 0.6954522414, 0.1406786965, 0.1638690622, 0.0447945634, 0.8596711185, 0.0955343182, -0.0055258826, 0.0040252103, 1.0015006723 );",
                           "const mat3 JAH_0T1 = mat3( 1.4514393161, -0.2365107469, -0.2149285693, -0.0765537734, 1.1762296998, -0.0996759264, 0.0083161484, -0.0060324498, 0.9977163014 );",
                           "const vec3 JAH_Y = vec3( 0.2722287168, 0.6740817658, 0.0536895174 );",
-                          "const float JAH_SLOPE = " + f(film.slope, 0.88) + ", JAH_TOE = " + f(film.toe, 0.55) + ";",
+                          "const float JAH_SLOPE = " + f(film.slope, 0.88) + ", JAH_TOE = " + f(film.toe, 0.3) + ";",
                           "const float JAH_SHOULDER = " + f(film.shoulder, 0.26) + ", JAH_BLACK = " + f(film.blackClip, 0.0) + ", JAH_WHITE = " + f(film.whiteClip, 0.04) + ";",
                           "float jahSat( vec3 c ) { float mi = min( min( c.r, c.g ), c.b ); float ma = max( max( c.r, c.g ), c.b ); return ( max( ma, 1e-10 ) - max( mi, 1e-10 ) ) / max( ma, 1e-2 ); }",
                           "float jahYc( vec3 c ) { float ch = sqrt( c.b * ( c.b - c.g ) + c.g * ( c.g - c.r ) + c.r * ( c.r - c.b ) ); return ( c.b + c.g + c.r + 1.75 * ch ) / 3.0; }",

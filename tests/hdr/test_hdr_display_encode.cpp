@@ -87,13 +87,14 @@ double oetf(double v)                  // the exact piecewise sRGB encode
 }
 
 // THE FILM CURVE (IMAGE-1): Unreal Engine's filmic tonemapper (4.15+,
-// TonemapCommon.ush FilmToneMap) on a grey at its five defaults, spelled out
+// TonemapCommon.ush FilmToneMap) on a grey at the engine's five defaults (Unreal's, the toe
+// 0.3 - BISTRO-FIXES-3), spelled out
 // here again rather than shared, so a curve edit in either place fails here.
 // iris::lens::filmCurve (irisgl cameralens.cpp) is the third copy and
 // tests/cameras holds it to this one.
 double toneCurve(double x)             // FinalToneMapping's LINEAR output, before the encode
 {
-    const double slope = 0.88, toe = 0.55, shoulder = 0.26, black = 0.0, white = 0.04;
+    const double slope = 0.88, toe = 0.3, shoulder = 0.26, black = 0.0, white = 0.04;   // the toe: BISTRO-FIXES-3
     const double toeScale = 1.0 + black - toe, shoulderScale = 1.0 + white - shoulder;
     const double bt = (0.18 + black) / toeScale - 1.0;
     const double toeMatch = std::log10(0.18) - 0.5 * std::log((1.0 + bt) / (1.0 - bt)) * (toeScale / slope);

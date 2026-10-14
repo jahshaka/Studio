@@ -173,9 +173,9 @@ double haloExcess(const std::vector<int> &frame, const std::vector<int> &off)
 /// halo pixel cannot be twice as bright in codes however linear the term is. A
 /// suite that asserted on code sums would pin the CURVE, not the amount. This
 /// pins the amount.
-double film(double x)               // UE 4.15 FilmToneMap on a grey, Unreal's defaults
+double film(double x)               // UE 4.15 FilmToneMap on a grey, the engine's defaults (the toe 0.3)
 {
-    const double slope = 0.88, toe = 0.55, shoulder = 0.26, black = 0.0, white = 0.04;
+    const double slope = 0.88, toe = 0.3, shoulder = 0.26, black = 0.0, white = 0.04;   // the toe: BISTRO-FIXES-3
     const double toeScale = 1.0 + black - toe, shoulderScale = 1.0 + white - shoulder;
     const double bt = (0.18 + black) / toeScale - 1.0;
     const double toeMatch = std::log10(0.18) - 0.5 * std::log((1.0 + bt) / (1.0 - bt)) * (toeScale / slope);

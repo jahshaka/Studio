@@ -293,22 +293,25 @@ static int glassMain(Engine *e)
         if (arm.refractionPass) {
             // The refraction pass lies OUTSIDE the gather's bracket (the pass
             // property is registered for the PrePassUse pass alone), so the
-            // refractive slab shades as it does with the gather off - but it
-            // TRANSMITS the floor under it, which the opaque pass drew. Since
-            // PHOTON-VOXEL-3/4 that floor's rough specular (roughness 1: a lobe
-            // wider than a cone) takes its occluded share from the DIFFUSE
-            // estimator's voxel light (Vct_piece_ps.any, applyVctRoughSpecular) -
-            // the gather's where it runs - so the gather moves what the glass
-            // transmits by the gather's own change of irradiance times the black
-            // floor's specular albedo: the white patch's change over its albedo
-            // 0.85, times the dielectric F0 0.04 at roughness 1 (the split-sum's
-            // DFG there is below 1: an upper bound), plus the reader's quantum 0.25.
-            const double glassBar = 0.25 + patch.mean / 0.85 * 0.04;
-            CHECK_MSG(glass.mean <= glassBar && glass.worst <= 3u,
-                      "GA-GLASS, %s: the glass reads no probe irradiance of its own — it moves only by "
-                      "the transmitted floor's rough specular, which carries the gather's (mean "
-                      "%.3f/255, worst %u; bar %.3f mean = 0.25 + the patch's %.3f / 0.85 x 0.04, 3 worst)",
-                      arm.name, glass.mean, glass.worst, glassBar, patch.mean);
+            // refractive slab shades as it does with the gather off - and it
+            // TRANSMITS the floor under it, which the opaque pass drew. That floor's
+            // rough specular (roughness 1: a lobe wider than a cone) is the sky's share
+            // the occlusion query let through plus, for the share it stopped, the
+            // radiance the query's own march read along the reflection - the VOXELS'
+            // (BISTRO-FIXES-3, applyVctRoughSpecular). The gather writes the diffuse
+            // estimate alone (envColourD) and nothing the voxels hold, so the toggle
+            // moves the transmitted floor by NOTHING: the glass's bar is the reader's
+            // quantum - mean 0.25, worst 1 code. (Until BISTRO-FIXES-3 the stopped share
+            // read the diffuse estimate - the gather's where it ran - and the bar was the
+            // gather's irradiance change x F0; that proxy is deleted.) The row guards two
+            // things now: the glass reads no probe irradiance of its own, and a rough
+            // floor's specular does not carry the gather's diffuse estimate.
+            const double glassBar = 0.25;
+            CHECK_MSG(glass.mean <= glassBar && glass.worst <= 1u,
+                      "GA-GLASS, %s: the glass reads no probe irradiance of its own, and the floor it "
+                      "transmits reflects what its lobe sees - nothing the gather writes (mean %.3f/255, "
+                      "worst %u; bar %.2f mean, 1 worst: the reader's quantum)",
+                      arm.name, glass.mean, glass.worst, glassBar);
         } else {
             // IN THE GATHERING PASS a blended fragment's diffuse GI is THE
             // ENVIRONMENT TERM ALONE since PHOTON-GATHER-1d (the listener's
