@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <cstdio>
 #include <map>
 #include <string>
@@ -37,6 +38,15 @@ static int failures = 0;
     } while (0)
 
 static const unsigned kSize = 96;
+
+static float halfToFloat(unsigned short h) {
+    const unsigned s = (h >> 15) & 1u, e = (h >> 10) & 0x1Fu, m = h & 0x3FFu;
+    float v;
+    if (e == 0) v = std::ldexp(float(m), -24);
+    else if (e == 31) v = m ? NAN : INFINITY;
+    else v = std::ldexp(float(m | 0x400u), int(e) - 25);
+    return s ? -v : v;
+}
 
 struct FieldWork {
     unsigned frames = 0, framesWithWork = 0;
@@ -80,6 +90,11 @@ int main(int argc, char **argv)
     // to the same bytes, so the probes whose atlas tiles differ after the move has settled are exactly
     // the probes whose integrand the move changed.
     const bool reachControl = argc > 1 && std::string(argv[1]) == "--reach-control";
+    // --variance: THE PER-PROBE STANDARD ERROR, SAMPLE BY SAMPLE (ENGINE-UPGRADE-2B stage 4's
+    // instrument, a measurement): an at-rest re-integration of the converged room (nothing
+    // changed), the atlas read after every pass; each probe's per-sample values follow from its
+    // running means (x_n = n m_n - (n - 1) m_{n-1}), and with them its standard error.
+    const bool varianceArm = argc > 1 && std::string(argv[1]) == "--variance";
     const bool reachArm = (argc > 1 && std::string(argv[1]) == "--reach") || reachControl;
     const int reachBounces = argc > 2 ? std::atoi(argv[2]) : 1;
     std::string err;
@@ -142,6 +157,100 @@ int main(int argc, char **argv)
                 g0.ifdProbesPerFrame);
     CHECK(g0.ifdBound && g0.ifdProbes > 0, "the scene's irradiance field is live (not vacuous)");
 
+    if (varianceArm) {
+        // Settled already (above). Re-integrate with nothing changed, reading the atlas after
+        // every pass: a pass is done when the refinements owed move (or the field goes quiet).
+        std::vector<GiFieldAtlas> passes;
+        unsigned owedSeen = s->giStatus().ifdRefinesOwed;   // 0: converged
+        s->refreshGiLighting(false);
+        int quietRun = 0;
+        bool started = false;
+        GiFieldAtlas prev;
+        for (int f = 0; f < 600 && quietRun < 20; ++f) {
+            e->renderOneFrame();
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            const FieldWork w = fieldWork(recs);
+            quietRun = (w.frames && !w.framesWithWork) ? quietRun + 1 : 0;
+            const unsigned owed = s->giStatus().ifdRefinesOwed;
+            // A PASS ENDED on the frame before the refinements owed fall (this frame began the next)
+            // or on the last frame with work (the field went quiet); the reset raising them
+            // (0 -> K - 1) is the event's own pass beginning, not an end. The atlas of the frame
+            // before is kept for that.
+            const bool began = owedSeen != ~0u && owed > owedSeen;
+            if ((owedSeen != ~0u && owed < owedSeen) || (quietRun == 1 && started)) passes.push_back(prev);
+            if (began) started = true;
+            owedSeen = owed;
+            if (started) { prev = GiFieldAtlas(); s->giFieldAtlas(prev); }
+        }
+        // The quiet frame's read repeats the last pass when the refinement's own boundary already
+        // captured it: one pass per sample, the target's count.
+        const unsigned target = s->giStatus().ifdTargetSamples;
+        if (passes.size() > target) passes.resize(target);
+        const unsigned K = unsigned(passes.size());
+        if (!K || !passes[0].available) { std::printf("FAIL: no atlas passes read\n"); return 1; }
+        const GiFieldAtlas &a0 = passes[0];
+        const unsigned np = a0.probes[0] * a0.probes[1] * a0.probes[2];
+        const unsigned bordered = a0.irradBordered, res = bordered - 2u, width = a0.irradWidth;
+        const unsigned bpp = a0.irradBytesPerTexel;
+        std::printf("   %u passes read (the target %u samples), %u probes, %ux%u texels each, %u bytes a texel\n", K,
+                    s->giStatus().ifdTargetSamples, np, res, res, bpp);
+        const auto lum = [&](const GiFieldAtlas &a, unsigned p, unsigned tx, unsigned ty) {
+            const unsigned x = (p * bordered) % width + 1u + tx, y = ((p * bordered) / width) * bordered + 1u + ty;
+            const unsigned short *h = reinterpret_cast<const unsigned short *>(&a.irradiance[(size_t(y) * width + x) * bpp]);
+            return 0.2126f * halfToFloat(h[0]) + 0.7152f * halfToFloat(h[1]) + 0.0722f * halfToFloat(h[2]);
+        };
+        // Per probe: the sample index n at which 2 SE / |mean| <= 0.16 holds for EVERY texel of it
+        // (the precision K was derived for), and the median relative sample deviation.
+        const unsigned checkpoints[4] = { 3u, 5u, 10u, 25u };
+        unsigned within[4] = { 0, 0, 0, 0 };
+        unsigned long long workAtStop[2] = { 0, 0 };   // samples spent with the stop at n >= 2, n >= 4
+        std::vector<float> relSigma;
+        relSigma.reserve(size_t(np) * res * res);
+        unsigned dark = 0;
+        for (unsigned p = 0; p < np; ++p) {
+            unsigned stopAt = K + 1u;   // the first n (>= 2) where every texel meets the bound
+            std::vector<double> sum(res * res, 0.0), sum2(res * res, 0.0);
+            bool anyLit = false;
+            for (unsigned n = 1; n <= K; ++n) {
+                bool all = true;
+                for (unsigned i = 0; i < res * res; ++i) {
+                    const unsigned tx = i % res, ty = i / res;
+                    const double mn = lum(passes[n - 1], p, tx, ty);
+                    const double mp = n > 1 ? lum(passes[n - 2], p, tx, ty) : 0.0;
+                    const double x = double(n) * mn - double(n - 1) * mp;   // the n-th sample
+                    sum[i] += x; sum2[i] += x * x;
+                    const double mean = sum[i] / n;
+                    if (mean > 1e-6) anyLit = true;
+                    if (n < 2) { all = false; continue; }
+                    const double var = std::max(0.0, (sum2[i] - n * mean * mean) / double(n - 1));
+                    const double se = std::sqrt(var / n);
+                    if (mean <= 1e-6) continue;   // an unlit texel: no relative error to bound
+                    if (2.0 * se / mean > 0.16) all = false;
+                    if (n == K) relSigma.push_back(float(std::sqrt(var) / mean));
+                }
+                if (all && stopAt > K) stopAt = n;
+            }
+            if (!anyLit) ++dark;
+            workAtStop[0] += std::min(stopAt, K);
+            workAtStop[1] += std::min(std::max(stopAt, 4u), K);
+            for (int c = 0; c < 4; ++c) if (stopAt <= checkpoints[c]) ++within[c];
+        }
+        std::sort(relSigma.begin(), relSigma.end());
+        const auto pct = [&](double q) { return relSigma.empty() ? 0.0 : double(relSigma[size_t(q * (relSigma.size() - 1))]); };
+        std::printf("   ONE SAMPLE'S RELATIVE DEVIATION per texel (sigma / mean over %zu lit texels): median %.4f, "
+                    "p90 %.4f, p99 %.4f, max %.4f\n", relSigma.size(), pct(0.5), pct(0.9), pct(0.99),
+                    relSigma.empty() ? 0.0 : double(relSigma.back()));
+        std::printf("   PROBES AT THE PRECISION (2 SE / mean <= 0.16 on every texel), of %u (%u unlit):", np, dark);
+        for (int c = 0; c < 4; ++c) std::printf(" by sample %u: %u (%.1f %%)", checkpoints[c], within[c], 100.0 * within[c] / np);
+        std::printf("\n");
+        std::printf("   THE WORK a variance stop would spend (samples, all probes): %llu stopping from sample 2, %llu "
+                    "from sample 4, against %llu at the target (%.2fx / %.2fx less)\n", workAtStop[0], workAtStop[1],
+                    (unsigned long long)np * K, double(np) * K / double(workAtStop[0] ? workAtStop[0] : 1),
+                    double(np) * K / double(workAtStop[1] ? workAtStop[1] : 1));
+        e->setFrameMonitor(MonitorLevel::Off);
+        return 0;
+    }
     if (reachArm) {
         const auto settleField = [&]() {
             int q = 0, n = 0;
