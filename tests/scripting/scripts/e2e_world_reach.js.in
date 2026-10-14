@@ -64,8 +64,10 @@ assert(drawerId >= 0, "a drawer to file it in -> " + drawerId);
 var before = scene.nodes().length;
 var placed = assets.importAndPlace(fixture, { position: { x: 4, y: 5, z: 6 }, drawer: drawerId });
 assert(placed.assetGuid && placed.assetGuid.length > 10, "assetGuid -> " + placed.assetGuid);
-assert(placed.projectGuid === placed.assetGuid,
-       "projectGuid IS the asset guid (reference-with-pin, no copy)");
+// projectGuid is the PROJECT's (BISTRO-IMPORT-1 stage 3b; it used to echo the asset's guid,
+// which the pin returns — reference-with-pin, no copy — and the name never meant).
+assert(placed.projectGuid === project.current().guid && placed.projectGuid !== placed.assetGuid,
+       "projectGuid is the open project's guid -> " + placed.projectGuid);
 assert(placed.nodeId && placed.nodeId.length > 10, "nodeId -> " + placed.nodeId);
 assert(scene.nodes().length > before, "the scene grew");
 
