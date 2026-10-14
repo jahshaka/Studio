@@ -109,7 +109,7 @@ target_compile_definitions(test_mirror_change_set PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_mirror_change_set PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_mirror_change_set JahshakaEngineMedia)
-jah_gpu_row(mirror.change_set CLASS engine FRAMES 130 COMMAND test_mirror_change_set
+jah_gpu_row(mirror.change_set CLASS engine FRAMES 161 COMMAND test_mirror_change_set
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.change_set PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")

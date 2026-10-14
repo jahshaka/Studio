@@ -6,8 +6,9 @@
 //   2. ONE CUBE MOVED: one change-set entry; ONE movement scan that re-reads the mover and nothing else (one
 //      caster-walk visit, not the scene's 25).
 //   3. THE GROUP MOVED: one entry (the parent), its 8 children re-read by the caster walk — a subtree, not a scene.
-//   4. THE LAMP MOVED: one entry, one light in it, the light serial up by exactly one (the re-inject's key) — what
-//      the mirror's three light hashes and noteLightsMoved used to say, named instead.
+//   4. THE LAMP: written with its own pose = one entry and NO re-solve (the pose key compares the named lamp); moved =
+//      one entry, one light in it, the light serial up by exactly one (the re-inject's key), one settled re-solve —
+//      what the mirror's three light hashes and noteLightsMoved used to say, named instead.
 //   5. THE SOFT PROMOTION IS DECIDED BY THE SET: a cube written while playing is promoted (one miss), a cube written
 //      just BEFORE play started is not (the play edge's sync holds no surprise), and a cube nobody writes stays still.
 #include <QGuiApplication>
@@ -149,8 +150,16 @@ int main(int argc, char **argv)
         for (int i = 0; i < 20; ++i) frame();
     }
 
-    // 4. the lamp moved
+    // 4. the lamp moved (and, first, written with its OWN pose: named, but no move the debounce answers)
     {
+        const quint64 r0 = mirror.giRefreshCount();
+        lamp->setLocalPos(lamp->getLocalPos());
+        frame();
+        CHECK(changes().changesMoved == 1, "the lamp written with its own pose: still ONE entry, named (%u)",
+              changes().changesMoved);
+        for (int i = 0; i < 30; ++i) frame();
+        CHECK(mirror.giRefreshCount() == r0, "...but no re-solve settles out of a pose that did not change (%llu)",
+              (unsigned long long)(mirror.giRefreshCount() - r0));
         const unsigned long long s0 = target->lightWriteSerial();
         lamp->setLocalPos(lamp->getLocalPos() + iris::Vec3(0.5f, 0.0f, 0.0f));
         frame();
@@ -159,7 +168,10 @@ int main(int argc, char **argv)
               c.changesMoved, c.changesLights);
         CHECK(target->lightWriteSerial() - s0 == 1, "...the light serial up by exactly one, the re-inject's key (%llu)",
               target->lightWriteSerial() - s0);
+        const quint64 r1 = mirror.giRefreshCount();
         for (int i = 0; i < 20; ++i) frame();
+        CHECK(mirror.giRefreshCount() == r1 + 1, "...and a still lamp that MOVED settles into exactly one re-solve (%llu)",
+              (unsigned long long)(mirror.giRefreshCount() - r1));
     }
 
     // 5. the soft promotion, decided by the set
