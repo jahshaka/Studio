@@ -22,6 +22,8 @@
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QColor>
+#include "irisgl/document/scenegraph/cameralens.h"
+
 #include <QImage>
 #include <algorithm>
 #include <cmath>
@@ -35,13 +37,24 @@
 /// since PHOTON-ENV-1 the ENVIRONMENT lobe carries it too (it always did for
 /// the direct lobe — MEASURE-1a decision b), so a roughness-1 18 % sphere lit
 /// by the studio alone reflects 0.662 of the card: the band is the card's,
-/// scaled by that factor in LINEAR light and re-encoded. Whether the meter
-/// should key on the renderer's own lobe instead is an exposure decision.
+/// scaled by that factor in the SCENE's light - BEFORE the film - and developed
+/// through the film again (BISTRO-FIXES-3: the band used to scale the DISPLAY's
+/// linear light, which is the film's slope only for a straight film; the softer
+/// default toe of 0.3 lifts what the darker card develops to, and the old band's
+/// top, 107.3, sat a tenth of a code under the sphere's 107.4). The film is
+/// iris::lens::filmCurve at the engine's defaults; its inverse is a bisection.
+/// Whether the meter should key on the renderer's own lobe instead is an
+/// exposure decision.
 static double greyCardDisplay(double displayCode, double linearScale)
 {
     const double v = displayCode / 255.0;
-    const double lin = v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-    const double l = lin * linearScale;
+    const double shown = v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+    double lo = -6.0, hi = 2.0;   // the film's input on the log axis that develops to `shown`
+    for (int i = 0; i < 80; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        if (double(iris::lens::filmCurve(float(std::pow(10.0, mid)))) < shown) lo = mid; else hi = mid;
+    }
+    const double l = double(iris::lens::filmCurve(float(std::pow(10.0, 0.5 * (lo + hi)) * linearScale)));
     const double e = l <= 0.0031308 ? l * 12.92 : 1.055 * std::pow(l, 1.0 / 2.4) - 0.055;
     return 255.0 * e;
 }

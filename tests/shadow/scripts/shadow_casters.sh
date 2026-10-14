@@ -24,15 +24,64 @@ import sys
 from PIL import Image
 what, work, runs = sys.argv[1], sys.argv[2], int(sys.argv[3])
 
+import math
+# THE MASK IS A STATEMENT ABOUT LIGHT (BISTRO-FIXES-3): a display code is taken back to the
+# film's input - the sRGB decode, then Unreal's FilmToneMap at the engine's defaults (the toe
+# 0.3) inverted by bisection - and a pixel is the caster's shadow where the casting frame's
+# light falls below the MIDPOINT between the solid shadow's core and the full light. A PCF
+# ramp is symmetric about the geometric edge, so the midpoint's contour IS the edge and an
+# area measured on it is the caster's own (the cut-out's half-holes read 0.485 of the solid).
+# In display codes a fixed 60 % sat wherever the film put it: the softer toe moved it deep into
+# the ramp and the cut-out read 0.33.
+def _film(x, slope=0.88, toe=0.3, shoulder=0.26, black=0.0, white=0.04):
+    ts = 1 + black - toe; ss = 1 + white - shoulder
+    bt = (0.18 + black) / ts - 1
+    tm = math.log10(0.18) - 0.5 * math.log((1 + bt) / (1 - bt)) * (ts / slope)
+    sm = (1 - toe) / slope - tm; shm = shoulder / slope - sm
+    lc = math.log10(max(x, 1e-10)); st = slope * (lc + sm)
+    tc = -black + 2 * ts / (1 + math.exp((-2 * slope / ts) * (lc - tm)))
+    sc = (1 + white) - 2 * ss / (1 + math.exp((2 * slope / ss) * (lc - shm)))
+    tc = tc if lc < tm else st; sc = sc if lc > shm else st
+    t = min(max((lc - tm) / (shm - tm), 0.0), 1.0)
+    if shm < tm: t = 1 - t
+    t = (3 - 2 * t) * t * t
+    return max(0.0, tc + (sc - tc) * t)
+_INPUT = []
+for c in range(256):
+    v = c / 255.0
+    shown = v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    lo, hi = -6.0, 2.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if _film(10 ** mid) < shown: lo = mid
+        else: hi = mid
+    _INPUT.append(10 ** (0.5 * (lo + hi)) if c else 0.0)
+
 def lum(path):
     im = Image.open(path).convert("RGB"); W, H = im.size; px = im.load()
-    return W, H, [[0.2126 * px[x, y][0] + 0.7152 * px[x, y][1] + 0.0722 * px[x, y][2] for x in range(W)] for y in range(H)]
+    return W, H, [[0.2126 * _INPUT[px[x, y][0]] + 0.7152 * _INPUT[px[x, y][1]] + 0.0722 * _INPUT[px[x, y][2]]
+                   for x in range(W)] for y in range(H)]
+
+_THR = {}
+def threshold(run):
+    """The midpoint between the solid shadow's core (the median light ratio of the pixels it
+    takes below half the light) and the full light, per run."""
+    if run not in _THR:
+        W, H, on = lum("%s/r%d_solid_on.png" % (work, run))
+        _, _, off = lum("%s/r%d_solid_off.png" % (work, run))
+        deep = sorted(on[y][x] / off[y][x] for y in range(H) for x in range(W)
+                      if off[y][x] > _INPUT[12] and on[y][x] < 0.5 * off[y][x])
+        core = deep[len(deep) // 2] if deep else 0.0
+        _THR[run] = 0.5 * (1.0 + core)
+        print("   run %d: the solid shadow's core reads %.3f of the light; the mask's midpoint %.3f" % (run, core, _THR[run]))
+    return _THR[run]
 
 def shadow(run, name):
-    """The shadow alone: pixels the casting frame darkens below 60 % of the non-casting one."""
+    """The shadow alone: pixels the casting frame darkens below the midpoint (threshold)."""
     W, H, on = lum("%s/r%d_%s_on.png" % (work, run, name))
     _, _, off = lum("%s/r%d_%s_off.png" % (work, run, name))
-    return [[off[y][x] > 12 and on[y][x] < 0.6 * off[y][x] for x in range(W)] for y in range(H)]
+    t = threshold(run)
+    return [[off[y][x] > _INPUT[12] and on[y][x] < t * off[y][x] for x in range(W)] for y in range(H)]
 
 def area(m): return sum(sum(r) for r in m)
 

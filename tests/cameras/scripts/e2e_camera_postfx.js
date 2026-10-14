@@ -365,7 +365,7 @@ world.removeLook(lookA);
 
 // ---- phase K: the image block (IMAGE-1) -------------------------------------
 var IMAGE = { contrast: 1, saturation: 1, shadows: 0, highlights: 0, whiteTemperature: 6500,
-              whiteTint: 0, vignette: 0, filmSlope: 0.88, filmToe: 0.55, filmShoulder: 0.26,
+              whiteTint: 0, vignette: 0, filmSlope: 0.88, filmToe: 0.3, filmShoulder: 0.26,
               filmBlackClip: 0, filmWhiteClip: 0.04 };
 var wfx = world.postFx({});
 Object.keys(IMAGE).forEach(function (k) {

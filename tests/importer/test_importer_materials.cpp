@@ -536,9 +536,15 @@ int main(int argc, char **argv)
                     // Hable's tail did; and the full-metal reading moved with it (60.6),
                     // so the relative fence below is re-derived from the two readings:
                     // 1.24x, fenced at 1.15x ("clearly brighter", not "tuned to it").
-                    CHECK(fixedLight > 69.0 && fixedLight < 81.0,
+                    // RE-PINNED (BISTRO-FIXES-3: the film's default toe 0.55 -> 0.3): 75.1 -> 54.0
+                    // in decoded light, attributed by a rebuild at the old toe (75.1 again); the
+                    // full-metal reading moved with it (60.6 -> 33.3) - Unreal's toe parameter
+                    // moves the whole toe-to-shoulder blend, and these tones sit above the grey
+                    // card's 0.18, where the softer toe develops darker. The relative fence
+                    // below holds on the same two readings (1.62x against 1.15x).
+                    CHECK(fixedLight > 48.0 && fixedLight < 60.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(75.1 +/- 6 in light, in the studio environment, Unreal's film)");
+                          "(54.0 +/- 6 in light, in the studio environment, the film at toe 0.3)");
                     // ...IN LIGHT (SRGB-ENCODE-1): the 1.25x fence was set on the linear
                     // picture, so it is evaluated on the decoded means.
                     std::printf("    in light: imported %.1f, pre-fix %.1f (ratio %.2f)\n",

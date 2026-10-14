@@ -185,3 +185,23 @@ foreach(_row_frames
         set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
     endif()
 endforeach()
+
+# shadow.cutout_two_sided — A THIN CUTOUT CARD STOPS THE SUN FROM BOTH SIDES (BISTRO-FIXES-3 stage 2): a one-sided
+# alpha-tested card facing AWAY from the sun casts the shadow it casts facing it (the caster never culls a cutout);
+# its cut half stays cut; an opaque one-sided card keeps the stock rule (a closed shape's back face casts nothing).
+add_executable(test_shadow_cutout_two_sided test_shadow_cutout_two_sided.cpp)
+set_target_properties(test_shadow_cutout_two_sided PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_shadow_cutout_two_sided PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_shadow_cutout_two_sided PRIVATE JahshakaEngine)
+add_dependencies(test_shadow_cutout_two_sided JahshakaEngineMedia)
+jah_gpu_row(shadow.cutout_two_sided CLASS engine COMMAND test_shadow_cutout_two_sided
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.cutout_two_sided PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(shadow.cutout_two_sided PROPERTIES JAHSHAKA_TEST_FRAMES 120)
