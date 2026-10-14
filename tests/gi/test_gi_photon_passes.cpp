@@ -134,15 +134,16 @@ int main()
           "photon_trace -> the hit decode -> photon_resolve -> the first pass that shades with the prepass, "
           "each once");
 
-    // ---- ONE RECORDING ENTRY POINT (ENGINE-UPGRADE-2B stage 3) ----------------------------------
-    // Every Photon GPU dispatch of this scene's life — the arm's build, the cascades', the field's,
-    // the injections, the mips, the border mirrors — was recorded inside photon_update.
+    // ---- ONE GI REGION (ENGINE-UPGRADE-2B stage 3) ---------------------------------------------
+    // Every Photon compute dispatch of this scene's life — the arm's build, the cascades', the
+    // field's three, the injections, the mips, the border mirrors — was made inside the GI region
+    // (PhotonComponent::GiRegion: the GI step and the arm build at engine.pre, the cards' pass).
     {
         const PhotonDispatchStatus d1 = photonDispatchStatus();
-        std::printf("   photon dispatches: %llu in photon_update, %llu outside\n", d1.inPass - d0.inPass,
-                    d1.outsidePass - d0.outsidePass);
-        CHECK(d1.inPass > d0.inPass, "the cards scene's GI dispatched inside photon_update");
-        CHECK(d1.outsidePass == d0.outsidePass, "NO Photon dispatch outside photon_update (the cards scene)");
+        std::printf("   photon dispatches: %llu in the GI region, %llu outside\n", d1.inRegion - d0.inRegion,
+                    d1.outsideRegion - d0.outsideRegion);
+        CHECK(d1.inRegion > d0.inRegion, "the cards scene's GI dispatched inside the GI region");
+        CHECK(d1.outsideRegion == d0.outsideRegion, "NO Photon dispatch outside the GI region (the cards scene)");
     }
     // ---- A PLAIN VCT SCENE (no cards, no rays): photon_update exists and carries its GI --------------
     {
@@ -181,10 +182,10 @@ int main()
                 if (p.pass == "Jahshaka photon update") { ++withUpdate; break; }
         const PhotonDispatchStatus p1 = photonDispatchStatus();
         std::printf("   plain VCT: %u of %zu frames ran photon_update; dispatches %llu in, %llu outside\n",
-                    withUpdate, r2.size(), p1.inPass - p0.inPass, p1.outsidePass - p0.outsidePass);
+                    withUpdate, r2.size(), p1.inRegion - p0.inRegion, p1.outsideRegion - p0.outsideRegion);
         CHECK(withUpdate > 0, "a plain VCT scene HAS photon_update and runs it on the frames its GI works");
-        CHECK(p1.inPass > p0.inPass && p1.outsidePass == p0.outsidePass,
-              "NO Photon dispatch outside photon_update (the plain VCT scene: the arm, the moved still's cascades)");
+        CHECK(p1.inRegion > p0.inRegion && p1.outsideRegion == p0.outsideRegion,
+              "NO Photon dispatch outside the GI region (the plain VCT scene: the arm, the moved still's cascades)");
         e->destroyView(v2);
         e->destroyScene(s2);
     }
