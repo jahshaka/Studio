@@ -19,7 +19,9 @@
 //     3. 1,000 more async frames: the compute queue's command buffers == its slot count and
 //        its fences unchanged; the graphics queue's command buffers unchanged (bounded).
 //   --no-family   THE FALLBACK, run with JAH_VK_ASYNC_COMPUTE=0 (no compute queue requested,
-//        what a device without one gets): the Component exists, hasComputeQueue() is false,
+//        what a device without one gets). (The other off arm, "a queue but no timeline
+//        semaphores", is proved by READING only: no device here lacks timelines.)
+//        The Component exists, hasComputeQueue() is false,
 //        the bracket's values still advance, no GPU work, and the picture equals the
 //        no-bracket picture.
 //   --validation <log>  THE SYNC CHECK, run under VK_LAYER_KHRONOS_validation with
@@ -28,7 +30,16 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <Compositor/OgreCompositorManager2.h>
 #include <OgreFrameListener.h>
+#include <OgreHlmsCompute.h>
+#include <OgreHlmsComputeJob.h>
+#include <OgreHlmsManager.h>
+#include <OgreResourceGroupManager.h>
+#include <OgreShaderParams.h>
+#include <Vao/OgreAsyncTicket.h>
+#include <Vao/OgreUavBufferPacked.h>
+#include <Vao/OgreVaoManager.h>
 #include <OgreRoot.h>
 #include <OgreVulkanAsyncComputeQueue.h>
 #include <OgreVulkanDevice.h>
@@ -39,7 +50,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -210,6 +223,304 @@ static int mainDefault() {
     return failures ? 1 : 0;
 }
 
+// ===================================================================================================
+// STAGE 2 — THE RECORDING: a fixture dispatch in the bracket, read by the graphics queue after waitAt.
+//
+// Two compute jobs of our own (written to disk by the test, nothing staged):
+//   AsyncTest/Fill    — in the bracket: dst[i] = seed.x * 1000003 + i * seed.y, seed.x = the frame's
+//                       index — a per-frame SHADER PARAM, i.e. data in the auto-param buffer of the
+//                       graphics frame ring (the dynamic data the frame-data rule protects);
+//   AsyncTest/Consume — on the GRAPHICS queue at the next frame's start, after waitAt: acc[i] += dst[i].
+// THE PROTOCOL IS THE ONE-FRAME-BEHIND ONE: the bracket opens at frame N-1's frameRenderingQueued
+// (after the frame's passes, before its swap — G = that point), graphics frame N waits C at its start.
+// After K brackets acc has a CLOSED FORM: acc[i] = sum over f of (f * 1000003 + 7 i) mod 2^32 —
+// any lost, doubled, stale or torn bracket breaks it.
+static const uint32_t kN = 4096u;
+static const char *kFillSrc = R"GLSL(
+@insertpiece( SetCrossPlatformSettings )
+vulkan( layout( ogre_P0 ) uniform Params { )
+	uniform uvec4 seed;
+vulkan( }; )
+layout( std430, ogre_U0 ) writeonly restrict buffer dstLayout { uint dst[]; };
+layout( local_size_x = @value( threads_per_group_x ),
+		local_size_y = @value( threads_per_group_y ),
+		local_size_z = @value( threads_per_group_z ) ) in;
+void main()
+{
+	const uint i = gl_GlobalInvocationID.x;
+	if( i < seed.z )
+		dst[i] = seed.x * 1000003u + i * seed.y;
+}
+)GLSL";
+static const char *kConsumeSrc = R"GLSL(
+@insertpiece( SetCrossPlatformSettings )
+vulkan( layout( ogre_P0 ) uniform Params { )
+	uniform uvec4 count;
+vulkan( }; )
+layout( std430, ogre_U0 ) readonly restrict buffer srcLayout { uint src[]; };
+layout( std430, ogre_U1 ) restrict buffer accLayout { uint acc[]; };
+layout( local_size_x = @value( threads_per_group_x ),
+		local_size_y = @value( threads_per_group_y ),
+		local_size_z = @value( threads_per_group_z ) ) in;
+void main()
+{
+	const uint i = gl_GlobalInvocationID.x;
+	if( i < count.x )
+		acc[i] += src[i];
+}
+)GLSL";
+
+static Ogre::DescriptorSetUav::BufferSlot uavSlot(Ogre::UavBufferPacked *b, Ogre::ResourceAccess::ResourceAccess a) {
+    Ogre::DescriptorSetUav::BufferSlot slot = Ogre::DescriptorSetUav::BufferSlot::makeEmpty();
+    slot.buffer = b;
+    slot.access = a;
+    return slot;
+}
+
+struct Jobs {
+    Ogre::HlmsCompute *hc = nullptr;
+    Ogre::HlmsComputeJob *fill = nullptr, *consume = nullptr;
+    Ogre::UavBufferPacked *dst = nullptr, *acc = nullptr;
+};
+
+static bool makeJobs(Jobs &j) {
+    const std::string dir = "async-record-media";
+    std::system(("mkdir -p " + dir).c_str());
+    { std::ofstream(dir + "/AsyncTestFill_cs.glsl") << kFillSrc; }
+    { std::ofstream(dir + "/AsyncTestConsume_cs.glsl") << kConsumeSrc; }
+    Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
+    rgm.addResourceLocation(dir, "FileSystem", "AsyncRecordTest", false);
+    rgm.initialiseResourceGroup("AsyncRecordTest", true);
+    j.hc = Ogre::Root::getSingleton().getHlmsManager()->getComputeHlms();
+    Ogre::StringVector pieces;
+    pieces.push_back("CrossPlatformSettings_piece_all");
+    j.fill = j.hc->createComputeJob("AsyncTest/Fill", "AsyncTest/Fill", "AsyncTestFill_cs", pieces);
+    j.consume = j.hc->createComputeJob("AsyncTest/Consume", "AsyncTest/Consume", "AsyncTestConsume_cs", pieces);
+    for (Ogre::HlmsComputeJob *job : { j.fill, j.consume }) {
+        job->setThreadsPerGroup(64u, 1u, 1u);
+        job->setNumThreadGroups(kN / 64u, 1u, 1u);
+    }
+    j.fill->setNumUavUnits(1u);
+    j.consume->setNumUavUnits(2u);
+    Ogre::ShaderParams &fp = j.fill->getShaderParams("default");
+    Ogre::ShaderParams::Param seed;
+    seed.name = "seed";
+    const Ogre::uint32 z[4] = { 0u, 7u, kN, 0u };
+    seed.setManualValue(z, 4u);
+    fp.mParams.push_back(seed);
+    fp.setDirty();
+    Ogre::ShaderParams &cp = j.consume->getShaderParams("default");
+    Ogre::ShaderParams::Param count;
+    count.name = "count";
+    const Ogre::uint32 c[4] = { kN, 0u, 0u, 0u };
+    count.setManualValue(c, 4u);
+    cp.mParams.push_back(count);
+    cp.setDirty();
+    Ogre::VaoManager *vao = Ogre::Root::getSingleton().getRenderSystem()->getVaoManager();
+    std::vector<Ogre::uint32> zeros(kN, 0u);
+    j.dst = vao->createUavBuffer(kN, 4u, 0u, zeros.data(), false);
+    j.acc = vao->createUavBuffer(kN, 4u, 0u, zeros.data(), false);
+    j.fill->_setUavBuffer(0u, uavSlot(j.dst, Ogre::ResourceAccess::Write));
+    j.consume->_setUavBuffer(0u, uavSlot(j.dst, Ogre::ResourceAccess::Read));
+    j.consume->_setUavBuffer(1u, uavSlot(j.acc, Ogre::ResourceAccess::ReadWrite));
+    return j.fill && j.consume && j.dst && j.acc;
+}
+
+// The jobs live in HlmsCompute and hold raw pointers to the buffers: unbound, then the buffers go,
+// then the jobs, all before the engine.
+static void releaseJobs(Jobs &j) {
+    const Ogre::DescriptorSetUav::BufferSlot empty = Ogre::DescriptorSetUav::BufferSlot::makeEmpty();
+    if (j.fill) j.fill->_setUavBuffer(0u, empty);
+    if (j.consume) { j.consume->_setUavBuffer(0u, empty); j.consume->_setUavBuffer(1u, empty); }
+    Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
+    rs->getVaoManager()->destroyUavBuffer(j.dst);
+    rs->getVaoManager()->destroyUavBuffer(j.acc);
+    if (j.hc) {
+        j.hc->destroyComputeJob("AsyncTest/Fill");
+        j.hc->destroyComputeJob("AsyncTest/Consume");
+    }
+    j = Jobs();
+}
+
+static void dispatch(Ogre::HlmsCompute *hc, Ogre::HlmsComputeJob *job) {
+    Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
+    Ogre::ResourceTransitionArray &rt = rs->getBarrierSolver().getNewResourceTransitionsArrayTmp();
+    job->analyzeBarriers(rt);
+    rs->executeResourceTransition(rt);
+    hc->dispatch(job, 0, 0);
+}
+
+struct Recorder : public Ogre::FrameListener {
+    Ogre::VulkanAsyncComputeQueue *acq = nullptr;
+    Jobs *j = nullptr;
+    int bracketsLeft = 0;         // brackets still to open
+    Ogre::uint64 pending = 0;     // the last bracket's C value, consumed by the next frame
+    Ogre::uint32 frameIndex = 0;  // the seed of the next bracket
+    unsigned opened = 0, consumed = 0;
+    int toggleEvery = 0;          // >0: setEnabled flips every toggleEvery frames (on -> off -> on)
+    unsigned frames = 0, toggles = 0;
+    bool frameStarted(const Ogre::FrameEvent &) override {
+        ++frames;
+        if (toggleEvery > 0 && frames % unsigned(toggleEvery) == 0u) {
+            acq->setEnabled(!acq->isEnabled());
+            ++toggles;
+        }
+        if (pending) {
+            acq->waitAt(pending, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+            dispatch(j->hc, j->consume);
+            pending = 0;
+            ++consumed;
+        }
+        return true;
+    }
+    bool frameRenderingQueued(const Ogre::FrameEvent &) override {
+        if (bracketsLeft <= 0) return true;
+        const Ogre::uint64 g = acq->signalPoint("jah.test.tail");
+        acq->begin(g, "jah.test.fill");
+        Ogre::ShaderParams &fp = j->fill->getShaderParams("default");
+        const Ogre::uint32 seed[4] = { frameIndex, 7u, kN, 0u };
+        fp.mParams[0].setManualValue(seed, 4u);
+        fp.setDirty();
+        dispatch(j->hc, j->fill);
+        pending = acq->end();
+        ++frameIndex;
+        ++opened;
+        --bracketsLeft;
+        return true;
+    }
+};
+
+static bool readAcc(Jobs &j, std::vector<Ogre::uint32> &out) {
+    out.assign(kN, 0u);
+    Ogre::AsyncTicketPtr t = j.acc->readRequest(0u, kN);
+    std::memcpy(out.data(), t->map(), kN * 4u);
+    t->unmap();
+    return true;
+}
+
+// One arm: K brackets one frame behind, the last consumed, then acc read and checked against the
+// closed form. Returns the number of wrong words.
+static unsigned runArm(Rig &r, Jobs &j, Recorder &rec, int K, int toggleEvery, const char *tag) {
+    std::vector<Ogre::uint32> zeros(kN, 0u);
+    j.acc->upload(zeros.data(), 0u, kN);   // a copy: outside every bracket
+    rec.bracketsLeft = K;
+    rec.frameIndex = 0;
+    rec.opened = rec.consumed = 0;
+    rec.toggleEvery = toggleEvery;
+    rec.frames = rec.toggles = 0;
+    for (int f = 0; f < K + 2; ++f) r.engine->renderOneFrame();
+    rec.toggleEvery = 0;
+    std::vector<Ogre::uint32> acc;
+    readAcc(j, acc);
+    unsigned wrong = 0;
+    for (uint32_t i = 0; i < kN; ++i) {
+        Ogre::uint32 want = 0u;
+        for (int f = 0; f < K; ++f) want += Ogre::uint32(f) * 1000003u + i * 7u;
+        if (acc[i] != want) ++wrong;
+    }
+    char msg[200];
+    std::snprintf(msg, sizeof msg, "%s: %u brackets opened, %u consumed, acc == the closed form in %u of %u words%s",
+                  tag, rec.opened, rec.consumed, kN - wrong, kN,
+                  toggleEvery ? (" (" + std::to_string(rec.toggles) + " on/off switches)").c_str() : "");
+    CHECK(rec.opened == unsigned(K) && rec.consumed == unsigned(K) && wrong == 0u, msg);
+    return wrong;
+}
+
+static int mainRecord() {
+    Rig r;
+    if (!boot(r, "test-async-record-ogre.log")) return 1;
+    for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+    Jobs j;
+    CHECK(makeJobs(j), "the two fixture compute jobs and their buffers exist");
+    CHECK(r.device->mJahShareFamilyCount == 2u,
+          "the pools and flagged images are CONCURRENT over the graphics and the compute family");
+    Recorder rec;
+    rec.acq = r.acq;
+    rec.j = &j;
+    Ogre::Root::getSingleton().addFrameListener(&rec);
+    const int K = 240;
+    std::printf("-- 1. the in-order arm (setEnabled(false)) — the reference\n");
+    r.acq->setEnabled(false);
+    runArm(r, j, rec, K, 0, "in order");
+    std::printf("-- 2. the async arm, one frame behind\n");
+    r.acq->setEnabled(true);
+    const Ogre::uint64 n0 = r.acq->getNumAsyncBrackets();
+    const Ogre::uint64 rec0 = r.acq->getNumSlotRecycles();
+    runArm(r, j, rec, K, 0, "async");
+    char msg[220];
+    std::snprintf(msg, sizeof msg, "the async arm's brackets ran on the compute queue (%llu)",
+                  (unsigned long long)(r.acq->getNumAsyncBrackets() - n0));
+    CHECK(r.acq->getNumAsyncBrackets() - n0 == Ogre::uint64(K), msg);
+    std::printf("-- 3. THE FRAME-DATA RULE: a slot whose bracket was waited by the next frame is never recycled early\n");
+    const Ogre::uint64 recycles = r.acq->getNumSlotRecycles() - rec0;
+    std::snprintf(msg, sizeof msg, "%llu recycles of a slot that recorded a bracket (>= %d), %llu had to wait, %llu violations",
+                  (unsigned long long)recycles, K - 4, (unsigned long long)r.acq->getNumRecyclesHeld(),
+                  (unsigned long long)r.acq->getNumRecycleViolations());
+    CHECK(recycles >= Ogre::uint64(K - 4) && r.acq->getNumRecycleViolations() == 0u, msg);
+    std::printf("-- 4. on -> off -> on every 40 frames (C migrating between the queues)\n");
+    runArm(r, j, rec, K, 40, "toggled");
+    r.acq->setEnabled(true);
+    Ogre::Root::getSingleton().removeFrameListener(&rec);
+    r.device->stall();
+    releaseJobs(j);
+    std::printf("%s\n", failures ? "engine.async_record: FAILED" : "engine.async_record: all ok");
+    return failures ? 1 : 0;
+}
+
+// THE GRAPHICS-ONLY CHECKS ARE RUNTIME-ACTIVE: inside a bracket (either arm) a graphics-only command
+// throws an Ogre::Exception that NAMES it, the bracket is still closable, and the frame after works.
+static bool expectThrow(const char *what, const char *needle, const std::function<void()> &f) {
+    try { f(); }
+    catch (const Ogre::Exception &e) {
+        const bool named = e.getFullDescription().find(needle) != std::string::npos;
+        char msg[300];
+        std::snprintf(msg, sizeof msg, "%s throws, naming '%s'", what, needle);
+        CHECK(named, msg);
+        if (!named) std::printf("   (it said: %s)\n", e.getFullDescription().substr(0, 240).c_str());
+        return named;
+    }
+    char msg[200];
+    std::snprintf(msg, sizeof msg, "%s throws", what);
+    CHECK(false, msg);
+    return false;
+}
+
+static int mainGraphicsCheck() {
+    Rig r;
+    if (!boot(r, "test-async-graphics-check-ogre.log")) return 1;
+    for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+    Jobs j;
+    if (!makeJobs(j)) { std::printf("FAIL: jobs\n"); return 1; }
+    Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
+    std::vector<Ogre::uint32> zeros(kN, 0u);
+    for (int arm = 0; arm < 2; ++arm) {
+        r.acq->setEnabled(arm == 0);
+        std::printf("-- the %s arm\n", arm == 0 ? "async" : "in-order");
+        r.acq->begin(r.acq->signalPoint("jah.test.check"));
+        dispatch(j.hc, j.fill);                                      // compute work: fine
+        expectThrow("an upload inside the bracket", "a copy", [&] { j.acc->upload(zeros.data(), 0u, kN); });
+        expectThrow("a graphics PSO bind inside the bracket", "a graphics pipeline bind",
+                    [&] { rs->_setPipelineStateObject(nullptr); });
+        expectThrow("a second begin", "a bracket is already open", [&] { r.acq->begin(0u); });
+        expectThrow("setEnabled inside the bracket", "setEnabled inside a bracket", [&] { r.acq->setEnabled(true); });
+        const Ogre::uint64 c = r.acq->end();
+        expectThrow("waitAt on a value no bracket signalled", "no bracket has signalled",
+                    [&] { r.acq->waitAt(c + 5u, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); });
+        expectThrow("waitAtFrameEnd on a value no bracket signalled", "no bracket has signalled",
+                    [&] { r.acq->waitAtFrameEnd(c + 5u); });
+        expectThrow("end without begin", "end without begin", [&] { r.acq->end(); });
+        r.acq->waitAt(c, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+        for (int i = 0; i < 5; ++i) r.engine->renderOneFrame();
+        j.acc->upload(zeros.data(), 0u, kN);                         // outside: fine
+    }
+    r.acq->setEnabled(true);
+    r.device->stall();
+    releaseJobs(j);
+    CHECK(true, "the frames after every refused command rendered (the bracket closed cleanly)");
+    std::printf("%s\n", failures ? "engine.async_graphics_check: FAILED" : "engine.async_graphics_check: all ok");
+    return failures ? 1 : 0;
+}
+
 static int mainNoFamily() {
     const char *env = std::getenv("JAH_VK_ASYNC_COMPUTE");
     if (!env || std::strcmp(env, "0") != 0) {
@@ -308,17 +619,25 @@ static int mainValidation(const char *logPath) {
         Rig r;
         if (!boot(r, "test-async-queue-validation-ogre.log")) return 1;
         CHECK(r.acq->isAsync(), "the async arm runs under the layer");
-        Bracket br;
-        br.acq = r.acq;
-        br.on = true;
-        Ogre::Root::getSingleton().addFrameListener(&br);
-        if (!frames(r, 300, nullptr)) return 1;
+        // THE REAL PATH: the fixture dispatch one frame behind, in order, async, and switched
+        // on -> off -> on (C migrating between the queues, G jumping at each enable).
+        for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+        Jobs j;
+        CHECK(makeJobs(j), "the fixture jobs exist");
+        Recorder rec;
+        rec.acq = r.acq;
+        rec.j = &j;
+        Ogre::Root::getSingleton().addFrameListener(&rec);
+        r.acq->setEnabled(false);
+        runArm(r, j, rec, 60, 0, "in order");
+        r.acq->setEnabled(true);
+        runArm(r, j, rec, 120, 0, "async");
+        runArm(r, j, rec, 120, 30, "toggled");
+        r.acq->setEnabled(true);
+        Ogre::Root::getSingleton().removeFrameListener(&rec);
         r.device->stall();
-        Ogre::Root::getSingleton().removeFrameListener(&br);
+        releaseJobs(j);
         CHECK(negativeControls(r.device), "the two negative controls were recorded");
-        char msg[160];
-        std::snprintf(msg, sizeof msg, "300 async brackets ran (%u)", br.brackets);
-        CHECK(br.brackets == 300u, msg);
     }   // the engine (and the instance) end here, so the layer has said everything
     std::ifstream in(logPath);
     CHECK(bool(in), "the validation layer wrote its log (the layer was loaded)");
@@ -354,5 +673,7 @@ int main(int argc, char **argv) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);   // the lines in order with the engine's
     if (argc > 1 && std::strcmp(argv[1], "--no-family") == 0) return mainNoFamily();
     if (argc > 2 && std::strcmp(argv[1], "--validation") == 0) return mainValidation(argv[2]);
+    if (argc > 1 && std::strcmp(argv[1], "--record") == 0) return mainRecord();
+    if (argc > 1 && std::strcmp(argv[1], "--graphics-check") == 0) return mainGraphicsCheck();
     return mainDefault();
 }

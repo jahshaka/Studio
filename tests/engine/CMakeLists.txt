@@ -267,6 +267,16 @@ if(OGRE_NEXT_VULKAN_RS_LIB AND Vulkan_FOUND)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.async_queue_nofamily PROPERTIES TIMEOUT 120 LABELS "engine"
         ENVIRONMENT "JAH_VK_ASYNC_COMPUTE=0")
+    # STAGE 2 (FORK-RECORD): the fixture dispatch in the bracket one frame behind, read by the
+    # graphics queue after waitAt — the closed form in order, async and toggled on/off; the
+    # frame-data rule's counts; and the runtime-active graphics-only checks (each refused
+    # command names itself, the bracket still closes, the next frames render).
+    jah_gpu_row(engine.async_record CLASS engine COMMAND test_engine_async_queue --record
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.async_record PROPERTIES TIMEOUT 120 LABELS "engine")
+    jah_gpu_row(engine.async_graphics_check CLASS engine COMMAND test_engine_async_queue --graphics-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.async_graphics_check PROPERTIES TIMEOUT 120 LABELS "engine")
     set(_jah_vvl_log "${CMAKE_CURRENT_BINARY_DIR}/async-queue-validation.log")
     jah_gpu_row(engine.async_queue_validation CLASS engine
              COMMAND test_engine_async_queue --validation "${_jah_vvl_log}"
@@ -340,7 +350,9 @@ foreach(_row_frames
         "decals.engine=60"
         "engine.async_queue=1920"             # 300 x 3 arms + 20 + 1,000 (counted from the source)
         "engine.async_queue_nofamily=600"
-        "engine.async_queue_validation=300"
+        "engine.async_queue_validation=316"   # 10 + (60 + 2) + (120 + 2) + (120 + 2), counted from the source
+        "engine.async_record=736"             # 10 + 3 x (240 + 2)
+        "engine.async_graphics_check=20"
         "engine.frame_catch=27"
         "engine.gi_scan=162"
         "engine.gpu_scene=58"
