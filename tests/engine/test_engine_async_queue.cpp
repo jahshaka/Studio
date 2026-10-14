@@ -37,6 +37,8 @@
 #include <OgreHlmsManager.h>
 #include <OgreResourceGroupManager.h>
 #include <OgreShaderParams.h>
+#include <OgreTextureGpuManager.h>
+#include <OgreResourceTransition.h>
 #include <Vao/OgreAsyncTicket.h>
 #include <Vao/OgreUavBufferPacked.h>
 #include <Vao/OgreVaoManager.h>
@@ -513,6 +515,48 @@ static int mainGraphicsCheck() {
         for (int i = 0; i < 5; ++i) r.engine->renderOneFrame();
         j.acc->upload(zeros.data(), 0u, kN);                         // outside: fine
     }
+    // A BRACKET A THROW LEAVES OPEN (the read's W3): the engine catches and goes on, so the next
+    // frame's top closes it (loudly) instead of the blocked graphics queue throwing every frame.
+    for (int arm = 0; arm < 2; ++arm) {
+        r.acq->setEnabled(arm == 0);
+        const Ogre::uint64 before = r.acq->getLastComputeValue();
+        try {
+            r.acq->begin(r.acq->signalPoint("jah.test.leak"), "jah.test.leaked");
+            dispatch(j.hc, j.fill);
+            j.acc->upload(zeros.data(), 0u, kN);                     // throws: the bracket is left open
+        } catch (const Ogre::Exception &) {}
+        const bool leaked = r.acq->isOpen();
+        const std::string errBefore = r.engine->lastError();   // a frame that throws replaces it
+        r.engine->renderOneFrame();
+        const std::string err = r.engine->lastError() == errBefore ? std::string() : r.engine->lastError();
+        char msg[300];
+        std::snprintf(msg, sizeof msg, "%s arm: a bracket left open by a throw is closed at the next frame's top "
+                      "(open before %d, after %d, C +%llu, the frame's error '%s')", arm == 0 ? "async" : "in-order",
+                      int(leaked), int(r.acq->isOpen()),
+                      (unsigned long long)(r.acq->getLastComputeValue() - before), err.substr(0, 120).c_str());
+        CHECK(leaked && !r.acq->isOpen() && r.acq->getLastComputeValue() == before + 1u && err.empty(), msg);
+        for (int i = 0; i < 3; ++i) r.engine->renderOneFrame();
+        // ...and THE SCOPE GUARD closes it where the throw leaves the scope.
+        try {
+            Ogre::VulkanAsyncComputeBracket bracket(r.acq, r.acq->signalPoint("jah.test.scope"), "jah.test.scoped");
+            dispatch(j.hc, j.fill);
+            j.acc->upload(zeros.data(), 0u, kN);                     // throws
+            bracket.end();
+        } catch (const Ogre::Exception &) {}
+        std::snprintf(msg, sizeof msg, "%s arm: the scope guard closed the bracket the throw left (C +%llu)",
+                      arm == 0 ? "async" : "in-order",
+                      (unsigned long long)(r.acq->getLastComputeValue() - before));
+        CHECK(!r.acq->isOpen() && r.acq->getLastComputeValue() == before + 2u, msg);
+        {
+            Ogre::VulkanAsyncComputeBracket bracket(r.acq, r.acq->signalPoint("jah.test.scope2"));
+            dispatch(j.hc, j.fill);
+            const Ogre::uint64 c = bracket.end();
+            r.acq->waitAt(c, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+            expectThrow("a second end of a scoped bracket", "already ended", [&] { bracket.end(); });
+        }
+        for (int i = 0; i < 3; ++i) r.engine->renderOneFrame();
+        CHECK(r.engine->lastError() == errBefore, "the frames after the leaks rendered without an error");
+    }
     r.acq->setEnabled(true);
     r.device->stall();
     releaseJobs(j);
@@ -613,6 +657,44 @@ static bool negativeControls(Ogre::VulkanDevice *d) {
     return true;
 }
 
+// THE TEXTURE BARRIERS IN THE BRACKET (the stage-2 read's W1): an AsyncComputeShared render target
+// handed to the compute queue (RenderTarget -> Uav: the source stage is COLOR_ATTACHMENT_OUTPUT) and
+// handed back to a fragment reader (Uav -> Texture for the pixel shader: the destination stage is
+// FRAGMENT_SHADER). Recorded on a compute-only family those stages are VUID-vkCmdPipelineBarrier-
+// srcStageMask-06461 / -dstStageMask-06462 unless the barrier is fitted to the recording queue.
+static bool bracketTextureBarriers(Rig &r) {
+    Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
+    Ogre::TextureGpuManager *tm = rs->getTextureGpuManager();
+    Ogre::TextureGpu *t = tm->createTexture(
+        "AsyncTest/SharedTarget", Ogre::GpuPageOutStrategy::Discard,
+        Ogre::TextureFlags::RenderToTexture | Ogre::TextureFlags::Uav | Ogre::TextureFlags::AsyncComputeShared,
+        Ogre::TextureTypes::Type2D);
+    t->setResolution(64u, 64u);
+    t->setPixelFormat(Ogre::PFG_RGBA16_FLOAT);
+    t->scheduleTransitionTo(Ogre::GpuResidency::Resident);
+    Ogre::BarrierSolver &bs = rs->getBarrierSolver();
+    auto go = [&](Ogre::ResourceLayout::Layout l, Ogre::ResourceAccess::ResourceAccess a, Ogre::uint8 stages) {
+        Ogre::ResourceTransitionArray &rt = bs.getNewResourceTransitionsArrayTmp();
+        bs.resolveTransition(rt, t, l, a, stages);
+        rs->executeResourceTransition(rt);
+    };
+    unsigned handed = 0;
+    for (int f = 0; f < 3; ++f) {
+        go(Ogre::ResourceLayout::RenderTarget, Ogre::ResourceAccess::Write, 0u);     // graphics: a target
+        r.acq->begin(r.acq->signalPoint("jah.test.target"), "jah.test.texture_barriers");
+        go(Ogre::ResourceLayout::Uav, Ogre::ResourceAccess::ReadWrite, Ogre::uint8(1u << Ogre::GPT_COMPUTE_PROGRAM));
+        go(Ogre::ResourceLayout::Texture, Ogre::ResourceAccess::Read, Ogre::uint8(1u << Ogre::PixelShader));
+        const Ogre::uint64 c = r.acq->end();
+        r.acq->waitAt(c, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        r.engine->renderOneFrame();
+        ++handed;
+    }
+    r.device->stall();
+    bs.textureDeleted(t);
+    tm->destroyTexture(t);
+    return handed == 3u;
+}
+
 static int mainValidation(const char *logPath) {
     std::remove(logPath);   // the layer appends: a previous run's log must not count
     {
@@ -637,6 +719,8 @@ static int mainValidation(const char *logPath) {
         Ogre::Root::getSingleton().removeFrameListener(&rec);
         r.device->stall();
         releaseJobs(j);
+        CHECK(bracketTextureBarriers(r),
+              "a shared render target handed to the compute queue and back to a fragment reader, 3 frames");
         CHECK(negativeControls(r.device), "the two negative controls were recorded");
     }   // the engine (and the instance) end here, so the layer has said everything
     std::ifstream in(logPath);

@@ -350,9 +350,9 @@ foreach(_row_frames
         "decals.engine=60"
         "engine.async_queue=1920"             # 300 x 3 arms + 20 + 1,000 (counted from the source)
         "engine.async_queue_nofamily=600"
-        "engine.async_queue_validation=316"   # 10 + (60 + 2) + (120 + 2) + (120 + 2), counted from the source
+        "engine.async_queue_validation=319"   # 10 + (60 + 2) + (120 + 2) + (120 + 2) + 3 (the shared target), counted from the source
         "engine.async_record=736"             # 10 + 3 x (240 + 2)
-        "engine.async_graphics_check=20"
+        "engine.async_graphics_check=34"     # 10 + 2 x (5 + 1 + 3 + 3), counted from the source
         "engine.frame_catch=27"
         "engine.gi_scan=162"
         "engine.gpu_scene=58"
