@@ -19,7 +19,8 @@
 //   * a move re-checks the moved node (and its subtree) and nothing else;
 //   * a material edit re-checks the nodes wearing it; an add, the added node;
 //   * an unshadowed lamp finds the leak a move makes, and the line stays live;
-//   * a line cleared from outside is re-raised by the next pass.
+//   * a line cleared from outside is re-raised by the next pass;
+//   * a deleted lamp's line goes on the next pass, another lamp or not.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -69,6 +70,15 @@ assert(still.walked.nodes === 0 && leaksOf(still).length === 1,
 assert(editor.clearIssue(leaks[0].id), "the line cleared from outside");
 assert(leaksOf(editor.checkScene()).length === 1,
        "...is re-raised by the next pass while the condition holds");
+
+// A DELETED LAMP TAKES ITS LINE WITH IT, even while another unshadowed lamp
+// keeps the leak check alive (the read's case: a lamp is no check's node).
+var other = scene.addLight("point", { position: { x: -100, y: 5, z: -100 }, name: "Other fill" });
+node.setProperty(other, "distance", 3);
+node.setProperty(other, "shadowMapType", 0);
+assert(leaksOf(editor.checkScene()).length === 1, "a second unshadowed lamp far from everything adds no line");
+assert(node.remove(lamp), "the leaking lamp deleted");
+assert(leaksOf(editor.checkScene()).length === 0, "...its line is gone on the next pass");
 
 // A MATERIAL EDIT re-checks the node wearing it.
 var v3 = visited();

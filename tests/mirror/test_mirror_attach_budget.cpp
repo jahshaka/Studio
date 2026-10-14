@@ -15,13 +15,15 @@ For more information see the LICENSE file
 // The owner's Bistro open blocked the UI thread 2.2 s in SceneMirror::toMeshData
 // on one frame, and a placement 2.4 s in OgreScene::buildMeshV2 via
 // SceneMirror::meshFor: the mirror built every new mesh of a world in the sync
-// that first saw it. SceneMirror::setAttachBudget gives ONE sync a share — at
-// most M new engine meshes and V of their vertices (the first always) — and a
+// that first saw it. SceneMirror::setAttachBudget gives ONE sync a share BY
+// COST — new meshes until V vertices or I indices are built (the first always)
+// — and a
 // node left without its mesh is brought back by the change list on the next
 // sync. The editor's DRIVER ticks ask for it; every other sync is unbounded.
 //
 // COUNTS: the deferrals (attachesOwed), the attaches (meshAttachCount) and the
-// syncs it takes, against the closed forms ceil(N / M) and the vertex cap; the
+// syncs it takes, against the closed form ceil(N * v / V) for meshes of v
+// vertices, and the index cap likewise; the
 // partial world is the document's (the full walk after the last sync pushes
 // nothing); a mesh already built is never deferred; a sync nobody budgeted
 // builds everything.
@@ -94,23 +96,36 @@ int main(int argc, char **argv)
     View *view = engine->createOffscreenView("budget", 64, 64, Colour(0, 0, 0));
     if (!view) { std::printf("FAIL: no offscreen view\n"); return 1; }
 
-    // ---- THE MESH CAP: 40 distinct meshes at 8 a sync = ceil(40/8) = 5 syncs.
+    // ---- ONE CUBE'S COST, measured through the mirror (v vertices, i indices).
+    std::size_t v = 0, idx = 0;
     {
         World w;
-        build(w, engine.get(), "budget-meshes", 40, 0);
+        build(w, engine.get(), "budget-probe", 1, 0);
+        view->setScene(w.target);
+        w.mirror->sync();
+        v = w.mirror->lastSyncBuiltVertices();
+        idx = w.mirror->lastSyncBuiltIndices();
+        CHECK(v > 0 && idx > 0, "one cube's vertices and indices, read off the mirror");
+        view->setScene(nullptr);
+        engine->destroyScene(w.target);
+    }
+
+    // ---- THE VERTEX CAP: 40 cubes at 8 cubes' vertices a sync = ceil(40/8) = 5.
+    {
+        World w;
+        build(w, engine.get(), "budget-vertices", 40, 0);
         view->setScene(w.target);
         int syncs = 0;
         quint64 owedAfterFirst = 0;
         do {
-            w.mirror->setAttachBudget(8, std::size_t(1) << 30);
+            w.mirror->setAttachBudget(8 * v, std::size_t(1) << 30);
             w.mirror->sync();
             if (++syncs == 1) owedAfterFirst = w.mirror->attachesOwed();
         } while (w.mirror->attachesOwed() > 0 && syncs < 100);
-        std::printf("info: 40 meshes at 8 a sync: %d syncs, %llu owed after the first, %llu attaches\n",
-                    syncs, (unsigned long long)owedAfterFirst,
-                    (unsigned long long)w.mirror->meshAttachCount());
+        std::printf("info: 40 cubes of %zu vertices at %zu a sync: %d syncs, %llu owed after the first\n",
+                    v, 8 * v, syncs, (unsigned long long)owedAfterFirst);
         CHECK(owedAfterFirst == 32, "the first budgeted sync attaches 8 and leaves 32 owed");
-        CHECK(syncs == 5, "the world is in after ceil(40 / 8) = 5 syncs");
+        CHECK(syncs == 5, "the world is in after ceil(40 * v / 8v) = 5 syncs");
         CHECK(w.mirror->meshAttachCount() == 40, "...with every node attached exactly once");
         CHECK(w.mirror->attachesDeferredTotal() == 32 + 24 + 16 + 8,
               "...and each deferral is one node waiting one sync (32+24+16+8)");
@@ -123,22 +138,19 @@ int main(int argc, char **argv)
         engine->destroyScene(w.target);
     }
 
-    // ---- THE VERTEX CAP: room for two cubes' vertices = 2 a sync; a cap below
-    //      one mesh still builds the first (a huge mesh is never starved).
+    // ---- THE INDEX CAP, and the first mesh of a sync always built.
     {
         World w;
-        build(w, engine.get(), "budget-vertices", 6, 0);
+        build(w, engine.get(), "budget-indices", 6, 0);
         view->setScene(w.target);
-        w.mirror->setAttachBudget(100, 1);
+        w.mirror->setAttachBudget(std::size_t(1) << 30, 1);
         w.mirror->sync();
-        const std::size_t cubeVerts = w.mirror->lastSyncBuiltVertices();
-        CHECK(cubeVerts > 0 && w.mirror->meshAttachCount() == 1 && w.mirror->attachesOwed() == 5,
+        CHECK(w.mirror->meshAttachCount() == 1 && w.mirror->attachesOwed() == 5,
               "a cap below one mesh still builds the first of the sync (1 of 6)");
-        w.mirror->setAttachBudget(100, 2 * cubeVerts);
+        w.mirror->setAttachBudget(std::size_t(1) << 30, 2 * idx);
         w.mirror->sync();
         CHECK(w.mirror->meshAttachCount() == 3 && w.mirror->attachesOwed() == 3,
-              "a vertex cap of two cubes builds two more (3 of 6)");
-        // ...and a sync nobody budgeted takes the rest.
+              "an index cap of two cubes builds two more (3 of 6)");
         w.mirror->sync();
         CHECK(w.mirror->meshAttachCount() == 6 && w.mirror->attachesOwed() == 0,
               "the next UNBUDGETED sync builds everything left (the budget is one shot)");
@@ -152,10 +164,10 @@ int main(int argc, char **argv)
         World w;
         build(w, engine.get(), "budget-shared", 1, 30);
         view->setScene(w.target);
-        w.mirror->setAttachBudget(1, std::size_t(1) << 30);
+        w.mirror->setAttachBudget(1, 1);
         w.mirror->sync();
         CHECK(w.mirror->attachesOwed() == 0 && w.mirror->meshAttachCount() == 31,
-              "31 nodes on one mesh attach in one sync at a budget of one mesh");
+              "31 nodes on one mesh attach in one sync at a budget below one mesh");
         view->setScene(nullptr);
         engine->destroyScene(w.target);
     }

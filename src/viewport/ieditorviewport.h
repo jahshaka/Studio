@@ -1159,6 +1159,10 @@ public:
         /// the rare, explicit answer (a bind, a page switch, the play edge,
         /// JAH_MIRROR_VERIFY=full); "dirty" every other frame.
         QString walkMode;
+        /// THE ATTACH BUDGET (SceneMirror::setAttachBudget): mesh nodes the last
+        /// sync left for later, and every such deferral, ever.
+        quint64 attachesOwed = 0;
+        quint64 attachesDeferred = 0;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the

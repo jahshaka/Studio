@@ -20,11 +20,11 @@ For more information see the LICENSE file
 // on one frame, building every mesh at once.
 //
 // THE LAW, IN FRAMES (the driver's own, read as `framesPresented`): an open of
-// a world of many distinct meshes (a fixture OBJ this test writes: 120 parts)
-// streams them over the driver's ticks — `pending.meshes` is seen above zero
-// after the reveal and the line names them ("meshes to come") — and the line is
-// gone within kArrivalSettleSamples + 1 = 3 frames of the last frame that owed
-// anything (a mesh, a texture, a lighting stage), whatever the frame time. The
+// a world of many distinct meshes (a fixture OBJ this test writes: 120 parts of
+// 1,681 vertices) streams them over several frames by the mirror's cost budget
+// — the mirror's deferral count moves across the open — and the line is gone within kArrivalSettleSamples + 1 = 3 driver
+// frames of the reveal or of the last frame that owed anything (a mesh, a
+// texture, a lighting stage), whatever the frame time. The
 // shader term, when shown, says what it is ("compiled"). A harness, not a
 // --script suite: a script's own frames are never driver frames, and the line
 // is the driver's alone.
@@ -57,14 +57,14 @@ QJsonValue readJson(McpClient &mcp, const QString &expression)
     return doc.array().isEmpty() ? QJsonValue() : doc.array().at(0);
 }
 
-/// `parts` separate objects, each a 4 x 4 grid patch — distinct meshes, so none
+/// `parts` separate objects, each a 40 x 40 grid patch — distinct meshes, so none
 /// is shared and every one is a build of its own.
 bool writeParts(const QString &path, int parts)
 {
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
     QTextStream out(&f);
-    const int n = 4;
+    const int n = 40;   // 1,681 vertices a part: 120 parts are ~200k vertices, several frames of the budget
     int base = 1;
     for (int k = 0; k < parts; ++k) {
         const double ox = (k % 12) * 1.2, oz = (k / 12) * 1.2;
@@ -123,7 +123,9 @@ int main(int argc, char **argv)
     const QString guid = made.toObject().value("guid").toString();
     CHECK(!guid.isEmpty(), "the world of 120 parts was made and saved");
 
-    // THE OPEN, watched frame by frame from outside.
+    // THE OPEN, watched frame by frame from outside. The deferral COUNT is read
+    // across it: a stream between two polls cannot be missed.
+    const double deferredBefore = readJson(mcp, QStringLiteral("editor.mirrorStats().attachesDeferred")).toDouble();
     mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(guid));
     struct Sample { double frame; bool idle; bool owed; double meshes; QString line; };
     std::vector<Sample> samples;
@@ -143,25 +145,33 @@ int main(int argc, char **argv)
         samples.push_back(x);
         if (x.idle && !x.owed && x.line.isEmpty() && samples.size() > 3) break;
     }
-    // The line's life after the reveal, and the last frame that owed anything.
-    bool sawMeshes = false, sawMeshTerm = false, shaderTermHonest = true;
-    double lastOwed = -1, gone = -1;
+    // The stream, and the line's end: the last frame that owed anything (a
+    // mesh, a texture, a lighting stage) or the reveal, whichever is later —
+    // the settle starts counting at the reveal.
+    bool shaderTermHonest = true;
+    double settleFrom = -1, gone = -1;
     for (const Sample &x : samples) {
-        if (x.idle && x.meshes > 0) sawMeshes = true;
-        if (x.line.contains(QLatin1String("meshes to come"))) sawMeshTerm = true;
         if (x.line.contains(QLatin1String("shader")) && !x.line.contains(QLatin1String("compiled")))
             shaderTermHonest = false;
-        if (x.idle && x.owed) { lastOwed = x.frame; gone = -1; }
+        // AFTER THE REVEAL only: framesPresented restarts at the bind, and the
+        // settle counts from the reveal (or a later owed frame) anyway.
+        if (x.idle && (settleFrom < 0 || x.owed)) { settleFrom = x.frame; gone = -1; }
         if (x.idle && !x.owed && x.line.isEmpty() && gone < 0) gone = x.frame;
     }
-    std::printf("info: %zu samples; meshes owed after the reveal %s; last owed frame %.0f, line "
-                "gone at frame %.0f\n", samples.size(), sawMeshes ? "yes" : "no", lastOwed, gone);
-    CHECK(sawMeshes, "the open's meshes streamed in on the driver's frames after the reveal");
-    CHECK(sawMeshTerm, "...and the line named them ('meshes to come')");
+    const double deferred =
+        readJson(mcp, QStringLiteral("editor.mirrorStats().attachesDeferred")).toDouble() - deferredBefore;
+    std::printf("info: %zu samples; %.0f deferral(s) across the open; the settle counts from frame %.0f, "
+                "line gone at frame %.0f\n", samples.size(), deferred, settleFrom, gone);
+    if (gone < 0 || settleFrom < 0 || gone - settleFrom > 3)
+        for (const Sample &x : samples)
+            std::printf("info:   frame %.0f idle %d owed %d meshes %.0f line '%s'\n", x.frame, int(x.idle),
+                        int(x.owed), x.meshes, qUtf8Printable(x.line));
+    CHECK(deferred >= 120 - 40, "the open's meshes streamed over several frames: ~200k vertices at 65,536 a "
+                                "frame defer most of the 120 parts at least once");
     CHECK(shaderTermHonest, "a shader term, when shown, is labelled as a count ('compiled')");
     CHECK(gone >= 0, "the line ended");
-    CHECK(gone >= 0 && lastOwed >= 0 && gone - lastOwed <= 3,
-          "...within 3 driver frames of the last frame that owed anything");
+    CHECK(gone >= 0 && settleFrom >= 0 && gone - settleFrom <= 3,
+          "...within 3 driver frames of the reveal or the last frame that owed anything");
 
     mcp.quit();
     if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }

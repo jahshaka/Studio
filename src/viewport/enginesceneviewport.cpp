@@ -2607,7 +2607,7 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // the frame the user is watching never blocks for every mesh of an
         // import or an open at once — the rest arrive on the ticks after it.
         // Every other frame (a script's, a screenshot's) builds all it sees.
-        if (mBudgetedSync) mMirror->setAttachBudget(kAttachMeshesPerFrame, kAttachVerticesPerFrame);
+        if (mBudgetedSync) mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
         mMirror->sync();
         // ...and while meshes are still owed the world has not arrived: no
         // FIRST-TIME lighting arm over half a world (Scene::setLoading).
@@ -3267,6 +3267,8 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.verifierCatches = mMirror->verifierCatchCount();
     s.pushes = mMirror->visitPushCount();
     s.walkMode = QString::fromLatin1(mMirror->walkMode());
+    s.attachesOwed = mMirror->attachesOwed();
+    s.attachesDeferred = mMirror->attachesDeferredTotal();
     return s;
 }
 
@@ -4468,7 +4470,7 @@ void EngineSceneViewport::primeSceneGeometry()
     // ONE FRAME'S SHARE, like a driver tick (finding 9: the owner's open spent
     // 2.2 s here in SceneMirror::toMeshData on one boundary frame); the rest
     // stream in on the driver's ticks after the reveal.
-    mMirror->setAttachBudget(kAttachMeshesPerFrame, kAttachVerticesPerFrame);
+    mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
     mMirror->sync();
 }
 

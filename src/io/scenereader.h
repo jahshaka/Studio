@@ -43,6 +43,16 @@ class SceneReader : public AssetIOBase
     QHash<QString,QList<iris::MeshPtr>> meshes;
     QSet<QString> assimpScenes;
     QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
+    /// ONE READ'S CATALOG ANSWERS (BISTRO-ENGINE-1 stage 5d): a guid's
+    /// resolved path and a (path, guid)'s import-settings hash, each asked of
+    /// the database once per read. Both were asked PER NODE — the settings hash
+    /// three times per mesh node, each a query plus a JSON parse of the asset's
+    /// whole properties record — which made a read O(nodes) catalog queries:
+    /// the Bistro Exterior's 1,592 mesh nodes, one source. Nothing writes the
+    /// catalog while one read runs (it is one call on one thread).
+    QHash<QString, QString> mResolvedPaths;
+    mutable QHash<QString, QString> mSettingsHashes;
+    QString settingsHash(const QString &filePath, const QString &assetGuid) const;
 
 	// Never left indeterminate: several call sites construct a SceneReader
 	// without a handle, and createMesh/readMaterial dereference it
@@ -98,7 +108,7 @@ public:
 	/// names a {guid, name} clip reference to it may use (assets.clips).
 	QStringList clipNames(const QString &assetGuid);
 
-	void setProject(Project *p) { project = p; }
+	void setProject(Project *p) { project = p; mResolvedPaths.clear(); }
 
     /// FALSE MEANS "resolve by the open project's PIN", which is what a project
     /// load means, and it is only ever turned on by setLibrarySource() below.
@@ -121,7 +131,7 @@ public:
     /// spelling) only ever added a `dir + row name` fallback, and with the
     /// retired legacy store view gone every caller passed the project folder
     /// — the by-name fallback plan item 15c deleted.
-    void setLibrarySource() { useAlternativeLocation = true; }
+    void setLibrarySource() { useAlternativeLocation = true; mResolvedPaths.clear(); }
 
 public:
     /// Pin-world byte resolution (ASSET_PIPELINE_SPEC §3.1.5, phase 4):
@@ -132,6 +142,7 @@ public:
     /// the reader decides a bake is pending through it, and the landing (SceneEditService::
     /// completeLandedContent / waitingSources) finds the nodes it completes through it.
     QString resolveAssetPath(const QString &guid);
+    QString resolveAssetPathUncached(const QString &guid);
 
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,

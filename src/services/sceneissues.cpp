@@ -475,7 +475,9 @@ void SceneIssues::checkNode(iris::SceneNode *node)
 
 void SceneIssues::forgetSubtree(iris::SceneNode *node)
 {
-    if (mChecks.remove(node)) mLeakDirty = true;
+    // Anything that left may have been a blocker or a lamp: re-test.
+    mLeakDirty = true;
+    mChecks.remove(node);
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
         if (iris::SceneNode *c = node->childAt(i)) forgetSubtree(c);
@@ -679,6 +681,15 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             if (light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None)
                 continue;
             leakers.append(light);
+        }
+        // A LAMP THAT IS GONE OR NOW CASTS takes its line with it, whatever
+        // else is dirty: a deleted light is not a node any check visits.
+        for (auto it = mLeakLines.begin(); it != mLeakLines.end();) {
+            const bool still = std::any_of(leakers.cbegin(), leakers.cend(), [&](const iris::LightNodePtr &l) {
+                return l->getGUID() == it->node;
+            });
+            if (still) ++it;
+            else it = mLeakLines.erase(it);
         }
         if (leakers.isEmpty()) {
             mLeakLines.clear();

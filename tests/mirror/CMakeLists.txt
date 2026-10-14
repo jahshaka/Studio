@@ -186,8 +186,8 @@ set_tests_properties(mirror.dirty_equals_full PROPERTIES
 set_tests_properties(mirror.dirty_equals_full PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # mirror.attach_budget — A FRAME BUILDS ITS SHARE OF NEW MESHES (BISTRO-ENGINE-1
-# stage 5, finding 9): SceneMirror::setAttachBudget's mesh and vertex caps
-# against ceil(N/M), the streamed world equal to the document (the full walk
+# stage 5, finding 9): SceneMirror::setAttachBudget's vertex and index caps
+# against ceil(N*v/V), the streamed world equal to the document (the full walk
 # pushes nothing), a built mesh never deferred, an unbudgeted sync unchanged.
 add_executable(test_mirror_attach_budget test_mirror_attach_budget.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)

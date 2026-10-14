@@ -202,6 +202,16 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
 QString SceneReader::resolveAssetPath(const QString &guid)
 {
     if (guid.isEmpty()) return QString();
+    // ONCE PER GUID PER READ (mResolvedPaths).
+    const auto known = mResolvedPaths.constFind(guid);
+    if (known != mResolvedPaths.constEnd()) return known.value();
+    const QString resolved = resolveAssetPathUncached(guid);
+    mResolvedPaths.insert(guid, resolved);
+    return resolved;
+}
+
+QString SceneReader::resolveAssetPathUncached(const QString &guid)
+{
     // A project load resolves through the project's PIN (resolvePinned falls
     // back to the library source itself); a library-source read (a store
     // preview, a library object dropped into a scene) through the library
@@ -233,12 +243,13 @@ QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
     // fewer. Pure JSON + the CAS resolution (which is DB work, hence UI
     // thread); no parsing happens here.
     QStringList out;
+    QSet<QString> seen;
     std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &nodeObj) {
         if (nodeObj["type"].toString() == QLatin1String("mesh")) {
             const QString source = nodeObj["mesh"].toString();
             if (!source.isEmpty() && !source.startsWith(':')) {
                 const QString path = resolveAssetPath(source);
-                if (!path.isEmpty() && !out.contains(path)) out.append(path);
+                if (!path.isEmpty() && !seen.contains(path)) { seen.insert(path); out.append(path); }
             }
         }
         const QJsonArray children = nodeObj["children"].toArray();
@@ -1826,9 +1837,20 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 // as an archaeological hazard.)
 }
 
+QString SceneReader::settingsHash(const QString &filePath, const QString &assetGuid) const
+{
+    // ONCE PER (path, guid) PER READ (mSettingsHashes).
+    const QString key = filePath + QLatin1Char('|') + assetGuid;
+    const auto known = mSettingsHashes.constFind(key);
+    if (known != mSettingsHashes.constEnd()) return known.value();
+    const QString hash = MeshBakeStore::settingsHashFor(filePath, assetGuid);
+    mSettingsHashes.insert(key, hash);
+    return hash;
+}
+
 QString SceneReader::assetCacheKey(const QString &filePath, const QString &assetGuid) const
 {
-    return filePath + QLatin1Char('|') + MeshBakeStore::settingsHashFor(filePath, assetGuid);
+    return filePath + QLatin1Char('|') + settingsHash(filePath, assetGuid);
 }
 
 void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &assetGuid)
@@ -1840,8 +1862,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
     // geometry, silently.
     const bool prewarmUsable =
         assetGuid.isEmpty()
-        || MeshBakeStore::settingsHashFor(filePath, assetGuid)
-               == MeshBakeStore::settingsHashFor(filePath, QString());
+        || settingsHash(filePath, assetGuid) == settingsHash(filePath, QString());
     if (!assimpScenes.contains(cacheKey)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;

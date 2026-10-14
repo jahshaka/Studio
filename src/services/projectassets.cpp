@@ -141,6 +141,7 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                                          Project *project,
                                          const iris::MeshPrewarmPtr &prewarm)
 {
+    Q_UNUSED(prewarm);   // the registration reads no model (see the Object case)
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     if (sessionHas(guid)) return true;
     const auto memberRecord = db->fetchAsset(guid);
@@ -155,39 +156,20 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
     switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
-            const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
-                return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
-            };
-            // THE BAKE first (MESH_BAKE_SPEC phase 1): the SAME deserialized
-            // model the scene reader used this open — one file read served
-            // both consumers, where the old path parsed the file twice.
-            // The counter spans the resolve, the read AND the fragment build.
-            LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sessionAsset"));
-            // The prewarm is planned from PATHS, which is this content's
-            // DEFAULT settings variant; a member whose row asks for other
-            // settings must resolve its own (IMPORT-1).
-            const bool prewarmUsable =
-                MeshBakeStore::settingsHashFor(path, member)
-                == MeshBakeStore::settingsHashFor(path, QString());
-            iris::BakedModelPtr baked = (prewarm && prewarmUsable) ? prewarm->baked(path)
-                                                                   : iris::BakedModelPtr();
-            if (!baked) baked = MeshBakeStore::load(path, member);
-            if (baked) {
-                auto node = iris::MeshBake::buildFragment(*baked, path, makeMaterial);
-                if (!node) break;
-                const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-                AssetHelper::updateNodeMaterial(node, definition, db);
-                auto *asset = new AssetNodeObject;
-                asset->assetGuid = member;
-                asset->fileName = memberRecord.name;
-                asset->path = path;
-                asset->setValue(QVariant::fromValue(node));
-                AssetManager::addAsset(asset);
-                break;
-            }
-
-            // No current bake: the model is missing from this open, and the
-            // library entry with it (FORWARD-ONLY-1 — never a parse).
+            // A REGISTRATION, NOT A COPY OF THE MODEL (BISTRO-ENGINE-1 stage 5d).
+            // This used to build the object's whole node fragment from its bake —
+            // every node and material, again, after the scene reader had already
+            // built the scene's — and store it as the registration's value, which
+            // nothing in the program reads (the session list, the drag lookups and
+            // assets.list read the guid, the name and the path). It was 1,039 ms
+            // of the Bistro Exterior's open on the UI thread. The model is read
+            // by whoever places it (libraryasset::fromLibrary, the scene reader),
+            // from its bake, when it is placed.
+            auto *asset = new AssetNodeObject;
+            asset->assetGuid = member;
+            asset->fileName = memberRecord.name;
+            asset->path = path;
+            AssetManager::addAsset(asset);
             break;
         }
         case ModelTypes::Texture: {

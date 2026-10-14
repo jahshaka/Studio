@@ -713,7 +713,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "ignores it, and \"No world open\" is not a load and always shows. ONE THING IT CANNOT DO, said here because it is measured and surprising: a world opened while the editor page is already showing one leaves the PREVIOUS world's last frame on screen for the length of the load whatever this preference says. A viewport with no world bound PRESENTS NOTHING (the engine destroys the view's workspace with its scene), so after the teardown no cover can be put there either — that is also why \"No world open\" is never actually drawn. The fix is engine-side (a scene-less view drawing its own background, STALE-VIEW-1). Every Desktop route — every create, every tile — is unaffected: its viewport is hidden for the load and the frames it reveals are the new world's. With no argument "
           "this reads; with one it writes and returns the new value.",
           Needs::Window },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -782,6 +782,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "the object and the field once in the log. `pushes` is how many engine writes the "
           "visits have made in total, which is what the differential test compares: run the "
           "change-list sync, then the whole walk, and the whole walk must push NOTHING.\n\n"
+          "`attachesOwed` is how many mesh nodes the last sync left without their mesh — the "
+          "frames a user watches build new meshes up to a cost budget (vertices and indices) "
+          "and leave the rest for the next frame — and `attachesDeferred` counts every such "
+          "deferral since the viewport was made.\n\n"
           "`available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
@@ -3027,6 +3031,8 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("verifierCatches", QVariant::fromValue(s.verifierCatches));
     out.insert("pushes", QVariant::fromValue(s.pushes));
     out.insert("walkMode", s.walkMode.isEmpty() ? QStringLiteral("none") : s.walkMode);
+    out.insert("attachesOwed", QVariant::fromValue(s.attachesOwed));
+    out.insert("attachesDeferred", QVariant::fromValue(s.attachesDeferred));
     return out;
 }
 

@@ -384,14 +384,12 @@ public:
     /// window, and this stops a scene whose textures never arrive from leaving
     /// the frame-edge drain switched off for the life of the session.
     static constexpr int kStreamFramesAfterReveal = 240;
-    /// ONE DRIVER TICK'S SHARE OF NEW MESHES (SceneMirror::setAttachBudget,
-    /// finding 9): at most this many engine meshes, and this many of their
-    /// vertices, are built in the frame a user is watching (the first always
-    /// is). Measured on the 400-part fixture in a Debug build: ~0.7 ms of UI
-    /// thread per small mesh, so 8 is a few ms; a Bistro open of 5,943 meshes
-    /// streams in over ~740 ticks instead of freezing for 2.2 s.
-    static constexpr int kAttachMeshesPerFrame = 8;
+    /// ONE FRAME'S SHARE OF NEW MESHES, BY COST (SceneMirror::setAttachBudget,
+    /// finding 9): the meshes built in the frame a user is watching stop once
+    /// this many of their vertices or indices are built (the first mesh always
+    /// is). The Bistro Exterior's ~3 M vertices arrive in ~45 frames.
     static constexpr std::size_t kAttachVerticesPerFrame = 65536;
+    static constexpr std::size_t kAttachIndicesPerFrame = 3 * 65536;
     /// True for the length of a frame whose mirror sync is BUDGETED: a driver
     /// tick's, and the open runner's boundary frame (renderBoundaryFrame).
     bool mBudgetedSync = false;
