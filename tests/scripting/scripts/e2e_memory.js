@@ -1,9 +1,10 @@
 // scripting.e2e.memory — the MEMORY verbs (riders lane R4): app.memoryStats,
 // app.reclaimMemory. Headless: the NULL
-// render system has a VaoManager and scene managers like Vulkan's, and the
-// document's nodes live in the engine's staging manager, so the SIMD half is
-// real here; the GPU rows are the NULL manager's (zero) and only their SHAPE
-// is asserted. Magnitudes are never pinned: they are a property of the box.
+// render system has a VaoManager like Vulkan's; since ENGINE-UPGRADE-U2 a
+// document node is no engine object at all (the document's own store; the
+// engine makes its nodes only for a mirrored scene), so headless the SIMD rows
+// hold no document node — which is itself asserted; the GPU rows are the NULL
+// manager's (zero) and only their SHAPE is asserted. Magnitudes are never pinned: they are a property of the box.
 //
 // WHAT IS ASSERTED: shape; that a burst of nodes is counted; that
 // reclaimMemory answers with a before/after pair whose counts match the
@@ -29,7 +30,7 @@ for (var i = 0; i < KEYS.length; ++i)
     assert(m0[KEYS[i]] !== undefined, "app.memoryStats has '" + KEYS[i] + "'");
 assert(typeof m0.gpuPoolsIncludeTextures === "boolean", "gpuPoolsIncludeTextures is a bool");
 assert(m0.gpuPoolFreeBytes <= m0.gpuPoolCapacityBytes, "free <= capacity");
-assert(m0.sceneManagers >= 1, "at least the staging manager is walked (" + m0.sceneManagers + ")");
+assert(typeof m0.sceneManagers === "number", "the scene managers walked are counted (" + m0.sceneManagers + ")");
 console.log("    baseline: " + JSON.stringify(m0));
 
 // ---- textureMemory: the attribution behind the GPU rows --------------------
@@ -65,10 +66,9 @@ try { app.textureMemory({ top: -1 }); } catch (e) { threw = String(e).indexOf("t
 assert(threw, "top -1 is a caller error: it throws with the reason");
 console.log("    textures: " + all.count + ", total " + all.totalBytes + " B, resident " + all.residentBytes + " B");
 
-// ---- a burst of nodes is counted ------------------------------------------
-// Empties, on purpose: a document node is an engine scene NODE, which is what
-// the node pools hold, and headless there is no Item behind a primitive (the
-// object pools stay at 0 under the NULL render system). Also on purpose:
+// ---- a burst of DOCUMENT nodes costs the engine nothing ---------------------
+// ENGINE-UPGRADE-U2: the document owns its nodes; the engine makes its own only
+// for a scene a mirror draws, and a headless script mirrors none. Also on purpose:
 // scene.addPrimitive costs ~130 ms headless and grows with the scene (200 of
 // them took 231 s on the box that wrote this — a pre-existing Studio defect,
 // reported, not this suite's); addEmpty is ~6 ms.
@@ -76,13 +76,12 @@ var ids = [];
 for (var n = 0; n < 200; ++n) ids.push(scene.addEmpty());
 assert(ids.length === 200 && ids[199].length > 10, "200 empties added");
 var m1 = app.memoryStats();
-assert(m1.simdNodes >= m0.simdNodes + 200,
-       "the burst is in the node pools: " + m0.simdNodes + " -> " + m1.simdNodes);
+assert(m1.simdNodes === m0.simdNodes,
+       "200 document nodes put nothing in the engine's node pools: " + m0.simdNodes + " -> " + m1.simdNodes);
 
 // ---- remove them: the undo stack keeps them alive (by design) ---------------
-// node.remove is undoable, so the removed nodes stay in the staging manager
-// until the history lets go of them — the count must not GROW, and it need
-// not fall. The moment that actually frees them is the project close, which
+// node.remove is undoable, so the removed nodes stay alive until the history
+// lets go of them — the engine's count must not GROW. The moment that actually frees them is the project close, which
 // is also where the editor calls reclaim (MainWindow::closeProject).
 var removed = 0;
 for (var k = 0; k < ids.length; ++k) if (node.remove(ids[k])) ++removed;

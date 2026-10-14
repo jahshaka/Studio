@@ -281,24 +281,18 @@ var fx = world.postFx({ exposureEv: 1.25 });
 assert(Math.abs(fx.exposureEv - 1.25) < 0.001, "world.postFx moves the post chain");
 
 // ---- the engine census's threading rows -------------------------------------
-// SPECS/THREADING_ADOPTION_SPEC.md P5 (stagingScenes), P4(b) D-E
+// SPECS/THREADING_ADOPTION_SPEC.md P4(b) D-E
 // (incompletePsoRequests) and P2 (textureStreaming). All three are read-backs
 // whose whole value is that a script can see them; asserting they EXIST and
 // carry the documented shape is what stops a boundary field being added, wired
 // to nothing, and going unnoticed for a release.
 //
-// A HEADLESS session is exactly the right place for the staging row: there is
-// no View, so `scenes` and `updatedScenes` are 0 and the ONLY scene manager the
-// engine holds is the document's staging one. If stagingScenes were folded into
-// `scenes` this assertion could not be written at all.
+// A HEADLESS session holds no scene at all: a document needs no engine object since ENGINE-UPGRADE-U2 (the
+// document's staging scene manager and its `stagingScenes` row are gone with it).
 var census = app.engineObjects();
-assert(typeof census.stagingScenes === "number",
-       "app.engineObjects() reports stagingScenes");
-assert(census.stagingScenes === 1,
-       "a headless session holds exactly one staging scene manager (got " +
-       census.stagingScenes + ")");
+assert(census.stagingScenes === undefined, "app.engineObjects() no longer carries a stagingScenes row");
 assert(census.scenes === 0 && census.updatedScenes === 0,
-       "…and no drawn scenes at all, which is what makes the row separate " +
+       "…and no drawn scenes at all " +
        "(scenes=" + census.scenes + ", updated=" + census.updatedScenes + ")");
 
 var stats = app.renderStats();

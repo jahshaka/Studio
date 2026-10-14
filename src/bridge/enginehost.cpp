@@ -365,6 +365,12 @@ bool EngineHost::start(QString &error)
     // (The transform-write counter is no longer handed over: the renderer learns what moved from each frame's
     // ChangeSet, which the mirror drains from the document's write journal — ENGINE-UPGRADE-1 U0 3b.)
 
+    // THE DEVICE BEFORE ITS ANSWERS: the device block below reads the adapter (and names Qt Multimedia's hardware
+    // backend from it), and on a rendering boot no device exists until a render target does. Until ENGINE-UPGRADE-U2
+    // the document's staging scene manager forced it here as a side effect; it is asked for by name now.
+    if (!mEngine->prepareDevice())
+        qWarning("EngineHost: the backend could not prepare its device: %s", mEngine->lastError().c_str());
+
     // The DEVICE BLOCK — SESSION_LOG_SPEC §4's two NEW header rows. It is a
     // block of its own, emitted HERE rather than in the startup header, for a
     // reason that is not going away: no render system — and therefore no
