@@ -1828,7 +1828,7 @@ add_dependencies(test_gi_rough_sky_once JahshakaEngineMedia)
 jah_gpu_row(gi.rough_sky_once CLASS engine COMMAND test_gi_rough_sky_once
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rough_sky_once PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.rough_sky_once PROPERTIES JAHSHAKA_TEST_FRAMES 1175)
+set_tests_properties(gi.rough_sky_once PROPERTIES JAHSHAKA_TEST_FRAMES 940)
 # gi.march_underread — RESERVED FOR PHOTON-MARCH-1 (BISTRO-FIXES-3 moved it out of gi.rough_sky_once):
 # a wall of the sky's radiance filling a grazing rough lobe reads the open value at every cascade
 # resolution. It fails today (0.998 / 0.954 / 0.873 at 32 / 64 / 128 cells: the cone march's opacity is

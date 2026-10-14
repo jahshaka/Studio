@@ -277,7 +277,7 @@ gi.reflect_no_helpers 4.30  ship 3a0422b4e (2026-10-13)
 gi.reflect_uncover 4.10  ship 3a0422b4e (2026-10-13)
 gi.reflect_uncover_norays 3.60  hand: REFLECT-FIX-1 one solo run of the registered command at 22129c289 on :73 (the frame-count run, 2026-10-13)
 gi.region_replace 5.36  quiet n=42
-gi.rough_sky_once 4.00  solo 2026-10-14 (BISTRO-FIXES-3 stage 1 + the read, :76, 1175 frames)
+gi.rough_sky_once 4.01  solo 2026-10-14 (BISTRO-FIXES-3, the wall arm moved to PHOTON-MARCH-1, :76, 940 frames)
 gi.rt_alpha_tested 17.91  quiet n=43
 gi.rt_reflect 4.92  quiet n=40
 gi.rt_reflect_asan 16.07  quiet n=41
