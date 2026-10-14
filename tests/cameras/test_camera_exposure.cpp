@@ -728,8 +728,7 @@ void partB()
     gEngine->destroyView(plain);
     gEngine->destroyView(view);
     // UNBIND BEFORE DESTROYING: an engine scene destroyed under a bound
-    // document leaves every node handle in it stale (iris::Scene::setGraphScene
-    // warns about exactly this).
+    // mirror leaves every engine id the mirror holds stale.
     mirror.setSource(iris::ScenePtr());
     gEngine->destroyScene(target);
 }

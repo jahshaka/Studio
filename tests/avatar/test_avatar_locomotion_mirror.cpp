@@ -13,7 +13,7 @@
 //        time (risk R13, and the case the spec's §14 records as never run).
 //
 // Everything here goes through the real seam — an iris::Scene, two SceneMirrors
-// on two engine Scenes, and Scene::setGraphScene's evacuation protocol firing
+// on two engine Scenes, and Scene::bindMirror's evacuation protocol firing
 // exactly as the editor and player pages fire it. The locomotion machine is
 // stepped DIRECTLY with a synthetic §5 contract (no physics, no ground, no
 // input): the subject is the translation from the machine's output to the

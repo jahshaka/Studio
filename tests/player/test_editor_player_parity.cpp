@@ -151,18 +151,10 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    // THE VIEWS COME FIRST, AND THAT IS LOAD-BEARING (found by this lane).
-    //
-    // A document node's transform, its children and its very existence live in
-    // an Ogre scene node (SCENEGRAPH_SPEC D2). Until a document is bound to an
-    // engine scene those nodes sit in the process-wide STAGING manager — and
-    // `graph::stagingScene()` cannot build that manager before a render window
-    // exists and the Hlms is registered, so before the first View it answers
-    // NULL and every addChild/setLocalPos silently does nothing
-    // (nodegraph.cpp:397-415, "the suites always create their View before their
-    // first document node").
-    //
-    // This suite used to build its document first. The result was a document
+    // THE DOCUMENT REALLY MATERIALISES. This suite once built its document
+    // before a View existed, when a document node needed the engine's staging
+    // scene manager to exist (SCENEGRAPH_SPEC D2, reversed by ENGINE-UPGRADE-U2:
+    // the document is its own store now). The result was a document
     // with an EMPTY root: both views rendered the bare sky, the comparisons all
     // read 0/255, and the suite passed on two identical blank frames for as
     // long as it has existed. The `spread()` assertion below is the guard that
@@ -262,9 +254,8 @@ int main(int argc, char **argv)
     camera->nearClip = 0.1f;
     camera->farClip = 100.0f;
     doc->refresh();
-    // The document really MATERIALISED (see "THE VIEWS COME FIRST" above): with
-    // no staging manager every addChild is a silent no-op and the root stays
-    // empty, which is exactly how this suite came to compare two blank frames.
+    // The document really MATERIALISED (see above): an empty root is how this
+    // suite once came to compare two blank frames.
     CHECK(doc->getRootNode()->childCount() > 0, "the document's root has children");
 
     int rc = 0;

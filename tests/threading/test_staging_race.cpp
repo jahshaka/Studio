@@ -24,7 +24,8 @@
 //   whose workspace renders MUST have been updated in the same frame.
 //
 //   PART 2 — THE SOAK, the regression net. A worker thread builds and destroys
-//   document subtrees in the staging manager (the graph's only off-main-thread
+//   document subtrees (since ENGINE-UPGRADE-U2 pure document: no Ogre object at
+//   all — the staging manager is gone; the graph's only off-main-thread
 //   exposure — the shape the importer has, without dragging in assimp and the
 //   import service) while the main thread renders 250 frames. Before P3 this is
 //   the pre-fix build's crash window; after it the two threads touch disjoint
@@ -95,13 +96,6 @@ int main(int argc, char **argv)
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
-
-    // The host's staging manager, exactly as EngineHost wires it. Without this
-    // the document falls back to making its own — same hazard, but this is the
-    // configuration the app ships.
-    void *docScene = engine->documentGraphScene();
-    CHECK(docScene != nullptr, "document staging scene manager");
-    iris::graph::setStagingScene(reinterpret_cast<iris::graph::SceneHandle>(docScene));
 
     Scene *drawn = engine->createScene("drawn");
     Scene *hidden = engine->createScene("hidden");
@@ -174,7 +168,6 @@ int main(int argc, char **argv)
     engine->objectCounts(counts);
     CHECK(counts.updatedScenes == 1, "the gate still holds after the soak");
 
-    iris::graph::setStagingScene(nullptr);
     engine.reset();
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;

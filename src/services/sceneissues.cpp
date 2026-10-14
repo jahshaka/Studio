@@ -510,7 +510,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // whose material's revision moved, and those whose texture file the disk
     // reported. Nothing written = nothing visited.
     {
-        std::vector<iris::graph::NodeHandle> moved, written;
+        std::vector<iris::SceneNode *> moved, written;
         int gone = 0;
         const bool complete = mJournal.take(moved, written, &gone);
         if (++mScansSinceRecheck >= kTextureRecheckScans) {
@@ -541,13 +541,11 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             // ours and is skipped; one in NO document has left ours, with its
             // subtree.
             const auto departed = [](iris::SceneNode *n) { return n && n->getScene().isNull(); };
-            for (iris::graph::NodeHandle h : moved) {
-                iris::SceneNode *n = iris::graph::ownerOf(h);
+            for (iris::SceneNode *n : moved) {
                 if (inScene(n)) walk(n);
                 else if (departed(n)) forgetSubtree(n);
             }
-            for (iris::graph::NodeHandle h : written) {
-                iris::SceneNode *n = iris::graph::ownerOf(h);
+            for (iris::SceneNode *n : written) {
                 if (!inScene(n)) { if (departed(n)) forgetSubtree(n); continue; }
                 if (visited.contains(n)) continue;
                 visited.insert(n);

@@ -64,6 +64,15 @@ add_test(NAME source.bake_key_guard
 set_tests_properties(source.bake_key_guard PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.bake_key_guard)
 
+# source.no_engine_transform_reads — ENGINE-UPGRADE-U2 stage 1 (DOCSTORE): the document never asks the engine where
+# a node is. No `_get…Updated` read outside irisgl/engine/src — the document's world transforms are its own
+# transform store's (nodegraph.h). See the script's header.
+add_test(NAME source.no_engine_transform_reads
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_engine_transform_reads.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.no_engine_transform_reads PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_engine_transform_reads)
+
 # source.one_readfile — IMPORT-1: every assimp parse of a model path goes
 # through iris::readSceneFile, which is where the asset's baked import
 # transform (scale, rotation, origin) is applied. A parse that skips it renders

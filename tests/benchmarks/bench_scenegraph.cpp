@@ -376,7 +376,7 @@ static size_t applyStaticTags(SynthScene &s)
             // canBeStatic() first, so an 's' node under a 'd' ancestor is
             // SKIPPED rather than refused — a refusal is a warning per node,
             // and there are thousands of them.
-            if (iris::graph::canBeStatic(n->graphNode())) n->_applyStaticHint(true);
+            if (iris::graph::canBeStatic(n->docNode())) n->_applyStaticHint(true);
         } else if (n->isStaticInGraph()) {
             // It inherited static from a static parent; the tag says it moves.
             n->_applyStaticHint(false);
@@ -909,6 +909,38 @@ int main(int argc, char **argv)
 
         addSingle("e.build_doc", n, buildMs);
         addSingle("e.first_sync", n, firstSyncMs);
+
+        // THE EXTRACT (ENGINE-UPGRADE-U2, U3's bar): the mirror's sync with K nodes WRITTEN (their own value — the
+        // picture holds still) — 1 (a drag), 100 (a physics pile), every node (a load, a paste) — and nothing else
+        // changed: the frame record carries one NodeRecord per written node (their LOCAL transform; the engine
+        // composes the rest), and the sync costs what extracting them costs. The render that drains it is outside
+        // the timed region; the records it applied are counted (d.extract_records.<K>.<n>).
+        {
+            const int ks[3] = { 1, 100, int(s.all.size()) };
+            const char *names[3] = { "d.extract_1", "d.extract_100", "d.extract_n" };
+            for (int k = 0; k < 3; ++k) {
+                const int K = std::min(ks[k], int(s.all.size()));
+                unsigned lastRecords = 0;
+                const auto st = runLoop(LoopBudget{ 3, 10, 200, 1200.0 }, [&](int, Recorder &rec) {
+                    for (int i = 0; i < K; ++i) {
+                        iris::SceneNode *w = (k < 2 && i < int(s.dynamic.size())) ? s.dynamic[std::size_t(i)].data()
+                                                                                 : s.all[std::size_t(i)].data();
+                        w->setLocalPos(w->getLocalPos());
+                    }
+                    const auto t0 = Clock::now();
+                    mirror.sync();
+                    rec.add(names[k], msSince(t0));
+                    engine->renderOneFrame();
+                    lastRecords = engine->frameInputStatus().nodeTransforms;
+                });
+                addMetric(names[k], n, st.at(names[k]), true);
+                gCounters[std::string("d.extract_records.") + std::to_string(K) + "." + std::to_string(n)] =
+                    double(lastRecords);
+                std::printf("    extract: %d written -> %u transform records applied by the drain\n", K, lastRecords);
+                CHECK(lastRecords == unsigned(K), "(d) the record carries ONE transform per written node, no more "
+                                                  "(the settle's class records beside them are not writes)");
+            }
+        }
 
         // SCENE_STATIC, applied and REPORTED. Outside every measured region:
         // the marking itself is authoring-time work (one memory-manager

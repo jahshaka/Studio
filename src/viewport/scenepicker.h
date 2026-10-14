@@ -90,7 +90,7 @@ public:
 
 private:
     /// Delegates to iris::picking::raycastMeshes — the ONE segment/mesh
-    /// implementation (Ogre RaySceneQuery broad phase + our TriMesh narrow
+    /// implementation (the document's own broad phase + our TriMesh narrow
     /// phase); this converts its hits to the picker's camera-relative ranking.
     static void pickMeshes(iris::ScenePtr scene, const iris::Vec3 &a, const iris::Vec3 &b,
                            const iris::Vec3 &cameraPos, bool forcePickable, QList<ScenePick> &out);

@@ -110,10 +110,8 @@ int main()
     CHECK(engine != nullptr, "headless engine");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    // A headless host never creates a View, and createScene needs the Hlms —
-    // which documentGraphScene() is what registers (tests/engine/
-    // test_engine_headless.cpp says the same thing at its own createScene).
-    engine->documentGraphScene();
+    // A headless host never creates a View; createScene registers the Hlms
+    // itself on a headless engine.
     Scene *scene = engine->createScene("share");
     CHECK(scene != nullptr, "scene");
     if (!scene) return 1;

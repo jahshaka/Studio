@@ -803,7 +803,6 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "enabledViews", int(s.objects.enabledViews) },
             { "scenes", int(s.objects.scenes) },
             { "updatedScenes", int(s.objects.updatedScenes) },
-            { "stagingScenes", int(s.objects.stagingScenes) },
             { "nodes", int(s.objects.nodes) },
             { "meshes", int(s.objects.meshes) },
             { "materials", int(s.objects.materials) },

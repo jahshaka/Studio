@@ -751,7 +751,7 @@ int main()
             pbsByWord[HlmsAtom::materialWordOf(kv.second.datablock)] =
                 static_cast<Ogre::HlmsPbsDatablock *>(kv.second.datablock);
     }
-    Ogre::SceneManager *sm = static_cast<Ogre::SceneManager *>(scene->nativeSceneManager());
+    Ogre::SceneManager *sm = static_cast<jahshaka::engine::detail::OgreScene *>(scene)->sceneManager();
     std::vector<AtomDecodeRenderable *> decodes;
     Ogre::SceneNode *decodeNode = sm->getRootSceneNode()->createChildSceneNode();
     bool twinsOk = true;

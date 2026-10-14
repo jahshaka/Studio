@@ -414,7 +414,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "threaded project open, whose install slices advance it themselves so that the open never "
           "depends on a frame the event loop may never let render.",
           Needs::Engine },
-        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, stagingScenes, nodes, meshes, materials, textures, datablocks}",
+        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, nodes, meshes, materials, textures, datablocks}",
           "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
           "only says what a frame cost (fps audit F11). `views` and `scenes` are the engine's own "
           "objects, `enabledViews` the subset renderOneFrame actually draws; `updatedScenes` is "
@@ -422,13 +422,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "enabled view draws it, so in an editor holding preview, player, asset and staging "
           "scenes this is normally 1 and `scenes` is not (THREADING_ADOPTION_SPEC.md P3); "
           "`updatedScenes` climbing to meet `scenes` means the gate stopped working and every "
-          "idle scene is being walked 60 times a second again. `stagingScenes` counts the "
-          "SceneManagers the engine holds that are NOT Scenes — the document's staging "
-          "manager, where every node that is not in a rendered scene lives (everything an "
-          "importer builds, everything the undo stack holds). It is a row of its own rather "
-          "than part of `scenes` because it has no view, no workspace, no worker threads and "
-          "no place in the frame loop, and a census that mixes two kinds of object answers no "
-          "question. `nodes`, `meshes`, "
+          "idle scene is being walked 60 times a second again. `nodes`, `meshes`, "
           "`materials` and `textures` are the per-scene registries of ids this boundary handed out "
           "and still honours, SUMMED over every live scene; `datablocks` is process-wide (Hlms "
           "datablocks belong to the one HlmsManager, not to a scene) and includes the backend's own "
@@ -1705,7 +1699,6 @@ QVariantMap AppApi::engineObjects()
     out.insert("enabledViews", c.enabledViews);
     out.insert("scenes", c.scenes);
     out.insert("updatedScenes", c.updatedScenes);
-    out.insert("stagingScenes", c.stagingScenes);
     out.insert("nodes", c.nodes);
     out.insert("meshes", c.meshes);
     out.insert("materials", c.materials);

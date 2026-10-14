@@ -23,9 +23,6 @@ namespace structuralundo
 bool liveIsUsable(const iris::SceneNodePtr &live, const SceneFragment &snapshot)
 {
     if (!live) return false;
-    // A handle with no graph node is a node whose Ogre side was destroyed —
-    // re-attaching it would put a corpse in the tree.
-    if (!live->graphNode()) return false;
     // Already somewhere: something else has claimed it since (a script that
     // held the subtree, a second command). The snapshot is then the only
     // honest copy of where it used to be.

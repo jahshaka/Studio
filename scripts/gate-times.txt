@@ -392,6 +392,7 @@ mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
 mirror.change_set 2.53  solo, warm, the card lock held (EU-1 U0 3b, 2026-10-14)
 mirror.frame_input 1.74  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
+mirror.doc_store 0.75  solo, warm, the card lock held (ENGINE-UPGRADE-U2 stage 1, 2026-10-14)
 mirror.reparent_local 2.30  solo, warm, the card lock held (EU-1 stage 2, 2026-10-13)
 mirror.scale 1.85  quiet n=48
 mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
@@ -817,6 +818,7 @@ sockets.tags 0.00  ship 3a0422b4e (2026-10-13)
 source.assimp_import_only 0.10  ship 3a0422b4e (2026-10-13)
 source.atom_no_registries 0.01  spec EU-2 stage 3 (2026-10-14)
 source.bake_key_guard 0.04  quiet n=57
+source.no_engine_transform_reads 0.04  solo (ENGINE-UPGRADE-U2 stage 1, 2026-10-14)
 source.db_pointers_initialised 0.00  ship 3a0422b4e (2026-10-13)
 source.fork_stamp 0.10  ship 3a0422b4e (2026-10-13)
 source.gate_scope_rules 6.20  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)

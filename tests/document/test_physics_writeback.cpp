@@ -214,7 +214,7 @@ void run(int checkEvery)
         // own cursor's writes between two document steps — under the old shared close that would have made the
         // world's next look incomplete and re-checked EVERY sleeping body. Its own cursor: still 0.
         iris::graph::WriteJournalReader mirrorLike;
-        std::vector<iris::graph::NodeHandle> seen;
+        std::vector<iris::SceneNode *> seen;
         mirrorLike.take(seen);                       // primed
         pile.scene->advance(kDt);
         auto lonely2 = iris::SceneNode::create();

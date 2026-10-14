@@ -119,8 +119,8 @@ struct SceneFragment
     /// The guid of the parent the subtree hung under. Empty means the scene's
     /// root node (whose own guid is a per-document value nothing else knows).
     QString parentGuid;
-    /// Its DOCUMENT sibling index under that parent (iris::graph::indexInParent
-    /// — engine-owned children are not counted). -1 = append.
+    /// Its DOCUMENT sibling index under that parent (SceneNode::siblingIndex, the store
+    /// — engine-owned nodes are never in it). -1 = append.
     int siblingIndex = -1;
 
     /// The subtree's SESSION identities, in PRE-ORDER (the order both the
