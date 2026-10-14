@@ -268,6 +268,30 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.component PROPERTIES TIMEOUT 60 LABELS "engine")
     set_tests_properties(atom.component PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # counted from the source (12 + 1 + 4 + 3 + 12 + 1 + 3 + the probe)
+    # ...AND ITS SANITISED TWIN: the owners' retire windows (a destroyed view's stats ring and a
+    # destroyed scene's caster ring, reaped 8 frames later through the device's window) are raw
+    # Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
+    if(JAHSHAKA_ASAN)
+        add_executable(test_atom_component_asan test_atom_component.cpp)
+        set_target_properties(test_atom_component_asan PROPERTIES
+            AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+            CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+            INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+        target_compile_definitions(test_atom_component_asan PRIVATE
+            JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+            JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+        target_link_libraries(test_atom_component_asan PRIVATE JahshakaEngineAsan)
+        add_dependencies(test_atom_component_asan JahshakaEngineMedia)
+        target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
+        jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+        set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
+    endif()
     # shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S
     # OWN CLUSTER CUT (ATOM-SHADOWS-1): every map's cut (PSSM, spot, the point's six faces)
     # captured by the engine's test door and checked against the rule at the LIGHT's request

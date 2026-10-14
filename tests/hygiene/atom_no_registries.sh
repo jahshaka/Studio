@@ -11,7 +11,8 @@
 # pass finds its scene bound on its SceneManager (sceneOfManager) and its view through its
 # workspace's listener. This counts the MUTABLE storage with static duration left in
 # Atom's files — a namespace-scope variable definition, or a function-local `static` that
-# is not const — and the bar is 0. The one exception is named: the pass provider
+# is not const (a line with `(` is a function only if it has no `=`: `static T *p = fn();` is
+# storage) — and the bar is 0. The one exception is named: the pass provider
 # (OgreAtomPass.cpp's gProvider / sProvider), Ogre's one CompositorPassProvider per
 # CompositorManager2, which the engine installs and uninstalls (AtomPass.h).
 #
@@ -28,9 +29,9 @@ for f in "${files[@]}"; do
     hits=$(awk -v F="$f" '
         # a function-local (or any indented) static that is not const: storage
         /^[[:space:]]+static[[:space:]]/ && !/static[[:space:]]+(const|constexpr|inline)[[:space:]]/ &&
-            !/static_assert|static_cast/ && !/\(/ { print F ":" NR ": " $0; next }
+            !/static_assert|static_cast/ && !(/\(/ && !/=/) { print F ":" NR ": " $0; next }
         # a namespace-scope variable definition: column 0, ends in ; (or = ...;), no call/declaration shape
-        /^[A-Za-z_]/ && /;[[:space:]]*(\/\/.*)?$/ && !/\(/ &&
+        /^[A-Za-z_]/ && /;[[:space:]]*(\/\/.*)?$/ && !(/\(/ && !/=/) &&
             !/^(using|typedef|struct|class|namespace|enum|template|extern|friend|constexpr|const |static_assert|return|#)/ \
             { print F ":" NR ": " $0 }
     ' "$SRC/$f" | grep -vE 'OgreAtomPass\.cpp:[0-9]+: (AtomPassProvider \*gProvider = nullptr;|    static AtomPassProvider sProvider;)$')
