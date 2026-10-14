@@ -20,6 +20,8 @@
 
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <cstdio>
 #include <map>
 #include <string>
@@ -73,6 +75,13 @@ int main(int argc, char **argv)
 {
     // --stills: the measurement of STILL objects moved every frame (by hand; not the row).
     const bool stillsArm = argc > 1 && std::string(argv[1]) == "--stills";
+    // --reach <bounces>: THE TRUE REACH OF A STILL'S MOVE (ENGINE-UPGRADE-2B stage 4's instrument, a
+    // measurement): with the field's rays NOT rotated (gi.fieldStatic) an unchanged probe re-integrates
+    // to the same bytes, so the probes whose atlas tiles differ after the move has settled are exactly
+    // the probes whose integrand the move changed.
+    const bool reachControl = argc > 1 && std::string(argv[1]) == "--reach-control";
+    const bool reachArm = (argc > 1 && std::string(argv[1]) == "--reach") || reachControl;
+    const int reachBounces = argc > 2 ? std::atoi(argv[2]) : 1;
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-field-dependency-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -108,8 +117,9 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.numBounces = reachArm ? reachBounces : 1;
     gi.ddgi = GiToggle::On;   // the field (the irradiance field's generation) is the subject
+    if (reachArm) e->setArm("gi.fieldStatic", 1.0);
     s->setGlobalIllumination(gi);
     Vec3 cam(0.0f, 1.6f, 4.0f);
     enginetest::testCameraLookAt(view, cam, Vec3(0.0f, 1.0f, -4.0f));
@@ -132,6 +142,46 @@ int main(int argc, char **argv)
                 g0.ifdProbesPerFrame);
     CHECK(g0.ifdBound && g0.ifdProbes > 0, "the scene's irradiance field is live (not vacuous)");
 
+    if (reachArm) {
+        const auto settleField = [&]() {
+            int q = 0, n = 0;
+            for (; n < 2000 && q < 30; ++n) {
+                e->renderOneFrame();
+                std::vector<FrameRecord> recs;
+                e->takeFrameRecords(recs);
+                const FieldWork w = fieldWork(recs);
+                q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
+            }
+            return n;
+        };
+        settleField();
+        GiFieldAtlas a0, a1;
+        CHECK(s->giFieldAtlas(a0) && a0.available, "the field's atlas reads back (before)");
+        // THE CONTROL: a re-integration with nothing changed (an at-rest light tick re-injects the
+        // chain and resets the field) — every probe must come back to the same bytes, or the
+        // instrument measures noise, not reach.
+        if (reachControl) s->refreshGiLighting(false);
+        else enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
+        const int frames = settleField();
+        CHECK(s->giFieldAtlas(a1) && a1.available, "the field's atlas reads back (after)");
+        const unsigned np = a0.probes[0] * a0.probes[1] * a0.probes[2];
+        const unsigned bordered = a0.irradBordered, bpp = a0.irradBytesPerTexel, width = a0.irradWidth;
+        unsigned changed = 0;
+        for (unsigned p = 0; p < np; ++p) {
+            const unsigned x0 = (p * bordered) % width, y0 = ((p * bordered) / width) * bordered;
+            bool diff = false;
+            for (unsigned y = 0; y < bordered && !diff; ++y) {
+                const size_t row = (size_t(y0 + y) * width + x0) * bpp;
+                diff = std::memcmp(&a0.irradiance[row], &a1.irradiance[row], size_t(bordered) * bpp) != 0;
+            }
+            if (diff) ++changed;
+        }
+        std::printf("   REACH at %d bounce(s): %s — %u of %u probes changed (%.1f %%), "
+                    "settled in %d frames\n", reachBounces,
+                    reachControl ? "THE CONTROL, a re-integration with nothing changed" : "one still moved 0.5 m", changed, np, 100.0 * changed / (np ? np : 1), frames);
+        e->setFrameMonitor(MonitorLevel::Off);
+        return failures ? 1 : 0;
+    }
     const auto run = [&](const char *tag, int frames, bool walk, bool move, bool moveStills = false) {
         std::vector<FrameRecord> all;
         for (int f = 0; f < frames; ++f) {
@@ -192,6 +242,22 @@ int main(int argc, char **argv)
         for (int i = 0; i < 300; ++i) e->renderOneFrame();
         { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
         run("stills move", 120, false, false, true);
+        // ONE STILL MOVED ONCE (ENGINE-UPGRADE-2B stage 4's instrument): the field's work from the
+        // move until it settles — its frames, its probe integrations, its GPU ms.
+        for (int i = 0; i < 300; ++i) e->renderOneFrame();
+        { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
+        std::vector<FrameRecord> one;
+        for (int f = 0; f < 240; ++f) {
+            e->renderOneFrame();
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            one.insert(one.end(), recs.begin(), recs.end());
+        }
+        const GiStatus gs = s->giStatus();
+        print("one still moved once", fieldWork(one));
+        std::printf("   the field: %d probes (a whole re-integration is %d x the target %u samples)\n", gs.ifdProbes,
+                    gs.ifdProbes, gs.ifdTargetSamples);
     }
     e->setFrameMonitor(MonitorLevel::Off);
     std::printf(failures ? "\n%d CHECK(S) FAILED\n" : "\nall checks passed\n", failures);
