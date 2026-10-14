@@ -2266,10 +2266,12 @@ static int cpuWalksMain()
     };
     size_t frames = 0;
     auto measure = [&](const char *label, bool move) {
+        std::vector<double> giScan;   // THE GI WALK (giScanMicros: the last scan that RAN; 0 on a skipped frame)
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 120; ++f) {
                 if (move) mover->setLocalPos(home + iris::Vec3(0.02f * float(f % 2 ? 1 : -1), 0, 0));
                 frame(env, 1);
+                giScan.push_back(env.scene->giStatus().giScanMicros);
             }
         });
         std::array<double, 5> med{};
@@ -2291,6 +2293,9 @@ static int cpuWalksMain()
                     " | cards.lights %6.3f ms (medians; frames carrying each: %zu %zu %zu %zu %zu)\n",
                     label, recs.size(), med[0], med[1], med[2], med[3], med[4], seen[0], seen[1], seen[2], seen[3],
                     seen[4]);
+        std::printf("W13 %-10s gi walk (giScanMicros) median %8.1f us, max %8.1f us over %zu frames\n", label,
+                    giScan.empty() ? 0.0 : stats(giScan).median,
+                    giScan.empty() ? 0.0 : *std::max_element(giScan.begin(), giScan.end()), giScan.size());
         return med;
     };
     const Visits v0 = visits();
