@@ -34,9 +34,6 @@
 //     query's visibility, strictly inside (0, open), and the share the query
 //     stopped is dark (the uniform enclosure's reading minus this one is the
 //     voxels' share, which the walls' L supplies).
-//   ONE WALL IN R — the grazing plate with a wall of radiance L filling its lobe's query,
-//     the hemisphere above open: the query stops more than the diffuse set, and the stopped
-//     share must still be lit at the query's share - the open grazing value.
 //   OPEN, GRAZING — the open plate seen 10 degrees above its surface: the query's cone
 //     reaches below the surface, a share the BRDF's masking already holds (no light
 //     arrives from below the horizon) - not the sky's occlusion: the GI-off value.
@@ -109,7 +106,7 @@ int main()
 
     // One scene: the uniform sky, the plate, and (when `box`) the box with its opening.
     struct Arm { double off = -1.0, cones = -1.0, field = -1.0; };
-    const auto runScene = [&](const char *name, int box /* 0 open, 1 emitting L, 2 dark, 3 one wall in R */,
+    const auto runScene = [&](const char *name, int box /* 0 open, 1 emitting L, 2 dark */,
                               bool grazing) {
         Arm a;
         Scene *s = e->createScene(name);
@@ -131,14 +128,7 @@ int main()
             s->attachMesh(nd, cube, s->createPbrMaterial(p));
             s->setNodeTransform(nd, pos, Quat(), scale);
         };
-        if (box == 3) {
-            // ONE WALL IN THE REFLECTION, emitting L: standing on the plate 1.5 m beyond its centre (inside the
-            // camera-centred cascade, which ends 2 m past the plate centre), 12 m wide,
-            // 7.9 m tall - it fills the grazing view's 45-degree query, the hemisphere above open.
-            PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
-            wall.emissive = Colour(float(L), float(L), float(L));
-            slab(Vec3(0.0f, 4.05f, 1.75f), Vec3(12.0f, 7.9f, 0.5f), wall);
-        } else if (box) {
+        if (box) {
             PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
             if (box == 1) wall.emissive = Colour(float(L), float(L), float(L));
             slab(Vec3(0, -0.25f, 0), Vec3(9.0f, 0.5f, 9.0f), wall);
@@ -179,7 +169,6 @@ int main()
 
     const Arm open = runScene("open", 0, false);
     const Arm graze = runScene("grazing", 0, true);
-    const Arm wallR = runScene("wall in R", 3, true);
     const Arm lit = runScene("enclosure", 1, false);
     const Arm dark = runScene("shaded", 2, false);
     std::printf("   ROUGH METAL (0.74), a uniform sky of L = %.4f: open %.4f / %.4f (cones / field); the uniform "
@@ -199,13 +188,9 @@ int main()
                   graze.cones, graze.field, graze.off);
     CHECK(graze.off > 0.01 && std::fabs(graze.cones / graze.off - 1.0) < 0.01 &&
           std::fabs(graze.field / graze.off - 1.0) < 0.01, msg);
-    // ONE WALL IN THE REFLECTION (the read's W1): a facade of the sky's radiance fills the
-    // grazing lobe's query while the hemisphere stays mostly open - the query stops more than
-    // the diffuse set. Every direction still carries L: the open grazing value, never less (a
-    // stopped share lit at the diffuse set's occlusion instead of the query's under-counts it).
-    std::snprintf(msg, sizeof msg, "ONE WALL IN R, emitting L: the grazing plate reads the open value (cones %.4f, "
-                  "field %.4f / %.4f; bar 3 %%)", wallR.cones, wallR.field, graze.off);
-    CHECK(std::fabs(wallR.cones / graze.off - 1.0) <= 0.03 && std::fabs(wallR.field / graze.off - 1.0) <= 0.03, msg);
+    // (ONE WALL IN THE REFLECTION - a wall of the sky's radiance filling a grazing lobe - is
+    // PHOTON-MARCH-1's acceptance, tests/gi/test_gi_march_underread.cpp: it under-reads as the
+    // cascade's cells shrink, the cone march's opacity uncorrected for its step.)
     // THE VISIBILITY ITSELF (the read's W2): the query is a 45-degree cone up the plate's
     // normal; the 3 x 3 m opening 4.9 m above the plate's top subtends 4 atan(ab / (d sqrt(a^2
     // + b^2 + d^2))) = 0.343 sr of the cone's 2 pi (1 - cos 45) = 1.840 sr: 0.187. THE BAR,
