@@ -628,6 +628,14 @@ def _is_wipe(cmd):
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
 
 
+def _rel_to_root(path):
+    """The path relative to ROOT by SPELLING, else by realpath (ROOT given through a symlink — ~/Developer → /mnt/work —
+    made relpath() answer "../../../../mnt/…" and every row's subsystem became that string; the lead, 2026-10-14)."""
+    r = os.path.relpath(path, ROOT)
+    if r.startswith(".."):
+        r = os.path.relpath(os.path.realpath(path), os.path.realpath(ROOT))
+    return r
+
 def load_inventory(build):
     # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
     # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
@@ -676,10 +684,10 @@ def load_inventory(build):
                 break
             n = nodes[n["parent"]]
         def _in_test_dir(f):
-            r = os.path.relpath(os.path.dirname(f), ROOT).split(os.sep)
+            r = _rel_to_root(os.path.dirname(f)).split(os.sep)
             return len(r) >= 2 and r[0] == "tests"
         cm = next((f for f in frames if _in_test_dir(f)), frames[0] if frames else ROOT)
-        d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
+        d = _rel_to_root(os.path.dirname(cm))          # tests/<dir>
         cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
         # THE SCRIPTS A ROW RUNS: the --script argument, and every argument that is a file of the

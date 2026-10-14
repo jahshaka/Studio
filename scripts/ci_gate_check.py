@@ -146,6 +146,8 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
         return f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]})"
     if fact is None:
         return "the row is not in the build's ctest inventory"
+    if row.startswith("source.") or "lint" in (fact.get("labels") or ()) or "hygiene" in (fact.get("labels") or ()):
+        return "a lint reads the whole tree: never served (2026-10-14: seven unpriced rows passed R2 by a served record)"
     rc = (rec.get("config") or {}).get("hash")
     if not rc or not cfg or rc != cfg.get("hash"):
         return "its build configuration differs (or is unknown): %s vs this build's %s" % (
