@@ -931,13 +931,14 @@ int main(int argc, char **argv)
                     mirror.sync();
                     rec.add(names[k], msSince(t0));
                     engine->renderOneFrame();
-                    lastRecords = engine->frameInputStatus().nodeRecords;
+                    lastRecords = engine->frameInputStatus().nodeTransforms;
                 });
                 addMetric(names[k], n, st.at(names[k]), true);
                 gCounters[std::string("d.extract_records.") + std::to_string(K) + "." + std::to_string(n)] =
                     double(lastRecords);
-                std::printf("    extract: %d written -> %u records applied by the drain\n", K, lastRecords);
-                CHECK(lastRecords == unsigned(K), "(d) the record carries ONE entry per written node, no more");
+                std::printf("    extract: %d written -> %u transform records applied by the drain\n", K, lastRecords);
+                CHECK(lastRecords == unsigned(K), "(d) the record carries ONE transform per written node, no more "
+                                                  "(the settle's class records beside them are not writes)");
             }
         }
 
