@@ -257,6 +257,17 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
+    # atom.component — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3,
+    # atom/AtomComponent.h): two scenes with shadows, each through its own view — the id pass
+    # once and before the screen decode, each caster pass after its map's shadow pass, the
+    # words step once a frame, each scene's caster state its own (bound on its manager), and
+    # a view and a scene destroyed mid-run with the other drawing on. Counts only.
+    add_executable(test_atom_component test_atom_component.cpp)
+    jah_atom_engine_target(test_atom_component)
+    jah_gpu_row(atom.component CLASS engine COMMAND test_atom_component
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.component PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(atom.component PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # counted from the source (12 + 1 + 4 + 3 + 12 + 1 + 3 + the probe)
     # shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S
     # OWN CLUSTER CUT (ATOM-SHADOWS-1): every map's cut (PSSM, spot, the point's six faces)
     # captured by the engine's test door and checked against the rule at the LIGHT's request
