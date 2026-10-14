@@ -185,6 +185,30 @@ set_tests_properties(mirror.dirty_equals_full PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 set_tests_properties(mirror.dirty_equals_full PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
+# mirror.attach_budget — A FRAME BUILDS ITS SHARE OF NEW MESHES (BISTRO-ENGINE-1
+# stage 5, finding 9): SceneMirror::setAttachBudget's vertex and index caps
+# against ceil(N*v/V), the streamed world equal to the document (the full walk
+# pushes nothing), a built mesh never deferred, an unbudgeted sync unchanged.
+add_executable(test_mirror_attach_budget test_mirror_attach_budget.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_attach_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_attach_budget PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_attach_budget PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_attach_budget PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_attach_budget JahshakaEngineMedia)
+jah_gpu_row(mirror.attach_budget CLASS engine COMMAND test_mirror_attach_budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.attach_budget PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.attach_budget PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+
 # mirror.grid_floor — THE GROUND GRID ON TOP OF THE FLOOR (GIZMO-2 item 5, owner
 # §370). The grid sits at exactly y=0 now and wins against the coplanar floor
 # through its material's depth bias instead of being pushed underneath it; a box

@@ -691,8 +691,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "default install\" was true for as long as it was because nothing could ask. Read-only; "
           "the capabilities behind the buttons are their own verbs.",
           Needs::Window },
-        { "viewportState", "editor.viewportState() -> {state, streaming, pending, cover, loadingCover, indicator, coversPresented, blankPresented, nativeMapped, nativeHides, rectChanges, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, devicePixelRatio, heldKeys, flying}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it. `streaming` and `pending` are the OTHER question — not \"is a world bound\" but \"is the picture still filling in\" (SPECS/OPEN_COVER_SPEC.md §2.1): with the loading cover off a world appears at once and streams in over the frames that follow, and `pending` is what is still coming — `{shaders, textures, gi}`, with `streaming` true while any of them is non-zero. `gi` is stages of the world's FIRST lighting arm still to run (4 when one is staged, then 3, 2, 1, 0) and `textures` is materials still drawing a fallback because their pixels have not landed; both are read straight off the engine. `shaders` IS NOT A QUEUE and cannot be — a pipeline state object is generated when a renderable is first DRAWN, so how many are left is not a number anything in this process knows — it is how many the last DRIVER frame compiled, which falls to zero the moment a frame draws without compiling anything. Beside them `shadersThisLoad` and `texturesThisLoad` are the progress figures the on-screen indicator line shows; there is deliberately no denominator for the shaders, because the only number available was the PREVIOUS SESSION's whole total (boot included) and it reads as progress through THIS load, which it is not. `cover` is which cover is on screen right now (\"none\", \"loading\", \"noscene\") — 'none' for a load in place with the preference off, which is the designed behaviour: a viewport with no world bound presents its BACKGROUND since STALE-VIEW-1, so the previous world leaves the screen the moment it is torn down and `blankPresented` counts the frames it drew there. Measured, so that nobody reads more into it than is there: in a load IN PLACE that is every frame between the teardown and the bind, and the viewport's window now stays on screen for all of them (VIEW-REBUILD-1 — before it the close half of an open switched the window to the Desktop page, which is a native ancestor of the viewport's own window, and the user watched the app's watermark for 499-2,973 ms while the engine presented into nothing) — and `loadingCover` is the preference behind it (editor.loadingCover), and `indicator` is the line the viewport is drawing at the bottom of the frame while a world streams in (\"Loading Showroom 2 - shaders 12/45  textures 3/17  lighting...\" — ASCII only, because the overlay font has no other glyphs), empty when it is drawing none. `coversPresented` counts the covers this viewport has actually PRESENTED, ever: `cover` is an instant and a warm load is over before a caller outside the process gets a second reading in, so \"was THIS load covered\" is a difference of this across the load — which is the only way to see, after the fact, that a load in place was covered even with the preference off. `blankPresented` is the same shape for the other question: frames this viewport presented with NO world bound — its background, and whatever the HUD drew over it — so \"did the teardown reach the screen\" is a difference of THIS across a load in place. It moves by at least one there because the teardown presents one frame explicitly rather than waiting for a driver tick. Never reset. `nativeMapped` is the third question and the one that governs the other two: is this viewport's native window ON SCREEN right now — an unmapped window shows nothing anybody presents into it, whatever the counters say — and `nativeHides`/`rectChanges` count how many times it has left the screen and how many times its rectangle has changed, ever, so a caller differences them across an operation the way it differences the two above. A load IN PLACE must move NEITHER: the page never changes, so the viewport keeps its window and its rect from the teardown through to the first frame of the new world. A page switch — the Desktop, the Player, a create from the Desktop — moves both, by design. Never reset.",
+        { "viewportState", "editor.viewportState() -> {state, streaming, pending, cover, loadingCover, indicator, indicatorMeshLines, coversPresented, blankPresented, nativeMapped, nativeHides, rectChanges, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, devicePixelRatio, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it. `streaming` and `pending` are the OTHER question — not \"is a world bound\" but \"is the picture still filling in\" (SPECS/OPEN_COVER_SPEC.md §2.1): with the loading cover off a world appears at once and streams in over the frames that follow, and `pending` is what is still coming — `{shaders, textures, gi, meshes}`, with `streaming` true while any of them is non-zero. `meshes` is mesh nodes still WITHOUT their mesh: a driver frame builds a few and draws (SceneMirror::setAttachBudget, BISTRO-ENGINE-1), so a big import or open fills in over the ticks after it instead of freezing the window; a script's editor.frame builds everything it sees. `gi` is stages of the world's FIRST lighting arm still to run (4 when one is staged, then 3, 2, 1, 0) and `textures` is materials still drawing a fallback because their pixels have not landed; both are read straight off the engine. `shaders` IS NOT A QUEUE and cannot be — a pipeline state object is generated when a renderable is first DRAWN, so how many are left is not a number anything in this process knows — it is how many the last DRIVER frame compiled, which falls to zero the moment a frame draws without compiling anything. Beside them `shadersThisLoad` and `texturesThisLoad` are the progress figures the on-screen indicator line shows; there is deliberately no denominator for the shaders, because the only number available was the PREVIOUS SESSION's whole total (boot included) and it reads as progress through THIS load, which it is not. `cover` is which cover is on screen right now (\"none\", \"loading\", \"noscene\") — 'none' for a load in place with the preference off, which is the designed behaviour: a viewport with no world bound presents its BACKGROUND since STALE-VIEW-1, so the previous world leaves the screen the moment it is torn down and `blankPresented` counts the frames it drew there. Measured, so that nobody reads more into it than is there: in a load IN PLACE that is every frame between the teardown and the bind, and the viewport's window now stays on screen for all of them (VIEW-REBUILD-1 — before it the close half of an open switched the window to the Desktop page, which is a native ancestor of the viewport's own window, and the user watched the app's watermark for 499-2,973 ms while the engine presented into nothing) — and `loadingCover` is the preference behind it (editor.loadingCover), and `indicator` is the line the viewport is drawing at the bottom of the frame while a world streams in (\"Loading Showroom 2 - 12 shaders compiled  textures 3/17  meshes to come 40  lighting...\" — ASCII only, because the overlay font has no other glyphs), empty when it is drawing none. It ends when the load has ARRIVED — two driver frames in a row after the reveal that owe no mesh, texture or lighting stage — and never comes back for that load; a count of compiled shaders keeps nothing alive (it is not a queue). `indicatorMeshLines` counts the frames, since this world started loading, whose line named meshes still to come while the mirror owed them — a count, because the stream is often over before a caller outside the process reads the line. `coversPresented` counts the covers this viewport has actually PRESENTED, ever: `cover` is an instant and a warm load is over before a caller outside the process gets a second reading in, so \"was THIS load covered\" is a difference of this across the load — which is the only way to see, after the fact, that a load in place was covered even with the preference off. `blankPresented` is the same shape for the other question: frames this viewport presented with NO world bound — its background, and whatever the HUD drew over it — so \"did the teardown reach the screen\" is a difference of THIS across a load in place. It moves by at least one there because the teardown presents one frame explicitly rather than waiting for a driver tick. Never reset. `nativeMapped` is the third question and the one that governs the other two: is this viewport's native window ON SCREEN right now — an unmapped window shows nothing anybody presents into it, whatever the counters say — and `nativeHides`/`rectChanges` count how many times it has left the screen and how many times its rectangle has changed, ever, so a caller differences them across an operation the way it differences the two above. A load IN PLACE must move NEITHER: the page never changes, so the viewport keeps its window and its rect from the teardown through to the first frame of the new world. A page switch — the Desktop, the Player, a create from the Desktop — moves both, by design. Never reset.",
           Needs::Document },
         { "loadingCover", "editor.loadingCover([on]) -> bool",
           "THE LOADING COVER, as a preference (SPECS/OPEN_COVER_SPEC.md §3). The cover is the "
@@ -713,7 +713,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "ignores it, and \"No world open\" is not a load and always shows. ONE THING IT CANNOT DO, said here because it is measured and surprising: a world opened while the editor page is already showing one leaves the PREVIOUS world's last frame on screen for the length of the load whatever this preference says. A viewport with no world bound PRESENTS NOTHING (the engine destroys the view's workspace with its scene), so after the teardown no cover can be put there either — that is also why \"No world open\" is never actually drawn. The fix is engine-side (a scene-less view drawing its own background, STALE-VIEW-1). Every Desktop route — every create, every tile — is unaffected: its viewport is hidden for the load and the frames it reveals are the new world's. With no argument "
           "this reads; with one it writes and returns the new value.",
           Needs::Window },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -782,6 +782,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "the object and the field once in the log. `pushes` is how many engine writes the "
           "visits have made in total, which is what the differential test compares: run the "
           "change-list sync, then the whole walk, and the whole walk must push NOTHING.\n\n"
+          "`attachesOwed` is how many mesh nodes the last sync left without their mesh — the "
+          "frames a user watches build new meshes up to a cost budget (vertices and indices) "
+          "and leave the rest for the next frame — and `attachesDeferred` counts every such "
+          "deferral since the world was bound (the mirror is made with each world).\n\n"
           "`available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
@@ -813,7 +817,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "(editor.checkScene) does this for its own kinds by itself, which is how a line leaves "
           "the viewport's error area — there is no dismiss. False when there is no such issue.",
           Needs::Document },
-        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...]}",
+        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...], walked:{full, leak, nodes, visited, passes, walks}}",
           "Runs the scene checker once against the open scene and returns what is live afterwards "
           "— the same thing the editor does on a timer, exposed so a script or a test can drive "
           "it. The conditions it knows (SceneIssues::scan): \"sun.tie\", two directional "
@@ -828,7 +832,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "so this is safe to "
           "call as often as you like. `raised` names the issues this call raised for the first "
           "time (empty on a second identical call — the never-repeat rule), and `list` is every "
-          "live issue in the order the error area lists them.",
+          "live issue in the order the error area lists them. THE NODE CHECKS FOLLOW THE "
+          "DOCUMENT'S WRITES, NOT THE CLOCK: each node's answers (\"shadow.leak\"'s box, "
+          "\"texture.missing\"'s files) are cached, and a pass re-checks only the nodes the "
+          "node graph's write journal names as written since the last pass (a moved node with "
+          "its subtree), those whose material changed and those whose file the disk reported "
+          "— nothing written, nothing visited. `walked` says what THIS pass did: `full` whether "
+          "it walked the whole scene (a new scene), `leak` whether it re-tested the lamps "
+          "against the boxes, `nodes` how many nodes it re-checked (0 for an idle pass); "
+          "`visited`, `passes` and `walks` the totals since launch (the editor's own 1 Hz pass "
+          "included).",
           Needs::Document },
         { "issueBar", "editor.issueBar() -> {editorActive, exists, visible, rows, lines, buttons}",
           "WHERE THE SCENE-ERROR AREA IS ON SCREEN. The bar is a frameless, "
@@ -2874,12 +2887,14 @@ QVariantMap EditorApi::viewportState()
         out.insert("pending", QVariantMap{ { QStringLiteral("shaders"), 0u },
                                            { QStringLiteral("textures"), 0u },
                                            { QStringLiteral("gi"), 0u },
+                                           { QStringLiteral("meshes"), 0u },
                                            { QStringLiteral("shadersThisLoad"), 0u },
                                            { QStringLiteral("texturesThisLoad"), 0u } });
         out.insert("cover", QStringLiteral("none"));
         out.insert("loadingCover", loadingcover::enabled());
         out.insert("indicator", QString());
         out.insert("coversPresented", 0);
+        out.insert("indicatorMeshLines", 0);
         out.insert("blankPresented", 0);
         out.insert("nativeMapped", false);
         out.insert("nativeHides", 0);
@@ -2944,6 +2959,7 @@ QVariantMap EditorApi::viewportState()
                               { QStringLiteral("shaders"), pending.shaders },
                               { QStringLiteral("textures"), pending.textures },
                               { QStringLiteral("gi"), pending.gi },
+                              { QStringLiteral("meshes"), pending.meshes },
                               { QStringLiteral("shadersThisLoad"), pending.shadersThisLoad },
                               { QStringLiteral("texturesThisLoad"), pending.texturesThisLoad },
                           });
@@ -2954,6 +2970,7 @@ QVariantMap EditorApi::viewportState()
     out.insert("loadingCover", loadingcover::enabled());
     out.insert("indicator", host.viewport->loadingIndicator());
     out.insert("coversPresented", QVariant::fromValue(host.viewport->coversPresented()));
+    out.insert("indicatorMeshLines", QVariant::fromValue(host.viewport->indicatorMeshLines()));
     // THE FRAMES THIS VIEWPORT PRESENTED WITH NO WORLD BOUND (STALE-VIEW-1).
     // The same shape and the same reason as `coversPresented`: a load in place
     // is over before a caller outside the process gets a second reading in, so
@@ -3016,6 +3033,8 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("verifierCatches", QVariant::fromValue(s.verifierCatches));
     out.insert("pushes", QVariant::fromValue(s.pushes));
     out.insert("walkMode", s.walkMode.isEmpty() ? QStringLiteral("none") : s.walkMode);
+    out.insert("attachesOwed", QVariant::fromValue(s.attachesOwed));
+    out.insert("attachesDeferred", QVariant::fromValue(s.attachesDeferred));
     return out;
 }
 
@@ -3077,9 +3096,17 @@ QVariantMap EditorApi::checkScene()
     QVariantList raised;
     for (const auto &i : store.issues())
         if (!before.contains(i.id)) raised.append(i.id);
+    const SceneIssues::ScanStats stats = store.lastScan();
+    const QVariantMap walked{ { QStringLiteral("full"), stats.fullWalk },
+                              { QStringLiteral("leak"), stats.leakEvaluated },
+                              { QStringLiteral("nodes"), stats.nodesVisited },
+                              { QStringLiteral("visited"), double(stats.visitedTotal) },
+                              { QStringLiteral("passes"), stats.passes },
+                              { QStringLiteral("walks"), stats.walks } };
     return QVariantMap{ { QStringLiteral("issues"), store.count() },
                         { QStringLiteral("raised"), raised },
-                        { QStringLiteral("list"), store.toVariant() } };
+                        { QStringLiteral("list"), store.toVariant() },
+                        { QStringLiteral("walked"), walked } };
 }
 
 QVariantMap EditorApi::issueBar()

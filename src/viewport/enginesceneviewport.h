@@ -251,6 +251,8 @@ public:
     void renderFrames(int n, float dt) override;
     void stepFrames(int n, float dt) override;
     bool canRenderFrames() const override;
+    void renderBoundaryFrame() override;
+    qulonglong indicatorMeshLines() const override { return mStream.meshLines; }
     MirrorStats mirrorStats() const override;
     RigStatsInfo rigStats() const override;
     QString dumpMaterial(const QString &nodeGuid) const override;
@@ -383,6 +385,15 @@ public:
     /// window, and this stops a scene whose textures never arrive from leaving
     /// the frame-edge drain switched off for the life of the session.
     static constexpr int kStreamFramesAfterReveal = 240;
+    /// ONE FRAME'S SHARE OF NEW MESHES, BY COST (SceneMirror::setAttachBudget,
+    /// finding 9): the meshes built in the frame a user is watching stop once
+    /// this many of their vertices or indices are built (the first mesh always
+    /// is). The Bistro Exterior's ~3 M vertices arrive in ~45 frames.
+    static constexpr std::size_t kAttachVerticesPerFrame = 65536;
+    static constexpr std::size_t kAttachIndicesPerFrame = 3 * 65536;
+    /// True for the length of a frame whose mirror sync is BUDGETED: a driver
+    /// tick's, and the open runner's boundary frame (renderBoundaryFrame).
+    bool mBudgetedSync = false;
 
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
@@ -463,23 +474,30 @@ private:
         unsigned shadersAtSample = 0;    ///< the engine's total at the last sample
         unsigned shadersAtLoad = 0;      ///< ...and when this load began
         unsigned texturesPeak = 0;       ///< the most materials waited on at once
-        /// THE LINE ON SCREEN, and the frames it is held for. The counts
-        /// FLICKER — the shader term is a per-frame rate and the arm's stage
-        /// machine is idle between a stage finishing and the next being
-        /// staged — so a line drawn from the raw reading blinks off and on
-        /// again while a world is plainly still arriving (photographed: two
-        /// frames of "Loading New World - shaders 4", then one blank, then
-        /// "...lighting..."). It is therefore held for a short tail after the
-        /// last frame that owed anything, and the tail is what makes it
-        /// disappear ONCE, cleanly, when the world has settled.
+        /// THE LINE ON SCREEN — composed once per drawn frame, so the HUD and
+        /// `editor.viewportState().indicator` read the same string.
         QString  line;
-        int      holdTicks = 0;
+        /// Consecutive revealed DRIVER samples that found nothing owed.
+        int      quietSamples = 0;
+        /// THE LOAD HAS ARRIVED (BISTRO-ENGINE-1 stage 5, finding 11): latched
+        /// the moment `kArrivalSettleSamples` revealed driver samples in a row
+        /// owe nothing, cleared by `beginSceneLoad`. Once set the line is gone
+        /// for this load and cannot come back — a texture arriving behind an
+        /// asset drop later is not this world loading. True outside any load.
+        bool     arrived = true;
+        /// Frames whose line named owed meshes (indicatorMeshLines).
+        qulonglong meshLines = 0;
     };
-    /// How many frames the indicator survives its last owed work — ~0.2 s at
-    /// 60 Hz. A bound on the flicker, not a timer for the line: the line goes
-    /// when this runs out, which is a few frames after the world stops
-    /// changing.
-    static constexpr int kIndicatorHoldTicks = 12;
+    /// THE SETTLE LAW, IN SAMPLES, NOT TIME (finding 11: the line used to live
+    /// for kStreamFramesAfterReveal driver frames whenever anything — a shader
+    /// compiled in the last frame — was owed, and at the Bistro's 4 fps 240
+    /// frames is a minute of a line that says "shaders 10" and never moves).
+    /// TWO, the least that is right: a sample describes the frame BEFORE it
+    /// (sampleStreamingWork runs ahead of the render), and the first revealed
+    /// frame is the one that stages the world's first GI arm — so the first
+    /// revealed sample reads a frame drawn while still loading and must not be
+    /// the one that ends the load.
+    static constexpr int kArrivalSettleSamples = 2;
     StreamSample mStream;
     /// Reads `Engine::streamingWork()` and banks this frame's differences.
     /// Called before EVERY frame this viewport draws, so the line describes

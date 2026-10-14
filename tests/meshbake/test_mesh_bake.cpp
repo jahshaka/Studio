@@ -2231,19 +2231,28 @@ static void printDagTerms(const QString &label, const iris::MeshBake::ClusterDag
                         double(r.facet), double(r.bound), double(r.reference));
 }
 
-/// `--dag-terms <model> [--dense]`: every mesh's DAG as group terms (the lead's
-/// tool on a file nobody can ship — the owner's scan). Times the DAG build.
-static int dagTerms(const QString &path, bool dense)
+/// `--dag-terms <model> [--dense] [--mesh i,j,...]`: every mesh's DAG as group
+/// terms (the lead's tool on a file nobody can ship — the owner's scan), or only
+/// the meshes named by their index in the file (the import log's `mesh N`).
+/// Times the DAG build.
+static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
 {
     const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
     if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
     for (int i = 0; i < meshes.size(); ++i) {
+        if (!only.isEmpty() && !only.contains(i)) continue;
         iris::MeshBake::ClusterDagStats st;
         st.wantTerms = true;
         st.denseReference = dense;
         QElapsedTimer t; t.start();
         iris::MeshBake::buildClusterDag(meshes.at(i), &st);
         printDagTerms(QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i), st);
+        // THE LOCK'S ACCOUNT (BISTRO-ENGINE-1 stage 6): groups still past the
+        // lock after their last attempt are charged by the measurement — their
+        // stored error is the measured one; `x worst` above is that charge over
+        // the group's own estimate (the lock's bar is kDagLockFactor = 2).
+        std::printf("      lock: %d retries, %d unconverged, %d made terminal, %d vertices locked\n",
+                    st.groupRetries, st.groupsUnconverged, st.groupsMadeTerminal, st.lockedVertices);
         // THE STORED ERRORS per depth (what the cut reads), from the DAG itself.
         std::map<int, std::vector<float>> stored;
         for (const auto &g : meshes.at(i)->clusterDag.groups)
@@ -3112,9 +3121,18 @@ int main(int argc, char **argv)
         return standin::write(QString::fromLocal8Bit(argv[2])) ? 0 : 1;
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-terms"))
         return boundTerms(QString::fromLocal8Bit(argv[2]));
-    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-terms"))
-        return dagTerms(QString::fromLocal8Bit(argv[2]),
-                        argc > 3 && QString::fromLocal8Bit(argv[3]) == QStringLiteral("--dense"));
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-terms")) {
+        bool dense = false;
+        QSet<int> only;
+        for (int a = 3; a < argc; ++a) {
+            const QString arg = QString::fromLocal8Bit(argv[a]);
+            if (arg == QStringLiteral("--dense")) dense = true;
+            else if (arg == QStringLiteral("--mesh") && a + 1 < argc)
+                for (const QString &n : QString::fromLocal8Bit(argv[++a]).split(QLatin1Char(',')))
+                    only.insert(n.toInt());
+        }
+        return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
+    }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bake-blob"))
         return bakeBlobTool(QString::fromLocal8Bit(argv[2]), argc > 3 ? QString::fromLocal8Bit(argv[3]).toInt() : 0,
                             argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());

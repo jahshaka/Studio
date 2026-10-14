@@ -143,7 +143,9 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
                 }
             }
             ++mFrameEpoch;
+            mBudgetedSync = true;
             syncFrame(-1.0f, recordable);
+            mBudgetedSync = false;
             // WHAT THE LAST FRAME LEFT OWED (OPEN_COVER_SPEC §2.1, lane
             // OPEN-COVER-2b). Sampled HERE, once per driver tick and before the
             // overlay is composed, because two of its three numbers are
@@ -2600,7 +2602,16 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // subtraction keeps it exclusive.
         mMirror->setMonitorEngine(framemonitor::active() ? mEngine.get() : nullptr);
         framemonitor::Stage mirrorStage("host.mirror");
+        // A DRIVER TICK (and the open's boundary frame) BUILDS ITS SHARE OF
+        // THE WORLD AND DRAWS (finding 9):
+        // the frame the user is watching never blocks for every mesh of an
+        // import or an open at once — the rest arrive on the ticks after it.
+        // Every other frame (a script's, a screenshot's) builds all it sees.
+        if (mBudgetedSync) mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
         mMirror->sync();
+        // ...and while meshes are still owed the world has not arrived: no
+        // FIRST-TIME lighting arm over half a world (Scene::setLoading).
+        if (mEngineScene) mEngineScene->setLoading(mWorldArriving || mMirror->attachesOwed() > 0);
     }
     framemonitor::Stage overlayStage("host.overlay");
     // SIZED FOR THE PICTURE, not for the camera we are flying (F7): the gizmo's
@@ -3059,6 +3070,13 @@ void EngineSceneViewport::renderFrames(int n)
     renderFrames(n, -1.0f);
 }
 
+void EngineSceneViewport::renderBoundaryFrame()
+{
+    mBudgetedSync = true;
+    renderFrames(1);
+    mBudgetedSync = false;
+}
+
 bool EngineSceneViewport::canRenderFrames() const
 {
     // The one thing renderFrames() itself tests before doing anything.
@@ -3249,6 +3267,8 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.verifierCatches = mMirror->verifierCatchCount();
     s.pushes = mMirror->visitPushCount();
     s.walkMode = QString::fromLatin1(mMirror->walkMode());
+    s.attachesOwed = mMirror->attachesOwed();
+    s.attachesDeferred = mMirror->attachesDeferredTotal();
     return s;
 }
 
@@ -3962,9 +3982,10 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
 //  so the line cannot claim work the renderer is not doing). The shader term is
 //  a RATE, not a queue, and the header says why: a pipeline state object is
 //  generated when a renderable is first drawn, so nothing in this process knows
-//  how many are left. What the line shows is progress — compiled since this
-//  load began, against the last saved run's total — and what keeps the line
-//  ALIVE is whether the last frame compiled anything at all.
+//  how many are left. What the line shows is a count — compiled since this
+//  load began, labelled as such — and it keeps nothing alive: the line ends
+//  when the exact queues (and the mirror's owed meshes) settle (finding 11,
+//  kArrivalSettleSamples).
 
 // `driverFrame` IS THE SAFETY RULE, AND IT COST A GATE (scripting.e2e.atom_lods,
 // this lane's first gate). THE OVERLAY IS GEOMETRY: its text quads go through
@@ -3995,22 +4016,27 @@ void EngineSceneViewport::sampleStreamingWork(bool driverFrame)
     mStream.shadersAtSample = w.shadersCompiled;
     if (w.materialsAwaitingTexture > mStream.texturesPeak)
         mStream.texturesPeak = w.materialsAwaitingTexture;
-    // ...and the line, HELD (see StreamSample::line). Composed here, once per
-    // drawn frame, so the string the HUD draws and the string
-    // `editor.viewportState().indicator` reports are the same object and
-    // cannot disagree about a reading taken a microsecond apart.
-    const QString now = composeIndicatorLine(driverFrame);
-    if (!now.isEmpty()) {
-        mStream.line = now;
-        // The hold exists to stop a 60 Hz flicker, which is a property of the
-        // render loop; a deterministic frame gets none.
-        mStream.holdTicks = driverFrame ? kIndicatorHoldTicks : 0;
-    } else if (!driverFrame) {
-        mStream.line.clear();
-        mStream.holdTicks = 0;
-    } else if (mStream.holdTicks > 0 && --mStream.holdTicks == 0) {
-        mStream.line.clear();
+    // ...and the line. Composed here, once per drawn frame, so the string the
+    // HUD draws and the string `editor.viewportState().indicator` reports are
+    // the same object and cannot disagree about a reading taken a microsecond
+    // apart. NO HOLD any more: the hold stopped the line blinking while the
+    // shader RATE kept it alive frame by frame; the line now ends once, at the
+    // settle, and cannot come back for this load.
+    // THE LOAD'S OWN COMPLETION (finding 11): a revealed driver frame that owes
+    // nothing — no mesh the mirror's budget left for later, no texture still
+    // drawing a fallback, no stage of the first lighting arm left — counts
+    // towards the settle; anything owed restarts it.
+    // A compiled shader is not owed work (no queue of them exists: a PSO is
+    // built when a renderable is first drawn), so it no longer keeps the line.
+    if (driverFrame && !mWorldArriving && !mStream.arrived) {
+        const StreamingPending p = streamingPending();
+        mStream.quietSamples = (p.textures || p.gi || p.meshes) ? 0 : mStream.quietSamples + 1;
+        if (mStream.quietSamples >= kArrivalSettleSamples) mStream.arrived = true;
     }
+    mStream.line = composeIndicatorLine(driverFrame);
+    if (!mStream.line.isEmpty() && mMirror && mMirror->attachesOwed() > 0 &&
+        mStream.line.contains(QLatin1String("meshes to come")))
+        ++mStream.meshLines;
 }
 
 IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
@@ -4025,6 +4051,7 @@ IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
                               ? w.shadersCompiled - mStream.shadersAtLoad
                               : 0u;
     out.texturesThisLoad = qMax(mStream.texturesPeak, out.textures);
+    out.meshes = mMirror ? unsigned(mMirror->attachesOwed()) : 0u;
     return out;
 }
 
@@ -4082,8 +4109,13 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     // load-in-place's teardown, which is when the line is most needed.
     // `mWorldArriving` is the host's own flag: raised in beginSceneLoad,
     // lowered at endSceneLoad, sticky across clearScene on purpose.
+    //
+    // AFTER THE REVEAL the line is a DRIVER-frame thing (see sampleStreamingWork)
+    // and lives until the load has ARRIVED — the settle law, counted in samples
+    // (kArrivalSettleSamples), never a window of frames that a slow frame
+    // stretches into minutes.
     const bool arriving = mWorldArriving;
-    if (!arriving && !(driverFrame && mStreamFramesLeft > 0 && p.any())) return QString();
+    if (!arriving && !(driverFrame && !mStream.arrived)) return QString();
 
     // ASCII ONLY, and it is not a style choice: the overlay font is Ogre's
     // `DebugFont` (irisgl/engine/src/OgreOverlayHud.cpp), whose glyph range
@@ -4094,7 +4126,7 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     QString line = name.isEmpty() ? tr("Loading world") : tr("Loading %1").arg(name);
     QStringList terms;
     // Progress, not a queue (see the note above). Shown while this load has
-    // built any at all, or while the last frame did.
+    // built any at all.
     // NO DENOMINATOR (the Fable read, item 5). `shadersExpected` is the
     // PREVIOUS SESSION's whole total — everything it compiled or read from the
     // cache, boot included — so "12/45" invited the reader to see a load that
@@ -4102,7 +4134,10 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     // is only a count says what it is. A real denominator would have to come
     // from something that knows THIS world's permutation set (the warm-up
     // slice's own built count is the candidate); until one exists there is none.
-    if (p.shadersThisLoad || p.shaders) terms << tr("shaders %1").arg(p.shadersThisLoad);
+    // LABELLED FOR WHAT IT IS (finding 11): the shaders THIS load has compiled,
+    // a running count and never a queue — "shaders 10" read as ten owed.
+    if (p.shadersThisLoad == 1) terms << tr("1 shader compiled");
+    else if (p.shadersThisLoad) terms << tr("%1 shaders compiled").arg(p.shadersThisLoad);
     // Only while something is STILL waiting: "textures 1/1" after the last one
     // landed is a term that says nothing and never leaves.
     if (p.textures) {
@@ -4110,6 +4145,8 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
                      .arg(p.texturesThisLoad - p.textures)
                      .arg(p.texturesThisLoad);
     }
+    // EXACT: the mesh nodes the mirror's budget left for the next ticks.
+    if (p.meshes) terms << tr("meshes to come %1").arg(p.meshes);
     if (p.gi) terms << tr("lighting...");
     if (terms.isEmpty()) return line + QStringLiteral("...");
     return line + QStringLiteral(" - ") + terms.join(QStringLiteral("  "));
@@ -4336,6 +4373,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // compiles and not the boot's.
     {
         mStream = StreamSample();
+        mStream.arrived = false;   // this load has not arrived until it settles
         if (mEngine) {
             const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
             mStream.shadersAtLoad = mStream.shadersAtSample = w.shadersCompiled;
@@ -4432,6 +4470,10 @@ void EngineSceneViewport::primeSceneGeometry()
     pushGridForView(helpers);
     mMirror->setGiVolumeOverlay(mShowGiVolume && helpers);
     LoadTimeline::Accumulate mirror(QStringLiteral("engine:mirrorSync"));
+    // ONE FRAME'S SHARE, like a driver tick (finding 9: the owner's open spent
+    // 2.2 s here in SceneMirror::toMeshData on one boundary frame); the rest
+    // stream in on the driver's ticks after the reveal.
+    mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
     mMirror->sync();
 }
 
