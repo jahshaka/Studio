@@ -279,6 +279,14 @@ add_test(NAME source.scene_no_friends
 set_tests_properties(source.scene_no_friends PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.scene_no_friends)
 
+# source.photon_one_dispatch — ENGINE-UPGRADE-2B stage 3: no raw HlmsCompute dispatch under
+# src/photon or in OgreSurfaceCache.cpp; photonDispatch (the GI region's witness) is the one door.
+add_test(NAME source.photon_one_dispatch
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/photon_one_dispatch.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.photon_one_dispatch PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.photon_one_dispatch)
+
 # source.scene_no_photon_members — ENGINE-UPGRADE-2B stage 1: Photon's state lives in
 # PhotonComponent, not OgreScene — none of the COMMITTED NAMED LIST (photon_members.txt) is an
 # OgreScene member, every one is a PhotonComponent member. See the script.

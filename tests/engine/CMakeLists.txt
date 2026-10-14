@@ -342,7 +342,7 @@ add_dependencies(test_engine_gpu_walk_parity JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_walk_parity CLASS engine COMMAND test_engine_gpu_walk_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine"
-    JAHSHAKA_TEST_FRAMES 67)   # counted from the source (4 + 8 + 2 + 13 steps x 4 + the drag's own one)
+    JAHSHAKA_TEST_FRAMES 103)   # counted from the source (4 + 8 + 2 + 4 + 21 steps x 4 + the drag's own one)
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)

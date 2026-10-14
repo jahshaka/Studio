@@ -839,6 +839,7 @@ source.photon_never_pinned 0.09  all n=2
 source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
+source.photon_one_dispatch 0.01  spec EU-2B stage 3 fix (2026-10-14)
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58

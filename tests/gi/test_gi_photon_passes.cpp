@@ -183,9 +183,35 @@ int main()
         const PhotonDispatchStatus p1 = photonDispatchStatus();
         std::printf("   plain VCT: %u of %zu frames ran photon_update; dispatches %llu in, %llu outside\n",
                     withUpdate, r2.size(), p1.inRegion - p0.inRegion, p1.outsideRegion - p0.outsideRegion);
-        CHECK(withUpdate > 0, "a plain VCT scene HAS photon_update and runs it on the frames its GI works");
+        CHECK(withUpdate > 0, "PRESENCE: a plain VCT scene has photon_update and runs it on the frames its GI works");
         CHECK(p1.inRegion > p0.inRegion && p1.outsideRegion == p0.outsideRegion,
               "NO Photon dispatch outside the GI region (the plain VCT scene: the arm, the moved still's cascades)");
+        // ---- THE VERB- AND DRAIN-TIME BUILDS (stage 3 read, finding A) ---------------------------
+        // After the scene has run: a GI configuration change (setGlobalIllumination rebuilds the
+        // arm through giDeferrable), an explicit refreshGi (the drain's plan() ->
+        // refreshGlobalIllumination -> the staged build / rebuildVct) and a material edit, each
+        // settled. RED BEFORE THE FIX: the arm those two rebuilt was dispatched outside every region.
+        const MaterialId editMat = s2->createPbrMaterial(PbrParams());
+        const NodeId edited = s2->createNode();
+        s2->attachMesh(edited, s2->createMesh(enginetest::unitCubeMesh()), editMat);
+        enginetest::setNodePosition(s2, edited, Vec3(-1.0f, 0.3f, 0.5f));
+        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        const PhotonDispatchStatus v0 = photonDispatchStatus();
+        GiParams g3 = g2;
+        g3.numBounces = 2;   // a configuration change: the arm rebuilds
+        s2->setGlobalIllumination(g3);
+        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        s2->refreshGlobalIllumination();
+        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        PbrParams red;
+        red.albedo = Colour(0.9f, 0.1f, 0.1f);
+        s2->setPbrMaterial(editMat, red);
+        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        const PhotonDispatchStatus v1 = photonDispatchStatus();
+        std::printf("   set GI + refreshGi + a material edit: dispatches %llu in, %llu outside\n",
+                    v1.inRegion - v0.inRegion, v1.outsideRegion - v0.outsideRegion);
+        CHECK(v1.inRegion > v0.inRegion && v1.outsideRegion == v0.outsideRegion,
+              "NO Photon dispatch outside the GI region (set GI after frames, refreshGi, a material edit)");
         e->destroyView(v2);
         e->destroyScene(s2);
     }

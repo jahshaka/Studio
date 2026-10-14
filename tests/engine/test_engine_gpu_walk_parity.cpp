@@ -10,7 +10,12 @@
 // a MISS (GpuSubstrateStatus::walkMissed). The bar: 0 misses, on a scene where every kind of
 // writer of a slot's transform or flags word runs — a mover, a material edit (the metal answer),
 // a cull edit (a cull twin), an alpha-test edit, a cast-shadow flip, a hidden parent, a drag
-// promoted and demoted, a mesh rebuild, a datablock swap, a planar reflector armed and disarmed.
+// promoted and demoted, a mesh rebuild, a datablock swap, a planar reflector armed and disarmed —
+// and (the stage 3 read, finding E) the detach tail (swap-remove MOVES another slot into the
+// hole: first), a light-mask write, the Atom switch off and on, a render-queue refile (a Blend
+// edit), a skin attached (a bone pose writes the bone buffer, never the slot's transform or flags
+// word: not a writer of the table), a mobility flip (setNodeMovable) and a nodeless write (a
+// transform on a node that carries no mesh, its slot-carrying child moving under it).
 // Each writer is followed by frames; each one must also have CHANGED what the table holds for
 // its node (its flags word or its transform), or the step tested nothing.
 #include "jahshaka/engine/Engine.h"
@@ -89,7 +94,26 @@ int main()
                  h = cubes[21], parent = cubes[1], child = cubes[2];
     const MaterialId other = scene->createPbrMaterial(PbrParams());
     const MeshId rebuilt = scene->createMesh(enginetest::unitCubeMesh());
+    // The nodeless write's group: a node with no mesh, one cube parented under it (settled first).
+    const NodeId group = scene->createNode(), grouped = cubes[9];
+    scene->setNodeParent(grouped, group);
+    // The skin: a GPU-skinned cube (one bone, every vertex weighted 1 to it).
+    MeshData skinned = enginetest::unitCubeMesh();
+    const size_t nv = skinned.positions.size() / 3;
+    skinned.blendIndices.assign(nv * 4, 0);
+    skinned.blendWeights.assign(nv * 4, 0.0f);
+    for (size_t v = 0; v < nv; ++v) skinned.blendWeights[v * 4] = 1.0f;
+    const MeshId skinMesh = scene->createMesh(skinned);
+    SkeletonDesc skel;
+    skel.id = "parity/rig";
+    BoneDesc bone;
+    bone.name = "root";
+    skel.bones.push_back(bone);
+    const NodeId rig = scene->createNode();
+    for (int i = 0; i < 4; ++i) e->renderOneFrame();
     std::vector<Step> steps = {
+        { "the detach tail (a middle slot detached: the last slot is moved into its hole)", [&] {
+              scene->detachMesh(cubes[5]); } },
         { "a mover", [&] { enginetest::setNodePosition(scene, a, Vec3(-2.5f, 0.6f, -2.0f)); } },
         { "a material edit (metalness 0 -> 1: the metal answer)", [&] {
               PbrParams p; p.metalness = 1.0f; p.roughness = 0.2f;
@@ -114,6 +138,18 @@ int main()
               scene->setPlanarReflections(pr);
               scene->setNodePlanarReflector(ground, true); } },
         { "a planar reflector disarmed", [&] { scene->setNodePlanarReflector(ground, false); } },
+        { "a light-mask write", [&] { scene->setNodeLightMask(cubes[15], 0x2u); } },
+        { "the Atom switch off", [&] { scene->setAtomDrawEnabled(false); } },
+        { "the Atom switch on", [&] { scene->setAtomDrawEnabled(true); } },
+        { "a render-queue refile (a Blend edit)", [&] {
+              PbrParams p; p.alphaMode = PbrAlphaMode::Blend; p.alpha = 0.5f;
+              scene->setPbrMaterial(matOf[cubes[16]], p); } },
+        { "a skin attached", [&] {
+              scene->attachSkinnedMesh(rig, skinMesh, matOf[cubes[18]], skel);
+              enginetest::setNodePosition(scene, rig, Vec3(2.5f, 0.3f, 2.0f)); } },
+        { "a mobility flip (setNodeMovable)", [&] { scene->setNodeMovable(cubes[20], true); } },
+        { "a nodeless write (a mesh-less group moved, its cube under it)", [&] {
+              enginetest::setNodePosition(scene, group, Vec3(0.0f, 0.5f, 0.0f)); } },
     };
     for (const Step &st : steps) {
         const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
