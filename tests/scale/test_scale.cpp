@@ -2223,7 +2223,11 @@ static int hitListMain()
 // compares every item (the only signal is a process-wide write counter; U0's change
 // set names the written nodes), so the substrate runs the compare as a
 // UniformScalableTask on the scene's workers and the frame's thread, with the
-// predicates' scene-wide inputs asked once per walk.
+// predicates' scene-wide inputs asked once per walk. THE ROW MEASURES THE OWNER'S
+// EDITOR SCENE: its scene is created with the Primary tier's workers (8 on the box;
+// Env::sceneWorkers, set by this row only) — on the engine default of 2 workers the
+// same walk reads 2.0-2.2 ms (2026-10-14). The bar moves only when stage 4 deletes the
+// flags backstop (the seams marking through U0's change set).
 // ===========================================================================
 static int cpuWalksMain()
 {
