@@ -91,6 +91,29 @@ jah_gpu_row(mirror.frame_input CLASS engine FRAMES 34 COMMAND test_mirror_frame_
 set_tests_properties(mirror.frame_input PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
+# mirror.doc_store — THE DOCUMENT'S TRANSFORM STORE IS THE ENGINE'S TRUTH (ENGINE-UPGRADE-U2 stage 1, DOCSTORE): on a
+# 1,000-node fixture with non-uniform, mirrored and zero scales, every world from the store equals Ogre's derived
+# transform after the frame (1e-6) and every parent / child set equals Ogre's (the order is the store's: case H), after a
+# keepTransform reparent, a scale, a rotation, zero-scale parents and a sheared parent; the re-expression keeps the
+# world and stores no NaN (SC1-REEXPRESS-SCALE-1). 7 cases x 2 frames.
+add_executable(test_doc_store test_doc_store.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_doc_store PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_doc_store PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_doc_store PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_doc_store PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)   # OgreNext: the engine's cached derived transform, read after a frame
+add_dependencies(test_doc_store JahshakaEngineMedia)
+jah_gpu_row(mirror.doc_store CLASS engine FRAMES 14 COMMAND test_doc_store
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.doc_store PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
+
 # mirror.change_set — THE FRAME'S CHANGE SET IS THE ONE SOURCE OF WHAT MOVED (ENGINE-UPGRADE-1 U0 3b): a still world
 # drains empty sets and costs no GI work (no scan, no caster visit, no GPU-table slot); one cube = one entry and one
 # caster visit; a group = one entry and its subtree; the lamp = one entry, one light, the serial +1; the soft promotion

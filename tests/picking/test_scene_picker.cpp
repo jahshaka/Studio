@@ -56,14 +56,6 @@ int main(int argc, char **argv) {
     ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
     auto hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
     CHECK(!hits.isEmpty(), "centre ray hits the cube");
-    // THE FALLBACK BROAD PHASE, pinned where it is actually exercised
-    // (SCENEGRAPH_SPEC §2): this suite builds a document nobody mirrors, so the
-    // engine holds none of its geometry and Ogre's RaySceneQuery would answer
-    // nothing. Everything below therefore characterises the document-side
-    // broad phase; mirror.document_to_engine pins the engine one and that the
-    // two agree.
-    CHECK(!iris::picking::lastUsedEngineBroadPhase(),
-          "an unmirrored document picks through the document broad phase");
     CHECK(ScenePicker::nearest(hits).node == front, "nearest hit is the cube");
     std::printf("    hit point %.2f %.2f %.2f (front face z should be ~+1)\n",
                 ScenePicker::nearest(hits).hitPoint.x(), ScenePicker::nearest(hits).hitPoint.y(), ScenePicker::nearest(hits).hitPoint.z());
@@ -332,7 +324,6 @@ int main(int argc, char **argv) {
         CHECK(hits(iris::Vec3(0, 0, 0), inside), "visibility: showing the parent makes it pickable again");
         CHECK(!hits(iris::Vec3(0, 3, 0), userHidden) && !userHidden->isVisibleInScene(),
               "visibility: the child hidden itself stays unpickable after the parent's hide/show");
-        CHECK(!iris::picking::lastUsedEngineBroadPhase(), "visibility: (the document broad phase)");
     }
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);

@@ -100,7 +100,7 @@ int main(int argc, char **argv)
             iris::graph::createNode(iris::graph::sceneOf(cam->graphNode()), cam->graphNode(),
                                     nullptr);
         CHECK(wire != nullptr, "an ENGINE child (a camera body wire) hangs off the camera");
-        CHECK(iris::graph::childCount(cam->graphNode()) == 1u, "...and Ogre sees it as a child");
+        CHECK(cam->childCount() == 0, "...and the document does not count it as a child");
         const unsigned long long before = writes();
         for (int i = 0; i < 50; ++i) fly(cam, float(i));
         CHECK(writes() == before,

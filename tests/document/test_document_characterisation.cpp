@@ -443,10 +443,9 @@ int main(int argc, char **argv)
     }
 
     // --- Transform propagation through the ONE tree -------------------------
-    // SPECS/SCENEGRAPH_SPEC.md D2: there are no document dirty flags and no
-    // cached matrices any more — a node's world transform is Ogre's, resolved
-    // on demand (Node::_getFullTransformUpdated) for the readers that need one
-    // between frames and by the engine's threaded SIMD pass inside the frame.
+    // A node's world transform is the document's transform store's
+    // (ENGINE-UPGRADE-U2: derived on read by Ogre's composition rule, cached
+    // per store epoch) — there are no per-node dirty flags to forget.
     // The three assertions this block used to carry about CACHE STALENESS (an
     // idle update leaving a hand-corrupted matrix alone, and setTransformDirty
     // repairing it) describe a mechanism that no longer exists and are gone

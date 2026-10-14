@@ -43,7 +43,7 @@ void ScenePicker::pickMeshes(iris::ScenePtr scene, const iris::Vec3 &segStart, c
                              const iris::Vec3 &cameraPos, bool forcePickable, QList<ScenePick> &out)
 {
     // ONE implementation, two entry points (audit F13): the mesh half of this
-    // picker IS iris::picking::raycastMeshes — Ogre's RaySceneQuery broad phase
+    // picker IS iris::picking::raycastMeshes — the document's own broad phase
     // plus our TriMesh narrow phase — and what stays here is the editor's own
     // helper spheres below, which have no document geometry to intersect.
     //

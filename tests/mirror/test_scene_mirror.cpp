@@ -173,7 +173,6 @@ int main(int argc, char **argv)
         CHECK(meshNode->isVisible() && !meshNode->isVisibleInScene(),
               "the child's own flag is untouched; it is not visible IN THE SCENE");
         CHECK(!picksCube(), "a child hidden by its parent is not pickable");
-        CHECK(iris::picking::lastUsedEngineBroadPhase(), "...through the engine broad phase");
         parent->setVisible(true);
         step("parent shown");
         CHECK(isMaterial(centre(img)), "showing the parent shows the child again");
@@ -1847,9 +1846,9 @@ int main(int argc, char **argv)
     // ---- PICKING: the broad phase really is the engine's ------------------
     // SCENEGRAPH_SPEC §2. `iris::picking::raycastMeshes` is the ONE
     // segment/mesh implementation behind both Scene::rayCast and Studio's
-    // ScenePicker (audit F13). Its broad phase is Ogre's RaySceneQuery when the
-    // engine holds the scene's geometry, and the document's own bounds walk
-    // when it does not — this pins BOTH, and that they agree.
+    // ScenePicker (audit F13). Its broad phase is the DOCUMENT's (ENGINE-UPGRADE-U2:
+    // the baked mesh box carried by the store's world pose) — one path, mirrored
+    // or not, and exact on the frame it is asked.
     {
         auto pdoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
@@ -1861,36 +1860,42 @@ int main(int argc, char **argv)
 
         const iris::Vec3 a(0, 0, 20), b(0, 0, -20);
 
-        // (1) NOT mirrored yet: no engine geometry for this document, so the
-        // fallback broad phase answers — and it must still hit.
+        // (1) NOT mirrored yet: no engine geometry for this document at all, and
+        // picking does not need any.
         auto pre = iris::picking::raycastMeshes(pdoc.data(), a, b);
-        CHECK(!iris::picking::lastUsedEngineBroadPhase(),
-              "picking: an unmirrored document uses the document broad phase");
         CHECK(!pre.isEmpty() && pre.first().node == cube,
-              "picking: ...and still finds the cube, with a triangle index");
+              "picking: an unmirrored document finds the cube, with a triangle index");
         CHECK(!pre.isEmpty() && pre.first().triangleIndex >= 0,
-              "picking: the fallback path reports a triangle index");
+              "picking: the narrow phase reports a triangle index");
 
-        // (2) mirrored: the Items exist, so RaySceneQuery is the broad phase.
+        // (2) mirrored: the same answer.
         SceneMirror pmirror(target);
         pmirror.setSource(pdoc);
         pmirror.sync();
-        engine->renderOneFrame();   // query AABBs come from the last updateSceneGraph
+        engine->renderOneFrame();
         auto post = iris::picking::raycastMeshes(pdoc.data(), a, b);
-        CHECK(iris::picking::lastUsedEngineBroadPhase(),
-              "picking: a mirrored document uses Ogre's RaySceneQuery broad phase");
         CHECK(!post.isEmpty() && post.first().node == cube,
-              "picking: the engine broad phase finds the same cube");
-        CHECK(!post.isEmpty() && post.first().triangleIndex >= 0,
-              "picking: ...and the triangle narrow phase is still ours");
+              "picking: a mirrored document finds the same cube");
+        CHECK(!post.isEmpty() && pre.size() == post.size() &&
+                  post.first().triangleIndex == pre.first().triangleIndex,
+              "picking: ...the same hits, the same triangle");
+
+        // (3) THE FRAME IT IS ASKED (the engine's RaySceneQuery answered from the
+        // last updateSceneGraph — a node moved since was tested at its old place):
+        // moved and picked with NO frame in between, it is found where it IS.
+        cube->setLocalPos(iris::Vec3(6, 0, 0));
+        CHECK(!iris::picking::raycastMeshes(pdoc.data(), iris::Vec3(6, 0, 20), iris::Vec3(6, 0, -20)).isEmpty(),
+              "picking: a node moved this frame is hit at its NEW place (no frame rendered)");
+        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b).isEmpty(),
+              "picking: ...and not at its old one");
+        cube->setLocalPos(iris::Vec3(0, 0, 0));
 
         // A ray that misses finds nothing through either phase.
         const iris::Vec3 mA(50, 50, 20), mB(50, 50, -20);
         CHECK(iris::picking::raycastMeshes(pdoc.data(), mA, mB).isEmpty(),
               "picking: a ray past the geometry hits nothing");
 
-        // `pickable` is honoured exactly: the flag reaches the Item as an Ogre
-        // QUERY FLAG (the mirror pushes it) and is re-checked on the candidate.
+        // `pickable` is honoured exactly, on the candidate.
         cube->setPickable(false);
         pmirror.sync();
         engine->renderOneFrame();
@@ -1900,8 +1905,7 @@ int main(int argc, char **argv)
               "picking: ...unless the caller asks for unpickable nodes too");
         cube->setPickable(true);
 
-        // pickingGroups stays an ALL-test on the candidates (Ogre's mask is an
-        // ANY-test and cannot express it).
+        // pickingGroups stays an ALL-test on the candidates.
         cube->pickingGroups = 0x3;
         pmirror.sync();
         CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0x1).isEmpty(),
