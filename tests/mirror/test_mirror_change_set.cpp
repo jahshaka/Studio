@@ -9,9 +9,14 @@
 //   4. THE LAMP: written with its own pose = one entry and NO re-solve (the pose key compares the named lamp); moved =
 //      one entry, one light in it, the light serial up by exactly one (the re-inject's key), one settled re-solve —
 //      what the mirror's three light hashes and noteLightsMoved used to say, named instead.
+//   6. A POSED RIG NAMES ITS RIDERS: a bone rider's item is re-read when the rig poses — one movement scan over
+//      the rider, never a full one (the read of 3b, B: the pose used to owe a nodeless full pass every frame).
+//   7. THE ONE GI SCHEDULER answers in environment frames: a moved still lamp settles into one re-solve after the
+//      stability window and none before it (settlePending meanwhile), world.refreshGi() re-solves on the next.
 //   5. THE SOFT PROMOTION IS DECIDED BY THE SET: a cube written while playing is promoted (one miss), a cube written
 //      just BEFORE play started is not (the play edge's sync holds no surprise), and a cube nobody writes stays still.
 #include <QGuiApplication>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -30,6 +35,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../skeletal/armrig.h"
 
 using namespace jahshaka::engine;
 
@@ -152,14 +158,14 @@ int main(int argc, char **argv)
 
     // 4. the lamp moved (and, first, written with its OWN pose: named, but no move the debounce answers)
     {
-        const quint64 r0 = mirror.giRefreshCount();
+        const quint64 r0 = mirror.target()->giStatus().schedulerResolves;
         lamp->setLocalPos(lamp->getLocalPos());
         frame();
         CHECK(changes().changesMoved == 1, "the lamp written with its own pose: still ONE entry, named (%u)",
               changes().changesMoved);
         for (int i = 0; i < 30; ++i) frame();
-        CHECK(mirror.giRefreshCount() == r0, "...but no re-solve settles out of a pose that did not change (%llu)",
-              (unsigned long long)(mirror.giRefreshCount() - r0));
+        CHECK(mirror.target()->giStatus().schedulerResolves == r0, "...but no re-solve settles out of a pose that did not change (%llu)",
+              (unsigned long long)(mirror.target()->giStatus().schedulerResolves - r0));
         const unsigned long long s0 = target->lightWriteSerial();
         lamp->setLocalPos(lamp->getLocalPos() + iris::Vec3(0.5f, 0.0f, 0.0f));
         frame();
@@ -168,10 +174,10 @@ int main(int argc, char **argv)
               c.changesMoved, c.changesLights);
         CHECK(target->lightWriteSerial() - s0 == 1, "...the light serial up by exactly one, the re-inject's key (%llu)",
               target->lightWriteSerial() - s0);
-        const quint64 r1 = mirror.giRefreshCount();
+        const quint64 r1 = mirror.target()->giStatus().schedulerResolves;
         for (int i = 0; i < 20; ++i) frame();
-        CHECK(mirror.giRefreshCount() == r1 + 1, "...and a still lamp that MOVED settles into exactly one re-solve (%llu)",
-              (unsigned long long)(mirror.giRefreshCount() - r1));
+        CHECK(mirror.target()->giStatus().schedulerResolves == r1 + 1, "...and a still lamp that MOVED settles into exactly one re-solve (%llu)",
+              (unsigned long long)(mirror.target()->giStatus().schedulerResolves - r1));
     }
 
     // 5. the soft promotion, decided by the set
@@ -192,6 +198,62 @@ int main(int argc, char **argv)
               (unsigned long long)(mirror.mobilityMissCount() - m0));
         doc->setPlaying(false);
         frame();
+    }
+
+    // 6. a posed rig with a bone rider (engine verbs on the mirror's own scene)
+    {
+        const iris::MeshPtr armMesh = armrig::buildArmMesh();
+        SkeletonDesc rig;
+        MeshData armData;
+        const bool translated = SceneMirror::toSkeletonDesc(armMesh->getSkeleton(), rig) &&
+                                SceneMirror::toMeshData(armMesh.data(), armData);
+        std::vector<float> bi, bw;
+        SceneMirror::toSkinData(armMesh.data(), bi, bw);
+        armData.blendIndices.resize(bi.size());
+        for (size_t i = 0; i < bi.size(); ++i) armData.blendIndices[i] = (unsigned char)(int)bi[i];
+        armData.blendWeights = bw;
+        MeshData cubeData;
+        SceneMirror::toMeshData(cubeMesh.data(), cubeData);
+        const MaterialId m = target->createPbrMaterial(PbrParams());
+        const NodeId owner = target->createNode();
+        const NodeId rider = target->createNode();
+        const bool built = translated && target->attachSkinnedMesh(owner, target->createMesh(armData), m, rig) &&
+                           target->attachMesh(rider, target->createMesh(cubeData), m) &&
+                           target->attachToBone(rider, owner, "jointTip", Vec3(), Quat(), Vec3(1, 1, 1));
+        CHECK(built, "a rig with a cube riding its jointTip bone");
+        for (int i = 0; i < 20; ++i) frame();
+        const size_t bones = target->boneNames(owner).size();
+        std::vector<BonePose> poses(bones);
+        const GiStatus g0 = gi();
+        for (int i = 0; i < 4; ++i) {
+            const float half = 0.5f * 0.087f * float(i + 1);   // 5 degrees a frame about X
+            for (size_t b = 0; b < bones; ++b) poses[b].rotation = Quat(std::sin(half), 0.0f, 0.0f, std::cos(half));
+            target->setBonePoses(owner, poses.data(), poses.size());
+            frame();
+        }
+        CHECK(bones > 0 && gi().giScans - g0.giScans == 4 && gi().giScansFull == g0.giScansFull,
+              "a posed rig names its rider: 4 posed frames, 4 movement scans, NONE full (%llu, %llu)",
+              gi().giScans - g0.giScans, gi().giScansFull - g0.giScansFull);
+        for (int i = 0; i < 20; ++i) frame();
+    }
+
+    // 7. the one GI scheduler, in environment frames
+    {
+        const GiStatus g0 = gi();
+        lamp->setLocalPos(lamp->getLocalPos() + iris::Vec3(0.0f, 0.0f, 0.5f));
+        frame();
+        CHECK(gi().settlePending, "a moved still lamp ARMS the settle");
+        int frames = 1;
+        while (gi().schedulerResolves == g0.schedulerResolves && frames < 40) { frame(); ++frames; }
+        CHECK(gi().schedulerResolves == g0.schedulerResolves + 1 && !gi().settlePending,
+              "...and settles into ONE re-solve after the stability window (%d environment frames)", frames);
+        CHECK(frames == 16, "...at exactly the window: the move's frame + 15 still frames (%d)", frames);
+        const unsigned long long r1 = gi().schedulerResolves;
+        ++doc->giRefreshSerial;
+        frame();
+        CHECK(gi().schedulerResolves == r1 + 1, "world.refreshGi()'s serial re-solves on the next frame");
+        for (int i = 0; i < 20; ++i) frame();
+        CHECK(gi().schedulerResolves == r1 + 1, "...and nothing after it while the world is still");
     }
 
     mirror.setSource(iris::ScenePtr());

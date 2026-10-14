@@ -2672,15 +2672,21 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     // exactly as it freezes the falling crate.
     mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
     if (mEngine) {
-        // ...AND THE USER'S GESTURE, AS THIS HOST KNOWS IT (U0 3a: FrameInput::gesture): a gizmo drag (this widget's
-        // or the wearer's — one gizmo per mode in the process) or a material hover preview, with the node it moves.
-        // The engine's GI scheduler reads it from 3c on; until then it still infers a gesture from motion.
+        // ...AND THE USER'S GESTURE, AS THIS HOST KNOWS IT (U0 3a; read since 3c — the engine infers no drag from
+        // motion): a gizmo drag (this widget's or the wearer's — one gizmo per mode in the process) or a material
+        // hover preview, with the node it moves. Every frame, so the release lands on the frame it happens.
         jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
-        jahshaka::engine::FrameInputGesture gesture;
-        gesture.active = (mGizmo && mGizmo->isDragging()) || (mScene && mScene->materialPreviewDepth > 0);
-        if (gesture.active && mSelectedNode && mMirror)
-            if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.data())) gesture.nodes.push_back(id);
-        frame.gesture = gesture;
+        if (mEngineScene) {
+            jahshaka::engine::FrameInputGesture gesture;
+            gesture.active = (mGizmo && mGizmo->isDragging()) || (mScene && mScene->materialPreviewDepth > 0);
+            if (gesture.active && mSelectedNode && mMirror)
+                if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.data()))
+                    gesture.nodes.push_back(id);
+            jahshaka::engine::FrameInputScene part;
+            part.scene = mEngineScene;
+            part.gesture = gesture;
+            frame.scenes.push_back(part);
+        }
         mEngine->submitFrame(frame);
     }
 }
@@ -2986,6 +2992,13 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);
     out.dragMovers           = st.dragMovers;
     out.dragMoverGestures    = double(st.dragMoverGestures);
+    out.scheduler.pushes             = double(st.schedulerPushes);
+    out.scheduler.resolves           = double(st.schedulerResolves);
+    out.scheduler.lightTicks         = double(st.schedulerLightTicks);
+    out.scheduler.lightTicksAtRest   = double(st.schedulerLightTicksAtRest);
+    out.scheduler.settlePending      = st.settlePending;
+    out.scheduler.settleStableFrames = int(st.settleStableFrames);
+    out.scheduler.gestureActive      = st.gestureActive;
     out.cards.built             = st.cards.built;
     out.cards.pageSize          = int(st.cards.pageSize);
     out.cards.pages             = int(st.cards.pages);
@@ -3261,10 +3274,6 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     MirrorStats s;
     if (!mMirror) return s;   // available stays false: no mirror, no counts
     s.available = true;
-    s.giPushes = mMirror->giPushCount();
-    s.giRefreshes = mMirror->giRefreshCount();
-    s.giLightRefreshes = mMirror->giLightRefreshCount();
-    s.giLightRefreshesAtRest = mMirror->giLightRefreshAtRestCount();
     // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): what the DOCUMENT resolved.
     // The renderer's own records — and the play-time misses — are reported by
     // world.giStatus(), beside the probe and rebuild counters they belong with.
@@ -3527,12 +3536,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                 }
                 part.postFx = fx;
             };
-            const quint64 giPushes = mMirror->giPushCount();
             mMirror->sync(SceneMirror::FrameViews{ { sv } });
             // A GI CONFIGURATION THIS SHOT'S RECORD CHANGES lands at the shot's first frame (U0 3a), so the settle
             // below cannot read it yet: the shot draws that frame first and then waits for giAtRest, as a gathering
-            // scene does.
-            shotGiChanged = mMirror->giPushCount() != giPushes;
+            // scene does. The engine's compare says so (U0 3c: the mirror keeps no copy of what it pushed).
+            shotGiChanged = view() && view()->scene() && mEngine->pendingGiConfiguration(view()->scene());
         }
     }
     // A screenshot is an offscreen render of this same scene: without this

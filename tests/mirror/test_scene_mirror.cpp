@@ -1663,13 +1663,13 @@ int main(int argc, char **argv)
         gcam->update(0.0f);
         mirror.sync(mirrorframe::camera(view, gcam));
 
-        const quint64 push0 = mirror.giPushCount(), refresh0 = mirror.giRefreshCount();
+        const quint64 push0 = mirror.target()->giStatus().schedulerPushes, refresh0 = mirror.target()->giStatus().schedulerResolves;
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
-        const quint64 pushAfterFirst = mirror.giPushCount();
+        const quint64 pushAfterFirst = mirror.target()->giStatus().schedulerPushes;
         CHECK(pushAfterFirst == push0 + 1, "GI idle: the first environment record pushes VCT exactly once");
-        CHECK(mirror.giRefreshCount() == refresh0, "GI idle: the first push is not also a refresh");
+        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0, "GI idle: the first push is not also a refresh");
 
         // The world transforms the signature is built from, captured once.
         const iris::Mat4 sun0 = gsun->getGlobalTransform(), panel0 = gpanel->getGlobalTransform();
@@ -1686,9 +1686,9 @@ int main(int argc, char **argv)
         // that field can never hand the signature two different answers.
         CHECK(gsun->getGlobalTransform() == sun0 && gpanel->getGlobalTransform() == panel0,
               "GI idle: getGlobalTransform() recomputes to the same bits the cache holds");
-        CHECK(mirror.giPushCount() == pushAfterFirst,
+        CHECK(mirror.target()->giStatus().schedulerPushes == pushAfterFirst,
               "GI idle: 60 idle frames pushed no new GI configuration");
-        CHECK(mirror.giRefreshCount() == refresh0,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0,
               "GI idle: 60 idle frames asked for ZERO GI re-solves");
 
         // A light that really moves must still re-solve — exactly once, but NOT
@@ -1702,14 +1702,14 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
         engine->renderOneFrame();
-        CHECK(mirror.giRefreshCount() == refresh0,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0,
               "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
         }
-        CHECK(mirror.giRefreshCount() == refresh0 + 1,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1,
               "GI: once the light holds still, moving it re-solved exactly once");
 
         // Moving GEOMETRY is deliberately NOT a re-solve (GI_SPEC: the mirror
@@ -1721,7 +1721,7 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::environment(view));
             engine->renderOneFrame();
         }
-        CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a MESH does not re-solve");
+        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1, "GI: moving a MESH does not re-solve");
 
         // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
         //
@@ -1765,23 +1765,23 @@ int main(int argc, char **argv)
             // Read until the counter stops moving: two still windows in a row.
             const auto drain = [&]() {
                 for (int round = 0; round < 8; ++round) {
-                    const quint64 before = mirror.giRefreshCount();
+                    const quint64 before = mirror.target()->giStatus().schedulerResolves;
                     settle(40);
-                    if (mirror.giRefreshCount() == before) return;
+                    if (mirror.target()->giStatus().schedulerResolves == before) return;
                 }
             };
 
             // ARM A: unflagged. One hover in, one hover out.
             drain();
-            const quint64 beforeA = mirror.giRefreshCount();
+            const quint64 beforeA = mirror.target()->giStatus().schedulerResolves;
             const quint64 swaps0 = mirror.materialSwapCount();
             const quint64 attaches0 = mirror.meshAttachCount();
             previewTarget->setMaterial(borrowed);
             settle(20);
-            const quint64 afterHoverA = mirror.giRefreshCount();
+            const quint64 afterHoverA = mirror.target()->giStatus().schedulerResolves;
             previewTarget->setMaterial(originalMat);
             settle(20);
-            const quint64 afterRestoreA = mirror.giRefreshCount();
+            const quint64 afterRestoreA = mirror.target()->giStatus().schedulerResolves;
             std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu; material swaps +%llu, "
                         "mesh re-attaches +%llu\n",
                         (unsigned long long)(afterHoverA - beforeA),
@@ -1810,16 +1810,16 @@ int main(int argc, char **argv)
             borrowed2->setRoughnessFactor(0.83f);
 
             drain();
-            const quint64 beforeB = mirror.giRefreshCount();
+            const quint64 beforeB = mirror.target()->giStatus().schedulerResolves;
             ++gdoc->materialPreviewDepth;
             previewTarget->setMaterial(borrowed2);
             settle(20);
-            CHECK(mirror.giRefreshCount() == beforeB,
+            CHECK(mirror.target()->giStatus().schedulerResolves == beforeB,
                   "GI preview: a FLAGGED hover held past the stability window asks for NO re-solve");
             previewTarget->setMaterial(originalMat);
             --gdoc->materialPreviewDepth;
             settle(20);
-            CHECK(mirror.giRefreshCount() == beforeB,
+            CHECK(mirror.target()->giStatus().schedulerResolves == beforeB,
                   "GI preview: ending the preview asks for no re-solve either (the signature never moved)");
 
             // ...and the gate is a GATE, not a mute: an edit to a material the
@@ -1828,11 +1828,11 @@ int main(int argc, char **argv)
             // and `material.set` do — the path the engine's generation counter
             // is actually keyed on.)
             drain();
-            const quint64 beforeC = mirror.giRefreshCount();
+            const quint64 beforeC = mirror.target()->giStatus().schedulerResolves;
             if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
                 pbr->setBaseColor(QColor(200, 30, 30));
             settle(20);
-            CHECK(mirror.giRefreshCount() == beforeC + 1,
+            CHECK(mirror.target()->giStatus().schedulerResolves == beforeC + 1,
                   "GI preview: a COMMITTED material edit after the preview still re-solves, once");
         }
 
@@ -2175,8 +2175,8 @@ int main(int argc, char **argv)
               "mobility: removing the driver puts the branch back (authoring, not automatic)");
 
         // ---- THE SURPRISE MOVER (O3): play only, warned once, no rebuild ---
-        const quint64 refreshesBefore = mmirror.giRefreshCount();
-        const quint64 pushesBefore = mmirror.giPushCount();
+        const quint64 refreshesBefore = mmirror.target()->giStatus().schedulerResolves;
+        const quint64 pushesBefore = mmirror.target()->giStatus().schedulerPushes;
         mdoc->setPlaying(true);
         mmirror.sync();                       // the frame that sees it standing still
         CHECK(mmirror.mobilityMissCount() == 0, "mobility: standing still during play is not a miss");
@@ -2193,7 +2193,7 @@ int main(int argc, char **argv)
         mmirror.sync();
         CHECK(mmirror.mobilityMissCount() == 1,
               "mobility: ...and NOT once per frame it keeps moving (one warning per play session)");
-        CHECK(mmirror.giRefreshCount() == refreshesBefore && mmirror.giPushCount() == pushesBefore,
+        CHECK(mmirror.target()->giStatus().schedulerResolves == refreshesBefore && mmirror.target()->giStatus().schedulerPushes == pushesBefore,
               "mobility: the soft promotion costs NO GI refresh (that is the whole point of O3)");
 
         // Play stop clears it: the document drops the soft flag, the mirror

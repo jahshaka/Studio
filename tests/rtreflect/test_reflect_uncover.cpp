@@ -34,6 +34,7 @@
 //
 // Every number is frames-counted (the engine has no wall clock).
 #include "jahshaka/engine/Engine.h"
+#include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -242,6 +243,7 @@ static int uncoverMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     for (int k = 0; k < 3; ++k) {
         while (frame < kCheck[k]) {
             ++frame;
+            enginetest::gesture(e, s, { room.box });   // a gesture moves it (U0 3c: the host says so)
             s->setNodeTransform(room.box, boxAt(frame), Quat(), Vec3(kBox, kBox, kBox));
             e->renderOneFrame();
         }
@@ -266,6 +268,7 @@ static int uncoverMain(Engine *e, Scene *s, View *view, const char *dumpDir)
                 writePpm(w, base + "-reflw.ppm");
             }
         }
+        enginetest::gesture(e, s, {});             // the hand pauses: the settle is at rest
         render(e, kSettle);
         if (!view->readPixels(settled)) { std::printf("FAIL: readPixels\n"); return 1; }
         const Rect direct = boxRect(boxAt(frame), 0.5f * kBox, 2.0f);

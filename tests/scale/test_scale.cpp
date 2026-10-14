@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "../support/gesture.h"
 
 #include "bridge/sceneworkerthreads.h"
 #include "jahshaka/engine/GpuSubstrate.h"
@@ -2650,8 +2651,8 @@ static int latticeOwedMain()
     }
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
-    // THE DRAG: one cube moved every frame for 60 frames — a still node moved on
-    // consecutive ticks IS the engine's drag (OgreGi.cpp:4053, MOVER-1's promotion) —
+    // THE DRAG: one cube moved every frame for 60 frames under the host's GESTURE (U0 3c: the record says
+    // it is held — MOVER-1's promotion) —
     // and the scene-graph updates the GI side adds per frame (the gi.sceneGraph monitor
     // stages, one per call). Two arms: the mover channel ON (the default, per project)
     // and OFF (giDragMoverChannel 0, the older behaviour a project may still choose).
@@ -2663,11 +2664,14 @@ static int latticeOwedMain()
         const iris::Vec3 p0 = cubeNode->getLocalPos();
         int dragMovers = 0;
         const auto drag = collect(env, [&] {
+            const jahshaka::engine::NodeId held = env.mirror->engineNode(cubeNode.data());
             for (int f = 0; f < 60; ++f) {
+                enginetest::gesture(env.engine.get(), env.scene, { held });   // the hand is on it (U0 3c)
                 cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));
                 frame(env, 1);
                 dragMovers = std::max(dragMovers, env.scene->giStatus().dragMovers);
             }
+            enginetest::gesture(env.engine.get(), env.scene, {});
         });
         std::vector<double> calls, ms;
         for (const FrameRecord &r : drag) {

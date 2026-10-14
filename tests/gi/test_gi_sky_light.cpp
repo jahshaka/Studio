@@ -790,7 +790,7 @@ int main(int argc, char **argv)
     // already applied. It is never an Ogre::Light at all.
     {
         for (int f = 0; f < 20; ++f) frame();      // let anything already owed settle
-        const quint64 refreshes = mirror.giRefreshCount();
+        const quint64 refreshes = mirror.target()->giStatus().schedulerResolves;
         const unsigned long long rebuilds = escene->giStatus().rebuilds;
         const Colour before = shade(108);
         skyLight->intensity = 0.3f;
@@ -800,16 +800,16 @@ int main(int argc, char **argv)
         const Colour dim = shade(108);
         std::printf("   sky light 1.0 -> 0.3: %.3f -> %.3f, re-solves %llu, rebuilds %llu\n",
                     lum(before), lum(dim),
-                    (unsigned long long)(mirror.giRefreshCount() - refreshes),
+                    (unsigned long long)(mirror.target()->giStatus().schedulerResolves - refreshes),
                     escene->giStatus().rebuilds - rebuilds);
         CHECK(lum(dim) < lum(before) * 0.6f, "11a. the intensity edit reaches the picture");
-        CHECK(mirror.giRefreshCount() == refreshes,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes,
               "11b. ...and costs NO full GI re-solve (it is not a voxel light)");
         CHECK(escene->giStatus().rebuilds == rebuilds,
               "11c. ...and no from-scratch rebuild of the arm");
         skyLight->intensity = 1.0f;
         for (int f = 0; f < 25; ++f) frame();
-        CHECK(mirror.giRefreshCount() == refreshes && escene->giStatus().rebuilds == rebuilds,
+        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes && escene->giStatus().rebuilds == rebuilds,
               "11d. and neither does putting it back");
     }
 

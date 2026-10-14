@@ -713,26 +713,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "ignores it, and \"No world open\" is not a load and always shows. ONE THING IT CANNOT DO, said here because it is measured and surprising: a world opened while the editor page is already showing one leaves the PREVIOUS world's last frame on screen for the length of the load whatever this preference says. A viewport with no world bound PRESENTS NOTHING (the engine destroys the view's workspace with its scene), so after the teardown no cover can be put there either — that is also why \"No world open\" is never actually drawn. The fix is engine-side (a scene-less view drawing its own background, STALE-VIEW-1). Every Desktop route — every create, every tile — is unaffected: its viewport is hidden for the load and the frames it reveals are the new world's. With no argument "
           "this reads; with one it writes and returns the new value.",
           Needs::Window },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred}",
-          "What the editor viewport's document->engine mirror has had to do about GLOBAL "
-          "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
-          "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
-          "re-solve tears the voxelizer down and rebuilds it from every item in the scene — and "
-          "both are debounced against the last value pushed, so \"a scene nobody is editing "
-          "re-solves ZERO times\" is a contract of the mirror rather than an optimisation. It is "
-          "invisible in pixels (a re-voxelized scene looks identical; it just costs a frame) and "
-          "invisible in the document, which is why the counters are the only way to assert it — "
-          "the perf.epic_steady_state gate does exactly that on a real sample scene. "
-          "`giLightRefreshes` counts the CHEAP half: while a light is being dragged the mirror "
-          "no longer re-solves at all, it re-injects the lights into the voxels that are already "
-          "there every few frames and waits for the drag to stop before the real re-solve. So "
-          "during a drag this is the counter that moves and `giRefreshes` is the one that must "
-          "NOT. `giLightRefreshesAtRest` is the subset of those taken once the motion STOPPED: "
-          "the injection is cheap while something moves (one bounce, a coarser ray march) and "
-          "must be the scene's full bounce count on the frame the movement ends, so one of these "
-          "follows every burst of movement — and for a lamp the author marked Movable it is the "
-          "only thing that ever runs the full count again, because that path deliberately arms "
-          "no re-solve at all.\n\n"
+        { "mirrorStats", "editor.mirrorStats() -> {available, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred}",
+          "What the editor viewport's document->engine mirror has had to do. (When the renderer's GLOBAL "
+          "ILLUMINATION answers a change — its configuration pushes, re-solves and cheap light re-injections — "
+          "is the RENDERER's own scheduler and is reported by world.giStatus().scheduler.)\n\n"
           "MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3): `movableNodes` is how many of the "
           "scene's objects THE DOCUMENT resolved as MOVING on the last sync — physics bodies, "
           "characters, socket riders, animated objects, particle emitters, and everything "
@@ -3010,10 +2994,6 @@ QVariantMap EditorApi::mirrorStats()
     const IEditorViewport::MirrorStats s =
         host.viewport ? host.viewport->mirrorStats() : IEditorViewport::MirrorStats{};
     out.insert("available", s.available);
-    out.insert("giPushes", QVariant::fromValue(s.giPushes));
-    out.insert("giRefreshes", QVariant::fromValue(s.giRefreshes));
-    out.insert("giLightRefreshes", QVariant::fromValue(s.giLightRefreshes));
-    out.insert("giLightRefreshesAtRest", QVariant::fromValue(s.giLightRefreshesAtRest));
     // MOBILITY (REALTIME_REFLECTIONS_SPEC §3.3): "how many things in this scene
     // does the DOCUMENT say move?". The renderer's side of it is on
     // world.giStatus() (§3.3.4), where R2's counters live.

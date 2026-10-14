@@ -312,29 +312,29 @@ int main(int argc, char **argv)
     // it. It also re-voxelizes ONCE on settle (the wall's bounce changes colour
     // too): VctMaterial caches each datablock's conversion by pointer, so the
     // voxel arm is rebuilt fresh under the probes it keeps.
-    const quint64 solvesBeforeAlbedo = mirror.giRefreshCount();
-    const quint64 injectsBeforeAlbedo = mirror.giLightRefreshCount();
+    const quint64 solvesBeforeAlbedo = mirror.target()->giStatus().schedulerResolves;
+    const quint64 injectsBeforeAlbedo = mirror.target()->giStatus().schedulerLightTicks;
     input("albedo", GiStaleReason::Material,
           [&]() { wallMat->setBaseColor(QColor(5, 5, 255)); }, 40);
     // A material-only edit waits for the settle WITHOUT the light re-inject
     // cadence (and its irradiance-field reset): nothing a re-inject reads
     // changed. The material generation is its own term for exactly this.
-    CHECK(mirror.giLightRefreshCount() == injectsBeforeAlbedo,
+    CHECK(mirror.target()->giStatus().schedulerLightTicks == injectsBeforeAlbedo,
           "albedo: the settle wait runs NO light re-inject (the material term is its own)");
     const Colour blueMirror = mirrorPixel();
     std::printf("   mirror, after the albedo edit   r=%.3f g=%.3f b=%.3f\n",
                 blueMirror.r, blueMirror.g, blueMirror.b);
     CHECK(blueMirror.b > blueMirror.r + 0.3f,
           "albedo: the mirror pixel FOLLOWS the edit — it now shows the BLUE wall");
-    CHECK(mirror.giRefreshCount() - solvesBeforeAlbedo == 1,
+    CHECK(mirror.target()->giStatus().schedulerResolves - solvesBeforeAlbedo == 1,
           "albedo: the voxel half re-solves exactly once (coalesced, like a moved object)");
 
     // A ROUGHNESS edit is seen by the probes but not by the voxelizer (which
     // reads albedo/emissive/alpha only): it re-captures and costs no re-solve.
-    const quint64 solvesBeforeRough = mirror.giRefreshCount();
+    const quint64 solvesBeforeRough = mirror.target()->giStatus().schedulerResolves;
     input("roughness", GiStaleReason::Material,
           [&]() { wallMat->setRoughnessFactor(0.5f); }, 12);
-    CHECK(mirror.giRefreshCount() == solvesBeforeRough,
+    CHECK(mirror.target()->giStatus().schedulerResolves == solvesBeforeRough,
           "roughness: probes re-capture, the voxels do not re-solve");
 
     // An edit that changes NOTHING stales nothing (the mirror pushes materials
@@ -379,10 +379,10 @@ int main(int argc, char **argv)
     // now hashes the light's parameters, so the voxels re-inject on the drag
     // cadence and re-solve ONCE on settle — before, a colour edit never reached
     // the voxel bounce at all.
-    const quint64 solvesBeforeLight = mirror.giRefreshCount();
+    const quint64 solvesBeforeLight = mirror.target()->giStatus().schedulerResolves;
     input("light colour", GiStaleReason::Light,
           [&]() { sun->color = QColor(255, 180, 120); }, 40);
-    CHECK(mirror.giRefreshCount() - solvesBeforeLight == 1,
+    CHECK(mirror.target()->giStatus().schedulerResolves - solvesBeforeLight == 1,
           "light colour: exactly ONE settle re-solve (it used to be none)");
 
     // ---- an AMBIENT change ----------------------------------------------------
@@ -406,7 +406,7 @@ int main(int argc, char **argv)
     {
         const Colour lit = mirrorPixel();
         const unsigned long long serial = escene->giStatus().staleSerial;
-        const quint64 solves = mirror.giRefreshCount();
+        const quint64 solves = mirror.target()->giStatus().schedulerResolves;
         sun->setVisible(false);
         frame();
         const GiStatus st = escene->giStatus();
@@ -420,7 +420,7 @@ int main(int argc, char **argv)
               "lamp off: the chrome probe pixel DARKENS within ceil(probes / budget) frames");
         CHECK(worstOver(40) <= kAllowed && escene->giStatus().staleProbes == 0,
               "lamp off: spread, then caught up");
-        CHECK(mirror.giRefreshCount() - solves == 1,
+        CHECK(mirror.target()->giStatus().schedulerResolves - solves == 1,
               "lamp off: the voxel bounce re-solves once on settle (the signature sees it)");
         CHECK(worstOver(20) == 0, "lamp off: ...and then the scene idles");
         sun->setVisible(true);
@@ -435,7 +435,7 @@ int main(int argc, char **argv)
     // now does, and the voxels are left alone (no re-solve).
     {
         const Colour before = mirrorPixel();
-        const quint64 solves = mirror.giRefreshCount();
+        const quint64 solves = mirror.target()->giStatus().schedulerResolves;
         auto plateMat = pbr(QColor(5, 255, 5));
         plateMat->setShadingModel(1);                         // Unlit
         iris::MeshNodePtr plate;
@@ -479,7 +479,7 @@ int main(int argc, char **argv)
         const Colour gone = mirrorPixel();
         CHECK(std::fabs(lum(gone) - lum(before)) < 0.15f && gone.g < gone.b,
               "unlit plane: deleted, it leaves the reflection within ceil(probes / budget) frames");
-        CHECK(mirror.giRefreshCount() == solves,
+        CHECK(mirror.target()->giStatus().schedulerResolves == solves,
               "unlit plane: all of it re-captured probes only — the voxels never re-solved");
         // The delete destroys the node's OWN mesh, and a destroyed node-owned
         // mesh is a from-scratch GI rebuild by the pre-existing rule (Instant
