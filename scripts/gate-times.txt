@@ -133,6 +133,7 @@ engine.gi_scan 2.38  quiet n=43
 engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
+engine.gpu_substrate 2.10  solo (EU-2 stage 1, 2026-10-14)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
 engine.lod_hysteresis 1.61  quiet n=44
 engine.lod_rule_parity 5.19  quiet n=44
@@ -249,6 +250,7 @@ gi.pcc_mirror.ray_tier 53.60  quiet n=44
 gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
+gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
 gi.probe_inputs 11.39  quiet n=44
 gi.probe_nan 5.64  quiet n=41
@@ -822,6 +824,7 @@ source.panel_rows_guarded 0.00  ship 3a0422b4e (2026-10-13)
 source.photon_never_pinned 0.09  all n=2
 source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.row_declares_needs 0.35  all n=2
+source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
 source.testing_rules 0.57  quiet n=56
