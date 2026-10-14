@@ -249,7 +249,8 @@ Objects:  {
 			P: "RotationActive", "bool", "", "",1
 			P: "InheritType", "enum", "", "",1
 			P: "Lcl Translation", "Lcl Translation", "", "A",0,10,0
-			P: "Lcl Rotation", "Lcl Rotation", "", "A",-60,30,0
+			P: "Lcl Rotation", "Lcl Rotation", "", "A",-45,30,0
+			P: "PostRotation", "Vector3D", "Vector", "",-90,0,0
 		}
 		Shading: T
 		Culling: "CullingOff"

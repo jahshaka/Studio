@@ -23,6 +23,7 @@
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QTemporaryDir>
+#include <QtMath>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -31,6 +32,7 @@
 #include "data/database/database.h"
 #include "data/project.h"
 #include "irisgl/document/animation/animation.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/assethelper.h"
@@ -248,6 +250,30 @@ int main(int argc, char **argv)
     const extent::Extent e = box ? extent::measureNode(box) : extent::Extent();
     CHECK(e.valid && std::fabs(e.x - 2.0) < 1e-3 && std::fabs(e.y - 2.0) < 1e-3 && std::fabs(e.z - 2.0) < 1e-3,
           QStringLiteral("Box2m under its pivot chain is 2 m on a side (%1 x %2 x %3)").arg(e.x).arg(e.y).arg(e.z));
+
+    // (d) THE LIGHT TRAVELS AS AUTHORED (BISTRO-FIXES-2 stage 2). The file's light shines
+    //     down its local -Y through the WHOLE node chain: SunLight is written the way Maya
+    //     writes the Bistro's directionalLight1 — PostRotation (-90, 0, 0) under an Lcl
+    //     Rotation (-45, 30, 0) — so it travels Ry(30) Rx(-45) Rx(90) (0,-1,0) =
+    //     (-0.3536, -0.7071, -0.6124): 45 degrees of elevation. assimp's pivot chain
+    //     ($AssimpFbx$_Rotation, _PostRotation) carries it and the light is adopted
+    //     under its host at identity. Base: the same (a guard; the shadow audit read the
+    //     light's own local rotation, identity, as "straight down").
+    iris::LightNodePtr sunNode;
+    std::function<void(const iris::SceneNodePtr &)> findLight = [&](const iris::SceneNodePtr &n) {
+        if (n->getSceneNodeType() == iris::SceneNodeType::Light)
+            sunNode = n.staticCast<iris::LightNode>();
+        for (const auto &c : n->children()) findLight(c);
+    };
+    findLight(node);
+    iris::Vec3 travel = sunNode ? sunNode->getLightDir() : iris::Vec3();
+    if (travel.lengthSquared() > 0.0f) travel.normalize();
+    const double elevation = qRadiansToDegrees(std::asin(-double(travel.y())));
+    CHECK(sunNode && std::fabs(travel.x() + 0.35355) < 1e-4 && std::fabs(travel.y() + 0.70711) < 1e-4
+              && std::fabs(travel.z() + 0.61237) < 1e-4,
+          QStringLiteral("SunLight travels as authored, (%1, %2, %3) at %4 degrees of elevation")
+              .arg(travel.x(), 0, 'f', 4).arg(travel.y(), 0, 'f', 4).arg(travel.z(), 0, 'f', 4)
+              .arg(elevation, 0, 'f', 2));
 
     // ---- STAGE 3: STATIC BY DEFAULT -------------------------------------------
     std::printf("--- stage 3: mobility from what the Take animates\n");
