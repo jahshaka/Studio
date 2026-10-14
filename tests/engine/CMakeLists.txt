@@ -236,6 +236,45 @@ jah_gpu_row(engine.gpu_scene CLASS engine COMMAND test_engine_gpu_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_scene PROPERTIES TIMEOUT 120 LABELS "engine")
 
+# THE ASYNC COMPUTE QUEUE ON THE FORK (ENGINE-UPGRADE-ASYNC stage 1): the fork's Component
+# VulkanAsyncComputeQueue — the family it took, an empty bracket per frame on the second queue
+# (timeline semaphores G and C), the three arms' one picture, the compute queue's command
+# buffers bounded by its slots; the fallback with no compute queue requested; the bracket under
+# the Khronos validation layer with synchronization validation on, zero messages. Its own
+# binary because it reaches the render system's device (links the Vulkan RS, like
+# engine.descriptor_pools) and because the two other rows set the process environment.
+find_package(Vulkan QUIET)
+if(OGRE_NEXT_VULKAN_RS_LIB AND Vulkan_FOUND)
+    add_executable(test_engine_async_queue test_engine_async_queue.cpp)
+    set_target_properties(test_engine_async_queue PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_engine_async_queue PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_include_directories(test_engine_async_queue PRIVATE
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+        ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(test_engine_async_queue PRIVATE JahshakaEngine OgreNext
+        "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES})
+    add_dependencies(test_engine_async_queue JahshakaEngineMedia)
+    jah_gpu_row(engine.async_queue CLASS engine COMMAND test_engine_async_queue
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.async_queue PROPERTIES TIMEOUT 120 LABELS "engine")
+    jah_gpu_row(engine.async_queue_nofamily CLASS engine COMMAND test_engine_async_queue --no-family
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.async_queue_nofamily PROPERTIES TIMEOUT 120 LABELS "engine"
+        ENVIRONMENT "JAH_VK_ASYNC_COMPUTE=0")
+    set(_jah_vvl_log "${CMAKE_CURRENT_BINARY_DIR}/async-queue-validation.log")
+    jah_gpu_row(engine.async_queue_validation CLASS engine
+             COMMAND test_engine_async_queue --validation "${_jah_vvl_log}"
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.async_queue_validation PROPERTIES TIMEOUT 120 LABELS "engine"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true;VK_KHRONOS_VALIDATION_DEBUG_ACTION=VK_DBG_LAYER_ACTION_LOG_MSG;VK_KHRONOS_VALIDATION_REPORT_FLAGS=error,warn;VK_KHRONOS_VALIDATION_LOG_FILENAME=${_jah_vvl_log}")
+endif()
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
@@ -299,6 +338,9 @@ set_tests_properties(engine.media_check PROPERTIES TIMEOUT 180 LABELS "engine")
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "decals.engine=60"
+        "engine.async_queue=1920"             # 300 x 3 arms + 20 + 1,000 (counted from the source)
+        "engine.async_queue_nofamily=600"
+        "engine.async_queue_validation=300"
         "engine.frame_catch=27"
         "engine.gi_scan=162"
         "engine.gpu_scene=58"
