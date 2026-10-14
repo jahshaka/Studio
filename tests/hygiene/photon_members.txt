@@ -1,4 +1,4 @@
-# PHOTON'S MEMBERS — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
+# PHOTON'S MEMBERS (146) — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
 # One data-member name per line; '#' starts a comment. Generated ONCE from the prefix family
 # (mGi/mProbe/mIfd/mPhoton/mCard/mVct/mFwd/mCascade/mScan/mDrag/mSun: 143 at f8c745483, by the
 # preflight's members2.py) and then edited by hand at both ends:
@@ -11,7 +11,9 @@
 #         FEED, the GPU scene's observer that files the cache's candidates by the scene's own
 #         predicate (mCardFeed, mCardQuery); the scene's per-pass binding record, which binds the
 #         planar mirrors, the IBL mip count and the light list beside the GI arms (mGiBinding);
-#         and the component itself (mPhoton).
+#         the scene's light dirt, written only by the scene's light seams and read by its light
+#         list and Atom's hit decode as much as by Photon (mGiLightWriteSerial, beside
+#         mLightsRemoved); and the component itself (mPhoton).
 #   IN  — Photon's, missed by the prefixes: the probe grid (mPcc + mPccStageOk, mPccNumProbes,
 #         mPccProbeRes, mPccProbeFormat, mPccWorkspaceName, mPccPhaseMs, mPccPhaseClock, mPccHdr,
 #         mPccShadowed, mPccCaptureSize), its budget (mProbesDropped, mProbesOverBudget,
@@ -76,7 +78,6 @@ mGiInjectionsThisFrame
 mGiInvalidationPending
 mGiItemsAppeared
 mGiLastItemCount
-mGiLightWriteSerial
 mGiLitVolume
 mGiMaterialGeneration
 mGiMovedBoxes

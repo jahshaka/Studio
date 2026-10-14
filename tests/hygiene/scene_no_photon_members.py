@@ -14,7 +14,7 @@ the PCC's `mPcc*`, the surface cache and the staleness serials did not).
 
 WHAT THIS ASSERTS, both halves:
   (1) OgreScene's class body (irisgl/engine/src/EnginePrivate.h) declares NONE of the
-      listed names as a data member: the count is 0 (it was 147 before the move);
+      listed names as a data member: the count is 0 (it was 146 before the move);
   (2) PhotonComponent's class body declares EVERY listed name — a list that names a
       member nobody declares is a stale list, and a stale list makes (1) vacuous.
 It prints OgreScene's declaration count (its data members and member-function
