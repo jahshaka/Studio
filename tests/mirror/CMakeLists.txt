@@ -95,7 +95,10 @@ set_tests_properties(mirror.frame_input PROPERTIES
 # 1,000-node fixture with non-uniform, mirrored and zero scales, every world from the store equals Ogre's derived
 # transform after the frame (1e-6) and every parent / child set equals Ogre's (the order is the store's: case H), after a
 # keepTransform reparent, a scale, a rotation, zero-scale parents and a sheared parent; the re-expression keeps the
-# world and stores no NaN (SC1-REEXPRESS-SCALE-1). 7 cases x 2 frames.
+# world and stores no NaN (SC1-REEXPRESS-SCALE-1). 7 cases x 2 frames. Case H pins A REAL FIX: since SCENEGRAPH D2 the
+# document's sibling order WAS Ogre's child vector, and Ogre-Next's removeChild is swap-and-pop, so every reparent or
+# delete permuted the remaining siblings (the outliner's order, undo's sibling index, the order a file is saved in);
+# the store keeps the document's order.
 add_executable(test_doc_store test_doc_store.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_doc_store PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
