@@ -262,6 +262,23 @@ add_test(NAME source.row_declares_needs
 set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.row_declares_needs)
 
+# source.scene_no_friends — ENGINE-UPGRADE-2 stage 2: OgreScene declares no friend (the ray
+# tier's friend access went through the GPU-scene view and PhotonComponent). See the script.
+add_test(NAME source.scene_no_friends
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scene_no_friends.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.scene_no_friends PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.scene_no_friends)
+
+# source.atom_no_registries — ENGINE-UPGRADE-2 stage 3: Atom's files keep no process-wide mutable
+# state (the pass provider aside): the scene's in its AtomComponent, a view's ring in the view, the
+# device's objects in HlmsAtom. See the script.
+add_test(NAME source.atom_no_registries
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/atom_no_registries.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.atom_no_registries PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.atom_no_registries)
+
 # source.no_fixed_gi_volume — D4-PHOTON-TIERS: the single scene-fitted voxel volume
 # stays deleted end to end, and nothing reads its document keys (giCascades,
 # giBoundsExcluded) any more — the READER half of "the deleted keys are ignored".

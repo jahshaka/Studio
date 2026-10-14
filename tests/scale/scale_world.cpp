@@ -440,7 +440,7 @@ bool boot(Env &env, const char *logFile, int w, int h)
                                                unsigned(w), unsigned(h), Colour(0, 0, 0))
                       : env.engine->createOffscreenView("scale", unsigned(w), unsigned(h), Colour(0, 0, 0));
     if (!env.view) { std::printf("FAIL: createView: %s\n", env.engine->lastError().c_str()); return false; }
-    env.scene = env.engine->createScene("scale");
+    env.scene = env.engine->createScene("scale", env.sceneWorkers);
     env.view->setScene(env.scene);
     if (!window) {
         env.envView = env.engine->createOffscreenView("scale-env", 64, 64, Colour(0, 0, 0));

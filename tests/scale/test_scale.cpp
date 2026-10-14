@@ -11,6 +11,9 @@
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
 
+#include "bridge/sceneworkerthreads.h"
+#include "jahshaka/engine/GpuSubstrate.h"
+
 #include "irisgl/core/logger.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -2214,15 +2217,25 @@ static int hitListMain()
 // a still frame and at most the moved slot on a mover frame (the change feed's
 // notifications, the split's words, the ray tier's feed). Their CPU ms — the brief's
 // 0.5 ms still / 1.5 ms mover — are printed `target:` lines: an ms bar under sibling
-// lanes' builds is a load flake, the visit count is the property. The DIRTY SCAN stays
-// a printed target: its bound needs a record of WHICH
-// nodes the document wrote (ENGINE V2's journal, V2-1) and none exists — the only
-// signal is a process-wide write counter (nodegraph.cpp markMoved), so a mover
-// frame still compares every item (the lane's STOP, stated in its report).
+// lanes' builds is a load flake, the visit count is the property. THE DIRTY SCAN'S BAR
+// (ENGINE-UPGRADE-2 stage 1, the substrate): the compose on a mover frame at 10k is at
+// most 2 ms — a FAILING assertion (5.36 ms on the base, 2026-10-14). A mover frame still
+// compares every item (the only signal is a process-wide write counter; U0's change
+// set names the written nodes), so the substrate runs the compare as a
+// UniformScalableTask on the scene's workers and the frame's thread, with the
+// predicates' scene-wide inputs asked once per walk. THE ROW MEASURES THE OWNER'S
+// EDITOR SCENE: its scene is created with the Primary tier's workers (8 on the box;
+// Env::sceneWorkers, set by this row only) — on the engine default of 2 workers the
+// same walk reads 2.0-2.2 ms (2026-10-14). The bar moves only when stage 4 deletes the
+// flags backstop (the seams marking through U0's change set).
 // ===========================================================================
 static int cpuWalksMain()
 {
     Env env;
+    // THE EDITOR'S SCENE (the Primary tier: the viewport creates its scene with it):
+    // the dirty scan is a UniformScalableTask on the scene's own worker pool, so its
+    // bar is read on the pool the owner's scene has, not the engine's default of 2.
+    env.sceneWorkers = sceneworkers::count(sceneworkers::Tier::Primary);
     World w;
     // D1's DENSE WORLD: the bars were calibrated on it (V2-P0A).
     if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log", denseWorld())) return 1;
@@ -2292,6 +2305,10 @@ static int cpuWalksMain()
                 v2.words - v1.words, v2.rays - v1.rays);
     REQUIRE(moving[0] >= 0 && moving[1] >= 0 && moving[2] >= 0 && moving[3] >= 0,
             "every walk's stage was filed on the mover frames");
+    // THE COMPOSE'S BAR (the substrate, GpuSceneSubstrate.h): the engine.gpuscene stage's
+    // median over the one-mover frames — the walk, the composer and the commit.
+    const double kComposeBarMs = 2.0;
+    const unsigned walkThreads = gpuSubstrateStatus(*env.scene).workers;
     REQUIRE(v1.feed == v0.feed && v1.words == v0.words && v1.rays == v0.rays,
             "W13 a STILL frame at 10k visits 0 slots (the change feed %llu, the split's words %llu, the ray tier %llu)",
             v1.feed - v0.feed, v1.words - v0.words, v1.rays - v0.rays);
@@ -2299,6 +2316,10 @@ static int cpuWalksMain()
                 v2.rays - v1.rays <= moverFrames,
             "W13 a MOVER frame visits at most the moved slot (feed %llu, words %llu, ray tier %llu over %llu frames)",
             v2.feed - v1.feed, v2.words - v1.words, v2.rays - v1.rays, moverFrames);
+    REQUIRE(moving[0] <= kComposeBarMs,
+            "W13 THE COMPOSE on a mover frame at 10k is at most %.1f ms (engine.gpuscene median %.3f ms; the "
+            "substrate's walk on %u threads)",
+            kComposeBarMs, moving[0], walkThreads);
     for (int k = 0; k < 5; ++k) {
         const std::string what = std::string(kWhat[k]) + " (" + kWalks[k] + ") on a mover frame at 10k; still " +
                                  std::to_string(still[size_t(k)]) + " ms" +

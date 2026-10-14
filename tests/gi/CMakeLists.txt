@@ -2333,3 +2333,43 @@ jah_gpu_row(gi.far_sun_lamp CLASS engine TOKENS 2 FRAMES 60
             COMMAND test_gi_far_sun lamp voxels --size 256
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.far_sun_lamp PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# gi.photon_passes — PHOTON'S GPU WORK IS THREE COMPOSITOR PASSES, IN ORDER (ENGINE-UPGRADE-2
+# stage 2; photon/PhotonComponent.h): the frame's own pass listing on a carded scene drawn by a
+# view with rays — photon_update after the card capture, photon_trace -> the hit decode ->
+# photon_resolve -> the first pass that shades with the prepass, each once a frame.
+add_executable(test_gi_photon_passes test_gi_photon_passes.cpp)
+set_target_properties(test_gi_photon_passes PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_photon_passes PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_photon_passes PRIVATE JahshakaEngine)
+add_dependencies(test_gi_photon_passes JahshakaEngineMedia)
+jah_gpu_row(gi.photon_passes CLASS engine COMMAND test_gi_photon_passes
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.photon_passes PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.photon_passes PROPERTIES JAHSHAKA_TEST_FRAMES 18)   # counted from the source (12 + 1 + 4 + the probe)
+
+# gi.field_dependency — THE IRRADIANCE FIELD GENERATES ONLY WHEN ITS INPUTS CHANGED (ENGINE-UPGRADE-2
+# stage 2): a walking camera and two movers re-integrate no field (counts of the field's cache work).
+add_executable(test_gi_field_dependency test_gi_field_dependency.cpp)
+set_target_properties(test_gi_field_dependency PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_dependency PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_dependency PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_dependency JahshakaEngineMedia)
+jah_gpu_row(gi.field_dependency CLASS engine COMMAND test_gi_field_dependency
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_dependency PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.field_dependency PROPERTIES JAHSHAKA_TEST_FRAMES 476)   # counted from the source (<= 224 settle + 2 x 126)

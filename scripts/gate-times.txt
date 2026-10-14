@@ -49,6 +49,8 @@ assets.torn_write 0.00  ship 3a0422b4e (2026-10-13)
 assets.tray 0.10  ship 3a0422b4e (2026-10-13)
 atom.cluster_crack 62.28  quiet n=20
 atom.cluster_cut 39.73  quiet n=19
+atom.component 2.10  spec EU-2 stage 3 (2026-10-14)
+atom.component_asan 9.07  spec EU-2 stage 3 (2026-10-14)
 atom.coverage_trace 178.60  ship 3a0422b4e (2026-10-13)
 atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same row, renamed by TESTING-CLEANUP-2B item 5
 atom.dag_bound_bar 18.70  quiet n=30
@@ -133,6 +135,7 @@ engine.gi_scan 2.38  quiet n=43
 engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
+engine.gpu_substrate 2.10  solo (EU-2 stage 1, 2026-10-14)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
 engine.lod_hysteresis 1.61  quiet n=44
 engine.lod_rule_parity 5.19  quiet n=44
@@ -201,6 +204,7 @@ gi.far_sun_lamp 6.11  hand: FAR-SUN-2 solo under gpu-exclusive, n=3 (6.07/6.11/6
 gi.far_sun_share 104.33  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_share_c3 4.96  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (4.87/4.96/5.03)
 gi.field_alias 72.80  ship 3a0422b4e (2026-10-13)
+gi.field_dependency 3.59  solo EU-2 stage 2 (2026-10-14)
 gi.field_edge 8.02  quiet n=29
 gi.field_follows 6.14  quiet n=45
 gi.field_follows.timing 5.40  ship 3a0422b4e (2026-10-13)
@@ -249,6 +253,7 @@ gi.pcc_mirror.ray_tier 53.60  quiet n=44
 gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
+gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
 gi.probe_inputs 11.39  quiet n=44
 gi.probe_nan 5.64  quiet n=41
@@ -803,6 +808,7 @@ sockets.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 sockets.render 1.53  quiet n=47
 sockets.tags 0.00  ship 3a0422b4e (2026-10-13)
 source.assimp_import_only 0.10  ship 3a0422b4e (2026-10-13)
+source.atom_no_registries 0.01  spec EU-2 stage 3 (2026-10-14)
 source.bake_key_guard 0.04  quiet n=57
 source.db_pointers_initialised 0.00  ship 3a0422b4e (2026-10-13)
 source.fork_stamp 0.10  ship 3a0422b4e (2026-10-13)
@@ -822,6 +828,7 @@ source.panel_rows_guarded 0.00  ship 3a0422b4e (2026-10-13)
 source.photon_never_pinned 0.09  all n=2
 source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.row_declares_needs 0.35  all n=2
+source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
 source.testing_rules 0.57  quiet n=56
