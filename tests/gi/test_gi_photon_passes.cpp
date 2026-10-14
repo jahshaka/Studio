@@ -13,6 +13,7 @@
 // RED ON THE BASE: none of the three passes exists (the work rode the listeners of the
 // capture workspace and of the view's scene passes).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>
@@ -76,6 +77,7 @@ int main()
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
     gi.cards = true;
+    const PhotonDispatchStatus d0 = photonDispatchStatus();   // from the first GI work on
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
     fx.allowOffscreen = true;
@@ -131,6 +133,61 @@ int main()
           "EVERY FRAME: photon_update once (the GI workspace, before the view), then in the view's chain "
           "photon_trace -> the hit decode -> photon_resolve -> the first pass that shades with the prepass, "
           "each once");
+
+    // ---- ONE RECORDING ENTRY POINT (ENGINE-UPGRADE-2B stage 3) ----------------------------------
+    // Every Photon GPU dispatch of this scene's life — the arm's build, the cascades', the field's,
+    // the injections, the mips, the border mirrors — was recorded inside photon_update.
+    {
+        const PhotonDispatchStatus d1 = photonDispatchStatus();
+        std::printf("   photon dispatches: %llu in photon_update, %llu outside\n", d1.inPass - d0.inPass,
+                    d1.outsidePass - d0.outsidePass);
+        CHECK(d1.inPass > d0.inPass, "the cards scene's GI dispatched inside photon_update");
+        CHECK(d1.outsidePass == d0.outsidePass, "NO Photon dispatch outside photon_update (the cards scene)");
+    }
+    // ---- A PLAIN VCT SCENE (no cards, no rays): photon_update exists and carries its GI --------------
+    {
+        e->destroyView(view);
+        e->destroyScene(s);
+        View *v2 = e->createOffscreenView("photonplain", kSize, kSize, Colour(0, 0, 0));
+        Scene *s2 = e->createScene("photonplain");
+        v2->setScene(s2);
+        s2->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.04f, 0.04f, 0.04f));
+        const NodeId floorN = enginetest::addTestCube(s2, Colour(0.6f, 0.6f, 0.6f), 0.0f, 0.9f);
+        s2->setNodeTransform(floorN, Vec3(0.0f, -0.55f, 0.0f), Quat(), Vec3(20.0f, 0.1f, 20.0f));
+        const NodeId still = enginetest::addTestCube(s2, Colour(0.7f, 0.4f, 0.2f), 0.0f, 0.7f);
+        enginetest::setNodePosition(s2, still, Vec3(0.0f, 0.3f, 0.0f));
+        enginetest::addDirectionalLight(s2, Vec3(-0.3f, -1.0f, -0.6f), 3.0f);
+        enginetest::testCameraLookAt(v2, Vec3(0.0f, 2.0f, 6.0f), Vec3(0.0f, 0.3f, -1.0f));
+        const PhotonDispatchStatus p0 = photonDispatchStatus();
+        GiParams g2;
+        g2.mode = GiMode::Vct;
+        g2.quality = GiQuality::Medium;
+        g2.numBounces = 1;
+        s2->setGlobalIllumination(g2);
+        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        e->setFrameMonitor(MonitorLevel::Review);
+        { std::vector<FrameRecord> drop; e->renderOneFrame(); e->takeFrameRecords(drop); }
+        // A STILL OBJECT MOVED: its cascades re-voxelise and re-inject, frame after frame.
+        for (int f = 0; f < 6; ++f) {
+            enginetest::setNodePosition(s2, still, Vec3(0.2f * float(f + 1), 0.3f, 0.0f));
+            e->renderOneFrame();
+        }
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::vector<FrameRecord> r2;
+        e->takeFrameRecords(r2);
+        unsigned withUpdate = 0;
+        for (const FrameRecord &r : r2)
+            for (const FramePass &p : r.passes)
+                if (p.pass == "Jahshaka photon update") { ++withUpdate; break; }
+        const PhotonDispatchStatus p1 = photonDispatchStatus();
+        std::printf("   plain VCT: %u of %zu frames ran photon_update; dispatches %llu in, %llu outside\n",
+                    withUpdate, r2.size(), p1.inPass - p0.inPass, p1.outsidePass - p0.outsidePass);
+        CHECK(withUpdate > 0, "a plain VCT scene HAS photon_update and runs it on the frames its GI works");
+        CHECK(p1.inPass > p0.inPass && p1.outsidePass == p0.outsidePass,
+              "NO Photon dispatch outside photon_update (the plain VCT scene: the arm, the moved still's cascades)");
+        e->destroyView(v2);
+        e->destroyScene(s2);
+    }
 
     std::printf(failures ? "\n%d CHECK(S) FAILED\n" : "\nall checks passed\n", failures);
     return failures ? 1 : 0;

@@ -2388,7 +2388,7 @@ add_dependencies(test_gi_photon_passes JahshakaEngineMedia)
 jah_gpu_row(gi.photon_passes CLASS engine COMMAND test_gi_photon_passes
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.photon_passes PROPERTIES TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.photon_passes PROPERTIES JAHSHAKA_TEST_FRAMES 18)   # counted from the source (12 + 1 + 4 + the probe)
+set_tests_properties(gi.photon_passes PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # counted from the source (12 + 1 + 4 + the probe; the plain scene 12 + 1 + 6)
 
 # gi.field_dependency — THE IRRADIANCE FIELD GENERATES ONLY WHEN ITS INPUTS CHANGED (ENGINE-UPGRADE-2
 # stage 2): a walking camera and two movers re-integrate no field (counts of the field's cache work).
