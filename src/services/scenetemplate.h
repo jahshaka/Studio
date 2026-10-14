@@ -81,6 +81,8 @@ constexpr int   kWorldTilesPerSide = 5;
 /// elevation (Unreal's default class) towards +Z — the default editor camera's
 /// back (EngineSceneViewport::resetEditorCam: (0, 5, 14) looking at the origin).
 constexpr float kSunPitchDegrees = 40.0f;
+constexpr const char *kSunName = "Directional Light";
+constexpr float kSunPosition[3] = { 4.0f, 4.0f, 0.0f };
 constexpr float kSunElevationDegrees = 90.0f - kSunPitchDegrees;
 
 }   // namespace scenetemplate

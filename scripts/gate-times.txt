@@ -331,6 +331,7 @@ importer.fbx 0.00  ship 3a0422b4e (2026-10-13)
 importer.glb 0.66  quiet n=46
 importer.materials 1.77  quiet n=40
 importer.meshformats 1.76  quiet n=42
+importer.scene 0.09  solo n=3 (BISTRO-IMPORT-1, 2026-10-14)
 importer.security 0.10  ship 3a0422b4e (2026-10-13)
 importer.texture_guids 0.07  quiet n=32
 input.actions 0.00  ship 3a0422b4e (2026-10-13)
@@ -507,6 +508,7 @@ pool.doc_assets::hold_refused 0.00  ship 3a0422b4e (2026-10-13)
 pool.doc_assets::image_material 0.31  quiet n=37
 pool.doc_assets::import_pipeline 0.05  quiet n=39
 pool.doc_assets::import_settings 0.17  quiet n=38
+pool.doc_assets::import_sun 0.23  solo n=2 (BISTRO-IMPORT-1 stage 3b, 2026-10-14)
 pool.doc_assets::live_textures 0.19  quiet n=38
 pool.doc_assets::material_refusal 0.10  quiet n=37
 pool.doc_assets::mesh_roundtrip 0.20  quiet n=38

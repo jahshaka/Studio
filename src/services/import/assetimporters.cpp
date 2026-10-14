@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QBuffer>
@@ -94,6 +95,62 @@ QImage thumbnailImageFor(int type, const QString &filePath)
 
 // ============================ MeshImporter ============================
 
+/// THE IMPORT SUMMARY (BISTRO-IMPORT-1): what this model brought, as the user needs to
+/// hear it — recorded in the row's metadata block (assets.metadata(guid).importSummary,
+/// assets.importAndPlace's `summary`), logged with the import and shown by the Assets
+/// page. Counted over the fragment the import wrote, so it is the document's own
+/// answer: mobility as resolveMobility gives it, the materials' modes, the lights and
+/// cameras adopted from the file, and the scale the file's own nodes put on its
+/// geometry (the most common across its meshes — Bistro Interior 0.01, Interior_Wine
+/// 0.01461, Exterior 0.016: a file's data, which the import's `scale` setting answers).
+static QJsonObject importSummaryOf(const iris::SceneNodePtr &root, const QStringList &missingMaps)
+{
+    int movable = 0, fixed = 0, lights = 0, cameras = 0, meshes = 0, cutouts = 0, glass = 0;
+    QHash<QString, int> scales;
+    std::function<void(const iris::SceneNodePtr &, float)> walk =
+        [&](const iris::SceneNodePtr &n, float scale) {
+            if (n->resolvedMobility() == iris::Mobility::Movable) ++movable; else ++fixed;
+            switch (n->getSceneNodeType()) {
+            case iris::SceneNodeType::Light: ++lights; break;
+            case iris::SceneNodeType::Camera: ++cameras; break;
+            default: break;
+            }
+            const float s = scale * n->getLocalScale().x();   // the root's own scale included
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                ++meshes;
+                ++scales[QString::number(double(s), 'g', 4)];
+                if (auto m = n.staticCast<iris::MeshNode>()->getMaterial()) {
+                    for (auto *prop : m->properties) {
+                        if (!prop || prop->name != QLatin1String("alphaMode")) continue;
+                        const int mode = prop->getValue().toInt();
+                        if (mode == 1) ++cutouts;
+                        if (mode == 3) ++glass;
+                    }
+                }
+            }
+            for (const auto &c : n->children()) walk(c, s);
+        };
+    if (root) walk(root, 1.0f);
+    QString commonScale;
+    int best = 0;
+    for (auto it = scales.constBegin(); it != scales.constEnd(); ++it)
+        if (it.value() > best || (it.value() == best && it.key() < commonScale)) {
+            best = it.value();
+            commonScale = it.key();
+        }
+    QJsonObject out;
+    out[QStringLiteral("movable")] = movable;
+    out[QStringLiteral("static")] = fixed;
+    out[QStringLiteral("meshes")] = meshes;
+    out[QStringLiteral("lights")] = lights;
+    out[QStringLiteral("cameras")] = cameras;
+    out[QStringLiteral("cutouts")] = cutouts;
+    out[QStringLiteral("glass")] = glass;
+    out[QStringLiteral("contentScale")] = commonScale.isEmpty() ? 1.0 : commonScale.toDouble();
+    out[QStringLiteral("missingMaps")] = QJsonArray::fromStringList(missingMaps);
+    return out;
+}
+
 int MeshImporter::modelType() const { return static_cast<int>(ModelTypes::Mesh); }
 
 bool MeshImporter::sniff(const QString &path) const
@@ -156,6 +213,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // Drop anything a previous parse on this thread left behind, so the
     // warnings taken below belong to THIS model.
     iris::MaterialHelper::takeContainmentWarnings();
+    iris::MaterialHelper::takeMissingMaps();
     // OUR SceneSource, so the parse survives the call and the mesh BAKE
     // (MESH_BAKE_SPEC phase 1) is written from the SAME parse — the import
     // still pays exactly one parse, which import.async asserts.
@@ -167,6 +225,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // contained by MaterialHelper (the path never resolves outside), reported
     // here so the user learns their model lost a map (deep audit 2026-09 F2).
     out.warnings += iris::MaterialHelper::takeContainmentWarnings();
+    // EVERY MAP THE FILE NAMES AND WE COULD NOT FIND (BISTRO-IMPORT-1): said, by
+    // name, in the warnings (the log line, the verb) and counted in the summary. Taken
+    // BEFORE the bake below re-extracts the same materials.
+    const QStringList missingMaps = iris::MaterialHelper::takeMissingMaps();
+    out.warnings += missingMaps;
     if (!node) {
         // WHY, precisely. The old message guessed ("may be corrupt or use ...
         // Draco compression") and was wrong for the most common case by far:
@@ -194,6 +257,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         return false;
     }
     out.metadata = modelStats;
+    QJsonObject summary = importSummaryOf(node, missingMaps);
+    for (const char *key : { "lightUnits", "animatedNodes" })
+        if (out.metadata.contains(QLatin1String(key)))
+            summary[QLatin1String(key)] = out.metadata.take(QLatin1String(key));
+    out.metadata[QStringLiteral("importSummary")] = summary;
 
     // The source model file — recorded under BOTH the Object guid and the Mesh
     // member guid (same content id: the CAS dedups). Scene instantiation

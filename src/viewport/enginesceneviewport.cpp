@@ -1277,8 +1277,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             emit mEvents.addPrimitive(QString::fromLatin1(prim->name), mDragScenePos);
             return;
         }
-        emit mEvents.addDroppedMesh(QDir(mProject->getProjectFolder()).filePath(role.value(2).toString()),
-                                    true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
+        emit mEvents.addDroppedMesh(true, mDragScenePos, role.value(3).toString());
     } else if (type == static_cast<int>(ModelTypes::Avatar)) {
         // AVATAR_ASSET_SPEC §5.5: dropping an avatar row spawns a LINKED
         // instance of the project's version — the same `avatar.spawn` verb the

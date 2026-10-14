@@ -50,7 +50,7 @@ signals:
     /// the cursor (smoke S2 — the drop used to carry no position at all and
     /// every dropped cube landed in front of the camera).
     void addPrimitive(QString guid, iris::Vec3 position);
-    void addDroppedMesh(QString path, bool ignore, iris::Vec3 position, QString guid, QString assetName);
+    void addDroppedMesh(bool ignore, iris::Vec3 position, QString guid);
     void addDroppedParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     /// A Texture asset dropped on empty space — the shell spawns an image
     /// plane at the drop point (IMAGE_PLANE_SPEC option A).

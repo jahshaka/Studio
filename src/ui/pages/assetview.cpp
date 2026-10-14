@@ -1651,6 +1651,22 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 			                     importErrors.join(QStringLiteral("\n")), QMessageBox::Ok);
 			importErrors.clear();
 		}
+		// WHAT THE MODELS BROUGHT (BISTRO-IMPORT-1): the maps they named and we could
+		// not find, by name, and what is movable — a success is never silent.
+		// Not on a CANCELLED batch: a cancel is the user's or the app's quit, and a
+		// dialog opened under a quitting app holds its teardown (import.shutdown).
+		if (cancelled) importSummaries.clear();
+		if (!importSummaries.isEmpty()) {
+			auto *box = new QMessageBox(QMessageBox::Information, tr("Import summary"),
+			                            importSummaries.join(QStringLiteral("\n\n")),
+			                            QMessageBox::Ok, this);
+			// NON-MODAL (stage 3b): a summary is information — it neither blocks
+			// the window nor holds the event loop (a toast is for fixable errors).
+			box->setAttribute(Qt::WA_DeleteOnClose);
+			box->setWindowModality(Qt::NonModal);
+			box->show();
+			importSummaries.clear();
+		}
 
 		// Engine-dependent tails AFTER the dialog closed (the dialog never
 		// waits on the viewer): mesh previews + rendered thumbnails,
@@ -1676,6 +1692,10 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 			                        .arg(QFileInfo(request.sourcePath).fileName(), result.error));
 		return;
 	}
+
+	const QString summary =
+	    AssetImportService::summaryText(QFileInfo(request.sourcePath).fileName(), result);
+	if (!summary.isEmpty()) importSummaries.append(summary);
 
 	if (request.typeHint == static_cast<int>(ModelTypes::Mesh)) {
 		// Viewer-driven types: the preview render happens post-dialog, one

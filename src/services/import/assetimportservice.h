@@ -81,6 +81,13 @@ public:
     static void logImportRecord(const ImportRequest &request, const ImportResult &result,
                                 qint64 elapsedMs);
 
+    /// THE IMPORT SUMMARY, IN WORDS (BISTRO-IMPORT-1): one paragraph for a model's
+    /// result — its movable/static counts, the lights and camera it brought, its
+    /// cutouts and glass, the scale its own nodes carry and every map it named that
+    /// was not found. Empty for a result with no summary (media, a failure). The log
+    /// line, the Assets page and the editor's project panel all say this one text.
+    static QString summaryText(const QString &fileName, const ImportResult &result);
+
     /// The DB half: publish (CAS) + register + drawer filing, one transaction
     /// with the existing rollback/orphan-cleanup semantics. MUST run on the
     /// thread that owns the default QSqlDatabase connection (the UI thread in

@@ -345,6 +345,7 @@ private:
 	// Threaded import batch (one at a time; the dialog owns the lifetime UX).
 	ImportBatchRunner *importRunner = nullptr;
 	QStringList importErrors;                 // aggregated, shown after the batch
+	QStringList importSummaries;              // BISTRO-IMPORT-1: each model's summary, shown after the batch
 	struct PendingViewerTail { ImportResult result; QString fileName; };
 	QVector<PendingViewerTail> pendingViewerTails;
 	QStringList pendingVideoThumbGuids;       // real frame grabs, post-dialog

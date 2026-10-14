@@ -1152,9 +1152,9 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // assets.addToScene makes. An avatar is not a second kind of import.
     const bool hasPosition = options.contains("position");
     host.services->selection->select(iris::SceneNodePtr());
-    host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
+    host.services->sceneEdit->addMaterialMesh(hasPosition,
                                               scriptmod::vecFromJs(options.value("position")),
-                                              modelGuid, assetRow.name);
+                                              modelGuid);
     auto node = host.services->selection->selected();
     if (!node) {
         record("avatar.spawn: the asset could not be instantiated");
