@@ -326,6 +326,24 @@ jah_gpu_row(engine.gpu_substrate CLASS engine COMMAND test_engine_gpu_substrate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_substrate PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# engine.readd_named — THE 10k RE-ADD IS PAID IN WHAT IT NAMED (ENGINE-UPGRADE-2B stage 5): the reparent bench's
+# fragment at the engine's seams (a 500-item subtree re-parented and its items re-created, ONE frame) at 1k and 10k:
+# named / compared / flags recomputed <= 500 and no full walk (red before at 1k: the cap cliff). See the source.
+add_executable(test_engine_readd_named test_engine_readd_named.cpp)
+set_target_properties(test_engine_readd_named PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_readd_named PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_readd_named PRIVATE JahshakaEngine)
+add_dependencies(test_engine_readd_named JahshakaEngineMedia)
+jah_gpu_row(engine.readd_named CLASS engine COMMAND test_engine_readd_named
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.readd_named PROPERTIES TIMEOUT 60 LABELS "engine"
+    JAHSHAKA_TEST_FRAMES 122)   # counted from the source (2 scales x (60 settle + the fragment's one) )
+
 # engine.gpu_walk_parity — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2): with the arm
 # gpuscene.walkParity, every slot is checked against the table after every frame's compose; every
 # writer kind of a slot's transform or flags word leaves 0 misses. See the source.
