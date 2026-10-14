@@ -197,6 +197,26 @@ int main(int argc, char **argv)
     CHECK(moved > 0.02,
           "the two frames differ — an agent looking through an avatar's head sees the rig move");
 
+    // ---- 3b. A WORLD WRITE ON AN ARMED RIDER LANDS WHERE IT WAS ASKED (W1, the U2 stage 1 read) --------------
+    // A gizmo drag of a socketed camera writes its WORLD. It must re-express under the TAG it hangs from: under its
+    // document parent it lands off by (tag - parent) and the next frame's drag adds that again — a runaway.
+    {
+        const iris::Vec3 target = swung + iris::Vec3(0.25f, 0.0f, 0.0f);
+        cam->setGlobalPos(target);
+        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        const iris::Vec3 landed1 = cam->getGlobalPosition();
+        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        const iris::Vec3 landed2 = cam->getGlobalPosition();
+        std::printf("    world write on the armed rider: asked %.3f %.3f %.3f, landed %.3f %.3f %.3f then %.3f %.3f %.3f\n",
+                    double(target.x()), double(target.y()), double(target.z()), double(landed1.x()),
+                    double(landed1.y()), double(landed1.z()), double(landed2.x()), double(landed2.y()),
+                    double(landed2.z()));
+        CHECK((landed1 - target).length() < 1e-3f && (landed2 - target).length() < 1e-3f,
+              "a world write on an ARMED rider lands where asked, and stays there two frames on");
+        cam->setGlobalPos(swung);   // back where step 3 left it
+        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+    }
+
     // ---- 4. the control: detached, the same two times are the same shot ---
     // Without this, "the frames differ" is satisfied by any per-frame noise.
     CHECK(doc->detachFromSocket(cam), "detach");
