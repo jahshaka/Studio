@@ -138,6 +138,7 @@ engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
 engine.gpu_substrate 2.10  solo (EU-2 stage 1, 2026-10-14)
+engine.gpu_walk_parity 3.98  spec EU-2B stage 2 (2026-10-14)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
 engine.lod_hysteresis 1.61  quiet n=44
 engine.lod_rule_parity 5.19  quiet n=44
