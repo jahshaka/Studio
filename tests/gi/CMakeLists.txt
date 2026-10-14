@@ -1809,6 +1809,26 @@ jah_gpu_row(gi.env_cone CLASS engine COMMAND test_gi_env_cone
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.env_cone PROPERTIES JAHSHAKA_TEST_FRAMES 1165)
+# gi.rough_sky_once — THE SKY IS COUNTED ONCE ON A ROUGH LOBE (BISTRO-FIXES-3 stage 1): on the bound-cube path
+# the environment cube's sample is scaled by the rough lobe's occlusion query (the voxels' light takes the share the
+# query stopped). A rough metal plate under a uniform sky, then in a box with one opening: emitting the sky's radiance
+# (the energy bar: the plate reads the open value, never more) and dark (the open value times the visibility).
+add_executable(test_gi_rough_sky_once test_gi_rough_sky_once.cpp)
+set_target_properties(test_gi_rough_sky_once PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_rough_sky_once PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_rough_sky_once PRIVATE JahshakaEngine)
+add_dependencies(test_gi_rough_sky_once JahshakaEngineMedia)
+jah_gpu_row(gi.rough_sky_once CLASS engine COMMAND test_gi_rough_sky_once
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rough_sky_once PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.rough_sky_once PROPERTIES JAHSHAKA_TEST_FRAMES 940)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.
