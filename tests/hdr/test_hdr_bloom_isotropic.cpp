@@ -23,7 +23,8 @@
 //
 // THE ARMS
 //   A  CONTROL: the hot spot is there and it blooms (a halo of real size).
-//   B  ISOTROPIC: the halo's half-width at half its peak excess on each of the
+//   B  ISOTROPIC: the halo's half-width at half its peak excess - in the LIGHT the
+//      bloom adds, the film's input (BISTRO-FIXES-3) - on each of the
 //      four sides (right, left, down, up) agree within 10 % (max/min), and its
 //      reach on every side sits in a bar from the lane's measurement. The base
 //      measured the row's at the frame's edge and the column's at ~12 px.
@@ -94,6 +95,65 @@ std::vector<double> profile(const Image &on, const Image &off, bool horizontal, 
             if (horizontal) { x = dir > 0 ? cx + r : cx - 1 - r; y = cy - side; }
             else            { y = dir > 0 ? cy + r : cy - 1 - r; x = cx - side; }
             sum += double(code(on, unsigned(x), unsigned(y)) - code(off, unsigned(x), unsigned(y)));
+        }
+        v.push_back(0.5 * sum);
+    }
+    return v;
+}
+
+/// THE FILM'S INPUT a display code came from (BISTRO-FIXES-3): the sRGB decode, then the
+/// film curve inverted by bisection — the curve spelled out here at the engine's defaults
+/// (Unreal's FilmToneMap, the toe 0.3), the tonemap suites' way. The bloom ADDS LIGHT before
+/// the film, so its isotropy is the isotropy of the light it adds; measured in display codes
+/// the film's toe weighted the halo's dim tail (toe 0.3 pushed the codes' half peak out to
+/// the frame's top and bottom edges, which truncate the vertical profile at 270 px).
+double filmCurve(double x)
+{
+    const double slope = 0.88, toe = 0.3, shoulder = 0.26, black = 0.0, white = 0.04;
+    const double toeScale = 1.0 + black - toe, shoulderScale = 1.0 + white - shoulder;
+    const double bt = (0.18 + black) / toeScale - 1.0;
+    const double toeMatch = std::log10(0.18) - 0.5 * std::log((1.0 + bt) / (1.0 - bt)) * (toeScale / slope);
+    const double straightMatch = (1.0 - toe) / slope - toeMatch;
+    const double shoulderMatch = shoulder / slope - straightMatch;
+    const double lc = std::log10(std::max(x, 1e-10));
+    const double straight = slope * (lc + straightMatch);
+    double toeC = -black + (2.0 * toeScale) / (1.0 + std::exp((-2.0 * slope / toeScale) * (lc - toeMatch)));
+    double shC = (1.0 + white) - (2.0 * shoulderScale) / (1.0 + std::exp((2.0 * slope / shoulderScale) * (lc - shoulderMatch)));
+    toeC = lc < toeMatch ? toeC : straight;
+    shC = lc > shoulderMatch ? shC : straight;
+    double t = std::min(std::max((lc - toeMatch) / (shoulderMatch - toeMatch), 0.0), 1.0);
+    if (shoulderMatch < toeMatch) t = 1.0 - t;
+    t = (3.0 - 2.0 * t) * t * t;
+    return std::max(0.0, toeC + (shC - toeC) * t);
+}
+double filmInput(int c)
+{
+    const double v = c / 255.0;
+    const double shown = v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+    double lo = -6.0, hi = 2.0;
+    for (int i = 0; i < 60; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        if (filmCurve(std::pow(10.0, mid)) < shown) lo = mid; else hi = mid;
+    }
+    return std::pow(10.0, 0.5 * (lo + hi));
+}
+
+/// The bloom's excess in the FILM'S INPUT — the light it added — along the same line; a
+/// pixel saturated (>= 250) in either picture carries no answer and reads 0, as the
+/// saturated core does in codes.
+std::vector<double> profileLight(const Image &on, const Image &off, bool horizontal, int dir)
+{
+    std::vector<double> v;
+    const int cx = int(kW / 2), cy = int(kH / 2);
+    const int n = horizontal ? cx : cy;
+    for (int r = 0; r < n; ++r) {
+        double sum = 0.0;
+        for (int side = 0; side < 2; ++side) {
+            int x, y;
+            if (horizontal) { x = dir > 0 ? cx + r : cx - 1 - r; y = cy - side; }
+            else            { y = dir > 0 ? cy + r : cy - 1 - r; x = cx - side; }
+            const int a = code(on, unsigned(x), unsigned(y)), b = code(off, unsigned(x), unsigned(y));
+            if (a < 250 && b < 250) sum += filmInput(a) - filmInput(b);
         }
         v.push_back(0.5 * sum);
     }
@@ -214,8 +274,16 @@ int main()
 
     // ---- B  ISOTROPIC -------------------------------------------------------
     // Each of the FOUR sides on its own: an average of left with right (or up
-    // with down) would pass a halo shifted half a texel to one side.
+    // with down) would pass a halo shifted half a texel to one side. IN THE LIGHT THE
+    // BLOOM ADDS (the film's input, profileLight; BISTRO-FIXES-3), not in display codes.
     {
+        const std::vector<double> rL = profileLight(on, off, true, +1), lL = profileLight(on, off, true, -1);
+        const std::vector<double> dL = profileLight(on, off, false, +1), uL = profileLight(on, off, false, -1);
+        double qr, ql, qd, qu;
+        const double hr = halfWidth(rL, qr), hl = halfWidth(lL, ql);
+        const double hd = halfWidth(dL, qd), hu = halfWidth(uL, qu);
+        std::printf("   in the added light: peak right %.4f left %.4f down %.4f up %.4f; half-width (px) "
+                    "right %.1f left %.1f down %.1f up %.1f\n", qr, ql, qd, qu, hr, hl, hd, hu);
         const double hMax = std::max({ hr, hl, hd, hu }), hMin = std::min({ hr, hl, hd, hu });
         const double ratio = hMax / std::max(1e-9, hMin);
         CHECK(ratio <= 1.10,

@@ -211,7 +211,12 @@ int main()
         l.colour = Colour(1.0f, 1.0f, 1.0f);
         // 4096 since IMAGE-1: the inverse square law at 32 m gives the plane the light
         // 2.0 gave it under the retired near-flat curve (2 x 2 = 4 = 4096 / 32^2).
-        l.intensity = 4096.0f;
+        // 12288 since BISTRO-FIXES-3: the film's default toe 0.3 moves Unreal's whole
+        // toe-to-shoulder blend, and at 4096 the same falloff spanned 16 display codes
+        // (196..212) - bands 38 px wide, too steep to band. Three times the light puts the
+        // plane where the curve is as shallow as the fixture was built for: 6 codes
+        // (235..241), the span 4096 gave under the old toe (192..198), runs of 138 px.
+        l.intensity = 12288.0f;
         l.range = 2000.0f;         // no range cut-off inside the fixture
         l.castShadows = false;
         if (!s->setLight(n, l)) { std::printf("FAIL: fixture light\n"); return 1; }
