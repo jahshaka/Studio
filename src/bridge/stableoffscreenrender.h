@@ -27,6 +27,8 @@
 // UI THREAD ONLY, like every Engine call, and meant to be used INSIDE an
 // OffscreenRenderScope so the on-screen views do not pay for the extra frames.
 
+#include <functional>
+
 #include "jahshaka/engine/Engine.h"
 #include "services/framemonitor.h"
 
@@ -86,32 +88,70 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
     return rendered;
 }
 
-/// THE STILL PICTURE'S SETTLE (PHOTON-GATHER-1d fix round;
-/// View::setOffscreenContract). An offscreen view that declares StillPicture
-/// gathers where its scene does, and its first frames are the gather's raw
-/// estimate — so where the scene gathers, the caller draws one frame (the
-/// view's history is born) and then renders until GiStatus::giAtRest, the ONE
-/// settle predicate the screenshot verbs wait on, at most `cap` frames, with the
-/// engine's clock frozen (a photograph does not advance the world). A scene
-/// that does not gather takes the path it always took. Returns frames rendered.
-inline unsigned settleStillPicture(jahshaka::engine::Engine *engine,
-                                   jahshaka::engine::Scene *scene, unsigned cap = 2000u)
+// ---- THE PICTURE SERVICE (ENGINE-UPGRADE-U3 stage 3; ONE_PICTURE E3) ------------------------------------------------
+// EVERY PICTURE LEAVES THE ENGINE THROUGH HERE: the editor's photo, the player's shot, the preview tiles and the
+// thumbnails ask for one — {the view, the settle policy} — and receive the image. ONE settle (the photo's inline copy
+// of it is gone), one readback. Served inline on one thread for now (the frames are rendered here and the image is
+// handed to `done` before this returns); stage 4 serves the request on the render thread behind a fence and delivers
+// it on the game thread.
+struct PictureRequest {
+    jahshaka::engine::Scene *scene = nullptr;   ///< whose GI the settle waits on (giAtRest, the one predicate)
+    jahshaka::engine::View  *view = nullptr;    ///< what is read back (null = settle only)
+    /// THE SETTLE (PHOTON-GATHER-1d): with the engine's clock frozen (a photograph does not advance the world), draw
+    /// the shot's first frame unconditionally where its own history starts young (`firstFrame`: a gathering scene, a
+    /// GI configuration the shot's record changes), then frames until the scene is at rest (`untilRest`), at most
+    /// `settleCap`; the clock handed back after (`restoreDelta` < 0: the delta the engine had).
+    unsigned settleCap = 2000u;
+    bool     firstFrame = false;
+    bool     untilRest = false;
+    float    restoreDelta = -1.0f;
+    bool     hdr = false;                       ///< the linear radiance too (View::readPixelsHdr)
+    /// THE STILL PICTURE'S POLICY (View::setOffscreenContract StillPicture): a scene that gathers draws the first frame
+    /// and waits for rest; a scene that does not takes the path it always took (no settle frames).
+    static PictureRequest stillPicture(jahshaka::engine::Scene *scene, jahshaka::engine::View *view,
+                                       unsigned cap = 2000u)
+    {
+        PictureRequest r;
+        r.scene = scene;
+        r.view = view;
+        r.settleCap = cap;
+        r.firstFrame = r.untilRest = scene && scene->published().gi.gather.on;   // the snapshot (U3 stage 2)
+        return r;
+    }
+};
+struct Picture {
+    bool                    ok = false;
+    jahshaka::engine::Image  rgba;
+    jahshaka::engine::ImageF hdr;
+    unsigned                frames = 0;        ///< the settle's and the stable frames' count
+};
+inline void takePicture(jahshaka::engine::Engine *engine, const PictureRequest &req,
+                        const std::function<void(Picture &&)> &done)
 {
-    // The GI machine as the last frame closed it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
-    if (!engine || !scene || !scene->published().gi.gather.on) return 0u;
-    const float delta = engine->fixedFrameDelta();
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
-    unsigned n = 0u;
-    auto frame = [&] {
-        if (framemonitor::active())
-            engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
-        engine->renderOneFrame();
-        ++n;
-    };
-    frame();
-    while (n < cap && !scene->published().gi.giAtRest) frame();
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(delta));
-    return n;
+    Picture pic;
+    if (engine && (req.firstFrame || req.untilRest)) {
+        const float delta = req.restoreDelta >= 0.0f ? req.restoreDelta : engine->fixedFrameDelta();
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
+        // FRAMES NOBODY SAW: the settle renders outside the driver's tick, and the monitor must not read them as driven.
+        const auto frame = [&] {
+            if (framemonitor::active())
+                engine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
+            engine->renderOneFrame();
+            ++pic.frames;
+        };
+        unsigned i = 0;
+        if (req.firstFrame) { frame(); ++i; }
+        if (req.untilRest)
+            for (; i < req.settleCap && !(req.scene && req.scene->published().gi.giAtRest); ++i) frame();
+        engine->submitFrame(jahshaka::engine::FrameInput::delta(delta));
+    }
+    // Plus whatever the texture load-request counter still owes (THREADING_ADOPTION_SPEC.md P2 item 4).
+    pic.frames += renderStableFrames(engine);
+    if (req.view) {
+        pic.ok = req.view->readPixels(pic.rgba);
+        if (req.hdr) req.view->readPixelsHdr(pic.hdr);
+    }
+    if (done) done(std::move(pic));
 }
 
 #endif   // STABLEOFFSCREENRENDER_H

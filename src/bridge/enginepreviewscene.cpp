@@ -157,13 +157,12 @@ QImage EnginePreviewScene::renderOffscreen(const char *tag, int width, int heigh
     // The editor does not pay for a preview snapshot (fps audit F5) — see
     // bridge/offscreenrenderscope.h.
     OffscreenRenderScope quiet(engine.get());
-    settleStillPicture(engine.get(), mScene);
-    // Two frames, plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(engine.get());
-    Image img;
+    // THE PICTURE SERVICE (U3 stage 3): the still picture's settle, two frames plus whatever the texture
+    // load-request counter still owes, the readback — one request (bridge/stableoffscreenrender.h).
     QImage result;
-    if (shot->readPixels(img)) result = toQImage(img);
+    takePicture(engine.get(), PictureRequest::stillPicture(mScene, shot), [&](Picture &&p) {
+        if (p.ok) result = toQImage(p.rgba);
+    });
     shot->setScene(nullptr);
     mView = previousView == shot ? nullptr : previousView;
     engine->destroyView(shot);

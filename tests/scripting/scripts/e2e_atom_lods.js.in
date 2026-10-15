@@ -401,12 +401,16 @@ console.log("---- 6. a capture is exact ----");
     // describe the capture's own frame, and the shot's probes are the primary
     // observable either way.
     function bandArm(tag, approachBias) {
+        // THE COUNTERS ARE SUBSCRIBED BY A CALL (U3 stage 3, app.renderStats' doc): one read BEFORE the arm's
+        // frames, so the capture's frame is counted — and the read after it says that it was.
+        app.renderStats();
         editor.setLodBias(approachBias);
         editor.frame(4);
         editor.setLodBias(park);
         editor.frame(4);
         var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
         var rs = app.renderStats();          // AFTER the shot: the CAPTURE's frame
+        assert(rs.metricsRecording, tag + ": the capture's frame was counted (metricsRecording)");
         var probes = [];
         for (var p = 0; p < shot.probes.length; ++p)
             probes.push(shot.probes[p].r + "," + shot.probes[p].g + "," + shot.probes[p].b);

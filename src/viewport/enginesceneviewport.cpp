@@ -3606,54 +3606,38 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
         if (mShotSettleFrames <= 0 && sc0 && (sc0->published().gi.gather.on || shotGiChanged)) mShotSettleFrames = 2000;
     }
+    // THE PICTURE SERVICE (U3 stage 3): one settle, one readback — the photo's own copy of the settle is gone. A
+    // gathering scene (or a GI configuration this shot's record changes) draws the shot's first frame unconditionally,
+    // then waits for the ONE predicate; a scene that does not gather but is not at rest waits for rest; the cap is the
+    // verb's; the clock is handed back as the viewport's own.
+    PictureRequest req;
+    req.view = shot;
+    req.hdr = wantRadiance;
+    req.restoreDelta = mLastFrameDelta;
     if (mShotSettleFrames > 0) {
-        const int cap = mShotSettleFrames;
+        req.settleCap = unsigned(mShotSettleFrames);
         mShotSettleFrames = 0;
-        // ...AND THE SHOT'S OWN GATHER HISTORY (PHOTON-GATHER-1d). Where the
-        // screen-probe gather runs, the shot view has a pixel history of its own
-        // that starts young, and giAtRest cannot see it until the view has drawn
-        // once (its settled term reads the views that drew the latest frame). So
-        // a gathering scene draws the shot's first frame unconditionally and then
-        // waits for the ONE predicate as always; a scene that does not gather
-        // takes exactly the path it always took.
         jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
         // The GI machine as the last frame closed it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
         const bool gathering = sc && (sc->published().gi.gather.on || shotGiChanged);
-        if (sc && (gathering || !sc->published().gi.giAtRest)) {
-            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
-            // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
-            // settle renders through the shot view, outside the driver's tick,
-            // and the frame monitor must not read them as driven frames.
-            const auto frame = [this] {
-                if (framemonitor::active())
-                    mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
-                mEngine->renderOneFrame();
-            };
-            int i = 0;
-            if (gathering) { frame(); ++i; }
-            for (; i < cap && !sc->published().gi.giAtRest; ++i)
-                frame();
-            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
-        }
+        req.scene = sc;
+        req.firstFrame = gathering;
+        req.untilRest = sc && (gathering || !sc->published().gi.giAtRest);
+        if (!req.untilRest) req.firstFrame = false;
     }
-    // Plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(mEngine.get());
-    Image img;
     QImage result;
-    if (shot->readPixels(img) && img.width && img.height) {
-        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
-        for (unsigned y = 0; y < img.height; ++y)
-            memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
-    }
-    if (wantRadiance) {
-        jahshaka::engine::ImageF hdr;
-        if (shot->readPixelsHdr(hdr) && hdr.width && hdr.height) {
-            mShotRadiance = QVector<float>(hdr.rgba.begin(), hdr.rgba.end());
-            mShotRadianceW = int(hdr.width);
-            mShotRadianceH = int(hdr.height);
+    takePicture(mEngine.get(), req, [&](Picture &&p) {
+        if (p.ok && p.rgba.width && p.rgba.height) {
+            result = QImage(int(p.rgba.width), int(p.rgba.height), QImage::Format_RGBA8888);
+            for (unsigned y = 0; y < p.rgba.height; ++y)
+                memcpy(result.scanLine(int(y)), &p.rgba.rgba[size_t(y) * p.rgba.width * 4u], p.rgba.width * 4u);
         }
-    }
+        if (wantRadiance && p.hdr.width && p.hdr.height) {
+            mShotRadiance = QVector<float>(p.hdr.rgba.begin(), p.hdr.rgba.end());
+            mShotRadianceW = int(p.hdr.width);
+            mShotRadianceH = int(p.hdr.height);
+        }
+    });
     mEngine->destroyView(shot);
     // ...and the viewport gets its own sizing back, before anything presents
     // another on-screen frame.

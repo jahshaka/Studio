@@ -432,14 +432,15 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     // hit is lit from the surface cache, which relights over frames after the
     // geometry it describes changes (a hidden floor shown again is recaptured),
     // and the shot view's own history starts young — bridge/stableoffscreenrender.h.
-    settleStillPicture(engine.get(), mScene, kShotSettleCap);
-    // Plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(engine.get());
-
+    // THE PICTURE SERVICE (U3 stage 3): the settle, the stable frames and the readback are one request.
     Image img;
+    bool read = false;
+    takePicture(engine.get(), PictureRequest::stillPicture(mScene, shot, kShotSettleCap), [&](Picture &&p) {
+        read = p.ok;
+        img = std::move(p.rgba);
+    });
     QImage result;
-    if (shot->readPixels(img) && img.width && img.height) {
+    if (read && img.width && img.height) {
         result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
         for (unsigned y = 0; y < img.height; ++y)
             memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
