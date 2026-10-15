@@ -187,6 +187,8 @@ OGRE_SCENE_FUNCTIONS = {
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},
     "particleVisibilityBits": ["particles", "engine"],
     **{f: ["gi", "atom", "engine"] for f in ("writeIsSceneMovement", "setNodeMovable", "nodeMovable", "mobilityStatus")},
+    # ENGINE-UPGRADE-U3 stage 2 read 12(b): the running mobility / rig / particle counts the snapshot carries
+    **{f: ["gi", "atom", "skeletal", "particles", "engine"] for f in ("applyCounted", "recountNode", "uncountNode")},
     **{f: ["engine", "gizmo"] for f in ("setNodeHelper", "nodeHelper", "setNodeBackdrop", "nodeBackdrop")},
     **{f: ["vr"] for f in ("setNodeVrHelper", "nodeVrHelper", "setVrProxyNodes", "vrProxyNodes", "setVrRayNodes",
                            "vrRayNodes", "setVrHandBoneNodes", "vrHandBoneNodes")},
@@ -202,7 +204,7 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: _CORE for f in ("OgreView", "~OgreView", "setScene", "detachScene", "attachWorkspace", "detachWorkspace",
                           "rebuildWorkspaceDef", "rebuildDetachedWorkspaceDef", "destroy", "createRtt", "passPreExecute",
                           "workspacePreUpdate", "workspacePosUpdate", "syncGlobalsListener", "applyPendingResize",
-                          "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "setCamera",
+                          "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "applyWorkspacesEnabled", "setSessionCovers", "setCamera",
                           "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
                           "readPixels", "readPixelsHdr")},
     **{f: ["engine"] for f in ("name", "scene", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
