@@ -3,8 +3,9 @@
 // A lobe wider than tan 1 (perceptual roughness above ~0.515) is not marched as a
 // cone: its march is an OCCLUSION QUERY along the reflection (PhotonVct_piece_ps.any,
 // computeVctProbe: vctRoughOcclusion = the share the voxels stopped) and the
-// occluded share is read from the diffuse estimator's voxel light
-// (applyVctRoughSpecular). Where the material carries the sky's environment cube
+// stopped share is lit by what the query stopped on - the march's own colour,
+// vctRoughVoxel, added by applyVctRoughSpecular (BISTRO-FIXES-3; the diffuse set's
+// voxel light stood for it before). Where the material carries the sky's environment cube
 // (the bound-cube path: use_envprobe_map without parallax-corrected cubemaps)
 // HlmsPbs's CubemapGlobal reads that cube; it must read it only for the share the
 // query let through (Lagarde & de Rousiers 2014's specular occlusion: at roughness
