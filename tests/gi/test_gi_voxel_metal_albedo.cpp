@@ -8,8 +8,9 @@
 // colour B and metalness m, under the same sun as a diffuser of the same B, stores (1 - m) of the
 // diffuser's radiance, and a white receiver facing it, lit by nothing else, takes (1 - m) of the
 // diffuser's bounce. BARS: the store's ratio within 1 % (one half-float quantum of a lit voxel is
-// 0.1 %), the receiver's within 0.03 of the diffuser's bounce (gi.env_cone's 3 % bar), field off
-// and on. The base stored the base colour whatever the metalness: every ratio read 1.
+// 0.1 %), the receiver's within 0.03 of the diffuser's bounce (gi.env_cone's 3 % bar; 0.005 for the
+// pure metal, which has nothing left to re-emit), field off and on. The base stored the base colour
+// whatever the metalness: every ratio read 1.
 //
 // THE FIXTURE: a sun straight down (no sky, no ambient: the receiver's face sees the plate's
 // bounce and nothing else); a 2 x 0.1 x 2 m plate of base colour 0.8 at the origin, metalness 0 /
@@ -196,9 +197,12 @@ int main()
             std::snprintf(msg, sizeof msg, "%s, metalness %.1f: the store holds 1 - m of the diffuser's radiance (%.4f; "
                           "want %.2f, bar 1 %%)", arms[a].second, kMetal[m], store[m][a] / store[0][a], want);
             CHECK(std::fabs(store[m][a] / store[0][a] - want) <= 0.01, msg);
+            // the bar: 3 % (gi.env_cone's) of the diffuser's bounce, and for a PURE metal 0.5 % - nothing of
+            // a metal's diffuse lobe is left to re-emit, so a leak of a few percent must not pass
+            const double bar = kMetal[m] >= 1.0f ? 0.005 : 0.03;
             std::snprintf(msg, sizeof msg, "%s, metalness %.1f: the panel takes 1 - m of the diffuser's bounce (%.4f; "
-                          "want %.2f, bar 0.03)", arms[a].second, kMetal[m], bounce[m][a] / bounce[0][a], want);
-            CHECK(std::fabs(bounce[m][a] / bounce[0][a] - want) <= 0.03, msg);
+                          "want %.2f, bar %.3f)", arms[a].second, kMetal[m], bounce[m][a] / bounce[0][a], want, bar);
+            CHECK(std::fabs(bounce[m][a] / bounce[0][a] - want) <= bar, msg);
         }
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

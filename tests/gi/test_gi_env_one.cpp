@@ -458,7 +458,8 @@ int main()
         std::printf("   (h) the floor at the wall's foot, sky only: one bounce %.4f, two %.4f "
                     "(+%.4f)\n", one, two, two - one);
         // A RELATIVE bar in float (it was 2/255, the 8-bit read's noise guard):
-        // measured +26 %; 2 % is twenty times the lobe fit's own spread above.
+        // measured +5.8 % at the default tier (one bounce 0.2156, two 0.2280; +26 % on the Low
+        // tier's deleted isotropic store); 2 % is twenty times the lobe fit's own spread above.
         CHECK_MSG(two - one > 0.02 * one,
                   "(h) the sky enters the bounce at injection: two bounces light the floor at a "
                   "sky-lit wall's foot more than one (+%.4f, bar +2 %%)", two - one);
