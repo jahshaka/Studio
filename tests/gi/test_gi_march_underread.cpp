@@ -23,6 +23,9 @@
 // m), so the plane's colour reads 0.9998 / 0.950 / 0.874 L at 32 / 64 / 128 cells (rebuilt from
 // mip 0 on the CPU to 4 digits) - the readings below. The free-standing wall's texel holds no
 // plate voxel: its plane reads 0.9998 L.
+// THE ANISOTROPIC TIERS (`--all-tiers`, stage 0's second measurement): Medium, High and Epic read
+// the same plane from the directional store and pass, 0.999 / 0.996 / 0.990 on the plate and 1.000
+// free-standing - the plane's colour 0.9998 / 0.995 / 0.990 L; the row reads Low (the tier that fails).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -30,6 +33,7 @@
 #include <cstdio>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace jahshaka::engine;
 
@@ -40,7 +44,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-int main()
+int main(int argc, char **argv)
 {
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-march-underread-ogre.log");
@@ -76,6 +80,12 @@ int main()
     const double L = std::pow((kSkyByte / 255.0 + 0.055) / 1.055, 2.4);
     PbrParams metal; metal.albedo = Colour(1, 1, 1); metal.metalness = 1.0f; metal.roughness = 0.74f;
 
+    // THE TIERS: the row reads Low; `--all-tiers` adds the anisotropic ones (Medium, High, Epic: the
+    // directional store, its level-0 back side and normal) - a measurement, not the row's.
+    std::vector<std::pair<GiQuality, const char *>> tiers = { { GiQuality::Low, "Low" } };
+    if (argc > 1 && std::string(argv[1]) == "--all-tiers")
+        tiers.insert(tiers.end(), { { GiQuality::Medium, "Medium" }, { GiQuality::High, "High" }, { GiQuality::Epic, "Epic" } });
+    for (const auto &tier : tiers)
     for (int res : { 32, 64, 128 })
         for (int standing = 1; standing >= 0; --standing) {
             Scene *s = e->createScene("underread");
@@ -110,7 +120,7 @@ int main()
             for (const auto &arm : { std::make_pair(GiToggle::Off, "field off"), std::make_pair(GiToggle::On, "field on") }) {
                 GiParams cones;
                 cones.mode = GiMode::Vct;
-                cones.quality = GiQuality::Low;
+                cones.quality = tier.first;
                 cones.numBounces = 1;
                 cones.ddgi = arm.first;
                 cones.gather = GiToggle::Off;
@@ -127,8 +137,8 @@ int main()
                 else
                     CHECK(!fieldBuilt, "the field-off arm has no field");
                 char msg[240];
-                std::snprintf(msg, sizeof msg, "%d cells, the wall %s, %s: a wall of L in the grazing lobe reads the open "
-                              "value (%.4f / %.4f = %.3f; bar 3 %%)", res, standing ? "on the plate" : "free-standing",
+                std::snprintf(msg, sizeof msg, "%s, %d cells, the wall %s, %s: a wall of L in the grazing lobe reads the open "
+                              "value (%.4f / %.4f = %.3f; bar 3 %%)", tier.second, res, standing ? "on the plate" : "free-standing",
                               arm.second, withWall, open, withWall / open);
                 CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
             }
