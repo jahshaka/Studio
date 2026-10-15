@@ -397,17 +397,17 @@ set_tests_properties(vr.warmup.timing PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
 set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 
-# vr.ui_stall — A 7 ms UI-THREAD STALL COSTS NO HEADSET FRAME (ENGINE-UPGRADE-U3 stage 1; the spec's premise (c),
-# re-measured). The app free-runs under Monado's simulated headset (`--script-live`, the driver ticking between the
-# script's verbs — JAH_VR_RUNNER_EVENTS=1 is what run_vr_app.sh launches that way); vr_ui_stall.js sleeps 7 ms in a
-# beforeFrame slot every 350 ms (app.tickStall) over 600 accepted headset frames and counts the RUNTIME's missed
-# display periods (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 missed, is the design's law
-# and the spec expected it RED ON MAIN (see THE BASE): the row is `measure` until stage 5 makes it a guard.
-# THE BASE (stage 1's tip = main's one-thread frame + the two new instruments, Debug, Xvfb 1920x1080, 2026-10-15): the
-# row is GREEN — 0 periods missed over 80 stalls of 7 ms (control 0 over 600). Monado's NULL compositor paces at 20 Hz
-# (a 50 ms predicted period; XRT_COMPOSITOR_DEFAULT_FRAMERATE does not move it), so a 7 ms stall never crosses a period
-# here. The instrument counts what it should: 120 ms -> 3.00 missed per stall; 32 ms (7/11.1 of the period, the 90 Hz
-# geometry) -> 1.00 per stall over 31; 45 ms -> 1.00 over 30. THE STIMULUS'S SIZE IS THE LEAD'S RULING (reported).
+# vr.ui_stall — A UI-THREAD STALL SHORTER THAN THE DISPLAY PERIOD NEVER COSTS A DISPLAY PERIOD (ENGINE-UPGRADE-U3; the
+# lead's ruling after stage 1). The app free-runs under Monado's simulated headset (`--script-live`, the driver ticking
+# between the script's verbs — JAH_VR_RUNNER_EVENTS=1 is what run_vr_app.sh launches that way); vr_ui_stall.js sleeps
+# 0.63 of the RUNTIME's predicted display period (7 ms at 90 Hz, the perf audit's figure, as a share) in a beforeFrame
+# slot every 350 ms (app.tickStall) over 600 accepted headset frames and counts the runtime's missed display periods
+# (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 per stall, is the design's law; RED ON MAIN,
+# so the row is `measure` until stage 5 makes it a guard.
+# THE BASE (stage 1's one-thread frame = main's, Debug, Xvfb 1920x1080, 2026-10-15; Monado's null compositor paces at
+# 20 Hz, a 50 ms period, and XRT_COMPOSITOR_DEFAULT_FRAMERATE does not move it): at 0.63 of the period (32 ms)
+# 1.00 missed per stall (31 of 31); 45 ms 1.00 (30/30); 120 ms 3.00 (135/45); 7 ms — under 0.15 of this period —
+# 0.00 (0/80). The control: 0-2 over 200-600 frames. As ruled (32 ms at 20 Hz): 93 missed over 93 stalls = 1.00, RED.
 set(_vr_ui_stall_home "${CMAKE_CURRENT_BINARY_DIR}/vr-ui-stall-home")
 jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "scripting;measure")
 jah_gpu_exclusive_test(NAME vr.ui_stall CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
