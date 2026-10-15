@@ -163,6 +163,30 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         TIMEOUT 120 LABELS "ui")
 endif()
 
+# view.window_on_render_thread — THE WINDOW SPIKE (ENGINE-UPGRADE-U3 stage 4's premise): every engine call on a
+# second thread — create on Qt's Display + a view on a winId, three resizes, a float + re-dock (the native window
+# replaced), an MSAA change, ~Engine on that thread — under the validation layer; 0 X errors, 0 validation errors.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test_window_render_thread test_window_render_thread.cpp xerrorcounter.cpp)
+    set_target_properties(test_window_render_thread PROPERTIES
+        CXX_STANDARD 17
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_window_render_thread PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_include_directories(test_window_render_thread PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+    target_link_libraries(test_window_render_thread PRIVATE JahshakaEngine Qt6::Widgets X11)
+    add_dependencies(test_window_render_thread JahshakaEngineMedia)
+    jah_gpu_row(view.window_on_render_thread CLASS engine FRAMES 120 COMMAND test_window_render_thread
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(view.window_on_render_thread PROPERTIES
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+        FAIL_REGULAR_EXPRESSION "Validation Error;X ERROR"
+        TIMEOUT 180 LABELS "ui")
+endif()
+
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
 # and dialog ownership (a missing parent is the classic Qt leak). The on-screen
 # ui.engine_view_winid suite links the engine and stays out.
