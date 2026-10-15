@@ -1624,9 +1624,9 @@ QVariantMap VrApi::state()
             // AS THE LAST FRAME DREW THEM (ENGINE-UPGRADE-U3 stage 2: the snapshot's effective chains, by name).
             const PublishedEngineFrame &pub = eng->published();
             QVariantMap fx;
-            if (const auto *pe = pub.view(eyes->name())) fx[QStringLiteral("eye")] = postFxMap(*eyes, *pe);
+            if (const auto *pe = pub.view(eyes->id())) fx[QStringLiteral("eye")] = postFxMap(*eyes, *pe);
             if (View *desk = desktopViewOf(eng, eyes))
-                if (const auto *pd = pub.view(desk->name())) fx[QStringLiteral("desktop")] = postFxMap(*desk, *pd);
+                if (const auto *pd = pub.view(desk->id())) fx[QStringLiteral("desktop")] = postFxMap(*desk, *pd);
             out[QStringLiteral("postFx")] = fx;
         }
     }

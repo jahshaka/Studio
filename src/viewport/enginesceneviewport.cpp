@@ -2419,7 +2419,7 @@ bool EngineSceneViewport::pipOnView() const
 unsigned EngineSceneViewport::pipBuilds() const
 {
     const jahshaka::engine::View *v = view();
-    const auto *pv = v ? publishedView() : nullptr;   // the last frame's (U3 stage 2)
+    const auto pv = v ? publishedView() : std::nullopt;   // the last frame's (U3 stage 2)
     return pv ? pv->pipGeneration : 0u;
 }
 
@@ -3866,7 +3866,7 @@ qulonglong EngineSceneViewport::presentsSinceBind() const
 {
     if (!view()) return 0;
     // THE LAST FRAME'S COUNT (ENGINE-UPGRADE-U3 stage 2: the snapshot), as every baseline below is taken.
-    const auto *pv = publishedView();
+    const auto pv = publishedView();
     const qulonglong now = pv ? qulonglong(pv->presented) : 0;
     // The engine resets its own counter when a scene is (re)bound; then `now`
     // is below the baseline and IS the answer.
@@ -3894,7 +3894,7 @@ qulonglong EngineSceneViewport::blankFramesPresented() const
     // Straight off the engine, with NO rebase: unlike framesPresented — which
     // is "frames of the world bound right now", and therefore restarts at every
     // bind — this one is a running total a caller differences across a load.
-    const auto *pv = publishedView();   // the last frame's (U3 stage 2)
+    const auto pv = publishedView();   // the last frame's (U3 stage 2)
     return pv ? qulonglong(pv->blank) : 0;
 }
 
@@ -4645,7 +4645,7 @@ void EngineSceneViewport::rememberPassShape()
     // machine cannot render. Two settings values, written only on change.
     if (!mEngine || !mEngineScene) return;
     if (View *v = view())
-        if (const auto *pv = publishedView())   // the achieved MSAA as the last frame drew it (U3 stage 2)
+        if (const auto pv = publishedView())   // the achieved MSAA as the last frame drew it (U3 stage 2)
             EngineHost::rememberWarmUpShape({ pv->sampleCount, v->pushedShadows() });
 }
 

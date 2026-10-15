@@ -281,7 +281,7 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
     }
     // The size the last frame drew (ENGINE-UPGRADE-U3 stage 2: the snapshot); a view no frame has drawn yet is
     // resized to the ask (a deferred no-op when it already is).
-    const auto *pv = engine->published().view(view()->name());
+    const auto *pv = engine->published().view(view()->id());
     if (!pv || pv->width != unsigned(size.width()) || pv->height != unsigned(size.height()))
         view()->resize(unsigned(size.width()), unsigned(size.height()));
     return true;

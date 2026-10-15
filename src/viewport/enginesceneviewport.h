@@ -237,11 +237,17 @@ public:
     /// framesPresented as the last frame closed it (0 before its first) — every present baseline is taken from it.
     /// The VR session's mirror paints the headset's eye over this viewport's view (the snapshot's fact, U3 read F2).
     bool sessionPaintsThisView() const;
-    qulonglong presentedNow() const { const auto *pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
-    const jahshaka::engine::PublishedEngineFrame::ViewFrames *publishedView() const
-    { return (mEngine && view()) ? mEngine->published().view(view()->name()) : nullptr; }
+    qulonglong presentedNow() const { const auto pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
+    /// The view's row of the last frame, BY VALUE — one lookup per use, by the view's id (U3 stage 3, decision 23);
+    /// empty before its first frame.
+    std::optional<jahshaka::engine::PublishedEngineFrame::ViewFrames> publishedView() const
+    {
+        if (!mEngine || !view()) return std::nullopt;
+        if (const auto *row = mEngine->published().view(view()->id())) return *row;
+        return std::nullopt;
+    }
     int sampleCount() const override
-    { const auto *pv = publishedView(); return pv ? int(pv->sampleCount) : 1; }
+    { const auto pv = publishedView(); return pv ? int(pv->sampleCount) : 1; }
     bool isOffscreen() const override
     { return view() ? view()->isOffscreen() : true; }
     /// The size of what is actually being rendered into, in pixels — View::
@@ -251,7 +257,7 @@ public:
     /// own request the selftest's post-resize check compared the pushed values
     /// with themselves and could not fail (deep audit area 7 F3).
     QSize renderTargetSize() const override
-    { const auto *pv = publishedView(); return pv ? QSize(int(pv->width), int(pv->height)) : QSize(); }
+    { const auto pv = publishedView(); return pv ? QSize(int(pv->width), int(pv->height)) : QSize(); }
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     int activePlanarReflectors() const override
