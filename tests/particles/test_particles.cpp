@@ -264,9 +264,11 @@ int main(int argc, char **argv)
         CHECK(eng != 0, "emitter has an engine node");
         CHECK(target->published().particlesOf(eng) == 0, "nothing is alive before the first frame");
 
-        enginetest::frames(engine, 90);
-        // (after the frames: the sync's record — and the definition it builds — lands in the first; U3 stage 2b)
+        // The sync's record — and the definition it builds — lands in the FIRST frame; the baseline is that frame's
+        // snapshot, and the 89 engine-only frames after it are inside the guarded window (U3 stage 2b / decision 24).
+        enginetest::frames(engine, 1);
         const unsigned defsAfterFirst = target->published().particleDefinitionsCreated;
+        enginetest::frames(engine, 89);
         std::printf("    after 90 engine frames: %u live particles\n", target->published().particlesOf(eng));
         CHECK(target->published().particlesOf(eng) > 0, "the ENGINE emitted, with no document tick at all");
         view->readPixels(img);
