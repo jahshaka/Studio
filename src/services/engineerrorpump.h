@@ -138,6 +138,9 @@ private:
     /// leaves alone (forgetting it would re-log a frame's error from before).
     unsigned long long mFrameErrorsTaken = 0;
     const void        *mFrameErrorsEngine = nullptr;
+    /// The commands' refusals taken so far (PublishedEngineFrame::refusals, numbered by input.messagesRefused).
+    unsigned long long mRefusalsTaken = 0;
+    const void        *mRefusalsEngine = nullptr;
     quint64            mRecorded  = 0;
     quint64            mSuppressed = 0;
     qint64             mBudgetWindowMs = 0;   ///< start of the current global window

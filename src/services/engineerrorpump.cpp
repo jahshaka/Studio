@@ -48,6 +48,17 @@ void EngineErrorPump::drain(jahshaka::engine::Engine *engine)
             record(QString::fromStdString(pub.frameErrors[i].text));
         mFrameErrorsTaken = pub.framesWithError;
     }
+    // ...AND THE COMMANDS' REFUSALS (decision 34: a refusal is its message's, published beside the frame's errors):
+    // the newest `messagesRefused - taken` of the list.
+    if (mRefusalsEngine != engine) { mRefusalsEngine = engine; mRefusalsTaken = 0; }
+    const unsigned long long refused = pub.input.messagesRefused;
+    if (refused != mRefusalsTaken) {
+        const unsigned long long unseen = refused > mRefusalsTaken ? refused - mRefusalsTaken : refused;
+        const size_t n = pub.refusals.size();
+        for (size_t i = n > unseen ? size_t(n - unseen) : 0u; i < n; ++i)
+            record(QString::fromStdString(pub.refusals[i].text));
+        mRefusalsTaken = refused;
+    }
 }
 
 std::vector<EngineErrorPump::Entry>::iterator EngineErrorPump::find(const QString &message)
