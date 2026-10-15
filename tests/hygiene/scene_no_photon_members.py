@@ -172,7 +172,7 @@ def main():
     src = os.path.join(root, 'irisgl', 'engine', 'src')
     scene_text = strip_code(open(os.path.join(src, 'EnginePrivate.h')).read())
     photon_text = strip_code(open(os.path.join(src, 'photon', 'PhotonComponent.h')).read())
-    scene = class_body(scene_text, r'^class OgreScene final : public Scene \{')
+    scene = class_body(scene_text, r'^class OgreScene final : public Scene(, public inspect::SceneEcho)? \{')
     photon = class_body(photon_text, r'^class PhotonComponent\b[^;{]*\{')
     if scene is None or photon is None:
         print('source.scene_no_photon_members: FAIL — the OgreScene or PhotonComponent class body was not found')
