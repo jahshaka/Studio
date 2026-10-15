@@ -177,8 +177,9 @@ void ordering_contract() {
     // Must run before any View has ever existed in this process (see main()). SINCE U2 (irisgl 314ed36) A SCENE
     // BEFORE ANY VIEW IS LEGAL: createScene runs the backend's one-time preparation itself (prepareDevice — a
     // surfaceless window, then the Hlms registration), so trap 1's order (window -> registerHlms -> scene manager)
-    // holds inside the engine and the host may not get it wrong. (This row is `measure`; it asserted the old refusal
-    // until ENGINE-UPGRADE-U3 stage 2 ran it.)
+    // holds inside the engine and the host may not get it wrong. A GUARD of that contract — test_engine as a whole is
+    // labelled `measure` by its PRICE (tests/CMakeLists.txt JAH_MEASURE_ROWS, TESTING-SIMPLE stage 3), so it runs at
+    // the sprint's ship only; it asserted the old refusal until ENGINE-UPGRADE-U3 stage 2 ran it by hand.
     Engine *e = gEngine.get();
     Scene *s = e->createScene("too-early");
     CHECK(s != nullptr);
