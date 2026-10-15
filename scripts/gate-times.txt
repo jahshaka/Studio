@@ -772,8 +772,8 @@ shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
 shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
 shadercache.engine_pipelines 11.27  quiet n=36
 shadercache.fixture_warm 1.44  solo, warm shared cache, the card lock held (EU-1 stage 1, 2026-10-13; 1.99 cold-first)
-shadercache.warmup 1.60  quiet n=46
-shadercache.warmup_pass 1.73  quiet n=45
+shadercache.warmup 3.20  ASYNC-3 stage-2 read D1: + the GI arm (2026-10-15, solo; FRAMES measured 18)
+shadercache.warmup_pass 3.32  ASYNC-3 stage-2 read D1: + the GI arm (2026-10-15, solo; FRAMES measured 18)
 shadergraph.ao_removed 0.00  ship 3a0422b4e (2026-10-13)
 shadergraph.asset_widget_db 0.00  ship 3a0422b4e (2026-10-13)
 shadergraph.bake_output 1.56  quiet n=32

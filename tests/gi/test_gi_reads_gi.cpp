@@ -9,7 +9,8 @@
 // On a carded scene with rays and SSR (every chain stage present), the frame monitor's records:
 //   1. THE LIST: the opaque pass, the ray tier's photon trace / resolve and photon_update READ;
 //      the SSR G-buffer prepass, the Atom decode prepass, the card capture, the SSR helpers' mask, the
-//      overlays, the Atom id passes, every shadow caster pass and every quad DO NOT;
+//      overlays, the Atom id passes, the distortion field, every shadow caster pass and every quad
+//      DO NOT (each asserted PRESENT in the records, so none is vacuous);
 //   2. THE BINDING FOLLOWS IT: pass preparations with the GI bound (readers) and without it
 //      (non-readers of a scene that has a GI) both happened;
 //   3. the frame's first and last GI readers, printed (the window's two ends).
@@ -64,6 +65,14 @@ int main()
     const NodeId mirror = s->createNode();
     s->attachMesh(mirror, s->createMesh(enginetest::unitCubeMesh()), s->createPbrMaterial(mp));
     enginetest::setNodePosition(s, mirror, Vec3(0.0f, 0.5f, -2.0f));
+    // A DISTORTION object: the chain grows its distortion-field pass (HlmsUnlit, no GI).
+    {
+        PbrParams dp;
+        dp.shadingModel = ShadingModel::Distortion;
+        const NodeId dn = s->createNode();
+        s->attachMesh(dn, s->createMesh(enginetest::unitCubeMesh()), s->createPbrMaterial(dp));
+        enginetest::setNodePosition(s, dn, Vec3(-1.0f, 0.5f, 0.5f));
+    }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.6f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 6.0f), Vec3(0.0f, 0.3f, -1.0f));
     GiParams gi;
@@ -74,6 +83,7 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
+    fx.distortion = true;   // the distortion-field pass (the cube below wears a distortion material)
     view->setPostFx(fx);
     e->renderOneFrame();
     // From the GI's first frames on: the card capture runs while the atlas fills.
@@ -127,9 +137,13 @@ int main()
     CHECK(present("Jahshaka overlays") && none("Jahshaka overlays"), "the overlays pass does NOT");
     CHECK(present("Jahshaka SSR helper mask") && none("Jahshaka SSR helper mask"), "the SSR helpers' mask does NOT");
     CHECK(present("Jahshaka SSR prepass") && none("Jahshaka SSR prepass"), "the SSR G-buffer prepass does NOT");
-    CHECK(none("Jahshaka atom decode prepass"), "the Atom decode prepass does NOT");
+    CHECK(present("Jahshaka atom decode prepass") && none("Jahshaka atom decode prepass"), "the Atom decode prepass does NOT");
     CHECK(present("Jahshaka card capture") && none("Jahshaka card capture"), "the card capture does NOT");
-    CHECK(none("Jahshaka atom id") && none("Jahshaka atom id late"), "the Atom id passes do NOT");
+    CHECK(present("Jahshaka atom id") && present("Jahshaka atom id late") && none("Jahshaka atom id") &&
+              none("Jahshaka atom id late"),
+          "the Atom id passes do NOT");
+    CHECK(present("Jahshaka distortion field") && none("Jahshaka distortion field"),
+          "the distortion field does NOT (HlmsUnlit displacement)");
     CHECK(!shadowReads, "no shadow node's pass reads it");
     std::printf("   the first GI reader: %s\n   the last:  %s\n", first.c_str(), last.c_str());
     std::printf("   pass preparations of the GI scene: %llu with the GI bound, %llu without (non-readers)\n",

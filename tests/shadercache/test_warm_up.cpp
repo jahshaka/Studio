@@ -275,6 +275,52 @@ int main() {
         if (v) gEngine->destroyView(v);
     }
 
+    // ---- 8. A GI SCENE (ENGINE-UPGRADE-ASYNC-3, the stage-2 read's D1) ------
+    //
+    // The GI is bound only on the passes that sample it (CompositorPassDef::mJahReadsGi): the
+    // warm-up must compile the variants the scene's passes draw with, the GI readers' included.
+    // A voxel-GI scene drawn until its arm exists, then a new material family added to it, warmed,
+    // and the first real frame compiles NOTHING. RED ON 7dd3281aa on the warm-up PASS
+    // route: the warm-up pass did not carry the flag and was not a reader, so it compiled the
+    // GI-less variants and the first frame compiled the readers' on the UI thread.
+    {
+        View *v = gEngine->createOffscreenView("warmgi", 96, 96, Colour(0.2f, 0, 0));
+        Scene *s = buildScene("warmgi", v);
+        CHECK(v && s, "GI view + scene");
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::Low;
+        gi.numBounces = 1;
+        CHECK(s && s->setGlobalIllumination(gi), "voxel GI on");
+        for (int i = 0; i < 12; ++i) gEngine->renderOneFrame();   // the arm builds (it needs a drawn frame)
+        // ...then A NEW MATERIAL FAMILY in the GI scene: a glass cube, a permutation no case
+        // above compiled, now with the GI's pass properties.
+        {
+            const NodeId n = s->createNode();
+            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+            PbrParams p;
+            p.albedo = Colour(0.3f, 0.8f, 0.4f);
+            p.alpha = 0.5f;
+            p.alphaMode = PbrAlphaMode::Glass;
+            const MaterialId m = s->createPbrMaterial(p);
+            CHECK(n && mesh && m && s->attachMesh(n, mesh, m), "GI scene: a glass cube");
+            enginetest::setNodePosition(s, n, Vec3(0.8f, 0.0f, 0.8f));
+        }
+        const unsigned before = compiledSoFar();
+        const bool ok = v->warmUpShaders();
+        const unsigned afterWarm = compiledSoFar();
+        gEngine->renderOneFrame();
+        const unsigned afterFrame = compiledSoFar();
+        std::printf("    GI scene: the warm-up compiled %u shader(s), the first real frame %u\n",
+                    afterWarm - before, afterFrame - afterWarm);
+        CHECK(ok, "warmUpShaders() on the GI scene");
+        CHECK(afterWarm > before, "the warm-up compiled the new family (not vacuous)");
+        CHECK(afterFrame == afterWarm,
+              "the first real frame of a warmed GI scene compiles NOTHING (the warm-up built the readers' variants)");
+        gEngine->destroyScene(s);
+        gEngine->destroyView(v);
+    }
+
     // ---- 4b. no scene: refuse, do not crash -------------------------------
     {
         View *v = gEngine->createOffscreenView("bare", 32, 32, Colour(0, 0, 0));
