@@ -287,6 +287,15 @@ add_test(NAME source.photon_one_dispatch
 set_tests_properties(source.photon_one_dispatch PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.photon_one_dispatch)
 
+# source.graphics_queue_seams — ENGINE-UPGRADE-ASYNC-3 stage 1: irisgl/engine/src names
+# mGraphicsQueue only on the allow-listed lines that must be graphics (OpenXR, the blocking
+# one-shot submits); every other take of the frame's command buffer is the recording queue's.
+add_test(NAME source.graphics_queue_seams
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/graphics_queue_seams.py"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.graphics_queue_seams PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.graphics_queue_seams)
+
 # source.scene_no_photon_members — ENGINE-UPGRADE-2B stage 1: Photon's state lives in
 # PhotonComponent, not OgreScene — none of the COMMITTED NAMED LIST (photon_members.txt) is an
 # OgreScene member, every one is a PhotonComponent member. See the script.

@@ -422,6 +422,10 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
             // "0 ms on the GPU" are different facts (Types.h).
             { "shadowMs", double(p.shadowMs) },
             { "gpuMs", double(p.gpuMs) },
+            // A top-level row (its gpuMs adds to the frame's) and a GI reader (ENGINE-UPGRADE-ASYNC-3:
+            // the frame's first and last bound the async compute window).
+            { "top", p.topLevel },
+            { "readsGi", p.readsGi },
         };
         if (p.shadowMapIdx != FramePass::kNoShadowMap) o.insert("shadowMap", int(p.shadowMapIdx));
         passes.append(o);

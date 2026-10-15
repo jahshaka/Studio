@@ -230,8 +230,8 @@ foreach(_row_frames
         "shadercache.container=136"
         "shadercache.container_asan=136"   # its plain twin's, an upper bound (the corruption cases only)
         "shadercache.engine_pipelines=180"
-        "shadercache.warmup=17"
-        "shadercache.warmup_pass=17"
+        "shadercache.warmup=18"
+        "shadercache.warmup_pass=18"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

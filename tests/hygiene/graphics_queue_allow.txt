@@ -1,0 +1,8 @@
+# source.graphics_queue_seams allow-list: <count>\t<file under irisgl/engine/src>\t<the code line, trimmed>
+# The lines that MUST be graphics (graphics_queue_seams.py says why). Nothing else may name mGraphicsQueue.
+1	OgreVrSession.cpp	mGraphicsFamily = dev->mGraphicsQueue.mFamilyIdx;
+1	OgreVrSession.cpp	mQueueIndex = dev->mGraphicsQueue.mQueueIdx;
+1	OgreVrSession.cpp	dev->mGraphicsQueue.endAllEncoders();
+1	OgreVrSession.cpp	VkCommandBuffer cmd = dev->mGraphicsQueue.getCurrentCmdBuffer();
+3	OgreRayQuery.cpp	pci.queueFamilyIndex = mDev->mGraphicsQueue.getFamilyIdx();
+3	OgreRayQuery.cpp	bool ok = vkQueueSubmit(mDev->mGraphicsQueue.mQueue, 1, &si, fence) == VK_SUCCESS;

@@ -137,7 +137,7 @@ engine.gi_scan 2.38  quiet n=43
 engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
-engine.gpu_substrate 2.10  solo (EU-2 stage 1, 2026-10-14)
+engine.gpu_substrate 2.73  solo (ASYNC-3 stage-1 read F4: + the graphics-build frame, 2026-10-15)
 engine.gpu_walk_parity 6.12  spec EU-2B stage 3 fix (2026-10-15)
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
@@ -197,7 +197,7 @@ gi.ddgi 10.32  quiet n=41
 gi.ddgi_ambient 5.05  quiet n=42
 gi.ddgi_edge 3.70  quiet n=42
 gi.drag_cadence 6.04  quiet n=46
-gi.drag_mover 3.16  quiet n=47
+gi.drag_mover 3.57  ASYNC-3 stage-1 read F3: + case 6 (2026-10-15, beside 3 rows)
 gi.env_cone 5.17  quiet n=42
 gi.env_one 6.95  quiet n=40
 gi.env_ray_match 5.21  quiet n=43
@@ -260,6 +260,8 @@ gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
 gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
+gi.reads_gi 2.61  spec ENGINE-UPGRADE-ASYNC-3 stage 2 (2026-10-15, solo, warm cache)
+gi.region_compute_only 2.94  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-15, solo, warm cache)
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
 gi.probe_inputs 11.39  quiet n=44
 gi.probe_nan 5.64  quiet n=41
@@ -770,8 +772,8 @@ shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
 shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
 shadercache.engine_pipelines 11.27  quiet n=36
 shadercache.fixture_warm 1.44  solo, warm shared cache, the card lock held (EU-1 stage 1, 2026-10-13; 1.99 cold-first)
-shadercache.warmup 1.60  quiet n=46
-shadercache.warmup_pass 1.73  quiet n=45
+shadercache.warmup 3.20  ASYNC-3 stage-2 read D1: + the GI arm (2026-10-15, solo; FRAMES measured 18)
+shadercache.warmup_pass 3.32  ASYNC-3 stage-2 read D1: + the GI arm (2026-10-15, solo; FRAMES measured 18)
 shadergraph.ao_removed 0.00  ship 3a0422b4e (2026-10-13)
 shadergraph.asset_widget_db 0.00  ship 3a0422b4e (2026-10-13)
 shadergraph.bake_output 1.56  quiet n=32
@@ -843,6 +845,7 @@ source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
 source.photon_one_dispatch 0.01  spec EU-2B stage 3 fix (2026-10-14)
+source.graphics_queue_seams 0.05  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-15, solo)
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
