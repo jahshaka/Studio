@@ -174,6 +174,7 @@ int main()
     const int replaceFrames2 = toRest(e, s);
     const double replaceMs2 =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t2).count();
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const GiStatus sc = s->published().gi;
     s->setGlobalIllumination(offGi);
     render(e, 4);

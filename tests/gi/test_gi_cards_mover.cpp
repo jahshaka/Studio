@@ -288,6 +288,7 @@ int main(int argc, char **argv)
                   "(a) the mover's umbra shows the card read's specks at the still control's rate "
                   "(%.1f %% vs %.1f %%, bar +2 points)", 100.0 * rateA, 100.0 * rateC);
     }
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const GiStatus afterA = s->published().gi;
     std::printf("    movers %u, traces %llu, retired %llu, relights %llu\n", afterA.cards.moverCasters,
                 (unsigned long long)afterA.cards.moverTraces, (unsigned long long)afterA.cards.moverRetired,

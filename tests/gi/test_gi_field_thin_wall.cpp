@@ -571,12 +571,14 @@ static int runAlias(Fixture &f)
         render(f.e, 4);
         const bool built = room->setGlobalIllumination(fieldGi(1));
         f.e->setArm("gi.fieldSamples", 0.0);
+        render(f.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("   the room: GI %s (%s), field %s, %d probes\n", built ? "built" : "REFUSED", f.e->lastError().c_str(),
                     room->published().gi.ifdBound ? "bound" : "UNBOUND", room->published().gi.ifdProbes);
         // Every probe's samples out of its own refining mean (read after each whole
         // pass: a probe whose count stepped by one gave up exactly one sample).
         std::vector<double> prevMean, prevCount, sum, sq, cnt;
         int reads = 0;
+        render(f.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int pass = 0; pass <= 17 && room->published().gi.ifdRefinesOwed > 0u; ++pass) {
             GiFieldAtlas at;
             if (room->giFieldAtlas(at) && at.available) {

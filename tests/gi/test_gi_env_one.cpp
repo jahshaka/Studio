@@ -441,6 +441,7 @@ int main()
         b->setSky(bsky);
         float bsh[27] = { 0.0f };
         bool ready = false;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = b->published().copySkyAmbientSh(bsh); }
         b->setAmbientSh(bsh);
         b->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));

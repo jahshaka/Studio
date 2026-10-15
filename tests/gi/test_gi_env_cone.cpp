@@ -394,6 +394,7 @@ int main()
             sky.equirect = open->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
+            enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             for (int f = 0; f < 20 && !open->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             open->setAmbientSh(sh);
             open->setEnvironmentLight(Colour(1, 1, 1, 1));
@@ -445,6 +446,7 @@ int main()
         cones.cascadeCount = 1;
         cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, 64, 0.0f };
         room->setGlobalIllumination(cones);
+        enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int f = 0; f < 4000 && !room->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         const double viaCones = readHdr(rv);
         GiParams field = cones;

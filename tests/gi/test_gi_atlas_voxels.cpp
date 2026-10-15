@@ -178,6 +178,7 @@ int main()
         // grid of BLACK probes — which reads as "the probes are fine" in every
         // other counter this suite has.
         const int capturedA = renderCounting(e, scene, 40);
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus after = scene->published().gi;
         const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
         std::printf("   after the rebuild: atlasRebuilds %u -> %u, arm rebuilds %llu -> %llu, "
@@ -189,6 +190,7 @@ int main()
               "THE VOXELS SURVIVED IT: not one from-scratch GI rebuild");
         CHECK(after.probeCount == before.probeCount && after.pccBound && after.vctBound,
               "...and the probe grid is still there, still bound, with the same probes");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("   the budget photographed %d probe(s) over the 40 frames after it, "
                     "%d still stale\n", capturedA, scene->published().gi.staleProbes);
         CHECK(capturedA > 0,

@@ -272,6 +272,7 @@ int main()
         std::vector<MonitorRecord> recs;
         engine->takeMonitorRecords(recs);
         engine->setFrameMonitor(MonitorLevel::Off);
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const size_t chainSize = scene->published().gi.cascades.size();
         int bothInOneFrame = 0, movingRows = 0, cascadeRows = 0;
         int worstCascadesInAFrame = 0, overlapUnits = -1;

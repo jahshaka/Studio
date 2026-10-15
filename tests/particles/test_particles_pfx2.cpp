@@ -447,6 +447,7 @@ int main(int argc, char **argv)
     {
         ParticleSystemDesc d = plumeDesc(1024, blob);
         CHECK(scene->setParticleSystem(node, d), "baseline system for the churn");
+        enginetest::frames(engine, 1);   // the baseline is the snapshot a frame closed (U3 stage 2b)
         const unsigned before = scene->published().particleDefinitionsCreated;
         bool churnOk = true;
         for (int i = 0; i < 20; ++i) {
@@ -471,8 +472,10 @@ int main(int argc, char **argv)
             d.quota = q;
             scene->setParticleSystem(node, d);
         }
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("    3 within-bucket quota edits created %u definitions\n",
                     scene->published().particleDefinitionsCreated - b2);
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(scene->published().particleDefinitionsCreated == b2,
               "quota changes inside one bucket never rebuild");
     }

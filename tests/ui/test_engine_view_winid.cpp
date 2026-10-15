@@ -128,6 +128,7 @@ void TestEngineViewWinId::rebuildsWhenTheNativeWindowIsReplaced()
     // with it), which is exactly why EngineViewWidget::viewRecreated() exists —
     // bind it the way a host does and confirm frames flow again.
     QVERIFY(second->setScene(scene));
+    enginetest::frames(mEngine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const unsigned long long before = second->published().presented;
     enginetest::frames(mEngine, 3);
     QVERIFY2(second->published().presented > before, "the rebuilt view presents nothing");
@@ -173,6 +174,7 @@ void TestEngineViewWinId::reparentLeavesALiveView()
     QVERIFY2(view != nullptr, "the reparent left the widget with no view at all");
     QVERIFY2(!view->isOffscreen(), "the reparent dropped the widget to an offscreen view");
     if (!view->scene()) QVERIFY(view->setScene(scene));
+    enginetest::frames(mEngine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const unsigned long long before = view->published().presented;
     enginetest::frames(mEngine, 3);
     QVERIFY2(view->published().presented > before, "nothing presents after the reparent");

@@ -194,12 +194,14 @@ int main(int argc, char **argv)
     CHECK(has(oomError, "VK_ERROR_OUT_OF_DEVICE_MEMORY") && has(oomError, "67108864-byte pool"),
           "...with the VkResult and the pool's size");
     CHECK(!has(oomError, "device was lost"), "...and does not claim the device was lost");
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(!e->published().deviceLost,
           "AN OOM IS NOT A DEVICE LOSS: the render system did not latch it (the fork's onVulkanFailure)");
 
     // =====================================================================
     // CASE 2 — THE PROCESS CARRIES ON, AND THE PICTURE IS THE SAME
     // =====================================================================
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const unsigned long long presented0 = view->published().presented;
     Image after;
     CHECK(settle(e, view, after), "the frames after the OOM render and settle");

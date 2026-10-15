@@ -633,8 +633,10 @@ int main(int argc, char **argv)
                   st.gather.settleFrames);
         lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "a light write (the cheap path)");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!r.scene->published().gi.giAtRest, "the write takes GI out of rest");
         int frames = 0;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         while (frames < 4000 && !r.scene->published().gi.giAtRest) {
             enginetest::frames(e, 1);
             ++frames;
@@ -718,8 +720,10 @@ int main(int argc, char **argv)
             // THE RESTART: a light write while the mover moves.
             lightWrite(r.scene, r.light);
             CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
+            enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(!r.scene->published().gi.giAtRest, "the write takes GI out of rest");
             unsigned lastSince = 0u;
+            enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             while (frames < 4000 && !r.scene->published().gi.giAtRest) {
                 step();
                 ++frames;

@@ -461,6 +461,7 @@ int main(int argc, char **argv)
     // off the GPU scene at every build (ATOM P4b) — so a deleted node is answered
     // by the cascades its box reaches, never by a from-scratch rebuild.
     escene->refreshGlobalIllumination();
+    enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(escene->published().gi.reusedLastRefresh, "the arm is being re-used again");
     {
         auto doomed = slab(doc, "doomed", white, iris::Vec3(3.4f, 0.6f, -3.4f),

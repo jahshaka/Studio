@@ -1663,6 +1663,7 @@ int main(int argc, char **argv)
         gcam->update(0.0f);
         mirror.sync(mirrorframe::camera(view, gcam));
 
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const quint64 push0 = mirror.target()->published().gi.schedulerPushes, refresh0 = mirror.target()->published().gi.schedulerResolves;
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
@@ -1810,6 +1811,7 @@ int main(int argc, char **argv)
             borrowed2->setRoughnessFactor(0.83f);
 
             drain();
+            enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             const quint64 beforeB = mirror.target()->published().gi.schedulerResolves;
             ++gdoc->materialPreviewDepth;
             previewTarget->setMaterial(borrowed2);
@@ -2047,18 +2049,22 @@ int main(int argc, char **argv)
 
         torch->setLocalPos(iris::Vec3(1.0f, 2.0f, 0.0f));
         tick();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long s1 = target->published().lightWriteSerial;
         CHECK(s1 > s0, "light writes: a lamp that moves ITSELF is a light write");
         tick();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(target->published().lightWriteSerial == s1,
               "light writes: ...once for the move, not once per frame after it");
 
         // THE CASE THAT WAS INVISIBLE: the lamp's own transform never changes.
         carrier->setLocalPos(iris::Vec3(0.0f, 0.0f, 3.0f));
         tick();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long s2 = target->published().lightWriteSerial;
         CHECK(s2 > s1, "light writes: a lamp CARRIED by its parent is a light write too");
         tick();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(target->published().lightWriteSerial == s2,
               "light writes: ...and that one settles back to still as well");
         std::printf("    light-write serial: still %llu, own move %llu, carried %llu\n",
@@ -2198,6 +2204,7 @@ int main(int argc, char **argv)
         mmirror.sync();
         CHECK(mmirror.mobilityMissCount() == 1,
               "mobility: ...and NOT once per frame it keeps moving (one warning per play session)");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(mmirror.target()->published().gi.schedulerResolves == refreshesBefore && mmirror.target()->published().gi.schedulerPushes == pushesBefore,
               "mobility: the soft promotion costs NO GI refresh (that is the whole point of O3)");
 

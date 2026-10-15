@@ -264,8 +264,9 @@ int main(int argc, char **argv)
         CHECK(eng != 0, "emitter has an engine node");
         CHECK(target->published().particlesOf(eng) == 0, "nothing is alive before the first frame");
 
-        const unsigned defsAfterFirst = target->published().particleDefinitionsCreated;
         enginetest::frames(engine, 90);
+        // (after the frames: the sync's record — and the definition it builds — lands in the first; U3 stage 2b)
+        const unsigned defsAfterFirst = target->published().particleDefinitionsCreated;
         std::printf("    after 90 engine frames: %u live particles\n", target->published().particlesOf(eng));
         CHECK(target->published().particlesOf(eng) > 0, "the ENGINE emitted, with no document tick at all");
         view->readPixels(img);
@@ -333,7 +334,9 @@ int main(int argc, char **argv)
             doc->getRootNode()->removeChild(churn);
             mirror.sync();
         }
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned churned = target->published().particleDefinitionsCreated - before;
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("    10 add/remove cycles left %u new definitions "
                     "(%u in the scene overall; ~%u KiB CPU + %u KiB GPU each at quota 1024)\n",
                     churned, target->published().particleDefinitionsCreated,

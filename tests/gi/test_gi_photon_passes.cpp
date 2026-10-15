@@ -97,6 +97,7 @@ int main()
     e->takeMonitorRecords(recs);
     CHECK(!recs.empty(), "the monitor recorded frames");
 
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const RayQueryStatus rq = s->published().rayQuery;
     std::printf("   rays: reflections %d, hit decode draws %d\n", rq.enabled ? 1 : 0, rq.hitDecodeDraws);
     unsigned good = 0, framesSeen = 0;

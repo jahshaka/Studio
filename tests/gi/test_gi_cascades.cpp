@@ -150,8 +150,12 @@ int main()
         CHECK(scene->setGlobalIllumination(cascadeGi()),
               "the cascade arm accepts before any frame has rendered");
         // WAITING IS NOT A REBUILD, and it says so rather than looking like a
-        // failed build (round-2 review F4/F5).
+        // failed build (round-2 review F4/F5). The host reads it off a frame's snapshot (U3 stage 2b): one frame
+        // with the only view disabled — nothing draws the scene, so nothing tracks a camera — then the view back on.
+        view->setEnabled(false);
+        render(e, 1);
         const GiStatus waiting = scene->published().gi;
+        view->setEnabled(true);
         CHECK(waiting.cascadesAwaitingCamera && waiting.cascades.empty(),
               "...and reports that it is WAITING FOR A CAMERA, not that it built nothing");
         CHECK(waiting.rebuilds == rebuildsBefore,
@@ -630,6 +634,7 @@ int main()
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the walk");
         render(e, 8);
         e->setFrameMonitor(MonitorLevel::Review);
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const float step = scene->published().gi.cascades[0].step;
         for (int f = 1; f <= 40; ++f) {
             const float x = float(f) * step / 4.0f;
@@ -928,6 +933,7 @@ int main()
             measure("a material edit", armMat, 16, total, worst);
             CHECK(total == (unsigned long long)nCascades,
                   "...and EVERY cascade got fresh voxels — one cascade per frame");
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(scene->published().gi.vctBound,
                   "...with the chain still bound after every voxeliser was replaced");
 
@@ -938,21 +944,25 @@ int main()
             // cache paint the new material with the old one's colour. Answered
             // the same way a parameter edit is — a replacement voxeliser per
             // cascade, one cascade per frame.
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             const unsigned long long armPre = scene->published().gi.rebuilds;
             CHECK(scene->setShadingModel(mat, ShadingModel::Unlit),
                   "a preset apply destroys the datablock (the item leaves GI)");
             measure("a preset apply", armPre, 16, total, worst);
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             const unsigned long long armPre2 = scene->published().gi.rebuilds;
             CHECK(scene->setShadingModel(mat, ShadingModel::Lit),
                   "...and another preset puts it back");
             measure("a preset undone", armPre2, 16, total, worst);
             CHECK(total >= 1 && total <= (unsigned long long)nCascades,
                   "...with fresh voxels spread one cascade per frame");
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(scene->published().gi.vctBound, "...and the chain still bound");
         }
 
         // ---- (e) a SPAWN ---------------------------------------------------
         {
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             unsigned long long arm0 = scene->published().gi.rebuilds;
             const NodeId spawned =
                 enginetest::addTestCube(scene, Colour(0.8f, 0.8f, 0.2f), 0.0f, 0.6f);
@@ -960,6 +970,7 @@ int main()
             measure("a spawn", arm0, 16, total, worst);
 
             // ---- (f) a HIDE ------------------------------------------------
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             arm0 = scene->published().gi.rebuilds;
             scene->setNodeVisible(spawned, false);
             measure("a hide", arm0, 16, total, worst);
@@ -979,6 +990,7 @@ int main()
             measure("an authoring flip", arm0, 16, total, worst);
 
             // ---- (h) a DELETE of LIT geometry -------------------------------
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             arm0 = scene->published().gi.rebuilds;
             scene->removeNode(spawned);
             measure("a delete", arm0, 16, total, worst);

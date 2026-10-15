@@ -347,6 +347,7 @@ int main(int argc, char **argv)
         // (1) STILL: a scene nobody is touching files no GI work at all — once the
         // chain has come to rest after the drag above (its dirty path spends a
         // cascade a frame and then settles: counted, not timed).
+        frame();   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int f = 0; f < 240 && !escene->published().gi.giAtRest; ++f) frame();
         engine->takeMonitorRecords(recs);
         for (int f = 0; f < 20; ++f) frame();

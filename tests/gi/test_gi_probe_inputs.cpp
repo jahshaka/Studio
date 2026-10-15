@@ -319,6 +319,7 @@ int main(int argc, char **argv)
     // A material-only edit waits for the settle WITHOUT the light re-inject
     // cadence (and its irradiance-field reset): nothing a re-inject reads
     // changed. The material generation is its own term for exactly this.
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(mirror.target()->published().gi.schedulerLightTicks == injectsBeforeAlbedo,
           "albedo: the settle wait runs NO light re-inject (the material term is its own)");
     const Colour blueMirror = mirrorPixel();
@@ -326,20 +327,24 @@ int main(int argc, char **argv)
                 blueMirror.r, blueMirror.g, blueMirror.b);
     CHECK(blueMirror.b > blueMirror.r + 0.3f,
           "albedo: the mirror pixel FOLLOWS the edit — it now shows the BLUE wall");
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(mirror.target()->published().gi.schedulerResolves - solvesBeforeAlbedo == 1,
           "albedo: the voxel half re-solves exactly once (coalesced, like a moved object)");
 
     // A ROUGHNESS edit is seen by the probes but not by the voxelizer (which
     // reads albedo/emissive/alpha only): it re-captures and costs no re-solve.
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const quint64 solvesBeforeRough = mirror.target()->published().gi.schedulerResolves;
     input("roughness", GiStaleReason::Material,
           [&]() { wallMat->setRoughnessFactor(0.5f); }, 12);
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(mirror.target()->published().gi.schedulerResolves == solvesBeforeRough,
           "roughness: probes re-capture, the voxels do not re-solve");
 
     // An edit that changes NOTHING stales nothing (the mirror pushes materials
     // on change, and the engine compares the parameters itself as well).
     {
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long serial = escene->published().gi.staleSerial;
         wallMat->setRoughnessFactor(0.5f);
         frames(3);
@@ -439,6 +444,7 @@ int main(int argc, char **argv)
         auto plateMat = pbr(QColor(5, 255, 5));
         plateMat->setShadingModel(1);                         // Unlit
         iris::MeshNodePtr plate;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long serial = escene->published().gi.staleSerial;
         plate = slab(doc, "unlit plate", plateMat, iris::Vec3(0.0f, 2.0f, 3.85f),
                      iris::Vec3(2.0f, 2.0f, 0.1f));
@@ -588,9 +594,11 @@ int main(int argc, char **argv)
         const TextureId lateTex = escene->loadTexture("probe_inputs_late.tga", true);
         CHECK(lateTex != 0, "late texture: loadTexture schedules it");
         const bool streaming = !engine->texturesDoneStreaming();
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long atBind = escene->published().gi.staleSerial;
         CHECK(escene->setPbrTexture(lateMat, PbrTextureSlot::Albedo, lateTex),
               "late texture: the bind applies");
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long afterBind = escene->published().gi.staleSerial;
         CHECK(afterBind > atBind, "late texture: the BIND stales the grid, as it always did");
         frame();                                      // the frame head drains the load
@@ -657,6 +665,7 @@ int main(int argc, char **argv)
         gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
         gi.testProbeRegionMin = Vec3(-3.0f, -1.0f, -3.0f);
         gi.testProbeRegionMax = Vec3(3.0f, 4.0f, 3.0f);
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long rebuilds = escene->published().gi.rebuilds;
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
         // THE CHAIN IS BUILT AROUND A TRACKED CAMERA (it waits for one), so the second

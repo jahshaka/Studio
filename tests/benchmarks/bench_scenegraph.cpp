@@ -1167,6 +1167,7 @@ int main(int argc, char **argv)
                 const int visited = mirror.sync();
                 const auto t3 = Clock::now();
                 const double syncMs = msSince(t0);
+                enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
                 const SceneChangeStats cs1 = es->published().changes;
                 enginetest::frames(engine, 1);
                 rec.add("c.reparent_500_remove", std::chrono::duration<double, std::milli>(t1 - t0).count());

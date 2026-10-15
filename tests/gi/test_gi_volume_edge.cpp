@@ -253,6 +253,7 @@ int main(int argc, char **argv)
         CHECK(o.scene->setGlobalIllumination(hybridDdgi()), "hybrid + DDGI arms");
         float inside = 0.0f, outside = 0.0f;
         measure(e, o, "flat ambient, GI on", inside, outside);
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus st = o.scene->published().gi;
         CHECK(st.vctBound, "the voxel arm is bound");
         CHECK(st.boundsMax.x - st.boundsMin.x < 48.0f,

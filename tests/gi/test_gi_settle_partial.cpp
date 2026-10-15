@@ -116,6 +116,7 @@ int main()
     std::vector<std::string> order;
     std::vector<MonitorRecord> all;
     for (int f = 0; f < 160; ++f) {
+        enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus now = s->published().gi;
         if (!tickAsked && now.cascades[1].rebuilds > before[1] && now.cascades[2].rebuilds == before[2]) {
             s->refreshGiLighting(false);
@@ -218,6 +219,7 @@ int main()
         unsigned settleAfter = 0;
         std::vector<MonitorRecord> keep;
         for (int f = 0; f < 160; ++f) {
+            enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             if (!wrote && s->published().gi.cascades[3].rebuilds > rb[3]) {
                 LightDesc l;
                 l.type = LightType::Directional;

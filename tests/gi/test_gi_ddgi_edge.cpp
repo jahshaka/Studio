@@ -330,6 +330,7 @@ int main()
     GiParams on = vctBase();
     on.ddgi = GiToggle::On;
     CHECK(b.scene->setGlobalIllumination(on), "DDGI arms");
+    render(e, 1);   // the snapshot reads the arm as the frame closed it (U3 stage 2b)
     const GiStatus st = b.scene->published().gi;
     CHECK(st.ifdBound, "the field is bound (the leak has a source)");
     std::printf("   field: %d probes, GI at rest %d\n", st.ifdProbes, int(st.giAtRest));
@@ -411,6 +412,7 @@ int main()
     enginetest::testCameraLookAt(b.driver, kDriverCase3, Vec3(0.0f, 0.5f, 1.0f));
     CHECK(b.scene->setGlobalIllumination(enc), "VCT without DDGI, enclosing bounds");
     {
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus es = b.scene->published().gi;
         if (!es.cascades.empty()) {
             const auto &c0 = es.cascades[0];

@@ -276,10 +276,10 @@ int main()
         d.distortion = true;
         d.distortionStrength = 0.0f;
         view->setPostFx(d);
+        render(engine.get(), 4);   // the snapshot names the workspace the frames drew with (U3 stage 2b)
         const unsigned genOn = view->published().workspaceGeneration;
         CHECK_MSG(genOn != genPlain,
                   "turning distortion on IS a shape change (%u -> %u)", genPlain, genOn);
-        render(engine.get(), 4);
         Image zero;
         REQUIRE(view->readPixels(zero));
         writePpm(zero, "distortion-strength0.ppm");
@@ -291,6 +291,7 @@ int main()
         PostFxDesc up = d;
         up.distortionStrength = 1.0f;
         view->setPostFx(up);
+        render(engine.get(), 1);
         CHECK_MSG(view->published().workspaceGeneration == genOn,
                   "changing the STRENGTH must not rebuild the workspace (%u -> %u)",
                   genOn, view->published().workspaceGeneration);

@@ -259,6 +259,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
     e->setFrameMonitor(MonitorLevel::Review);
     double skinMs = 0.0, refitMs = 0.0, frameAnim = 0.0, frameStill = 0.0, cpuMs = 0.0;
     int skinN = 0, animN = 0, stillN = 0;
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const unsigned long long p0 = s->published().rayQuery.skinPasses;
     int frame = 0;
     for (int round = 0; round < 4; ++round) {
@@ -286,6 +287,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
         }
     }
     e->setFrameMonitor(MonitorLevel::Off);
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const RayQueryStatus rq = s->published().rayQuery;
     const double items = double(characters);
     const double verts = double(md.positions.size() / 3u);

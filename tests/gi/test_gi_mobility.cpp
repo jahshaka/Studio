@@ -285,6 +285,7 @@ static void sectionA(Engine *engine)
         const int hidden = worstOver(6);
         s->setNodeVisible(mover, true);
         const int shown = worstOver(6);
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(hidden == 0 && shown == 0 && s->published().gi.staleSerial == serial,
               "hiding and showing a mover stales nothing and captures nothing (%d/%d)", hidden, shown);
     }
@@ -294,6 +295,7 @@ static void sectionA(Engine *engine)
     // a GI edge: exactly one from-scratch rebuild, reported as such. (This is
     // the honest cost the play-time promotion below refuses to pay.)
     {
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long rebuilds = cascadeRebuilds(s->published().gi);
         const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
         s->setNodeMovable(stayer, true);
@@ -330,6 +332,7 @@ static void sectionA(Engine *engine)
         const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
         const unsigned long long serial = s->published().gi.staleSerial;
         s->setNodeMovable(surprise, true, MobilityChange::Soft);
+        frame();   // the snapshot reads the grid as the frame closed it (U3 stage 2b)
         CHECK(s->published().gi.staleSerial == serial + 1 &&
               s->published().gi.lastStaleReason == GiStaleReason::Mobility,
               "the promotion stales the grid ONCE, with its own reason — the probes that "
@@ -338,8 +341,9 @@ static void sectionA(Engine *engine)
         // The one-off catch-up, at the budget, and then nothing for ever: this
         // is the whole difference from what the base did, where every frame of
         // the movement staled the grid again.
-        int catchUp = 0, worst = 0;
-        for (int i = 0; i < 8; ++i) { frame(); catchUp += s->published().gi.probeCapturesLastFrame; }
+        // (the frame the promotion's read stepped is the catch-up's first: its captures count — 8 frames in all)
+        int catchUp = s->published().gi.probeCapturesLastFrame, worst = 0;
+        for (int i = 1; i < 8; ++i) { frame(); catchUp += s->published().gi.probeCapturesLastFrame; }
         const unsigned long long after = s->published().gi.staleSerial;
         int captures = 0;
         for (int i = 0; i < 30; ++i) {
@@ -358,6 +362,7 @@ static void sectionA(Engine *engine)
         const unsigned long long r2 = s->published().gi.rebuilds;
         s->removeNode(surprise);
         const int onDelete = worstOver(6);
+        frame();   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(onDelete == 0 && s->published().gi.rebuilds == r2,
               "deleting a mover costs no capture and no rebuild (%d)", onDelete);
     }
@@ -458,6 +463,7 @@ static void sectionB(Engine *engine)
         const float before = lowerRed(3, "mover movable, no reflector yet");
         CHECK(s->setNodePlanarReflector(floor, true), "the floor is a reflector");
         const float on = lowerRed(3, "mover movable, reflector on");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(s->published().activePlanarReflectors == 1, "exactly one actor rendered");
         CHECK(on > before + 0.10f,
               "a MOVABLE object is drawn into the planar mirror (kMovableBit is in the pass)");

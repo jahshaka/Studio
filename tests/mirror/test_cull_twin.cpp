@@ -321,6 +321,7 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 10.0f), Vec3(0.0f, 0.5f, 0.0f));
         auto rebuilds = [&] {
             unsigned long long n = 0;
+            frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
             for (const auto &c : scene->published().gi.cascades) n += c.rebuilds;
             return n;
         };

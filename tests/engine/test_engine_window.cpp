@@ -137,6 +137,7 @@ int main() {
     // Asking for a size the window does not have must NOT change the answer:
     // nothing has been applied yet, and the swapchain is still the old one.
     v->resize(512, 384);
+    render(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().width == 320 && v->published().height == 240,
               "a pending resize does not change the reported size (%ux%u)",
               v->published().width, v->published().height);

@@ -114,6 +114,7 @@ int main(int argc, char **argv)
             sky.equirect = s->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
+            enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             for (int f = 0; f < 20 && !s->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1, 1, 1, 1));

@@ -726,6 +726,7 @@ int main()
         GiParams high = hybrid;
         high.quality = GiQuality::High;
         const bool rays = engine->rayQueryAvailable() && s->rayTracingResolved();
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus before = s->published().gi;
         CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
         render(engine.get(), 4);

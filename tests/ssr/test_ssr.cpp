@@ -332,11 +332,12 @@ int main()
     fx.allowOffscreen = true;      // the ONE door through the offscreen guarantee
     fx.ssr = 1;                    // half-resolution rays
     view->setPostFx(fx);
-    CHECK(view->published().workspaceGeneration > genPlain, "enabling SSR rebuilds the chain");
     // Four frames: the resolve reads the PREVIOUS frame's colour, so the first
     // frame after a rebuild reflects the seeded black history.
     Image ssrOnImg;
     const float redOn = measure(engine.get(), view, "ssr on (half-res rays)", 4, &ssrOnImg);
+    // (the snapshot's generation, once the frames have closed the rebuild — U3 stage 2b)
+    CHECK(view->published().workspaceGeneration > genPlain, "enabling SSR rebuilds the chain");
     if (!engine->lastError().empty())
         std::printf("    lastError after enabling SSR: %s\n", engine->lastError().c_str());
     CHECK(redOn > redOff + 0.10f,
@@ -394,6 +395,7 @@ int main()
 
     // ---- 6. shape vs tuning -------------------------------------------------
     {
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned gen = view->published().workspaceGeneration;
         PostFxDesc tuned = fx;
         tuned.ssrMaxDistance = 40.0f;
@@ -401,6 +403,7 @@ int main()
         tuned.ssrIntensity = 0.9f;
         tuned.reflectionRoughnessCutoff = 0.55f;   // the World row, mid-drag
         view->setPostFx(tuned);
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(view->published().workspaceGeneration == gen,
               "SSR distance/thickness/intensity/roughness-cutoff are UNIFORMS, "
               "not graph changes");
@@ -409,6 +412,7 @@ int main()
         PostFxDesc hq = fx;
         hq.ssr = 2;                                    // full-resolution rays
         view->setPostFx(hq);
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(view->published().workspaceGeneration > gen, "the quality row IS a graph change");
         // ---- 7. full-resolution rays still reflect --------------------------
         Image hqImg;

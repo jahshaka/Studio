@@ -368,6 +368,7 @@ void resize_offscreen() {
     CHECK(img.rgba.size() == 48u * 32u * 4u);
 
     v->resize(128, 80);
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(v->published().width == 128 && v->published().height == 80);
     render(e);
     REQUIRE(v->readPixels(img));
@@ -656,6 +657,7 @@ void pip_is_ignored_offscreen_unless_asked() {
     ViewPipDesc d = pip::desc(0.6f, 0.6f, 0.35f, 0.35f);
     d.allowOffscreen = false;                       // deliberately NOT opted in
     v->setPip(d);
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not build anything for an inset it will ignore: %u -> %u",
               genBefore, v->published().workspaceGeneration);
@@ -701,6 +703,7 @@ void pip_composites_a_second_camera_into_the_rect() {
     ViewPipDesc moved = d;
     moved.left = 0.04f; moved.top = 0.04f;
     v->setPip(moved);
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == gen,
               "moving the inset must not rebuild the workspace: %u -> %u",
               gen, v->published().workspaceGeneration);
@@ -750,9 +753,11 @@ void pip_request_dies_with_its_scene() {
 
     CHECK(v->setScene(nullptr));
     CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "detaching the scene must drop the PiP request");
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const unsigned pipGen = v->published().pipGeneration;
     CHECK(v->setScene(s2));
     CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "the next scene must not inherit the request");
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().pipGeneration == pipGen,
               "no inset may be BUILT on a scene that did not ask for one: pipGeneration %u -> %u",
               pipGen, v->published().pipGeneration);
@@ -895,6 +900,7 @@ void pip_survives_a_main_workspace_rebuild() {
     const unsigned gen = v->published().workspaceGeneration;
     v->setShadows(true);
     v->setShadows(false);
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration >= gen + 2, "two rebuilds expected, %u -> %u",
               gen, v->published().workspaceGeneration);
     render(e, 3);
@@ -1088,6 +1094,7 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
     CameraDesc cam;
     cam.position = Vec3(0.0f, 0.0f, 4.0f);            // identity: looks down -Z
     v->setCamera(cam);
+    render(e, 1);   // the generation is the snapshot's: a frame closes the bind's (U3 stage 2b)
     const unsigned genBefore = v->published().workspaceGeneration;
     render(e, 3);
     Image plain; REQUIRE(v->readPixels(plain));
@@ -4212,6 +4219,7 @@ void workspace_seam_counts_every_rebuild() {
               "a view with no scene has no workspace yet: %u", v->published().workspaceGeneration);
     Scene *s = fx.scene("seam-scene"); REQUIRE(s);
     CHECK(v->setScene(s));
+    render(fx.e, 1);   // every read below is the snapshot a frame closed (U3 stage 2b)
     const unsigned afterBind = v->published().workspaceGeneration;
     CHECK_MSG(afterBind == 1u, "binding a scene builds exactly one workspace: %u", afterBind);
 
@@ -4219,17 +4227,22 @@ void workspace_seam_counts_every_rebuild() {
     v->setBackground(jahshaka::engine::inspect::view(v)->background());
     v->setSampleCount(v->published().sampleCount);
     v->setShadows(jahshaka::engine::inspect::view(v)->shadows());
+    render(fx.e, 1);
     CHECK_MSG(v->published().workspaceGeneration == afterBind,
               "re-pushing unchanged values must not rebuild: %u", v->published().workspaceGeneration);
 
     // Each real change rebuilds once, and only once.
     v->setBackground(kGreen);
+    render(fx.e, 1);
     CHECK_MSG(v->published().workspaceGeneration == afterBind + 1, "background change: %u", v->published().workspaceGeneration);
     v->setShadows(true);
+    render(fx.e, 1);
     CHECK_MSG(v->published().workspaceGeneration == afterBind + 2, "shadow toggle: %u", v->published().workspaceGeneration);
     v->resize(96, 96);
+    render(fx.e, 1);
     CHECK_MSG(v->published().workspaceGeneration == afterBind + 3, "offscreen resize: %u", v->published().workspaceGeneration);
     v->setSampleCount(4);
+    render(fx.e, 1);
     CHECK_MSG(v->published().workspaceGeneration == afterBind + 4, "sample-count change: %u", v->published().workspaceGeneration);
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kGreen, 12));
@@ -4509,10 +4522,11 @@ void hud_overlay_is_ignored_offscreen_unless_asked() {
     const unsigned genBefore = v->published().workspaceGeneration;
 
     v->setOverlay(loudCover());          // allowOffscreen deliberately NOT set
+    render(fx.e, 4); Image covered; REQUIRE(v->readPixels(covered));
+    // (the snapshot's generation, after the frames that would have rebuilt — U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not even rebuild for an overlay it will ignore: %u -> %u",
               genBefore, v->published().workspaceGeneration);
-    render(fx.e, 4); Image covered; REQUIRE(v->readPixels(covered));
 
     std::printf("    pixelhash  no overlay %016llx   cover+stats refused %016llx\n",
                 pixelHash(plain), pixelHash(covered));
@@ -5013,6 +5027,7 @@ void postfx_is_ignored_offscreen_unless_asked() {
     PostFxDesc fxDesc;
     fxDesc.hdr = true; fxDesc.bloom = true; fxDesc.ssao = true; fxDesc.smaaPreset = 1;
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not even rebuild for post fx: %u -> %u",
               genBefore, v->published().workspaceGeneration);
@@ -5044,6 +5059,7 @@ void hdr_tonemap_and_exposure() {
     fxDesc.hdr = true;
     fxDesc.exposure = 0.0f;
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration >= 2u, "enabling HDR rebuilds the chain: %u",
               v->published().workspaceGeneration);
     settleExposure(fx.e, v);   // the auto-exposure converged, in frames
@@ -5065,6 +5081,7 @@ void hdr_tonemap_and_exposure() {
     const unsigned gen = v->published().workspaceGeneration;
     fxDesc.exposure = 2.0f;
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == gen,
               "exposure is a uniform, not a graph change: %u -> %u", gen,
               v->published().workspaceGeneration);
@@ -5157,6 +5174,7 @@ void fixed_exposure_tonemap() {
     fxDesc.tonemapFixed = true;
     fxDesc.exposure = 0.6f;          // secondaryfx::kFixedExposure
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration >= 2u,
               "the fixed-exposure chain is a graph change: %u", v->published().workspaceGeneration);
     render(fx.e, 3); Image graded; REQUIRE(v->readPixels(graded));
@@ -5185,6 +5203,7 @@ void fixed_exposure_tonemap() {
     const unsigned genFixed = v->published().workspaceGeneration;
     fxDesc.tonemapFixed = false;
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration > genFixed,
               "tonemapFixed is part of sameShape(): flipping it rebuilds (%u -> %u)",
               genFixed, v->published().workspaceGeneration);
@@ -5270,13 +5289,14 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     const unsigned genBefore = v->published().workspaceGeneration;
     fxDesc.ssao = true;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->published().workspaceGeneration > genBefore,
-              "ssao is a shape change: the workspace rebuilt (%u -> %u)",
-              genBefore, v->published().workspaceGeneration);
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
               double(v->measuredExposureScale()));
     std::printf("    ...after the rebuild: stopped moving after %d frames\n", settleExposure(fx.e, v));
+    // (the generation is the snapshot's, read once the frames have closed the rebuild — U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration > genBefore,
+              "ssao is a shape change: the workspace rebuilt (%u -> %u)",
+              genBefore, v->published().workspaceGeneration);
     CHECK_MSG(v->measuredExposureScale() > 0.0f,
               "...and it reports again once the NEW graph has drawn: %f",
               double(v->measuredExposureScale()));
@@ -5300,6 +5320,7 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     render(fx.e, 2); Image card; REQUIRE(v->readPixels(card));
     fxDesc.exposureScale = 4.0f;          // far from e^(0.6-2)/0.18 = 1.37
     v->setPostFx(fxDesc);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK_MSG(v->published().workspaceGeneration == genFixed,
               "exposureScale is a clear colour, not a graph edit: no rebuild (%u)",
               v->published().workspaceGeneration);
@@ -5896,8 +5917,8 @@ void monitor_off_is_inert() {
     // ...and that is the END of it: the storage is gone.
     recs.clear();
     CHECK(fx.e->takeMonitorRecords(recs) == 0u);
-    CHECK(fx.e->published().monitor.ringFrames == 0u);
     render(fx.e, 2);
+    CHECK(fx.e->published().monitor.ringFrames == 0u);   // the snapshot, a frame after the drain (U3 stage 2b)
     CHECK(fx.e->takeMonitorRecords(recs) == 0u);
 }
 
@@ -6333,6 +6354,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
     rigA.v->setEnabled(false);
     render(fx.e, 3);
     fx.e->setFrameMonitor(MonitorLevel::Off);   // the FrameMonitor dies here
+    render(fx.e, 1);   // the snapshot's monitor status, a frame after the stop (U3 stage 2b)
     CHECK(fx.e->published().monitor.attachedListeners == 0u);
 
     // ...and back. With the defect, this frame executed A's mirror workspace
@@ -6461,6 +6483,7 @@ void monitor_heavy_frames_keep_their_samples() {
     render(fx.e, 10);                       // uploads and pipelines, before the capture
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     MonitorStatus st = fx.e->published().monitor;
     if (!st.gpuActive) {
         std::printf("    no GPU timestamps in this build (%s): nothing to measure\n", st.gpuReason.c_str());
@@ -6520,6 +6543,7 @@ void monitor_gpu_timestamps() {
     CHECK(!st.gpuReason.empty());
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     st = fx.e->published().monitor;
     std::printf("    gpu: compiled=%d supported=%d active=%d pools=%u reason='%s'\n",
                 int(st.gpuCompiled), int(st.gpuSupported), int(st.gpuActive), st.gpuQueryPools,
@@ -6573,6 +6597,7 @@ void monitor_gpu_timestamps() {
 
     // ...and the pools go with the capture.
     fx.e->setFrameMonitor(MonitorLevel::Off);
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
     st = fx.e->published().monitor;
     CHECK_MSG(st.gpuQueryPools == 0u, "stopping the capture frees the pools: %u",
               st.gpuQueryPools);

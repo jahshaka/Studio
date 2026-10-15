@@ -476,6 +476,7 @@ static int cardsMain(Engine *e)
         at.readback = true;
         s->setGatherTuning(at);
         // the first copy OF THIS ARM: the status keeps the previous arm's last copy until a new one retires
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned since = s->published().gi.gather.frame;
         GatherStatus st;
         for (int f = 0; f < 20; ++f) {

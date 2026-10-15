@@ -154,6 +154,7 @@ int main()
         scene->setNodeTransform(nodes[k * 7u % kFill],
                                 Vec3(float(k) * 0.3f, 2.0f + float(k) * 0.05f, -3.0f),
                                 Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(0.25f, 0.25f, 0.25f));
+    // (the baseline is the last frame's snapshot: a transform reaches the tables only in the frame — U3 stage 2b)
     const GpuSceneStatus beforeMove = scene->published().gpuScene;
     render(1);
     {
@@ -290,7 +291,10 @@ int main()
         GpuSceneEntry keep;
         scene->gpuSceneEntry(5u, keep);
         unsigned added = 0u;
-        while (scene->published().gpuScene.slotCount < from.capacity + 1u) {
+        // One item node per attach, one slot each: the count that crosses the capacity, from the last frame's figures
+        // (the snapshot moves only at a frame's close — U3 stage 2b).
+        const unsigned need = from.capacity + 1u - from.slotCount;
+        while (added < need) {
             const NodeId n = scene->createNode();
             scene->setNodeTransform(n, Vec3(0.0f, 40.0f + float(added) * 0.1f, 0.0f),
                                     Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(0.1f, 0.1f, 0.1f));

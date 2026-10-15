@@ -173,6 +173,7 @@ int main()
         s->refreshGlobalIllumination();
         // THE CHAIN answers a moved box through its dirty path, one cascade a
         // frame, then its settle: count frames until GI is at rest (bounded).
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int f = 0; f < 240 && !s->published().gi.giAtRest; ++f) enginetest::frames(engine, 1);
         render(engine.get());
         view->readPixels(img);

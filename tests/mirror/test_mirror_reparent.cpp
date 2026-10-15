@@ -58,6 +58,7 @@ iris::MeshPtr gCube;
 iris::MaterialPtr gMaterial;
 
 struct World {
+    Engine *engine = nullptr;
     Scene *target = nullptr;
     iris::ScenePtr doc;
     std::unique_ptr<SceneMirror> mirror;
@@ -80,6 +81,7 @@ iris::SceneNodePtr meshNode(float scale)
 void build(World &w, Engine *engine, int n)
 {
     w.n = n;
+    w.engine = engine;
     w.target = engine->createScene(("reparent" + std::to_string(n)).c_str());
     w.doc = iris::Scene::create();
     const int branch = 8;
@@ -136,12 +138,16 @@ template <typename Edit>
 Counts measure(World &w, Edit edit)
 {
     Counts c;
+    // The engine's change counts are read off the snapshot (U3 stage 2b): a frame closes the state before the edit,
+    // and the frame after the sync closes the edit's.
+    enginetest::frames(w.engine, 1);
     const quint64 pushes0 = w.mirror->visitPushCount();
     const SceneChangeStats cs0 = w.target->published().changes;
     const unsigned long long sw0 = iris::graph::staticSwitchCount();
     const quint64 sweeps0 = w.mirror->reclaimSweepCount();
     edit();
     c.visited = w.mirror->sync();
+    enginetest::frames(w.engine, 1);
     const SceneChangeStats cs1 = w.target->published().changes;
     c.staticSwitches = iris::graph::staticSwitchCount() - sw0;
     c.reclaimSweeps = w.mirror->reclaimSweepCount() - sweeps0;

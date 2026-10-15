@@ -131,6 +131,7 @@ int main()
     // The hair piece carries ONE bone of the rig — `mid` — through a remap.
     const unsigned short hairMap[] = { 1 };
     CHECK(scene->attachSkinnedMesh(hair, hairMesh, mat, rig, hairMap, 1), "hair rigged, remapped");
+    enginetest::frames(engine, 1);   // the snapshot's per-node bones, a frame after the attach (U3 stage 2b)
     CHECK(scene->published().streamedBonesOf(hair) == 1 && scene->published().streamedBonesOf(body) == 3,
           "each piece streams its own bones");
 

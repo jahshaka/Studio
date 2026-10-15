@@ -138,6 +138,7 @@ int main()
         render(e, 30);
         const Spend s = spendOf(engine.get());
         engine->setFrameMonitor(MonitorLevel::Off);
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long chainAfter = scene->published().gi.rebuilds;
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d; whole-chain builds "
                     "%llu -> %llu\n", s.frames, s.total, s.worstPerFrame, chainBefore, chainAfter);
@@ -151,6 +152,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 2: a material edit is at most one cascade per frame ==\n");
     {
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long chainBefore = scene->published().gi.rebuilds;
         const unsigned long long spentBefore = totalRebuilds();
         engine->setFrameMonitor(MonitorLevel::Review);
@@ -169,6 +171,7 @@ int main()
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d\n",
                     s.frames, s.total, s.worstPerFrame);
         CHECK(s.worstPerFrame <= 1, "NO FRAME PAID FOR TWO CASCADES");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(scene->published().gi.rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
         CHECK(totalRebuilds() > spentBefore, "...while the edit WAS answered");
     }
@@ -178,6 +181,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 3: a spawn is at most one cascade per frame ==\n");
     {
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long chainBefore = scene->published().gi.rebuilds;
         engine->setFrameMonitor(MonitorLevel::Review);
         const NodeId spawned = enginetest::addTestCube(scene, Colour(0.9f, 0.9f, 0.1f), 0.0f, 0.4f);
@@ -188,6 +192,7 @@ int main()
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d\n",
                     s.frames, s.total, s.worstPerFrame);
         CHECK(s.worstPerFrame <= 1, "NO FRAME PAID FOR TWO CASCADES");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(scene->published().gi.rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
     }
 

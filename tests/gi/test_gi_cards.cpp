@@ -459,6 +459,7 @@ static int caseCapture()
         p.albedo = Colour(0.05f, 0.05f, 0.95f);
         p.roughness = 0.4f;
         const MaterialId preset = s->createPbrMaterial(p);
+        render(f.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const CardCacheStatus before = s->published().gi.cards;
         CHECK(preset && s->setNodeMaterial(crate[0], preset),
               "a preset is hovered onto a carded crate (an in-place swap)");

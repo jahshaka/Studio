@@ -207,7 +207,7 @@ OGRE_VIEW_FUNCTIONS = {
                           "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "applyWorkspacesEnabled", "setSessionCovers", "setCamera",
                           "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
                           "readPixels", "readPixelsHdr")},
-    **{f: ["engine"] for f in ("name", "scene", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
+    **{f: ["engine"] for f in ("name", "scene", "published", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
                                "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
                                "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",
                                "attachBlankWorkspace", "detachBlankWorkspace")},

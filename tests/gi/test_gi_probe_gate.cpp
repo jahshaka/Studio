@@ -372,6 +372,7 @@ int main()
             drag.metalness = v;                 // both controls, as the panel's author would
             s->setPbrMaterial(editedMat, drag);
         }
+        render(engine.get(), 1);   // the counter is cumulative; the snapshot carries it at a frame's close (U3 2b)
         const unsigned atBlack = s->published().gi.probeGateCrossings;
         for (int i = 0; i <= 20; ++i) {         // ...and back
             const float v = float(i) * 0.05f;
@@ -379,6 +380,7 @@ int main()
             drag.metalness = v;
             s->setPbrMaterial(editedMat, drag);
         }
+        render(engine.get(), 1);
         const unsigned after = s->published().gi.probeGateCrossings;
         std::printf("   probe-gate crossings: %u -> %u -> %u (41 pushes through black)\n",
                     before, atBlack, after);

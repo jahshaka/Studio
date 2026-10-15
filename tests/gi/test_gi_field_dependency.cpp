@@ -413,6 +413,7 @@ int main(int argc, char **argv)
         // Settled already (above). Re-integrate with nothing changed, reading the atlas after
         // every pass: a pass is done when the refinements owed move (or the field goes quiet).
         std::vector<GiFieldAtlas> passes;
+        enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         unsigned owedSeen = s->published().gi.ifdRefinesOwed;   // 0: converged
         s->refreshGiLighting(false);
         int quietRun = 0;
