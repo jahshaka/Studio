@@ -146,6 +146,28 @@ jah_gpu_row(mirror.change_set CLASS engine FRAMES 242 COMMAND test_mirror_change
 set_tests_properties(mirror.change_set PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
+# mirror.messages_in_order — THE SYNC'S COMMANDS ARE MESSAGES, IN ORDER, UNDER RESERVED IDS (ENGINE-UPGRADE-U3 stage 3):
+# one tick creates 100 nodes (mesh + material each), re-parents half and destroys ten; nothing applies on the spot,
+# one frame applies all of it under the mirror's reserved ids, the engine assigns no id of its own. A law in counts; 3 frames.
+add_executable(test_mirror_messages test_mirror_messages.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_messages PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_messages PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_messages PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_messages PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_messages JahshakaEngineMedia)
+jah_gpu_row(mirror.messages_in_order CLASS engine FRAMES 3 COMMAND test_mirror_messages
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.messages_in_order PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+
 # mirror.reparent_local — A REPARENT COSTS THE FRAGMENT, NEVER THE SCENE (ENGINE-UPGRADE-1 stage 2): one 500-node
 # fragment moved three ways inside a 1k and a 10k lattice; the same counts at both scales (the mirror's visits, the
 # engine's Items, ONE GI invalidation per sync, the static switches, the drawn pose after a move). A law in counts; 4 frames.
