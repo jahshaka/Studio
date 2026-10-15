@@ -1829,11 +1829,13 @@ jah_gpu_row(gi.rough_sky_once CLASS engine COMMAND test_gi_rough_sky_once
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rough_sky_once PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.rough_sky_once PROPERTIES JAHSHAKA_TEST_FRAMES 940)
-# gi.march_underread — RESERVED FOR PHOTON-MARCH-1 (BISTRO-FIXES-3 moved it out of gi.rough_sky_once):
-# a wall of the sky's radiance filling a grazing rough lobe reads the open value at every cascade
-# resolution. It fails today (0.998 / 0.954 / 0.873 at 32 / 64 / 128 cells: the cone march's opacity is
-# not corrected for its step), so it is a TOOL until that spec registers it as its acceptance row.
-add_executable(test_gi_march_underread EXCLUDE_FROM_ALL test_gi_march_underread.cpp)
+# gi.march_underread — A WALL OF L IN A GRAZING ROUGH LOBE READS L AT EVERY CASCADE RESOLUTION
+# (PHOTON-MARCH-1, its acceptance row; moved out of gi.rough_sky_once by BISTRO-FIXES-3): 32 / 64 / 128
+# cells of one 9 m cascade, the field off and on, the wall standing on the plate and free-standing, each
+# against the GI-off reading within 3 %. RED on the base at stage 0 (0.998 / 0.954 / 0.873, the wall on
+# the plate): the plane's colour is the isotropic texel's mean radiance, the plate's voxels included
+# (the fixture's header; spikes/photon-march-1/).
+add_executable(test_gi_march_underread test_gi_march_underread.cpp)
 set_target_properties(test_gi_march_underread PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
@@ -1844,6 +1846,11 @@ target_compile_definitions(test_gi_march_underread PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_march_underread PRIVATE JahshakaEngine)
+add_dependencies(test_gi_march_underread JahshakaEngineMedia)
+jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 432)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.

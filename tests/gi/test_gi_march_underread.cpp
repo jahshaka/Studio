@@ -1,6 +1,6 @@
-// gi.march_underread — RESERVED FOR PHOTON-MARCH-1 (not registered: this is the next spec's
-// acceptance, moved out of gi.rough_sky_once by the lead's ruling, BISTRO-FIXES-3; the spec
-// registers the row when its fix lands, with its FRAMES and its gate-times line).
+// gi.march_underread — A WALL OF L IN A GRAZING ROUGH LOBE READS L AT EVERY CASCADE RESOLUTION
+// (PHOTON-MARCH-1; moved out of gi.rough_sky_once by BISTRO-FIXES-3, registered at PHOTON-MARCH-1
+// stage 0 RED on the base, its acceptance row).
 //
 // THE LAW: a rough (0.74) white metal plate seen 10 degrees above its surface, a wall emitting
 // the sky's radiance L standing in its reflection (filling the rough lobe's 45-degree query),
@@ -8,22 +8,28 @@
 // the plate reads the open plate's value (the GI-off reading) whatever the cascade's cells: the
 // sky's share (the cube times the query's visibility) plus the voxels' share (what the query
 // stopped on, at the same occlusion) is one lobe of L. BAR: 3 % (gi.env_cone's furnace bar and
-// its reasons), at EVERY cascade resolution.
+// its reasons), at EVERY cascade resolution, the field off and on, the wall standing on the
+// plate and free-standing (the plate stopping 0.15 m short of it).
 //
-// MEASURED at BISTRO-FIXES-3 (the cones and the field read alike; one 9 m cascade):
-//   cells           32 (0.28 m)   64 (0.14 m)   128 (0.07 m)
-//   wall on plate   0.998         0.954         0.873
-//   free-standing   -             0.978         0.941    (the plate stops 0.15 m short of it)
-// A 1 m thick wall reads as the 0.5 m one; a 16 m tall one 0.8 % lower. The under-read GROWS as
-// the cells shrink - the signature of a cone march whose opacity is not corrected for its step
-// (alpha' = 1 - (1 - alpha)^(step / voxel)): more, smaller steps accumulate more opacity for the
-// same physical occluder. spikes/bistro-fixes-3/march-underread.md.
+// WHERE THE BASE LOSES IT (stage 0, measured: spikes/photon-march-1/, the march of the centre
+// pixel's ray dumped per plane through the parity job). The query crosses empty planes and takes
+// the whole of its room (1 - the below-horizon share, 0.614) in ONE plane, the one holding the
+// wall's face: the opacity is exact and nothing accumulates over steps. The colour that comes with
+// that opacity is the isotropic texel's MEAN radiance (jahVoxelReadPlane: cA = s.rgb aA / s.a) -
+// every voxel of the fetch's neighbourhood weighted by its conservative opacity, the plate's
+// voxels too, whose faces are parallel to the ray and give the plane no opacity. The fetch at the
+// wall straddles the texel holding the wall-plate junction (the texel is 0.5625 m at every cell
+// count; the ray meets the wall lower as the one-cell start bias shrinks: y 0.685 / 0.544 / 0.474
+// m), so the plane's colour reads 0.9998 / 0.950 / 0.874 L at 32 / 64 / 128 cells (rebuilt from
+// mip 0 on the CPU to 4 digits) - the readings below. The free-standing wall's texel holds no
+// plate voxel: its plane reads 0.9998 L.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 using namespace jahshaka::engine;
 
@@ -70,54 +76,66 @@ int main()
     const double L = std::pow((kSkyByte / 255.0 + 0.055) / 1.055, 2.4);
     PbrParams metal; metal.albedo = Colour(1, 1, 1); metal.metalness = 1.0f; metal.roughness = 0.74f;
 
-    for (int res : { 32, 64, 128 }) {
-        Scene *s = e->createScene("underread");
-        CHECK(rv->setScene(s), "the view shows the scene");
-        const unsigned char skyPx[4] = { kSkyByte, kSkyByte, kSkyByte, 255 };
-        SkyDesc sky;
-        sky.mode = SkyMode::Equirectangular;
-        sky.equirect = s->createTexture(1, 1, skyPx, true);
-        CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
-        float sh[27] = { 0 };
-        for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) e->renderOneFrame();
-        s->setAmbientSh(sh);
-        s->setEnvironmentLight(Colour(1, 1, 1, 1));
-        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
-        const auto slab = [&](const Vec3 &pos, const Vec3 &scale, const PbrParams &p) {
-            const NodeId nd = s->createNode();
-            s->attachMesh(nd, cube, s->createPbrMaterial(p));
-            s->setNodeTransform(nd, pos, Quat(), scale);
-        };
-        // the wall on the plate, 1.5 m beyond its centre, inside the camera-centred cascade
-        PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
-        wall.emissive = Colour(float(L), float(L), float(L));
-        slab(Vec3(0.0f, 4.05f, 1.75f), Vec3(12.0f, 7.9f, 0.5f), wall);
-        slab(Vec3(0.0f, 0.05f, 0.0f), Vec3(4.0f, 0.1f, 4.0f), metal);
-        enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
-        GiParams off; off.mode = GiMode::Off;
-        s->setGlobalIllumination(off);
-        for (int f = 0; f < 10; ++f) e->renderOneFrame();
-        const double open = readHdr();
-        GiParams cones;
-        cones.mode = GiMode::Vct;
-        cones.quality = GiQuality::Low;
-        cones.numBounces = 1;
-        cones.ddgi = GiToggle::Off;
-        cones.gather = GiToggle::Off;
-        cones.cascadeCount = 1;
-        cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
-        s->setGlobalIllumination(cones);
-        for (int f = 0; f < 20; ++f) e->renderOneFrame();
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
-        const double withWall = readHdr();
-        char msg[220];
-        std::snprintf(msg, sizeof msg, "%d cells: a wall of L in the grazing lobe reads the open value (%.4f / %.4f "
-                      "= %.3f; bar 3 %%)", res, withWall, open, withWall / open);
-        CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
-        s->setGlobalIllumination(off);
-        rv->setScene(nullptr);
-        e->destroyScene(s);
-    }
+    for (int res : { 32, 64, 128 })
+        for (int standing = 1; standing >= 0; --standing) {
+            Scene *s = e->createScene("underread");
+            CHECK(rv->setScene(s), "the view shows the scene");
+            const unsigned char skyPx[4] = { kSkyByte, kSkyByte, kSkyByte, 255 };
+            SkyDesc sky;
+            sky.mode = SkyMode::Equirectangular;
+            sky.equirect = s->createTexture(1, 1, skyPx, true);
+            CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
+            float sh[27] = { 0 };
+            for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) e->renderOneFrame();
+            s->setAmbientSh(sh);
+            s->setEnvironmentLight(Colour(1, 1, 1, 1));
+            const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+            const auto slab = [&](const Vec3 &pos, const Vec3 &scale, const PbrParams &p) {
+                const NodeId nd = s->createNode();
+                s->attachMesh(nd, cube, s->createPbrMaterial(p));
+                s->setNodeTransform(nd, pos, Quat(), scale);
+            };
+            // the wall 1.5 m beyond the plate's centre (its face at z 1.5), inside the camera-centred
+            // cascade; standing on the plate (z -2 .. 2) or free (the plate stops 0.15 m short, z -2 .. 1.35)
+            PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
+            wall.emissive = Colour(float(L), float(L), float(L));
+            slab(Vec3(0.0f, 4.05f, 1.75f), Vec3(12.0f, 7.9f, 0.5f), wall);
+            if (standing) slab(Vec3(0.0f, 0.05f, 0.0f), Vec3(4.0f, 0.1f, 4.0f), metal);
+            else slab(Vec3(0.0f, 0.05f, -0.325f), Vec3(4.0f, 0.1f, 3.35f), metal);
+            enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
+            GiParams off; off.mode = GiMode::Off;
+            s->setGlobalIllumination(off);
+            for (int f = 0; f < 10; ++f) e->renderOneFrame();
+            const double open = readHdr();
+            for (const auto &arm : { std::make_pair(GiToggle::Off, "field off"), std::make_pair(GiToggle::On, "field on") }) {
+                GiParams cones;
+                cones.mode = GiMode::Vct;
+                cones.quality = GiQuality::Low;
+                cones.numBounces = 1;
+                cones.ddgi = arm.first;
+                cones.gather = GiToggle::Off;
+                cones.cascadeCount = 1;
+                cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
+                s->setGlobalIllumination(cones);
+                for (int f = 0; f < 20; ++f) e->renderOneFrame();
+                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+                const double withWall = readHdr();
+                const GiStatus st = s->giStatus();
+                const bool fieldBuilt = st.ifdMax.x > st.ifdMin.x;
+                if (arm.first == GiToggle::On)
+                    CHECK(fieldBuilt, "the field-on arm has a field (its volume is not empty)");
+                else
+                    CHECK(!fieldBuilt, "the field-off arm has no field");
+                char msg[240];
+                std::snprintf(msg, sizeof msg, "%d cells, the wall %s, %s: a wall of L in the grazing lobe reads the open "
+                              "value (%.4f / %.4f = %.3f; bar 3 %%)", res, standing ? "on the plate" : "free-standing",
+                              arm.second, withWall, open, withWall / open);
+                CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
+            }
+            s->setGlobalIllumination(off);
+            rv->setScene(nullptr);
+            e->destroyScene(s);
+        }
     e->destroyView(rv);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
