@@ -581,11 +581,15 @@ int main(int argc, char **argv)
         L.mirror->sync();
         size_t dynamicFresh = 0;
         for (const auto &m : fresh) if (!m->isStaticInGraph()) ++dynamicFresh;
+        // THE COMMANDS LAND AT A FRAME (U3 stage 3, decision 32): the creates, promotions and removals are messages
+        // in the pending record, so the engine holds them only after the frame that drains it.
+        enginetest::frames(engine, 1);
         MemoryStats a, b;
         const bool gotA = engine->memoryStats(a);
         for (int k = 0; L.mirror->staticSettleInProgress() && k < 100000; ++k) L.mirror->sync();
         size_t back = 0;
         for (const auto &m : fresh) if (m->isStaticInGraph()) ++back;
+        enginetest::frames(engine, 1);
         const bool gotB = engine->memoryStats(b);
         // ...and 50 props REMOVED from the document, kept alive (an undo stack's hold:
         // pool.doc's doc.memory arm): detached and demoted, never destroyed — the
@@ -598,6 +602,7 @@ int main(int argc, char **argv)
         }
         L.mirror->sync();
         for (int k = 0; L.mirror->staticSettleInProgress() && k < 100000; ++k) L.mirror->sync();
+        enginetest::frames(engine, 1);
         MemoryStats c;
         const bool gotC = engine->memoryStats(c);
         std::printf("    live nodes %u -> %u -> %u, used slots %u -> %u -> %u (50 new props: dynamic %zu, "

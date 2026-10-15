@@ -804,7 +804,7 @@ iris::SceneNodePtr SceneReader::readFragment(const SceneFragment &fragment)
         int i = 0;
         std::function<void(const iris::SceneNodePtr &)> replay =
             [&](const iris::SceneNodePtr &n) {
-                if (i < fragment.nodeIds.size()) n->nodeId = fragment.nodeIds[i];
+                if (i < fragment.nodeIds.size()) n->setNodeId(fragment.nodeIds[i]);   // the owner table follows (decision 33)
                 ++i;
                 const int kids = n->childCount();
                 for (int c = 0; c < kids; ++c)
