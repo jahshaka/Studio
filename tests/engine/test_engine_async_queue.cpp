@@ -500,7 +500,16 @@ static int mainGraphicsCheck() {
         std::printf("-- the %s arm\n", arm == 0 ? "async" : "in-order");
         r.acq->begin(r.acq->signalPoint("jah.test.check"));
         dispatch(j.hc, j.fill);                                      // compute work: fine
-        expectThrow("an upload inside the bracket", "a copy", [&] { j.acc->upload(zeros.data(), 0u, kN); });
+        // A ROUTED COPY (ENGINE-UPGRADE-ASYNC-3 stage 1): a staging upload records on the record
+        // queue, legal on a compute family; the graphics queue's own copy encoder is still refused.
+        {
+            bool threw = false;
+            try { j.acc->upload(zeros.data(), 0u, kN); } catch (const Ogre::Exception &) { threw = true; }
+            CHECK(!threw, "an upload inside the bracket is a routed copy (no throw)");
+        }
+        expectThrow("the graphics queue's copy encoder inside the bracket", "a copy", [&] {
+            r.device->mGraphicsQueue.getCopyEncoder(j.acc, nullptr, false, Ogre::CopyEncTransitionMode::Auto);
+        });
         expectThrow("a graphics PSO bind inside the bracket", "a graphics pipeline bind",
                     [&] { rs->_setPipelineStateObject(nullptr); });
         expectThrow("a second begin", "a bracket is already open", [&] { r.acq->begin(0u); });
@@ -523,7 +532,7 @@ static int mainGraphicsCheck() {
         try {
             r.acq->begin(r.acq->signalPoint("jah.test.leak"), "jah.test.leaked");
             dispatch(j.hc, j.fill);
-            j.acc->upload(zeros.data(), 0u, kN);                     // throws: the bracket is left open
+            rs->_setPipelineStateObject(nullptr);                    // throws: the bracket is left open
         } catch (const Ogre::Exception &) {}
         const bool leaked = r.acq->isOpen();
         const std::string errBefore = r.engine->lastError();   // a frame that throws replaces it
@@ -540,7 +549,7 @@ static int mainGraphicsCheck() {
         try {
             Ogre::VulkanAsyncComputeBracket bracket(r.acq, r.acq->signalPoint("jah.test.scope"), "jah.test.scoped");
             dispatch(j.hc, j.fill);
-            j.acc->upload(zeros.data(), 0u, kN);                     // throws
+            rs->_setPipelineStateObject(nullptr);                    // throws
             bracket.end();
         } catch (const Ogre::Exception &) {}
         std::snprintf(msg, sizeof msg, "%s arm: the scope guard closed the bracket the throw left (C +%llu)",

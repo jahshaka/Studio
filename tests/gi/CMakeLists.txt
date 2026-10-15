@@ -2390,6 +2390,27 @@ jah_gpu_row(gi.photon_passes CLASS engine COMMAND test_gi_photon_passes
 set_tests_properties(gi.photon_passes PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.photon_passes PROPERTIES JAHSHAKA_TEST_FRAMES 67)   # counted from the source (12 + 1 + 4 + the probe; the plain scene 12 + 1 + 6; the verb-time step 6 + 6 + 6 + 12)
 
+# gi.region_compute_only — THE GI REGION IS COMPUTE-LEGAL (ENGINE-UPGRADE-ASYNC-3 stage 1): with the
+# fork's async bracket opened around Photon's GI region on the in-order arm, a carded scene and a plain
+# VCT scene run 300 frames each with a mover and a light tick, then a rebuild: no graphics-only command
+# refused inside the region, every dispatch through the door, the albedo's compute mips keep the mean.
+add_executable(test_gi_region_compute_only test_gi_region_compute_only.cpp)
+set_target_properties(test_gi_region_compute_only PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_region_compute_only PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_region_compute_only PRIVATE JahshakaEngine)
+add_dependencies(test_gi_region_compute_only JahshakaEngineMedia)
+jah_gpu_row(gi.region_compute_only CLASS engine COMMAND test_gi_region_compute_only
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.region_compute_only PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.region_compute_only PROPERTIES JAHSHAKA_TEST_FRAMES 624)   # measured (a temporary renderOneFrame counter: 2 x (300 + 12))
+
 # gi.field_dependency — THE IRRADIANCE FIELD GENERATES ONLY WHEN ITS INPUTS CHANGED (ENGINE-UPGRADE-2
 # stage 2): a walking camera and two movers re-integrate no field (counts of the field's cache work).
 add_executable(test_gi_field_dependency test_gi_field_dependency.cpp)

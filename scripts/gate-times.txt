@@ -260,6 +260,7 @@ gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
 gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
+gi.region_compute_only 2.59  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-15, solo, warm cache)
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
 gi.probe_inputs 11.39  quiet n=44
 gi.probe_nan 5.64  quiet n=41
@@ -843,6 +844,7 @@ source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
 source.photon_one_dispatch 0.01  spec EU-2B stage 3 fix (2026-10-14)
+source.graphics_queue_seams 0.05  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-15, solo)
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
