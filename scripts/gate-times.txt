@@ -137,7 +137,7 @@ engine.gi_scan 2.38  quiet n=43
 engine.gpu_cull 8.90  ship 3a0422b4e (2026-10-13)
 engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
-engine.gpu_substrate 2.10  solo (EU-2 stage 1, 2026-10-14)
+engine.gpu_substrate 2.73  solo (ASYNC-3 stage-1 read F4: + the graphics-build frame, 2026-10-15)
 engine.gpu_walk_parity 6.12  spec EU-2B stage 3 fix (2026-10-15)
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
@@ -197,7 +197,7 @@ gi.ddgi 10.32  quiet n=41
 gi.ddgi_ambient 5.05  quiet n=42
 gi.ddgi_edge 3.70  quiet n=42
 gi.drag_cadence 6.04  quiet n=46
-gi.drag_mover 3.16  quiet n=47
+gi.drag_mover 3.57  ASYNC-3 stage-1 read F3: + case 6 (2026-10-15, beside 3 rows)
 gi.env_cone 5.17  quiet n=42
 gi.env_one 6.95  quiet n=40
 gi.env_ray_match 5.21  quiet n=43

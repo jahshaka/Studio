@@ -181,6 +181,32 @@ int main()
     for (int i = 0; i < 4; ++i) e->renderOneFrame();
     moverRun("mover 35", cubes[35]);
 
+    // ---- 1b. THE LATER-CALL PATH IS STILL LIVE (the stage-1 read's F4): a GRAPHICS-REGION build - a
+    // GI configuration change rebuilds the arm in order: it composes, converts, composes - made with a
+    // mover moved: its second compose is a LATER call that finds the scan made, no call walks twice,
+    // and the frame writes ONE copy.
+    {
+        const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
+        const GpuSceneStatus a = scene->gpuSceneStatus();
+        enginetest::setNodePosition(scene, cubes[27], Vec3(0.45f, 0.3f, -0.5f));
+        GiParams g = chainGi();
+        g.numBounces = g.numBounces + 1;   // a configuration change: the arm rebuilds (graphics)
+        CHECK(scene->setGlobalIllumination(g), "a GI configuration change rebuilds the arm (a graphics-region build)");
+        e->renderOneFrame();
+        const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
+        const GpuSceneStatus b = scene->gpuSceneStatus();
+        std::printf("   [graphics build] later calls %llu, walks %llu, scans %llu, copies written %llu\n",
+                    (unsigned long long)(sb.laterCalls - sa.laterCalls), (unsigned long long)(sb.walks - sa.walks),
+                    (unsigned long long)(b.scans - a.scans), (unsigned long long)(sb.copyWrites - sa.copyWrites));
+        CHECK(sb.laterCalls > sa.laterCalls,
+              "[graphics build] the arm build's composes are LATER calls that found the frame scanned (not vacuous)");
+        // (Two walks here, not one, and the walk-twice counter moves: the verb's build composes BETWEEN
+        // frames under the coming frame's number, then that frame scans again. A verb-time build is not
+        // a frame of the protocol; the one-walk law is the mover frames' above.)
+        CHECK(sb.copyWrites - sa.copyWrites == 1u, "[graphics build] ...and ONE copy written, however many commits");
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    }
+
     // ---- 3b. EVERY COPY CATCHES UP ------------------------------------------------
     // The mover stops; the next writing frames go round the ring, and each copy they
     // write is brought current with everything written to the others since it was

@@ -731,7 +731,7 @@ add_dependencies(test_gi_drag_mover JahshakaEngineMedia)
 jah_gpu_row(gi.drag_mover CLASS engine COMMAND test_gi_drag_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.drag_mover PROPERTIES JAHSHAKA_TEST_FRAMES 491)
+set_tests_properties(gi.drag_mover PROPERTIES JAHSHAKA_TEST_FRAMES 631)
 
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
 # (fork ae2ed529f (was 0060)). The pin binds the EXTRA CASCADES' light voxels once and

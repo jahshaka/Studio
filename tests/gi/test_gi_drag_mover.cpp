@@ -287,6 +287,41 @@ int main()
               "missing from the room's bounce — is tens of steps over a third of it)",
               worst, movedPct);
 
+    // ---- case 6: A MATERIAL EDITED WHILE A STILL IS DRAGGED (ENGINE-UPGRADE-ASYNC-3, the stage-1 read's
+    // F3): an owed material refresh (a voxel input pushed every frame - a colour slider) must not
+    // freeze the chain: with the rule off, the dragged still's cascades are re-voxelised every frame
+    // of the drag exactly as without the edit. RED ON 1ce8bb1f9: every pending cascade waited for the
+    // refresh, frame after frame - 0 re-voxelisations while the slider moved.
+    std::printf("\n== case 6: a material slider dragged while the still is dragged ==\n");
+    PbrParams slab;
+    slab.albedo = Colour(0.3f, 0.3f, 0.8f);
+    slab.roughness = 0.8f;
+    const MaterialId slabMat = s->createPbrMaterial(slab);
+    const NodeId slabNode = s->createNode();
+    s->attachMesh(slabNode, s->createMesh(enginetest::unitCubeMesh()), slabMat);
+    enginetest::setNodePosition(s, slabNode, Vec3(2.0f, 0.5f, -1.5f));
+    render(e, 40);
+    const unsigned long long beforePlain = cascadeRebuilds(s->giStatus());
+    drag(e, s, prop, again, -0.08f, 30);
+    const unsigned long long plainDrag = cascadeRebuilds(s->giStatus()) - beforePlain;
+    render(e, 40);
+    const unsigned long long beforeEdit = cascadeRebuilds(s->giStatus());
+    for (int i = 0; i < 30; ++i) {
+        slab.albedo = Colour(0.3f + 0.02f * float(i), 0.3f, 0.8f - 0.02f * float(i));
+        s->setPbrMaterial(slabMat, slab);              // the slider: a voxel input every frame
+        again.x += 0.08f;
+        enginetest::gesture(e, s, { prop });
+        enginetest::setNodePosition(s, prop, again);
+        render(e, 1);
+    }
+    enginetest::gesture(e, s, {});
+    const unsigned long long editDrag = cascadeRebuilds(s->giStatus()) - beforeEdit;
+    std::printf("   30 dragged frames: %llu re-voxelisations without the edit, %llu with the material "
+                "pushed every frame\n", plainDrag, editDrag);
+    CHECK_MSG(plainDrag >= 25u && editDrag >= plainDrag,
+              "A MATERIAL EDIT DOES NOT FREEZE THE CHAIN: the dragged still re-voxelised every frame "
+              "with the slider moving (%llu) as without it (%llu)", editDrag, plainDrag);
+
     e->destroyView(view);
     e->destroyScene(s);
     std::printf(failures ? "FAILURES: %d\n" : "PASS: gi.drag_mover\n", failures);

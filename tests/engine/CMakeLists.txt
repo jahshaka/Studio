@@ -433,7 +433,7 @@ foreach(_row_frames
         "engine.frame_catch=27"
         "engine.gi_scan=162"
         "engine.gpu_scene=58"
-        "engine.gpu_substrate=94"   # counted from the source (4 + 8 + 2 x 31 + 4 + 4 + 12)
+        "engine.gpu_substrate=103"  # measured (a temporary renderOneFrame counter: + the graphics-build frame 1 + 8)
         "engine.headless=0"
         "engine.lod_hysteresis=265"
         "engine.media_check=0"
