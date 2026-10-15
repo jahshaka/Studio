@@ -169,6 +169,8 @@ OGRE_SCENE_FUNCTIONS = {
     # ENGINE-UPGRADE-U3 stage 2: the scene's engine bound once; the rigs whose poses the snapshot carries; the
     # fixtures' door onto the engine's record (EngineInspect.h)
     "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
+    # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
+    #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
     **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
                                          "setNodeCastShadow", "nodeCastShadow", "setLight", "removeLight", "ogreLight",

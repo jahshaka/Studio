@@ -140,9 +140,9 @@ assert(world.get().shadowResolution === 1024, "document stores the shadow-resolu
 // The verb steps no frame (ENGINE-UPGRADE-U3 stage 2): the atlas rebuild lands in the frames after the next sync.
 editor.frame(2);
 assert(world.shadowResolution() === 1024, "the renderer reports the override");
-// Out-of-window values clamp rather than throw; the engine's window is 256 up
-// to a platform cap (8192 on desktop GL/Vulkan hosts, 4096 on Metal — its max
-// texture height divided by the 3.5x atlas would overflow at 8192).
+// Out-of-window values clamp rather than throw. The verb answers the DOCUMENT's
+// clamp (256 up to the platform cap: 8192 on desktop Vulkan, 4096 on macOS),
+// not a read-back of the engine's atlas — the verb steps no frame.
 assert(world.setShadowResolution(100) === 256, "below-range resolution clamps up to 256");
 var shadowCap = world.setShadowResolution(99999);
 assert(shadowCap === 8192 || shadowCap === 4096,
