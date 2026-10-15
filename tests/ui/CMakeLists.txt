@@ -1489,6 +1489,21 @@ jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeL
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.column_law)   # spawns the app
 
+# ui.harness_child_log — ENGINE-UPGRADE-U3 decision 26: a child that dies of a device loss keeps its WHOLE log
+# (tests/support/mcpharness.h keepDeviceLostLog, through childReport). A real child process (a shell) writes a
+# 200-line log whose cause precedes 80 VK_ERROR_DEVICE_LOST lines and exits; the row reads the kept file back. CPU
+# only: no display, no GPU.
+add_executable(test_harness_child_log test_harness_child_log.cpp)
+set_target_properties(test_harness_child_log PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_harness_child_log PRIVATE Qt6::Core Qt6::Network)
+target_compile_definitions(test_harness_child_log PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+add_test(NAME ui.harness_child_log COMMAND test_harness_child_log
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.harness_child_log PROPERTIES TIMEOUT 60 LABELS "ui")
+
 # ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
 # report 2026-09-14). Same harness as ui.column_law, and for the same reason —
 # these are LAYOUT facts, only visible in a shown window with the loop turning
