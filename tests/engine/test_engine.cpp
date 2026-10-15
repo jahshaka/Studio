@@ -4,6 +4,7 @@
 // through createOffscreenView + readPixels; nothing here opens a window.
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/proceduralshell.h"
 
@@ -173,12 +174,16 @@ void create_twice_returns_null_with_error() {
 }
 
 void ordering_contract() {
-    // Must run before any View has ever existed in this process (see main()).
+    // Must run before any View has ever existed in this process (see main()). SINCE U2 (irisgl 314ed36) A SCENE
+    // BEFORE ANY VIEW IS LEGAL: createScene runs the backend's one-time preparation itself (prepareDevice — a
+    // surfaceless window, then the Hlms registration), so trap 1's order (window -> registerHlms -> scene manager)
+    // holds inside the engine and the host may not get it wrong. (This row is `measure`; it asserted the old refusal
+    // until ENGINE-UPGRADE-U3 stage 2 ran it.)
     Engine *e = gEngine.get();
     Scene *s = e->createScene("too-early");
-    CHECK(s == nullptr);
-    CHECK(!e->lastError().empty());
-    std::printf("    createScene before view: %s\n", e->lastError().c_str());
+    CHECK(s != nullptr);
+    std::printf("    createScene before view: %s\n", s ? "prepared the device itself" : e->lastError().c_str());
+    if (s) e->destroyScene(s);
 }
 
 void offscreen_cube_renders() {
@@ -3359,7 +3364,7 @@ void unlit_refuses_rigged_meshes() {
         NodeId shared = s->createNode();
         MaterialId sharedMat = s->createPbrMaterial(p);
         CHECK(s->attachMesh(shared, rigged, sharedMat));
-        CHECK_MSG(s->hasSkeleton(shared),
+        CHECK_MSG(jahshaka::engine::inspect::scene(s)->hasSkeleton(shared),
                   "a plain attach of an already-rigged mesh still yields a skeleton instance");
         CHECK_MSG(!s->setShadingModel(sharedMat, ShadingModel::Unlit),
                   "...and is therefore refused Unlit for the same reason");
@@ -3571,7 +3576,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     aim(v);
 
     // NO ATMOSPHERE YET: white, whatever is asked.
-    const Colour noSky = s->atmosphereSunTint(Vec3(0.0f, 0.1f, -1.0f));
+    const Colour noSky = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 0.1f, -1.0f));
     CHECK_MSG(noSky.r == 1.0f && noSky.g == 1.0f && noSky.b == 1.0f,
               "with no analytic sky the tint is exactly white (%.3f %.3f %.3f)",
               noSky.r, noSky.g, noSky.b);
@@ -3585,7 +3590,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
     render(fx.e);
 
-    const Colour noon = s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    const Colour noon = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 1.0f, 0.0f));
     std::printf("    tint at the zenith  %.3f %.3f %.3f\n", noon.r, noon.g, noon.b);
     CHECK_MSG(std::fabs(noon.r - 1.0f) < 1e-3f && std::fabs(noon.g - 1.0f) < 1e-3f &&
                   std::fabs(noon.b - 1.0f) < 1e-3f,
@@ -3594,7 +3599,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // ~5 degrees above the horizon.
     const float elev = std::sin(5.0f * 3.14159265f / 180.0f);
     const float flat = std::cos(5.0f * 3.14159265f / 180.0f);
-    const Colour low = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    const Colour low = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
     std::printf("    tint at 5 degrees   %.3f %.3f %.3f   (r/b %.2f)\n",
                 low.r, low.g, low.b, low.b > 1e-6f ? low.r / low.b : 0.0f);
     CHECK_MSG(low.r > low.b * 1.3f,
@@ -3606,7 +3611,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // a switch: 30 degrees sits between the two.
     const float e30 = std::sin(30.0f * 3.14159265f / 180.0f);
     const float f30 = std::cos(30.0f * 3.14159265f / 180.0f);
-    const Colour mid = s->atmosphereSunTint(Vec3(0.0f, e30, -f30));
+    const Colour mid = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, e30, -f30));
     std::printf("    tint at 30 degrees  %.3f %.3f %.3f\n", mid.r, mid.g, mid.b);
     CHECK_MSG(mid.b > low.b && mid.b <= noon.b,
               "30 degrees sits between the horizon and the zenith (b %.3f)", mid.b);
@@ -3619,8 +3624,8 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // way.
     Image before, after;
     render(fx.e); REQUIRE(v->readPixels(before));
-    (void)s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
-    (void)s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    (void)jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
+    (void)jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 1.0f, 0.0f));
     render(fx.e); REQUIRE(v->readPixels(after));
     const Px b0 = px(before, 4, 4), a0 = px(after, 4, 4);
     CHECK_MSG(b0.r == a0.r && b0.g == a0.g && b0.b == a0.b,
@@ -3630,7 +3635,8 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // A PICTURE SKY HAS NO OPINION: back to white.
     SkyDesc none;
     CHECK_MSG(s->setSky(none), "the sky goes away: %s", fx.e->lastError().c_str());
-    const Colour off = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    fx.e->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+    const Colour off = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
     CHECK_MSG(off.r == 1.0f && off.g == 1.0f && off.b == 1.0f,
               "without the analytic sky the tint is white again");
 }
@@ -3726,7 +3732,7 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // is re-based on the reference instead of on a hand-picked bar.
     // sky.sun_transmittance is where the tint is gated against that reference
     // across eight elevations; here it only has to stay DAYLIGHT.
-    const Colour tint = s->atmosphereSunTint(Vec3(0.0f, 0.587785f, -0.809017f));
+    const Colour tint = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 0.587785f, -0.809017f));
     std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
     // THE REFERENCE IS THE PLANET'S ATMOSPHERE'S OWN (SKY-ATMOSPHERE-1): its
     // transmittance integral at the default haze (the reference's clear air),
@@ -3751,7 +3757,7 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // deleting the atmosphere: 5 degrees up is unmistakably warm.
     const float e5 = std::sin(5.0f * 3.14159265f / 180.0f);
     const float f5 = std::cos(5.0f * 3.14159265f / 180.0f);
-    const Colour low = s->atmosphereSunTint(Vec3(0.0f, e5, -f5));
+    const Colour low = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, e5, -f5));
     std::printf("    sun tint at  5 degrees  %.3f %.3f %.3f\n", low.r, low.g, low.b);
     CHECK_MSG(low.r > low.b * 1.5f, "a 5-degree sun is warm (r %.3f vs b %.3f)", low.r, low.b);
 }

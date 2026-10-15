@@ -62,6 +62,7 @@
 // it pins, so its numbers stay about them. The gather has its own suites
 // (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -401,7 +402,7 @@ int main()
         s->setNodeHelper(helper, true);
         CHECK(helper && helperMesh && helperMat && s->attachMesh(helper, helperMesh, helperMat),
               "helper: the unlit witness plate attaches");
-        CHECK(s->nodeHelper(helper), "helper: setNodeHelper reads back");
+        CHECK(jahshaka::engine::inspect::scene(s)->nodeHelper(helper), "helper: setNodeHelper reads back");
         s->setNodeTransform(helper, Vec3(0.0f, 2.5f, 3.85f), Quat(),
                             Vec3(7.0f, 4.0f, 0.1f));
 
@@ -424,7 +425,7 @@ int main()
         // plate, now carrying a proxy's flags, is still absent. A wearer's
         // hands light nothing and reflect in nothing.
         s->setNodeVrHelper(helper, true);
-        CHECK(s->nodeVrHelper(helper), "vr helper: setNodeVrHelper reads back");
+        CHECK(jahshaka::engine::inspect::scene(s)->nodeVrHelper(helper), "vr helper: setNodeVrHelper reads back");
         CHECK(s->setGlobalIllumination(hybrid), "vr helper: the hybrid rebuilds with both flags");
         render(engine.get());
         view->readPixels(img);
@@ -439,7 +440,7 @@ int main()
 
         // The same plate, no longer a helper: now it MUST take the mirror over.
         s->setNodeHelper(helper, false);
-        CHECK(!s->nodeHelper(helper), "helper: clearing the flag reads back");
+        CHECK(!jahshaka::engine::inspect::scene(s)->nodeHelper(helper), "helper: clearing the flag reads back");
         CHECK(s->setGlobalIllumination(hybrid), "helper: the hybrid rebuilds with the plate visible");
         render(engine.get());
         view->readPixels(img);

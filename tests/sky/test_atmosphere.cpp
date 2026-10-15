@@ -215,9 +215,9 @@ int main()
 
     // ---- c. THE SUN'S COLOUR -----------------------------------------------
     {
-        const Colour low = r.s->atmosphereSunTint(towardsSun(5.0f, 0.0f));
-        const Colour high = r.s->atmosphereSunTint(towardsSun(60.0f, 0.0f));
-        const Colour noon = r.s->atmosphereSunTint(towardsSun(90.0f, 0.0f));
+        const Colour low = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(5.0f, 0.0f));
+        const Colour high = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(60.0f, 0.0f));
+        const Colour noon = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(90.0f, 0.0f));
         const double rbLow = low.r / std::max(low.b, 1e-6f), rbHigh = high.r / std::max(high.b, 1e-6f);
         std::printf("    sun tint: 90 deg %.4f %.4f %.4f | 60 deg %.4f %.4f %.4f | 5 deg %.4f %.4f %.4f\n",
                     noon.r, noon.g, noon.b, high.r, high.g, high.b, low.r, low.g, low.b);
@@ -427,10 +427,12 @@ int main()
                   "(b/r %.3f to %.3f)", clean.g, hazy.g, clean.b / clean.r, hazy.b / hazy.r);
         SkyDesc hz = atmosphere(20.0f, 180.0f, 1.0f, 1.0f);
         r.s->setSky(hz);
-        const Colour tClean = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        r.e->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        const Colour tClean = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(20.0f, 180.0f));
         hz.atmosphere.sunHaze = 50.0f;
         r.s->setSky(hz);
-        const Colour tHazy = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        r.e->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        const Colour tHazy = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(20.0f, 180.0f));
         CHECK_MSG(tHazy.g < tClean.g * 0.9f,
                   "(g) ...and the sun's tint: green at a 20-degree sun %.4f at haze 1, %.4f at haze 50",
                   tClean.g, tHazy.g);

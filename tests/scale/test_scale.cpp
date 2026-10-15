@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
 
 #include "bridge/sceneworkerthreads.h"
@@ -1080,7 +1081,7 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
         v.scale = k;
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        v.tolerance = root ? 1e30f : kLodBudgetPixels * env.scene->lodBias();
+        v.tolerance = root ? 1e30f : kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
@@ -1223,7 +1224,7 @@ static int cutCostMain()
         GpuCullRequest req;
         if (!env.engine->fillCullView(env.view, req)) continue;
         req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
-        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+        req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
         req.mode = 3u;
         GpuCullResult r;
         if (!env.engine->gpuCull(env.scene, env.view, req, false, r)) continue;
@@ -1757,7 +1758,7 @@ static int occlusionMain()
         GpuCullRequest req;
         if (env.engine->hzbStatus(env.view, hz) && hz.primed && env.engine->fillCullView(env.view, req)) {
             req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h): the id pass's
-            req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+            req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
             req.mode = 3u;
             req.hzbLevels = hz.levels;
             GpuCullResult ref;

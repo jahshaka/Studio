@@ -141,6 +141,19 @@ public:
     /// in every windowed process on its first tick, editor or no editor.
     virtual jahshaka::engine::Scene *engineScene() { return nullptr; }
     virtual SceneMirror *sceneMirror() { return nullptr; }
+    /// ATOM's LOD DIAL ON THE ONE SCENE (editor.lodBias): the viewport keeps what it set (ENGINE-UPGRADE-U3 stage 2 —
+    /// Scene::lodBias is deleted; the host keeps its own). Back to the engine's 1 with every new engine scene.
+    virtual float engineLodBias() const { return 1.0f; }
+    virtual void  setEngineLodBias(float) {}
+    /// THE DEBUG VIEWS ON THE ONE SCENE (world.setAtomView / world.setPhotonView, the editor's menus): set through the
+    /// viewport, which keeps what it set (U3 stage 2 — Scene::atomView / photonView / photonVoxelCascade deleted).
+    /// Off / Off / -1 with every new engine scene.
+    virtual int  engineAtomView() const { return 0; }
+    virtual void setEngineAtomView(int) {}
+    virtual int  enginePhotonView() const { return 0; }
+    virtual void setEnginePhotonView(int) {}
+    virtual int  enginePhotonVoxelCascade() const { return -1; }
+    virtual void setEnginePhotonVoxelCascade(int) {}
 
     /// BUILD THE ONE SCENE NOW IF IT DOES NOT EXIST — the explicit ask, for the
     /// two callers that are entitled to make it: the Player page as it is

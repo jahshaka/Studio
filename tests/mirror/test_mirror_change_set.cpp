@@ -34,6 +34,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../skeletal/armrig.h"
 
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
                            target->attachToBone(rider, owner, "jointTip", Vec3(), Quat(), Vec3(1, 1, 1));
         CHECK(built, "a rig with a cube riding its jointTip bone");
         for (int i = 0; i < 20; ++i) frame();
-        const size_t bones = target->boneNames(owner).size();
+        const size_t bones = jahshaka::engine::inspect::scene(target)->boneNames(owner).size();
         std::vector<BonePose> poses(bones);
         const GiStatus g0 = gi();
         for (int i = 0; i < 4; ++i) {

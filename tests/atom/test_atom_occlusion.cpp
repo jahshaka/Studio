@@ -25,6 +25,7 @@
 //   (f) an ORTHOGRAPHIC one, each over a short walk.
 // Frames, never time: the engine's fixed clock; every comparison is per frame.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include "EnginePrivate.h"
@@ -322,7 +323,7 @@ int main()
     buildWorld(on.scene);
     buildWorld(off.scene);
     off.scene->setAtomOcclusionEnabled(false);
-    CHECK(on.scene->atomOcclusionEnabled() && !off.scene->atomOcclusionEnabled(), "the door: on in one world, shut in the other");
+    CHECK(jahshaka::engine::inspect::scene(on.scene)->atomOcclusionEnabled() && !jahshaka::engine::inspect::scene(off.scene)->atomOcclusionEnabled(), "the door: on in one world, shut in the other");
     for (Arm *a : { &on, &off }) {
         a->view->setOffscreenContract(OffscreenContract::StillPicture);
         a->view->setScene(a->scene);

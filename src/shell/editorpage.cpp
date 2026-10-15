@@ -158,7 +158,7 @@ void EditorPage::build(const Deps &deps)
         connect(atomMenu, &QMenu::aboutToShow, this, [this]() {
             const int mode = atomViewMode();
             jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
-            const bool paintable = es && es->atomViewPaintable();
+            const bool paintable = es && es->published().atomViewPaintable;
             for (int i = 0; i < atomViewActions.size(); ++i) {
                 atomViewActions[i]->setChecked(i == mode);
                 atomViewActions[i]->setEnabled(i == 0 || paintable);
@@ -192,8 +192,7 @@ void EditorPage::build(const Deps &deps)
             for (int i = 0; i < photonViewActions.size(); ++i) {
                 photonViewActions[i]->setChecked(i == mode);
                 const bool paints =
-                    i == 0 || (es && es->photonViewRefusal(
-                                         static_cast<jahshaka::engine::PhotonView>(i)).empty());
+                    i == 0 || (es && es->published().photonViewRefusals[i].empty());
                 photonViewActions[i]->setEnabled(paints);
             }
         });
@@ -600,23 +599,21 @@ void EditorPage::resetOverlaysToDefaults()
 
 int EditorPage::atomViewMode() const
 {
-    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
-    return es ? int(es->atomView()) : 0;
+    return sceneView && sceneView->engineScene() ? sceneView->engineAtomView() : 0;
 }
 
 void EditorPage::setAtomViewMode(int mode)
 {
     jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
     if (!es || mode < 0 || mode > 4) return;
-    if (mode != 0 && !es->atomViewPaintable()) return;   // world.setAtomView's refusal
-    es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
+    if (mode != 0 && !es->published().atomViewPaintable) return;   // world.setAtomView's refusal
+    sceneView->setEngineAtomView(mode);
     for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
 }
 
 int EditorPage::photonViewMode() const
 {
-    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
-    return es ? int(es->photonView()) : 0;
+    return sceneView && sceneView->engineScene() ? sceneView->enginePhotonView() : 0;
 }
 
 void EditorPage::setPhotonViewMode(int mode)
@@ -624,8 +621,8 @@ void EditorPage::setPhotonViewMode(int mode)
     jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
     if (!es || mode < 0 || mode >= jahshaka::engine::kPhotonViewCount) return;
     const auto view = static_cast<jahshaka::engine::PhotonView>(mode);
-    if (!es->photonViewRefusal(view).empty()) return;   // world.setPhotonView's refusal
-    es->setPhotonView(view);
+    if (!es->published().photonViewRefusals[mode].empty()) return;   // world.setPhotonView's refusal
+    sceneView->setEnginePhotonView(mode);
     for (int i = 0; i < photonViewActions.size(); ++i) photonViewActions[i]->setChecked(i == mode);
 }
 

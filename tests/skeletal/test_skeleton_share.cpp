@@ -35,6 +35,7 @@
 // the rendered arm of the rig-perf gate; everything structural is here.
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -183,7 +184,7 @@ int main()
         // The MASTER takes all four, and its clips survive its followers.
         CHECK(scene->attachClips(body, &c, 1), "the master takes the clips");
         CHECK(scene->setClipStates(body, &st, 1), "...and plays them");
-        CHECK(scene->boneNames(hair).size() == 3,
+        CHECK(jahshaka::engine::inspect::scene(scene)->boneNames(hair).size() == 3,
               "reads are ALLOWED on a follower (a socket on a non-master piece keeps working)");
     }
 

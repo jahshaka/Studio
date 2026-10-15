@@ -42,6 +42,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../support/documentgraph.h"
 #include "multipiecerig.h"
@@ -211,8 +212,8 @@ int main(int argc, char **argv)
     CHECK(scene->attachSkinnedMesh(eye, eyeMesh, mat, desc, eyeMap.constData(),
                                    size_t(eyeMap.size())),
           "the eye piece binds the SAME rig — the precondition for sharing");
-    CHECK(scene->boneNames(body).size() == rig->bones.size() &&
-              scene->boneNames(eye).size() == rig->bones.size(),
+    CHECK(jahshaka::engine::inspect::scene(scene)->boneNames(body).size() == rig->bones.size() &&
+              jahshaka::engine::inspect::scene(scene)->boneNames(eye).size() == rig->bones.size(),
           "both pieces speak the union's bones");
     CHECK(scene->streamedBoneCount(body) == 5, "the body streams its 5 bones, not the union's 8");
     CHECK(scene->streamedBoneCount(eye) == 2, "the eye streams its 2 bones, not the union's 8");
@@ -286,10 +287,10 @@ int main(int argc, char **argv)
         bool oneRig = true;
         for (const iris::MeshNodePtr &piece : hero.pieces) {
             const NodeId n = mirror.engineNode(piece.data());
-            if (!n || !ms->hasSkeleton(n)) continue;
+            if (!n || !jahshaka::engine::inspect::scene(ms)->hasSkeleton(n)) continue;
             ++rigged;
             streamed += ms->streamedBoneCount(n);
-            const std::vector<std::string> names = ms->boneNames(n);
+            const std::vector<std::string> names = jahshaka::engine::inspect::scene(ms)->boneNames(n);
             if (firstNames.empty()) firstNames = names;
             else oneRig = oneRig && names == firstNames;
         }
@@ -378,7 +379,7 @@ int main(int argc, char **argv)
             size_t riggedNow = 0, withClips = 0;
             for (const iris::MeshNodePtr &piece : hero.pieces) {
                 const NodeId n = mirror.engineNode(piece.data());
-                if (!n || !ms->hasSkeleton(n)) continue;
+                if (!n || !jahshaka::engine::inspect::scene(ms)->hasSkeleton(n)) continue;
                 ++riggedNow;
                 if (!ms->clipNames(n).empty()) ++withClips;
             }
@@ -386,7 +387,7 @@ int main(int argc, char **argv)
                   "S16: the character survived the piece leaving, every piece still rigged");
             CHECK(withClips >= 1,
                   "S16: its clips are attached to the LIVE instances, not the destroyed one");
-            CHECK(ms->boneNames(mirror.engineNode(hero.pieces[0].data())).size()
+            CHECK(jahshaka::engine::inspect::scene(ms)->boneNames(mirror.engineNode(hero.pieces[0].data())).size()
                       == multipiece::bones().size() - 1,
                   "...on the NEW union rig (one bone fewer), which is what forced the re-attach");
             const quint64 before3 = mirror.clipStatePushes();

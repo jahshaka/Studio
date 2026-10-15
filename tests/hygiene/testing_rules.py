@@ -32,6 +32,9 @@ tree and the build's registration, each with its name in the failure line:
      EngineConfig has (pluginDir, hlmsMediaDir, shaderCacheDir, asyncShaderThreads, optimizeShadowMeshes, logSink,
      headless, logFile, vr.enabled) is RED. A variable or a return INITIALISED from a call (the helper, a suite's own
      wrapper of it) is not a construction. RED ON BASE b96b95c00: 814 sites in 196 files.
+  R11 THE ENGINE'S RECORD IS THE FIXTURES' ALONE (ENGINE-UPGRADE-U3 stage 2). No file under src/ or irisgl/mirror
+     includes jahshaka/engine/EngineInspect.h — the test door onto the engine's own record of what a host set; the host
+     keeps what it set.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -439,6 +442,15 @@ def main(source, build):
     bad = r10_bad(r10_files(source))
     check(not bad, "R10 one fixture config: no test source builds an EngineConfig outside %s (%d sites: %s)"
           % (R10_HELPER, len(bad), bad[:8]))
+    inspect = []
+    for root in ("src", os.path.join("irisgl", "mirror")):
+        for dirpath, _dirs, names in os.walk(os.path.join(source, root)):
+            for n in names:
+                if n.endswith((".cpp", ".h")):
+                    f = os.path.join(dirpath, n)
+                    if "EngineInspect.h" in open(f, errors="replace").read():
+                        inspect.append(os.path.relpath(f, source))
+    check(not inspect, "R11 no host source includes jahshaka/engine/EngineInspect.h (the fixtures' door): %s" % inspect[:8])
     if FAILURES:
         print("source.testing_rules: FAILED (%d)" % len(FAILURES))
         return 1

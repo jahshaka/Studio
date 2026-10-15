@@ -885,6 +885,9 @@ bool EngineSceneViewport::ensureEngineScene()
                                         std::to_string(reinterpret_cast<uintptr_t>(this)),
                                         sceneworkers::count(sceneworkers::Tier::Primary));
     if (!mEngineScene) return false;
+    mEngineLodBias = 1.0f;   // a new engine scene starts at the engine's own bias and with no debug view
+    mEngineAtomView = mEnginePhotonView = 0;
+    mEnginePhotonCascade = -1;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     // The mirror before the bind: bindViewToScene drops its environment latches
     // (see there), and on this path there is nothing to drop — but the order has
@@ -2872,7 +2875,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
 {
     GiStatusInfo out;
     if (!view() || !view()->scene()) return out;   // available stays false
-    const jahshaka::engine::GiStatus st = view()->scene()->giStatus();
+    // THE LAST FRAME'S GI MACHINE (ENGINE-UPGRADE-U3 stage 2: the snapshot, never a read of the engine).
+    const jahshaka::engine::GiStatus &st = view()->scene()->published().gi;
     out.available = true;
     switch (st.mode) {
     case jahshaka::engine::GiMode::Off:              out.mode = QStringLiteral("off"); break;
@@ -3032,7 +3036,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     // member of GiStatus: the tier is a geometry service, and GI is only its
     // first consumer.
     {
-        const jahshaka::engine::RayQueryStatus rq = view()->scene()->rayQueryStatus();
+        const jahshaka::engine::RayQueryStatus &rq = view()->scene()->published().rayQuery;
         out.rayQuery.available    = rq.available;
         out.rayQuery.enabled      = rq.enabled;
         out.rayQuery.blasCount    = rq.blasCount;
@@ -3200,7 +3204,7 @@ IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo() const
     if (!es || !mEngine) return out;          // available stays false
     out.available = true;
     out.rays = sceneTracesRays();
-    const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+    const jahshaka::engine::SunContactStatus &st = es->published().sunContact;   // the last frame's (U3 stage 2)
     out.on = st.on;
     out.running = st.running;
     out.width = int(st.width);
@@ -3569,7 +3573,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // — at the verb's cap — rather than photographing the raw estimate.
     {
         jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
-        if (mShotSettleFrames <= 0 && sc0 && (sc0->giStatus().gather.on || shotGiChanged)) mShotSettleFrames = 2000;
+        if (mShotSettleFrames <= 0 && sc0 && (sc0->published().gi.gather.on || shotGiChanged)) mShotSettleFrames = 2000;
     }
     if (mShotSettleFrames > 0) {
         const int cap = mShotSettleFrames;
@@ -3582,8 +3586,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // waits for the ONE predicate as always; a scene that does not gather
         // takes exactly the path it always took.
         jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
-        const bool gathering = sc && (sc->giStatus().gather.on || shotGiChanged);
-        if (sc && (gathering || !sc->giStatus().giAtRest)) {
+        // The GI machine as the last frame closed it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
+        const bool gathering = sc && (sc->published().gi.gather.on || shotGiChanged);
+        if (sc && (gathering || !sc->published().gi.giAtRest)) {
             mEngine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
             // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
             // settle renders through the shot view, outside the driver's tick,
@@ -3595,7 +3600,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             };
             int i = 0;
             if (gathering) { frame(); ++i; }
-            for (; i < cap && !sc->giStatus().giAtRest; ++i)
+            for (; i < cap && !sc->published().gi.giAtRest; ++i)
                 frame();
             mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
         }
@@ -4793,4 +4798,33 @@ bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
                                                             newLocalPos, rot, scale));
     }
     return true;
+}
+
+void EngineSceneViewport::setEngineLodBias(float bias)
+{
+    if (!mEngineScene) return;
+    if (!(bias >= 0.0f)) bias = 0.0f;   // the engine's own clamp (OgreScene::setLodBias)
+    mEngineScene->setLodBias(bias);
+    mEngineLodBias = bias;
+}
+
+void EngineSceneViewport::setEngineAtomView(int mode)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
+    mEngineAtomView = mode;
+}
+
+void EngineSceneViewport::setEnginePhotonView(int mode)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setPhotonView(static_cast<jahshaka::engine::PhotonView>(mode));
+    mEnginePhotonView = mode;
+}
+
+void EngineSceneViewport::setEnginePhotonVoxelCascade(int cascade)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setPhotonVoxelCascade(cascade);
+    mEnginePhotonCascade = cascade < 0 ? -1 : cascade;   // the engine's own clamp
 }

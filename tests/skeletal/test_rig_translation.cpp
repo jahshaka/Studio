@@ -27,6 +27,7 @@
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "armrig.h"
@@ -147,8 +148,8 @@ int main(int argc, char **argv)
     NodeId node = s->createNode();
 
     CHECK(s->attachSkinnedMesh(node, meshId, matId, desc), "attachSkinnedMesh succeeded");
-    CHECK(s->hasSkeleton(node), "the node reports a rig");
-    const std::vector<std::string> names = s->boneNames(node);
+    CHECK(jahshaka::engine::inspect::scene(s)->hasSkeleton(node), "the node reports a rig");
+    const std::vector<std::string> names = jahshaka::engine::inspect::scene(s)->boneNames(node);
     CHECK(names.size() == 2 && names[0] == "jointRoot" && names[1] == "jointTip",
           "boneNames comes back in rig order");
 
@@ -232,7 +233,7 @@ int main(int argc, char **argv)
         NodeId n = s->createNode();
         CHECK(!s->attachSkinnedMesh(n, plainId, matId, desc),
               "T7: a mesh with no blend data is refused");
-        CHECK(!s->hasSkeleton(n), "T7: ... and gets no rig");
+        CHECK(!jahshaka::engine::inspect::scene(s)->hasSkeleton(n), "T7: ... and gets no rig");
 
         // Empty rig, and a rig that does not cover the mesh's blend indices.
         SkeletonDesc empty; empty.id = "empty";
@@ -258,7 +259,7 @@ int main(int argc, char **argv)
             huge.bones[i].parent = i ? int(i) - 1 : -1;
         }
         CHECK(!s->attachSkinnedMesh(big, freshId, matId, huge), "T7: a 300-bone rig is refused");
-        CHECK(!s->hasSkeleton(big), "T7: ... and rides unskinned instead of crashing");
+        CHECK(!jahshaka::engine::inspect::scene(s)->hasSkeleton(big), "T7: ... and rides unskinned instead of crashing");
         engine->renderOneFrame();
         CHECK(true, "T7: the frame after an over-limit attach still renders");
         s->removeNode(big);

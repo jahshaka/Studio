@@ -1331,7 +1331,7 @@ QVariantMap WorldApi::giStatus()
     {
         jahshaka::engine::Scene *vs =
             (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
-        out.insert(QStringLiteral("viewCascade"), vs ? vs->photonVoxelCascade() : -1);
+        out.insert(QStringLiteral("viewCascade"), vs ? host.viewport->enginePhotonVoxelCascade() : -1);
     }
     QVariantMap refusals;
     jahshaka::engine::Scene *es =
@@ -1339,7 +1339,7 @@ QVariantMap WorldApi::giStatus()
     for (int i = 1; i < jahshaka::engine::kPhotonViewCount; ++i)
         refusals.insert(QLatin1String(kPhotonViewNames[i]),
                         es ? QString::fromStdString(
-                                 es->photonViewRefusal(static_cast<jahshaka::engine::PhotonView>(i)))
+                                 es->published().photonViewRefusals[i])
                            : QStringLiteral("no engine viewport"));
     out.insert(QStringLiteral("viewRefusals"), refusals);
     return out;
@@ -1701,7 +1701,7 @@ bool WorldApi::setAtomView(const QString &view)
     if (!host.isEngineReady() || !host.viewport) return false;
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
-    if (mode != 0 && !es->atomViewPaintable()) {
+    if (mode != 0 && !es->published().atomViewPaintable) {
         fail(QStringLiteral("world.setAtomView: the viewport carries no id pass, so the '%1' view "
                             "would paint nothing — the Low tier's viewport draws straight into its "
                             "window, and world.setAtomDraw(false) shuts the split "
@@ -1709,7 +1709,7 @@ bool WorldApi::setAtomView(const QString &view)
                  .arg(view));
         return false;
     }
-    es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
+    host.viewport->setEngineAtomView(mode);
     return true;
 }
 
@@ -1763,15 +1763,15 @@ bool WorldApi::setPhotonView(const QString &view, const QVariantMap &options)
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
     const auto v = static_cast<jahshaka::engine::PhotonView>(mode);
-    const std::string why = es->photonViewRefusal(v);
+    const std::string why = es->published().photonViewRefusals[mode];   // the last frame's (U3 stage 2)
     if (!why.empty()) {
         fail(QStringLiteral("world.setPhotonView: the '%1' view cannot paint here — %2")
                  .arg(QLatin1String(kPhotonViewNames[mode]), QString::fromStdString(why)));
         return false;
     }
-    es->setPhotonView(v);
+    host.viewport->setEnginePhotonView(mode);
     if (options.contains(QStringLiteral("cascade")))
-        es->setPhotonVoxelCascade(options.value(QStringLiteral("cascade")).toInt());
+        host.viewport->setEnginePhotonVoxelCascade(options.value(QStringLiteral("cascade")).toInt());
     return true;
 }
 
@@ -1779,7 +1779,7 @@ QString WorldApi::photonView()
 {
     if (!host.isEngineReady() || !host.viewport) return QStringLiteral("off");
     jahshaka::engine::Scene *es = host.viewport->engineScene();
-    const int mode = es ? int(es->photonView()) : 0;
+    const int mode = es ? host.viewport->enginePhotonView() : 0;
     return QLatin1String(
         kPhotonViewNames[(mode >= 0 && mode < jahshaka::engine::kPhotonViewCount) ? mode : 0]);
 }
@@ -1788,7 +1788,7 @@ QString WorldApi::atomView()
 {
     if (!host.isEngineReady() || !host.viewport) return QStringLiteral("off");
     jahshaka::engine::Scene *es = host.viewport->engineScene();
-    const int mode = es ? int(es->atomView()) : 0;
+    const int mode = es ? host.viewport->engineAtomView() : 0;
     return QLatin1String(kAtomViewNames[(mode >= 0 && mode < 5) ? mode : 0]);
 }
 
@@ -1837,7 +1837,7 @@ QVariantMap WorldApi::gatherHits(const QVariantMap &params)
     if (!es)
         return QVariantMap{ { QStringLiteral("ready"), false },
                             { QStringLiteral("reason"), QStringLiteral("no engine viewport") } };
-    const jahshaka::engine::GatherStatus g = es->giStatus().gather;
+    const jahshaka::engine::GatherStatus &g = es->published().gi.gather;   // the last frame's (U3 stage 2)
     if (!g.running || g.rays.empty() || !g.stride || !g.targetW || !g.targetH)
         return QVariantMap{ { QStringLiteral("ready"), false },
                             { QStringLiteral("reason"),
@@ -2420,7 +2420,9 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
                                        scene->skyType != iris::SkyType::CUBEMAP;
     if (host.isEngineReady() && host.viewport) {
         if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
-            const jahshaka::engine::CloudStatus st = es->cloudStatus();
+            // THE LIVE HALF IS THE LAST FRAME'S (ENGINE-UPGRADE-U3 stage 2: the snapshot, never a read of the engine).
+            const jahshaka::engine::PublishedFrame &pub = es->published();
+            const jahshaka::engine::CloudStatus &st = pub.clouds;
             QVariantMap live;
             live[QStringLiteral("drawn")] = st.drawn;
             // The document's own reason first: the renderer never hears of a
@@ -2434,10 +2436,10 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
             live[QStringLiteral("capturePeriodFrames")] = st.capturePeriodFrames;
             live[QStringLiteral("clockTicks")] = st.clockTicks;
             live[QStringLiteral("scroll")] = QVariantList{ double(st.scroll[0]), double(st.scroll[1]) };
-            float sh[27];
-            if (es->skyAmbientSh(sh))
-                live[QStringLiteral("skyMean")] = QVariantList{ double(sh[0]), double(sh[1]), double(sh[2]) };
-            const jahshaka::engine::AtmosphereStatus at = es->atmosphereStatus();
+            if (pub.skyAmbientShValid)
+                live[QStringLiteral("skyMean")] = QVariantList{ double(pub.skyAmbientSh[0]), double(pub.skyAmbientSh[1]),
+                                                                double(pub.skyAmbientSh[2]) };
+            const jahshaka::engine::AtmosphereStatus &at = pub.atmosphereStatus;
             if (at.on) {
                 live[QStringLiteral("drawnObserverM")] = double(at.observerAltitudeM);
                 live[QStringLiteral("environmentObserverM")] = double(at.environmentObserverM);
@@ -2501,7 +2503,7 @@ QVariantMap WorldApi::heightFog(const QVariantMap &params)
         double(h.heightFalloff * iris::HeightFog::kUnrealDialToPerMetre);
     if (host.isEngineReady() && host.viewport) {
         if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
-            const jahshaka::engine::HeightFogStatus st = es->heightFogStatus();
+            const jahshaka::engine::HeightFogStatus &st = es->published().heightFog;   // the last frame's (U3 stage 2)
             QVariantMap live;
             live[QStringLiteral("on")] = st.on;
             live[QStringLiteral("colour")] =
@@ -2572,7 +2574,7 @@ QVariantMap WorldApi::sunContact(const QVariantMap &params)
         QString::fromLatin1(iris::SunContact::resolutionName(c.resolution));
     if (host.isEngineReady() && host.viewport) {
         if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
-            const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+            const jahshaka::engine::SunContactStatus &st = es->published().sunContact;   // the last frame's (U3 stage 2)
             QVariantMap live;
             live[QStringLiteral("on")] = st.on;
             live[QStringLiteral("running")] = st.running;

@@ -55,6 +55,7 @@
 //
 // Its own binary, like gi.pcc_mirror (spec §9).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -285,10 +286,10 @@ static void excludeFlagCase(Engine *engine, View *view)
     showBox("probe fit, ground in", st.probeFitMin, st.probeFitMax);
     CHECK(st.probeFitMax.x - st.probeFitMin.x > 18.0f,
           "the heuristic keeps this ground (it is not an outlier here)");
-    CHECK(!s->nodeProbeGridExcluded(ground), "the flag starts off");
+    CHECK(!jahshaka::engine::inspect::scene(s)->nodeProbeGridExcluded(ground), "the flag starts off");
 
     s->setNodeProbeGridExcluded(ground, true);
-    CHECK(s->nodeProbeGridExcluded(ground), "setNodeProbeGridExcluded reads back");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeProbeGridExcluded(ground), "setNodeProbeGridExcluded reads back");
     // The flag invalidates the GI caches; the flush is at frame time, like every
     // other geometry change.
     render(engine, 2);

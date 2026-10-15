@@ -42,6 +42,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -141,10 +142,10 @@ int main(int argc, char **argv)
     CHECK(onFrac > 0.95, "B: with the widget on, the ground reaches the horizon");
     const NodeId plane = mirror.groundPlaneNode();
     CHECK(plane != 0, "B: the plane is a mirror-owned engine node");
-    CHECK(plane && target->nodeBackdrop(plane),
+    CHECK(plane && jahshaka::engine::inspect::scene(target)->nodeBackdrop(plane),
           "B: ...a BACKDROP: drawn by every view, out of every capture — no shadow-map caster, "
           "no reflection-probe face, no planar mirror, no GI geometry");
-    CHECK(plane && target->nodeHelper(plane),
+    CHECK(plane && jahshaka::engine::inspect::scene(target)->nodeHelper(plane),
           "B: ...which implies the helper exclusion (the capture passes ask for kVisibleBit)");
     CHECK(doc->getRootNode()->children().size() == 2,
           "B: and the document never heard of it (the sun and the camera, nothing else)");

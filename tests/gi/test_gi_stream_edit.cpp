@@ -51,6 +51,7 @@
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>
@@ -137,7 +138,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 1: the arm waits for the world to be on screen ==\n");
     scene->setLoading(true);
-    CHECK(scene->isLoading(), "Scene::setLoading(true) sticks");
+    CHECK(jahshaka::engine::inspect::scene(scene)->isLoading(), "Scene::setLoading(true) sticks");
     scene->setGlobalIllumination(hybridGi());
     frames(e, FramePace::Streaming, 6);
     {

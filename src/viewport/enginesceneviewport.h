@@ -63,6 +63,14 @@ public:
     /// ensureEngineScene() and nothing else. They are read per frame.
     jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
     SceneMirror *sceneMirror() override { return mMirror.get(); }
+    float engineLodBias() const override { return mEngineLodBias; }
+    void  setEngineLodBias(float bias) override;
+    int  engineAtomView() const override { return mEngineAtomView; }
+    void setEngineAtomView(int mode) override;
+    int  enginePhotonView() const override { return mEnginePhotonView; }
+    void setEnginePhotonView(int mode) override;
+    int  enginePhotonVoxelCascade() const override { return mEnginePhotonCascade; }
+    void setEnginePhotonVoxelCascade(int cascade) override;
     /// IEditorViewport: build the one scene now if it does not exist, for a
     /// caller that draws it and cannot wait for this widget's show event (the
     /// Player page, the editor's VR preview). See the definition.
@@ -241,7 +249,7 @@ public:
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     int activePlanarReflectors() const override
-    { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
+    { return (view() && view()->scene()) ? view()->scene()->published().activePlanarReflectors : 0; }
     GiStatusInfo giStatus() const override;
     GiVoxelStatsInfo giVoxelStats(int cascade) override;
     ShadowStatusInfo shadowStatus() const override;
@@ -657,6 +665,10 @@ private:
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
+    /// The LOD bias this viewport set on mEngineScene (the engine clamps a negative to 0, as here).
+    float mEngineLodBias = 1.0f;
+    /// ...and the debug views it set on it (AtomView / PhotonView as ints; the cascade -1 = the finest).
+    int mEngineAtomView = 0, mEnginePhotonView = 0, mEnginePhotonCascade = -1;
     /// F3 / editor.setOverlays({stats}) / Preferences show_fps.
     bool mShowStats = false;
     /// The readout's text, rebuilt at most every kStatsRefreshMs. A number that

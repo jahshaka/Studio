@@ -22,6 +22,7 @@
 // compile counter, which is the only thing that can see it: the picture is
 // identical either way, and the cost is a stall.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -79,7 +80,7 @@ static void shadowHygieneCase(Engine *engine, View *view)
     enginetest::setNodePosition(s, helper, Vec3(0.0f, 30.0f, 0.0f));
     enginetest::setNodeScale(s, helper, Vec3(200.0f, 0.5f, 200.0f));
     s->setNodeHelper(helper, true);
-    CHECK(s->nodeHelper(helper), "the plate is marked as an editor helper");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeHelper(helper), "the plate is marked as an editor helper");
 
     render(engine, 6);
     Image withHelper; view->readPixels(withHelper);

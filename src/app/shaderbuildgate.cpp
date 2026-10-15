@@ -241,7 +241,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         while (frames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
             frame();
             engine.shaderBuildProgress(c, f, e);
-            const GiStatus gi = es->giStatus();
+            const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
             const bool armed = gi.mode == GiMode::Off || gi.vctBound;
             quiet = (c == last && armed) ? quiet + 1 : 0;
             last = c;
@@ -288,7 +288,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                     engine.waitForAsyncShaders();
                     as = engine.asyncShaderStats();
                     engine.shaderBuildProgress(c, f, e);
-                    const GiStatus gi = es->giStatus();
+                    const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                     const bool armed = gi.mode == GiMode::Off || gi.vctBound;
                     quiet = (c == last && as.completed == lastDone && armed) ? quiet + 1 : 0;
                     last = c;
@@ -613,11 +613,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         if (!haveWarmGi || warmGi.mode == GiMode::Off) return true;
         // Every GI mode the tiers ship voxelises (VCT, alone or under the probes): the arm is
         // bound when the cone tracer is.
-        return warmScene->giStatus().vctBound;
+        return warmScene->published().gi.vctBound;
     };
     int boundFrames = 0;
     for (; runPass && warmScene && giFrames < kWarmUpGiFrames &&
-           ((quiet < kGiQuietFrames && !warmScene->giStatus().giAtRest) || boundFrames < kWarmUpFrames);
+           ((quiet < kGiQuietFrames && !warmScene->published().gi.giAtRest) || boundFrames < kWarmUpFrames);
          ++giFrames) {
         engine->renderOneFrame();
         poll();
@@ -669,7 +669,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             engine->shaderBuildProgress(compiled, cached, expected);
             unsigned tierLast = compiled;
             for (; tierFrames < kWarmUpGiFrames &&
-                   (tierQuiet < kGiQuietFrames || !warmScene->giStatus().vctBound);
+                   (tierQuiet < kGiQuietFrames || !warmScene->published().gi.vctBound);
                  ++tierFrames) {
                 engine->renderOneFrame();
                 poll();

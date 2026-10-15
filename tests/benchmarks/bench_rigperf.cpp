@@ -75,6 +75,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../skeletal/multipiecerig.h"
 #include "../support/enginetesthelpers.h"
@@ -238,7 +239,7 @@ int main(int argc, char **argv)
     for (const multipiece::Character &c : cast)
         for (const iris::MeshNodePtr &piece : c.pieces) {
             const NodeId n = mirror.engineNode(piece.data());
-            if (!n || !es->hasSkeleton(n)) continue;
+            if (!n || !jahshaka::engine::inspect::scene(es)->hasSkeleton(n)) continue;
             ++rigged;
             streamed += es->streamedBoneCount(n);
         }

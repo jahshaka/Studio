@@ -1206,8 +1206,12 @@ QVariantMap VrApi::proxyPose(const QString &hand)
     Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
     Vec3 position;
     Quat rotation;
-    const bool drawn = scene && nodes[index] &&
-                       scene->nodeWorldPose(nodes[index], position, rotation);
+    // THE PROXY AS THE LAST FRAME DREW IT (ENGINE-UPGRADE-U3 stage 2: the snapshot's named nodes, never a read of
+    // the engine).
+    bool drawn = false;
+    if (scene && nodes[index])
+        for (const auto &np : scene->published().nodePoses)
+            if (np.node == nodes[index]) { position = np.position; rotation = np.rotation; drawn = true; break; }
     out = vrnames::pose(position, rotation, drawn);
     // `valid` on a POSE means "the runtime located it"; here the question is
     // "is there a marker in the scene at all", so it is named for what it is.

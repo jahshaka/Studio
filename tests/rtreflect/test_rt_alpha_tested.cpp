@@ -37,6 +37,7 @@
 // A world with NO alpha-tested item has no table and asks opaque by
 // construction — the pre-lane flags exactly.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "EnginePrivate.h"
 
@@ -311,7 +312,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     enginetest::setNodePosition(s, fence, Vec3(3.0f, 0.0f, 1.0f));
     view->resize(1920, 1080);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 8.0f), Vec3(0.0f, 0.0f, -20.0f));
-    SunContactDesc sc = s->sunContact();
+    SunContactDesc sc = jahshaka::engine::inspect::scene(s)->sunContact();
     sc.enabled = true;
     s->setSunContact(sc);
     for (int i = 0; i < 240; ++i) e->renderOneFrame();

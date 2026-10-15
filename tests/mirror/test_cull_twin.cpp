@@ -40,6 +40,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -126,7 +127,7 @@ int main(int argc, char **argv)
     frames(2);
     CHECK(scene->cullTwinCount() == 1, "one material worn one-sided AND two-sided: ONE twin");
     const NodeId otherNode = mirror.engineNode(other.data());
-    CHECK(otherNode && scene->nodeFaceCull(otherNode) == FaceCull::TwoSided,
+    CHECK(otherNode && jahshaka::engine::inspect::scene(scene)->nodeFaceCull(otherNode) == FaceCull::TwoSided,
           "the mirror pushed the node's cull (None -> TwoSided)");
 
     // ---- 2. THE PICTURE: a plane from below ------------------------------

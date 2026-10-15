@@ -61,6 +61,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -174,8 +175,8 @@ int main(int argc, char **argv)
     bool bothChannels = true;
     for (int i = 0; i < 2; ++i) {
         if (!nodes[i]) continue;
-        bothChannels = bothChannels && target->nodeHelper(nodes[i]) &&
-                       target->nodeVrHelper(nodes[i]);
+        bothChannels = bothChannels && jahshaka::engine::inspect::scene(target)->nodeHelper(nodes[i]) &&
+                       jahshaka::engine::inspect::scene(target)->nodeVrHelper(nodes[i]);
     }
     CHECK(bothChannels,
           "D: each controller is in BOTH channels — kHelperBit (the desk, and out of every "
@@ -228,7 +229,7 @@ int main(int argc, char **argv)
     // needs a runtime: `vr.verbs_session` measures the lag in frames.)
     {
         NodeId registered[2] = { 0, 0 };
-        target->vrProxyNodes(registered);
+        jahshaka::engine::inspect::scene(target)->vrProxyNodes(registered);
         CHECK(registered[0] == nodes[0] && registered[1] == nodes[1] &&
               registered[0] && registered[1],
               "E: the scene knows both proxy nodes, left first — so a session can place them "
@@ -287,9 +288,9 @@ int main(int argc, char **argv)
     // ---- D (second half). the outline is the desk's only ------------------
     unsigned helperCount = 0, vrHelperCount = 0;
     for (NodeId id = 1; id < 4096; ++id) {
-        if (!target->nodeHelper(id)) continue;
+        if (!jahshaka::engine::inspect::scene(target)->nodeHelper(id)) continue;
         ++helperCount;
-        if (target->nodeVrHelper(id)) ++vrHelperCount;
+        if (jahshaka::engine::inspect::scene(target)->nodeVrHelper(id)) ++vrHelperCount;
     }
     std::printf("   scene helpers: %u, of which VR helpers: %u\n", helperCount, vrHelperCount);
     // FOUR SINCE PHASE 4b STAGE 1, RE-ANCHORED WITH ITS REASON (it was two):
@@ -311,12 +312,12 @@ int main(int argc, char **argv)
               "G: the ray has two nodes of its own — the line and the hit marker");
         bool channels = true;
         for (int i = 0; i < 2; ++i)
-            channels = channels && target->nodeHelper(ray[i]) && target->nodeVrHelper(ray[i]);
+            channels = channels && jahshaka::engine::inspect::scene(target)->nodeHelper(ray[i]) && jahshaka::engine::inspect::scene(target)->nodeVrHelper(ray[i]);
         CHECK(channels,
               "G: ...both on the wearer's two channels: every VR eye and the desk's picture, no "
               "capture and no user's screenshot");
         NodeId registered[2] = { 0, 0 };
-        target->vrRayNodes(registered);
+        jahshaka::engine::inspect::scene(target)->vrRayNodes(registered);
         CHECK(registered[0] == ray[0] && registered[1] == ray[1],
               "G: the scene knows both, the LINE first — so a session can place them inside the "
               "frame that draws them (Engine::setVrRay)");
@@ -638,8 +639,8 @@ int main(int argc, char **argv)
             const unsigned count = mirror.vrHandBoneNodes(VrHandRight, bones, kVrHandBoneCount);
             bool channels = count == kVrHandBoneCount;
             for (unsigned b = 0; b < count; ++b)
-                channels = channels && bones[b] && target->nodeHelper(bones[b]) &&
-                           target->nodeVrHelper(bones[b]);
+                channels = channels && bones[b] && jahshaka::engine::inspect::scene(target)->nodeHelper(bones[b]) &&
+                           jahshaka::engine::inspect::scene(target)->nodeVrHelper(bones[b]);
             CHECK(channels,
                   "K: every bone is on BOTH helper channels — in the desk's picture and in "
                   "every VR eye, in no probe capture and in no user's screenshot");

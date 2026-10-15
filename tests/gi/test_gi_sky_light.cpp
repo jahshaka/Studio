@@ -35,6 +35,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -459,10 +460,10 @@ int main(int argc, char **argv)
             const float sizeWas = doc->sunDiscSize;
             doc->sunDiscSize = iris::kDefaultSunDiscSize;
             for (int f = 0; f < 2; ++f) frame();
-            const SunDisc atDefault = escene->sky().sun;
+            const SunDisc atDefault = jahshaka::engine::inspect::scene(escene)->sky().sun;
             doc->sunDiscSize = 2.0f * iris::kDefaultSunDiscSize;
             for (int f = 0; f < 2; ++f) frame();
-            const SunDisc atDouble = escene->sky().sun;
+            const SunDisc atDouble = jahshaka::engine::inspect::scene(escene)->sky().sun;
             std::printf("   pushed: %.3f deg at radiance %.4f -> %.3f deg at %.4f\n",
                         atDefault.angularDiameterDeg, atDefault.colour.r,
                         atDouble.angularDiameterDeg, atDouble.colour.r);
@@ -584,7 +585,7 @@ int main(int argc, char **argv)
                     for (int y = 0; y < 256; ++y)
                         for (int x = 0; x < 256; ++x) sum += double(lum(img.at(x, y)));
                     const iris::Vec3 toSun = -sun->getLightDir().normalized();
-                    const Colour tint = escene->atmosphereSunTint(
+                    const Colour tint = jahshaka::engine::atmosphereSunTint(escene->published().atmosphere, 
                         Vec3(toSun.x(), toSun.y(), toSun.z()));
                     Step st;
                     st.pitch = float(p);
@@ -592,7 +593,7 @@ int main(int argc, char **argv)
                                        * 180.0 / M_PI);
                     st.tintMax = std::max(tint.r, std::max(tint.g, tint.b));
                     st.mean = float(sum / (256.0 * 256.0));
-                    st.disc = escene->sky().sun.enabled;
+                    st.disc = jahshaka::engine::inspect::scene(escene)->sky().sun.enabled;
                     out.push_back(st);
                 }
                 return out;
@@ -680,14 +681,14 @@ int main(int argc, char **argv)
                 sun->setLocalRot(iris::Quat::fromEulerAngles(-120.0f, 0.0f, 0.0f));  // 30 deg under
                 settle();
                 const iris::Vec3 toSun = -sun->getLightDir().normalized();
-                const Colour tint = escene->atmosphereSunTint(
+                const Colour tint = jahshaka::engine::atmosphereSunTint(escene->published().atmosphere, 
                     Vec3(toSun.x(), toSun.y(), toSun.z()));
                 std::printf("   thin sky (haze 0), sun 30 deg BELOW: tint %.4f %.4f %.4f, "
                             "disc %s\n", tint.r, tint.g, tint.b,
-                            escene->sky().sun.enabled ? "on" : "off");
+                            jahshaka::engine::inspect::scene(escene)->sky().sun.enabled ? "on" : "off");
                 CHECK(tint.r == 0.0f && tint.g == 0.0f && tint.b == 0.0f,
                       "7b5. a set sun lights nothing, at any sky density");
-                CHECK(!escene->sky().sun.enabled,
+                CHECK(!jahshaka::engine::inspect::scene(escene)->sky().sun.enabled,
                       "7b6. ...and draws no disc under the ground");
                 doc->setSkyRealistic(was);
             }

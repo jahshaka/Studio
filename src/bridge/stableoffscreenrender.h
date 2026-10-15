@@ -89,7 +89,8 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
 inline unsigned settleStillPicture(jahshaka::engine::Engine *engine,
                                    jahshaka::engine::Scene *scene, unsigned cap = 2000u)
 {
-    if (!engine || !scene || !scene->giStatus().gather.on) return 0u;
+    // The GI machine as the last frame closed it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
+    if (!engine || !scene || !scene->published().gi.gather.on) return 0u;
     const float delta = engine->fixedFrameDelta();
     engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
     unsigned n = 0u;
@@ -100,7 +101,7 @@ inline unsigned settleStillPicture(jahshaka::engine::Engine *engine,
         ++n;
     };
     frame();
-    while (n < cap && !scene->giStatus().giAtRest) frame();
+    while (n < cap && !scene->published().gi.giAtRest) frame();
     engine->submitFrame(jahshaka::engine::FrameInput::delta(delta));
     return n;
 }

@@ -22,6 +22,7 @@
 // view's shadow maps) in the same process, deliberately AFTER the hybrid
 // section, so the hybrid is measured with the process to itself.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -150,7 +151,7 @@ static void sectionA(Engine *engine)
     // node, before any geometry attaches), and why a scene full of movers never
     // pays a rebuild for its own classification.
     s->setNodeMovable(mover, true);
-    CHECK(s->nodeMovable(mover) && !s->nodeMovable(stayer), "the mover reads back movable");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeMovable(mover) && !jahshaka::engine::inspect::scene(s)->nodeMovable(stayer), "the mover reads back movable");
 
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;

@@ -32,6 +32,7 @@
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/import/meshbake.h"
@@ -1368,7 +1369,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 4; ++i) engine->renderOneFrame();
         Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
         show("gradient sky + chrome cube (settled)", before);
-        const SkyDesc settled = target->sky();
+        const SkyDesc settled = jahshaka::engine::inspect::scene(target)->sky();
         const unsigned ws0 = view->workspaceGeneration();
         float settledSh[27] = { 0.0f };
         std::printf("    sky desc: mode=%d equirect=%u  sky SH band0 %.3f %.3f %.3f  ws gen %u\n",
@@ -1393,7 +1394,7 @@ int main(int argc, char **argv)
         }
         Image after; CHECK(view->readPixels(after), "idempotency: the frame after five re-pushes reads back");
         show("gradient sky + chrome cube (after 5 identical pushes)", after);
-        CHECK(target->sky() == settled,
+        CHECK(jahshaka::engine::inspect::scene(target)->sky() == settled,
               "five more pushes of an unchanged sky re-bake nothing (the description, "
               "texture ids and all, is the one the engine already had)");
         CHECK(view->workspaceGeneration() == ws0,
@@ -1941,21 +1942,21 @@ int main(int argc, char **argv)
         const auto cubeNode = lmirror.engineNode(cube.data());
         const auto lampNode = lmirror.engineNode(lamp.data());
         CHECK(cubeNode != 0 && lampNode != 0, "channels: both nodes reached the engine");
-        CHECK(target->nodeLightMask(cubeNode) == 0xFFFFFFFFu,
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0xFFFFFFFFu,
               "channels: a node the user never touched is on EVERY channel");
 
         cube->setLightMask(0x2u);
         lmirror.sync();
-        CHECK(target->nodeLightMask(cubeNode) == 0x2u,
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x2u,
               "channels: the document's mask reached the Item");
         // The change guard: a SECOND edit must land too.
         cube->setLightMask(0x4u);
         lmirror.sync();
-        CHECK(target->nodeLightMask(cubeNode) == 0x4u,
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x4u,
               "channels: a second edit is not swallowed by the push guard");
         // And an idle sync must not undo it.
         lmirror.sync();
-        CHECK(target->nodeLightMask(cubeNode) == 0x4u, "channels: an idle sync changes nothing");
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x4u, "channels: an idle sync changes nothing");
 
         // The LIGHT half rides the LightDesc, whose operator== had to grow the
         // field — a comparison that ignores the mask would drop this edit.
@@ -1964,7 +1965,7 @@ int main(int argc, char **argv)
         CHECK(lamp->getLightMask() == 0x8u, "channels: the light carries its own mask");
         // The engine records the mask on the node either way (a light node has
         // no Item, so this is the record, not the Item's flag).
-        CHECK(target->nodeLightMask(lampNode) == 0x8u,
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(lampNode) == 0x8u,
               "channels: the light node's mask reached the engine too");
         // A duplicate carries the channels: a copied object that silently
         // rejoined every channel would be the classic "why is this one lit?".
@@ -2147,7 +2148,7 @@ int main(int argc, char **argv)
         const NodeId stillId = mmirror.engineNode(still.data());
         const NodeId riderId = mmirror.engineNode(rider.data());
         CHECK(stillId != 0 && riderId != 0, "mobility: both nodes reached the engine");
-        CHECK(!target->nodeMovable(stillId) && !target->nodeMovable(riderId),
+        CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId) && !jahshaka::engine::inspect::scene(target)->nodeMovable(riderId),
               "mobility: a still scene pushes NOTHING as movable");
         CHECK(mmirror.movableNodeCount() == 0, "mobility: ...and the mirror counts zero");
         CHECK(target->mobilityStatus().movableNodes == 0,
@@ -2160,9 +2161,9 @@ int main(int argc, char **argv)
         carrier->physicsProperty.type = iris::PhysicsType::RigidBody;
         mmirror.sync();
         engine->renderOneFrame();
-        CHECK(target->nodeMovable(riderId),
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(riderId),
               "mobility: a driver on the PARENT makes the child movable in the engine (rule 2)");
-        CHECK(!target->nodeMovable(stillId), "mobility: ...and leaves the still node alone");
+        CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId), "mobility: ...and leaves the still node alone");
         CHECK(mmirror.movableNodeCount() == 2,
               "mobility: the mirror counts the carrier and its rider");
         CHECK(target->mobilityStatus().movableNodes == 2,
@@ -2175,7 +2176,7 @@ int main(int argc, char **argv)
         carrier->isPhysicsBody = false;
         carrier->physicsProperty.type = iris::PhysicsType::None;
         mmirror.sync();
-        CHECK(!target->nodeMovable(riderId) && mmirror.movableNodeCount() == 0,
+        CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(riderId) && mmirror.movableNodeCount() == 0,
               "mobility: removing the driver puts the branch back (authoring, not automatic)");
 
         // ---- THE SURPRISE MOVER (O3): play only, warned once, no rebuild ---
@@ -2186,7 +2187,7 @@ int main(int argc, char **argv)
         CHECK(mmirror.mobilityMissCount() == 0, "mobility: standing still during play is not a miss");
         still->setLocalPos(iris::Vec3(0, 2, 0));
         mmirror.sync();
-        CHECK(target->nodeMovable(stillId),
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(stillId),
               "mobility: a node that starts moving during play is movable from that frame");
         CHECK(mmirror.mobilityMissCount() == 1 &&
               mmirror.lastMobilityMiss() == QStringLiteral("mobility-still"),
@@ -2204,13 +2205,13 @@ int main(int argc, char **argv)
         // re-resolves, and the engine is told.
         mdoc->setPlaying(false);
         mmirror.sync();
-        CHECK(!target->nodeMovable(stillId) && mmirror.mobilityMissCount() == 1,
+        CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId) && mmirror.mobilityMissCount() == 1,
               "mobility: play stop clears the promotion (the ghost bounce goes with it)");
 
         // An explicit setting reaches the engine the same way.
         still->setMobility(iris::Mobility::Movable);
         mmirror.sync();
-        CHECK(target->nodeMovable(stillId), "mobility: an explicit Movable reaches the engine");
+        CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(stillId), "mobility: an explicit Movable reaches the engine");
         mmirror.setSource(nullptr);
     }
 

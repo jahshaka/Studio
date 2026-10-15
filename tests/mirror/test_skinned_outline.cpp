@@ -49,6 +49,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
@@ -231,7 +232,7 @@ int main(int argc, char **argv)
 
     const NodeId bodyNode = mirror.engineNode(body.data());
     CHECK(bodyNode != 0, "the rigged body reached the engine scene");
-    CHECK(scene->hasSkeleton(bodyNode), "...and it is GPU-skinned (the whole premise)");
+    CHECK(jahshaka::engine::inspect::scene(scene)->hasSkeleton(bodyNode), "...and it is GPU-skinned (the whole premise)");
     if (!bodyNode) return 1;
 
     // ABOVE the character's head (its top is y=2) but inside the enlarged hull

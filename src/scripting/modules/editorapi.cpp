@@ -370,7 +370,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "level at a time and how a person turns automatic LOD off. Applies to the live "
           "scene immediately — every mesh's switch thresholds are re-derived in place, with "
           "no rebuild — and meshes with no baked chain (skinned, too small to simplify, "
-          "opened without a bake) are unaffected by any value. "
+          "opened without a bake) are unaffected by any value. The NEXT frame draws it: the verb steps no "
+          "frame (a script reading app.renderStats() after it steps one with editor.frame). "
           "A SESSION DIAL AND NOT A SCENE VALUE (ATOM inventory row AT-A14): it is a "
           "measurement and debugging knob, it is never written to a project, and binding a "
           "new scene returns it to 1. It was `world.setLodBias` until ATOM-BAKE-1, backed by "
@@ -1977,26 +1978,23 @@ bool EditorApi::setGizmoSpace(const QString &space)
 double EditorApi::lodBias()
 {
     if (!requireEngine()) return 0.0;
-    jahshaka::engine::Scene *scene = host.viewport->engineScene();
-    if (!scene) return fail(QStringLiteral("editor.lodBias: no engine scene")), 0.0;
-    return double(scene->lodBias());
+    if (!host.viewport->engineScene()) return fail(QStringLiteral("editor.lodBias: no engine scene")), 0.0;
+    return double(host.viewport->engineLodBias());
 }
 
 double EditorApi::setLodBias(double bias)
 {
     if (!requireEngine()) return 0.0;
-    jahshaka::engine::Scene *scene = host.viewport->engineScene();
-    if (!scene) return fail(QStringLiteral("editor.setLodBias: no engine scene")), 0.0;
+    if (!host.viewport->engineScene()) return fail(QStringLiteral("editor.setLodBias: no engine scene")), 0.0;
     if (!(bias >= 0.0) || bias > 1.0e6) {
         fail(QStringLiteral("editor.setLodBias: the bias must be between 0 (pin the finest "
                             "level) and 1e6"));
-        return double(scene->lodBias());
+        return double(host.viewport->engineLodBias());
     }
-    scene->setLodBias(float(bias));
-    // Step a frame so a script that sets the dial and then reads
-    // app.renderStats() sees the level it asked for.
-    host.viewport->renderFrames(1);
-    return double(scene->lodBias());
+    // NO FRAME HERE (ENGINE-UPGRADE-U3 stage 2: the post-edit renders are deleted): the dial lands now and the next
+    // frame draws it; a script that reads app.renderStats() steps that frame itself (editor.frame).
+    host.viewport->setEngineLodBias(float(bias));
+    return double(host.viewport->engineLodBias());
 }
 
 bool EditorApi::fullscreen(const QVariant &on)

@@ -47,6 +47,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -226,7 +227,7 @@ Irradiance irradianceAt(Rig &r, const std::vector<float> *tau, unsigned n, float
     for (int c = 0; c < 3; ++c)
         e.ambient += M_PI * (double(sh[0 * 3 + c]) + double(sh[1 * 3 + c]) - double(sh[6 * 3 + c]) -
                              double(sh[8 * 3 + c]));
-    const SkyDesc sd = r.escene->sky();
+    const SkyDesc sd = jahshaka::engine::inspect::scene(r.escene)->sky();
     const double mu = std::max(0.0, double(sd.clouds.sunDir[1]));
     double t = 1.0;
     if (tau && !tau->empty())
@@ -259,7 +260,7 @@ int caseEnergy() {
         r.sunAt(90.0f, 0.0f);
         r.settle();
         const double g = r.ground() / 3.0;
-        const SkyDesc sd = r.escene->sky();
+        const SkyDesc sd = jahshaka::engine::inspect::scene(r.escene)->sky();
         const double albedo = std::pow((128.0 / 255.0 + 0.055) / 1.055, 2.4);
         const double disney = 1.0 / 1.51;
         const double plate = double(sd.clouds.sunIrradiance.r + sd.clouds.sunIrradiance.g +
@@ -322,7 +323,7 @@ int caseEnergy() {
     for (int a = 0; a < 360; a += 3) {
         r.sunAt(el, float(a));
         r.frame();
-        const SkyDesc sd = r.escene->sky();
+        const SkyDesc sd = jahshaka::engine::inspect::scene(r.escene)->sky();
         const float t = tauAlongSun(tau, n, tile, sd.clouds.sunDir, sd.clouds.altitude);
         if (t < sunTau) { sunTau = t; bestSun = float(a); }
         if (t > shadeTau) { shadeTau = t; bestShade = float(a); }

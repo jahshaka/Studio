@@ -55,6 +55,7 @@
 // at 1920x1080, paired arms in ONE process (the lead's measurement law) — run
 // it under scripts/gpu-exclusive.sh.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -913,7 +914,7 @@ static BoardResult boardArm(Engine *e, bool raysWanted, const char *dumpDir)
     };
 
     // ---- THE DEFAULT IS OFF ------------------------------------------------
-    CHECK(!s->sunContact().enabled, "the row is off by default");
+    CHECK(!jahshaka::engine::inspect::scene(s)->sunContact().enabled, "the row is off by default");
     CHECK(!s->sunContactStatus().on, "...and so is the job");
 
     Image off, onFull, onHalf, onShort, offAgain;
