@@ -86,6 +86,9 @@ ENGINE_SUBSYSTEMS = [
     (r"Grid|Clips", ["engine", "gizmo"], "the grid and clip planes"),
     (r"src/OgreMaterials\.cpp$|src/OgreMesh\.cpp$", ["engine", "pieces", "materialpreview", "atom", "*picture"],
      "materials and meshes (every lit pixel)"),
+    # THE RENDER LOOP (ENGINE-UPGRADE-U3): the hand-over, the serial and the publish of every frame — the frame loop's
+    # own reach (OgreEngine.cpp's renderOneFrame / runFrame): everything that renders, the app rows too
+    (r"src/RenderThread\.(h|cpp)$", ["*engine-fixtures", "*picture", "*vulkan-scripts"], "the render loop"),
     (r"VkDescriptorPools|src/EnginePrivate\.h$", ["*engine-fixtures", "*picture"],
      "the Vulkan descriptor pools / the private header's includers (every engine fixture)"),
     (r"^media/Hlms/Jahshaka/", ["*picture"], "a Jahshaka Hlms medium (the picture set)"),
@@ -107,7 +110,8 @@ PIECE_TOKENS = ["atom", "engine.atom_"]
 _ALL = ["*engine-fixtures", "*picture", "*vulkan-scripts"]   # everything that renders: the fixtures, the app rows
 OGRE_ENGINE_FUNCTIONS = {
     # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
-    **{f: _ALL for f in ("init", "renderOneFrame", "closeRenderFrame", "frameCloseStep", "createView",
+    **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
+                         "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",
                          "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
                          "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",
                          "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
