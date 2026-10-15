@@ -16,8 +16,8 @@
 //
 // THE PROOF IS A MEASUREMENT OF BYTES, not of a picture: from a perturbed
 // history (a lamp walked with the moving tick), one at-rest tick, then a
-// second — every cascade's light volumes (the total and the three anisotropic
-// axes) hashed raw (GiVoxelStats::lightDigest) after each. They must be EQUAL,
+// second — every cascade's light volumes (all ten of the voxel lighting's list,
+// level 0) hashed raw (GiVoxelStats::lightDigest) after each. They must be EQUAL,
 // per cascade, at Medium and at High. And the history test in bytes: a lamp
 // that travelled and came to rest leaves the SAME bytes as the same lamp jumped
 // there. (The default scene and Showroom 2 take the same proof through the

@@ -247,6 +247,7 @@ gi.id_depth 4.81  quiet n=37
 gi.id_depth_rays 4.60  quiet n=34
 gi.lamp_falloff 5.39  quiet n=36
 gi.leak_room 6.00  quiet n=41
+gi.march_underread 5.33  solo 2026-10-15 (PHOTON-MARCH-1 stage 3: n=3, 5.33-5.40 s, 2236 frames: Low + Medium + the slab)
 gi.material_swap 2.69  quiet n=44
 gi.mobility 6.80  ship 3a0422b4e (2026-10-13)
 gi.modes 3.48  quiet n=41
@@ -315,6 +316,7 @@ gi.voxel_coverage 44.23  quiet n=42
 gi.voxel_emissive 6.75  quiet n=39
 gi.voxel_feed 3.03  quiet n=40
 gi.voxel_lab 1.45  quiet n=34
+gi.voxel_metal_albedo 3.43  solo 2026-10-15 (PHOTON-MARCH-1 stage 2: n=3, 3.43-3.49 s, 1128 frames)
 gi.voxel_resident 4.72  quiet n=45
 gizmo.drag_frame 0.10  ship 3a0422b4e (2026-10-13)
 gizmo.group_transform 0.06  quiet n=46

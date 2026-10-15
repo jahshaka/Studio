@@ -228,34 +228,25 @@ int main()
               "(%.4f against %.4f)", ra, closedForm);
 
     // ---- (b) THE VOXEL CONES ---------------------------------------------------
-    // TWO TIERS, because the ESCAPE is not this suite's subject and one tier's
-    // escape is not 1 on this fixture. At Low the volume is isotropic and a
-    // cone's escape is its own composite: nothing but the box is in the volume
-    // and every cone leaves the top face upward, so the escape is 1 and the
-    // pixel is the environment's own number. Above Low the escape is the directional
-    // composite along each cone (PHOTON-VOXEL-3; the min-over-axes OCCUPANCY estimate
-    // that stood in for it is deleted), read by the plane march with the origin rule (a
-    // cone never reads the face it leaves). Its reading is printed and fenced, and the
-    // number it is short by is the escape, not the environment.
-    {
-        GiParams low = base;
-        low.quality = GiQuality::Low;
-        CHECK(s->setGlobalIllumination(low), "VCT Low (isotropic, no field, no gather) builds");
+    // ONE STORE, ONE BAR (PHOTON-MARCH-1: every tier reads the directional store). Nothing
+    // but the box is in the volume and every cone leaves the top face upward, read by the
+    // plane march with the origin rule (a cone never reads the face it leaves), so the
+    // escape is 1 and the pixel is the environment's own number at every tier: Low's
+    // cascade set and Medium's, the same law and the same 2 % bar.
+    for (const GiQuality q : { GiQuality::Low, GiQuality::Medium }) {
+        GiParams g = base;
+        g.quality = q;
+        const char *tier = q == GiQuality::Low ? "Low" : "Medium";
+        CHECK_MSG(s->setGlobalIllumination(g), "VCT %s (no field, no gather) builds", tier);
         render(e, 20);
-        const double rbl = readTop(4);
-        std::printf("   (b) the cones' escape, Low:      %.4f  (%.3f of (a))\n", rbl, rbl / ra);
-        CHECK_MSG(std::fabs(rbl / ra - 1.0) < 0.02,
-                  "(b) the voxel cones' escape reads the SAME number within 2 %% (isotropic, where "
-                  "the escape of an open face is 1: %.4f against %.4f)", rbl, ra);
+        const double rb = readTop(4);
+        std::printf("   (b) the cones' escape, %-6s:   %.4f  (%.3f of (a))\n", tier, rb, rb / ra);
+        CHECK_MSG(std::fabs(rb / ra - 1.0) < 0.02,
+                  "(b) %s: the voxel cones' escape reads the SAME number within 2 %% (the escape of "
+                  "an open face is 1: %.4f against %.4f)", tier, rb, ra);
     }
-    CHECK(s->setGlobalIllumination(base), "VCT Medium (anisotropic, no field, no gather) builds");
+    CHECK(s->setGlobalIllumination(base), "VCT Medium (no field, no gather) builds");
     render(e, 20);
-    const double rb = readTop(4);
-    std::printf("   (b) the cones' escape, Medium:   %.4f  (%.3f of (a): the directional "
-                "composite's escape)\n", rb, rb / ra);
-    CHECK_MSG(rb / ra > 0.92 && rb / ra < 1.02,
-              "(b) anisotropic: the same number times the directional composite's escape, fenced "
-              "at 0.92-1.02 (%.4f against %.4f)", rb, ra);
 
     // ---- (c) THE IRRADIANCE FIELD ----------------------------------------------
     {
@@ -457,7 +448,6 @@ int main()
         enginetest::testCameraLookAt(view, Vec3(0.2f, 2.6f, 1.2f), Vec3(0.0f, 0.0f, -0.7f));
         const auto armAt = [&](int bounces) {
             GiParams g = base;
-            g.quality = GiQuality::Low;          // isotropic: the escape is the composite
             g.numBounces = bounces;
             b->setGlobalIllumination(g);
             render(e, 30);
@@ -468,7 +458,8 @@ int main()
         std::printf("   (h) the floor at the wall's foot, sky only: one bounce %.4f, two %.4f "
                     "(+%.4f)\n", one, two, two - one);
         // A RELATIVE bar in float (it was 2/255, the 8-bit read's noise guard):
-        // measured +26 %; 2 % is twenty times the lobe fit's own spread above.
+        // measured +5.8 % at the default tier (one bounce 0.2156, two 0.2280; +26 % on the Low
+        // tier's deleted isotropic store); 2 % is twenty times the lobe fit's own spread above.
         CHECK_MSG(two - one > 0.02 * one,
                   "(h) the sky enters the bounce at injection: two bounces light the floor at a "
                   "sky-lit wall's foot more than one (+%.4f, bar +2 %%)", two - one);

@@ -302,7 +302,7 @@ int main()
             const double outside = centre();
             GiParams vct;
             vct.mode = GiMode::Vct;
-            vct.quality = GiQuality::Low;          // isotropic: the escape is the composite
+            vct.quality = GiQuality::Medium;   // the default tier (one pinned cascade below)
             vct.numBounces = 1;
             vct.ddgi = GiToggle::Off;
             vct.gather = GiToggle::Off;

@@ -12,8 +12,8 @@
 // Hlms compute job both built from those files (Engine::voxelReaderParity), and
 // every float compared bit for bit.
 //
-// WHAT IT COVERS. Two chains: the shipped anisotropic four-cascade chain (High)
-// and an isotropic chain of one cascade (Low). Every walk variant the consumers use:
+// WHAT IT COVERS. Two chains over the one directional store (every tier since
+// PHOTON-MARCH-1): the shipped four-cascade chain (High) and a chain of one cascade (Low). Every walk variant the consumers use:
 // the pixel's diffuse (the six-cone and the four-cone mip step), the specular
 // walk, the field's free-space ray (the hop measured along the ray, no bias).
 // Starts inside cascade 0 and outside it (the hop), directions down the axes,
@@ -188,9 +188,9 @@ int main()
         CHECK(st.cascades.size() >= 2u, "...and it is a chain");
         measureChain(e, scene, "anisotropic chain", unsigned(st.cascades.size()), true);
     }
-    // THE ISOTROPIC ONE-CASCADE CHAIN (Low, a pinned table of one): the reader's
-    // other half. (It was the single scene-fitted volume until D4-PHOTON-TIERS
-    // deleted it; one camera-centred cascade is the same reader over one volume.)
+    // THE ONE-CASCADE CHAIN (Low, a pinned table of one): the specular skip's chain, and
+    // the hit compared with the march at every lod (the last argument). (It was the
+    // isotropic store until PHOTON-MARCH-1.)
     {
         GiParams gi;
         gi.mode = GiMode::Vct;
@@ -199,9 +199,9 @@ int main()
         gi.ddgi = GiToggle::Off;
         gi.cascadeCount = 1;
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 64, 0.0f };
-        CHECK(scene->setGlobalIllumination(gi), "the isotropic one-cascade chain builds");
+        CHECK(scene->setGlobalIllumination(gi), "the one-cascade chain builds");
         for (int i = 0; i < 6; ++i) e->renderOneFrame();
-        measureChain(e, scene, "isotropic volume", 1u, false);
+        measureChain(e, scene, "one-cascade chain", 1u, false);
     }
 
     GiParams off;

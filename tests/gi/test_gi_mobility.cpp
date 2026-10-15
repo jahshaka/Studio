@@ -566,7 +566,7 @@ static void sectionC(Engine *engine)
 
     GiParams gi;
     gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::Low;          // isotropic: the bounces are readable
+    gi.quality = GiQuality::Medium;   // the default tier
     gi.numBounces = 4;          // the engine's ceiling: the widest gap to measure
     gi.testProbeRegionMin = Vec3(-6.5f, -0.6f, -6.5f);
     gi.testProbeRegionMax = Vec3(6.5f, 6.6f, 6.5f);

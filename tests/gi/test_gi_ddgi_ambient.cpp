@@ -624,18 +624,12 @@ int main(int argc, char **argv)
     // CASE 1 — OPEN-SCENE RECOVERY, and CASE 4 — CORNER HONESTY, both on
     // GiQuality::Low.
     //
-    // WHY LOW, and this is a finding in itself (case 2 pins it): Low is the
-    // only quality whose voxel cone tracing is ISOTROPIC, and it is therefore
-    // the only one whose cone-traced diffuse still carries a MEANINGFUL ambient
-    // for this fix to be measured against. Above Low the engine builds
-    // anisotropic voxels (OgreGi.cpp: `anisotropic = quality != Low`) and the
-    // anisotropic march saturates its alpha almost immediately, so the escape
-    // fraction that weights the ambient collapses to ~4% and there is no
-    // reference left to compare with. Case 2 measures that separately and
-    // fences it; the brief's "within 10% of the pre-DDGI VCT ambient reading"
-    // is answered here, where the phrase means something.
+    // LOW, and since PHOTON-MARCH-1 every tier reads ONE light store (the directional
+    // one: no tier is isotropic), so this case and case 2 read the same store at two
+    // tiers' cascade sets; the brief's "within 10% of the pre-DDGI VCT ambient
+    // reading" is answered here.
     // =====================================================================
-    std::printf("\n== case 1/4: open-scene recovery + corner honesty (isotropic VCT) ==\n");
+    std::printf("\n== case 1/4: open-scene recovery + corner honesty (Low VCT) ==\n");
     {
         OpenScene o = buildOpenScene(e, "ddgiamb_open");
         Scene *s = o.scene;
@@ -659,14 +653,14 @@ int main(int argc, char **argv)
         GiParams ref;
         ref.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         ref.mode = GiMode::Vct;
-        ref.quality = GiQuality::Low;        // isotropic: see the header above
+        ref.quality = GiQuality::Low;        // the Low tier's cascade set (one store at every tier)
         // NO BOUNCE: the subject is the SKY the field and the cones see; the sky-lit wall's
         // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi's and the cards'
         // subject, and it is not in the analytic below (skyIrradiance).
         ref.numBounces = 0;
         ref.cascadeCount = 1;                // see vctBase: one cascade, the lab's store
         ref.cascadeSet[0] = GiParams::GiCascadeDesc{ 12.0f, 64, 0.0f };
-        CHECK(s->setGlobalIllumination(ref), "VCT (isotropic) builds over the open scene");
+        CHECK(s->setGlobalIllumination(ref), "VCT (Low) builds over the open scene");
         render(e, 6);
         o.view->readPixels(img);
         const Colour refOpen = img.at(kOpenX, kOpenY);
@@ -677,7 +671,7 @@ int main(int argc, char **argv)
                     "and %.1f%% in the corner\n",
                     100.0f * lum(refOpen) / lum(giOffOpen),
                     100.0f * lum(refCorner) / lum(giOffCorner));
-        checkConeSet(e, s, "isotropic", false);
+        checkConeSet(e, s, "Low", true);
         enginetest::dumpVoxelStore(s, "amb");
 
         // ---- THE FIELD. It carries the sky its probes' rays escape to.
@@ -781,8 +775,7 @@ int main(int argc, char **argv)
     // CASE 2 — THE SHIPPED TIER, and the finding this lane owes the ledger:
     // THE CONE SET ON THE ANISOTROPIC STORE, against the same quadrature as case 1.
     //
-    // The anisotropic tiers (`anisotropic = quality != GiQuality::Low`, OgreGi.cpp) read the
-    // directional mips; since PHOTON-VOXEL-3 the escape IS the directional opacity along
+    // Every tier reads the directional mips (PHOTON-MARCH-1); since PHOTON-VOXEL-3 the escape IS the directional opacity along
     // the cone's axis (the min-over-axes occupancy estimate and fork 8f09c0cd4 (was 0021)'s one-mip-finer
     // escape are deleted), so the shipped tier's cones answer the same question as the
     // isotropic ones and are held to the same bar. (History: the unpatched march kept 4 % of
