@@ -96,7 +96,7 @@ int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int 
 {
     int lo = 255, hi = 0;
     for (int f = 0; f < frames; ++f) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
         enginetest::frames(engine, 1);
         Image img;
         if (view->readPixels(img)) {
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
     // first 0.4 s and 0/255 once warm. The house rule, again: warm up, then
     // measure.
     for (int i = 0; i < 12; ++i) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
         enginetest::frames(engine, 1);
     }
 
@@ -178,7 +178,7 @@ int main(int argc, char **argv)
         const float before = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
         const int n = 30;
         for (int f = 0; f < n; ++f) {
-            preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+            preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
             enginetest::frames(engine, 1);
         }
         const float advanced = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before;
@@ -188,7 +188,7 @@ int main(int argc, char **argv)
         // A FRAME THAT BUYS TWO STEPS (a 30 fps host) advances it two steps:
         // the clock is the document's simulated time, not a count of syncs.
         const float before2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
-        preview.step(2.0f / 60.0f, int(view->width()), int(view->height()));
+        preview.step(2.0f / 60.0f, int(view->published().width), int(view->published().height));
         enginetest::frames(engine, 1);
         const float advanced2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before2;
         std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));

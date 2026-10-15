@@ -1370,7 +1370,7 @@ int main(int argc, char **argv)
         Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
         show("gradient sky + chrome cube (settled)", before);
         const SkyDesc settled = jahshaka::engine::inspect::scene(target)->sky();
-        const unsigned ws0 = view->workspaceGeneration();
+        const unsigned ws0 = view->published().workspaceGeneration;
         float settledSh[27] = { 0.0f };
         std::printf("    sky desc: mode=%d equirect=%u  sky SH band0 %.3f %.3f %.3f  ws gen %u\n",
                     int(settled.mode), settled.equirect,
@@ -1397,7 +1397,7 @@ int main(int argc, char **argv)
         CHECK(jahshaka::engine::inspect::scene(target)->sky() == settled,
               "five more pushes of an unchanged sky re-bake nothing (the description, "
               "texture ids and all, is the one the engine already had)");
-        CHECK(view->workspaceGeneration() == ws0,
+        CHECK(view->published().workspaceGeneration == ws0,
               "...and rebuild no workspace (no shadow-atlas churn from the world push)");
         CHECK(after.rgba == before.rgba,
               "...and the pixels are byte-identical (no reflection re-convolution blink)");

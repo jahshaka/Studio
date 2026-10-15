@@ -672,14 +672,14 @@ void partB()
             mirror.sync(mirrorframe::camera(view, doc.camera));
             enginetest::frames(gEngine, 1);
         }
-        const unsigned before = view->workspaceGeneration();
+        const unsigned before = view->published().workspaceGeneration;
         for (int i = 0; i < 10; ++i) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             mirror.sync(mirrorframe::camera(view, doc.camera));
             enginetest::frames(gEngine, 1);
         }
-        const unsigned after = view->workspaceGeneration();
+        const unsigned after = view->published().workspaceGeneration;
         std::printf("    workspace generation over 10 steady frames: %u -> %u\n", before, after);
         CHECK(before == after,
               "STEADY STATE: a camera whose override changes an ENABLE FLAG rebuilds the "

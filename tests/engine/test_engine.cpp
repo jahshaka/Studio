@@ -368,7 +368,7 @@ void resize_offscreen() {
     CHECK(img.rgba.size() == 48u * 32u * 4u);
 
     v->resize(128, 80);
-    CHECK(v->width() == 128 && v->height() == 80);
+    CHECK(v->published().width == 128 && v->published().height == 80);
     render(e);
     REQUIRE(v->readPixels(img));
     CHECK(img.width == 128 && img.height == 80);
@@ -414,7 +414,7 @@ void msaa_offscreen_views_default_to_one_sample() {
     Fixture f;
     View *v = f.view("aa-default", 32, 32, kBlue);
     REQUIRE(v);
-    CHECK_MSG(v->sampleCount() == 1, "offscreen default is 1, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 1, "offscreen default is 1, got %u", v->published().sampleCount);
 }
 
 void msaa_4x_blends_silhouette_edges() {
@@ -438,7 +438,7 @@ void msaa_4x_blends_silhouette_edges() {
     // must come back exactly.
     v->setSampleCount(4);
     render(e);
-    CHECK_MSG(v->sampleCount() == 4, "achieved %u for a 4x request", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 4, "achieved %u for a 4x request", v->published().sampleCount);
     Image img4;
     REQUIRE(v->readPixels(img4));
     CHECK(near(centre(img4), kOrange));
@@ -462,11 +462,11 @@ void msaa_runtime_toggle_and_clamping() {
     CHECK(v->setScene(s));
     aim(v);
     render(e);
-    CHECK(v->sampleCount() == 1);
+    CHECK(v->published().sampleCount == 1);
 
     v->setSampleCount(4);
     render(e);
-    CHECK(v->sampleCount() == 4);
+    CHECK(v->published().sampleCount == 4);
     Image img;
     REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kOrange));
@@ -476,7 +476,7 @@ void msaa_runtime_toggle_and_clamping() {
     // no lower than the mandatory 4).
     v->setSampleCount(8);
     render(e);
-    const unsigned got8 = v->sampleCount();
+    const unsigned got8 = v->published().sampleCount;
     CHECK_MSG(got8 == 8 || got8 == 4, "8x request achieved %u", got8);
     std::printf("    8x request -> achieved %ux\n", got8);
     REQUIRE(v->readPixels(img));
@@ -485,11 +485,11 @@ void msaa_runtime_toggle_and_clamping() {
     // Odd values round DOWN to a power of two before reaching the driver.
     v->setSampleCount(3);
     render(e);
-    CHECK_MSG(v->sampleCount() == 2, "3 rounds down to 2, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 2, "3 rounds down to 2, got %u", v->published().sampleCount);
 
     v->setSampleCount(1);
     render(e);
-    CHECK_MSG(v->sampleCount() == 1, "back to 1x, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 1, "back to 1x, got %u", v->published().sampleCount);
     REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kOrange));
     CHECK(near(corner(img), kBlue));
@@ -500,7 +500,7 @@ void msaa_runtime_toggle_and_clamping() {
     v->setSampleCount(4);
     v->resize(48, 48);
     render(e);
-    CHECK_MSG(v->sampleCount() == 4, "resize kept 4x, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 4, "resize kept 4x, got %u", v->published().sampleCount);
 }
 
 /// CAMERAS_SPEC §7.3 correction 1, half one — the OVERLAY pass under MSAA.
@@ -548,7 +548,7 @@ void msaa_overlay_pass_resolves_at_every_sample_count() {
     for (const unsigned samples : { 1u, 2u, 4u }) {
         v->setSampleCount(samples);
         render(e, 3);
-        const unsigned achieved = v->sampleCount();
+        const unsigned achieved = v->published().sampleCount;
         Image img;
         REQUIRE(v->readPixels(img));
         if (samples == 1u) {
@@ -651,14 +651,14 @@ void pip_is_ignored_offscreen_unless_asked() {
     pip::aimMain(v);
     render(e, 3);
     Image plain; REQUIRE(v->readPixels(plain));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     ViewPipDesc d = pip::desc(0.6f, 0.6f, 0.35f, 0.35f);
     d.allowOffscreen = false;                       // deliberately NOT opted in
     v->setPip(d);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not build anything for an inset it will ignore: %u -> %u",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     render(e, 3);
     Image refused; REQUIRE(v->readPixels(refused));
     std::printf("    pixelhash  no pip %016llx   pip refused %016llx\n",
@@ -697,13 +697,13 @@ void pip_composites_a_second_camera_into_the_rect() {
     std::printf("    inset %u/%u px, outside diff %u\n", st.inside, st.insideTotal, st.outsideDiff);
 
     // MOVING it is a live viewport modifier, never a rebuild (spike T3).
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     ViewPipDesc moved = d;
     moved.left = 0.04f; moved.top = 0.04f;
     v->setPip(moved);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "moving the inset must not rebuild the workspace: %u -> %u",
-              gen, v->workspaceGeneration());
+              gen, v->published().workspaceGeneration);
     render(e, 3);
     Image movedImg; REQUIRE(v->readPixels(movedImg));
     st = pip::compare(movedImg, ref, moved, kGreen);
@@ -750,12 +750,12 @@ void pip_request_dies_with_its_scene() {
 
     CHECK(v->setScene(nullptr));
     CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "detaching the scene must drop the PiP request");
-    const unsigned pipGen = v->pipGeneration();
+    const unsigned pipGen = v->published().pipGeneration;
     CHECK(v->setScene(s2));
     CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "the next scene must not inherit the request");
-    CHECK_MSG(v->pipGeneration() == pipGen,
+    CHECK_MSG(v->published().pipGeneration == pipGen,
               "no inset may be BUILT on a scene that did not ask for one: pipGeneration %u -> %u",
-              pipGen, v->pipGeneration());
+              pipGen, v->published().pipGeneration);
     pip::aimMain(v);
     render(e, 3);
     Image after; REQUIRE(v->readPixels(after));
@@ -763,7 +763,7 @@ void pip_request_dies_with_its_scene() {
     CHECK_MSG(off.inside == 0, "the rect must show the main view, not an inset: %u/%u px are the wall",
               off.inside, off.insideTotal);
     std::printf("    inset on scene A %u/%u px; after the rebind %u/%u px, pipGeneration %u\n",
-                on.inside, on.insideTotal, off.inside, off.insideTotal, v->pipGeneration());
+                on.inside, on.insideTotal, off.inside, off.insideTotal, v->published().pipGeneration);
 
     // ...and a host that wants it on the new scene asks again, and gets it.
     v->setPip(d);
@@ -793,7 +793,7 @@ void pip_over_msaa_keeps_the_main_frame() {
     pip::aimMain(v);
     v->setSampleCount(4);
     render(e, 3);
-    const unsigned achieved = v->sampleCount();
+    const unsigned achieved = v->published().sampleCount;
     CHECK_MSG(achieved == 4, "4x is Vulkan-mandatory; achieved %u", achieved);
     Image ref; REQUIRE(v->readPixels(ref));
     CHECK(near(centre(ref), kOrange));
@@ -892,11 +892,11 @@ void pip_survives_a_main_workspace_rebuild() {
 
     // setShadows is a definition rebuild: detach, rebuild the chain, re-attach
     // — the exact sequence that used to leave the inset first in the list.
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     v->setShadows(true);
     v->setShadows(false);
-    CHECK_MSG(v->workspaceGeneration() >= gen + 2, "two rebuilds expected, %u -> %u",
-              gen, v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration >= gen + 2, "two rebuilds expected, %u -> %u",
+              gen, v->published().workspaceGeneration);
     render(e, 3);
     Image after; REQUIRE(v->readPixels(after));
     const pip::RectStats st = pip::compare(after, before, d, kGreen);
@@ -1088,7 +1088,7 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
     CameraDesc cam;
     cam.position = Vec3(0.0f, 0.0f, 4.0f);            // identity: looks down -Z
     v->setCamera(cam);
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
     render(e, 3);
     Image plain; REQUIRE(v->readPixels(plain));
 
@@ -1118,8 +1118,8 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
     CHECK_MSG(stretched.rgba == plain.rgba,
               "an UNCONSTRAINED aspect is inert — the camera follows the target, as it always "
               "has (%ux%u vs %ux%u)", sw, sh, pw, ph);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
-              "and it rebuilds nothing: %u -> %u", genBefore, v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
+              "and it rebuilds nothing: %u -> %u", genBefore, v->published().workspaceGeneration);
 
     // ---- 2:1 CONSTRAINED --------------------------------------------------
     cam.constrainAspect = true;
@@ -4208,29 +4208,29 @@ void fog_breakthrough_spares_bright_surfaces() {
 void workspace_seam_counts_every_rebuild() {
     Fixture fx;
     View *v = fx.view("seam-view", 64, 64, kBlue); REQUIRE(v);
-    CHECK_MSG(v->workspaceGeneration() == 0u,
-              "a view with no scene has no workspace yet: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == 0u,
+              "a view with no scene has no workspace yet: %u", v->published().workspaceGeneration);
     Scene *s = fx.scene("seam-scene"); REQUIRE(s);
     CHECK(v->setScene(s));
-    const unsigned afterBind = v->workspaceGeneration();
+    const unsigned afterBind = v->published().workspaceGeneration;
     CHECK_MSG(afterBind == 1u, "binding a scene builds exactly one workspace: %u", afterBind);
 
     // Same value = free. Hosts (SceneMirror) push these every frame.
     v->setBackground(jahshaka::engine::inspect::view(v)->background());
-    v->setSampleCount(v->sampleCount());
+    v->setSampleCount(v->published().sampleCount);
     v->setShadows(jahshaka::engine::inspect::view(v)->shadows());
-    CHECK_MSG(v->workspaceGeneration() == afterBind,
-              "re-pushing unchanged values must not rebuild: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == afterBind,
+              "re-pushing unchanged values must not rebuild: %u", v->published().workspaceGeneration);
 
     // Each real change rebuilds once, and only once.
     v->setBackground(kGreen);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 1, "background change: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 1, "background change: %u", v->published().workspaceGeneration);
     v->setShadows(true);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 2, "shadow toggle: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 2, "shadow toggle: %u", v->published().workspaceGeneration);
     v->resize(96, 96);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 3, "offscreen resize: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 3, "offscreen resize: %u", v->published().workspaceGeneration);
     v->setSampleCount(4);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 4, "sample-count change: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 4, "sample-count change: %u", v->published().workspaceGeneration);
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kGreen, 12));
 
@@ -4506,12 +4506,12 @@ void hud_overlay_is_ignored_offscreen_unless_asked() {
     populate(s, kOrange);
     aim(v);
     render(fx.e, 4); Image plain; REQUIRE(v->readPixels(plain));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     v->setOverlay(loudCover());          // allowOffscreen deliberately NOT set
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not even rebuild for an overlay it will ignore: %u -> %u",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     render(fx.e, 4); Image covered; REQUIRE(v->readPixels(covered));
 
     std::printf("    pixelhash  no overlay %016llx   cover+stats refused %016llx\n",
@@ -4637,7 +4637,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     CHECK_MSG(!near(centre(world), kBlue, 8),
               "the fixture must actually draw its object first: %d %d %d",
               centre(world).r, centre(world).g, centre(world).b);
-    const unsigned long long blankBefore = v->blankFramesPresented();
+    const unsigned long long blankBefore = v->published().blank;
 
     // ---- the scene goes ----------------------------------------------------
     v->setScene(nullptr);
@@ -4651,9 +4651,9 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     CHECK_MSG(notBackground == 0,
               "every pixel must be the view's own background: %zu of %u are not",
               notBackground, bare.width * bare.height);
-    CHECK_MSG(v->blankFramesPresented() > blankBefore,
+    CHECK_MSG(v->published().blank > blankBefore,
               "...and the view must have COUNTED those frames (%llu -> %llu)",
-              blankBefore, v->blankFramesPresented());
+              blankBefore, v->published().blank);
 
     // ---- the panel a close raises, on that background -----------------------
     ViewOverlayDesc noScene;
@@ -4688,7 +4688,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     for (const unsigned samples : { 2u, 4u }) {
         v->setSampleCount(samples);
         render(fx.e, 3);
-        const unsigned achieved = v->sampleCount();
+        const unsigned achieved = v->published().sampleCount;
         Image aa; REQUIRE(v->readPixels(aa));
         CHECK_MSG(near(centre(aa), noScene.coverFill, 6),
                   "%ux (achieved %u): the panel must survive the resolve: %d %d %d",
@@ -4708,7 +4708,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
             if (!near(px(aaBare, x, y), kBlue, 4)) ++aaNotBackground;
     CHECK_MSG(aaNotBackground == 0,
               "at %ux every pixel must still be the view's background: %zu of %u are not",
-              v->sampleCount(), aaNotBackground, aaBare.width * aaBare.height);
+              v->published().sampleCount, aaNotBackground, aaBare.width * aaBare.height);
     v->setSampleCount(1);
     render(fx.e, 2);
 
@@ -4740,7 +4740,7 @@ void hud_overlay_toggle_does_not_rebuild_the_workspace() {
     on.allowOffscreen = true;            // pay the one entitlement rebuild up front
     v->setOverlay(on);
     render(fx.e, 2);
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
 
     for (int i = 0; i < 3; ++i) {
         ViewOverlayDesc d;
@@ -4754,9 +4754,9 @@ void hud_overlay_toggle_does_not_rebuild_the_workspace() {
     }
     v->setOverlay(on);
     render(fx.e, 1);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "toggling the overlay must not rebuild the workspace: %u -> %u",
-              gen, v->workspaceGeneration());
+              gen, v->published().workspaceGeneration);
 }
 
 /// The data half (phase 1). Not "plausible numbers" — the two properties a
@@ -5008,14 +5008,14 @@ void postfx_is_ignored_offscreen_unless_asked() {
     populate(s, kOrange);
     aim(v);
     render(fx.e); Image before; REQUIRE(v->readPixels(before));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     PostFxDesc fxDesc;
     fxDesc.hdr = true; fxDesc.bloom = true; fxDesc.ssao = true; fxDesc.smaaPreset = 1;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not even rebuild for post fx: %u -> %u",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     render(fx.e); Image after; REQUIRE(v->readPixels(after));
     const Px b = centre(before), a = centre(after);
     CHECK_MSG(b.r == a.r && b.g == a.g && b.b == a.b,
@@ -5044,8 +5044,8 @@ void hdr_tonemap_and_exposure() {
     fxDesc.hdr = true;
     fxDesc.exposure = 0.0f;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() >= 2u, "enabling HDR rebuilds the chain: %u",
-              v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration >= 2u, "enabling HDR rebuilds the chain: %u",
+              v->published().workspaceGeneration);
     settleExposure(fx.e, v);   // the auto-exposure converged, in frames
     if (!fx.e->lastError().empty())
         std::printf("    lastError after HDR enable: %s\n", fx.e->lastError().c_str());
@@ -5062,12 +5062,12 @@ void hdr_tonemap_and_exposure() {
               hdrCube.r, hdrCube.g, hdrCube.b);
 
     // Exposure is a UNIFORM: changing it must not rebuild anything.
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     fxDesc.exposure = 2.0f;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "exposure is a uniform, not a graph change: %u -> %u", gen,
-              v->workspaceGeneration());
+              v->published().workspaceGeneration);
     settleExposure(fx.e, v);
     Image bright; REQUIRE(v->readPixels(bright));
     const Px brightCube = centre(bright);
@@ -5157,8 +5157,8 @@ void fixed_exposure_tonemap() {
     fxDesc.tonemapFixed = true;
     fxDesc.exposure = 0.6f;          // secondaryfx::kFixedExposure
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() >= 2u,
-              "the fixed-exposure chain is a graph change: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration >= 2u,
+              "the fixed-exposure chain is a graph change: %u", v->published().workspaceGeneration);
     render(fx.e, 3); Image graded; REQUIRE(v->readPixels(graded));
     int gSat = 0, gLit = 0, gMax = 0;
     histogram(graded, gSat, gLit, gMax);
@@ -5182,12 +5182,12 @@ void fixed_exposure_tonemap() {
     // ...and for contrast, the AUTOMATIC form on the same view is not: turning
     // tonemapFixed off puts the luminance reduction back, which is a graph
     // change, and the picture then depends on how long it has been adapting.
-    const unsigned genFixed = v->workspaceGeneration();
+    const unsigned genFixed = v->published().workspaceGeneration;
     fxDesc.tonemapFixed = false;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() > genFixed,
+    CHECK_MSG(v->published().workspaceGeneration > genFixed,
               "tonemapFixed is part of sameShape(): flipping it rebuilds (%u -> %u)",
-              genFixed, v->workspaceGeneration());
+              genFixed, v->published().workspaceGeneration);
 
     // Off again: the passthrough graph and the ORIGINAL pixels, exactly.
     v->setPostFx(PostFxDesc());
@@ -5267,12 +5267,12 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     //    `jahOldLum` is destroyed and recreated by one — so a shape change
     //    followed immediately by a read would have returned the seed at best
     //    and unwritten VRAM at worst. Turning SSAO on is exactly such a change.
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
     fxDesc.ssao = true;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() > genBefore,
+    CHECK_MSG(v->published().workspaceGeneration > genBefore,
               "ssao is a shape change: the workspace rebuilt (%u -> %u)",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
               double(v->measuredExposureScale()));
@@ -5296,13 +5296,13 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     // ...and the other half of the pair: exposureScale REPLACES the grey card
     // without rebuilding anything, which is what lets a screenshot be handed a
     // measured value at the moment it is taken.
-    const unsigned genFixed = v->workspaceGeneration();
+    const unsigned genFixed = v->published().workspaceGeneration;
     render(fx.e, 2); Image card; REQUIRE(v->readPixels(card));
     fxDesc.exposureScale = 4.0f;          // far from e^(0.6-2)/0.18 = 1.37
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == genFixed,
+    CHECK_MSG(v->published().workspaceGeneration == genFixed,
               "exposureScale is a clear colour, not a graph edit: no rebuild (%u)",
-              v->workspaceGeneration());
+              v->published().workspaceGeneration);
     render(fx.e, 2); Image pinned; REQUIRE(v->readPixels(pinned));
     CHECK_MSG(pinned.rgba != card.rgba,
               "a pinned exposureScale grades differently from the grey card it replaces");
@@ -5567,7 +5567,7 @@ void postfx_epic_shape_with_msaa() {
     aim(v);
     v->setSampleCount(4);
     render(fx.e, 2);
-    std::printf("    achieved samples: %u\n", v->sampleCount());
+    std::printf("    achieved samples: %u\n", v->published().sampleCount);
 
     PostFxDesc fxDesc;
     fxDesc.allowOffscreen = true;
@@ -5701,7 +5701,7 @@ void sky_stays_smooth_under_the_post_chain() {
 
     // The sky band: the top third, which the camera framing keeps free of
     // geometry (the horizon sits at about 60% of the frame height).
-    const unsigned skyY0 = 2u, skyY1 = v->height() / 3u;
+    const unsigned skyY0 = 2u, skyY1 = v->published().height / 3u;
     auto skyLuma = [&](const Image &img) {
         int sum = 0, n = 0;
         for (unsigned y = skyY0; y < skyY1; ++y)

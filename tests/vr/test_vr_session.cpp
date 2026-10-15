@@ -331,9 +331,9 @@ int main() {
         REQUIRE(engine->vrStatus().active);
         View *vrView = engine->vrView();
         REQUIRE(vrView != nullptr);
-        CHECK_MSG(vrView->width() == info.eyeWidth * 2u && vrView->height() == info.eyeHeight,
+        CHECK_MSG(vrView->published().width == info.eyeWidth * 2u && vrView->published().height == info.eyeHeight,
                   "the session's target is two eyes wide (%ux%u for a %ux%u eye)",
-                  vrView->width(), vrView->height(), info.eyeWidth, info.eyeHeight);
+                  vrView->published().width, vrView->published().height, info.eyeWidth, info.eyeHeight);
 
         // THE PHASE-2 PROFILE (VR_SPEC §9 item 6), applied by the session:
         // HDR on, MSAA 1 (HDR + MSAA segfaults this driver), and every effect
@@ -344,7 +344,7 @@ int main() {
         CHECK(!fx.ssao);
         CHECK(fx.smaaPreset < 0);
         CHECK(fx.ssr == 0);
-        CHECK(vrView->sampleCount() == 1u);
+        CHECK(vrView->published().sampleCount == 1u);
 
         // THE DESKTOP KEEPS DRAWING WHILE A SESSION RUNS (F4). The runtime's
         // first frames carry shouldRender = 0, and the pump used to answer
@@ -352,9 +352,9 @@ int main() {
         // so a headset that was taken off, a dashboard that came up or a
         // runtime that paused froze the editor's viewport and every host that
         // counts frames. The desktop view's own counter is the witness.
-        const unsigned long long deskBefore = desktop->framesPresented();
+        const unsigned long long deskBefore = desktop->published().presented;
         const unsigned long long frames = pump(engine.get(), 60ull, 600u);
-        const unsigned long long deskDrawn = desktop->framesPresented() - deskBefore;
+        const unsigned long long deskDrawn = desktop->published().presented - deskBefore;
         const VrStatus st = engine->vrStatus();
         CHECK_MSG(frames >= 60ull, "the runtime accepted %llu frames (>= 60)", frames);
         CHECK_MSG(st.state == VrState::Focused, "the session reached FOCUSED (state %d)",

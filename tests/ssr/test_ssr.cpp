@@ -325,14 +325,14 @@ int main()
     const float redOff = measure(engine.get(), view, "ssr off", 3, &plain);
     CHECK(redOff < 0.06f, "no red on the floor before SSR exists");
     if (envOn("JAH_SSR_DUMP")) writePpm(plain, "ssr-off.ppm");
-    const unsigned genPlain = view->workspaceGeneration();
+    const unsigned genPlain = view->published().workspaceGeneration;
 
     // ---- 1. off -> on ------------------------------------------------------
     PostFxDesc fx;
     fx.allowOffscreen = true;      // the ONE door through the offscreen guarantee
     fx.ssr = 1;                    // half-resolution rays
     view->setPostFx(fx);
-    CHECK(view->workspaceGeneration() > genPlain, "enabling SSR rebuilds the chain");
+    CHECK(view->published().workspaceGeneration > genPlain, "enabling SSR rebuilds the chain");
     // Four frames: the resolve reads the PREVIOUS frame's colour, so the first
     // frame after a rebuild reflects the seeded black history.
     Image ssrOnImg;
@@ -394,14 +394,14 @@ int main()
 
     // ---- 6. shape vs tuning -------------------------------------------------
     {
-        const unsigned gen = view->workspaceGeneration();
+        const unsigned gen = view->published().workspaceGeneration;
         PostFxDesc tuned = fx;
         tuned.ssrMaxDistance = 40.0f;
         tuned.ssrThickness = 0.8f;
         tuned.ssrIntensity = 0.9f;
         tuned.reflectionRoughnessCutoff = 0.55f;   // the World row, mid-drag
         view->setPostFx(tuned);
-        CHECK(view->workspaceGeneration() == gen,
+        CHECK(view->published().workspaceGeneration == gen,
               "SSR distance/thickness/intensity/roughness-cutoff are UNIFORMS, "
               "not graph changes");
         render(engine.get(), 3);
@@ -409,7 +409,7 @@ int main()
         PostFxDesc hq = fx;
         hq.ssr = 2;                                    // full-resolution rays
         view->setPostFx(hq);
-        CHECK(view->workspaceGeneration() > gen, "the quality row IS a graph change");
+        CHECK(view->published().workspaceGeneration > gen, "the quality row IS a graph change");
         // ---- 7. full-resolution rays still reflect --------------------------
         Image hqImg;
         const float redHq = measure(engine.get(), view, "ssr on (full-res rays)", 4, &hqImg);
@@ -2305,7 +2305,7 @@ int main()
             base.reflectionRoughnessCutoff = 1.0f;
             cv->setPostFx(base);
             render(engine.get(), 5);
-            const unsigned genCut = cv->workspaceGeneration();
+            const unsigned genCut = cv->published().workspaceGeneration;
 
             auto atCutoff = [&](float cutoff, const char *what) {
                 PostFxDesc p = base;
@@ -2349,7 +2349,7 @@ int main()
                       "reflection WHOLE (%.3f vs %.3f) - with the old cutoff/2 ramp the same "
                       "surface kept half of it (0.424 of 0.847, measured)", dflt, wide);
             // THE DRAG.
-            CHECK_MSG(cv->workspaceGeneration() == genCut,
+            CHECK_MSG(cv->published().workspaceGeneration == genCut,
                       "five cutoffs on one workspace: dragging the Roughness Cutoff row is a "
                       "UNIFORM and never rebuilds the chain (generation %u throughout)", genCut);
 

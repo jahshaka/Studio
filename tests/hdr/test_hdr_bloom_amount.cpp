@@ -276,11 +276,11 @@ int main()
     // one arm whose chain has a different SHAPE (no ladder at all).
     Image offImg, zeroImg, oneImg, twoImg, oneAgain;
     if (!shoot(offImg, 8)) { std::printf("FAIL: readPixels (bloom off)\n"); return 1; }
-    const unsigned genAfterOff = gView->workspaceGeneration();
+    const unsigned genAfterOff = gView->published().workspaceGeneration;
 
     setBloom(true, 1.0f);
     if (!shoot(oneImg, 6)) { std::printf("FAIL: readPixels (amount 1)\n"); return 1; }
-    const unsigned genAtOne = gView->workspaceGeneration();
+    const unsigned genAtOne = gView->published().workspaceGeneration;
 
     setBloom(true, 0.0f);
     if (!shoot(zeroImg, 4)) { std::printf("FAIL: readPixels (amount 0)\n"); return 1; }
@@ -290,7 +290,7 @@ int main()
 
     setBloom(true, 1.0f);
     if (!shoot(oneAgain, 4)) { std::printf("FAIL: readPixels (back to 1)\n"); return 1; }
-    const unsigned genAfterWalk = gView->workspaceGeneration();
+    const unsigned genAfterWalk = gView->published().workspaceGeneration;
 
     const std::vector<int> off = green(offImg), zero = green(zeroImg),
                            one = green(oneImg), two = green(twoImg),

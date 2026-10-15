@@ -4286,8 +4286,8 @@ void EngineSceneViewport::presentCovered(int frames)
     // to be OURS — View::framesPresented resets to 0 on every scene bind, so it
     // collides across exactly the close/reopen this key exists to distinguish.
     const jahshaka::engine::ViewOverlayDesc wanted = overlayDesc();
-    if (wanted == mLastPresentedCover && view()->width() == mLastPresentedW &&
-        view()->height() == mLastPresentedH &&
+    if (wanted == mLastPresentedCover && view()->published().width == mLastPresentedW &&
+        view()->published().height == mLastPresentedH &&
         mFrameEpoch == mLastPresentedEpoch)
         return;
     if (mPresentingCover) return;          // refreshOverlay's rising edge, already in hand
@@ -4331,8 +4331,8 @@ void EngineSceneViewport::presentCovered(int frames)
     if (view()->pushedOverlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
         ++mCoversPresented;
     mLastPresentedCover = wanted;
-    mLastPresentedW = view()->width();
-    mLastPresentedH = view()->height();
+    mLastPresentedW = view()->published().width;
+    mLastPresentedH = view()->published().height;
     mLastPresentedEpoch = mFrameEpoch;
     mPresentingCover = false;
 }

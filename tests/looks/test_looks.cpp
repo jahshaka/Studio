@@ -286,7 +286,7 @@ int main()
     render(fx.e, 4);
     Image plain;
     REQUIRE(fx.v->readPixels(plain));
-    const unsigned genPlain = fx.v->workspaceGeneration();
+    const unsigned genPlain = fx.v->published().workspaceGeneration;
     writePpm(plain, "looks-plain.ppm");
     std::printf("   baseline centre = %.3f %.3f %.3f, chroma %.4f, generation %u\n",
                 centre(plain).r, centre(plain).g, centre(plain).b, meanChroma(plain), genPlain);
@@ -295,9 +295,9 @@ int main()
         // An EMPTY stack, opted in offscreen: no pass, no texture, no rebuild.
         PostFxDesc fxDesc = baseFx();
         fx.v->setPostFx(fxDesc);
-        CHECK_MSG(fx.v->workspaceGeneration() == genPlain,
+        CHECK_MSG(fx.v->published().workspaceGeneration == genPlain,
                   "an empty looks stack must not rebuild the workspace: %u -> %u",
-                  genPlain, fx.v->workspaceGeneration());
+                  genPlain, fx.v->published().workspaceGeneration);
         render(fx.e, 3);
         Image empty;
         REQUIRE(fx.v->readPixels(empty));
@@ -311,13 +311,13 @@ int main()
         // Back to the instrument (no door), then a stack WITHOUT the door: it
         // must change nothing, not even the workspace.
         fx.v->setPostFx(PostFxDesc());
-        const unsigned genBack = fx.v->workspaceGeneration();
+        const unsigned genBack = fx.v->published().workspaceGeneration;
         PostFxDesc fxDesc;                       // NO allowOffscreen
         fxDesc.looks.push_back(look(LookKind::Desaturate, 1.0f));
         fx.v->setPostFx(fxDesc);
-        CHECK_MSG(fx.v->workspaceGeneration() == genBack,
+        CHECK_MSG(fx.v->published().workspaceGeneration == genBack,
                   "looks_are_ignored_offscreen_unless_asked: no rebuild (%u -> %u)",
-                  genBack, fx.v->workspaceGeneration());
+                  genBack, fx.v->published().workspaceGeneration);
         render(fx.e, 3);
         Image ignored;
         REQUIRE(fx.v->readPixels(ignored));
@@ -332,7 +332,7 @@ int main()
         PostFxDesc fxDesc = baseFx();
         fxDesc.looks.push_back(look(LookKind::Desaturate, 1.0f));
         fx.v->setPostFx(fxDesc);
-        const unsigned genLook = fx.v->workspaceGeneration();
+        const unsigned genLook = fx.v->published().workspaceGeneration;
         CHECK_MSG(genLook != genPlain,
                   "adding a look is a SHAPE change and must rebuild: %u -> %u",
                   genPlain, genLook);
@@ -351,9 +351,9 @@ int main()
         PostFxDesc zero = baseFx();
         zero.looks.push_back(look(LookKind::Desaturate, 0.0f));
         fx.v->setPostFx(zero);
-        CHECK_MSG(fx.v->workspaceGeneration() == genLook,
+        CHECK_MSG(fx.v->published().workspaceGeneration == genLook,
                   "scrubbing a look parameter must NOT rebuild: %u -> %u",
-                  genLook, fx.v->workspaceGeneration());
+                  genLook, fx.v->published().workspaceGeneration);
         render(fx.e, 3);
         Image identity;
         REQUIRE(fx.v->readPixels(identity));
@@ -367,7 +367,7 @@ int main()
     // ---- 4. removing the stack puts the graph back -------------------------
     {
         fx.v->setPostFx(baseFx());
-        CHECK_MSG(fx.v->workspaceGeneration() != genPlain,
+        CHECK_MSG(fx.v->published().workspaceGeneration != genPlain,
                   "removing the last look rebuilds (generation moved on)");
         render(fx.e, 3);
         Image back;
@@ -434,7 +434,7 @@ int main()
         b.looks.push_back(look(LookKind::Posterize, 1.0f, 4.0f, 0.6f));
         fx.v->setPostFx(b);
         CHECK_MSG(true, "reordering the stack rebuilt the graph (generation %u)",
-                  fx.v->workspaceGeneration());
+                  fx.v->published().workspaceGeneration);
         render(fx.e, 3);
         Image desatFirst;
         REQUIRE(fx.v->readPixels(desatFirst));

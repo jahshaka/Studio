@@ -461,16 +461,16 @@ int main(int argc, char **argv)
     {
         rect = Rect { 0.60f, 0.58f, 0.36f, 0.38f };
         Image img; frame(img);                      // settle on this rect
-        const unsigned builtPip = view->pipGeneration();
-        const unsigned builtWs  = view->workspaceGeneration();
+        const unsigned builtPip = view->published().pipGeneration;
+        const unsigned builtWs  = view->published().workspaceGeneration;
         CHECK(builtPip > 0, "the inset's workspace exists (pipGeneration %u)", builtPip);
 
         // STEADY: the host pushes the whole description every frame, exactly as
         // the editor does. Nothing may rebuild.
         for (int i = 0; i < 30; ++i) frame(img);
         std::printf("    30 steady frames: pipGeneration %u -> %u, workspace %u -> %u\n",
-                    builtPip, view->pipGeneration(), builtWs, view->workspaceGeneration());
-        CHECK(view->pipGeneration() == builtPip && view->workspaceGeneration() == builtWs,
+                    builtPip, view->published().pipGeneration, builtWs, view->published().workspaceGeneration);
+        CHECK(view->published().pipGeneration == builtPip && view->published().workspaceGeneration == builtWs,
               "STEADY: 30 frames with the inset shown rebuild NOTHING");
 
         // MOVING the inset, and moving the CAMERA: both live, both free.
@@ -480,8 +480,8 @@ int main(int argc, char **argv)
             shotCam->setLocalPos(iris::Vec3(0.02f * i, 0.0f, kSubjectDistance));
             frame(img);
         }
-        std::printf("    10 moving frames: pipGeneration %u\n", view->pipGeneration());
-        CHECK(view->pipGeneration() == builtPip,
+        std::printf("    10 moving frames: pipGeneration %u\n", view->published().pipGeneration);
+        CHECK(view->published().pipGeneration == builtPip,
               "MOVING the inset and the previewed camera rebuilds NOTHING either");
         shotCam->setLocalPos(iris::Vec3(0.0f, 0.0f, kSubjectDistance));
 
@@ -489,24 +489,24 @@ int main(int argc, char **argv)
         // from the rect. Once, not once per frame.
         rect.w = 0.24f; rect.h = 0.26f;
         frame(img);
-        const unsigned afterResize = view->pipGeneration();
+        const unsigned afterResize = view->published().pipGeneration;
         std::printf("    after a resize: pipGeneration %u\n", afterResize);
         CHECK(afterResize == builtPip + 1,
               "a RESIZE re-creates the inset's texture exactly once (%u -> %u)",
               builtPip, afterResize);
         for (int i = 0; i < 10; ++i) frame(img);
-        CHECK(view->pipGeneration() == afterResize,
+        CHECK(view->published().pipGeneration == afterResize,
               "…and holding the new size rebuilds nothing further");
 
         // HAZARD 2, host-side: a MAIN-workspace rebuild must re-append the
         // inset (there is no reorder API — an inset added before the main
         // workspace is silently painted over).
-        const unsigned beforeRebuild = view->pipGeneration();
+        const unsigned beforeRebuild = view->published().pipGeneration;
         view->setShadows(!jahshaka::engine::inspect::view(view)->shadows());
         Image afterShadowFlip; frame(afterShadowFlip);
         std::printf("    main-workspace rebuild: workspace %u, pipGeneration %u -> %u\n",
-                    view->workspaceGeneration(), beforeRebuild, view->pipGeneration());
-        CHECK(view->pipGeneration() > beforeRebuild,
+                    view->published().workspaceGeneration, beforeRebuild, view->published().pipGeneration);
+        CHECK(view->published().pipGeneration > beforeRebuild,
               "a MAIN workspace rebuild re-appends the inset (it must stay LAST)");
         CHECK(histogram(afterShadowFlip, rect).lit > 100,
               "…and the inset is still on screen after it");

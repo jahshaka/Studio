@@ -103,9 +103,9 @@ static int inRecordChild()
     std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->gpuFault()), int(e->deviceLost()));
     std::printf("CHILD frameError=%s\n", e->published().frameError.c_str());
     // A latched engine renders nothing: this call must return, not crash.
-    const unsigned long long frames = view->framesPresented();
+    const unsigned long long frames = view->published().presented;
     enginetest::frames(e, 1);
-    std::printf("CHILD survived-next-frame=%d\n", view->framesPresented() == frames ? 1 : 0);
+    std::printf("CHILD survived-next-frame=%d\n", view->published().presented == frames ? 1 : 0);
     // THE HOST'S END (src/viewport/devicelossend.h): exit 1 for an OOM, no teardown.
     std::fflush(nullptr);
     ::_exit(e->gpuFault() == GpuFault::OutOfMemoryInFrame ? 1 : 2);
@@ -200,10 +200,10 @@ int main(int argc, char **argv)
     // =====================================================================
     // CASE 2 — THE PROCESS CARRIES ON, AND THE PICTURE IS THE SAME
     // =====================================================================
-    const unsigned long long presented0 = view->framesPresented();
+    const unsigned long long presented0 = view->published().presented;
     Image after;
     CHECK(settle(e, view, after), "the frames after the OOM render and settle");
-    CHECK(view->framesPresented() > presented0, "the view presents again after the OOM frame");
+    CHECK(view->published().presented > presented0, "the view presents again after the OOM frame");
     CHECK(after.rgba == control.rgba,
           "THE PICTURE AFTER THE OOM IS BYTE-EQUAL TO THE CONTROL (nothing the OOM left stops a frame)");
     CHECK(!e->deviceLost(), "...and nothing latched later either");

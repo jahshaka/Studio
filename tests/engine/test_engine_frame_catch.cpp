@@ -177,14 +177,14 @@ int main()
     // CASE 2 — THE FRAME AFTER A THROW IS AN ORDINARY FRAME
     // =====================================================================
     {
-        const unsigned long long presented0 = view->framesPresented();
+        const unsigned long long presented0 = view->published().presented;
         e->setFrameFault(FrameFault::Throw, 2u);
         enginetest::frames(e, 1);
         enginetest::frames(e, 1);
-        CHECK(view->framesPresented() == presented0,
+        CHECK(view->published().presented == presented0,
               "a thrown frame does not claim to have presented (it did not get that far)");
         enginetest::frames(e, 3);
-        CHECK(view->framesPresented() >= presented0 + 3ull,
+        CHECK(view->published().presented >= presented0 + 3ull,
               "THE VIEW PRESENTS AGAIN after the faults are spent");
         Image after;
         CHECK(view->readPixels(after) && drawnFraction(after) > 0.02,

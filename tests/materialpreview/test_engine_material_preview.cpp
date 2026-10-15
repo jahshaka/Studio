@@ -64,7 +64,7 @@ static void show(const char *tag, const Image &i, int x, int y)
 static Image render(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int frames = 3)
 {
     for (int i = 0; i < frames; ++i) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
         enginetest::frames(engine, 1);
     }
     Image img;

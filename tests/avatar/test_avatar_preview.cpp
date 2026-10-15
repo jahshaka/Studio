@@ -125,7 +125,7 @@ static float overlayCentroidY(const Image &img)
 static Image render(AvatarPreviewScene &scene, Engine &engine, View *view, int frames = 3)
 {
     for (int i = 0; i < frames; ++i) {
-        scene.step(0.0f, int(view->width()), int(view->height()));   // dt 0: paused, deterministic
+        scene.step(0.0f, int(view->published().width), int(view->published().height));   // dt 0: paused, deterministic
         enginetest::frames(engine, 1);
     }
     Image img;
@@ -603,7 +603,7 @@ int main(int argc, char **argv)
         const unsigned long long showBefore = scene.overlayVisibilityWrites();
         CHECK(pushBefore > 0, "S13: the overlay did push the skeleton it is drawing");
         for (int f = 0; f < 60; ++f) {
-            scene.step(0.0f, int(view->width()), int(view->height()));
+            scene.step(0.0f, int(view->published().width), int(view->published().height));
             enginetest::frames(engine, 1);
         }
         const unsigned long long pushStill = scene.overlayTransformPushes() - pushBefore;
