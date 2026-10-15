@@ -95,7 +95,7 @@ console.log("recording cost x" + (on / Math.max(1, off1)).toFixed(2) +
 
 // A capture with a length shorter than a frame still produces a bundle rather
 // than a half-written directory: the auto-stop is a timer, and the drain at the
-// stop is a LOOP over the engine's holding queue (Engine.h takeFrameRecords).
+// stop is a LOOP over the engine's holding queue (Engine.h takeMonitorRecords).
 // A DIFFERENT directory: a capture never overwrites an existing bundle.
 var quick = perf.capture({ seconds: 0.2, out: out + "-quick" });
 assert(quick.started === true, "a 0.2 s capture starts");

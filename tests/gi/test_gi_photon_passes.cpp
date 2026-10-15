@@ -2,7 +2,7 @@
 // (ENGINE-UPGRADE-2 stage 2; photon/PhotonComponent.h).
 //
 // The frame's own listing is the evidence: the monitor records every pass the compositor
-// executed, in execution order (FrameRecord.passes). On a carded scene drawn by a view
+// executed, in execution order (MonitorRecord.passes). On a carded scene drawn by a view
 // with rays (the reflection and the gather on, the hit decode in its chain):
 //   1. photon_update ("Jahshaka photon update") runs in the GI workspace right after the
 //      card capture's, before any of the view's passes;
@@ -87,21 +87,21 @@ int main()
 
     e->setFrameMonitor(MonitorLevel::Review);
     {
-        std::vector<FrameRecord> drop;
+        std::vector<MonitorRecord> drop;
         enginetest::frames(e, 1);
-        e->takeFrameRecords(drop);
+        e->takeMonitorRecords(drop);
     }
     enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> recs;
-    e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    e->takeMonitorRecords(recs);
     CHECK(!recs.empty(), "the monitor recorded frames");
 
     const RayQueryStatus rq = s->rayQueryStatus();
     std::printf("   rays: reflections %d, hit decode draws %d\n", rq.enabled ? 1 : 0, rq.hitDecodeDraws);
     unsigned good = 0, framesSeen = 0;
     std::string listing;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         if (r.passes.empty()) continue;
         ++framesSeen;
         int update = -1, firstView = -1, trace = -1, decode = -1, resolve = -1, shade = -1;
@@ -167,17 +167,17 @@ int main()
         s2->setGlobalIllumination(g2);
         enginetest::frames(e, 12);
         e->setFrameMonitor(MonitorLevel::Review);
-        { std::vector<FrameRecord> drop; enginetest::frames(e, 1); e->takeFrameRecords(drop); }
+        { std::vector<MonitorRecord> drop; enginetest::frames(e, 1); e->takeMonitorRecords(drop); }
         // A STILL OBJECT MOVED: its cascades re-voxelise and re-inject, frame after frame.
         for (int f = 0; f < 6; ++f) {
             enginetest::setNodePosition(s2, still, Vec3(0.2f * float(f + 1), 0.3f, 0.0f));
             enginetest::frames(e, 1);
         }
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> r2;
-        e->takeFrameRecords(r2);
+        std::vector<MonitorRecord> r2;
+        e->takeMonitorRecords(r2);
         unsigned withUpdate = 0;
-        for (const FrameRecord &r : r2)
+        for (const MonitorRecord &r : r2)
             for (const FramePass &p : r.passes)
                 if (p.pass == "Jahshaka photon update") { ++withUpdate; break; }
         const PhotonDispatchStatus p1 = photonDispatchStatus();

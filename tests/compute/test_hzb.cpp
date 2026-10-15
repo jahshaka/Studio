@@ -348,8 +348,8 @@ int main()
     e->setFrameMonitor(MonitorLevel::Review);
     enginetest::frames(e, 24);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> records;
-    while (e->takeFrameRecords(records) > 0) {}
+    std::vector<MonitorRecord> records;
+    while (e->takeMonitorRecords(records) > 0) {}
 
     // The best (lowest) measured frame: this box runs other lanes, and the
     // question "what does the pyramid cost" is answered by the cheapest clean
@@ -361,7 +361,7 @@ int main()
     const std::string bigWorkspace = "hzb1080/Workspace";
     float bestMs = -1.0f;
     unsigned measuredFrames = 0, passCount = 0;
-    for (const FrameRecord &r : records) {
+    for (const MonitorRecord &r : records) {
         float sum = 0.0f;
         unsigned n = 0;
         bool complete = true;
@@ -411,12 +411,12 @@ int main()
         e->setFrameMonitor(MonitorLevel::Review);
         enginetest::frames(e, 24);
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> recs;
-        while (e->takeFrameRecords(recs) > 0) {}
+        std::vector<MonitorRecord> recs;
+        while (e->takeMonitorRecords(recs) > 0) {}
         const std::string ws = "hzb4k/Workspace";
         float best = -1.0f;
         unsigned measured = 0, passes = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             float sum = 0.0f; unsigned n = 0; bool complete = true;
             for (const FramePass &pp : r.passes) {
                 if (pp.workspace != ws) continue;

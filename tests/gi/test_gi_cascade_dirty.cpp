@@ -70,11 +70,11 @@ struct Spend { int worstPerFrame = 0; int total = 0; int frames = 0; };
 
 static Spend spendOf(Engine *engine)
 {
-    std::vector<FrameRecord> recs;
-    engine->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    engine->takeMonitorRecords(recs);
     Spend s;
     s.frames = int(recs.size());
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         int inThisFrame = 0;
         for (const CacheWork &w : r.cacheWork)
             if (w.detail.rfind("vct.cascade", 0) == 0) ++inThisFrame;

@@ -1186,10 +1186,10 @@ static int costMain(Engine *e, const char *, const char *)
         // inside the reflection's one timestamp span and is its own pass row now (lane TEST-1), so
         // it is printed on its own — a target with no bar (the reflect bars below are on trace + filter).
         {
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             std::vector<float> dec;
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 float sum = -1.0f;
                 for (const FramePass &p : r.passes)
                     if (p.pass.find("hit decode") != std::string::npos && p.gpuMs >= 0.0f)

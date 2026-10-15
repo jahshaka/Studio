@@ -1904,12 +1904,12 @@ static int costMain(Engine *e)
             e->setArm("atom.hitWorldLights", worldArm(arms[a].v->world));
             e->setArm("atom.hitVctSpecular", arms[a].v->spec && std::strcmp(arms[a].v->spec, "0") == 0 ? 0.0 : 1.0);
             render(e, 40);
-            std::vector<FrameRecord> drop;
-            e->takeFrameRecords(drop);
+            std::vector<MonitorRecord> drop;
+            e->takeMonitorRecords(drop);
             render(e, 40);
-            std::vector<FrameRecord> recs;
-            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeFrameRecords(recs); }
-            for (const FrameRecord &r : recs) {
+            std::vector<MonitorRecord> recs;
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeMonitorRecords(recs); }
+            for (const MonitorRecord &r : recs) {
                 if (r.gpuMs > 0.0f) { frameSum[a] += r.gpuMs; ++frameN[a]; }
                 for (const FramePass &p : r.passes)
                     if (p.pass == "Jahshaka hit decode" && p.gpuMs >= 0.0f) { decodeSum[a] += p.gpuMs; ++decodeN[a]; }
@@ -2004,11 +2004,11 @@ static int costLampsMain(Engine *e)
             lit(arms[a].lamps);
             e->setArm("atom.hitWorldLights", worldArm(arms[a].world));
             render(e, 40);
-            std::vector<FrameRecord> drop;
-            e->takeFrameRecords(drop);
-            std::vector<FrameRecord> recs;
-            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeFrameRecords(recs); }
-            for (const FrameRecord &r : recs)
+            std::vector<MonitorRecord> drop;
+            e->takeMonitorRecords(drop);
+            std::vector<MonitorRecord> recs;
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeMonitorRecords(recs); }
+            for (const MonitorRecord &r : recs)
                 for (const FramePass &p : r.passes)
                     if (p.pass == "Jahshaka hit decode" && p.gpuMs >= 0.0f) { sum[a] += p.gpuMs; ++n[a]; }
             rec[a] = s->rayQueryStatus().hitRecords;

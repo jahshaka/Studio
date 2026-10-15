@@ -59,7 +59,7 @@ static int failures = 0;
 // record helpers
 // ---------------------------------------------------------------------------
 
-static float stageMs(const FrameRecord &r, const char *name)
+static float stageMs(const MonitorRecord &r, const char *name)
 {
     float ms = 0.0f;
     for (const FrameStage &s : r.stages)
@@ -67,7 +67,7 @@ static float stageMs(const FrameRecord &r, const char *name)
     return ms;
 }
 
-static const FramePass *passNamed(const FrameRecord &r, const char *name)
+static const FramePass *passNamed(const MonitorRecord &r, const char *name)
 {
     for (const FramePass &p : r.passes)
         if (p.pass == name) return &p;
@@ -78,27 +78,27 @@ static const FramePass *passNamed(const FrameRecord &r, const char *name)
 /// rendered from the call on (records arrive late: attributed by frame number).
 /// A path longer than the monitor's ring (kRingCapacity, 4,096 frames — the 2 km walk is
 /// 6,000) drains into collect()'s buffer as it goes (midDrain), or its first frames are lost.
-static std::vector<FrameRecord> *g_midDrain = nullptr;
+static std::vector<MonitorRecord> *g_midDrain = nullptr;
 static void midDrain(Env &env)
 {
     if (!g_midDrain) return;
-    for (FrameRecord &r : drain(env)) g_midDrain->push_back(std::move(r));
+    for (MonitorRecord &r : drain(env)) g_midDrain->push_back(std::move(r));
 }
-static std::vector<FrameRecord> collect(Env &env, const std::function<void()> &body, int tail = 8)
+static std::vector<MonitorRecord> collect(Env &env, const std::function<void()> &body, int tail = 8)
 {
     frame(env, 4);
     unsigned long long before = 0;
-    for (const FrameRecord &r : drain(env)) before = std::max(before, r.frame);
-    std::vector<FrameRecord> mid;
+    for (const MonitorRecord &r : drain(env)) before = std::max(before, r.frame);
+    std::vector<MonitorRecord> mid;
     g_midDrain = &mid;
     body();
     frame(env, tail);
     midDrain(env);
     g_midDrain = nullptr;
-    std::vector<FrameRecord> out;
-    for (FrameRecord &r : mid)
+    std::vector<MonitorRecord> out;
+    for (MonitorRecord &r : mid)
         if (r.frame > before) out.push_back(std::move(r));
-    std::sort(out.begin(), out.end(), [](const FrameRecord &a, const FrameRecord &b) { return a.frame < b.frame; });
+    std::sort(out.begin(), out.end(), [](const MonitorRecord &a, const MonitorRecord &b) { return a.frame < b.frame; });
     return out;
 }
 
@@ -177,11 +177,11 @@ static void pathFly(Env &env, float seconds)
     }
 }
 
-static void printPath(const char *label, const std::vector<FrameRecord> &recs)
+static void printPath(const char *label, const std::vector<MonitorRecord> &recs)
 {
     std::vector<double> total, swap, gpu, pre, record;
     unsigned rebuilds = 0;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         total.push_back(r.totalMs);
         swap.push_back(stageMs(r, "engine.swap"));
         pre.push_back(stageMs(r, "engine.pre"));
@@ -276,8 +276,8 @@ static int voxelScrollMain()
     }
 
     struct Row { std::vector<double> cpu, gpu; };
-    auto harvest = [](const std::vector<FrameRecord> &recs, std::map<std::string, Row> &rows) {
-        for (const FrameRecord &r : recs)
+    auto harvest = [](const std::vector<MonitorRecord> &recs, std::map<std::string, Row> &rows) {
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &c : r.cacheWork)
                 if (c.detail.rfind("vct.cascade", 0) == 0) {
                     rows[c.detail].cpu.push_back(c.ms);
@@ -918,7 +918,7 @@ static int lightsCostMain()
             frame(env, 8);
         }
     });
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const CacheWork &cw : r.cacheWork)
             if (cw.detail == "vct.light" && cw.gpuMs > 0.0f) ms.push_back(cw.gpuMs);
     const Stats s = stats(ms);
@@ -992,7 +992,7 @@ struct IdRead {
 };
 /// The opaque side of one frame (see IdRead): negative when the opaque pass carries
 /// no GPU sample.
-static double opaqueSideMs(const FrameRecord &r, double *decodePassMs = nullptr)
+static double opaqueSideMs(const MonitorRecord &r, double *decodePassMs = nullptr)
 {
     const FramePass *o = passNamed(r, "Jahshaka opaque");
     if (!o || o->gpuMs < 0) return -1;
@@ -1029,7 +1029,7 @@ static IdRead readIdPass(Env &env, int frames)
         const auto recs = collect(env, [&] { frame(env, frames); }, 8);
         drawn += frames + 12;
         records += recs.size();
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             dropped += r.gpuMarksDropped;
             if (const FramePass *p = passNamed(r, "Jahshaka atom id")) {
                 tris.push_back(double(p->triangles));
@@ -1577,7 +1577,7 @@ static int decodeExactMain()
         bool prepassRan = false, decodeRan = false;
         {
             const auto recs = collect(env, [&] { frame(env, 2); });
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 prepassRan = prepassRan || passNamed(r, "Jahshaka atom decode prepass");
                 decodeRan = decodeRan || passNamed(r, "Jahshaka atom decode");
             }
@@ -1849,7 +1849,7 @@ static int tlasMain()
     pathStill(env, 30);
     std::vector<double> gather, stage, stillStage, tlasGpu;
     const auto still = collect(env, [&] { frame(env, 60); });
-    for (const FrameRecord &r : still) stillStage.push_back(stageMs(r, "engine.rayquery"));
+    for (const MonitorRecord &r : still) stillStage.push_back(stageMs(r, "engine.rayquery"));
     // ONE MOVABLE ITEM moving every frame (a physics body / an animated prop — the
     // user's word, Mobility::Movable): a STATIC item nudged by a script is held by
     // the static settle and moves the ray tier's epoch a handful of times, not per
@@ -1868,7 +1868,7 @@ static int tlasMain()
             if (f >= 20 && rq.tlasMs >= 0) tlasGpu.push_back(rq.tlasMs);
         }
     });
-    for (const FrameRecord &r : moving) stage.push_back(stageMs(r, "engine.rayquery"));
+    for (const MonitorRecord &r : moving) stage.push_back(stageMs(r, "engine.rayquery"));
     const RayQueryStatus rq = env.scene->rayQueryStatus();
     REQUIRE(rq.enabled, "the ray tier is enabled (instances %d, far %d)", rq.instances, rq.farInstances);
     REQUIRE(rq.tlasBuilds + rq.tlasRefits - builds0 >= 100, "the TLAS was re-made on (nearly) every moving frame (%llu of 128)",
@@ -2280,7 +2280,7 @@ static int cpuWalksMain()
         std::array<size_t, 5> seen{};
         for (int k = 0; k < 5; ++k) {
             std::vector<double> v;
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 bool has = false;
                 for (const FrameStage &st : r.stages) has |= st.name == kWalks[k];
                 if (has) v.push_back(stageMs(r, kWalks[k]));
@@ -2459,7 +2459,7 @@ static int frameArmsMain(bool lattice)
         std::printf("WALKS %-9s", label);
         for (const char *wk : kWalks) {
             std::vector<double> v;
-            for (const FrameRecord &r : recs) v.push_back(stageMs(r, wk));
+            for (const MonitorRecord &r : recs) v.push_back(stageMs(r, wk));
             std::printf(" | %s %.3f", wk, stats(v).median);
         }
         std::printf("\n");
@@ -2474,7 +2474,7 @@ static int frameArmsMain(bool lattice)
 
 // ===========================================================================
 // scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
-// The frame monitor's records carry the frame's OWN GPU span (FrameRecord::frameGpuMs), and the
+// The frame monitor's records carry the frame's OWN GPU span (MonitorRecord::frameGpuMs), and the
 // monitor times every stretch in which none of its rows is open: a stretch that crossed a CPU
 // submission is the GPU WAITING (gpuIdleMs — a frame-schedule reading, printed, never a coverage
 // hole: the irradiance field's raster submits every 8 probes and the CPU records on), one inside a
@@ -2510,8 +2510,8 @@ static int gpuCoverageMain()
         });
         std::vector<double> span, busy, idle, rest, share, mismatch;
         unsigned unmeasured = 0;
-        const FrameRecord *worst = nullptr, *worstIdle = nullptr;
-        for (const FrameRecord &r : recs) {
+        const MonitorRecord *worst = nullptr, *worstIdle = nullptr;
+        for (const MonitorRecord &r : recs) {
             if (r.frameGpuMs <= 0.0f || r.unattributedGpuMs < 0.0f || r.gpuIdleMs < 0.0f) { ++unmeasured; continue; }
             const double b = double(r.frameGpuMs) - double(r.gpuIdleMs);
             span.push_back(r.frameGpuMs);
@@ -2528,7 +2528,7 @@ static int gpuCoverageMain()
                     "busy median %.2f %% p95 %.2f %% (bar %.0f %%)\n",
                     what, span.size(), unmeasured, sp.median, bu.median, id.median, id.p95, un.median, un.p95,
                     100.0 * sh.median, 100.0 * sh.p95, 100.0 * kCoverageBar);
-        const auto dump = [&](const char *label, const FrameRecord *r) {
+        const auto dump = [&](const char *label, const MonitorRecord *r) {
             if (!r) return;
             std::printf("COVERAGE %-5s %s frame %llu: span %.3f idle %.3f unattributed %.3f ms, CPU %.3f ms; rows",
                         what, label, r->frame, r->frameGpuMs, r->gpuIdleMs, r->unattributedGpuMs, r->totalMs);
@@ -2578,7 +2578,7 @@ static int shadowCutMain()
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
     auto measure = [&](Env &env, Arm &arm) {
         const auto recs = collect(env, [&] { frame(env, 120); });
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             double cpu = 0, gpu = 0;
             bool gpuOk = true;
             unsigned n = 0;
@@ -2671,7 +2671,7 @@ static int latticeOwedMain()
         std::vector<double> dec, id, pre;
         unsigned decodePasses = 0;
         const auto recs = collect(env, [&] { frame(env, 90); });
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             // The PREPASS SIDE too, when the tier carries one: its decode pass + the prepass.
             if (const FramePass *p = passNamed(r, "Jahshaka SSR prepass")) {
                 const FramePass *dp = passNamed(r, "Jahshaka atom decode prepass");
@@ -2721,7 +2721,7 @@ static int latticeOwedMain()
             enginetest::gesture(env.engine.get(), env.scene, {});
         });
         std::vector<double> calls, ms;
-        for (const FrameRecord &r : drag) {
+        for (const MonitorRecord &r : drag) {
             unsigned n = 0;
             double t = 0;
             for (const FrameStage &st2 : r.stages)
@@ -2753,7 +2753,7 @@ struct OcclArm {
 };
 static void occlCollect(Env &env, OcclArm &arm, const std::function<void()> &body)
 {
-    for (const FrameRecord &r : collect(env, body)) {
+    for (const MonitorRecord &r : collect(env, body)) {
         if (r.gpuMs >= 0) arm.frame.push_back(r.gpuMs);
         double hz = 0.0;
         bool anyHz = false;

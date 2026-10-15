@@ -102,9 +102,9 @@ int main()
     for (size_t i = 0; i < n; ++i) before[i] = g0.cascades[i].rebuilds;
 
     e->setFrameMonitor(MonitorLevel::Review);
-    std::vector<FrameRecord> drop;
+    std::vector<MonitorRecord> drop;
     enginetest::frames(e, 1);
-    e->takeFrameRecords(drop);
+    e->takeMonitorRecords(drop);
     const NodeId box = enginetest::leakroom::addSlab(s, Colour(0.9f, 0.9f, 0.2f), at,
                                                      Vec3(0.6f, 0.6f, 0.6f));
     CHECK(box != 0, "the edit's box exists");
@@ -114,7 +114,7 @@ int main()
     unsigned settleInjections = 0, tickInCascade2Frame = 0;
     bool tickAsked = false, tickRanWithCascade2 = false;
     std::vector<std::string> order;
-    std::vector<FrameRecord> all;
+    std::vector<MonitorRecord> all;
     for (int f = 0; f < 160; ++f) {
         const GiStatus now = s->giStatus();
         if (!tickAsked && now.cascades[1].rebuilds > before[1] && now.cascades[2].rebuilds == before[2]) {
@@ -122,18 +122,18 @@ int main()
             tickAsked = true;
         }
         enginetest::frames(e, 1);
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
         if (f > 30 && s->giStatus().giAtRest) break;
     }
     e->setFrameMonitor(MonitorLevel::Off);
     {
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);      // what the monitor still held (GPU samples come back late)
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);      // what the monitor still held (GPU samples come back late)
         all.insert(all.end(), recs.begin(), recs.end());
     }
-    for (const FrameRecord &r : all) {
+    for (const MonitorRecord &r : all) {
         bool c2Here = false;
         unsigned tickUnits = 0;
         for (const CacheWork &w : r.cacheWork) {
@@ -216,7 +216,7 @@ int main()
         bool wrote = false;
         int writeFrame = -1, firstSettleAfter = -1;
         unsigned settleAfter = 0;
-        std::vector<FrameRecord> keep;
+        std::vector<MonitorRecord> keep;
         for (int f = 0; f < 160; ++f) {
             if (!wrote && s->giStatus().cascades[3].rebuilds > rb[3]) {
                 LightDesc l;
@@ -228,24 +228,24 @@ int main()
                 writeFrame = f;
             }
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
             if (f > writeFrame + 20 && wrote && s->giStatus().giAtRest) break;
         }
         e->setFrameMonitor(MonitorLevel::Off);
         {
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
         }
         // The records carry the engine's frame numbers; the write happened before
         // the frame whose cascade-3 rebuild row came first, plus one.
         unsigned long long c3Frame = 0;
-        for (const FrameRecord &r : keep)
+        for (const MonitorRecord &r : keep)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi && w.detail == "vct.cascade3" && !c3Frame) c3Frame = r.frame;
-        for (const FrameRecord &r : keep) {
+        for (const MonitorRecord &r : keep) {
             if (r.frame <= c3Frame) continue;
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi && w.detail == "vct.light.settle" && w.units) {

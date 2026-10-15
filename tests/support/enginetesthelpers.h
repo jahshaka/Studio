@@ -607,8 +607,8 @@ public:
     ~GpuTimingWindow() {
         if (!mArmed) return;
         mE->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> tail;   // the capture's records are not this window's subject
-        mE->takeFrameRecords(tail);
+        std::vector<MonitorRecord> tail;   // the capture's records are not this window's subject
+        mE->takeMonitorRecords(tail);
     }
     GpuTimingWindow(const GpuTimingWindow &) = delete;
     GpuTimingWindow &operator=(const GpuTimingWindow &) = delete;

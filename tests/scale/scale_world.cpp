@@ -750,10 +750,10 @@ void armMonitor(Env &env)
     env.engine->setFrameMonitor(MonitorLevel::Review);
 }
 
-std::vector<FrameRecord> drain(Env &env)
+std::vector<MonitorRecord> drain(Env &env)
 {
-    std::vector<FrameRecord> out;
-    env.engine->takeFrameRecords(out);
+    std::vector<MonitorRecord> out;
+    env.engine->takeMonitorRecords(out);
     return out;
 }
 

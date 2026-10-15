@@ -125,8 +125,8 @@ int main()
     // one per throw, and the frame numbers had a hole in them.
     {
         e->setFrameMonitor(MonitorLevel::Review);
-        std::vector<FrameRecord> drained;
-        e->takeFrameRecords(drained);                     // start from a clean ring
+        std::vector<MonitorRecord> drained;
+        e->takeMonitorRecords(drained);                     // start from a clean ring
         drained.clear();
         const unsigned long long rec0 = e->monitorStatus().framesRecorded;
 
@@ -158,15 +158,15 @@ int main()
         // not about this lane.
         e->setFrameMonitor(MonitorLevel::Off);
         drained.clear();
-        e->takeFrameRecords(drained);
+        e->takeMonitorRecords(drained);
         unsigned long long last = 0ull;
         bool increasing = !drained.empty();
-        for (const FrameRecord &r : drained) {
+        for (const MonitorRecord &r : drained) {
             if (last && r.frame <= last) increasing = false;
             last = r.frame;
         }
         std::printf("   the ring holds %zu records, frames", drained.size());
-        for (const FrameRecord &r : drained) std::printf(" %llu", r.frame);
+        for (const MonitorRecord &r : drained) std::printf(" %llu", r.frame);
         std::printf("\n");
         CHECK(drained.size() == size_t(kGood * 2u + kThrown) && increasing,
               "...and every record carries its OWN frame number, strictly increasing "

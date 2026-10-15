@@ -92,8 +92,8 @@ int main()
     s->setGlobalIllumination(gi);
     enginetest::frames(e, 16);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> recs;
-    e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    e->takeMonitorRecords(recs);
     const PhotonBindingStatus b1 = photonBindingStatus();
     CHECK(!recs.empty(), "the monitor recorded frames");
 
@@ -101,7 +101,7 @@ int main()
     std::map<std::string, std::pair<unsigned, unsigned>> seen;
     bool shadowReads = false;
     std::string first, last;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         int f = -1, l = -1;
         for (size_t i = 0; i < r.passes.size(); ++i) {
             const FramePass &p = r.passes[i];

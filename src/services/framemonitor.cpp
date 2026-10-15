@@ -306,7 +306,7 @@ public:
     unsigned long long frames() const { return mFrameCount; }
     unsigned long long events() const { return mEventCount; }
 
-    void writeFrame(const FrameRecord &r);
+    void writeFrame(const MonitorRecord &r);
     void writeEvent(const MonitorEvent &e);
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
     /// GPU timing marks the engine's query pool could not hold over this
@@ -331,7 +331,7 @@ public:
 
 private:
     void traceMeta();
-    void traceFrame(const FrameRecord &r);
+    void traceFrame(const MonitorRecord &r);
     void traceEvent(const MonitorEvent &e);
     /// Appends to `f` unless the cap for it is already spent. Returns false
     /// when the write was refused, which is what the truncation counters count.
@@ -393,7 +393,7 @@ bool FrameMonitor::Bundle::append(QFile &f, qint64 &written, qint64 cap, const Q
     return false;
 }
 
-void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
+void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
 {
     QJsonArray stages;
     for (const FrameStage &s : r.stages)
@@ -558,7 +558,7 @@ void FrameMonitor::Bundle::traceMeta()
     }
 }
 
-void FrameMonitor::Bundle::traceFrame(const FrameRecord &r)
+void FrameMonitor::Bundle::traceFrame(const MonitorRecord &r)
 {
     // A RECONSTRUCTION, and it says so here: the records carry EXCLUSIVE
     // milliseconds per stage and per pass, not timestamps, so the timeline lays
@@ -1449,7 +1449,7 @@ void FrameMonitor::finish(bool early)
     if (eng) eng->setFrameMonitor(MonitorLevel::Off);
     // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
     // the NEXT drain hands it back with the monitor already off (Engine.h
-    // takeFrameRecords). Drain in a LOOP until it is empty — never "render one,
+    // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
     // expect one" — or the last frames of every capture are lost.
     for (int i = 0; i < 8; ++i) {
         const unsigned moved = drainOnce();
@@ -1504,9 +1504,9 @@ unsigned FrameMonitor::drainOnce()
     }
     mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
     unsigned moved = 0;
-    std::vector<FrameRecord> frames;
-    moved += eng->takeFrameRecords(frames);
-    for (const FrameRecord &r : frames) mBundle->writeFrame(r);
+    std::vector<MonitorRecord> frames;
+    moved += eng->takeMonitorRecords(frames);
+    for (const MonitorRecord &r : frames) mBundle->writeFrame(r);
     // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
     // 2026-09-18). The bundle is a file a lead opens later; this is the same
     // rows, for the frame that just landed, readable NOW by the verb and the
@@ -1514,7 +1514,7 @@ unsigned FrameMonitor::drainOnce()
     // or it is not a breakdown of anything — and only while recording, which
     // is the only time the engine fills them at all.
     if (!frames.empty()) {
-        const FrameRecord &r = frames.back();
+        const MonitorRecord &r = frames.back();
         QVariantList rows;
         rows.reserve(int(r.passes.size()));
         for (const FramePass &p : r.passes) {

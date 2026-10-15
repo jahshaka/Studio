@@ -87,9 +87,9 @@ struct FieldWork {
     std::map<std::string, unsigned> byDetail;   // frames carrying each detail
 };
 
-static FieldWork fieldWork(const std::vector<FrameRecord> &recs) {
+static FieldWork fieldWork(const std::vector<MonitorRecord> &recs) {
     FieldWork w;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         ++w.frames;
         bool any = false;
         std::map<std::string, bool> seen;
@@ -228,8 +228,8 @@ int main(int argc, char **argv)
     for (; settle < 1200 && quiet < 30; ++settle) {
         enginetest::frames(e, 1);
         if (stopArm) captureOracle();
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         const FieldWork w = fieldWork(recs);
         settleWork += w.framesWithWork;
         quiet = (w.frames && !w.framesWithWork) ? quiet + int(w.frames) : (w.frames ? 0 : quiet);
@@ -249,14 +249,14 @@ int main(int argc, char **argv)
         // S6's half: A LIGHT TICK, the common event (an at-rest re-injection: the field's RESET path, not the
         // build's), settled - the job's integrations and the frames it took.
         const auto lightTick = [&](unsigned long long &integrations, int &frames) {
-            { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }   // the frames before are not the tick's
+            { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }   // the frames before are not the tick's
             const PhotonFieldStatus t0 = photonFieldStatus(*s);
             s->refreshGiLighting(false);
             int q = 0, f = 0;
             for (; f < 1200 && q < 30; ++f) {
                 enginetest::frames(e, 1);
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -281,8 +281,8 @@ int main(int argc, char **argv)
         int sq = 0, sf = 0;
         for (; sf < 1200 && sq < 30; ++sf) {
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             sq = (w.frames && !w.framesWithWork) ? sq + int(w.frames) : (w.frames ? 0 : sq);
         }
@@ -420,8 +420,8 @@ int main(int argc, char **argv)
         GiFieldAtlas prev;
         for (int f = 0; f < 600 && quietRun < 20; ++f) {
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             quietRun = (w.frames && !w.framesWithWork) ? quietRun + 1 : 0;
             const unsigned owed = s->giStatus().ifdRefinesOwed;
@@ -508,8 +508,8 @@ int main(int argc, char **argv)
             int q = 0, n = 0;
             for (; n < 2000 && q < 30; ++n) {
                 enginetest::frames(e, 1);
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -544,7 +544,7 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
     const auto run = [&](const char *tag, int frames, bool walk, bool move, bool moveStills = false) {
-        std::vector<FrameRecord> all;
+        std::vector<MonitorRecord> all;
         for (int f = 0; f < frames; ++f) {
             if (walk) {
                 cam.z -= 1.4f / 60.0f;
@@ -559,14 +559,14 @@ int main(int argc, char **argv)
                     enginetest::setNodePosition(s, stills[i], Vec3(-2.5f + 5.0f * float(i) + 0.4f * std::sin(0.05f * float(f)),
                                                                    0.5f, -3.0f));
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         for (int f = 0; f < 6; ++f) {
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         const FieldWork w = fieldWork(all);
@@ -601,19 +601,19 @@ int main(int argc, char **argv)
     // re-integrates the WHOLE field per re-injection (OgreGi.cpp, stage 4's).
     if (stillsArm) {
         enginetest::frames(e, 300);
-        { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
         run("stills move", 120, false, false, true);
         // ONE STILL MOVED ONCE (ENGINE-UPGRADE-2B stage 4's instrument): the field's work from the
         // move until it settles — its frames, its probe integrations, its GPU ms.
         enginetest::frames(e, 300);
-        { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
         const PhotonFieldStatus i0 = photonFieldStatus(*s);
         enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
-        std::vector<FrameRecord> one;
+        std::vector<MonitorRecord> one;
         for (int f = 0; f < 240; ++f) {
             enginetest::frames(e, 1);
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             one.insert(one.end(), recs.begin(), recs.end());
         }
         const GiStatus gs = s->giStatus();

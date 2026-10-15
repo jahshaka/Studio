@@ -637,10 +637,10 @@ int main()
                                                              Vec3(x, 1.0f, 0.0f)));
             render(e, 1);
         }
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         unsigned rows = 0, camera = 0, other = 0, worstPerFrame = 0, counterTotal = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             unsigned inFrame = 0;
             for (const CacheWork &w : r.cacheWork) {
                 if (w.cache != CacheKind::Gi) continue;
@@ -662,7 +662,7 @@ int main()
               "EVERY SCROLL REBUILD IS FILED UNDER `Camera`, not under the last probe reason");
         CHECK(worstPerFrame <= 1, "...at most one row per frame");
         CHECK(counterTotal == rows,
-              "...and FrameRecord::cascadeRebuilds counts exactly them");
+              "...and MonitorRecord::cascadeRebuilds counts exactly them");
     }
 
     // =====================================================================

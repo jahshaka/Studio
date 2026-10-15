@@ -288,9 +288,9 @@ int main(int argc, char **argv)
             std::vector<double> frameMs;
             for (int i = 0; i < 300; ++i) {
                 enginetest::frames(e, 1);
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
-                for (const FrameRecord &r : recs) {
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
+                for (const MonitorRecord &r : recs) {
                     double g = 0.0;
                     bool any = false;
                     for (const FramePass &fp : r.passes)

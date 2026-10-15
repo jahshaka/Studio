@@ -2363,8 +2363,8 @@ int main() {
                       "...and the session is neither lost nor wedged (state %d)",
                       int(thrown.state));
             engine->setFrameMonitor(MonitorLevel::Off);
-            std::vector<FrameRecord> sink;
-            engine->takeFrameRecords(sink);
+            std::vector<MonitorRecord> sink;
+            engine->takeMonitorRecords(sink);
 
             // AND THE EYES ARE NOT BLACK. A leaked acquire cannot be seen in a
             // counter alone: the next frames' copies would have no image to

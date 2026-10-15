@@ -243,7 +243,7 @@ int main()
     struct Arm { Image back; float scrollGpu = -1.0f, scrollCpu = -1.0f; unsigned units = 0;
                  unsigned long long follows = 0, replacements = 0; std::vector<float> gpu;
                  float worstCentreErr = 0.0f; bool fieldBound = true; bool settled = false;
-                 std::vector<FrameRecord> records;
+                 std::vector<MonitorRecord> records;
                  // THE JUMPS, per jump (PHOTON-FIELD-ROTATE-1 part 3): the frames that
                  // integrated a re-placement's slab, the worst frame's field GPU ms (timed
                  // rows) and wall ms, and the picture's mean luminance on the frame after
@@ -267,8 +267,8 @@ int main()
     // A JUMP: the camera lands `p` in ONE frame (a teleport, or a headset re-centred
     // far away), then the scene settles; the field must be where cascade 0 is.
     const auto jumpTo = [&](Arm &arm, const Vec3 &p) {
-        std::vector<FrameRecord> pre;
-        engine->takeFrameRecords(pre);
+        std::vector<MonitorRecord> pre;
+        engine->takeMonitorRecords(pre);
         arm.records.insert(arm.records.end(), pre.begin(), pre.end());
         const unsigned long long replacedBefore = scene->giStatus().ifdReplacements;
         view->setCamera(enginetest::testCameraDescLookAt(p, Vec3(p.x, p.y - 1.0f, p.z - 8.0f)));
@@ -287,9 +287,9 @@ int main()
         view->readPixels(after);
         j.meanDuring = sawDuring ? meanLum(during) : -1.0f;
         j.meanAfter = meanLum(after);
-        std::vector<FrameRecord> recs;
-        engine->takeFrameRecords(recs);
-        for (const FrameRecord &r : recs) {
+        std::vector<MonitorRecord> recs;
+        engine->takeMonitorRecords(recs);
+        for (const MonitorRecord &r : recs) {
             float fieldGpu = 0.0f;
             bool slab = false, timedAll = true;
             unsigned frameProbes = 0;
@@ -305,7 +305,7 @@ int main()
                 if (w.gpuMs >= 0.0f) fieldGpu += w.gpuMs;
                 else timedAll = false;
             }
-            // THE JUMP FRAME'S GPU: its passes (FrameRecord::gpuMs) plus every timed
+            // THE JUMP FRAME'S GPU: its passes (MonitorRecord::gpuMs) plus every timed
             // compute row of the frame (a cascade rebuild, the field's slab) - what the
             // GPU owes for this frame, the quantity a 60 Hz frame is spent in. EVERY frame
             // of the jump's window counts, a slab's or a cascade rebuild's; a frame whose
@@ -350,9 +350,9 @@ int main()
         render(e, 2);
         scene->setGlobalIllumination(fieldGi(1));
         render(e, 90);
-        std::vector<FrameRecord> drop;
+        std::vector<MonitorRecord> drop;
         render(e, 8);
-        engine->takeFrameRecords(drop);
+        engine->takeMonitorRecords(drop);
         const unsigned long long f0 = scene->giStatus().ifdFollows;
         const unsigned long long r0 = scene->giStatus().ifdReplacements;
         float x2 = 0.0f;
@@ -384,10 +384,10 @@ int main()
         view->readPixels(arm.back);
         arm.follows = scene->giStatus().ifdFollows - f0;
         arm.replacements = scene->giStatus().ifdReplacements - r0;
-        std::vector<FrameRecord> recs;
-        engine->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        engine->takeMonitorRecords(recs);
         recs.insert(recs.begin(), arm.records.begin(), arm.records.end());
-        for (const FrameRecord &r : recs)
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork) {
                 if (w.detail != "ifd.follow") continue;
                 // The re-placed walk's every step is the whole field; the scrolled
@@ -463,7 +463,7 @@ int main()
     // AND THE JUMP FRAME FITS THE TIER'S FRAME, IN GPU FRAMES (POST-C-FIXES-1): the
     // worst jump frame's GPU work (its passes + every timed compute row) as a
     // fraction of this view's frame - the desktop profile at 60 Hz, 16.7 ms - must
-    // stay under one. The bar used to be the frame's WALL clock (FrameRecord::
+    // stay under one. The bar used to be the frame's WALL clock (MonitorRecord::
     // totalMs), which measures the CPU and whatever a sibling process takes from it:
     // it flaked 1 of 2 on the base under a sibling's load. The wall ms stays PRINTED
     // (information, never gated); the suite runs under the GPU-timing lock.

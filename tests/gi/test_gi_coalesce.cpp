@@ -333,10 +333,10 @@ int main(int argc, char **argv)
     // reads says so. Same three windows, one monitor capture.
     {
         engine->setFrameMonitor(MonitorLevel::Review);
-        std::vector<FrameRecord> recs;
+        std::vector<MonitorRecord> recs;
         const auto giRows = [&](WorkReason *anyReason) {
             unsigned n = 0;
-            for (const FrameRecord &r : recs)
+            for (const MonitorRecord &r : recs)
                 for (const CacheWork &w : r.cacheWork)
                     if (w.cache == CacheKind::Gi) {
                         ++n;
@@ -348,12 +348,12 @@ int main(int argc, char **argv)
         // chain has come to rest after the drag above (its dirty path spends a
         // cascade a frame and then settles: counted, not timed).
         for (int f = 0; f < 240 && !escene->giStatus().giAtRest; ++f) frame();
-        engine->takeFrameRecords(recs);
+        engine->takeMonitorRecords(recs);
         for (int f = 0; f < 20; ++f) frame();
         recs.clear();
-        engine->takeFrameRecords(recs);
+        engine->takeMonitorRecords(recs);
         const unsigned idleRows = giRows(nullptr);
-        for (const FrameRecord &r : recs)
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi) std::printf("   idle GI row: %s\n", w.detail.c_str());
         std::printf("   monitor: %zu still frames, %u GI cache rows\n", recs.size(), idleRows);
@@ -370,9 +370,9 @@ int main(int argc, char **argv)
             frame();
         }
         recs.clear();
-        engine->takeFrameRecords(recs);
+        engine->takeMonitorRecords(recs);
         unsigned lightTicks = 0, lightRowsNamed = 0, untimed = 0;
-        for (const FrameRecord &r : recs)
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi && w.reason == WorkReason::Light) {
                     ++lightTicks;
@@ -404,9 +404,9 @@ int main(int argc, char **argv)
         // (3) LETTING GO: the settle's full re-solve files its own row too.
         for (int f = 0; f < 40; ++f) frame();
         recs.clear();
-        engine->takeFrameRecords(recs);
+        engine->takeMonitorRecords(recs);
         unsigned solveRows = 0;
-        for (const FrameRecord &r : recs)
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi &&
                     (w.detail.rfind("vct.cascade", 0) == 0 || w.detail == "vct.cascades.build" ||
@@ -414,7 +414,7 @@ int main(int argc, char **argv)
                     ++solveRows;   // the chain's re-solve: a cascade rebuild, or — with nothing
                                    // geometric moved — its at-rest re-injection
         std::printf("   monitor: the settle filed %u re-solve row(s)\n", solveRows);
-        for (const FrameRecord &r : recs)
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi) std::printf("   settle GI row: %s\n", w.detail.c_str());
         CHECK(solveRows >= 1, "the settle's re-solve is FILED as GI cache work");

@@ -19,7 +19,7 @@
 //      table the last frame committed; its two ensureGpuScene calls were deleted): a mover
 //      frame calls the substrate once, so its later calls are ZERO. Run over two movers.
 //   2. ATOM'S WORDS STEP ONCE PER FRAME: the frame records' `engine.atomwords` stage
-//      (FrameRecord.stages) is filed once per frame. RED ON THE BASE: twice (before
+//      (MonitorRecord.stages) is filed once per frame. RED ON THE BASE: twice (before
 //      and after the ray tier).
 //   3. ONE COPY PER FRAME IN FLIGHT: the substrate holds an instance-table copy per
 //      frame in flight plus the one a frame writes (a pre-frame reader may bind the
@@ -70,7 +70,7 @@ static unsigned long long cascadeRebuilds(Scene *s)
     return n;
 }
 
-static unsigned stageCount(const FrameRecord &r, const char *name)
+static unsigned stageCount(const MonitorRecord &r, const char *name)
 {
     unsigned n = 0;
     for (const FrameStage &s : r.stages) n += s.name == name ? 1u : 0u;
@@ -118,9 +118,9 @@ int main()
     const auto moverRun = [&](const char *tag, NodeId mover) {
         e->setFrameMonitor(MonitorLevel::Review);
         {
-            std::vector<FrameRecord> drop;
+            std::vector<MonitorRecord> drop;
             enginetest::frames(e, 1);
-            e->takeFrameRecords(drop);
+            e->takeMonitorRecords(drop);
         }
         const unsigned long long rebuilds0 = cascadeRebuilds(scene);
         unsigned maxWalks = 0, maxScans = 0, maxCopyWrites = 0, sameCopyTwice = 0, writeFrames = 0, laterCalls = 0;
@@ -147,12 +147,12 @@ int main()
             }
         }
         const unsigned long long rebuilds = cascadeRebuilds(scene) - rebuilds0;
-        std::vector<FrameRecord> recs;
+        std::vector<MonitorRecord> recs;
         enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
-        e->takeFrameRecords(recs);
+        e->takeMonitorRecords(recs);
         unsigned wordsMin = 0xFFFFFFFFu, wordsMax = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             wordsMin = std::min(wordsMin, stageCount(r, "engine.atomwords"));
             wordsMax = std::max(wordsMax, stageCount(r, "engine.atomwords"));
         }

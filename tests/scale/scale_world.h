@@ -243,8 +243,8 @@ inline iris::Vec3 worldEye() { return iris::Vec3(0.0f, 1.7f, 0.0f); }
 /// Arm the render stats and the frame monitor (Review) — the geometry counters
 /// are OFF until something reads renderStats (GATE_AND_RIG.md).
 void armMonitor(Env &env);
-/// Drain the monitor's records (attributed by FrameRecord::frame, never order).
-std::vector<FrameRecord> drain(Env &env);
+/// Drain the monitor's records (attributed by MonitorRecord::frame, never order).
+std::vector<MonitorRecord> drain(Env &env);
 /// The frame monitor's GPU timing needs a capture's query pool: false when the
 /// build or the device has none (every GPU ms then reads negative — never 0).
 bool gpuTimed(Env &env);

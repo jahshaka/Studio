@@ -640,12 +640,12 @@ static int costMain(Engine *e)
             sc.resolution = arms[a].res;
             s->setSunContact(sc);
             render(e, 30);                           // warm: the shape rebuilt, the queries back
-            std::vector<FrameRecord> drop;
-            e->takeFrameRecords(drop);
+            std::vector<MonitorRecord> drop;
+            e->takeMonitorRecords(drop);
             render(e, 60);
-            std::vector<FrameRecord> recs;
-            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeFrameRecords(recs); }
-            for (const FrameRecord &r : recs) {
+            std::vector<MonitorRecord> recs;
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeMonitorRecords(recs); }
+            for (const MonitorRecord &r : recs) {
                 if (r.gpuMs > 0.0f) { frameSum[a] += r.gpuMs; ++frameN[a]; }
                 for (const CacheWork &w : r.cacheWork)
                     if (w.detail == "sun.contact" && w.gpuMs >= 0.0f) { jobSum[a] += w.gpuMs; ++jobN[a]; }

@@ -590,15 +590,15 @@ int main()
         const auto collect = [&](int frames, const std::function<void(int)> &perFrame,
                                  double &frameMs, int &frameN, double jobMs[4], int jobN[4]) {
             r.e->setFrameMonitor(MonitorLevel::Review);
-            std::vector<FrameRecord> drop;
-            r.e->takeFrameRecords(drop);
+            std::vector<MonitorRecord> drop;
+            r.e->takeMonitorRecords(drop);
             for (int i = 0; i < frames; ++i) { perFrame(i); enginetest::frames(r.e, 1); }
             r.e->setFrameMonitor(MonitorLevel::Off);
-            std::vector<FrameRecord> recs;
-            r.e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            r.e->takeMonitorRecords(recs);
             static const char *kJobs[4] = { "Jahshaka/AtmoTransmittance", "Jahshaka/AtmoMultiScatter",
                                             "Jahshaka/AtmoSkyView", "Jahshaka/AtmoAerial" };
-            for (const FrameRecord &f : recs) {
+            for (const MonitorRecord &f : recs) {
                 if (f.gpuMs > 0.0f) { frameMs += f.gpuMs; ++frameN; }
                 for (const CacheWork &w : f.cacheWork)
                     if (w.cache == CacheKind::Atmosphere && w.gpuMs >= 0.0f)

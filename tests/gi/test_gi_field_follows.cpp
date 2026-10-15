@@ -312,13 +312,13 @@ int main() {
         // THE FRAME COST OF A STEP, from the monitor rather than a stopwatch
         // around renderOneFrame: `totalMs` is the whole frame and `ifd.follow`
         // is what the field's re-integration cost inside it.
-        std::vector<FrameRecord> recs;
+        std::vector<MonitorRecord> recs;
         engine->setFrameMonitor(MonitorLevel::Off);
-        engine->takeFrameRecords(recs);
+        engine->takeMonitorRecords(recs);
         float worstMs = 0.0f, worstFollowMs = -1.0f, worstFollowGpu = -1.0f;
         float worstCascadeMs = -1.0f, worstCascadeGpu = -1.0f;
         unsigned followRows = 0, followProbes = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             worstMs = std::max(worstMs, r.totalMs);
             for (const CacheWork &w : r.cacheWork) {
                 if (w.detail == "ifd.follow") {
@@ -600,12 +600,12 @@ int main() {
                                                                 Vec3(x, 1.0f, -6.0f)));
                 render(e, 1);
             }
-            std::vector<FrameRecord> recs;
+            std::vector<MonitorRecord> recs;
             engine->setFrameMonitor(MonitorLevel::Off);
-            engine->takeFrameRecords(recs);
+            engine->takeMonitorRecords(recs);
             float worst = 0.0f, sum = 0.0f, worstGpu = -1.0f, sumGpu = 0.0f;
             unsigned nGpu = 0;
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 worst = std::max(worst, r.totalMs);
                 sum += r.totalMs;
                 if (r.gpuMs >= 0.0f) { worstGpu = std::max(worstGpu, r.gpuMs); sumGpu += r.gpuMs; ++nGpu; }

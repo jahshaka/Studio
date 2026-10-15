@@ -128,7 +128,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
 {
     static const double kBarMs = 0.05;
     e->setFrameMonitor(MonitorLevel::Review);
-    std::vector<FrameRecord> recs;
+    std::vector<MonitorRecord> recs;
     double copy = 0.0, frame = 0.0;
     int nCopy = 0, nFrame = 0, f = 0;
     for (int round = 0; round < 12; ++round) {
@@ -137,9 +137,9 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
             enginetest::frames(e, 1);
         }
         recs.clear();
-        e->takeFrameRecords(recs);
+        e->takeMonitorRecords(recs);
         if (round == 0) continue;   // warm-up: the first second is pipeline creation
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             double c = -1.0;
             for (const FramePass &p : r.passes)
                 if (p.pass == "Jahshaka atom id depth" && p.gpuMs >= 0.0f) c = (c < 0.0 ? 0.0 : c) + p.gpuMs;
@@ -149,7 +149,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
     }
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    e->takeFrameRecords(recs);
+    e->takeMonitorRecords(recs);
     const double c = nCopy ? copy / nCopy : -1.0, fr = nFrame ? frame / nFrame : -1.0;
     std::printf("target: 1920x1080, a moving Atom sphere behind a still skinned comb on a mirror floor: the id "
                 "depth copy %.4f ms of a %.4f ms frame (bar %.2f) [%d / %d frames]\n", c, fr, kBarMs, nCopy, nFrame);

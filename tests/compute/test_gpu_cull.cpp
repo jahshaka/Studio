@@ -513,11 +513,11 @@ int main()
         const bool culled = e->gpuCull(scene, view, r, false, big);
         enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         double jobMs[3] = { -1.0, -1.0, -1.0 };
         static const char *kJobs[3] = { "cull.test", "cull.compact", "cull.draws" };
-        for (const FrameRecord &f : recs)
+        for (const MonitorRecord &f : recs)
             for (const CacheWork &w : f.cacheWork)
                 for (int k = 0; k < 3; ++k)
                     if (w.detail == kJobs[k] && w.gpuMs >= 0.0f && jobMs[k] < 0.0) jobMs[k] = w.gpuMs;

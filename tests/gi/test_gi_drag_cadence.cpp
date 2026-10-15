@@ -269,14 +269,14 @@ int main()
             scene->refreshGiLighting(true);            // the host's in-motion tick
             render(e, 1);
         }
-        std::vector<FrameRecord> recs;
-        engine->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        engine->takeMonitorRecords(recs);
         engine->setFrameMonitor(MonitorLevel::Off);
         const size_t chainSize = scene->giStatus().cascades.size();
         int bothInOneFrame = 0, movingRows = 0, cascadeRows = 0;
         int worstCascadesInAFrame = 0, overlapUnits = -1;
         std::vector<int> tickUnitsSeen;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             bool moving = false, rebuilt = false;
             unsigned tickUnits = 0;
             int inThisFrame = 0;

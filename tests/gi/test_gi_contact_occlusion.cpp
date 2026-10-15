@@ -472,20 +472,20 @@ int main()
         render(f.e, 300);
         f.e->setFrameMonitor(MonitorLevel::Review);
         render(f.e, 10);
-        std::vector<FrameRecord> sink; f.e->takeFrameRecords(sink);
+        std::vector<MonitorRecord> sink; f.e->takeMonitorRecords(sink);
         double sum[2] = { 0, 0 }; int n[2] = { 0, 0 };
         double relight[2] = { 0, 0 }; int nr[2] = { 0, 0 };
         int frame = 0;
         for (int block = 0; block < 12; ++block) {
             const int arm = block & 1;
             f.s->setEnvironmentLight(arm ? Colour(0, 0, 0) : Colour(1, 1, 1));
-            std::vector<FrameRecord> recs;
+            std::vector<MonitorRecord> recs;
             for (int k = 0; k < 90; ++k, ++frame) {
                 const float a = 0.05f * float(frame);
                 f.s->setNodeTransform(lamp, Vec3(-1.5f + std::cos(a), 1.2f, std::sin(a)), Quat(), Vec3(1, 1, 1));
                 enginetest::frames(f.e, 1);
-                if (k < 30) { std::vector<FrameRecord> d; f.e->takeFrameRecords(d); continue; }
-                f.e->takeFrameRecords(recs);
+                if (k < 30) { std::vector<MonitorRecord> d; f.e->takeMonitorRecords(d); continue; }
+                f.e->takeMonitorRecords(recs);
                 const float rg = f.s->giStatus().cards.relightGpuMs;
                 if (rg > 0.0f) { relight[arm] += rg; ++nr[arm]; }
             }
