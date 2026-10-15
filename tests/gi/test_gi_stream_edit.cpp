@@ -72,12 +72,13 @@ static int failures = 0;
 
 static const unsigned kSize = 128;
 
-/// One frame at a named pace. The pace is consumed per frame, so it is set per
-/// frame — exactly as `EngineSceneViewport`'s driver tick does.
+/// One frame at a named pace (Engine::setFramePace: in force until set again — the driver sets its frame's and
+/// lowers it after; here every frame names its own).
 static void frame(Engine *e, FramePace pace)
 {
-    e->submitFrame(jahshaka::engine::FrameInput::withPace(pace));
+    e->setFramePace(pace);
     e->renderOneFrame();
+    e->setFramePace(FramePace::Complete);
 }
 
 static void frames(Engine *e, FramePace pace, int n)

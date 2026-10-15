@@ -673,6 +673,8 @@ private:
     iris::ScenePtr mScene;
     /// The LOD bias this viewport set on mEngineScene (the engine clamps a negative to 0, as here).
     float mEngineLodBias = 1.0f;
+    /// The pace this viewport last set on the engine (Engine::setFramePace; set on change, lowered after its frame).
+    jahshaka::engine::FramePace mPaceSet = jahshaka::engine::FramePace::Complete;
     /// ...and the debug views it set on it (AtomView / PhotonView as ints; the cascade -1 = the finest).
     int mEngineAtomView = 0, mEnginePhotonView = 0, mEnginePhotonCascade = -1;
     /// F3 / editor.setOverlays({stats}) / Preferences show_fps.

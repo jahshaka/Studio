@@ -168,7 +168,10 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // — one un-streamed frame per cover rise, which is exactly the
             // frame the whole arm used to land in.
             if (mEngine) {
-                mEngine->submitFrame(jahshaka::engine::FrameInput::withPace(driverFramePace()));
+                // THE PACE IS THE DRIVER FRAME'S, SET ON CHANGE (U3 stage 2 read F3: no record of its own, so a tick
+                // with nothing from the document is a real empty hand-over); lowered after the frame (afterFrame).
+                const jahshaka::engine::FramePace pace = driverFramePace();
+                if (pace != mPaceSet) { mEngine->setFramePace(pace); mPaceSet = pace; }
                 // The window is spent by DRIVER frames of a REVEALED world —
                 // never by the load's own, which is what stops a slow load from
                 // consuming it before the user sees anything. `mWorldArriving`
@@ -193,6 +196,11 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // a 1080p render is never paid for a frame nobody records.
         connect(mDriver, &EngineRenderDriver::afterFrame, this, [this]() {
             if (mRecordView) mRecordView->setEnabled(false);
+            // The driver frame's pace ends with it: every frame until the next tick renders Complete.
+            if (mEngine && mPaceSet != jahshaka::engine::FramePace::Complete) {
+                mEngine->setFramePace(jahshaka::engine::FramePace::Complete);
+                mPaceSet = jahshaka::engine::FramePace::Complete;
+            }
             emit mEvents.framesDrawn();
         });
 }
