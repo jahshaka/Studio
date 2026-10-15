@@ -1834,7 +1834,9 @@ set_tests_properties(gi.rough_sky_once PROPERTIES JAHSHAKA_TEST_FRAMES 940)
 # cells of one 9 m cascade, the field off and on, the wall standing on the plate and free-standing, each
 # against the GI-off reading within 3 %, at Low and Medium - and Low reads Medium's value on every arm (one
 # light store, one reader law at every tier). The isotropic store Low kept read 0.998 / 0.954 / 0.873 on the
-# plate (the fixture's header; spikes/photon-march-1/).
+# plate (the fixture's header; spikes/photon-march-1/). And the law's own proof (stage 3): a 0.02 m slab lit 1 :
+# 0.25 face by face, the lobe following the face that looks back at 32 / 64 / 128 cells, at rest, with the suns
+# swapped and after a sub-cell move (the isotropic store read the faces' mean).
 add_executable(test_gi_march_underread test_gi_march_underread.cpp)
 set_target_properties(test_gi_march_underread PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1850,7 +1852,7 @@ add_dependencies(test_gi_march_underread JahshakaEngineMedia)
 jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 864)
+set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 2236)
 # gi.voxel_metal_albedo — A METAL RE-EMITS ITS DIFFUSE LOBE, base x (1 - metalness), INTO THE BOUNCE
 # (PHOTON-MARCH-1 stage 2, VOXEL-METAL-ALBEDO-1): a plate of base colour 0.8 at metalness 0 / 0.5 / 1
 # under a sun, a white panel facing it lit by nothing else: the store and the panel's bounce in the ratio
