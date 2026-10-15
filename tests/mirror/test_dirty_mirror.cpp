@@ -545,6 +545,7 @@ int main(int argc, char **argv)
                                              .arg(QLatin1String(c.what))));
             differential(r, qPrintable(QStringLiteral("D2 emitter.%1").arg(QLatin1String(c.what))), [] {});
         }
+        enginetest::frames(r.engine, 1);   // the sync's messages land at a frame (U3 stage 3)
         CHECK(r.engine->lastError().find("colour ramp") == std::string::npos &&
                   r.engine->lastError().find("Image format") == std::string::npos,
               "D2: the ramp image loaded into the affector (no ramp error from the engine)");
@@ -562,6 +563,7 @@ int main(int argc, char **argv)
             r.mirror->sync();
             r.emitter->setColourRamp(QStringLiteral("ramp-a"), first);
             r.mirror->sync();
+            enginetest::frames(r.engine, 1);   // the sync's messages land at a frame (U3 stage 3)
             CHECK(r.engine->lastError().find("colour ramp") == std::string::npos,
                   "D2: ramp A resolves (its shard is now a registered location)");
             QImage other = ramp.mirrored(true, false);
@@ -569,6 +571,7 @@ int main(int argc, char **argv)
             const quint64 before = r.mirror->visitPushCount();
             r.emitter->setColourRamp(QStringLiteral("ramp-b"), second);
             r.mirror->sync();
+            enginetest::frames(r.engine, 1);   // the sync's messages land at a frame (U3 stage 3)
             std::printf("info: D2 second ramp in a registered shard: %llu push(es), engine error '%s'\n",
                         (unsigned long long)(r.mirror->visitPushCount() - before),
                         r.engine->lastError().c_str());

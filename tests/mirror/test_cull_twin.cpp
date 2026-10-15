@@ -119,6 +119,7 @@ int main(int argc, char **argv)
     // ---- 1. BOOKKEEPING ----------------------------------------------------
     CHECK(plane->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
           "a mesh node is born leaving the cull to its material");
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     CHECK(scene->published().cullTwins == 0, "no node names a cull: no twin");
     other->setFaceCullingMode(iris::FaceCullingMode::Back);
     frames(2);

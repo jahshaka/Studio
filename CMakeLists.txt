@@ -572,6 +572,7 @@ set(HEADERS
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h
     irisgl/mirror/scenemirror.h
+    irisgl/mirror/scenecommands.h
     src/viewport/enginesceneviewport.h
     src/viewport/headlesseditorviewport.h
     src/viewport/ieditorviewport.h

@@ -1944,20 +1944,24 @@ int main(int argc, char **argv)
         const auto cubeNode = lmirror.engineNode(cube.data());
         const auto lampNode = lmirror.engineNode(lamp.data());
         CHECK(cubeNode != 0 && lampNode != 0, "channels: both nodes reached the engine");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0xFFFFFFFFu,
               "channels: a node the user never touched is on EVERY channel");
 
         cube->setLightMask(0x2u);
         lmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x2u,
               "channels: the document's mask reached the Item");
         // The change guard: a SECOND edit must land too.
         cube->setLightMask(0x4u);
         lmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x4u,
               "channels: a second edit is not swallowed by the push guard");
         // And an idle sync must not undo it.
         lmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0x4u, "channels: an idle sync changes nothing");
 
         // The LIGHT half rides the LightDesc, whose operator== had to grow the
@@ -1967,6 +1971,7 @@ int main(int argc, char **argv)
         CHECK(lamp->getLightMask() == 0x8u, "channels: the light carries its own mask");
         // The engine records the mask on the node either way (a light node has
         // no Item, so this is the record, not the Item's flag).
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(lampNode) == 0x8u,
               "channels: the light node's mask reached the engine too");
         // A duplicate carries the channels: a copied object that silently
@@ -2182,17 +2187,21 @@ int main(int argc, char **argv)
         carrier->isPhysicsBody = false;
         carrier->physicsProperty.type = iris::PhysicsType::None;
         mmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(riderId) && mmirror.movableNodeCount() == 0,
               "mobility: removing the driver puts the branch back (authoring, not automatic)");
 
         // ---- THE SURPRISE MOVER (O3): play only, warned once, no rebuild ---
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const quint64 refreshesBefore = mmirror.target()->published().gi.schedulerResolves;
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const quint64 pushesBefore = mmirror.target()->published().gi.schedulerPushes;
         mdoc->setPlaying(true);
         mmirror.sync();                       // the frame that sees it standing still
         CHECK(mmirror.mobilityMissCount() == 0, "mobility: standing still during play is not a miss");
         still->setLocalPos(iris::Vec3(0, 2, 0));
         mmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(stillId),
               "mobility: a node that starts moving during play is movable from that frame");
         CHECK(mmirror.mobilityMissCount() == 1 &&
@@ -2212,12 +2221,14 @@ int main(int argc, char **argv)
         // re-resolves, and the engine is told.
         mdoc->setPlaying(false);
         mmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId) && mmirror.mobilityMissCount() == 1,
               "mobility: play stop clears the promotion (the ghost bounce goes with it)");
 
         // An explicit setting reaches the engine the same way.
         still->setMobility(iris::Mobility::Movable);
         mmirror.sync();
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(stillId), "mobility: an explicit Movable reaches the engine");
         mmirror.setSource(nullptr);
     }

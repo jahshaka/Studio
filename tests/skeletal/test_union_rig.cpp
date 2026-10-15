@@ -385,6 +385,7 @@ int main(int argc, char **argv)
             size_t riggedNow = 0, withClips = 0;
             for (const iris::MeshNodePtr &piece : hero.pieces) {
                 const NodeId n = mirror.engineNode(piece.data());
+                enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
                 if (!n || !jahshaka::engine::inspect::scene(ms)->hasSkeleton(n)) continue;
                 ++riggedNow;
                 enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
