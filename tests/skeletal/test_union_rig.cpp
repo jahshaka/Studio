@@ -333,7 +333,8 @@ int main(int argc, char **argv)
             doc->updateSceneAnimation(0.3f);
             mirror.sync();
             const NodeId hairNode = mirror.engineNode(hair.data());
-            CHECK(!ms->sharesSkeleton(hairNode), "a moved piece stops sharing");
+            enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            CHECK(!ms->published().factsBlock().sharesSkeleton(hairNode), "a moved piece stops sharing");
             const RigStats moved = ms->rigStats();
             CHECK(moved.instances == 2 && moved.shared == 3,
                   "...onto an instance of its own; the other three still share");
@@ -348,7 +349,8 @@ int main(int argc, char **argv)
             hair->setLocalPos(iris::Vec3(0, 0, 0));
             doc->updateSceneAnimation(0.5f);
             mirror.sync();
-            CHECK(ms->sharesSkeleton(hairNode), "moving it back re-shares it");
+            enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            CHECK(ms->published().factsBlock().sharesSkeleton(hairNode), "moving it back re-shares it");
             CHECK(ms->rigStats().instances == 1, "one instance again");
         }
 
@@ -385,7 +387,8 @@ int main(int argc, char **argv)
                 const NodeId n = mirror.engineNode(piece.data());
                 if (!n || !jahshaka::engine::inspect::scene(ms)->hasSkeleton(n)) continue;
                 ++riggedNow;
-                if (!ms->clipNames(n).empty()) ++withClips;
+                enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+                if (!ms->published().factsBlock().clipNamesOf(n).empty()) ++withClips;
             }
             CHECK(riggedNow == size_t(hero.pieces.size()),
                   "S16: the character survived the piece leaving, every piece still rigged");

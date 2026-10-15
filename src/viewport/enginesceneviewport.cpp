@@ -2850,7 +2850,7 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     if (!mMirror || node.isNull() || !view() || !view()->scene()) return true;
     const jahshaka::engine::NodeId id = mMirror->engineNode(node.data());
     if (!id) return true;   // not mirrored yet — the next sync decides
-    return view()->scene()->nodePlanarReflector(id);
+    return view()->scene()->published().factsBlock().isPlanarReflector(id);   // the facts (U3 stage 3)
 }
 
 IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)

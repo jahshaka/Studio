@@ -257,11 +257,13 @@ int main(int argc, char **argv)
     // SkeletonManager's hardcoded frameRate = 1.0f ever changes upstream.
     CHECK(s->attachClips(nodeClip, &clipDesc, 1), "attachClips succeeded");
     if (!s->attachClips(nodeClip, &clipDesc, 1)) std::printf("    %s\n", engine->lastError().c_str());
+    enginetest::frames(engine, 1);   // the facts move at a frame's close (U3 stage 3)
     {
-        const auto names = s->clipNames(nodeClip);
+        const auto names = s->published().factsBlock().clipNamesOf(nodeClip);
         CHECK(names.size() == 1 && names[0] == "Swing", "clipNames reports the attached clip");
         CHECK(s->attachClips(nodeClip, &clipDesc, 1), "re-attaching the same clip id is idempotent");
-        CHECK(s->clipNames(nodeClip).size() == 1, "and does not duplicate it");
+        enginetest::frames(engine, 1);
+        CHECK(s->published().factsBlock().clipNamesOf(nodeClip).size() == 1, "and does not duplicate it");
     }
     // A clip on a node that has no rig is refused, not ignored.
     {
@@ -435,8 +437,10 @@ int main(int argc, char **argv)
         ClipState off; off.name = "Swing"; off.enabled = false;
         CHECK(s->setClipStates(nodeClip, &off, 1), "clips disabled before attaching another");
         CHECK(s->attachClips(nodeClip, &partialDesc, 1), "the partial clip attaches");
-        if (s->clipNames(nodeClip).size() != 2) std::printf("    %s\n", engine->lastError().c_str());
-        CHECK(s->clipNames(nodeClip).size() == 2, "two clips on the node");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        if (s->published().factsBlock().clipNamesOf(nodeClip).size() != 2) std::printf("    %s\n", engine->lastError().c_str());
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(s->published().factsBlock().clipNamesOf(nodeClip).size() == 2, "two clips on the node");
 
         // Attaching while something plays is REFUSED, loudly — Ogre's
         // addAnimationsFromSkeleton would dangle every active clip pointer.

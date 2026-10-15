@@ -207,7 +207,7 @@ static float timeOf(const iris::AvatarLocomotion *loco, const char *clip)
 /// out of `clipNames` rather than assuming it is what keeps that true.
 static std::string engineNameFor(Scene *scene, NodeId node, const char *want)
 {
-    for (const auto &n : scene->clipNames(node))
+    for (const auto &n : scene->published().factsBlock().clipNamesOf(node))
         if (n == want || n.rfind(std::string(want) + "_", 0) == 0) return n;
     return std::string();
 }
@@ -278,7 +278,7 @@ int main(int argc, char **argv)
     CHECK(editorNode != 0, "the rigged mesh reached the editor's engine scene");
     if (!editorNode) return 1;
     {
-        const auto names = editorScene->clipNames(editorNode);
+        const auto names = editorScene->published().factsBlock().clipNamesOf(editorNode);
         std::printf("      engine clips on the editor node:");
         for (const auto &n : names) std::printf(" '%s'", n.c_str());
         std::printf("\n");
@@ -376,9 +376,10 @@ int main(int argc, char **argv)
     const NodeId playerNode = playerMirror.engineNode(avatar.mesh.data());
     CHECK(playerNode != 0, "...and the winning mirror rebuilt the avatar from scratch");
     if (!playerNode) return 1;
+    enginetest::frames(engine, 1);   // the facts (the clips' engine names) move at a frame's close (U3 stage 3)
     const std::string pTip = engineNameFor(playerScene, playerNode, "TipOnly");
     const std::string pBoth = engineNameFor(playerScene, playerNode, "Both");
-    CHECK(playerScene->clipNames(playerNode).size() == 2 && !pTip.empty() && !pBoth.empty(),
+    CHECK(playerScene->published().factsBlock().clipNamesOf(playerNode).size() == 2 && !pTip.empty() && !pBoth.empty(),
           "...including RE-ATTACHING both clips (attachClipsFor ran on the new entry)");
 
     // The DOCUMENT-side claim: the swap is not a step. Nothing about the phase,

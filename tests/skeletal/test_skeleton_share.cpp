@@ -137,7 +137,8 @@ int main()
 
     // ---- the share -------------------------------------------------------
     CHECK(scene->shareSkeleton(hair, body), "hair shares the body's skeleton");
-    CHECK(scene->sharesSkeleton(hair) && !scene->sharesSkeleton(body),
+    enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(scene->published().factsBlock().sharesSkeleton(hair) && !scene->published().factsBlock().sharesSkeleton(body),
           "the FOLLOWER shares; the master does not (Ogre's refcount would say both)");
     {
         const RigStats rs = scene->rigStats();
@@ -156,7 +157,8 @@ int main()
         CHECK(scene->shareSkeleton(third, body), "...but the master takes it");
         CHECK(!scene->shareSkeleton(body, third), "a follower with followers cannot become one");
         CHECK(scene->shareSkeleton(third, 0), "and it can stop");
-        CHECK(!scene->sharesSkeleton(third), "...which it did");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(!scene->published().factsBlock().sharesSkeleton(third), "...which it did");
         scene->removeNode(third);
     }
     {
@@ -197,7 +199,8 @@ int main()
     {
         CHECK(scene->attachSkinnedMesh(hair, hairMesh, mat, rig, hairMap, 1),
               "the follower's renderable is re-created (a material/mesh swap)");
-        CHECK(!scene->sharesSkeleton(hair),
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(!scene->published().factsBlock().sharesSkeleton(hair),
               "...which DROPS the share — the host re-arms it, nothing lingers half-shared");
         const RigStats rs = scene->rigStats();
         CHECK(rs.instances == 2 && rs.shared == 0, "both pieces are back on their own instances");
@@ -211,7 +214,8 @@ int main()
     // ---- TRAP 2: the master's Item is re-created --------------------------
     {
         CHECK(scene->attachSkinnedMesh(body, bodyMesh, mat, rig), "the MASTER's renderable is re-created");
-        CHECK(!scene->sharesSkeleton(hair), "every follower was released first");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(!scene->published().factsBlock().sharesSkeleton(hair), "every follower was released first");
         const RigStats rs = scene->rigStats();
         CHECK(rs.instances == 2 && rs.shared == 0, "...onto their own instances");
         // The released follower must be USABLE, not a corpse: its fresh instance
@@ -250,7 +254,8 @@ int main()
 
         CHECK(scene->attachSkinnedMesh(solo, soloMesh, mat, rig),
               "its renderable is re-created (a material swap on a PLAYING rig)");
-        CHECK(scene->clipNames(solo).empty(),
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().factsBlock().clipNamesOf(solo).empty(),
               "S16: the clips went with the instance their records pointed into");
         // THE CALL THAT ABORTED. Nothing to disable is not an error.
         CHECK(scene->setClipStates(solo, nullptr, 0),
@@ -262,7 +267,8 @@ int main()
         // next (its idempotency set is empty again, so the clips really come
         // back rather than being skipped).
         CHECK(scene->attachClips(solo, &c, 1), "the clips re-attach onto the NEW instance");
-        CHECK(scene->clipNames(solo).size() == 1, "...and the node has them again");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().factsBlock().clipNamesOf(solo).size() == 1, "...and the node has them again");
         CHECK(scene->setClipStates(solo, &st, 1), "...and drives them");
         const auto w = scene->clipBoneWeights(solo, "share/soloclip");
         CHECK(w.size() == 3 && std::fabs(w[1] - 1.0f) < 1e-5f,
@@ -286,7 +292,8 @@ int main()
     {
         CHECK(scene->shareSkeleton(hair, body), "re-shared");
         CHECK(scene->removeNode(body), "the master node is destroyed");
-        CHECK(!scene->sharesSkeleton(hair),
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(!scene->published().factsBlock().sharesSkeleton(hair),
               "the follower was un-shared before the master's node died");
         const RigStats rs = scene->rigStats();
         CHECK(rs.rigged == 1 && rs.instances == 1 && rs.shared == 0,
