@@ -118,9 +118,13 @@ QString PerfSampler::sampleNow()
                        .arg(fs.workMs, 0, 'f', 1)
                        .arg(fs.worstMs, 0, 'f', 1)
                        .arg(fs.slowFrames);
-            line += QStringLiteral(" | draws %1 submittedTris %2")
-                        .arg(qulonglong(rs.draws))
-                        .arg(qulonglong(rs.triangles));
+            // COUNTED OR SAID SO (decision 29): the span's first sample after a lapse has no counted frame.
+            if (rs.metricsRecording)
+                line += QStringLiteral(" | draws %1 submittedTris %2")
+                            .arg(qulonglong(rs.draws))
+                            .arg(qulonglong(rs.triangles));
+            else
+                line += QStringLiteral(" | draws - submittedTris - (not counted yet)");
         }
     }
 

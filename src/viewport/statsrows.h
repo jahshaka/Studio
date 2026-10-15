@@ -63,6 +63,9 @@ struct Input
     quint64 submittedTriangles = 0;
     /// Draw calls in that same frame.
     quint64 draws = 0;
+    /// Whether the renderer COUNTED that frame (RenderStats::metricsRecording — the counters run by subscription, U3
+    /// stage 3): false on the overlay's first frame after a lapse, and then the two numbers read "-", never a zero.
+    bool    counted = true;
     /// Frames over the 100 ms hitch threshold in the last minute.
     int     slowFramesLastMinute = 0;
     /// ATOM's readout (P1): how many DRAWN objects have a baked LOD chain at all,
@@ -107,11 +110,11 @@ inline QStringList compose(const Input &in)
     // Row 3 — THE TWO TRIANGLE NUMBERS, both labelled. Neither word is
     // optional: "tris" alone is the row the owner read as his scene's content.
     rows << QStringLiteral("%1 scene tris   %2 submitted")
-                .arg(grouped(in.sceneTriangles), grouped(in.submittedTriangles));
+                .arg(grouped(in.sceneTriangles), in.counted ? grouped(in.submittedTriangles) : QStringLiteral("-"));
     // Row 4 — draws, and the rolling hitch count. "last min" is part of the
     // row: a bare "3 slow" is a lifetime total to anybody who reads it.
     rows << QStringLiteral("%1 draws   %2 slow frames (last min)")
-                .arg(grouped(in.draws)).arg(in.slowFramesLastMinute);
+                .arg(in.counted ? grouped(in.draws) : QStringLiteral("-")).arg(in.slowFramesLastMinute);
     // Row 5 — THE CHAIN, WHERE IT CAN BE SEEN WORKING (ATOM P1's readout, the gap
     // OWN-TRI left). `submittedTriangles` above says the scene shed triangles;
     // this says which levels did the shedding, which is the difference between a

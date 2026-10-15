@@ -1251,6 +1251,21 @@ jah_gpu_row(gi.cards_mover_shadow CLASS engine COMMAND test_gi_cards_mover
 set_tests_properties(gi.cards_mover_shadow PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.cards_mover_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 783)
 
+# gi.card_walk_cost — THE CARD WALK AT 10k SLOTS (ENGINE-UPGRADE-U3 decision 36): a `measure` row, run by hand —
+# 10,000 carded cubes, twenty arrivals, each a full walk of the card casters' records; the walk's own time printed.
+add_executable(test_gi_card_walk test_gi_card_walk.cpp)
+set_target_properties(test_gi_card_walk PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_walk PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_walk PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_walk JahshakaEngineMedia)
+
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

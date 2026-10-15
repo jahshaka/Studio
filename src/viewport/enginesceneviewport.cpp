@@ -3943,8 +3943,9 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             in.fpsDrawn = ds.fpsDrawn;
             in.workMs = ds.workMs;
             in.sceneTriangles = scenestats::sceneGeometry(mScene).triangles;
-            in.submittedTriangles = haveRs ? quint64(rs.triangles) : 0;
-            in.draws = haveRs ? quint64(rs.draws) : 0;
+            in.counted = haveRs && rs.metricsRecording;   // decision 29: never a silent zero
+            in.submittedTriangles = in.counted ? quint64(rs.triangles) : 0;
+            in.draws = in.counted ? quint64(rs.draws) : 0;
             in.slowFramesLastMinute = ds.slowFramesLastMinute;
             // ATOM's per-object levels, summarised for one overlay line. Read off
             // the Items (the byte the render queue indexes with), same source the

@@ -354,7 +354,7 @@ int main()
                     "prevWorld == world %d (the dead item's x was %.2f, the newborn's is %.2f)\n",
                     tail, (unsigned long long)dead.nodeId, (unsigned long long)now.nodeId,
                     sameFloats(now.world, now.prevWorld, 12) ? 1 : 0, dead.world[3], now.world[3]);
-        CHECK(got && now.nodeId == unsigned(fresh),
+        CHECK(got && now.nodeId == NodeId(fresh),
               "the newborn really landed in the freed tail slot (the arm is not vacuous)");
         CHECK(got && sameFloats(now.world, now.prevWorld, 12),
               "A NEWBORN IN A FREED TAIL SLOT HAS prevWorld == world — it did not inherit the "
