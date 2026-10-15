@@ -221,7 +221,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             ev.view = view;
             ev.environment = true;
             ev.finish = [](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
                 secondaryfx::applyScene(fx, 0.0f);
                 part.postFx = fx;
             };

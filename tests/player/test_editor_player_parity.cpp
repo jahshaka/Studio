@@ -64,6 +64,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
@@ -268,7 +269,7 @@ int main(int argc, char **argv)
         player.setEditorScene(editorScene, &editorMirror);
         CHECK(player.attach(playerView), "player view bound to the editor's scene");
         CHECK(player.engineScene() == editorScene, "ONE SCENE: the player draws the editor's");
-        CHECK(!playerView->helpersVisible() && editorView->helpersVisible(),
+        CHECK(!jahshaka::engine::inspect::view(playerView)->helpersVisible() && jahshaka::engine::inspect::view(editorView)->helpersVisible(),
               "the furniture is hidden per VIEW, not per scene");
         player.setDocument(doc, camera);
         player.begin();
@@ -281,15 +282,15 @@ int main(int argc, char **argv)
         // ---- 1. the shape contract ------------------------------------------
         // COPIES: postFx() returns a reference to the view's live description,
         // which step 3 below rewrites.
-        const PostFxDesc efx = editorView->postFx();
-        const PostFxDesc pfx = playerView->postFx();
+        const PostFxDesc efx = jahshaka::engine::inspect::view(editorView)->postFx();
+        const PostFxDesc pfx = jahshaka::engine::inspect::view(playerView)->postFx();
         std::printf("    editor postFx: hdr=%d bloom=%d ssao=%d exposure=%.2f\n",
                     int(efx.hdr), int(efx.bloom), int(efx.ssao), double(efx.exposure));
         std::printf("    player postFx: hdr=%d bloom=%d ssao=%d exposure=%.2f\n",
                     int(pfx.hdr), int(pfx.bloom), int(pfx.ssao), double(pfx.exposure));
         CHECK(pfx.hdr, "the player view was told the scene is HDR (it was not, before this fix)");
         CHECK(pfx == efx, "ONE chain shape: player postFx == editor postFx");
-        CHECK(playerView->shadows() == editorView->shadows(), "shadow flag matches");
+        CHECK(jahshaka::engine::inspect::view(playerView)->shadows() == jahshaka::engine::inspect::view(editorView)->shadows(), "shadow flag matches");
 
         // ---- 2. neutral pixels: fog, ambient, shadows ------------------------
         Image e, p;
@@ -463,7 +464,7 @@ int main(int argc, char **argv)
             const auto force = [](View *v, PostFxDesc fx) {
                 fx.allowOffscreen = true; v->setPostFx(fx);
             };
-            force(editorView, editorView->postFx());
+            force(editorView, jahshaka::engine::inspect::view(editorView)->postFx());
             for (int i = 0; i < 24; ++i) engine->renderOneFrame();
             const float editorScale = editorView->measuredExposureScale();
             std::printf("    editor converged exposure = %.4f\n", double(editorScale));
@@ -489,7 +490,7 @@ int main(int argc, char **argv)
                 // host's first buildEnvironment, here the same description
                 // pushed by hand (a fresh view's own PostFxDesc has no HDR in
                 // it at all) — and one frame is rendered.
-                const PostFxDesc worldFx = editorView->postFx();
+                const PostFxDesc worldFx = jahshaka::engine::inspect::view(editorView)->postFx();
                 force(seeded, worldFx);
                 force(control, worldFx);
                 engine->renderOneFrame();

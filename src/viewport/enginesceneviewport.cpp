@@ -1833,7 +1833,7 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     if (mMirror) mMirror->setSource(scene);
     // A new document scene means no frame of IT has presented yet, even when
     // the engine scene underneath is the same object (close/open reuses it).
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     refreshOverlay();
     // AND THE TEARDOWN REACHES THE SCREEN (lane STALE-VIEW-1). This is the one
     // moment the world a user is looking at stops existing; without a frame
@@ -2404,13 +2404,14 @@ void EngineSceneViewport::setPipSize(double fraction)
 bool EngineSceneViewport::pipOnView() const
 {
     const jahshaka::engine::View *v = view();
-    return v && v->pip().enabled;
+    return v && v->pushedPip().enabled;   // what the host last pushed (U3 stage 2)
 }
 
 unsigned EngineSceneViewport::pipBuilds() const
 {
     const jahshaka::engine::View *v = view();
-    return v ? v->pipGeneration() : 0u;
+    const auto *pv = v ? publishedView() : nullptr;   // the last frame's (U3 stage 2)
+    return pv ? pv->pipGeneration : 0u;
 }
 
 // THE SELECTION PREVIEW (D3), pushed once a frame from syncFrame. It exists
@@ -2773,7 +2774,7 @@ void EngineSceneViewport::settlePresentedFrame()
     if (mPresentedDone.empty()) return;
     jahshaka::engine::View *v = view();
     if (mEngine && v && v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed) {
-        if (!v->isEnabled()) {
+        if (!v->pushedEnabled()) {
             // A HIDDEN VIEW PRESENTS NOTHING, so there is no presented frame to
             // read: its window is not on screen and may have been resized under
             // it while hidden (forcing a frame into it there lost the device —
@@ -3499,7 +3500,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                 // THE GRADE, ON THE SHOT'S PART OF THE RECORD (U0 3a): the description the mirror built for the shot
                 // (the world's chain and the camera's), opted in here — never on the view on the spot, which the
                 // drain would overwrite with the record's chain.
-                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
                 // The mirror built the scene's
                 // post-fx description — the VIEWPORT's description — which an offscreen
                 // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
@@ -3834,7 +3835,9 @@ void EngineSceneViewport::end()
 qulonglong EngineSceneViewport::presentsSinceBind() const
 {
     if (!view()) return 0;
-    const qulonglong now = qulonglong(view()->framesPresented());
+    // THE LAST FRAME'S COUNT (ENGINE-UPGRADE-U3 stage 2: the snapshot), as every baseline below is taken.
+    const auto *pv = publishedView();
+    const qulonglong now = pv ? qulonglong(pv->presented) : 0;
     // The engine resets its own counter when a scene is (re)bound; then `now`
     // is below the baseline and IS the answer.
     return now >= mPresentBaseline ? now - mPresentBaseline : now;
@@ -3861,7 +3864,8 @@ qulonglong EngineSceneViewport::blankFramesPresented() const
     // Straight off the engine, with NO rebase: unlike framesPresented — which
     // is "frames of the world bound right now", and therefore restarts at every
     // bind — this one is a running total a caller differences across a load.
-    return view() ? qulonglong(view()->blankFramesPresented()) : 0;
+    const auto *pv = publishedView();   // the last frame's (U3 stage 2)
+    return pv ? qulonglong(pv->blank) : 0;
 }
 
 void EngineSceneViewport::setShowFps(bool value)
@@ -4100,7 +4104,7 @@ QString EngineSceneViewport::coverState() const
     // question a caller asks is "what is the user looking at", and the overlay
     // the view holds is the answer. With no view there is nothing to cover.
     if (!view()) return QStringLiteral("none");
-    switch (view()->overlay().cover) {
+    switch (view()->pushedOverlay().cover) {
     case Cover::Loading: return QStringLiteral("loading");
     case Cover::NoScene: return QStringLiteral("noscene");
     case Cover::None:    break;
@@ -4270,13 +4274,13 @@ void EngineSceneViewport::presentCovered(int frames)
     if (mPresentingCover) return;          // refreshOverlay's rising edge, already in hand
     mPresentingCover = true;
     refreshOverlay();
-    const bool covered = view()->overlay().cover !=
+    const bool covered = view()->pushedOverlay().cover !=
                          jahshaka::engine::ViewOverlayDesc::Cover::None;
     // The View is enabled by widget VISIBILITY (EngineViewWidget::show/hideEvent)
     // and the driver skips a tick with nothing enabled — so on the path this
     // exists for (a page switch, a synchronous open) the view may still be
     // disabled. Enable it for exactly these frames and put it back.
-    const bool wasEnabled = view()->isEnabled();
+    const bool wasEnabled = view()->pushedEnabled();
     view()->setEnabled(true);
     for (int i = 0; i < frames; ++i) {
         sampleStreamingWork(false);
@@ -4299,13 +4303,13 @@ void EngineSceneViewport::presentCovered(int frames)
     // and take it straight back down over a world that has not drawn yet. (The
     // driver's own ticks while the cover is up DO count, exactly as they always
     // did — that is what eventually reveals the viewport.)
-    if (covered) mPresentBaseline = qulonglong(view()->framesPresented());
+    if (covered) mPresentBaseline = presentedNow();
     // THE COUNT A CALLER DIFFERENCES ACROSS A LOAD to ask "was this one
     // covered" after the fact (IEditorViewport::coversPresented) — the LOADING
     // cover only. `Cover::NoScene` is not a load and is presented by every
     // close, so counting it would answer a different question with the same
     // number.
-    if (view()->overlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
+    if (view()->pushedOverlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
         ++mCoversPresented;
     mLastPresentedCover = wanted;
     mLastPresentedW = view()->width();
@@ -4332,7 +4336,7 @@ void EngineSceneViewport::presentBackground()
     // — but a load begun before the page was shown can reach here with the view
     // still disabled. Enable it for this one frame and put it back, exactly as
     // presentCovered does.
-    const bool wasEnabled = view()->isEnabled();
+    const bool wasEnabled = view()->pushedEnabled();
     view()->setEnabled(true);
     sampleStreamingWork(false);
     ++mFrameEpoch;
@@ -4348,7 +4352,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
 {
     // The world on screen (if any) is about to be replaced: nothing presented
     // from here on belongs to the old one.
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     mSceneLoadPending = true;
     mLoadingTitle = title;
     // THE COVER IS A PREFERENCE, LATCHED HERE (services/loadingcover.h,
@@ -4604,7 +4608,8 @@ void EngineSceneViewport::rememberPassShape()
     // machine cannot render. Two settings values, written only on change.
     if (!mEngine || !mEngineScene) return;
     if (View *v = view())
-        EngineHost::rememberWarmUpShape({ v->sampleCount(), v->shadows() });
+        if (const auto *pv = publishedView())   // the achieved MSAA as the last frame drew it (U3 stage 2)
+            EngineHost::rememberWarmUpShape({ pv->sampleCount, v->pushedShadows() });
 }
 
 void EngineSceneViewport::coverIfNotPresenting()
@@ -4701,7 +4706,7 @@ void EngineSceneViewport::clearScene()
     // calls this to tear the OLD world down, so clearing it here would hand the
     // world being installed a scene that builds its whole GI arm behind the
     // cover (OPEN_COVER_SPEC §2 A). A plain close never raised it.
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     refreshOverlay();
 }
 

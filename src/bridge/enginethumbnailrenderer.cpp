@@ -279,7 +279,10 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
                    .arg(QString::fromStdString(engine->lastError())));
         return false;
     }
-    if (view()->width() != unsigned(size.width()) || view()->height() != unsigned(size.height()))
+    // The size the last frame drew (ENGINE-UPGRADE-U3 stage 2: the snapshot); a view no frame has drawn yet is
+    // resized to the ask (a deferred no-op when it already is).
+    const auto *pv = engine->published().view(view()->name());
+    if (!pv || pv->width != unsigned(size.width()) || pv->height != unsigned(size.height()))
         view()->resize(unsigned(size.width()), unsigned(size.height()));
     return true;
 }
@@ -444,7 +447,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     fv.camera = camera;
     const float exposure = iris::lens::exposureStopsToChain(document->exposure);
     fv.finish = [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
         secondaryfx::apply(fx, true, exposure);
         part.postFx = fx;
     };

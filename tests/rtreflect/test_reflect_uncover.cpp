@@ -34,6 +34,7 @@
 //
 // Every number is frames-counted (the engine has no wall clock).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
@@ -443,7 +444,7 @@ static int helpersMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         render(e, 60);
         view->readPixels(marchBare);
         helpersOn(true);
-        PostFxDesc plain = view->postFx();
+        PostFxDesc plain = jahshaka::engine::inspect::view(view)->postFx();
         plain.ssr = 0;
         view->setPostFx(plain);
         render(e, 60);

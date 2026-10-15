@@ -30,6 +30,7 @@
 // runner and asserted here — the user-level manifest belongs to whatever
 // headset last connected (VR_SPEC §2.6).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <chrono>
@@ -307,7 +308,7 @@ int main() {
     buildScene(scene);
     REQUIRE(desktop->setScene(scene));
     testCameraLookAt(desktop, Vec3{ 0.6f, 1.5f, 2.4f }, Vec3{ 0.0f, 1.3f, -0.6f });
-    const PostFxDesc desktopFxBefore = desktop->postFx();
+    const PostFxDesc desktopFxBefore = jahshaka::engine::inspect::view(desktop)->postFx();
 
     // ---- THE DESKTOP'S PICTURE, BEFORE ------------------------------------
     // VR_SPEC §0's constraint, measured in this process: without a headset the
@@ -338,7 +339,7 @@ int main() {
         // HDR on, MSAA 1 (HDR + MSAA segfaults this driver), and every effect
         // that samples a NEIGHBOURHOOD off, because at the middle of this
         // target the neighbourhood is the other eye.
-        const PostFxDesc fx = vrView->postFx();
+        const PostFxDesc fx = jahshaka::engine::inspect::view(vrView)->postFx();
         CHECK(fx.hdr);
         CHECK(!fx.ssao);
         CHECK(fx.smaaPreset < 0);
@@ -1293,8 +1294,8 @@ int main() {
             if (began) {
                 View *vrView = engine->vrView();
                 REQUIRE(vrView != nullptr);
-                CHECK(!vrView->helpersVisible());
-                CHECK(vrView->vrHelpersVisible());
+                CHECK(!jahshaka::engine::inspect::view(vrView)->helpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->vrHelpersVisible());
                 pump(engine.get(), 50ull, 500u);
                 Image eyes;
                 REQUIRE(vrView->readPixels(eyes));
@@ -1324,8 +1325,8 @@ int main() {
             if (began) {
                 View *vrView = engine->vrView();
                 REQUIRE(vrView != nullptr);
-                CHECK(vrView->helpersVisible());
-                CHECK(vrView->vrHelpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->helpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->vrHelpersVisible());
                 pump(engine.get(), 50ull, 500u);
                 Image eyes;
                 REQUIRE(vrView->readPixels(eyes));
@@ -1373,7 +1374,7 @@ int main() {
     // is a fixture bug, not a VR one, and it read 230,400 bytes when this line
     // was missing.
     setFixtureSky(scene, false);
-    CHECK_MSG(desktop->postFx() == desktopFxBefore,
+    CHECK_MSG(jahshaka::engine::inspect::view(desktop)->postFx() == desktopFxBefore,
               "the desktop view's post chain is exactly what it was before the session");
     Image after;
     REQUIRE(stableReadback(engine.get(), desktop, after));
@@ -2687,7 +2688,7 @@ int main() {
             CHECK_MSG(drawing.mirrorShowing == VrDesktopPicture::Eye,
                       "THE DESKTOP IS THE EYE'S COPY while the runtime draws (rendered %llu)",
                       drawing.rendered);
-            CHECK_MSG(!desktop->isEnabled(),
+            CHECK_MSG(!jahshaka::engine::inspect::view(desktop)->isEnabled(),
                       "...which is ONE RENDER PIPELINE: the desktop's own View is switched "
                       "off by the ENGINE, not by a host");
 
@@ -2703,7 +2704,7 @@ int main() {
                 if (own) ++ownFrames;
                 // The reported answer and the View's own flag are one fact:
                 // "the desktop shows the eye" IS "its View is not drawing".
-                if (own != desktop->isEnabled()) ++disagreed;
+                if (own != jahshaka::engine::inspect::view(desktop)->isEnabled()) ++disagreed;
             }
             CHECK_MSG(ownFrames == 0u && disagreed == 0u,
                       "A ONE-FRAME BLINK DOES NOT FLAP THE DESKTOP: %u of 120 frames showed "
@@ -2711,7 +2712,7 @@ int main() {
                       ownFrames, disagreed);
         }
         if (began) { engine->setVrMirrorView(nullptr); engine->endVrSession(); }
-        CHECK_MSG(desktop->isEnabled(),
+        CHECK_MSG(jahshaka::engine::inspect::view(desktop)->isEnabled(),
                   "(5) A SESSION THAT ENDS LEAVES THE DESKTOP DRAWING: the engine switched "
                   "the View off, so the engine switched it back on");
 
@@ -2751,7 +2752,7 @@ int main() {
                 const double ms = std::chrono::duration<double, std::milli>(
                                       std::chrono::steady_clock::now() - t0).count();
                 const bool eyeNow = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
-                if (eyeNow == desktop->isEnabled()) ++disagreements;
+                if (eyeNow == jahshaka::engine::inspect::view(desktop)->isEnabled()) ++disagreements;
                 if (eyeNow != showingEye) {
                     if (eyeNow) ++toEye; else ++toOwn;
                     flipMs += ms; ++flipFrames;
@@ -2815,7 +2816,7 @@ int main() {
             engine->endVrSession();
         }
         CHECK(!engine->vrStatus().active);
-        CHECK_MSG(desktop->isEnabled(), "the desktop draws again after the second session");
+        CHECK_MSG(jahshaka::engine::inspect::view(desktop)->isEnabled(), "the desktop draws again after the second session");
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------

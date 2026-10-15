@@ -49,6 +49,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -263,7 +264,7 @@ Resolved resolveThroughMirror(const iris::ScenePtr &doc, View *view, SceneMirror
     // over the world's on the view's part — drained by the frame, then read.
     mirror.sync(mirrorframe::world(view, camera));
     gEngine->renderOneFrame();
-    const PostFxDesc fx = view->postFx();
+    const PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
     return { fx.exposure, fx.exposureMin, fx.exposureMax, fx.tonemapFixed };
 }
 

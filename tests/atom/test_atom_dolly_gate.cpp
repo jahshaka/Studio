@@ -64,6 +64,7 @@
 // side is not clipped to black either. A saturated sphere would hide a pop by
 // clamping it.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -214,7 +215,7 @@ int main()
     // THE WATCHED VIEW'S BAND (see the header): set once, at creation, because
     // it is a graph-shape property.
     view->setLodHysteresisOffscreen(true);
-    CHECK(view->lodHysteresisOffscreen(), "the offscreen view carries the watched view's LOD band");
+    CHECK(jahshaka::engine::inspect::view(view)->lodHysteresisOffscreen(), "the offscreen view carries the watched view's LOD band");
 
     std::vector<float> bounds;
     const MeshData sphere = sphereWithChain(bounds);

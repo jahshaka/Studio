@@ -135,9 +135,9 @@ bool profileFromName(const QString &raw, VrProfileName &out, QString *error)
 /// views report theirs here — `View::postFx()` is what the view is really
 /// carrying, the VR policy already applied — so the answer is an assertion on
 /// the fields rather than on a picture, and a difference names ITSELF.
-QVariantMap postFxMap(const View &view)
+QVariantMap postFxMap(const View &view, const PublishedEngineFrame::ViewFrames &pv)
 {
-    const PostFxDesc &fx = view.postFx();
+    const PostFxDesc &fx = pv.postFx;   // the effective chain, as the last frame drew it (U3 stage 2)
     const auto lookName = [](LookKind k) {
         switch (k) {
         case LookKind::Desaturate: return QStringLiteral("desaturate");
@@ -211,7 +211,7 @@ QVariantMap postFxMap(const View &view)
     // need rides that one push, immediately before this view's passes; a count
     // that does not climb means this picture is rendering with whatever the
     // last workspace to update left in the process-wide materials.
-    m[QStringLiteral("globalsPushes")] = QVariant::fromValue(qulonglong(view.globalsPushes()));
+    m[QStringLiteral("globalsPushes")] = QVariant::fromValue(qulonglong(pv.globalsPushes));
     QVariantList looks;
     for (const LookDesc &l : fx.looks) {
         QVariantMap one;
@@ -1619,10 +1619,12 @@ QVariantMap VrApi::state()
     // headset looks wrong" should read first.
     if (Engine *eng = e) {
         if (View *eyes = eng->vrView()) {
+            // AS THE LAST FRAME DREW THEM (ENGINE-UPGRADE-U3 stage 2: the snapshot's effective chains, by name).
+            const PublishedEngineFrame &pub = eng->published();
             QVariantMap fx;
-            fx[QStringLiteral("eye")] = postFxMap(*eyes);
+            if (const auto *pe = pub.view(eyes->name())) fx[QStringLiteral("eye")] = postFxMap(*eyes, *pe);
             if (View *desk = desktopViewOf(eng, eyes))
-                fx[QStringLiteral("desktop")] = postFxMap(*desk);
+                if (const auto *pd = pub.view(desk->name())) fx[QStringLiteral("desktop")] = postFxMap(*desk, *pd);
             out[QStringLiteral("postFx")] = fx;
         }
     }

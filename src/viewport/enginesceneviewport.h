@@ -234,8 +234,14 @@ public:
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     void readRadianceWithNextScreenshot() override { mShotRadianceWanted = true; }
     QVector<float> takeScreenshotRadiance(int *width, int *height) override;
+    /// THE VIEW AS THE LAST FRAME CLOSED IT (ENGINE-UPGRADE-U3 stage 2: Engine::published(), by the view's name) —
+    /// null before its first frame. The achieved size, MSAA and present counts are read here, never from the engine.
+    /// framesPresented as the last frame closed it (0 before its first) — every present baseline is taken from it.
+    qulonglong presentedNow() const { const auto *pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
+    const jahshaka::engine::PublishedEngineFrame::ViewFrames *publishedView() const
+    { return (mEngine && view()) ? mEngine->published().view(view()->name()) : nullptr; }
     int sampleCount() const override
-    { return view() ? int(view()->sampleCount()) : 1; }
+    { const auto *pv = publishedView(); return pv ? int(pv->sampleCount) : 1; }
     bool isOffscreen() const override
     { return view() ? view()->isOffscreen() : true; }
     /// The size of what is actually being rendered into, in pixels — View::
@@ -245,7 +251,7 @@ public:
     /// own request the selftest's post-resize check compared the pushed values
     /// with themselves and could not fail (deep audit area 7 F3).
     QSize renderTargetSize() const override
-    { return view() ? QSize(int(view()->width()), int(view()->height())) : QSize(); }
+    { const auto *pv = publishedView(); return pv ? QSize(int(pv->width), int(pv->height)) : QSize(); }
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     int activePlanarReflectors() const override

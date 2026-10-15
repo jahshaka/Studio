@@ -70,7 +70,7 @@ static void shadowHygieneCase(Engine *engine, View *view)
     // SHADOWS ARE OFF BY DEFAULT ON A VIEW. Without this the suite would be
     // comparing two unshadowed frames and passing for the wrong reason.
     view->setShadows(true);
-    CHECK(view->shadows(), "the view renders shadows");
+    CHECK(jahshaka::engine::inspect::view(view)->shadows(), "the view renders shadows");
 
     // THE HELPER: an enormous flat plate far off to the side and well above the
     // camera, marked as an editor helper exactly as the mirror marks the ground

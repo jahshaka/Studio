@@ -57,6 +57,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -494,7 +495,7 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     gEngine->renderOneFrame();
     mirror.sync(mirrorframe::environment(view));
     if (optIn) {
-        PostFxDesc fx = view->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
         fx.allowOffscreen = true;
         view->setPostFx(fx);
     }
@@ -871,9 +872,9 @@ void partD()
     doc.scene->exposureMeterLowPercent = 2.0f;
     doc.scene->exposureMeterHighPercent = 98.0f;
     shoot(mirror, view, doc.camera, true, nullptr, 3);
-    CHECK(view->postFx().meterPattern == ExposureMeterPattern::Spot &&
-              std::fabs(view->postFx().meterLowPercent - 2.0f) < 1e-6f &&
-              std::fabs(view->postFx().meterHighPercent - 98.0f) < 1e-6f,
+    CHECK(jahshaka::engine::inspect::view(view)->postFx().meterPattern == ExposureMeterPattern::Spot &&
+              std::fabs(jahshaka::engine::inspect::view(view)->postFx().meterLowPercent - 2.0f) < 1e-6f &&
+              std::fabs(jahshaka::engine::inspect::view(view)->postFx().meterHighPercent - 98.0f) < 1e-6f,
           "the scene's metering pattern and clips reach the view's description");
 
     // ---- D3: A CAMERA OVERRIDE DOES NOT RESET THE WORLD'S METER ---------
@@ -888,8 +889,8 @@ void partD()
     doc.camera->exposureMin = -6.0f;
     doc.camera->exposureMax = 6.0f;
     shoot(mirror, view, doc.camera, true, nullptr, 3);
-    CHECK(view->postFx().meterPattern == ExposureMeterPattern::Spot &&
-              std::fabs(view->postFx().meterLowPercent - 2.0f) < 1e-6f,
+    CHECK(jahshaka::engine::inspect::view(view)->postFx().meterPattern == ExposureMeterPattern::Spot &&
+              std::fabs(jahshaka::engine::inspect::view(view)->postFx().meterLowPercent - 2.0f) < 1e-6f,
           "a camera in Auto over the world's Spot meter still meters SPOT");
     doc.camera->exposureMode = iris::CameraExposureMode::Inherit;
 

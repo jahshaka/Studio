@@ -22,6 +22,7 @@
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -227,7 +228,7 @@ int main()
         // (measured: the sphere's unlit side came back at 1.0000 and its LIT side
         // at 0.2609 before this was pinned). tonemapFixed is the same filmic
         // curve with the metering taken out.
-        PostFxDesc fx = view->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
         fx.allowOffscreen = true;
         fx.hdr = true;
         fx.tonemapFixed = true;

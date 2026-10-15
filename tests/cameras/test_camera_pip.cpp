@@ -63,6 +63,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -285,7 +286,7 @@ int main(int argc, char **argv)
             ev.view = view;
             ev.environment = true;
             ev.finish = [](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-                PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                PostFxDesc fx = part.postFx ? *part.postFx : jahshaka::engine::inspect::view(v)->postFx();
                 fx.allowOffscreen = true;
                 fx.tonemapFixed = true;
                 part.postFx = fx;
@@ -300,7 +301,7 @@ int main(int argc, char **argv)
         pip.left = rect.l; pip.top = rect.t; pip.width = rect.w; pip.height = rect.h;
         mirror.applyPip(pipOn ? shotCam : iris::CameraNodePtr(), view, pip);
         if (forceRaw) {                         // the control, engine-side
-            ViewPipDesc raw = view->pip();
+            ViewPipDesc raw = jahshaka::engine::inspect::view(view)->pip();
             raw.tonemap = false;
             view->setPip(raw);
         }
@@ -501,7 +502,7 @@ int main(int argc, char **argv)
         // inset (there is no reorder API — an inset added before the main
         // workspace is silently painted over).
         const unsigned beforeRebuild = view->pipGeneration();
-        view->setShadows(!view->shadows());
+        view->setShadows(!jahshaka::engine::inspect::view(view)->shadows());
         Image afterShadowFlip; frame(afterShadowFlip);
         std::printf("    main-workspace rebuild: workspace %u, pipGeneration %u -> %u\n",
                     view->workspaceGeneration(), beforeRebuild, view->pipGeneration());
@@ -509,7 +510,7 @@ int main(int argc, char **argv)
               "a MAIN workspace rebuild re-appends the inset (it must stay LAST)");
         CHECK(histogram(afterShadowFlip, rect).lit > 100,
               "…and the inset is still on screen after it");
-        view->setShadows(!view->shadows());
+        view->setShadows(!jahshaka::engine::inspect::view(view)->shadows());
     }
 
     // ---- 6. THE CONSISTENCY RULE ------------------------------------------
@@ -524,7 +525,7 @@ int main(int argc, char **argv)
         doc->hdrEnabled = false;                // the world stops grading...
         worldDirty = true;
         Image plain; frame(plain);
-        ViewPipDesc ask = view->pip();
+        ViewPipDesc ask = jahshaka::engine::inspect::view(view)->pip();
         ask.tonemap = true;                     // ...and the host asks anyway
         view->setPip(ask);
         Image asked; frame(asked);

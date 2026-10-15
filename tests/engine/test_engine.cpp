@@ -339,7 +339,7 @@ void background_changes_at_runtime() {
     Image img; REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kBlue));
     v->setBackground(kGreen);
-    CHECK(near(Px{ int(v->background().r * 255), int(v->background().g * 255), int(v->background().b * 255), 255 }, kGreen));
+    CHECK(near(Px{ int(jahshaka::engine::inspect::view(v)->background().r * 255), int(jahshaka::engine::inspect::view(v)->background().g * 255), int(jahshaka::engine::inspect::view(v)->background().b * 255), 255 }, kGreen));
     render(fx.e); REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kGreen));
     v->setBackground(kGreen);                       // same value: no-op, still fine
@@ -666,7 +666,7 @@ void pip_is_ignored_offscreen_unless_asked() {
               "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
               pixelHash(plain), pixelHash(refused));
     // The view still remembers what it was asked for — it just does not act.
-    CHECK(v->pip().enabled);
+    CHECK(jahshaka::engine::inspect::view(v)->pip().enabled);
 }
 
 /// The other half: with allowOffscreen the SAME desc must composite a second
@@ -745,13 +745,13 @@ void pip_request_dies_with_its_scene() {
     CHECK_MSG(on.inside >= on.insideTotal * 95 / 100,
               "precondition: the inset owns its rect on the first scene: %u/%u",
               on.inside, on.insideTotal);
-    CHECK(v->pip().enabled);
+    CHECK(jahshaka::engine::inspect::view(v)->pip().enabled);
 
     CHECK(v->setScene(nullptr));
-    CHECK_MSG(!v->pip().enabled, "detaching the scene must drop the PiP request");
+    CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "detaching the scene must drop the PiP request");
     const unsigned pipGen = v->pipGeneration();
     CHECK(v->setScene(s2));
-    CHECK_MSG(!v->pip().enabled, "the next scene must not inherit the request");
+    CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "the next scene must not inherit the request");
     CHECK_MSG(v->pipGeneration() == pipGen,
               "no inset may be BUILT on a scene that did not ask for one: pipGeneration %u -> %u",
               pipGen, v->pipGeneration());
@@ -1341,7 +1341,7 @@ void shadows_darken_the_ground() {
     auto lum = [&](unsigned x, unsigned y) { const Px q = px(img, x, y); return (q.r + q.g + q.b) / 3; };
     const int besideOff = lum(48, 28);
     v->setShadows(true);
-    CHECK(v->shadows());
+    CHECK(jahshaka::engine::inspect::view(v)->shadows());
     if (!fx.e->lastError().empty()) std::printf("    lastError after setShadows: %s\n", fx.e->lastError().c_str());
     render(fx.e, 4); REQUIRE(v->readPixels(img));
     const int besideOn = lum(48, 28), farOn = lum(6, 6);
@@ -4215,9 +4215,9 @@ void workspace_seam_counts_every_rebuild() {
     CHECK_MSG(afterBind == 1u, "binding a scene builds exactly one workspace: %u", afterBind);
 
     // Same value = free. Hosts (SceneMirror) push these every frame.
-    v->setBackground(v->background());
+    v->setBackground(jahshaka::engine::inspect::view(v)->background());
     v->setSampleCount(v->sampleCount());
-    v->setShadows(v->shadows());
+    v->setShadows(jahshaka::engine::inspect::view(v)->shadows());
     CHECK_MSG(v->workspaceGeneration() == afterBind,
               "re-pushing unchanged values must not rebuild: %u", v->workspaceGeneration());
 
@@ -4519,8 +4519,8 @@ void hud_overlay_is_ignored_offscreen_unless_asked() {
               "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
               pixelHash(plain), pixelHash(covered));
     // The view still remembers what it was asked for — it just does not act.
-    CHECK(v->overlay().cover == ViewOverlayDesc::Cover::Loading);
-    CHECK(v->overlay().stats);
+    CHECK(jahshaka::engine::inspect::view(v)->overlay().cover == ViewOverlayDesc::Cover::Loading);
+    CHECK(jahshaka::engine::inspect::view(v)->overlay().stats);
 }
 
 /// The other half: a negative test that can never fail proves nothing. With
@@ -5022,7 +5022,7 @@ void postfx_is_ignored_offscreen_unless_asked() {
               b.r, b.g, b.b, a.r, a.g, a.b);
     // postFx() still reports what the host asked for — the view remembers, it
     // just does not act.
-    CHECK(v->postFx().hdr);
+    CHECK(jahshaka::engine::inspect::view(v)->postFx().hdr);
 }
 
 /// HDR + filmic tonemap + auto exposure, on an offscreen view that opted in.

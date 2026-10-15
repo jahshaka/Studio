@@ -290,7 +290,7 @@ void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)
     if (mModel && mModel->document()) {
         const float exposure = iris::lens::exposureStopsToChain(mModel->document()->exposure);
         sv.finish = [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             secondaryfx::apply(fx, true, exposure);
             part.postFx = fx;
         };

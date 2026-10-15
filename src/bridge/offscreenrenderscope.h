@@ -51,7 +51,7 @@ public:
         std::vector<jahshaka::engine::View *> views;
         mEngine->listViews(views);
         for (jahshaka::engine::View *v : views) {
-            if (!v || v->isOffscreen() || !v->isEnabled()) continue;
+            if (!v || v->isOffscreen() || !v->pushedEnabled()) continue;
             v->setEnabled(false);
             mSuspended.push_back(v);
         }

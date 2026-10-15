@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "jahshaka/engine/Types.h"
 
 namespace enginetest {
@@ -259,7 +260,7 @@ inline void setNodeScale(Scene *s, NodeId n, const Vec3 &scale)
 // radiance — the space every such bar in this tree was derived in.
 inline bool displayEncoded(View *v)
 {
-    return v && (!v->isOffscreen() || v->postFx().allowOffscreen);
+    return v && (!v->isOffscreen() || jahshaka::engine::inspect::view(v)->postFx().allowOffscreen);
 }
 inline void linearise(Image &img)
 {

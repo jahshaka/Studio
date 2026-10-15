@@ -1,6 +1,7 @@
 // THE SCALE FIXTURES — see scale_world.h for what they are and why they are built
 // this way.
 #include "scale_world.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../support/proceduralshell.h"
 
@@ -478,20 +479,20 @@ void frame(Env &env, int count)
             // measured view directly and then setting the flag would rebuild that
             // view's workspace twice a frame.
             env.mirror->sync(mirrorframe::environment(env.envView));
-            PostFxDesc fx = env.envView->postFx();
+            PostFxDesc fx = jahshaka::engine::inspect::view(env.envView)->postFx();
             fx.allowOffscreen = true;
             if (env.fxOverride) env.fxOverride(fx);
-            if (fx != env.view->postFx()) env.view->setPostFx(fx);
-            if (env.view->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
+            if (fx != jahshaka::engine::inspect::view(env.view)->postFx()) env.view->setPostFx(fx);
+            if (jahshaka::engine::inspect::view(env.view)->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
         } else {
             env.mirror->sync(mirrorframe::environment(env.view));
             if (env.fxOverride) {
                 // A MEASUREMENT'S OWN POST FLAGS (W7's depth pyramid) on a window
                 // view: pushed over the world's description after it — a rebuild
                 // only on the frame the flag first differs, then the same value.
-                PostFxDesc fx = env.view->postFx();
+                PostFxDesc fx = jahshaka::engine::inspect::view(env.view)->postFx();
                 env.fxOverride(fx);
-                if (fx != env.view->postFx()) env.view->setPostFx(fx);
+                if (fx != jahshaka::engine::inspect::view(env.view)->postFx()) env.view->setPostFx(fx);
             }
         }
         env.mirror->sync(mirrorframe::camera(env.view, env.camera));

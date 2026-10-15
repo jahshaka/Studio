@@ -44,6 +44,7 @@
 #include "irisgl/document/scenegraph/socket.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include "../skeletal/armrig.h"
@@ -261,7 +262,7 @@ int main(int argc, char **argv)
         Image warm;
         oneStep(0.0f, warm);      // arms the tag and the camera binding
         oneStep(0.0f, warm);
-        CHECK(view->cameraNode() != 0, "the view's camera rides the socketed camera's node");
+        CHECK(jahshaka::engine::inspect::view(view)->cameraNode() != 0, "the view's camera rides the socketed camera's node");
         Image single0, single1;
         oneStep(0.0f, single0);
         show("P2b t=0, one sync + one frame", single0);

@@ -75,7 +75,7 @@ inline void apply(jahshaka::engine::PostFxDesc &fx, bool enabled, float exposure
 inline void apply(jahshaka::engine::View *view, bool enabled, float exposure)
 {
     if (!view) return;
-    jahshaka::engine::PostFxDesc fx = view->postFx();
+    jahshaka::engine::PostFxDesc fx = view->pushedPostFx();   // what the host last pushed (U3 stage 2)
     apply(fx, enabled, exposure);
     view->setPostFx(fx);
 }
@@ -123,7 +123,7 @@ inline void applyScene(jahshaka::engine::PostFxDesc &fx, float measuredExposureS
 
 inline void applyScene(jahshaka::engine::View *view, float measuredExposureScale) {
     if (!view) return;
-    jahshaka::engine::PostFxDesc fx = view->postFx();
+    jahshaka::engine::PostFxDesc fx = view->pushedPostFx();   // what the host last pushed (U3 stage 2)
     applyScene(fx, measuredExposureScale);
     view->setPostFx(fx);
 }

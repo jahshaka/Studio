@@ -53,6 +53,7 @@
 //      numbers depend on the noise and on nothing a driver's float arithmetic
 //      decides, and therefore the one to compare across drivers by hand.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -99,7 +100,7 @@ MeshData planeMesh(float half)
 /// with no environment variable and no other thread involved.
 void setDither(bool off)
 {
-    PostFxDesc fx = gView->postFx();
+    PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
     fx.ditherOff = off;
     gView->setPostFx(fx);
 }
@@ -408,7 +409,7 @@ int main()
     // discriminates — verified by hand once, by flipping the format back to
     // _SRGB in OgreChain::build: 73,896 of 262,144 bytes then differ.
     {
-        PostFxDesc fx = gView->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
         fx.ditherOff = true;
         fx.smaaPreset = -1;
         gView->setPostFx(fx);
@@ -457,7 +458,7 @@ int main()
         // to +500 leaves it far behind: the frame is the clear colour and
         // nothing else. (setScene(nullptr) would take the chain down with it.)
         enginetest::testCameraAt(gView, Vec3(0.0f, 0.0f, -500.0f));
-        PostFxDesc fx = gView->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
         fx.ditherOff = true;  gView->setPostFx(fx);
         Image flatPlain;
         if (!shoot(flatPlain, 4)) { std::printf("FAIL: readPixels (flat, undithered)\n"); return 1; }

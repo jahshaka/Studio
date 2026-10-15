@@ -59,6 +59,7 @@
 //      This is the difference between a dial a person can drag and a dial that
 //      destroys the compositor under the cursor.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -110,7 +111,7 @@ MeshData planeMesh(float half)
 /// description edit and a re-read; nothing else about the fixture moves.
 void setBloom(bool on, float amount)
 {
-    PostFxDesc fx = gView->postFx();
+    PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
     fx.bloom = on;
     fx.bloomAmount = amount;
     gView->setPostFx(fx);

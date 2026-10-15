@@ -405,7 +405,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
         // The grades (IEditorViewport::ScreenshotGrade), exactly as the editor's takeScreenshot resolves them — the
         // player is the other space, not another policy — on the shot's part of the record.
         sv.finish = [&](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (grade == int(IEditorViewport::ScreenshotGrade::Scene)) {
                 // The player's on-screen view is the one that has been measuring this scene; the shot borrows its
                 // exposure (SS1). No view (the player page was never shown) falls back inside applyScene.
