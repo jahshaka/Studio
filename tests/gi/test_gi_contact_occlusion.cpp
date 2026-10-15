@@ -628,12 +628,12 @@ int main()
                         const size_t i = (size_t(iz) * vv.height + iy) * vv.width + ix;
                         const double c = vv.albedo[i * 4 + 3];
                         const double lr = vv.light[i * 4 + 0];
-                        const double back = vv.lightBack.empty() ? -1.0 : vv.lightBack[i * 4 + 0];
+                        const double back = vv.lightBack[i * 4 + 0];
                         std::printf("   voxel %-22s (%d,%d,%d) albedo %.3f c %.3f  L/(k c)/L_sky: mean %.4f back %.4f "
                                     "front %.4f\n", what, ix, iy, iz, vv.albedo[i * 4], c,
                                     c > 0 ? lr / (vv.multiplier * c) / L : 0.0,
-                                    c > 0 && back >= 0 ? back / (vv.multiplier * c) / L : -1.0,
-                                    c > 0 && back >= 0 ? (2 * lr - back) / (vv.multiplier * c) / L : -1.0);
+                                    c > 0 ? back / (vv.multiplier * c) / L : -1.0,
+                                    c > 0 ? (2 * lr - back) / (vv.multiplier * c) / L : -1.0);
                     };
                     std::printf("   THE STORE (cascade 0, cell %.3f m, k %.4f): a Lambertian lit by the sky "
                                 "alone re-emits rho x 0.702 (the lobe) x its sky share\n", vv.cell[0],

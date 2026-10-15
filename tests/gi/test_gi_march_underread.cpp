@@ -22,10 +22,12 @@
 // 0.990 on the plate, 1.000 free-standing, field off and on. The leftover 1 % at 128 cells is the
 // junction voxel itself, which holds the wall's foot and the plate's top in one light.
 // THE TIERS ARE ONE READER: the row reads Low and Medium and asserts Low reads Medium's value on
-// every arm (`--all-tiers` adds High and Epic). It prints the light store's memory per arm (Low,
+// every arm within 1e-4 - the same store and the same reader path, so the same number (`--all-tiers`
+// adds High and Epic). It prints the light store's memory per arm (Low,
 // 64 cells, one cascade: 6.86 MB before stage 1, 14.07 MB after - the directional volumes, the
 // back side and the bounce's per-side twins).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -160,6 +162,42 @@ int main(int argc, char **argv)
             rv->setScene(nullptr);
             e->destroyScene(s);
         }
+    {
+        // THE LOW TIER'S OWN CHAIN (two 64^3 cascades): its light store and the mip dispatches its
+        // build and settle make. The total's chain exists only for the specular SDF skip, which
+        // runs on a one-cascade chain only; a shipped chain allocates and regenerates none.
+        Scene *s = e->createScene("underread-low");
+        CHECK(rv->setScene(s), "the view shows the Low chain's scene");
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+        PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
+        wall.emissive = Colour(float(L), float(L), float(L));
+        const NodeId nd = s->createNode();
+        s->attachMesh(nd, cube, s->createPbrMaterial(wall));
+        s->setNodeTransform(nd, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
+        enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
+        const unsigned long long mips0 = photonDispatchStatus().mipDispatches;
+        GiParams low;
+        low.mode = GiMode::Vct;
+        low.quality = GiQuality::Low;
+        low.numBounces = 1;
+        low.gather = GiToggle::Off;
+        s->setGlobalIllumination(low);
+        for (int f = 0; f < 20; ++f) e->renderOneFrame();
+        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+        const unsigned long long mips = photonDispatchStatus().mipDispatches - mips0;
+        std::vector<TextureMemoryEntry> tex;
+        unsigned long long bytes = 0; int count = 0;
+        if (e->textureMemory(tex))
+            for (const TextureMemoryEntry &t : tex)
+                if (t.name.rfind("VctLighting", 0) == 0 || t.name.rfind("VCT/", 0) == 0) { bytes += t.bytes; ++count; }
+        const size_t cascades = s->giStatus().cascades.size();
+        std::printf("Low's own chain: %zu cascades, the light store holds %.2f MB in %d textures; %llu mip "
+                    "dispatches from the build to rest\n", cascades, double(bytes) / (1024.0 * 1024.0), count, mips);
+        CHECK(cascades == 2u, "the Low tier's chain is two cascades");
+        s->setGlobalIllumination(GiParams());
+        rv->setScene(nullptr);
+        e->destroyScene(s);
+    }
     e->destroyView(rv);
     {
         // ONE READER AT EVERY TIER: Low reads Medium's value on every arm (the same store, the same law)
@@ -167,9 +205,9 @@ int main(int argc, char **argv)
         for (size_t k = 0; k < readings[0].size() && k < readings[1].size(); ++k)
             worst = std::max(worst, std::fabs(readings[0][k] / readings[1][k] - 1.0));
         char msg[200];
-        std::snprintf(msg, sizeof msg, "Low reads Medium's value on all %zu arms (worst %.4f; bar 3 %%)",
+        std::snprintf(msg, sizeof msg, "Low reads Medium's value on all %zu arms (worst %.6f; bar 1e-4: one path)",
                       readings[0].size(), worst);
-        CHECK(readings[0].size() == 12u && readings[1].size() == 12u && worst <= 0.03, msg);
+        CHECK(readings[0].size() == 12u && readings[1].size() == 12u && worst <= 1e-4, msg);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
