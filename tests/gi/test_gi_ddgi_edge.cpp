@@ -265,7 +265,7 @@ static Reading measure(Engine *e, Box &b)
 
     // THE INTERIOR, settled: counted in frames, until GI is at rest, bounded.
     render(e);
-    enginetest::frames(e, 240 && !b.scene->giStatus().giAtRest);
+    for (int f = 0; f < 240 && !b.scene->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
     b.inside->readPixels(r.interior);
     // The floor patch nearest the red wall (the camera looks from -Z toward +Z,
     // so the far half of the floor is the red wall's side) and one off to the

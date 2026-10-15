@@ -330,7 +330,7 @@ int main()
             field.ddgi = GiToggle::On;
             scene->setGlobalIllumination(field);
             enginetest::frames(e, 20);
-            enginetest::frames(e, 4000 && !scene->giStatus().giAtRest);
+            for (int f = 0; f < 4000 && !scene->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
             const double withField = centre();
             std::printf("   SPECULAR ENVIRONMENT at roughness %.2f, THE FIELD ON: inside %.4f (%.3fx of outside)\n",
                         rough, withField, withField / outside);
@@ -394,7 +394,7 @@ int main()
             sky.equirect = open->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            enginetest::frames(e, 20 && !open->skyAmbientSh(sh));
+            for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             open->setAmbientSh(sh);
             open->setEnvironmentLight(Colour(1, 1, 1, 1));
             const NodeId nd = open->createNode();
@@ -445,13 +445,13 @@ int main()
         cones.cascadeCount = 1;
         cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, 64, 0.0f };
         room->setGlobalIllumination(cones);
-        enginetest::frames(e, 4000 && !room->giStatus().giAtRest);
+        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         const double viaCones = readHdr(rv);
         GiParams field = cones;
         field.ddgi = GiToggle::On;
         room->setGlobalIllumination(field);
         enginetest::frames(e, 20);
-        enginetest::frames(e, 4000 && !room->giStatus().giAtRest);
+        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         const double viaField = readHdr(rv);
         std::printf("   ROUGH METAL (0.80) IN A SEALED FURNACE of radiance L = %.4f: the plate under a uniform sky "
                     "of L %.4f; in the furnace GI off %.4f, the cones %.4f (%.3fx), the field %.4f (%.3fx)\n", L,

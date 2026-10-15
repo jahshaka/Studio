@@ -136,7 +136,7 @@ int main()
             gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 6.0f, 64, 0.0f };
             s->setGlobalIllumination(gi);
             enginetest::frames(e, 20);
-            enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
             bounce[m][a] = readHdr() - dark;
             int n = 0;
             store[m][a] = plateRadiance(s, n);
@@ -153,7 +153,7 @@ int main()
             };
             const auto settle = [&]() {
                 enginetest::frames(e, 20);
-                enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
             };
             settle();
             const unsigned long long r0 = rebuilds();

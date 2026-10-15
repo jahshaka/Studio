@@ -114,7 +114,7 @@ int main(int argc, char **argv)
             sky.equirect = s->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            enginetest::frames(e, 20 && !s->skyAmbientSh(sh));
+            for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1, 1, 1, 1));
             const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
                 cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
                 s->setGlobalIllumination(cones);
                 enginetest::frames(e, 20);
-                enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
                 const double withWall = readHdr();
                 if (arm.first == GiToggle::Off && standing) {
                     // THE LIGHT STORE'S MEMORY (the textures PhotonVoxelLighting creates: the total, the
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
         const auto settle = [&]() {
             enginetest::frames(e, 20);
-            enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         };
         // one reading: the face's radiance (GI off, the camera square on the face) and the plate's lobe (GI on)
         const auto measure = [&](double &face, double &lobe) {
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
         low.gather = GiToggle::Off;
         s->setGlobalIllumination(low);
         enginetest::frames(e, 20);
-        enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         const unsigned long long mips = photonDispatchStatus().mipDispatches - mips0;
         std::vector<TextureMemoryEntry> tex;
         unsigned long long bytes = 0; int count = 0;

@@ -623,7 +623,7 @@ static void ensureRoomForThreeLamps(Engine *e, View *v)
     e->setShadowMapBudget(8u);
     if (e->shadowStatus().focusedMaps >= 3u) return;
     CacheRoom warm = buildCacheRoom(e, v, "t3warm");
-    enginetest::frames(e, 12 && e->shadowStatus().focusedMaps < 3u);
+    for (int i = 0; i < 12 && e->shadowStatus().focusedMaps < 3u; ++i) enginetest::frames(e, 1);
     e->destroyScene(warm.scene);
 }
 
@@ -875,7 +875,7 @@ static void ensureRoomForLamps(Engine *e, View *v, unsigned n)
         const float a = float(i) * 1.2f;
         s->setNodeTransform(lamp, Vec3(9.0f * std::cos(a), 3.0f, 9.0f * std::sin(a)), Quat(), Vec3(1, 1, 1));
     }
-    enginetest::frames(e, 16 && e->shadowStatus().focusedMaps < n);
+    for (int i = 0; i < 16 && e->shadowStatus().focusedMaps < n; ++i) enginetest::frames(e, 1);
     e->destroyScene(s);
 }
 
@@ -1624,7 +1624,7 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     }
     // Let the atlas grow to hold all five in the VIEW (it steps {2,4,8,16} and
     // never shrinks), so nothing below is the view standing down.
-    enginetest::frames(e, 24 && e->shadowStatus().focusedMaps < 5u);
+    for (int i = 0; i < 24 && e->shadowStatus().focusedMaps < 5u; ++i) enginetest::frames(e, 1);
     CHECK(e->shadowStatus().focusedMaps >= 5u,
           "the view atlas holds all five lamps (%u maps)", e->shadowStatus().focusedMaps);
 

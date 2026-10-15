@@ -120,7 +120,7 @@ int main()
         sky.equirect = s->createTexture(1, 1, skyPx, true);
         CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
         float sh[27] = { 0 };
-        enginetest::frames(e, 20 && !s->skyAmbientSh(sh));
+        for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
         s->setAmbientSh(sh);
         s->setEnvironmentLight(Colour(1, 1, 1, 1));
         const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -154,11 +154,11 @@ int main()
         a.off = readHdr(rv);
         s->setGlobalIllumination(cones);
         enginetest::frames(e, 20);
-        enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         a.cones = readHdr(rv);
         s->setGlobalIllumination(field);
         enginetest::frames(e, 20);
-        enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
+        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
         a.field = readHdr(rv);
         s->setGlobalIllumination(off);
         rv->setScene(nullptr);

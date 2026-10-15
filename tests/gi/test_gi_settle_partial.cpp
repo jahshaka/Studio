@@ -82,7 +82,7 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 2;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds");
-    enginetest::frames(e, 240 && !s->giStatus().giAtRest);
+    for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
     enginetest::frames(e, 1);
     GiStatus g0 = s->giStatus();
     const size_t n = g0.cascades.size();

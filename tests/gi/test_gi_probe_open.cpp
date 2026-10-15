@@ -503,7 +503,7 @@ int main()
         // A 25 m jump re-centres the camera's cascade chain, one cascade a frame,
         // then its settle: counted until GI is at rest (bounded), not a fixed 6.
         render(engine.get(), 6);
-        enginetest::frames(engine, 240 && !s->giStatus().giAtRest);
+        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) enginetest::frames(engine, 1);
         view->readPixels(img);
         const Colour outside = img.at(56, 54);
         show("mirror OUTSIDE every probe box", outside);

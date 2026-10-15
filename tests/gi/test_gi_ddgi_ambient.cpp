@@ -525,11 +525,11 @@ static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Ve
     enginetest::testCameraLookAt(view, eye, Vec3(eye.x, 1.6f, eye.z - 4.4f));
     s->setGlobalIllumination(gi);
     render(e, 6);
-    enginetest::frames(e, 600 && !s->giStatus().giAtRest);
+    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
     Image off; view->readPixels(off);
     s->setAmbient(kAmbientUpper, kAmbientLower);
     render(e, 30);
-    enginetest::frames(e, 600 && !s->giStatus().giAtRest);
+    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
     render(e, 30);
     Image on; view->readPixels(on);
     unsigned wx = 0, wy = 0;

@@ -807,7 +807,7 @@ int main(int argc, char **argv)
     // The chain answers a refresh through its dirty path and its tick, a frame
     // at a time: counted until the field is whole again (bounded), not a fixed 3.
     render(e, 3);
-    enginetest::frames(e, 120 && !fieldWhole(r.scene->giStatus()));
+    for (int f = 0; f < 120 && !fieldWhole(r.scene->giStatus()); ++f) enginetest::frames(e, 1);
     st = r.scene->giStatus();
     CHECK(st.ifdBound && fieldWhole(st),
           "a full refresh under a live field rebuilds it, bound and whole");
