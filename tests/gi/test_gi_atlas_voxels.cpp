@@ -169,9 +169,9 @@ int main()
                     before.rebuilds);
         CHECK(before.probeShadows && before.probeCount > 0,
               "the probe captures really are shadowed (the precondition for this gate)");
-        const unsigned atlas0 = e->shadowStatus().atlasRebuilds;
+        const unsigned atlas0 = enginetest::shadowStatus(e).atlasRebuilds;
         // A SHADOW QUALITY CHANGE: the explicit, deterministic trigger.
-        e->setShadowResolution(e->shadowStatus().resolution == 1024u ? 2048u : 1024u);
+        e->setShadowResolution(enginetest::shadowStatus(e).resolution == 1024u ? 2048u : 1024u);
         // THE WORKSPACES MUST STILL CAPTURE (round-2 F8). Keeping the grid is
         // only half the claim: every probe's cubemap went back to the pool with
         // its workspace, so a probe whose workspace came back wrong would be a
@@ -180,7 +180,7 @@ int main()
         const int capturedA = renderCounting(e, scene, 40);
         render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const GiStatus after = scene->published().gi;
-        const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
+        const unsigned atlas1 = enginetest::shadowStatus(e).atlasRebuilds;
         std::printf("   after the rebuild: atlasRebuilds %u -> %u, arm rebuilds %llu -> %llu, "
                     "probes %d -> %d\n",
                     atlas0, atlas1, before.rebuilds, after.rebuilds, before.probeCount,
@@ -218,7 +218,7 @@ int main()
                     before.cascades.size(), before.probeCount, before.rebuilds, cascade0);
         CHECK(!before.cascades.empty(), "the chain is up");
         CHECK(before.probeShadows, "...with shadowed probe captures beside it");
-        const unsigned atlas0 = e->shadowStatus().atlasRebuilds;
+        const unsigned atlas0 = enginetest::shadowStatus(e).atlasRebuilds;
         // Lamps 3, 4 and 5: the count steps at 3 and again at 5.
         int capturedB = 0;
         addCastingLamp(scene, Vec3(-2.0f, 4.0f, -2.0f));
@@ -230,8 +230,8 @@ int main()
         const GiStatus after = scene->published().gi;
         unsigned long long cascade1 = 0;
         for (const auto &c : after.cascades) cascade1 += c.rebuilds;
-        const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
-        const ShadowStatus sh = e->shadowStatus();
+        const unsigned atlas1 = enginetest::shadowStatus(e).atlasRebuilds;
+        const ShadowStatus sh = enginetest::shadowStatus(e);
         std::printf("   after three lamps: atlasRebuilds %u -> %u (focused maps %u), "
                     "arm rebuilds %llu -> %llu, cascade rebuilds %llu -> %llu\n",
                     atlas0, atlas1, sh.focusedMaps, before.rebuilds, after.rebuilds,

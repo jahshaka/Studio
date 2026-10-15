@@ -702,7 +702,7 @@ int main(int argc, char **argv)
     // FIRST call switches Ogre's per-draw counting on and reports zeros with
     // metricsRecording=false. Asking here, before anything is built, means
     // every later read in the sweep carries real draws/batches/triangles.
-    { RenderStats warm; engine->renderStats(warm); }
+    { RenderStats warm; enginetest::renderStats(engine, warm); }
 
     loadSharedAssets();
     CHECK(!gCube.isNull(), "shared cube mesh loaded (no GL)");
@@ -825,7 +825,7 @@ int main(int argc, char **argv)
                         // frames is settled and cheap...
                         enginetest::frames(engine, 3);
                         RenderStats rs;
-                        if (!engine->renderStats(rs)) continue;
+                        if (!enginetest::renderStats(engine, rs)) continue;
                         // ...and THE COUNTS' OWN LAG on top (RenderStats::gpuCountLagFrames).
                         // Where the visibility buffer draws the grid (ATOM S3-DRAW) its
                         // triangles are chosen by the GPU cull and counted from a readback
@@ -835,7 +835,7 @@ int main(int argc, char **argv)
                         // 0 on the CPU path, where Ogre counts what it submits.
                         if (rs.gpuCountLagFrames) {
                             enginetest::frames(engine, rs.gpuCountLagFrames);
-                            if (!engine->renderStats(rs)) continue;
+                            if (!enginetest::renderStats(engine, rs)) continue;
                         }
                         Reading &r = (pass == 0 ? off[d] : on[d]);
                         r.triangles = rs.triangles;
@@ -1131,7 +1131,7 @@ int main(int argc, char **argv)
                 st["b.idle_tick"].median - st["b.idle_sync"].median;
 
             RenderStats rs;
-            if (engine->renderStats(rs)) {
+            if (enginetest::renderStats(engine, rs)) {
                 std::printf("BENCH %-28s scale=%-6d frame_ms=%7.3f p95_ms=%7.3f fps=%6.1f "
                             "draws=%llu batches=%llu triangles=%llu recording=%d\n",
                             "b.render_stats", n, rs.frameMs, rs.p95Ms, rs.fps,

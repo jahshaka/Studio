@@ -746,7 +746,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
 void armMonitor(Env &env)
 {
     RenderStats rs;
-    env.engine->renderStats(rs);
+    enginetest::renderStats(env.engine, rs);
     env.engine->setFrameMonitor(MonitorLevel::Review);
 }
 

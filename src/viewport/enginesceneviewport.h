@@ -688,6 +688,8 @@ private:
     mutable QStringList mStatsLines;
     mutable QElapsedTimer mStatsClock;
     static constexpr qint64 kStatsRefreshMs = 200;
+    /// A reader's subscription to the shadow / render statuses, in frames, renewed at each read (U3 stage 3).
+    static constexpr unsigned kStatusWindowFrames = 120;
     /// Whether the last refreshOverlay left a cover up — the rising edge that
     /// makes a raise synchronous (see refreshOverlay).
     bool mCoverUp = false;

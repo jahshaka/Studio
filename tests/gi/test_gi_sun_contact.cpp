@@ -814,7 +814,7 @@ static int legsArm(Engine *e, bool raysWanted, const char *dumpDir)
     };
     render(e, 60);   // a new scene's first frames carry no sun shadow yet
     {
-        const ShadowStatus st = e->shadowStatus();
+        const ShadowStatus st = enginetest::shadowStatus(e);
         std::printf("    atlas %u px base (%ux%u): the largest split has %u texels, so the floor's lookup is lifted "
                     ">= 0.826 x 168 / %u = %.3f m against the board's %.2f m top\n",
                     st.resolution, st.atlasWidth, st.atlasHeight, st.resolution, st.resolution,

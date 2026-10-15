@@ -3236,7 +3236,11 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
 {
     ShadowStatusInfo out;
     if (!mEngine) return out;                 // available stays false
-    const jahshaka::engine::ShadowStatus st = mEngine->shadowStatus();
+    // THE SUBSCRIPTION, RENEWED BY THE READ (U3 stage 3, decision 17): the World panel refreshes while it is open
+    // and world.shadowStatus reads at each call, so a reader keeps the counters on for the window after its read —
+    // and the read is the last frame's snapshot (its counters unmeasured before the first frame of a span).
+    mEngine->publishShadowStatus(kStatusWindowFrames);
+    const jahshaka::engine::ShadowStatus st = mEngine->published().shadow;
     out.available = st.live;
     out.resolution = int(st.resolution);
     out.maps = int(st.maps);
@@ -3926,8 +3930,10 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
         if (!mStatsClock.isValid() || mStatsClock.elapsed() >= kStatsRefreshMs) {
             mStatsClock.restart();
             mStatsLines.clear();
-            jahshaka::engine::RenderStats rs;
-            const bool haveRs = mEngine && mEngine->renderStats(rs);
+            // The overlay subscribes while it is on (U3 stage 3): renewed at each refresh, read off the snapshot.
+            if (mEngine) mEngine->publishRenderStats(kStatusWindowFrames);
+            const jahshaka::engine::RenderStats rs = mEngine ? mEngine->published().render : jahshaka::engine::RenderStats();
+            const bool haveRs = mEngine != nullptr;
             const EngineRenderDriver::Stats ds =
                 mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
             // THE ROWS ARE COMPOSED BY A PURE FUNCTION (viewport/statsrows.h),

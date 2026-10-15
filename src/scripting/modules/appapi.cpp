@@ -1646,11 +1646,10 @@ QVariantMap AppApi::renderStats()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.renderStats: no engine in this session"); return out; }
-    jahshaka::engine::RenderStats s;
-    if (!engine->renderStats(s)) {
-        fail("app.renderStats: the engine could not report its counters");
-        return out;
-    }
+    // THE SUBSCRIPTION, RENEWED BY THE CALL (U3 stage 3, decision 17): the counters run for the window after it, and
+    // the answer is the last frame's snapshot — metricsRecording false (zero geometry) before the span's first frame.
+    engine->publishRenderStats(120u);
+    const jahshaka::engine::RenderStats s = engine->published().render;
     out.insert("metricsRecording", s.metricsRecording);
     out.insert("fps", s.fps);
     out.insert("frameMs", s.frameMs);

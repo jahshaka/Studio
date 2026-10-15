@@ -110,8 +110,9 @@ QString PerfSampler::sampleNow()
                        .arg(fs.slowFrames);
 
     if (auto engine = EngineHost::instance().engine()) {
-        jahshaka::engine::RenderStats rs;
-        if (engine->renderStats(rs)) {
+        engine->publishRenderStats(120u);   // the sampler subscribes while it samples (U3 stage 3)
+        {
+            const jahshaka::engine::RenderStats rs = engine->published().render;
             line = QStringLiteral("fps %1 work %2ms worst %3ms slow %4")
                        .arg(rs.fps, 0, 'f', 1)
                        .arg(fs.workMs, 0, 'f', 1)

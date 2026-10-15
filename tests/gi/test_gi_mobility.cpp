@@ -505,16 +505,16 @@ static void sectionB(Engine *engine)
         s->setLight(lamp, d);
         s->setNodeTransform(lamp, Vec3(0.0f, 5.0f, 0.0f), Quat(), Vec3(1, 1, 1));
         view->setShadows(true);
-        engine->shadowStatus();                    // arms the per-frame counters
+        enginetest::shadowStatus(engine);                    // arms the per-frame counters
         enginetest::frames(engine, 12);
         // At rest: the lamp's map is a cache and re-renders nothing.
         unsigned rest = 0;
-        for (int i = 0; i < 20; ++i) { enginetest::frames(engine, 1); rest += engine->shadowStatus().cachedMapRendersLastFrame; }
+        for (int i = 0; i < 20; ++i) { enginetest::frames(engine, 1); rest += enginetest::shadowStatus(engine).cachedMapRendersLastFrame; }
         CHECK(rest == 0u, "a still scene re-renders no cached lamp map (%u)", rest);
         // The mover moves: its lamp's map re-renders in the VIEW, that frame.
         s->setNodeTransform(mover, Vec3(1.5f, 2.2f, 0.0f), Quat(), Vec3(1.5f, 1.5f, 1.5f));
         enginetest::frames(engine, 1);
-        const ShadowStatus st = engine->shadowStatus();
+        const ShadowStatus st = enginetest::shadowStatus(engine);
         std::printf("-- mover moved: cached-map renders %u, view passes %u, probe passes %u\n",
                     st.cachedMapRendersLastFrame, st.shadowPassesLastFrame, st.probePassesLastFrame);
         CHECK(st.cachedMapRendersLastFrame > 0u,

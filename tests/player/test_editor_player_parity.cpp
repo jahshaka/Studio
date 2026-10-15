@@ -343,7 +343,7 @@ int main(int argc, char **argv)
             editorMirror.invalidateEnvironment();
 
             const GiStatus gi0 = editorScene->published().gi;
-            const ShadowStatus sh0 = engine->shadowStatus();
+            const ShadowStatus sh0 = enginetest::shadowStatus(engine);
             std::printf("    before the switch: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi0.rebuilds, sh0.atlasRebuilds);
 
@@ -424,7 +424,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
 
             const GiStatus gi1 = editorScene->published().gi;
-            const ShadowStatus sh1 = engine->shadowStatus();
+            const ShadowStatus sh1 = enginetest::shadowStatus(engine);
             std::printf("    after the round trip: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi1.rebuilds, sh1.atlasRebuilds);
             // THE WHOLE POINT OF ONE SCENE. On the two-scene shape this was four

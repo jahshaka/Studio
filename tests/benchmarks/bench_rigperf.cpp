@@ -197,7 +197,7 @@ int main(int argc, char **argv)
     // WALL-CLOCK is what the engine charges per frame, and an offscreen frame is
     // ~1 ms — every time-driven thing inside would see a clock no editor has.
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
-    { RenderStats warm; engine->renderStats(warm); }
+    { RenderStats warm; enginetest::renderStats(engine, warm); }
 
     Scene *es = engine->createScene("rigperf");
     view->setScene(es);
@@ -292,7 +292,7 @@ int main(int argc, char **argv)
     recordCounter("r.clip_pushes_frame", pushesPerFrame);
 
     RenderStats stats;
-    if (engine->renderStats(stats)) {
+    if (enginetest::renderStats(engine, stats)) {
         recordCounter("render.frame_ms", stats.frameMs);
         recordCounter("render.draws", double(stats.draws));
         recordCounter("render.triangles", double(stats.triangles));

@@ -387,9 +387,9 @@ int main(int argc, char **argv)
     CHECK(escene->published().gi.staleProbes == 0, "E: caught up before the idle run");
     {
         RenderStats rs;
-        engine->renderStats(rs);      // switches metrics recording on
+        enginetest::renderStats(engine, rs);      // switches metrics recording on
         frame();
-        engine->renderStats(rs);
+        enginetest::renderStats(engine, rs);
         const unsigned long long draws0 = rs.draws;
         int capturingFrames = 0, drawMoves = 0, worstCaptures = 0;
         const quint64 refreshE = mirror.target()->published().gi.schedulerResolves, lightE = mirror.target()->published().gi.schedulerLightTicks;
@@ -398,7 +398,7 @@ int main(int argc, char **argv)
             const GiStatus st = escene->published().gi;
             if (st.probeCapturesLastFrame != 0) ++capturingFrames;
             worstCaptures = std::max(worstCaptures, st.probeCapturesLastFrame);
-            engine->renderStats(rs);
+            enginetest::renderStats(engine, rs);
             if (rs.draws != draws0) ++drawMoves;
         }
         std::printf("   idle: frames that captured a probe = %d (worst %d), frames whose "

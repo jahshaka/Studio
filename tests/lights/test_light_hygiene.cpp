@@ -280,7 +280,7 @@ static void forwardPlusCensusCase(Engine *engine, View *view)
     render(engine, 2);
 
     RenderStats st;
-    CHECK(engine->renderStats(st), "renderStats reports");
+    CHECK(enginetest::renderStats(engine, st), "renderStats reports");
     std::printf("   directional only: forwardPlusLights=%u budget=%u over=%u\n",
                 st.forwardPlusLights, st.forwardPlusBudget, st.forwardPlusOverBudget);
     CHECK(st.forwardPlusLights == 0,
@@ -299,7 +299,7 @@ static void forwardPlusCensusCase(Engine *engine, View *view)
         s->setLight(n, d);
     }
     render(engine, 2);
-    CHECK(engine->renderStats(st), "renderStats reports again");
+    CHECK(enginetest::renderStats(engine, st), "renderStats reports again");
     std::printf("   plus 12 point lights: forwardPlusLights=%u over=%u\n",
                 st.forwardPlusLights, st.forwardPlusOverBudget);
     CHECK(st.forwardPlusLights == 12, "point lights are counted");

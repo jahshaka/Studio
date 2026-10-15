@@ -137,6 +137,31 @@ template <class E> void frames(E &&e, int n, const FrameInput *rec = nullptr)
 /// The same with the record by reference — a suite's temporary record (`frames(e, 1, FrameInput::delta(0.0f))`).
 template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std::forward<E>(e), n, &rec); }
 
+/// THE SUBSCRIBED STATUSES, READ THE WAY A HOST READS THEM (ENGINE-UPGRADE-U3 stage 3, decision 17): each call
+/// renews the counters' subscription for the window after it and answers the last frame's snapshot — counters
+/// unmeasured before the span's first frame, exactly the old getters' "the first read arms" contract.
+namespace framesdetail {
+template <class E> Engine *engineOf(E &e)
+{
+    if constexpr (RendersByDot<std::remove_reference_t<E>>::value) return &e;
+    else return &*e;
+}
+}  // namespace framesdetail
+constexpr unsigned kStatusWindowFrames = 120u;
+template <class E> ShadowStatus shadowStatus(E &&e)
+{
+    Engine *eng = framesdetail::engineOf(e);
+    eng->publishShadowStatus(kStatusWindowFrames);
+    return eng->published().shadow;
+}
+template <class E> bool renderStats(E &&e, RenderStats &out)
+{
+    Engine *eng = framesdetail::engineOf(e);
+    eng->publishRenderStats(kStatusWindowFrames);
+    out = eng->published().render;
+    return true;
+}
+
 /// THE VOXEL READ-BACK LANDS A FEW FRAMES LATE (VOXEL-READOUT-1): a cascade's
 /// `items`, `attached`, `voxelLevels`, `voxelTriangles`, `voxelRecords` and
 /// `voxelOverflow` are a read-back of its gather that nothing waits for. A suite

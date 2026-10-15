@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < 40; ++i) frame();   // the open: the arm builds, the static settle runs, everything quiets
 
     const auto gi = [&] { return target->published().gi; };
-    const auto walks = [&] { return engine->shadowStatus().casterWalkItems; };
+    const auto walks = [&] { return enginetest::shadowStatus(engine).casterWalkItems; };
     const auto changes = [&] { return engine->published().input; };
 
     // 1. a still world

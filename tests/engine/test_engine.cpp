@@ -4786,13 +4786,13 @@ void render_stats_are_live_and_lazily_recorded() {
     aim(v);
 
     RenderStats first;
-    CHECK(fx.e->renderStats(first));
+    CHECK(enginetest::renderStats(fx.e, first));
     // The first read may or may not find recording already on — an earlier test
     // in this process may have asked. What must hold either way: after the read
     // switched it on and a frame has been drawn, there ARE draws.
     render(fx.e, 4);
     RenderStats after;
-    CHECK(fx.e->renderStats(after));
+    CHECK(enginetest::renderStats(fx.e, after));
     CHECK_MSG(after.metricsRecording, "reading renderStats must have enabled recording");
     std::printf("    %.1f fps  %.2f ms  %llu draws  %llu batches  %llu tris  %llu verts\n",
                 after.fps, after.frameMs, after.draws, after.batches, after.triangles,
@@ -5940,7 +5940,7 @@ void monitor_passes_sum_to_the_frame() {
     // RenderingMetrics recording on, and it is off until someone asks. Ask
     // BEFORE the measured frame, or the frame renders with no counters at all
     // and every number below is zero.
-    RenderStats rs; CHECK(fx.e->renderStats(rs));
+    RenderStats rs; CHECK(enginetest::renderStats(fx.e, rs));
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
     std::vector<MonitorRecord> recs;
@@ -5959,7 +5959,7 @@ void monitor_passes_sum_to_the_frame() {
     // legitimately reports ZERO draws, and so does its pass record. (Recorded
     // for the monitor's analysis: draws == 0 means "replayed", not "nothing was
     // drawn".)
-    CHECK(fx.e->renderStats(rs));
+    CHECK(enginetest::renderStats(fx.e, rs));
     render(fx.e, 4);                       // past the GPU readback latency
     const unsigned drained = fx.e->takeMonitorRecords(recs);   // once: REQUIRE evaluates twice
     REQUIRE(drained > 0u);
@@ -6479,7 +6479,7 @@ void monitor_heavy_frames_keep_their_samples() {
     // The geometry counters are OFF until something reads renderStats (the
     // pass's triangles are how a record is recognised as a heavy frame).
     RenderStats armCounters;
-    fx.e->renderStats(armCounters);
+    enginetest::renderStats(fx.e, armCounters);
     render(fx.e, 10);                       // uploads and pipelines, before the capture
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
