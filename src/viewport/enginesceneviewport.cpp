@@ -3156,7 +3156,13 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         if (framemonitor::active())
             mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Scripted));
         armRecordingFrame(recordable);
+        // THE LOCKSTEP VERB (ENGINE-UPGRADE-U3, the two modes): editor.frame's frame is the record just built, handed
+        // over and presented before the verb goes on — the ONE synchronous verb, by contract. One thread today, so the
+        // frame below is the wait; from stage 4 it is a wait on "serial >= want presented". Every test and every hash
+        // runs through here.
+        const unsigned long long want = mEngine->frameSubmitStatus().nextSerial;
         mEngine->renderOneFrame();
+        Q_ASSERT(mEngine->published().serial >= want || mEngine->published().gpuFault != jahshaka::engine::GpuFault::None);
         if (mRecordView) mRecordView->setEnabled(false);
         emit mEvents.framesDrawn();
         // ...and a compile it caused is said like a driver frame's (SHADER-WARM-2).
