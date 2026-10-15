@@ -201,7 +201,7 @@ int main(int argc, char **argv)
         // THE CHANGE SET IS THE SUBJECT (U0 3b; this block used to wire the host's transform counter for itself,
         // and the rest of the suite ran without one — "no epoch, no skipping" — a mode that no longer exists: the
         // engine's scans re-read exactly what the frame's ChangeSet and its own seams name, always).
-        const auto moved = [&]() { return engine->frameInputStatus().changesMoved; };
+        const auto moved = [&]() { return engine->published().input.changesMoved; };
         const auto reads = [&]() { return escene->published().gi.giAabbReads; };
         // A GIZMO-SHAPED node: an engine-owned node carrying an UNLIT, on-top
         // (depth-test off) item, which is what createUnlitMaterial(_, false)

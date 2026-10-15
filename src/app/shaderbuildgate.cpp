@@ -278,7 +278,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 if (tier == born) continue;
                 worldmodes::setPhoton(doc, photonOn, tier);
                 environmentOnce();
-                AsyncShaderStats as = engine.asyncShaderStats();
+                AsyncShaderStats as = engine.published().shaders;
                 unsigned long long lastDone = as.completed;
                 engine.shaderBuildProgress(c, f, e);
                 last = c;
@@ -286,7 +286,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 for (int tf = 0; tf < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames; ++tf) {
                     frame();
                     engine.waitForAsyncShaders();
-                    as = engine.asyncShaderStats();
+                    as = engine.published().shaders;
                     engine.shaderBuildProgress(c, f, e);
                     const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                     const bool armed = gi.mode == GiMode::Off || gi.vctBound;

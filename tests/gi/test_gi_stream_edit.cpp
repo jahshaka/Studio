@@ -165,7 +165,7 @@ int main()
     CHECK_MSG(mid.rebuilds == 1, "case 2: the chain is built (rebuilds %llu)",
               (unsigned long long)mid.rebuilds);
     CHECK(mid.vctBound, "case 2: ...and bound");
-    CHECK_MSG(e->framePaceOwesWork(), "case 2: the engine says it still owes work");
+    CHECK_MSG(e->published().paceOwesWork, "case 2: the engine says it still owes work");
     CHECK_MSG(mid.probeCount == 0 && mid.probesDropped == 0,
               "case 2: no probe decision yet (%d kept, %d dropped)",
               mid.probeCount, mid.probesDropped);
@@ -184,13 +184,13 @@ int main()
     // ONE streaming frame spends ONE stage — the machine must still owe the
     // rest, which is what "the world streams in" means.
     frame(e, FramePace::Streaming);
-    CHECK(e->framePaceOwesWork(), "case 3: one streaming frame spends one stage, no more");
+    CHECK(e->published().paceOwesWork, "case 3: one streaming frame spends one stage, no more");
     // ...and then a COMPLETE frame finishes whatever is left, in itself. That is
     // the rule every pixel suite and both selftest hashes rest on, and it is why
     // a `--script` run can never see a half-built arm: `editor.frame` is always
     // Complete.
     frame(e, FramePace::Complete);
-    CHECK(!e->framePaceOwesWork(),
+    CHECK(!e->published().paceOwesWork,
           "case 3: ONE Complete frame owes nothing afterwards");
 
     const GiStatus st = scene->published().gi;

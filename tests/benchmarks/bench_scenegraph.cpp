@@ -931,7 +931,7 @@ int main(int argc, char **argv)
                     mirror.sync();
                     rec.add(names[k], msSince(t0));
                     enginetest::frames(engine, 1);
-                    lastRecords = engine->frameInputStatus().nodeTransforms;
+                    lastRecords = engine->published().input.nodeTransforms;
                 });
                 addMetric(names[k], n, st.at(names[k]), true);
                 gCounters[std::string("d.extract_records.") + std::to_string(K) + "." + std::to_string(n)] =

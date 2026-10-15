@@ -5854,7 +5854,7 @@ void monitor_off_is_inert() {
     REQUIRE(built);
     CHECK(fx.e->frameMonitor() == MonitorLevel::Off);   // the default, always
     render(fx.e, 3);
-    MonitorStatus st = fx.e->monitorStatus();
+    MonitorStatus st = fx.e->published().monitor;
     CHECK(st.level == MonitorLevel::Off);
     CHECK_MSG(st.attachedListeners == 0u, "off must attach nothing: %u", st.attachedListeners);
     CHECK_MSG(st.ringCapacity == 0u, "off must free the ring: %u", st.ringCapacity);
@@ -5874,16 +5874,16 @@ void monitor_off_is_inert() {
     fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Scripted));
     render(fx.e);
     CHECK(fx.e->takeMonitorEvents(evs) == 0u);
-    CHECK(fx.e->monitorStatus().framesRecorded == 0ull);
+    CHECK(fx.e->published().monitor.framesRecorded == 0ull);
 
     // ...and ON then OFF returns to exactly that state (nothing is leaked and
     // nothing stays attached).
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    CHECK(fx.e->published().monitor.attachedListeners > 0u);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     CHECK(st.level == MonitorLevel::Off);
     CHECK(st.attachedListeners == 0u);
     CHECK(st.ringCapacity == 0u);
@@ -5896,7 +5896,7 @@ void monitor_off_is_inert() {
     // ...and that is the END of it: the storage is gone.
     recs.clear();
     CHECK(fx.e->takeMonitorRecords(recs) == 0u);
-    CHECK(fx.e->monitorStatus().ringFrames == 0u);
+    CHECK(fx.e->published().monitor.ringFrames == 0u);
     render(fx.e, 2);
     CHECK(fx.e->takeMonitorRecords(recs) == 0u);
 }
@@ -6137,7 +6137,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     render(fx.e, 2);
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 2);
-    const unsigned attached = fx.e->monitorStatus().attachedListeners;
+    const unsigned attached = fx.e->published().monitor.attachedListeners;
     CHECK_MSG(attached > 0u, "a live view must carry the monitor's listener");
 
     // (a) AN ATLAS REBUILD drops and recreates every workspace naming a shadow node.
@@ -6213,7 +6213,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     CameraDesc c; c.position = Vec3(3, 3, 3); c.fovDegrees = 60;
     v2->setCamera(c);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    CHECK(fx.e->published().monitor.attachedListeners > 0u);
     fx.forget(v2);
     fx.e->destroyView(v2);
     render(fx.e, 6);
@@ -6225,7 +6225,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     // (d) DOWN again: everything detaches, from every kind of workspace.
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
     CHECK(fx.e->lastError().empty() || true);   // reported, never thrown
 }
 
@@ -6280,7 +6280,7 @@ void monitor_snapshot_names_the_graph() {
     CHECK(!snap.hlmsDatablocks.empty());
     CHECK(snap.device.renderSystem.empty() || true);  // reported; no assertion on the GPU
     // ...and the GPU-timing half says WHY it is unavailable rather than lying.
-    const MonitorStatus st = fx.e->monitorStatus();
+    const MonitorStatus st = fx.e->published().monitor;
     CHECK(!st.gpuReason.empty());
     CHECK(!st.gpuCompiled || st.gpuSupported || !st.gpuReason.empty());
 }
@@ -6324,16 +6324,16 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 3);                       // A is drawn: its mirror takes the listener
-    CHECK_MSG(fx.e->monitorStatus().attachedListeners >= 3u,
+    CHECK_MSG(fx.e->published().monitor.attachedListeners >= 3u,
               "the view, the second view and the mirror all carry it: %u",
-              fx.e->monitorStatus().attachedListeners);
+              fx.e->published().monitor.attachedListeners);
 
     // THE PAGE SWITCH: A's view is disabled, so A stops being drawn. Its
     // workspaces live on, listener and all.
     rigA.v->setEnabled(false);
     render(fx.e, 3);
     fx.e->setFrameMonitor(MonitorLevel::Off);   // the FrameMonitor dies here
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
 
     // ...and back. With the defect, this frame executed A's mirror workspace
     // through a destroyed listener.
@@ -6359,7 +6359,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
     render(fx.e, 2);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
     {
         const std::string err = fx.e->takeLastError();
         CHECK_MSG(err.empty(), "a capture across a view disable/enable is clean: %s", err.c_str());
@@ -6461,7 +6461,7 @@ void monitor_heavy_frames_keep_their_samples() {
     render(fx.e, 10);                       // uploads and pipelines, before the capture
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    MonitorStatus st = fx.e->monitorStatus();
+    MonitorStatus st = fx.e->published().monitor;
     if (!st.gpuActive) {
         std::printf("    no GPU timestamps in this build (%s): nothing to measure\n", st.gpuReason.c_str());
         fx.e->setFrameMonitor(MonitorLevel::Off);
@@ -6473,7 +6473,7 @@ void monitor_heavy_frames_keep_their_samples() {
     // 48 capture frames: the bar counts >= 40 heavy records, and the capture publishes all but the 2-3 frames
     // still in flight (58 of 60 measured) — the frames the bar counts and that margin, no more.
     for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->takeMonitorRecords(recs); }
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     const unsigned pools = st.gpuQueryPools;
     fx.e->setFrameMonitor(MonitorLevel::Off);
     { std::vector<MonitorRecord> tail; fx.e->takeMonitorRecords(tail); }
@@ -6514,13 +6514,13 @@ void monitor_gpu_timestamps() {
     render(fx.e, 3);
 
     // OFF: no pools, whatever the build says.
-    MonitorStatus st = fx.e->monitorStatus();
+    MonitorStatus st = fx.e->published().monitor;
     CHECK_MSG(st.gpuQueryPools == 0u, "no capture, no query pool: %u", st.gpuQueryPools);
     CHECK(!st.gpuActive);
     CHECK(!st.gpuReason.empty());
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     std::printf("    gpu: compiled=%d supported=%d active=%d pools=%u reason='%s'\n",
                 int(st.gpuCompiled), int(st.gpuSupported), int(st.gpuActive), st.gpuQueryPools,
                 st.gpuReason.c_str());
@@ -6564,7 +6564,7 @@ void monitor_gpu_timestamps() {
     // carry no time.
     unsigned long long droppedInRecords = 0;
     for (const MonitorRecord &r : recs) droppedInRecords += r.gpuMarksDropped;
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     std::printf("    gpu marks dropped: %llu in the records, %llu on the status\n",
                 droppedInRecords, st.gpuMarksDropped);
     CHECK_MSG(st.gpuMarksDropped == droppedInRecords && st.gpuMarksDropped == 0ull,
@@ -6573,7 +6573,7 @@ void monitor_gpu_timestamps() {
 
     // ...and the pools go with the capture.
     fx.e->setFrameMonitor(MonitorLevel::Off);
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     CHECK_MSG(st.gpuQueryPools == 0u, "stopping the capture frees the pools: %u",
               st.gpuQueryPools);
     CHECK(!st.gpuActive);

@@ -759,7 +759,7 @@ std::vector<MonitorRecord> drain(Env &env)
 
 bool gpuTimed(Env &env)
 {
-    const MonitorStatus st = env.engine->monitorStatus();
+    const MonitorStatus st = env.engine->published().monitor;
     return st.gpuCompiled && st.gpuSupported;
 }
 

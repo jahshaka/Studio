@@ -110,7 +110,7 @@ int main(int argc, char **argv)
 
     const auto gi = [&] { return target->published().gi; };
     const auto walks = [&] { return engine->shadowStatus().casterWalkItems; };
-    const auto changes = [&] { return engine->frameInputStatus(); };
+    const auto changes = [&] { return engine->published().input; };
 
     // 1. a still world
     {

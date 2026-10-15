@@ -2334,7 +2334,7 @@ int main() {
 
             engine->setFrameMonitor(MonitorLevel::Review);
             const unsigned long long frames0 = engine->vrStatus().frames;
-            const unsigned long long rec0 = engine->monitorStatus().framesRecorded;
+            const unsigned long long rec0 = engine->published().monitor.framesRecorded;
             const unsigned kThrown = 5u;
             engine->setFrameFault(FrameFault::Throw, kThrown);
             unsigned fired = 0;
@@ -2348,7 +2348,7 @@ int main() {
             const VrStatus thrown = engine->vrStatus();
             std::printf("THROWN frames %llu -> %llu, monitor records +%llu, state=%d\n",
                         frames0, thrown.frames,
-                        engine->monitorStatus().framesRecorded - rec0, int(thrown.state));
+                        engine->published().monitor.framesRecorded - rec0, int(thrown.state));
             // THE RUNTIME WAS GIVEN EVERY ONE OF THEM. `VrSession::endFrame`
             // counts a frame when xrEndFrame succeeds, so this number IS the
             // proof that the close ran on a thrown frame — and with it that the
@@ -2356,7 +2356,7 @@ int main() {
             CHECK_MSG(thrown.frames - frames0 == (unsigned long long)kThrown,
                       "EVERY THROWN FRAME STILL CLOSED THE RUNTIME'S FRAME (%llu of %u)",
                       thrown.frames - frames0, kThrown);
-            CHECK_MSG(engine->monitorStatus().framesRecorded - rec0 ==
+            CHECK_MSG(engine->published().monitor.framesRecorded - rec0 ==
                           (unsigned long long)kThrown,
                       "...and each one closed the monitor's record too");
             CHECK_MSG(thrown.active && thrown.state != VrState::Lost,
@@ -2380,7 +2380,7 @@ int main() {
             CHECK_MSG(drewAfter > 0.02,
                       "THE HEADSET IS NOT BLACK AFTER N THROWN FRAMES: the eye target still "
                       "draws (%.3f of it, against %.3f before)", drewAfter, drewBefore);
-            CHECK(!engine->deviceLost());
+            CHECK(!engine->published().deviceLost);
             engine->endVrSession();
             CHECK(!engine->vrStatus().active);
         }

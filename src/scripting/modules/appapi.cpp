@@ -951,7 +951,7 @@ QVariantMap AppApi::asyncShaders()
     m["active"] = livecompiles::asyncNow();
     auto engine = EngineHost::instance().engine();
     if (!engine) { m["running"] = false; return m; }
-    const jahshaka::engine::AsyncShaderStats s = engine->asyncShaderStats();
+    const jahshaka::engine::AsyncShaderStats s = engine->published().shaders;
     m["running"]              = s.running;
     m["threads"]              = s.threads;
     m["pending"]              = s.pending;

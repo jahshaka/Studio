@@ -96,11 +96,11 @@ static int inRecordChild()
     enginetest::addTestCube(scene, Colour(0.8f, 0.3f, 0.2f), 0.0f, 0.5f);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.6f, 1.4f, 2.2f), Vec3(0, 0, 0)));
     enginetest::frames(e, 8);
-    if (e->gpuFault() != GpuFault::None) { std::printf("CHILD-FAIL: a fault before the door\n"); return 2; }
+    if (e->published().gpuFault != GpuFault::None) { std::printf("CHILD-FAIL: a fault before the door\n"); return 2; }
 
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemoryInRecord, 1u);
     enginetest::frames(e, 1);
-    std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->gpuFault()), int(e->deviceLost()));
+    std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->published().gpuFault), int(e->published().deviceLost));
     std::printf("CHILD frameError=%s\n", e->published().frameError.c_str());
     // A latched engine renders nothing: this call must return, not crash.
     const unsigned long long frames = view->published().presented;
@@ -108,7 +108,7 @@ static int inRecordChild()
     std::printf("CHILD survived-next-frame=%d\n", view->published().presented == frames ? 1 : 0);
     // THE HOST'S END (src/viewport/devicelossend.h): exit 1 for an OOM, no teardown.
     std::fflush(nullptr);
-    ::_exit(e->gpuFault() == GpuFault::OutOfMemoryInFrame ? 1 : 2);
+    ::_exit(e->published().gpuFault == GpuFault::OutOfMemoryInFrame ? 1 : 2);
 }
 
 int main(int argc, char **argv)
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     // ---- the control picture: settled, before anything is faulted --------
     Image control;
     CHECK(settle(e, view, control), "the fixture settles to one picture (two equal frames in a row)");
-    CHECK(!e->deviceLost(), "the device is not lost before any fault");
+    CHECK(!e->published().deviceLost, "the device is not lost before any fault");
 
     // =====================================================================
     // CASE 1 — AN OOM IN A FRAME: an honest error, no latch
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
     CHECK(has(oomError, "VK_ERROR_OUT_OF_DEVICE_MEMORY") && has(oomError, "67108864-byte pool"),
           "...with the VkResult and the pool's size");
     CHECK(!has(oomError, "device was lost"), "...and does not claim the device was lost");
-    CHECK(!e->deviceLost(),
+    CHECK(!e->published().deviceLost,
           "AN OOM IS NOT A DEVICE LOSS: the render system did not latch it (the fork's onVulkanFailure)");
 
     // =====================================================================
@@ -206,13 +206,13 @@ int main(int argc, char **argv)
     CHECK(view->published().presented > presented0, "the view presents again after the OOM frame");
     CHECK(after.rgba == control.rgba,
           "THE PICTURE AFTER THE OOM IS BYTE-EQUAL TO THE CONTROL (nothing the OOM left stops a frame)");
-    CHECK(!e->deviceLost(), "...and nothing latched later either");
+    CHECK(!e->published().deviceLost, "...and nothing latched later either");
 
     // A second one is no different: the OOM is an ordinary, repeatable error.
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemory, 2u);
     enginetest::frames(e, 1);
     enginetest::frames(e, 1);
-    CHECK(has(e->published().frameError, "GPU out of memory") && !e->deviceLost(),
+    CHECK(has(e->published().frameError, "GPU out of memory") && !e->published().deviceLost,
           "two more OOM frames: the same honest error, still no latch");
     Image again;
     CHECK(settle(e, view, again) && again.rgba == control.rgba,
@@ -223,7 +223,7 @@ int main(int argc, char **argv)
     // =====================================================================
     e->setFrameFault(FrameFault::VulkanDeviceLost, 1u);
     enginetest::frames(e, 1);
-    CHECK(e->deviceLost(),
+    CHECK(e->published().deviceLost,
           "A REAL VK_ERROR_DEVICE_LOST through the same path STILL LATCHES (the fork kept that half)");
     CHECK(e->published().frameError == "the GPU device was lost", "...and the engine says which fact it latched");
     // The render system now vetoes every frame (it never recreates a lost

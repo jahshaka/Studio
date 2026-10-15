@@ -64,7 +64,7 @@ int drain(Engine *e)
     FogDesc fog;
     fog.enabled = true;
     fog.density = 0.05f;
-    const FrameInputStatus s0 = e->frameInputStatus();
+    const FrameInputStatus s0 = e->published().input;
     const FrameSubmitStatus u0 = e->frameSubmitStatus();
     e->submitFrame(sceneRecord(scene, fog));
     const int N = 6;
@@ -72,10 +72,10 @@ int drain(Engine *e)
     std::vector<double> costs;
     for (int f = 0; f < N; ++f) {
         enginetest::frames(e, 1);
-        if (f == 0) firstApplied = e->frameInputStatus().fieldsApplied;
-        costs.push_back(e->frameInputStatus().drainMicros);
+        if (f == 0) firstApplied = e->published().input.fieldsApplied;
+        costs.push_back(e->published().input.drainMicros);
     }
-    const FrameInputStatus s1 = e->frameInputStatus();
+    const FrameInputStatus s1 = e->published().input;
     const FrameSubmitStatus u1 = e->frameSubmitStatus();
     CHECK(u1.submitted - u0.submitted == 1, "one submit counted (%llu)", u1.submitted - u0.submitted);
     CHECK(s1.drained - s0.drained == unsigned(N), "one submit then %d frames: %d drains (%llu)", N, N,
@@ -86,25 +86,25 @@ int drain(Engine *e)
 
     // 2. the same record again: it changes nothing, so it drains to nothing
     enginetest::frames(e, 1, sceneRecord(scene, fog));
-    CHECK(e->frameInputStatus().fieldsApplied == 0, "an unchanged record drains to nothing (fieldsApplied %u)",
-          e->frameInputStatus().fieldsApplied);
+    CHECK(e->published().input.fieldsApplied == 0, "an unchanged record drains to nothing (fieldsApplied %u)",
+          e->published().input.fieldsApplied);
 
     // 3. two submits before one frame: ONE drain, the scene part REPLACED, the newest in force
     FogDesc fogA = fog, fogB = fog;
     fogA.density = 0.10f;
     fogB.density = 0.02f;
-    const FrameInputStatus s2 = e->frameInputStatus();
+    const FrameInputStatus s2 = e->published().input;
     const FrameSubmitStatus u2 = e->frameSubmitStatus();
     e->submitFrame(sceneRecord(scene, fogA));
     enginetest::frames(e, 1, sceneRecord(scene, fogB));
-    const FrameInputStatus s3 = e->frameInputStatus();
+    const FrameInputStatus s3 = e->published().input;
     const FrameSubmitStatus u3 = e->frameSubmitStatus();
     CHECK(s3.drained - s2.drained == 1 && s3.drainedEmpty == s2.drainedEmpty,
           "two submits then one frame: ONE drain (%llu), not empty", s3.drained - s2.drained);
     CHECK(u3.scenePartsMerged - u2.scenePartsMerged == 1, "...the scene part merged into the pending one, the newer winning (%llu)", u3.scenePartsMerged - u2.scenePartsMerged);
     enginetest::frames(e, 1, sceneRecord(scene, fogB));
-    CHECK(e->frameInputStatus().fieldsApplied == 0,
-          "...and the NEWEST is the one in force (fogB again applies nothing: %u)", e->frameInputStatus().fieldsApplied);
+    CHECK(e->published().input.fieldsApplied == 0,
+          "...and the NEWEST is the one in force (fogB again applies nothing: %u)", e->published().input.fieldsApplied);
 
     // 4. a camera move is the per-view part only
     {
@@ -115,7 +115,7 @@ int drain(Engine *e)
         in.views.push_back(v);
         in.scenes.push_back(sceneRecord(scene, fogB).scenes.front());
         enginetest::frames(e, 1, in);
-        const FrameInputStatus st = e->frameInputStatus();
+        const FrameInputStatus st = e->published().input;
         CHECK(st.fieldsApplied == 1 && st.viewFieldsApplied == 1,
               "a camera move with a still environment: the per-view part only (%u applied, %u of them per view)",
               st.fieldsApplied, st.viewFieldsApplied);

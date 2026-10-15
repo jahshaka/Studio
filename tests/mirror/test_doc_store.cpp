@@ -320,11 +320,11 @@ int main(int argc, char **argv)
     {
         frames();                                                   // anything owed from H lands first
         frames();
-        const unsigned still = engine->frameInputStatus().nodeRecords;
+        const unsigned still = engine->published().input.nodeRecords;
         CHECK(still == 0, "I a still frame sends 0 node records (got %u)", still);
         nodes[17]->setLocalPos(nodes[17]->getLocalPos() + iris::Vec3(0.1f, 0, 0));
         mirror.sync(); enginetest::frames(engine, 1);
-        const unsigned one = engine->frameInputStatus().nodeRecords;
+        const unsigned one = engine->published().input.nodeRecords;
         CHECK(one == 1, "I one mover sends 1 node record (got %u)", one);
         auto big = iris::SceneNode::create();
         doc->getRootNode()->addChild(big, false);
@@ -340,7 +340,7 @@ int main(int argc, char **argv)
         big->setLocalPos(iris::Vec3(5, 0, 0));
         big->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 20.0f));
         mirror.sync(); enginetest::frames(engine, 1);
-        const unsigned rootMove = engine->frameInputStatus().nodeRecords;
+        const unsigned rootMove = engine->published().input.nodeRecords;
         enginetest::frames(engine, 1);
         CHECK(rootMove == 1, "I the root of a 10,000-node subtree written sends 1 node record (got %u)", rootMove);
         double worst = 0;

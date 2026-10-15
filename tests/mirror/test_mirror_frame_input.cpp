@@ -65,19 +65,19 @@ int main(int argc, char **argv)
     for (int i = 0; i < 10; ++i) frame();   // the open: everything applies once, and settles
 
     // 1. a still document: one submit and one drain a frame, every drain empty of changes
-    const FrameInputStatus s0 = engine->frameInputStatus();
+    const FrameInputStatus s0 = engine->published().input;
     const FrameSubmitStatus u0 = engine->frameSubmitStatus();
     unsigned appliedWhileStill = 0;
     std::vector<double> drainUs;
     for (int i = 0; i < 20; ++i) {
         frame();
-        appliedWhileStill += engine->frameInputStatus().fieldsApplied;
-        drainUs.push_back(engine->frameInputStatus().drainMicros);
+        appliedWhileStill += engine->published().input.fieldsApplied;
+        drainUs.push_back(engine->published().input.drainMicros);
     }
     std::sort(drainUs.begin(), drainUs.end());
     std::printf("    the drain's own cost, a still document's record: median %.2f us, max %.2f us over 20 frames\n",
                 drainUs[drainUs.size() / 2], drainUs.back());
-    const FrameInputStatus s1 = engine->frameInputStatus();
+    const FrameInputStatus s1 = engine->published().input;
     const FrameSubmitStatus u1 = engine->frameSubmitStatus();
     CHECK(u1.submitted - u0.submitted == 20 && s1.drained - s0.drained == 20 && s1.drainedEmpty == s0.drainedEmpty,
           "20 still frames: 20 submits, 20 drains, none empty (%llu / %llu / %llu)", u1.submitted - u0.submitted,
@@ -88,9 +88,9 @@ int main(int argc, char **argv)
     // 2. the fog on: one field at the next drain, none at the one after
     doc->fogEnabled = true;
     frame();
-    const FrameInputStatus f1 = engine->frameInputStatus();
+    const FrameInputStatus f1 = engine->published().input;
     frame();
-    const FrameInputStatus f2 = engine->frameInputStatus();
+    const FrameInputStatus f2 = engine->published().input;
     CHECK(f1.fieldsApplied == 1 && f1.viewFieldsApplied == 0,
           "the World fog on: the next drain applies ONE scene field (%u, %u of them per view)", f1.fieldsApplied,
           f1.viewFieldsApplied);
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     // 3. the camera moved: the per-view part only
     cam->setLocalPos(iris::Vec3(2.5f, 1.5f, 4.0f));
     frame();
-    const FrameInputStatus c1 = engine->frameInputStatus();
+    const FrameInputStatus c1 = engine->published().input;
     CHECK(c1.fieldsApplied == 1 && c1.viewFieldsApplied == 1,
           "a camera move: the per-view part only (%u applied, %u of them per view)", c1.fieldsApplied,
           c1.viewFieldsApplied);

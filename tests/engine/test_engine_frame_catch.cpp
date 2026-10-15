@@ -128,7 +128,7 @@ int main()
         std::vector<MonitorRecord> drained;
         e->takeMonitorRecords(drained);                     // start from a clean ring
         drained.clear();
-        const unsigned long long rec0 = e->monitorStatus().framesRecorded;
+        const unsigned long long rec0 = e->published().monitor.framesRecorded;
 
         const unsigned kGood = 3u, kThrown = 4u;
         enginetest::frames(e, kGood);
@@ -142,12 +142,12 @@ int main()
                                 "(the case is not vacuous)");
         enginetest::frames(e, kGood);
 
-        const unsigned long long recorded = e->monitorStatus().framesRecorded - rec0;
+        const unsigned long long recorded = e->published().monitor.framesRecorded - rec0;
         std::printf("   %u frames rendered (%u of them thrown) -> %llu monitor records\n",
                     kGood * 2u + kThrown, kThrown, recorded);
         CHECK(recorded == (unsigned long long)(kGood * 2u + kThrown),
               "ONE MONITOR RECORD PER FRAME, THROWN OR NOT (it was one short per throw)");
-        CHECK(!e->monitorStatus().framesDropped,
+        CHECK(!e->published().monitor.framesDropped,
               "...and the ring dropped none of them, so the count above is the ring's");
 
         // THE RING IS DRAINED AFTER THE MONITOR IS STOPPED, deliberately: a
@@ -197,11 +197,11 @@ int main()
     // LAST, because the latch is one-way by design (a lost device never comes
     // back) and because it writes `lastError`.
     {
-        CHECK(!e->deviceLost(), "the device is not lost before the fault (nothing faked it yet)");
+        CHECK(!e->published().deviceLost, "the device is not lost before the fault (nothing faked it yet)");
         e->setFrameFault(FrameFault::ThrowDeviceLost, 1u);
         enginetest::frames(e, 1);
-        CHECK(faultFired(e) || e->deviceLost(), "the device-lost fault fired");
-        CHECK(e->deviceLost(),
+        CHECK(faultFired(e) || e->published().deviceLost, "the device-lost fault fired");
+        CHECK(e->published().deviceLost,
               "A DEVICE LOSS INSIDE A FRAME LATCHES: the latch lives after the catch, and "
               "until this lane a throw returned straight past it");
         CHECK(e->published().frameError == "the GPU device was lost",

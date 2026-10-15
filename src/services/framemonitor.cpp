@@ -1490,7 +1490,7 @@ unsigned FrameMonitor::drainOnce()
     // missed every dropping frame between two drains); machine.json states the
     // total: a bundle whose GPU times are incomplete has to say so rather than
     // let analysis discover that some passes have no time.
-    const MonitorStatus st = eng->monitorStatus();
+    const MonitorStatus st = eng->published().monitor;
     if (st.gpuMarksDropped > mGpuMarksDropped) {
         mGpuMarksDropped = st.gpuMarksDropped;
         mBundle->noteGpuMarksDropped(st.gpuMarksDropped);
@@ -1757,7 +1757,7 @@ QVariantMap FrameMonitor::status() const
     // off" assertions a suite checks rather than trusts.
     QVariantMap eng;
     if (auto e = engine()) {
-        const MonitorStatus s = e->monitorStatus();
+        const MonitorStatus s = e->published().monitor;
         eng["level"] = s.level == MonitorLevel::Review ? QStringLiteral("review")
                                                        : QStringLiteral("off");
         eng["attachedListeners"] = s.attachedListeners;
