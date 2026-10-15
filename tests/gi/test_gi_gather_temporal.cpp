@@ -52,7 +52,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 // The pixel history's measurement arm (lane TEST-1: was JAHSHAKA_GATHER_NO_TEMPORAL),
 // latched at the top of the next frame.
@@ -204,7 +204,7 @@ static StableReading stableReading(Engine *e, View *view, int frames, const char
     double sum = 0.0;
     size_t n = 0;
     for (int f = 0; f < frames; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         view->readPixels(cur);
         for (unsigned y = y0; y < y1; ++y)
             for (unsigned x = 0; x < kW; ++x) {
@@ -326,7 +326,7 @@ static int stableMain(Engine *e)
         s->refreshGlobalIllumination();
         std::vector<Image> frames(121);
         for (int f = 0; f <= 120; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             view->readPixels(frames[size_t(f)]);
         }
         int arrived = -1;

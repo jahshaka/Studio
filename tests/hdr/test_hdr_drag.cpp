@@ -231,17 +231,17 @@ int main()
 
         // Settle at the start pose: the adaptation and the shadow caches.
         lampAt(0);
-        for (int i = 0; i < 150; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 150);
 
         // A run-up at the same step, so the measured window sits in the MIDDLE of
         // a drag rather than at its onset (where a real lighting change legitimately
         // moves the grade fast).
-        for (int f = 0; f < kFrames; ++f) { lampAt(f); engine->renderOneFrame(); }
+        for (int f = 0; f < kFrames; ++f) { lampAt(f); enginetest::frames(engine, 1); }
 
         std::vector<float> drag;
         for (int f = 0; f < kFrames; ++f) {
             lampAt(f);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             drag.push_back(view->measuredExposureScale());
         }
         // ...and at rest, with nothing moving at all — ONCE THE ADAPTATION HAS
@@ -255,10 +255,10 @@ int main()
         // merge). "Quiet at rest" means the METER is quiet, not that the
         // filter has no gap left, so the rest window starts after one filter
         // settle of kFrames (60) — the same bound, every row.
-        for (int f = 0; f < kFrames; ++f) engine->renderOneFrame();
+        enginetest::frames(engine, kFrames);
         std::vector<float> rest;
         for (int f = 0; f < kFrames; ++f) {
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             rest.push_back(view->measuredExposureScale());
         }
 

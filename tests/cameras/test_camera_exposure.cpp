@@ -94,7 +94,7 @@ unsigned long long pixelHash(const Image &img)
     return h;
 }
 
-void frames(int n) { for (int i = 0; i < n; ++i) gEngine->renderOneFrame(); }
+void frames(int n) { enginetest::frames(gEngine, n);}
 
 // ---------------------------------------------------------------------------
 // SETTLING, AND WHY IT IS COUNTED IN FRAMES
@@ -492,7 +492,7 @@ double shoot(SceneMirror &mirror, View *view, const iris::CameraNodePtr &camera,
     // once and then renders hundreds of frames, so without these two lines the
     // FIRST shot of the run is the only one taken before the sky's light
     // arrives, and every later one is 2.5x brighter than it.
-    gEngine->renderOneFrame();
+    enginetest::frames(gEngine, 1);
     mirror.sync(mirrorframe::environment(view));
     if (optIn) {
         PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
@@ -670,14 +670,14 @@ void partB()
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             mirror.sync(mirrorframe::camera(view, doc.camera));
-            gEngine->renderOneFrame();
+            enginetest::frames(gEngine, 1);
         }
         const unsigned before = view->workspaceGeneration();
         for (int i = 0; i < 10; ++i) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             mirror.sync(mirrorframe::camera(view, doc.camera));
-            gEngine->renderOneFrame();
+            enginetest::frames(gEngine, 1);
         }
         const unsigned after = view->workspaceGeneration();
         std::printf("    workspace generation over 10 steady frames: %u -> %u\n", before, after);

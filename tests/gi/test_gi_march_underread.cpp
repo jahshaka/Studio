@@ -74,7 +74,7 @@ int main(int argc, char **argv)
     const auto readHdr = [&]() {
         double acc = 0.0;
         for (int f = 0; f < 4; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img;
             if (!rv->readPixelsHdr(img)) return -1.0;
             double s2 = 0.0; int n = 0;
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
             sky.equirect = s->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) e->renderOneFrame();
+            enginetest::frames(e, 20 && !s->skyAmbientSh(sh));
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1, 1, 1, 1));
             const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
             enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
             GiParams off; off.mode = GiMode::Off;
             s->setGlobalIllumination(off);
-            for (int f = 0; f < 10; ++f) e->renderOneFrame();
+            enginetest::frames(e, 10);
             const double open = readHdr();
             for (const auto &arm : { std::make_pair(GiToggle::Off, "field off"), std::make_pair(GiToggle::On, "field on") }) {
                 GiParams cones;
@@ -145,8 +145,8 @@ int main(int argc, char **argv)
                 cones.cascadeCount = 1;
                 cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
                 s->setGlobalIllumination(cones);
-                for (int f = 0; f < 20; ++f) e->renderOneFrame();
-                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+                enginetest::frames(e, 20);
+                enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
                 const double withWall = readHdr();
                 if (arm.first == GiToggle::Off && standing) {
                     // THE LIGHT STORE'S MEMORY (the textures PhotonVoxelLighting creates: the total, the
@@ -221,14 +221,14 @@ int main(int argc, char **argv)
         gi.cascadeCount = 1;
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
         const auto settle = [&]() {
-            for (int f = 0; f < 20; ++f) e->renderOneFrame();
-            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+            enginetest::frames(e, 20);
+            enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
         };
         // one reading: the face's radiance (GI off, the camera square on the face) and the plate's lobe (GI on)
         const auto measure = [&](double &face, double &lobe) {
             s->setGlobalIllumination(off);
             enginetest::testCameraLookAt(rv, Vec3(0.0f, 2.0f, 0.5f), Vec3(0.0f, 2.0f, 1.5f));
-            for (int f = 0; f < 6; ++f) e->renderOneFrame();
+            enginetest::frames(e, 6);
             face = readHdr();
             enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
             s->setGlobalIllumination(gi);
@@ -283,8 +283,8 @@ int main(int argc, char **argv)
         low.numBounces = 1;
         low.gather = GiToggle::Off;
         s->setGlobalIllumination(low);
-        for (int f = 0; f < 20; ++f) e->renderOneFrame();
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+        enginetest::frames(e, 20);
+        enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
         const unsigned long long mips = photonDispatchStatus().mipDispatches - mips0;
         std::vector<TextureMemoryEntry> tex;
         unsigned long long bytes = 0; int count = 0;

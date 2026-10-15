@@ -64,7 +64,7 @@ static int failures = 0;
 static const unsigned kWidth = 640;
 static const unsigned kHeight = 360;
 static const unsigned kBars = 8;          // four solid, four clear
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// The fence: one quad in z = 0, x in [-1, 1], y in [0, 2], facing +z, UVs over it.
 static MeshData fenceMesh()
@@ -315,7 +315,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     SunContactDesc sc = jahshaka::engine::inspect::scene(s)->sunContact();
     sc.enabled = true;
     s->setSunContact(sc);
-    for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    enginetest::frames(e, 240);
     // The three GPU readings are the monitor's rows (lane TEST-1): a capture for the arms.
     enginetest::GpuTimingWindow gpuTiming(e);
     double sum[2][3] = {}, n[2][3] = {};
@@ -323,7 +323,7 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
         for (int arm = 0; arm < 2; ++arm) {
             e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (i < 10) continue;   // the timestamps come back a few frames late
                 const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
                                      s->sunContactStatus().gpuMs };
@@ -343,13 +343,13 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
         enginetest::setNodePosition(s, n, Vec3(0.0f, 0.0f, -10.0f));
         stack.push_back(n);
     }
-    for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    enginetest::frames(e, 240);
     double ssum[2][3] = {}, sn[2][3] = {};
     for (int round = 0; round < 24; ++round)
         for (int arm = 0; arm < 2; ++arm) {
             e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (i < 10) continue;
                 const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
                                      s->sunContactStatus().gpuMs };

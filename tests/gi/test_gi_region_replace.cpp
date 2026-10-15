@@ -41,7 +41,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// Frames until the GI owes nothing and the grid has caught up (capped).
@@ -49,7 +49,7 @@ static int toRest(Engine *e, Scene *s)
 {
     int n = 0;
     for (; n < 2000; ++n) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const GiStatus st = s->giStatus();
         if (n > 2 && st.giAtRest && st.pccBound && st.staleProbes == 0) break;
     }

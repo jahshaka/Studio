@@ -123,7 +123,7 @@ static void editorFrame(SceneMirror &editorMirror, Engine &engine, View *editorV
     editorMirror.sync(mirrorframe::sky(editorView));
     editorMirror.sync(mirrorframe::environment(editorView));
     editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
-    engine.renderOneFrame();
+    enginetest::frames(engine, 1);
 }
 
 // One frame of BOTH paths at once — what the ORIGINAL parity case needs (the
@@ -138,7 +138,7 @@ static void frame(EnginePlayerScene &player, SceneMirror &editorMirror, Engine &
     editorMirror.sync(mirrorframe::sky(editorView));
     editorMirror.sync(mirrorframe::environment(editorView));
     editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
-    engine.renderOneFrame();
+    enginetest::frames(engine, 1);
 }
 
 int main(int argc, char **argv)
@@ -311,7 +311,7 @@ int main(int argc, char **argv)
             PostFxDesc ef = efx; ef.allowOffscreen = true; editorView->setPostFx(ef);
             PostFxDesc pf = pfx; pf.allowOffscreen = true; playerView->setPostFx(pf);
             for (int i = 0; i < 8; ++i) {
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 // The mirrors must not push the un-forced description back.
                 editorMirror.sync(mirrorframe::camera(editorView, camera));
             }
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
             playerView->seedExposureHistory(editorView->measuredExposureScale());
             for (int i = 0; i < 24; ++i) {
                 player.step(1.0f / 60.0f, W, H);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             Image pSwitch;
             CHECK(playerView->readPixels(pSwitch), "player readback after taking the screen");
@@ -465,7 +465,7 @@ int main(int argc, char **argv)
                 fx.allowOffscreen = true; v->setPostFx(fx);
             };
             force(editorView, jahshaka::engine::inspect::view(editorView)->postFx());
-            for (int i = 0; i < 24; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 24);
             const float editorScale = editorView->measuredExposureScale();
             std::printf("    editor converged exposure = %.4f\n", double(editorScale));
             CHECK(editorScale > 0.0f, "the editor view has a converged exposure to hand over");
@@ -493,7 +493,7 @@ int main(int argc, char **argv)
                 const PostFxDesc worldFx = jahshaka::engine::inspect::view(editorView)->postFx();
                 force(seeded, worldFx);
                 force(control, worldFx);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
 
                 const float seededScale  = seeded->measuredExposureScale();
                 const float controlScale = control->measuredExposureScale();
@@ -556,7 +556,7 @@ int main(int argc, char **argv)
                     orphan.setDocument(doc2, cam2);
                     orphan.begin();
                     orphan.step(1.0f / 60.0f, W, H);
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                     CHECK(orphanView->scene() == temp, "...and is drawing it");
                     // THE TEARDOWN, in clearScene's order: mirror first, then
                     // the scene. The host is told nothing.
@@ -573,7 +573,7 @@ int main(int argc, char **argv)
                 CHECK(orphan.engineScene() == nullptr, "the player let go of the freed scene");
                 CHECK(!orphan.attach(orphanView), "...refuses to bind to nothing");
                 orphan.step(1.0f / 60.0f, W, H);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 CHECK(true, "a frame after the host scene was destroyed is survivable");
 
                 // ...and handed a LIVE scene it draws again, which is what the
@@ -595,7 +595,7 @@ int main(int argc, char **argv)
                 orphan.begin();
                 for (int i = 0; i < 4; ++i) {
                     orphan.step(1.0f / 60.0f, W, H);
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                 }
                 Image revived;
                 CHECK(orphanView->readPixels(revived), "readback after the re-adopt");

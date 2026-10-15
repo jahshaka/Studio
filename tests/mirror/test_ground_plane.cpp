@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 
     Image img;
     const auto renderN = [&](int n) {
-        for (int i = 0; i < n; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < n; ++i) { mirror.sync(); enginetest::frames(engine, 1); }
         view->readPixels(img);
     };
     const auto isSky = [](const Colour &c) { return c.b > c.r * 1.8f && c.b > 0.25f; };
@@ -175,7 +175,7 @@ int main(int argc, char **argv)
           "C: A HIDE DESTROYS NOTHING — the quad and its material are still there");
     mirror.setGroundPlane(true);
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     view->readPixels(img);
     const double firstFrameFrac = groundBandIsGround();
     const ObjectCounts shown = census();
@@ -354,7 +354,7 @@ int main(int argc, char **argv)
     // THE FLIP, with the document UNTOUCHED, and exactly ONE sync after it.
     mirror.setHideDefaultFloor(true);
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     view->readPixels(img);
     const double skyAfterFlip = centreIsSky();
     std::printf("   D: one sync after setHideDefaultFloor(true): %.1f%% sky at the centre\n",
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
     // so the same guarantee has to hold in the other direction.
     mirror.setHideDefaultFloor(false);
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     view->readPixels(img);
     const double skyAfterRestore = centreIsSky();
     std::printf("   D: one sync after setHideDefaultFloor(false): %.1f%% sky at the centre\n",

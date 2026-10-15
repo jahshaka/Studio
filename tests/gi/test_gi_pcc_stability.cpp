@@ -73,7 +73,7 @@ static const int kSweepFrames = 48;
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale,

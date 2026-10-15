@@ -94,7 +94,7 @@ int floorBrightness(Engine *engine, View *view)
     c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);   // look down -Y
     c.fovDegrees = 50;
     view->setCamera(c);
-    for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 6);
     Image img;
     if (!view->readPixels(img)) return -1;
     const Colour q = img.at(img.width / 2, img.height / 2);

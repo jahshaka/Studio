@@ -79,11 +79,11 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     gi.dragMoverChannel = true;
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     CHECK(scene->setGlobalIllumination(gi), "the GI chain (the drag mover channel needs a cascade chain)");
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     CHECK(e->setArm("gpuscene.walkParity", 1.0), "the guard's arm");
-    for (int i = 0; i < 2; ++i) e->renderOneFrame();
+    enginetest::frames(e, 2);
     const GpuSubstrateStatus s0 = gpuSubstrateStatus(*scene);
     CHECK(s0.live && s0.walkChecked > 0, "the guard runs (%llu slots checked)", s0.walkChecked);
     CHECK(s0.walkMissed == 0, "a settled scene: 0 misses (%llu)", s0.walkMissed);
@@ -110,7 +110,7 @@ int main()
     bone.name = "root";
     skel.bones.push_back(bone);
     const NodeId rig = scene->createNode();
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     std::vector<Step> steps = {
         { "the detach tail (a middle slot detached: the last slot is moved into its hole)", [&] {
               scene->detachMesh(cubes[5]); } },
@@ -128,7 +128,7 @@ int main()
         { "a drag promoted (a gesture, a still moved under it)", [&] {
               enginetest::gesture(e, scene, { g });
               enginetest::setNodePosition(scene, g, Vec3(1.5f, 0.3f, 1.0f));
-              e->renderOneFrame();
+              enginetest::frames(e, 1);
               enginetest::setNodePosition(scene, g, Vec3(1.7f, 0.3f, 1.0f)); } },
         { "the drag demoted (the gesture ends)", [&] { enginetest::gesture(e, scene, {}); } },
         { "a mesh rebuild (attachMesh again)", [&] { scene->attachMesh(h, rebuilt, matOf[h]); } },
@@ -155,7 +155,7 @@ int main()
         const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
         const GpuSceneStatus gb = scene->gpuSceneStatus();
         st.run();
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
         const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
         const GpuSceneStatus ga = scene->gpuSceneStatus();
         CHECK(after.walkMissed == before.walkMissed,

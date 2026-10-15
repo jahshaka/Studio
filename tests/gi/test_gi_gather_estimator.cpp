@@ -90,7 +90,7 @@ static const int kLeakReadFrames = 10;   // the leak arm's frames after the turn
 /// THE SHOWROOM'S POSE: the flythrough's fourth capture (its kKeys[4]); away = the same eye turned 40 degrees left.
 static const Vec3 kPos(10.5f, 1.7f, 4.0f), kTarget(-5.0f, 0.5f, -4.0f), kAway(-1.0f, 0.5f, 12.0f);
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static PbrParams matte(const Colour &albedo)
 {

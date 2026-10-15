@@ -73,7 +73,7 @@ static const unsigned kSize = 256;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// THE CHAIN, because this is a cascade rule: the single-volume arm

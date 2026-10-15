@@ -64,7 +64,7 @@ const unsigned kSize = 768u;
 const float kOrthoHalf = 6.0f;
 float kCamY = 3.0f;   // the eye height being measured
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 CameraDesc topDownCamera()
 {

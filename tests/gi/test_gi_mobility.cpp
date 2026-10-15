@@ -169,8 +169,7 @@ static void sectionA(Engine *engine)
         part.gi = gi;
         jahshaka::engine::FrameInput in;
         in.scenes.push_back(part);
-        engine->submitFrame(in);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1, in);
     };
     frame();
     CHECK(s->giStatus().schedulerPushes == 1, "the hybrid arm builds (one configuration, from the frame's record)");
@@ -440,7 +439,7 @@ static void sectionB(Engine *engine)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
 
     const auto lowerRed = [&](int frames, const char *what) {
-        for (int i = 0; i < frames; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, frames);
         Image img; view->readPixels(img);
         const float r = maxRedExcess(img, img.height / 2, img.height);
         std::printf("   %s: max red excess (lower half) = %.3f\n", what, r);
@@ -501,14 +500,14 @@ static void sectionB(Engine *engine)
         s->setNodeTransform(lamp, Vec3(0.0f, 5.0f, 0.0f), Quat(), Vec3(1, 1, 1));
         view->setShadows(true);
         engine->shadowStatus();                    // arms the per-frame counters
-        for (int i = 0; i < 12; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 12);
         // At rest: the lamp's map is a cache and re-renders nothing.
         unsigned rest = 0;
-        for (int i = 0; i < 20; ++i) { engine->renderOneFrame(); rest += engine->shadowStatus().cachedMapRendersLastFrame; }
+        for (int i = 0; i < 20; ++i) { enginetest::frames(engine, 1); rest += engine->shadowStatus().cachedMapRendersLastFrame; }
         CHECK(rest == 0u, "a still scene re-renders no cached lamp map (%u)", rest);
         // The mover moves: its lamp's map re-renders in the VIEW, that frame.
         s->setNodeTransform(mover, Vec3(1.5f, 2.2f, 0.0f), Quat(), Vec3(1.5f, 1.5f, 1.5f));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const ShadowStatus st = engine->shadowStatus();
         std::printf("-- mover moved: cached-map renders %u, view passes %u, probe passes %u\n",
                     st.cachedMapRendersLastFrame, st.shadowPassesLastFrame, st.probePassesLastFrame);
@@ -572,7 +571,7 @@ static void sectionC(Engine *engine)
     gi.testProbeRegionMin = Vec3(-6.5f, -0.6f, -6.5f);
     gi.testProbeRegionMax = Vec3(6.5f, 6.6f, 6.5f);
     CHECK(s->setGlobalIllumination(gi), "VCT at the full bounce count");
-    for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 6);
     Image img;
     v->readPixels(img);
     // WHOLE-IMAGE readings, not one pixel: the difference between one bounce
@@ -605,7 +604,7 @@ static void sectionC(Engine *engine)
 
     // IN MOTION: the document's own count, whatever the scene asks for (F-D).
     CHECK(s->refreshGiLighting(true), "the in-motion re-inject runs");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image moving;
     v->readPixels(moving);
     unsigned movedFromOld = 0; float movedFromOldWorst = 0.0f;
@@ -616,7 +615,7 @@ static void sectionC(Engine *engine)
 
     // AT REST: the full solve of the SAME new lighting, and the frame the user is left with.
     CHECK(s->refreshGiLighting(false), "the at-rest re-inject runs");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image rested;
     v->readPixels(rested);
     unsigned movedPixels = 0; float movedWorst = 0.0f;
@@ -627,7 +626,7 @@ static void sectionC(Engine *engine)
     d.intensity = 0.15f;
     s->setLight(lamp, d);
     CHECK(s->refreshGiLighting(false), "the old lighting solved again");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image restored;
     v->readPixels(restored);
     unsigned restedPixels = 0; float restedWorst = 0.0f;
@@ -695,7 +694,7 @@ static void sectionD(Engine *engine)
                               Colour(0.1f, 0.1f, 0.8f), 0.0f, 0.7f);
     CHECK(keeper && mover, "the twins exist");
     enginetest::testCameraLookAt(v, Vec3(0.0f, 3.0f, 9.0f), Vec3(0.0f, 0.5f, 0.0f));
-    const auto frames = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+    const auto frames = [&](int n) { enginetest::frames(engine, n);};
 
     GiParams gi;
     gi.mode = GiMode::Vct;

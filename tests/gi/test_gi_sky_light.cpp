@@ -118,7 +118,7 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     // Rows 108 and 148 are up the sphere's dome and down its underside, both on
     // the centre column and both safely inside its ~32 px silhouette.

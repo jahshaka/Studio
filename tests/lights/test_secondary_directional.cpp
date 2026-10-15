@@ -117,7 +117,7 @@ int main()
     // a probe that cannot tell them apart proves nothing — lights.masks case 6
     // learned that the hard way).
     auto probe = [&]() {
-        for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 6);
         Probe out;
         Image img;
         if (!view->readPixels(img)) return out;
@@ -180,7 +180,7 @@ int main()
         only.primaryDirectional = false;     // deliberately NOT the sun
         only.forwardShadingPriority = 1;
         s->setLight(a, only);
-        for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 6);
         Image img;
         view->readPixels(img);
         const Colour q = img.at(img.width / 2 + 30, img.height / 2);

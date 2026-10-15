@@ -85,12 +85,12 @@ int main()
     fx.ssr = 2;
     fx.distortion = true;   // the distortion-field pass (the cube below wears a distortion material)
     view->setPostFx(fx);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     // From the GI's first frames on: the card capture runs while the atlas fills.
     const PhotonBindingStatus b0 = photonBindingStatus();
     e->setFrameMonitor(MonitorLevel::Review);
     s->setGlobalIllumination(gi);
-    for (int i = 0; i < 16; ++i) e->renderOneFrame();
+    enginetest::frames(e, 16);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<FrameRecord> recs;
     e->takeFrameRecords(recs);

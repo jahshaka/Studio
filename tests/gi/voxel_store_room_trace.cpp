@@ -50,8 +50,8 @@ int main(int argc, char **argv)
     gi.gather = GiToggle::Off;
     gi.numBounces = 1;
     s->setGlobalIllumination(gi);
-    for (int f = 0; f < 16; ++f) e->renderOneFrame();
-    for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    enginetest::frames(e, 16);
+    enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
     GiVoxelVolume v;
     if (!s->giVoxelVolume(0, v) || !v.available) { std::printf("no store\n"); return 1; }
     long lit = 0, dark = 0;

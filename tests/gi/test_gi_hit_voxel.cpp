@@ -36,7 +36,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                 \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MaterialId matte(Scene *s, const Colour &albedo)
 {

@@ -221,7 +221,7 @@ int main()
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, 60.0f), Vec3(0.0f, 0.0f, -20.0f));
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
     GpuSceneStatus gs = scene->gpuSceneStatus();
     std::printf("\n== the table ==\n   live %d, %u slots, %u mesh entries\n", gs.live ? 1 : 0,
@@ -356,7 +356,7 @@ int main()
         }
         enginetest::addDirectionalLight(hs, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
         enginetest::testCameraLookAt(hv, Vec3(0.0f, 0.0f, 10.0f), Vec3(0.0f, 0.0f, -40.0f));
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
 
         HzbStatus hst;
         CHECK(e->hzbStatus(hv, hst) && hst.built, "the fixture's view builds a pyramid");
@@ -501,7 +501,7 @@ int main()
             enginetest::setNodePosition(
                 scene, n, Vec3(float((i * 17) % 400) - 200.0f, 0.0f, float((i * 31) % 400) - 200.0f));
         }
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        enginetest::frames(e, 3);
         const unsigned n = scene->gpuSceneStatus().slotCount;
         GpuCullRequest r = requestFor(e, view, 1.0f, 2u);
         r.flagsRequired = 1u;
@@ -511,7 +511,7 @@ int main()
         e->setFrameMonitor(MonitorLevel::Review);
         GpuCullResult big;
         const bool culled = e->gpuCull(scene, view, r, false, big);
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
         std::vector<FrameRecord> recs;
         e->takeFrameRecords(recs);
@@ -547,7 +547,7 @@ int main()
             const float t = float(f) / float(kDollyFrames);
             const float z = 20.0f + 120.0f * (0.5f - 0.5f * std::cos(t * 6.2831853f));
             enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, z), Vec3(0.0f, 0.0f, -20.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         GpuSceneStatus st1 = scene->gpuSceneStatus();
         const unsigned long long evals = st1.rayLevelEvals - st0.rayLevelEvals;

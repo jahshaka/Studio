@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(other);
 
     mirror.setSource(doc);
-    auto frames = [&](int n) { for (int i = 0; i < n; ++i) { mirror.sync(); engine->renderOneFrame(); } };
+    auto frames = [&](int n) { for (int i = 0; i < n; ++i) { mirror.sync(); enginetest::frames(engine, 1); } };
     // An unworn twin outlives its last wearer by the engine's kCullTwinGraceFrames
     // (60) of the scene's drawn frames; two more for the sweep that ends it.
     const int kGrace = 62;
@@ -354,7 +354,7 @@ int main(int argc, char **argv)
                   "(9) a cube in it");
             for (int i = 0; i < 1000; ++i)
                 hidden->setNodeFaceCull(n, (i & 1) ? FaceCull::Material : FaceCull::TwoSided);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             std::printf("    never-drawn scene after 1000 cull edits: %u twin(s), %u candidate(s)\n",
                         hidden->cullTwinCount(), hidden->cullTwinCandidateCount());
             CHECK(hidden->cullTwinCount() == 1 && hidden->cullTwinCandidateCount() <= hidden->cullTwinCount(),
@@ -364,7 +364,7 @@ int main(int argc, char **argv)
     }
 
     mirror.setSource(nullptr);
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     engine->destroyView(view);
     engine->destroyScene(scene);
     std::printf(failures ? "FAILURES: %d\n" : "all good (%d failures)\n", failures);

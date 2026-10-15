@@ -232,7 +232,7 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     doc->updateSceneAnimation(0.0f);
     mirror.sync();
-    for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 4);
 
     // ---- structural numbers ---------------------------------------------
     size_t rigged = 0, streamed = 0;
@@ -279,7 +279,7 @@ int main(int argc, char **argv)
         const auto tick0 = Clock::now();
         mirror.sync();
         const double sync = msSince(tick0);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const double tick = msSince(tick0);
         if (i < warmup) { pushesBefore = mirror.clipStatePushes(); continue; }
         syncMs.push_back(sync);

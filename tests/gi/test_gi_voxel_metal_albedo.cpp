@@ -61,7 +61,7 @@ int main()
     const auto readHdr = [&]() {
         double acc = 0.0;
         for (int f = 0; f < 4; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img;
             if (!rv->readPixelsHdr(img)) return -1.0;
             double s2 = 0.0; int n = 0;
@@ -123,7 +123,7 @@ int main()
         enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.9f, -2.0f), Vec3(0.0f, 0.75f, 1.1f));
         GiParams off; off.mode = GiMode::Off;
         s->setGlobalIllumination(off);
-        for (int f = 0; f < 10; ++f) e->renderOneFrame();
+        enginetest::frames(e, 10);
         const double dark = readHdr();
         for (int a = 0; a < 2; ++a) {
             GiParams gi;
@@ -135,8 +135,8 @@ int main()
             gi.cascadeCount = 1;
             gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 6.0f, 64, 0.0f };
             s->setGlobalIllumination(gi);
-            for (int f = 0; f < 20; ++f) e->renderOneFrame();
-            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+            enginetest::frames(e, 20);
+            enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
             bounce[m][a] = readHdr() - dark;
             int n = 0;
             store[m][a] = plateRadiance(s, n);
@@ -152,8 +152,8 @@ int main()
                 return st.cascades.empty() ? 0ull : st.cascades[0].rebuilds;
             };
             const auto settle = [&]() {
-                for (int f = 0; f < 20; ++f) e->renderOneFrame();
-                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+                enginetest::frames(e, 20);
+                enginetest::frames(e, 4000 && !s->giStatus().giAtRest);
             };
             settle();
             const unsigned long long r0 = rebuilds();

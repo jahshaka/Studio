@@ -85,7 +85,7 @@ static const double kBar = 0.02;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The shipped PHOTON chain, cones only. `updateBudget` 0 keeps the reflection

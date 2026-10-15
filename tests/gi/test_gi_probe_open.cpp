@@ -98,7 +98,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 static void show(const char *what, const Colour &c)
 {
     std::printf("   %-34s r=%.4f g=%.4f b=%.4f\n", what, c.r, c.g, c.b);
@@ -503,7 +503,7 @@ int main()
         // A 25 m jump re-centres the camera's cascade chain, one cascade a frame,
         // then its settle: counted until GI is at rest (bounded), not a fixed 6.
         render(engine.get(), 6);
-        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
+        enginetest::frames(engine, 240 && !s->giStatus().giAtRest);
         view->readPixels(img);
         const Colour outside = img.at(56, 54);
         show("mirror OUTSIDE every probe box", outside);

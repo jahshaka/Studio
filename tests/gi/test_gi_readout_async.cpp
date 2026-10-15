@@ -71,7 +71,7 @@ int main()
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 12.0f), Vec3(0.0f, 0.5f, 0.0f));
-    for (int i = 0; i < 2; ++i) e->renderOneFrame();
+    enginetest::frames(e, 2);
 
     GiParams gi;
     gi.mode = GiMode::Vct;
@@ -80,7 +80,7 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     CHECK(scene->setGlobalIllumination(gi), "the High chain built");
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     GiStatus st0 = scene->giStatus();
     CHECK(!st0.cascades.empty(), "the chain has cascades");
     if (st0.cascades.empty()) { std::printf("\n%d CHECK(S) FAILED\n", failures + 1); return 1; }
@@ -105,7 +105,7 @@ int main()
     for (int f = 0; f < kWalkFrames; ++f) {
         const float z = 12.0f - 0.4f * float(f);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, z), Vec3(0.0f, 0.5f, z - 12.0f));
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const GiStatus st = status();
         flushes = gathers = readings = 0;
         for (const auto &c : st.cascades) {
@@ -136,7 +136,7 @@ int main()
         for (const auto &c : status().cascades) g += c.voxelGathers + (c.pending ? 1 : 0);
         if (g == lastGathers) break;
         lastGathers = g;
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     const int landed = enginetest::settleVoxelReadings(e, scene, 32);
     std::printf("   the newest gather's reading landed %d frame(s) after the walk's queue drained\n", landed);

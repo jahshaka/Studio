@@ -67,7 +67,7 @@ static void worldToPixel(float wx, float wz, unsigned &px, unsigned &py)
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void show(const char *what, const Colour &c)

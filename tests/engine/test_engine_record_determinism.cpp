@@ -91,7 +91,7 @@ int child(const char *out)
         return 2;
     }
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.8f, 1.4f, 2.4f), Vec3(0, 0.25f, 0)));
-    for (int i = 0; i < kWarm; ++i) e->renderOneFrame();
+    enginetest::frames(e, kWarm);
 
     const unsigned long long base = e->published().serial;
     const FrameSubmitStatus s0 = e->frameSubmitStatus();
@@ -104,7 +104,7 @@ int child(const char *out)
             if (twoSubmits(f)) e->submitFrame(nodeRecord(scene, node, f, 1));
             ++expected;
         }
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const PublishedEngineFrame &pub = e->published();
         if (pub.serial == expected) ++serialLaw;
         if (pub.recordApplied == !noSubmit(f)) ++appliedLaw;

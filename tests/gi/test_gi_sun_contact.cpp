@@ -93,7 +93,7 @@ static Vec3 kCamPos(2.2f, 3.0f, 4.2f);
 static Vec3 kCamTarget(1.8f, 0.0f, 0.0f);
 static const float kFaceX = 0.5f;           // the board's shaded face
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static float luma(const Image &img, unsigned x, unsigned y)
 {

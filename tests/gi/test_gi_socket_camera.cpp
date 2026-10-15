@@ -77,7 +77,7 @@ int main()
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
     CHECK(scene->setGlobalIllumination(gi), "the cascade arm accepts");
-    for (int i = 0; i < 16; ++i) e->renderOneFrame();
+    enginetest::frames(e, 16);
 
     GiStatus st = scene->giStatus();
     CHECK(!st.cascades.empty(), "the chain is up");
@@ -90,7 +90,7 @@ int main()
     // The tracking re-centres one cascade a frame; cascade 0 is the first. A
     // handful of frames covers its own schedule; the bar is the distance.
     const int kFrames = int(st.cascades.size()) + 2;
-    for (int i = 0; i < kFrames; ++i) e->renderOneFrame();
+    enginetest::frames(e, kFrames);
     st = scene->giStatus();
     printC0("after 30 m", st, moved);
     if (!st.cascades.empty()) {

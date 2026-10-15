@@ -102,7 +102,7 @@ int main()
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.55f), 3.14159f);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(6.0f, 6.0f, 14.0f), Vec3(0, 0, 0)));
 
-    auto render = [&](int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); };
+    auto render = [&](int frames) { enginetest::frames(e, frames);};
 
     // ONE mesh and ONE material for the filler: the subject is the table, not
     // resource churn, and a shared mesh is also the case the mesh table's
@@ -501,14 +501,14 @@ int main()
                         // transforms are last frame's until updateSceneGraph
                         // runs — so the frame is rendered and its own timing
                         // read back.
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                         us = scene->gpuSceneStatus().lastScanMicros;
                     } else {
                         // The pre-frame form, READ BEFORE the frame runs its own
                         // pass and overwrites the number.
                         scene->measureGpuSceneScan(false);
                         us = scene->gpuSceneStatus().lastScanMicros;
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                     }
                     if (us > 0.0 && (best == 0.0 || us < best)) best = us;
                 }
@@ -564,7 +564,7 @@ int main()
                 // where the scan reports it, while `renderOneFrame`'s cost is
                 // the same measurement in every build of this engine.
                 const auto t0 = std::chrono::steady_clock::now();
-                e->renderOneFrame();          // the frame's own pass does the work
+                enginetest::frames(e, 1);          // the frame's own pass does the work
                 const double frameMs =
                     std::chrono::duration<double, std::milli>(
                         std::chrono::steady_clock::now() - t0).count();

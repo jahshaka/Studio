@@ -74,7 +74,7 @@ static const float kHalfRun = 1.6f;
 // the arm "reflect.metalDecode"'s shipped default (GpuScene.h kReflectMetalDecodeRoughness)
 static const double kReflectMetalDecodeDefault = 0.30;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData sphereMesh(int rings = 48, int segments = 96)
 {
@@ -246,7 +246,7 @@ static int uncoverMain(Engine *e, Scene *s, View *view, const char *dumpDir)
             ++frame;
             enginetest::gesture(e, s, { room.box });   // a gesture moves it (U0 3c: the host says so)
             s->setNodeTransform(room.box, boxAt(frame), Quat(), Vec3(kBox, kBox, kBox));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         Image moving, settled;
         if (!view->readPixels(moving)) { std::printf("FAIL: readPixels: %s\n", e->lastError().c_str()); return 1; }
@@ -719,7 +719,7 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         e->setArm("reflect.metalDecode", arm);
         render(e, 120);
         std::vector<unsigned long long> r;
-        for (int f = 0; f < 30; ++f) { e->renderOneFrame(); r.push_back(s->rayQueryStatus().hitRecords); }
+        for (int f = 0; f < 30; ++f) { enginetest::frames(e, 1); r.push_back(s->rayQueryStatus().hitRecords); }
         std::sort(r.begin(), r.end());
         return r[r.size() / 2];
     };

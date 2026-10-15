@@ -288,7 +288,7 @@ int main(int argc, char **argv)
         ClipState st; st.name = "Swing"; st.enabled = true; st.time = t;
         st.weight = 1.0f; st.looping = false;
         CHECK(s->setClipStates(nodeClip, &st, 1), "setClipStates accepted an absolute time");
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const double d = worstBoneDiff(s, nodeDoc, nodeClip, boneCount);
         worstPose = std::max(worstPose, d);
         std::printf("    t=%.2f: worst |engine-clip bone matrix - manual-pose bone matrix| = %.3e\n",
@@ -303,7 +303,7 @@ int main(int argc, char **argv)
         const std::vector<BonePose> want = posesFrom(desc, extracted, 0.6f);
         ClipState st; st.name = "Swing"; st.time = 0.6f; st.looping = false;
         s->setClipStates(nodeClip, &st, 1);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         std::vector<BonePose> got(boneCount);
         CHECK(s->bonePoses(nodeClip, got.data(), got.size()), "bonePoses read back");
         double worst = 0.0;
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
             ClipState st; st.name = "Sparse"; st.enabled = true; st.time = t;
             st.weight = 1.0f; st.looping = false;
             s->setClipStates(nSparse, &st, 1);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             const double d = worstBoneDiff(s, nodeDoc, nSparse, boneCount);
             if (t == 0.0f || t == 1.0f) atKeys = std::max(atKeys, d);
             else between = std::max(between, d);
@@ -383,7 +383,7 @@ int main(int argc, char **argv)
         const auto poseAt = [&](float t) {
             ClipState st; st.name = "Swing"; st.time = t; st.looping = false;
             s->setClipStates(nodeClip, &st, 1);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             std::vector<BonePose> p(boneCount);
             s->bonePoses(nodeClip, p.data(), p.size());
             return flatten(p);
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
         {
             ClipState on; on.name = "Swing"; on.enabled = true; on.time = 0.0f; on.looping = false;
             s->setClipStates(nodeClip, &on, 1);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             ClipDesc third = partialDesc; third.id += "-third"; third.name = "Third";
             CHECK(!s->attachClips(nodeClip, &third, 1),
                   "attachClips REFUSES while a clip is enabled (R2: it would dangle "
@@ -470,12 +470,12 @@ int main(int argc, char **argv)
 
         // ...and the pose agrees: the un-shared bone lands EXACTLY on the full
         // clip's pose, which is the assertion the weights only imply.
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const iris::Mat4 blended = engineBone(s, nodeClip, 1, boneCount);
         ClipState solo; solo.name = "Swing"; solo.enabled = true; solo.time = length;
         solo.weight = 1.0f; solo.looping = false;
         s->setClipStates(nodeClip, &solo, 1);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const iris::Mat4 alone = engineBone(s, nodeClip, 1, boneCount);
         // Only the bone's OWN contribution can be compared: its parent moves
         // under the blend (RootOnly animates the root), so the full matrix
@@ -485,10 +485,10 @@ int main(int argc, char **argv)
         (void)blended; (void)alone;
         {
             s->setClipStates(nodeClip, both, 2);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             std::vector<BonePose> pb(boneCount); s->bonePoses(nodeClip, pb.data(), pb.size());
             s->setClipStates(nodeClip, &solo, 1);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             std::vector<BonePose> ps(boneCount); s->bonePoses(nodeClip, ps.data(), ps.size());
             const auto fb = flatten(pb), fs = flatten(ps);
             for (size_t i = 10; i < 20; ++i)   // bone 1 only
@@ -550,13 +550,13 @@ int main(int argc, char **argv)
 
             s->setNodeVisible(nodeDoc, true);
             s->setNodeVisible(nodeClip, false);
-            for (int f = 0; f < 3; ++f) engine->renderOneFrame();
+            enginetest::frames(engine, 3);
             Image a;
             CHECK(view->readPixels(a), "the manually-posed frame read back");
 
             s->setNodeVisible(nodeDoc, false);
             s->setNodeVisible(nodeClip, true);
-            for (int f = 0; f < 3; ++f) engine->renderOneFrame();
+            enginetest::frames(engine, 3);
             Image b;
             CHECK(view->readPixels(b), "the clip-driven frame read back");
 
@@ -643,7 +643,7 @@ int main(int argc, char **argv)
                     ClipState st; st.name = fDesc.name; st.enabled = true; st.time = t;
                     st.weight = 1.0f; st.looping = false;
                     s->setClipStates(fClip, &st, 1);
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                     worst = std::max(worst, worstBoneDiff(s, fDoc, fClip, fbxRig.bones.size()));
                 }
                 std::printf("    FBX pivot rig: worst |engine clip - manual pose| bone matrix = %.3e\n", worst);

@@ -409,7 +409,7 @@ int main()
     CHECK(vA && vB && thumb, "three offscreen views");
     CHECK(buildRoom(a, blue), "room A (blue) builds its hybrid: voxels, probes, field");
     CHECK(buildRoom(b, red), "room B (red) builds its own");
-    for (int i = 0; i < 30; ++i) e->renderOneFrame();
+    enginetest::frames(e, 30);
     {
         const GiStatus sa = a->giStatus(), sb = b->giStatus();
         std::printf("    A: vct %d pcc %d (probes %d) ifd %d   B: vct %d pcc %d (probes %d) ifd %d\n",
@@ -427,7 +427,7 @@ int main()
     {
         Tally ta, tb, tt;
         for (int f = 0; f < kPhaseFrames; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f < kSkipFrames) continue;
             judge(vA, true, false, ta);
             judge(vB, false, false, tb);
@@ -446,7 +446,7 @@ int main()
             vA->setEnabled(drawA);
             vB->setEnabled(!drawA);
             thumb->setEnabled(!drawA);
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f < kSkipFrames) continue;
             if (drawA) judge(vA, true, false, ta);
             else { judge(vB, false, false, tb); judge(thumb, false, true, tt); }
@@ -467,7 +467,7 @@ int main()
     {
         Tally ta, tb, tt;
         for (int f = 0; f < kPhaseFrames; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f < kSkipFrames) continue;
             judge(thumb, false, true, tt);
             judge(vB, false, false, tb);
@@ -485,7 +485,7 @@ int main()
     {
         Tally tb, tt;
         for (int f = 0; f < kPhaseFrames; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f < kSkipFrames) continue;
             judge(vB, false, false, tb);
             judge(thumb, false, true, tt);
@@ -516,14 +516,14 @@ int main()
         View *vq = planarView("switch_planar_q", q);
         bool ok = p && q && vp && vq;
         planarRoom(p, Colour(1.0f, 0.0f, 0.0f), ok);
-        for (int i = 0; i < 5; ++i) e->renderOneFrame();
+        enginetest::frames(e, 5);
         planarRoom(q, Colour(0.0f, 1.0f, 0.0f), ok);
         CHECK(ok, "5: two scenes, each with its own planar mirror (P armed first, Q second)");
         const auto run = [&](const char *phase) {
             int bad = 0, judged = 0;
             float worstP = 1e9f, worstQ = 1e9f;
             for (int f = 0; f < kPhaseFrames; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (f < kSkipFrames) continue;
                 const float ep = lowerHalfExcess(vp, 0), eq = lowerHalfExcess(vq, 1);
                 worstP = std::min(worstP, ep);
@@ -562,19 +562,19 @@ int main()
         Scene *small = e->createScene("switch_sky_small");
         View *vs = sphereView("switch_sky_small", small);
         CHECK(skySphereScene(small, 8), "6: a sphere under an 8 px reflection cube (4 levels)");
-        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        enginetest::frames(e, 60);
         Image smallAlone, smallBeside, bigBeside, bigAlone;
         vs->readPixels(smallAlone);
         Scene *big = e->createScene("switch_sky_big");
         View *vb = sphereView("switch_sky_big", big);
         CHECK(skySphereScene(big, 256), "6: ...and a second scene under a 256 px cube (9 levels)");
-        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        enginetest::frames(e, 60);
         vs->readPixels(smallBeside);
         vb->readPixels(bigBeside);
         vs->setScene(nullptr);
         e->destroyView(vs);
         e->destroyScene(small);
-        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        enginetest::frames(e, 60);
         vb->readPixels(bigAlone);
         unsigned overS = 0, overB = 0;
         const int dS = sphereDiff(smallAlone, smallBeside, &overS);

@@ -109,7 +109,7 @@ void setDither(bool off)
 /// count only has to cover the mirror/chain settling, not a wall clock.
 bool shoot(Image &out, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     return gView->readPixels(out);
 }
 

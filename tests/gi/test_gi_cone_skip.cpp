@@ -45,7 +45,7 @@ static int failures = 0;
 
 static const unsigned kW = 256, kH = 144;
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// How many float components differ (bit for bit) between two readbacks.
 static size_t floatsDiffering(const ImageF &a, const ImageF &b)

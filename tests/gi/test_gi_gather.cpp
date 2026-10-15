@@ -50,7 +50,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// The offscreen chain the gather needs. The prepass — the depth and normals
 /// every probe's surface comes from — exists ONLY with the SSR row on at the
@@ -875,7 +875,7 @@ static int costMain(Engine *e)
         enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
         std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const GatherStatus q = gatherStatus(s);
             if (q.placeMs >= 0.0f) place.push_back(q.placeMs);
             if (q.traceMs >= 0.0f) trace.push_back(q.traceMs);
@@ -1097,7 +1097,7 @@ static int shippedCostMain(Engine *e)
             enginetest::GpuTimingWindow gpuTiming(e);   // the gather jobs' GPU times are monitor rows (lane TEST-1)
             std::vector<float> pl, tr, fi, in, tot;
             for (int i = 0; i < 60; ++i) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 const GatherStatus q = gatherStatus(s);
                 if (q.placeMs < 0.0f || q.traceMs < 0.0f || q.filterMs < 0.0f || q.integrateMs < 0.0f)
                     continue;

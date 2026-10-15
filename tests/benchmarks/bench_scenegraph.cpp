@@ -724,7 +724,7 @@ int main(int argc, char **argv)
         SceneMirror mirror(es);
         mirror.setSource(doc);
         mirror.sync();
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         Image img;
         view->readPixels(img);
         const Colour at = img.at(img.width / 2, img.height / 2);
@@ -732,7 +732,7 @@ int main(int argc, char **argv)
         CHECK(at.r > 0.10f && at.r > at.b * 1.5f, "centre pixel shows the mirrored cube");
         mn->setLocalPos(iris::Vec3(50.0f, 0.0f, 0.0f));
         mirror.sync();
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         const Colour away = img.at(img.width / 2, img.height / 2);
         std::printf("    moved +50x:     centre %3.0f %3.0f %3.0f\n", away.r * 255, away.g * 255, away.b * 255);
@@ -823,7 +823,7 @@ int main(int argc, char **argv)
                         // Ogre's LOD update runs inside the scene pass, so the first
                         // frame after a dial change still draws the old level; three
                         // frames is settled and cheap...
-                        for (int f = 0; f < 3; ++f) engine->renderOneFrame();
+                        enginetest::frames(engine, 3);
                         RenderStats rs;
                         if (!engine->renderStats(rs)) continue;
                         // ...and THE COUNTS' OWN LAG on top (RenderStats::gpuCountLagFrames).
@@ -834,7 +834,7 @@ int main(int argc, char **argv)
                         // pose's count: "1365 %" was the level-0 count of the pass before).
                         // 0 on the CPU path, where Ogre counts what it submits.
                         if (rs.gpuCountLagFrames) {
-                            for (unsigned f = 0; f < rs.gpuCountLagFrames; ++f) engine->renderOneFrame();
+                            enginetest::frames(engine, rs.gpuCountLagFrames);
                             if (!engine->renderStats(rs)) continue;
                         }
                         Reading &r = (pass == 0 ? off[d] : on[d]);
@@ -902,7 +902,7 @@ int main(int argc, char **argv)
         const auto tFirst = Clock::now();
         const int mirrored = mirror.sync();
         const double firstSyncMs = msSince(tFirst);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         std::printf("    document %d nodes (%zu dynamic), mirror reported %d, first sync %.1f ms\n",
                     s.totalNodes, s.dynamic.size(), mirrored, firstSyncMs);
         CHECK(mirrored == s.totalNodes, "every synthetic node reached the engine");
@@ -930,7 +930,7 @@ int main(int argc, char **argv)
                     const auto t0 = Clock::now();
                     mirror.sync();
                     rec.add(names[k], msSince(t0));
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                     lastRecords = engine->frameInputStatus().nodeTransforms;
                 });
                 addMetric(names[k], n, st.at(names[k]), true);
@@ -974,7 +974,7 @@ int main(int argc, char **argv)
                     s.dynamic[i]->setLocalPos(s.dynBase[i] + iris::Vec3(d, 0, 0));
                 mirror.sync();
                 const double syncMs = msSince(t0);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 rec.add("a.sync_dynamic", syncMs);
                 rec.add("a.transform_update_dynamic", msSince(t0));
             });
@@ -991,7 +991,7 @@ int main(int argc, char **argv)
                     s.all[i]->setLocalPos(s.basePos[i] + iris::Vec3(0, d, 0));
                 mirror.sync();
                 const double syncMs = msSince(t0);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 rec.add("a.sync_all", syncMs);
                 rec.add("a.transform_update_all", msSince(t0));
             });
@@ -1008,10 +1008,10 @@ int main(int argc, char **argv)
             size_t dyn = 0;
             for (const iris::SceneNodePtr &x : s.all) if (!x->isStaticInGraph()) ++dyn;
             std::vector<double> r;
-            for (int i = 0; i < 5; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 5);
             for (int i = 0; i < (quick ? 20 : 60); ++i) {
                 const auto t0 = Clock::now();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 r.push_back(msSince(t0));
             }
             const Stats us = computeStats(r);
@@ -1059,7 +1059,7 @@ int main(int argc, char **argv)
                     slices.push_back(ms);
                 }
                 const auto t1 = Clock::now();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 if (slice) renders.push_back(msSince(t1));
             }
             {
@@ -1120,7 +1120,7 @@ int main(int argc, char **argv)
                 const auto t0 = Clock::now();
                 mirror.sync();
                 const double syncMs = msSince(t0);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 rec.add("b.idle_sync", syncMs);
                 rec.add("b.idle_tick", msSince(t0));
             });
@@ -1168,7 +1168,7 @@ int main(int argc, char **argv)
                 const auto t3 = Clock::now();
                 const double syncMs = msSince(t0);
                 const SceneChangeStats cs1 = es->changeStats();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 rec.add("c.reparent_500_remove", std::chrono::duration<double, std::milli>(t1 - t0).count());
                 rec.add("c.reparent_500_add", std::chrono::duration<double, std::milli>(t2 - t1).count());
                 rec.add("c.reparent_500_mirror", std::chrono::duration<double, std::milli>(t3 - t2).count());
@@ -1215,7 +1215,7 @@ int main(int argc, char **argv)
             SceneMirror mirror(es);
             mirror.setSource(doc);
             mirror.sync();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
 
             const LoopBudget bRig{ 5, 30, quick ? 40 : 400, quick ? 400.0 : 2000.0 };
             float t = 0.0f;
@@ -1225,7 +1225,7 @@ int main(int argc, char **argv)
                 doc->getRootNode()->updateAnimation(t);
                 mirror.sync();
                 const double syncMs = msSince(t0);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 rec.add("d.anim_rig_200_sync", syncMs);
                 rec.add("d.anim_rig_200", msSince(t0));
             });

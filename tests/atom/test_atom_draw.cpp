@@ -363,7 +363,7 @@ static bool settle(Engine *e, View *view, Image &img, int &frames)
     int stable = 0;
     frames = 0;
     while (frames < 1200) {
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
         frames += 4;
         if (!view->readPixels(img)) return false;
         if (frames >= 24 && prev.rgba.size() == img.rgba.size()) {
@@ -532,7 +532,7 @@ int main()
     scene->setLight(sunNode, sunL);
     scene->setLight(pointNode, pointL);
 
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     ogreScene->ensureGpuScene(false);
     const detail::GpuScene &gs = ogreScene->gpuScene();
     for (Cell &c : cells) {
@@ -969,7 +969,7 @@ int main()
             oc.orthoSize = A.half;
             view->setCamera(oc);
             scene->setAtomDrawEnabled(true);
-            for (int i = 0; i < 8; ++i) e->renderOneFrame();
+            enginetest::frames(e, 8);
             ogreScene->ensureGpuScene(false);
             uint32_t slot = 0xFFFFFFFFu;
             for (unsigned sl = 0; sl < gs.slotCount(); ++sl)
@@ -981,7 +981,7 @@ int main()
                 if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot)
                     ++gpuLevels[AtomId::depthOf(gx[px])];
             scene->setAtomDrawEnabled(false);
-            for (int i = 0; i < 8; ++i) e->renderOneFrame();
+            enginetest::frames(e, 8);
             const unsigned cpu = litem ? unsigned(litem->getCurrentMeshLod()) : 99u;
             const unsigned gpu = gpuLevels.size() == 1u ? gpuLevels.begin()->first : 98u;
             std::printf("  (g) ortho half-height %.1f m: the cut's depth %u (%zu depth(s) seen), CPU level %u\n",
@@ -1050,10 +1050,10 @@ int main()
         lc.aspect = 3.0f;
         view->setCamera(lc);
         scene->setAtomDrawEnabled(true);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         const unsigned gpu = gpuLevelOf(hn);
         scene->setAtomDrawEnabled(false);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         const unsigned cpu = hitem ? unsigned(hitem->getCurrentMeshLod()) : 97u;
         scene->setAtomDrawEnabled(true);
         std::printf("  (h) letterboxed 3:1: the cut's depth %u, CPU level %u\n", gpu, cpu);
@@ -1130,7 +1130,7 @@ int main()
     }
 
     scene->setAtomDrawEnabled(true);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     e->destroyView(view);
     e->destroyScene(scene);
     std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);

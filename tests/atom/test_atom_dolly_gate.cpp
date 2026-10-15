@@ -261,7 +261,7 @@ int main()
     // the observed switch sits a band past the predicted one by design (the
     // hysteresis holds the level across ~10 % of the threshold).
     pose(kFar);
-    for (int i = 0; i < 5; ++i) e->renderOneFrame();
+    enginetest::frames(e, 5);
     GpuCullRequest vr;
     if (e->fillCullView(view, vr)) {
         std::printf("   this view: %.0f px tall, proj11 %.4f, budget %.1f px -> switches at",
@@ -284,12 +284,12 @@ int main()
     auto walk = [&](const char *what, float mul = 1.0f) {
         std::vector<Step> out;
         pose(kFar * mul);
-        for (int i = 0; i < 30; ++i) e->renderOneFrame();     // warm up, in FRAMES
+        enginetest::frames(e, 30);// warm up, in FRAMES
         Image previous;
         unsigned previousLevel = 0xFFFFFFFFu;
         for (float dist = kFar; dist >= kNear - 1.0e-4f; dist -= kStep) {
             pose(dist * mul);
-            e->renderOneFrame();                             // ONE frame per step, by design
+            enginetest::frames(e, 1);                             // ONE frame per step, by design
             std::vector<ObjectLodDesc> drawn;
             scene->objectLods(drawn);
             unsigned level = 0xFFFFFFFFu;

@@ -122,7 +122,7 @@ int main() {
     enginetest::addTestCube(s, Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
 
-    auto render = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+    auto render = [&](int n) { enginetest::frames(engine, n);};
     render(3);
 
     CHECK_MSG(v->framesPresented() >= 3, "presenting into the window (%llu frames)",

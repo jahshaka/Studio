@@ -22,6 +22,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -113,6 +114,29 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
 }
 #endif
 
+/// THE TEST DOOR'S ONE FRAME VERB (ENGINE-UPGRADE-U3 stage 2b): every engine suite steps the engine through here —
+/// `frames(e, n)` renders n frames, `frames(e, 1, rec)` hands the record over first. `e` is whatever the suite holds
+/// (an Engine *, a unique_ptr, an Engine &): a template, so no call site edits its receiver. Its body is today's bytes
+/// (submit if given, then renderOneFrame n times); stage 4 swaps it ONCE for the lockstep wait on the render thread.
+namespace framesdetail {
+template <class E, class = void> struct RendersByDot : std::false_type {};
+template <class E>
+struct RendersByDot<E, std::void_t<decltype(std::declval<E &>().renderOneFrame())>> : std::true_type {};
+}  // namespace framesdetail
+
+template <class E> void frames(E &&e, int n, const FrameInput *rec = nullptr)
+{
+    if constexpr (framesdetail::RendersByDot<std::remove_reference_t<E>>::value) {
+        if (rec) e.submitFrame(*rec);
+        for (int i = 0; i < n; ++i) e.renderOneFrame();
+    } else {
+        if (rec) e->submitFrame(*rec);
+        for (int i = 0; i < n; ++i) e->renderOneFrame();
+    }
+}
+/// The same with the record by reference — a suite's temporary record (`frames(e, 1, FrameInput::delta(0.0f))`).
+template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std::forward<E>(e), n, &rec); }
+
 /// THE VOXEL READ-BACK LANDS A FEW FRAMES LATE (VOXEL-READOUT-1): a cascade's
 /// `items`, `attached`, `voxelLevels`, `voxelTriangles`, `voxelRecords` and
 /// `voxelOverflow` are a read-back of its gather that nothing waits for. A suite
@@ -129,7 +153,7 @@ inline int settleVoxelReadings(Engine *e, Scene *s, int maxFrames = 64)
             current = current && c.voxelReadingGather == c.voxelGathers;
         if (current) return f;
         if (f >= maxFrames) return -1;
-        e->renderOneFrame();
+        frames(e, 1);
     }
 }
 

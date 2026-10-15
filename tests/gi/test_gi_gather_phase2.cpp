@@ -49,7 +49,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static NodeId addBox(Scene *s, const PbrParams &p, const Vec3 &pos, const Vec3 &scale)
 {
@@ -237,7 +237,7 @@ static int planeMain(Engine *e, bool targetRow)
     };
     unsigned lastFrame = ~0u, frames = 0u;
     for (int f = 0; f < 200 && frames < 96u; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const GatherStatus st = s->giStatus().gather;
         if (st.irradiance.empty() || st.irradianceFrame == lastFrame) continue;
         lastFrame = st.irradianceFrame;
@@ -357,7 +357,7 @@ static int deterministicMain(Engine *e)
         // (inside the 60 rendered — a cold view's sequence starts at 0).
         GatherStatus st;
         for (int f = 0; f < 60; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const GatherStatus now = s->giStatus().gather;
             if (now.irradianceFrame == 50u && !now.irradiance.empty()) st = now;
         }
@@ -479,7 +479,7 @@ static int cardsMain(Engine *e)
         const unsigned since = s->giStatus().gather.frame;
         GatherStatus st;
         for (int f = 0; f < 20; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             st = s->giStatus().gather;
             if (!st.irradiance.empty() && st.irradianceFrame >= since) break;
         }
@@ -491,7 +491,7 @@ static int cardsMain(Engine *e)
             int got = 0;
             unsigned lf = st.irradianceFrame;
             for (int f = 0; f < 8 * liveFrames && got < liveFrames; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 const GatherStatus q = s->giStatus().gather;
                 if (q.irradiance.size() != acc.size() || q.irradianceFrame == lf) continue;
                 lf = q.irradianceFrame;

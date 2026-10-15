@@ -134,7 +134,7 @@ NodeId populate(Scene *s, const Colour &albedo) {
 void aim(View *v) {
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
-void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames = 3) { enginetest::frames(e, frames);}
 /// Renders until a view's auto-exposure STOPS MOVING, in FRAMES (TESTING-SPEED-B3; trap 7: the engine has no wall
 /// clock, frames never clocks). The adaptation is a first-order filter at the engine's fixed 1/60 s
 /// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast)) = 2.284 % of the gap a frame; OgreChain.cpp's
@@ -148,7 +148,7 @@ int settleExposure(Engine *e, View *v, int maxFrames = 600) {
     float prev = 0.0f;
     int frames = 0;
     while (frames < maxFrames) {
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         frames += 8;
         const float now = v->measuredExposureScale();
         if (now > 0.0f && prev > 0.0f && std::fabs(now - prev) <= 0.001f * prev) return frames;
@@ -3636,7 +3636,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // A PICTURE SKY HAS NO OPINION: back to white.
     SkyDesc none;
     CHECK_MSG(s->setSky(none), "the sky goes away: %s", fx.e->lastError().c_str());
-    fx.e->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+    enginetest::frames(fx.e, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
     const Colour off = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
     CHECK_MSG(off.r == 1.0f && off.g == 1.0f && off.b == 1.0f,
               "without the analytic sky the tint is white again");
@@ -4435,11 +4435,11 @@ void video_readback_is_bt709_nv12() {
     CHECK_MSG(!v->takeVideoFrame(fr, false), "nothing armed, nothing to take");
 
     v->armVideoFrame(7);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image img;
     REQUIRE(v->readPixels(img));
     bool got = false;
-    for (int i = 0; i < 8 && !got; ++i) { got = v->takeVideoFrame(fr, false); if (!got) e->renderOneFrame(); }
+    for (int i = 0; i < 8 && !got; ++i) { got = v->takeVideoFrame(fr, false); if (!got) enginetest::frames(e, 1); }
     REQUIRE(got);
     CHECK(fr.tag == 7u && fr.width == W && fr.height == H && fr.nv12.size() == size_t(W) * H * 3 / 2);
 
@@ -4479,7 +4479,7 @@ void video_readback_is_bt709_nv12() {
 
     // THE RING: five armed frames, nobody taking — three are read back, two dropped.
     const unsigned long long dropped0 = v->videoReadbackStatus().dropped;
-    for (unsigned long long t = 100; t < 105; ++t) { v->armVideoFrame(t); e->renderOneFrame(); }
+    for (unsigned long long t = 100; t < 105; ++t) { v->armVideoFrame(t); enginetest::frames(e, 1); }
     const VideoReadbackStatus st1 = v->videoReadbackStatus();
     std::printf("    ring: pending %u recorded %llu delivered %llu dropped %llu\n", st1.pending,
                 st1.recorded, st1.delivered, st1.dropped);

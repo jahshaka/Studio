@@ -215,7 +215,7 @@ int main(int argc, char **argv)
         cd.framingAspect = kHold;
         view->setCamera(cd);
 
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         Image img;
         if (!view->readPixels(img)) { std::printf("FAIL: readPixels\n"); ++failures; continue; }
         const std::vector<Centroid> drawn = drawnCentroids(img);

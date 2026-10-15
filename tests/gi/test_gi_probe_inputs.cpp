@@ -201,7 +201,7 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
     const auto mirrorPixel = [&]() {

@@ -99,14 +99,14 @@ static const float kPanelZ = -1.0f, kPanelT = 0.02f;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static bool settle(Engine *e, Scene *s)
 {
     for (int f = 0; f < 4000; ++f) {
         if (s->giStatus().giAtRest) return true;
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     return s->giStatus().giAtRest;
 }
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         sky.equirect = open->createTexture(1, 1, skyPx, true);
         CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
         float sh[27] = { 0 };
-        for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) e->renderOneFrame();
+        enginetest::frames(e, 20 && !open->skyAmbientSh(sh));
         open->setAmbientSh(sh);
         open->setEnvironmentLight(Colour(1, 1, 1, 1));
         PbrParams metal;

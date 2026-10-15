@@ -77,7 +77,7 @@ static const unsigned kSize = 128;
 static void frame(Engine *e, FramePace pace)
 {
     e->setFramePace(pace);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     e->setFramePace(FramePace::Complete);
 }
 

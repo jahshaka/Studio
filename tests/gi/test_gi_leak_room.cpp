@@ -40,7 +40,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
 // (its fix round, B1): gi.gather measures the same room with a third arm

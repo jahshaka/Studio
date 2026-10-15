@@ -53,7 +53,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 // A white floor and a white wall, NO LIGHT OF ANY KIND. Whatever the camera
@@ -140,7 +140,7 @@ int main()
             const float t = float(i) / 8.0f;             // 0.40 -> 0.10, passing 0.25 == lower
             const float upper = 0.40f - 0.30f * t;
             s->setAmbient(Colour(upper, upper, upper), Colour(0.25f, 0.25f, 0.25f));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         const unsigned after = engine->shaderCacheStats().compiledThisRun;
         std::printf("   ambient drag through the flat point: %u shader compiles\n", after - before);

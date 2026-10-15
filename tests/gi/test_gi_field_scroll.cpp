@@ -72,7 +72,7 @@ static int failures = 0;
 
 static const unsigned kSize = 128;
 
-static void render(Engine *e, int frames = 1) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 1) { enginetest::frames(e, frames);}
 
 static GiParams fieldGi(int budget)
 {

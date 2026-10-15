@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     auto render = [&](Image &img) {
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img);
     };
 

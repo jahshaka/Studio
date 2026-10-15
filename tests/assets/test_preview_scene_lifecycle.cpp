@@ -207,7 +207,7 @@ int main(int argc, char **argv)
         CHECK(viewB->scene() == first, "...and the new one carries the Scene");
 
         // ---- 2. a frame really renders through the base's push ----
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         Image img;
         CHECK(viewB->readPixels(img) && img.width == 96 && img.height == 96,
               "the probe's Scene renders into the bound View");
@@ -221,7 +221,7 @@ int main(int argc, char **argv)
         CHECK(viewB->scene() == nullptr, "release() unbinds the caller's View");
         // The caller's View is NOT destroyed: it must still be usable.
         viewB->setScene(primaryScene);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(viewB->scene() == primaryScene, "release() left the caller's View alive");
         viewB->setScene(nullptr);
 
@@ -272,7 +272,7 @@ int main(int argc, char **argv)
         CHECK(probe.scenes == 1 && probe.mirrors == 1,
               "...and no Scene or mirror hook re-ran across the window swap");
         CHECK(rebuilt->scene() == kept, "...the new View carries the Scene");
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         Image img;
         CHECK(rebuilt->readPixels(img) && img.width == 96,
               "...and it renders, so the swap really completed");
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
         CHECK(s != nullptr, "heap probe has a Scene");
         delete probe;    // ~ProbeScene -> release() -> the hooks, then ~EnginePreviewScene
         CHECK(viewA->scene() == nullptr, "the destructor unbound the View");
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         std::printf("ok:   a frame after the destructor does not touch the dead Scene\n");
     }
 
@@ -344,11 +344,11 @@ int main(int argc, char **argv)
     for (int i = 0; i < 12; ++i) {
         ProbeScene probe(engine);
         if (!probe.attach(i % 2 ? viewB : viewA)) { std::printf("FAIL: cycle %d attach\n", i); ++failures; break; }
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         probe.release();
     }
     std::printf("ok:   12 create/attach/release/destroy cycles\n");
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     {
         Image img;
         CHECK(primary->readPixels(img) && img.width == 64,

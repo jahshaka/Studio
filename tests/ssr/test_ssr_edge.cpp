@@ -188,7 +188,7 @@ int main()
             s->setSky(sky);
             float sh[27] = { 0.0f };
             bool ready = false;
-            for (int f = 0; f < 20 && !ready; ++f) { e->renderOneFrame(); ready = s->skyAmbientSh(sh); }
+            for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = s->skyAmbientSh(sh); }
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
         }
@@ -246,7 +246,7 @@ int main()
             enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
             enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
         }
-        for (int i = 0; i < 12; ++i) e->renderOneFrame();   // the history is a frame late
+        enginetest::frames(e, 12);// the history is a frame late
         ImageF refl, pic;
         CHECK_MSG(view->readReflectionHdr(refl) && refl.width == kW,
                   "%s: the reflection's weight reads back", names[fixture]);
@@ -269,7 +269,7 @@ int main()
                 p.emissive = Colour(k, k, k);
                 s->setPbrMaterial(m.id, p);
             }
-            for (int i = 0; i < 4; ++i) e->renderOneFrame();
+            enginetest::frames(e, 4);
             ImageF maskImg;
             view->readPixelsHdr(maskImg);
             for (unsigned y = 0; y < kH; ++y)

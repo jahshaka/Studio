@@ -235,7 +235,7 @@ bool stableReadback(Engine *e, View *v, Image &out, unsigned budget = 120u) {
     Image prev;
     if (!v->readPixels(prev)) return false;
     for (unsigned i = 0; i < budget; ++i) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (!v->readPixels(out)) return false;
         if (out.rgba == prev.rgba && !out.rgba.empty()) return true;
         prev = out;
@@ -249,7 +249,7 @@ bool stableReadback(Engine *e, View *v, Image &out, unsigned budget = 120u) {
 unsigned long long pump(Engine *e, unsigned long long want, unsigned budget) {
     for (unsigned i = 0; i < budget && e->vrStatus().frames < want; ++i) {
         e->advanceResources();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     return e->vrStatus().frames;
 }
@@ -912,7 +912,7 @@ int main() {
                   engine->vrStatus().frames);
         engine->endVrSession();               // ...and this must not touch it
         CHECK(!engine->vrStatus().active);
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         CHECK_MSG(true, "the session ended after its screen quad was destroyed");
     }
 
@@ -959,7 +959,7 @@ int main() {
             // ACCEPTED must climb while `rendered` stays at nothing — that is
             // the pair the owner's log could not show: a session that stopped
             // being pumped answers "no picture" for ever.
-            for (int i = 0; i < 20; ++i) { engine->advanceResources(); engine->renderOneFrame(); }
+            for (int i = 0; i < 20; ++i) { engine->advanceResources(); enginetest::frames(engine, 1); }
             const VrStatus noPicture = engine->vrStatus();
             CHECK_MSG(noPicture.frames >= 15ull && noPicture.rendered == 0ull,
                       "THE LOOP RUNS WITH NOTHING ENABLED: %llu frames accepted, %llu drawn",
@@ -982,12 +982,12 @@ int main() {
             // ...AND IT DOES PAINT once the runtime asks for a picture again.
             for (int i = 0; i < 200 && engine->vrStatus().rendered == 0ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             CHECK_MSG(engine->vrStatus().rendered > 0ull,
                       "the runtime asked for a picture again after the forced stretch (%llu drawn)",
                       engine->vrStatus().rendered);
-            for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 3);
             Image mirroredNow;
             REQUIRE(desktop->readPixels(mirroredNow));
             CHECK_MSG(differingBytes(mirroredNow.rgba, quiet.rgba) > 0u,
@@ -1029,7 +1029,7 @@ int main() {
             int frames = 0;
             for (; frames < 400 && !ended; ++frames) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 ended = !engine->vrStatus().active;
             }
             CHECK_MSG(ended,
@@ -1104,7 +1104,7 @@ int main() {
             for (int i = 0; i < 30; ++i) {
                 if (engine->hasEnabledViews()) {
                     engine->advanceResources();
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                 } else {
                     ++skipped;
                 }
@@ -2340,7 +2340,7 @@ int main() {
             unsigned fired = 0;
             for (unsigned i = 0; i < kThrown; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published, never in the calls' sink.
                 if (engine->published().frameError.find("injected frame fault") != std::string::npos) ++fired;
             }
@@ -2408,7 +2408,7 @@ int main() {
             unsigned rendered = 0;
             for (; rendered < 400u && engine->vrStatus().active; ++rendered) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             engine->setFrameFault(FrameFault::None, 0u);
             std::printf("STOPPED after %u thrown frames, active=%d, frameError='%s'\n", rendered,
@@ -2682,7 +2682,7 @@ int main() {
             engine->setVrMirrorView(desktop);
             for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             const VrStatus drawing = engine->vrStatus();
             CHECK_MSG(drawing.mirrorShowing == VrDesktopPicture::Eye,
@@ -2699,7 +2699,7 @@ int main() {
             unsigned disagreed = 0, ownFrames = 0;
             for (int i = 0; i < 120; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 const bool own = engine->vrStatus().mirrorShowing == VrDesktopPicture::Own;
                 if (own) ++ownFrames;
                 // The reported answer and the View's own flag are one fact:
@@ -2734,7 +2734,7 @@ int main() {
             engine->setVrMirrorView(desktop);
             for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             ObjectCounts objBefore;
             engine->objectCounts(objBefore);
@@ -2748,7 +2748,7 @@ int main() {
             for (int i = 0; i < 400 && (toOwn < 10u || toEye < 10u); ++i) {
                 engine->advanceResources();
                 const auto t0 = std::chrono::steady_clock::now();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 const double ms = std::chrono::duration<double, std::milli>(
                                       std::chrono::steady_clock::now() - t0).count();
                 const bool eyeNow = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
@@ -2796,15 +2796,15 @@ int main() {
             for (int i = 0; i < 200 &&
                             engine->vrStatus().mirrorShowing != VrDesktopPicture::Own; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             if (CHECK_MSG(engine->vrStatus().mirrorShowing == VrDesktopPicture::Own,
                           "parked on a frame where the desktop draws its own camera")) {
                 Image a;
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 REQUIRE(desktop->readPixels(a));
                 testCameraLookAt(desktop, Vec3{ -1.4f, 1.9f, 2.9f }, Vec3{ 0.0f, 1.0f, -0.6f });
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 Image b;
                 REQUIRE(desktop->readPixels(b));
                 CHECK_MSG(differingBytes(a.rgba, b.rgba) > 0u,

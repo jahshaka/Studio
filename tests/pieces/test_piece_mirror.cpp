@@ -97,7 +97,7 @@ int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int 
     int lo = 255, hi = 0;
     for (int f = 0; f < frames; ++f) {
         preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        enginetest::frames(engine, 1);
         Image img;
         if (view->readPixels(img)) {
             const Colour c = img.at(img.width / 2, img.height / 2);
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
     // measure.
     for (int i = 0; i < 12; ++i) {
         preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     }
 
     // ---- the control FIRST: a plain material must not move ------------------
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
         const int n = 30;
         for (int f = 0; f < n; ++f) {
             preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         const float advanced = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before;
         std::printf("    shader clock advanced %.6f s over %d frames\n", double(advanced), n);
@@ -189,7 +189,7 @@ int main(int argc, char **argv)
         // the clock is the document's simulated time, not a count of syncs.
         const float before2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
         preview.step(2.0f / 60.0f, int(view->width()), int(view->height()));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const float advanced2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before2;
         std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));
         CHECK(std::fabs(advanced2 - 2.0f / 60.0f) < 1e-4f,

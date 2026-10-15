@@ -68,7 +68,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 static void show(const char *what, const Colour &c)
 {
     std::printf("   %-34s r=%.4f g=%.4f b=%.4f   (r-g)=%+.4f\n", what, c.r, c.g, c.b, c.r - c.g);

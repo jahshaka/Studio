@@ -69,7 +69,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                 \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static const unsigned kSize = 384;
 static const float kMirrorZ = 4.85f;
@@ -605,7 +605,7 @@ static int costMain(Engine *e)
                     enginetest::setNodePosition(s, movers[size_t(m)],
                                                 Vec3(home[size_t(m)].x, home[size_t(m)].y, home[size_t(m)].z + dz));
                 }
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 {
                     const CardCacheStatus c = s->giStatus().cards;
                     maxAge = std::max(maxAge, c.moverPendingAge);

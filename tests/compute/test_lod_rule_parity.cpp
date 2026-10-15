@@ -282,7 +282,7 @@ static void productCutParity(Engine *e, View *view)
         unsigned slots = 0, inTable = 0;
         std::vector<GpuSceneEntry> table;
         for (int frame = 0; frame < 60 && inTable < 8u; ++frame) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             // The table's dirty scan (engine.atom_draw's door): a scene whose frames
             // nothing in the view reads the table in (no GI, no rays) stages nothing.
             static_cast<jahshaka::engine::detail::OgreScene *>(sc)->ensureGpuScene(false);
@@ -465,7 +465,7 @@ int main(int argc, char **argv)
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
     const unsigned slots = scene->gpuSceneStatus().slotCount;
     CHECK(slots == unsigned(kInstances + kRotated), "every instance is in the table");
@@ -589,7 +589,7 @@ int main(int argc, char **argv)
     {
         // The level is written by the LOD walk of a rendered frame; the cull
         // sweep above renders none, so the reading is taken from a fresh one.
-        for (int i = 0; i < 2; ++i) e->renderOneFrame();
+        enginetest::frames(e, 2);
         GpuCullRequest vr;
         if (!e->fillCullView(view, vr)) { std::printf("FAIL: fillCullView (view)\n"); return 1; }
         std::vector<ObjectLodDesc> drawn;

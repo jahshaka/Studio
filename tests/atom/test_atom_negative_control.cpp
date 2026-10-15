@@ -495,7 +495,7 @@ int main()
     const NodeId cube = enginetest::addTestCube(scene, Colour(0.7f, 0.45f, 0.3f), 0.0f, 0.5f);
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -0.8f, -0.3f), 1.2f);
     CHECK(cube != 0, "the fixture cube exists");
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
     Ogre::Root &root = Ogre::Root::getSingleton();
     auto *vkRs = dynamic_cast<Ogre::VulkanRenderSystem *>(root.getRenderSystem());
@@ -540,7 +540,7 @@ int main()
     int identical = 0, recordedRight = 0;
     size_t worstBytes = 0, covered = 0;
     for (int f = 0; f < kFrames; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         readTarget(withTex, a);
         readTarget(withoutTex, b);
         size_t diff = 0;

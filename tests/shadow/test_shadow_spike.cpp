@@ -231,7 +231,7 @@ static void shellRoom(Scene *s)
 }
 
 
-static void render(Engine *e, int frames = 4) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 4) { enginetest::frames(e, frames);}
 
 static int lum(const Image &img, unsigned x, unsigned y)
 {
@@ -836,7 +836,7 @@ static void scanCostCase(int n)
     // cache walks on its own after updateSceneGraph (cached world AABBs).
     gi.updateBudget = std::getenv("JAH_SCANCOST_NOGI") ? 0 : 1;
     s->setGlobalIllumination(gi);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
     const auto sample = [&](int frames, bool move, double &shadowUs, double &giUs, double &frameMs) {
         shadowUs = giUs = frameMs = 0.0;
         for (int f = 0; f < frames; ++f) {
@@ -849,7 +849,7 @@ static void scanCostCase(int n)
                                         Quat(), Vec3(step * 0.4f, 0.5f, step * 0.4f));
                 }
             const auto t0 = std::chrono::steady_clock::now();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             frameMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
             shadowUs += scene->shadowScanMicros() + scene->casterWalkMicros();
             giUs += scene->giScanMicros();

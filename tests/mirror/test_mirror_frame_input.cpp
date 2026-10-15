@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     auto frame = [&] {
         mirror.sync(mirrorframe::world(view, cam));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     for (int i = 0; i < 10; ++i) frame();   // the open: everything applies once, and settles
 

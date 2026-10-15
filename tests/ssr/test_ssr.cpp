@@ -203,7 +203,7 @@ static MeshData unitSphereMesh(unsigned rings = 24, unsigned segments = 48)
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The strongest "this pixel is red and its neighbours are not" signal in the
@@ -482,10 +482,10 @@ int main()
                 if (c.ssr > 0) { d.allowOffscreen = true; d.ssr = c.ssr; }
                 big->setPostFx(d);
                 Image drain;
-                for (int i = 0; i < 60; ++i) engine->renderOneFrame();     // settle
+                enginetest::frames(engine, 60);// settle
                 big->readPixels(drain);
                 const auto t0 = std::chrono::steady_clock::now();
-                for (int i = 0; i < 400; ++i) engine->renderOneFrame();
+                enginetest::frames(engine, 400);
                 big->readPixels(drain);                                    // drain
                 const auto t1 = std::chrono::steady_clock::now();
                 const double ms =

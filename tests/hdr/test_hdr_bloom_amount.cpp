@@ -119,7 +119,7 @@ void setBloom(bool on, float amount)
 
 bool shoot(Image &out, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     return gView->readPixels(out);
 }
 

@@ -34,7 +34,7 @@
 
 using namespace jahshaka::engine;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// THE MATERIALS THE SCENE'S CARDED ITEMS WEAR (their edit is what re-queues them).
 static std::vector<std::pair<MaterialId, PbrParams>> gMaterials;

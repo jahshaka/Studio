@@ -69,7 +69,7 @@ MeshData planeMesh(float half)
 
 bool shoot(Image &out, int frames)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     return gView->readPixels(out);
 }
 

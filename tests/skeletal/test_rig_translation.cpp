@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     std::vector<BonePose> poses = armPoses(0.0f);
     CHECK(poses.size() == 2, "one pose per bone");
     CHECK(s->setBonePoses(node, poses.data(), poses.size()), "setBonePoses accepted the bind pose");
-    engine->renderOneFrame();   // runs the engine's bone FK; no pixel is read
+    enginetest::frames(engine, 1);   // runs the engine's bone FK; no pixel is read
 
     double worst = 0.0;
     for (size_t b = 0; b < 2; ++b) {
@@ -189,7 +189,7 @@ int main(int argc, char **argv)
     for (float t : { 0.25f, 0.5f, 0.9f }) {
         poses = armPoses(t);
         s->setBonePoses(node, poses.data(), poses.size());
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const QVector<iris::Mat4> want = armrig::swingSkinMatrices(-90.0f, t);
         double w = 0.0;
         for (size_t b = 0; b < 2; ++b) {
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
         std::vector<BonePose> poseB = armPoses(0.0f);
         s->setBonePoses(node, poseA.data(), poseA.size());
         s->setBonePoses(n2, poseB.data(), poseB.size());
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const iris::Mat4 m1 = engineBone(s, node, 1, 2);
         const iris::Mat4 m2 = engineBone(s, n2, 1, 2);
         CHECK(m1 != m2, "two nodes on ONE mesh hold two DIFFERENT bone matrices");
@@ -260,7 +260,7 @@ int main(int argc, char **argv)
         }
         CHECK(!s->attachSkinnedMesh(big, freshId, matId, huge), "T7: a 300-bone rig is refused");
         CHECK(!jahshaka::engine::inspect::scene(s)->hasSkeleton(big), "T7: ... and rides unskinned instead of crashing");
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(true, "T7: the frame after an over-limit attach still renders");
         s->removeNode(big);
 

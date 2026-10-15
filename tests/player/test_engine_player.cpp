@@ -62,7 +62,7 @@ static Image render(EnginePlayerScene &player, Engine &engine, View *view, int f
 {
     for (int i = 0; i < frames; ++i) {
         player.step(dt, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);

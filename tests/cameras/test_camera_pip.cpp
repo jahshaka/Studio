@@ -305,7 +305,7 @@ int main(int argc, char **argv)
             raw.tonemap = false;
             view->setPip(raw);
         }
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(out);
     };
 

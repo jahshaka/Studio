@@ -104,9 +104,9 @@ int main()
         enginetest::setNodeScale(scene, n, Vec3(0.4f, 0.4f, 0.4f));
         cubes.push_back(n);
     }
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     CHECK(scene->setGlobalIllumination(chainGi()), "the GI chain built (its builds read the table before the frame)");
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
 
     const GpuSubstrateStatus s0 = gpuSubstrateStatus(*scene);
     std::printf("   substrate: live %d, copies %u, frames in flight %u, workers %u\n", s0.live ? 1 : 0,
@@ -119,7 +119,7 @@ int main()
         e->setFrameMonitor(MonitorLevel::Review);
         {
             std::vector<FrameRecord> drop;
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             e->takeFrameRecords(drop);
         }
         const unsigned long long rebuilds0 = cascadeRebuilds(scene);
@@ -131,7 +131,7 @@ int main()
             const GpuSceneStatus a = scene->gpuSceneStatus();
             const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
             enginetest::setNodePosition(scene, mover, Vec3(0.3f * float(f % 4) - 0.45f, 0.3f, -0.5f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const GpuSceneStatus b = scene->gpuSceneStatus();
             const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
             maxScans = std::max(maxScans, unsigned(b.scans - a.scans));
@@ -148,7 +148,7 @@ int main()
         }
         const unsigned long long rebuilds = cascadeRebuilds(scene) - rebuilds0;
         std::vector<FrameRecord> recs;
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
         e->takeFrameRecords(recs);
         unsigned wordsMin = 0xFFFFFFFFu, wordsMax = 0;
@@ -178,7 +178,7 @@ int main()
     CHECK(s0.framesInFlight >= 2u && s0.copies == s0.framesInFlight + 1u,
           "ONE INSTANCE-TABLE COPY PER FRAME IN FLIGHT, plus the one a frame writes");
     moverRun("mover 27", cubes[27]);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     moverRun("mover 35", cubes[35]);
 
     // ---- 1b. THE LATER-CALL PATH IS STILL LIVE (the stage-1 read's F4): a GRAPHICS-REGION build - a
@@ -192,7 +192,7 @@ int main()
         GiParams g = chainGi();
         g.numBounces = g.numBounces + 1;   // a configuration change: the arm rebuilds (graphics)
         CHECK(scene->setGlobalIllumination(g), "a GI configuration change rebuilds the arm (a graphics-region build)");
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
         const GpuSceneStatus b = scene->gpuSceneStatus();
         std::printf("   [graphics build] later calls %llu, walks %llu, scans %llu, copies written %llu\n",
@@ -204,7 +204,7 @@ int main()
         // frames under the coming frame's number, then that frame scans again. A verb-time build is not
         // a frame of the protocol; the one-walk law is the mover frames' above.)
         CHECK(sb.copyWrites - sa.copyWrites == 1u, "[graphics build] ...and ONE copy written, however many commits");
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
     }
 
     // ---- 3b. EVERY COPY CATCHES UP ------------------------------------------------
@@ -220,7 +220,7 @@ int main()
             const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
             enginetest::setNodePosition(scene, walkers[k % walkers.size()],
                                         Vec3(-3.5f + float(k % 8), 0.6f + 0.05f * float(k), -3.5f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
             if (after.copyWrites == before.copyWrites) continue;
             ++rounds;
@@ -245,11 +245,11 @@ int main()
     }
 
     // ---- 4. A STILL FRAME --------------------------------------------------------
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     {
         const GpuSceneStatus a = scene->gpuSceneStatus();
         const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         const GpuSceneStatus b = scene->gpuSceneStatus();
         const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
         CHECK(b.scans == a.scans && sb.walks == sa.walks && b.copyRuns == a.copyRuns && sb.copyWrites == sa.copyWrites,

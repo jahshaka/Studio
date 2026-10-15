@@ -96,7 +96,7 @@ static bool gTarget = false;
 
 static void render(Engine *e, int frames = 6)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }

@@ -194,8 +194,8 @@ int main() {
     }
 
     // ---- a frame: legal, and nothing happens -------------------------------
-    engine->renderOneFrame();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
+    enginetest::frames(engine, 1);
     std::printf("renderOneFrame x2 survived with no View\n");
 
     // ---- teardown, in the engine's order -----------------------------------

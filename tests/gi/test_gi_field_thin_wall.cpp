@@ -87,7 +87,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames = 1) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 1) { enginetest::frames(e, frames);}
 
 static float halfToFloat(unsigned short h)
 {

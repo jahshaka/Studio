@@ -144,10 +144,10 @@ int main(int argc, char **argv)
         doc->updateSceneAnimation(t);
         for (int i = 0; i < 2; ++i) {
             mirror.sync();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(out);
     };
 
@@ -204,9 +204,9 @@ int main(int argc, char **argv)
     {
         const iris::Vec3 target = swung + iris::Vec3(0.25f, 0.0f, 0.0f);
         cam->setGlobalPos(target);
-        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 2; ++i) { mirror.sync(); enginetest::frames(engine, 1); }
         const iris::Vec3 landed1 = cam->getGlobalPosition();
-        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 2; ++i) { mirror.sync(); enginetest::frames(engine, 1); }
         const iris::Vec3 landed2 = cam->getGlobalPosition();
         std::printf("    world write on the armed rider: asked %.3f %.3f %.3f, landed %.3f %.3f %.3f then %.3f %.3f %.3f\n",
                     double(target.x()), double(target.y()), double(target.z()), double(landed1.x()),
@@ -215,7 +215,7 @@ int main(int argc, char **argv)
         CHECK((landed1 - target).length() < 1e-3f && (landed2 - target).length() < 1e-3f,
               "a world write on an ARMED rider lands where asked, and stays there two frames on");
         cam->setGlobalPos(swung);   // back where step 3 left it
-        for (int i = 0; i < 2; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 2; ++i) { mirror.sync(); enginetest::frames(engine, 1); }
     }
 
     // ---- 4. the control: detached, the same two times are the same shot ---
@@ -256,7 +256,7 @@ int main(int argc, char **argv)
             doc->updateSceneAnimation(t);
             mirror.sync();
             mirror.sync(mirrorframe::camera(view, cam));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             view->readPixels(out);
         };
         Image warm;

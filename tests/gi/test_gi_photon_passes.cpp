@@ -83,15 +83,15 @@ int main()
     fx.allowOffscreen = true;
     fx.ssr = 2;
     view->setPostFx(fx);
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
 
     e->setFrameMonitor(MonitorLevel::Review);
     {
         std::vector<FrameRecord> drop;
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         e->takeFrameRecords(drop);
     }
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<FrameRecord> recs;
     e->takeFrameRecords(recs);
@@ -165,13 +165,13 @@ int main()
         g2.quality = GiQuality::Medium;
         g2.numBounces = 1;
         s2->setGlobalIllumination(g2);
-        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        enginetest::frames(e, 12);
         e->setFrameMonitor(MonitorLevel::Review);
-        { std::vector<FrameRecord> drop; e->renderOneFrame(); e->takeFrameRecords(drop); }
+        { std::vector<FrameRecord> drop; enginetest::frames(e, 1); e->takeFrameRecords(drop); }
         // A STILL OBJECT MOVED: its cascades re-voxelise and re-inject, frame after frame.
         for (int f = 0; f < 6; ++f) {
             enginetest::setNodePosition(s2, still, Vec3(0.2f * float(f + 1), 0.3f, 0.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         e->setFrameMonitor(MonitorLevel::Off);
         std::vector<FrameRecord> r2;
@@ -195,18 +195,18 @@ int main()
         const NodeId edited = s2->createNode();
         s2->attachMesh(edited, s2->createMesh(enginetest::unitCubeMesh()), editMat);
         enginetest::setNodePosition(s2, edited, Vec3(-1.0f, 0.3f, 0.5f));
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         const PhotonDispatchStatus v0 = photonDispatchStatus();
         GiParams g3 = g2;
         g3.numBounces = 2;   // a configuration change: the arm rebuilds
         s2->setGlobalIllumination(g3);
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         s2->refreshGlobalIllumination();
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         PbrParams red;
         red.albedo = Colour(0.9f, 0.1f, 0.1f);
         s2->setPbrMaterial(editMat, red);
-        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        enginetest::frames(e, 12);
         const PhotonDispatchStatus v1 = photonDispatchStatus();
         std::printf("   set GI + refreshGi + a material edit: dispatches %llu in, %llu outside\n",
                     v1.inRegion - v0.inRegion, v1.outsideRegion - v0.outsideRegion);

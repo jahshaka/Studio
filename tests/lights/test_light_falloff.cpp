@@ -43,7 +43,7 @@ static float probeAt(Engine *engine, View *view, Scene *s, NodeId probe, float x
     enginetest::setNodePosition(s, probe, Vec3(x, 0.0f, z));
     // Straight down onto the patch, close enough that it fills the frame.
     enginetest::testCameraLookAt(view, Vec3(x, 3.0f, z + 0.001f), Vec3(x, 0.0f, z));
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image img; view->readPixels(img);
     const Colour c = img.at(64, 64);
     return (c.r + c.g + c.b) / 3.0f;
@@ -57,7 +57,7 @@ static float radianceAt(Engine *engine, View *view, Scene *s, NodeId lightNode, 
     // The patch's top face is at y = 0.025 (a 0.05-high box at the origin).
     s->setNodeTransform(lightNode, Vec3(0.0f, 0.025f + d, 0.0f), Quat(), Vec3(1, 1, 1));
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.6f, 0.001f), Vec3(0.0f, 0.0f, 0.0f));
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     ImageF img;
     if (!view->readPixelsHdr(img)) return -1.0f;
     const Colour c = img.at(64, 64);

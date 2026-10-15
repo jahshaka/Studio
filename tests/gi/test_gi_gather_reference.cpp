@@ -76,7 +76,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// The diffuse lobe's energy factor at perceptual roughness 1 (every floor here
 /// is roughness 1): what the environment lobe multiplies envColourD by since
@@ -522,7 +522,7 @@ int main()
         std::vector<double> acc(points.size(), 0.0), acc2(points.size(), 0.0);
         const int kFrames = gather ? 192 : 48;
         for (int f = 0; f < kFrames; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img;
             view->readPixelsHdr(img);
             for (size_t i = 0; i < points.size(); ++i) {
@@ -659,7 +659,7 @@ int main()
             std::vector<double> a1(points.size(), 0.0), a2(points.size(), 0.0);
             const int kN = 48;
             for (int f = 0; f < kN; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 ImageF img;
                 view->readPixelsHdr(img);
                 for (size_t i = 0; i < points.size(); ++i) {
@@ -684,7 +684,7 @@ int main()
         s->refreshGlobalIllumination();
         int f = 0;
         for (; f < 400; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const GatherStatus gs = s->giStatus().gather;
             if (gs.restFrames > gs.settleFrames) break;
         }
@@ -692,7 +692,7 @@ int main()
         CHECK_MSG(gs.restFrames > gs.settleFrames,
                   "the still view HOLDS its rest mean (rest frames %u > N %u, %d frames)", gs.restFrames,
                   gs.settleFrames, f);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         ImageF img;
         view->readPixelsHdr(img);
         for (size_t i = 0; i < points.size(); ++i) {
@@ -971,7 +971,7 @@ static int traceMain(Engine *e)
     double measured = 0.0;
     const int kFrames = 48;
     for (int f = 0; f < kFrames; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         ImageF shot;
         view->readPixelsHdr(shot);
         double px, py, m[3];

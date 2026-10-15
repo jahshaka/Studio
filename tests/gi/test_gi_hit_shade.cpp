@@ -86,7 +86,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                 \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// THE MATTE RECIPE (the default ground's, GF1): Specular workflow at ior 1.0
 /// with a black specular colour is F0 = 0 — no specular term at all, so a

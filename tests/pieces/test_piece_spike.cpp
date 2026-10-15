@@ -118,7 +118,7 @@ unsigned long long pixelHash(const Image &img) {
 
 const Colour kBlack(0.0f, 0.0f, 0.0f);
 
-void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames = 3) { enginetest::frames(e, frames);}
 
 /// Writes `source` to <scratch>/<name> and hands back the absolute path.
 std::string writePiece(const std::string &name, const std::string &source) {
@@ -372,7 +372,7 @@ void broken_piece_costs_one_frame() {
         cs.s->setMaterialCustomPiece(MaterialId(0x7FFFFFF0u), path, CustomPieceStage::PixelPreLights);
         const std::string sentinel = e->lastError();
         const auto t0 = std::chrono::steady_clock::now();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         if (e->lastError() != sentinel) ++lost;
         worstMs = std::max(worstMs, ms);

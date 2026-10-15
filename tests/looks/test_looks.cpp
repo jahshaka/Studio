@@ -93,7 +93,7 @@ static void writePpm(const Image &img, const char *path)
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// How many pixels differ AT ALL between two frames.

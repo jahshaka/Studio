@@ -226,7 +226,7 @@ int main(int argc, char **argv)
     int quiet = 0, settle = 0;
     unsigned settleWork = 0;
     for (; settle < 1200 && quiet < 30; ++settle) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (stopArm) captureOracle();
         std::vector<FrameRecord> recs;
         e->takeFrameRecords(recs);
@@ -254,7 +254,7 @@ int main(int argc, char **argv)
             s->refreshGiLighting(false);
             int q = 0, f = 0;
             for (; f < 1200 && q < 30; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 std::vector<FrameRecord> recs;
                 e->takeFrameRecords(recs);
                 const FieldWork w = fieldWork(recs);
@@ -272,15 +272,15 @@ int main(int argc, char **argv)
         int tickOnFrames = 0;
         // THE STOP: the field rebuilt with the stop on (the arm reads at the build: the field off, then on).
         e->setArm("gi.fieldStopOff", 0.0);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         GiParams off = gi;
         off.ddgi = GiToggle::Off;
         s->setGlobalIllumination(off);
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
         s->setGlobalIllumination(gi);
         int sq = 0, sf = 0;
         for (; sf < 1200 && sq < 30; ++sf) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             const FieldWork w = fieldWork(recs);
@@ -297,7 +297,7 @@ int main(int argc, char **argv)
                   sa.probes[0] * sa.probes[1] * sa.probes[2] == oProbes && sa.irradBordered == oBordered,
               "the stop's atlas reads back, the oracle's layout");
         // S5: at rest.
-        for (int i = 0; i < 30; ++i) e->renderOneFrame();
+        enginetest::frames(e, 30);
         const PhotonFieldStatus fr = photonFieldStatus(*s);
         std::printf("   at rest: %llu integrations in 30 frames, giAtRest %d\n", fr.integrations - fs.integrations,
                     s->giStatus().giAtRest ? 1 : 0);
@@ -419,7 +419,7 @@ int main(int argc, char **argv)
         bool started = false;
         GiFieldAtlas prev;
         for (int f = 0; f < 600 && quietRun < 20; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             const FieldWork w = fieldWork(recs);
@@ -507,7 +507,7 @@ int main(int argc, char **argv)
         const auto settleField = [&]() {
             int q = 0, n = 0;
             for (; n < 2000 && q < 30; ++n) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 std::vector<FrameRecord> recs;
                 e->takeFrameRecords(recs);
                 const FieldWork w = fieldWork(recs);
@@ -558,13 +558,13 @@ int main(int argc, char **argv)
                 for (int i = 0; i < 2; ++i)
                     enginetest::setNodePosition(s, stills[i], Vec3(-2.5f + 5.0f * float(i) + 0.4f * std::sin(0.05f * float(f)),
                                                                    0.5f, -3.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         for (int f = 0; f < 6; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
@@ -600,18 +600,18 @@ int main(int argc, char **argv)
     // re-built under them, a real change of the field's input; today's orchestration
     // re-integrates the WHOLE field per re-injection (OgreGi.cpp, stage 4's).
     if (stillsArm) {
-        for (int i = 0; i < 300; ++i) e->renderOneFrame();
+        enginetest::frames(e, 300);
         { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
         run("stills move", 120, false, false, true);
         // ONE STILL MOVED ONCE (ENGINE-UPGRADE-2B stage 4's instrument): the field's work from the
         // move until it settles — its frames, its probe integrations, its GPU ms.
-        for (int i = 0; i < 300; ++i) e->renderOneFrame();
+        enginetest::frames(e, 300);
         { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
         const PhotonFieldStatus i0 = photonFieldStatus(*s);
         enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
         std::vector<FrameRecord> one;
         for (int f = 0; f < 240; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             one.insert(one.end(), recs.begin(), recs.end());

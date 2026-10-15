@@ -61,7 +61,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The strongest "this pixel is red and its neighbours are not" signal in the
@@ -352,7 +352,7 @@ int main()
         }
         // THE NODE TURNS TWO-SIDED UNDER THE ARMED MIRROR (CULL-TWIN-DEBTS-1): the
         // refusal is re-derived on the spot (it used to wait for the next flag change).
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         // lastError() is sticky: put an unrelated reason there first, so the check
         // below reads THIS refusal and not the one above.
         CHECK(!s->setNodePlanarReflector(NodeId(0x7FFFFFF0u), true) &&
@@ -362,7 +362,7 @@ int main()
               "…and the armed mirror is refused again, naming two-sidedness");
         CHECK(s->nodePlanarReflector(twoSided), "…keeping its flag for when it is one-sided again");
         s->setNodeFaceCull(twoSided, FaceCull::Material);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(s->setNodePlanarReflector(twoSided, false), "cleared again, leaving the scene as found");
     }
 

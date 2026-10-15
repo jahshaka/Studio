@@ -59,7 +59,7 @@ using namespace jahshaka::engine;
 static const unsigned kW = 640u, kH = 360u;   // 16:9, the framing hold's own aspect
 static const float PI = 3.14159265358979323846f;
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 // ---------------------------------------------------------------------------
 // THE SHADER'S OWN ARITHMETIC (jah_probe_params.glsl:124-170), in C++.
@@ -531,7 +531,7 @@ static int sweepMain(Engine *e, View *view)
                 for (int a = 0; a < 3; ++a) {
                     tune(s, len[a]);
                     for (int fr = 0; fr < 36; ++fr) {
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                         if (fr < 6) continue;
                         const GatherStatus q = s->giStatus().gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
@@ -791,7 +791,7 @@ static int farBlasMain(Engine *e, View *view)
                     else if (a == 1) tuneFar(s, 0.0f, true);
                     else tuneFar(s, diag, true);
                     for (int fr = 0; fr < 36; ++fr) {
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                         if (fr < 6) continue;
                         const GatherStatus q = s->giStatus().gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)

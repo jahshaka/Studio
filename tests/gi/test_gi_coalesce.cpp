@@ -167,7 +167,7 @@ int main(int argc, char **argv)
         doc->refresh();
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     const auto floorPixel = [&]() {
         Image img;

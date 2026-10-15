@@ -75,7 +75,7 @@ static int failures = 0;
 
 static const float kPi = 3.14159265358979f;
 int mirrorMain(Engine *e);
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 // ---------------------------------------------------------------------------
 // THE COLUMN: two boxes, each its own 24 vertices (flat normals), the lower on
@@ -266,7 +266,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
             for (int f = 0; f < 60; ++f, ++frame) {
                 if (arm == 0)
                     for (NodeId n : nodes) pose(s, n, 0.5f + 0.5f * std::sin(0.05f * float(frame) + float(n)));
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 std::vector<FrameRecord> recs;
                 e->takeFrameRecords(recs);
                 if (f < 20) continue;                  // settle: the queries come back 3 frames late

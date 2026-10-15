@@ -104,7 +104,7 @@ static Box solve(Scene *s)
     gi.quality = GiQuality::Low;
     gi.updateBudget = 0;
     s->setGlobalIllumination(gi);
-    for (int i = 0; i < 2; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, 2);
     const GiStatus st = s->giStatus();
     return Box{ st.probeFitMin, st.probeFitMax };
 }
@@ -209,8 +209,8 @@ static void liveTable(Engine *engine, View *view)
         addCube(s, n - 1);
         // A geometry change flags the caches; the flush is at frame time, like
         // every other edit. Two frames is what the sibling suites use.
-        engine->renderOneFrame();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
+        enginetest::frames(engine, 1);
         s->refreshGlobalIllumination();
         const Box b = solve(s);
         show("live", n, b);

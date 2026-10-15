@@ -107,7 +107,7 @@ int main()
         const std::vector<EnvironmentConeQuery> one = { dflt };
         bool ready = false;
         for (int f = 0; f < 30 && !ready; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f >= 4) ready = e->environmentCones(scene, one, probe);
         }
         CHECK(ready, "the environment cube exists (the sky's capture and convolution landed)");
@@ -265,7 +265,7 @@ int main()
         sky.atmosphere.sunDir[1] = std::sin(0.61f);
         sky.atmosphere.sunDir[2] = 0.0f;
         scene->setSky(sky);
-        for (int f = 0; f < 10; ++f) e->renderOneFrame();
+        enginetest::frames(e, 10);
         float sh[27] = { 0 };
         scene->skyAmbientSh(sh);
         scene->setAmbientSh(sh);
@@ -277,7 +277,7 @@ int main()
         const auto centre = [&]() {
             double acc = 0.0;
             for (int f = 0; f < 4; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 Image img;
                 view->readPixels(img);
                 double s2 = 0.0; int n = 0;
@@ -298,7 +298,7 @@ int main()
             scene->attachMesh(plate, cube, scene->createPbrMaterial(p));
             GiParams off; off.mode = GiMode::Off;
             scene->setGlobalIllumination(off);
-            for (int f = 0; f < 6; ++f) e->renderOneFrame();
+            enginetest::frames(e, 6);
             const double outside = centre();
             GiParams vct;
             vct.mode = GiMode::Vct;
@@ -312,7 +312,7 @@ int main()
             vct.cascadeCount = 1;
             vct.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 80, 0.0f };
             scene->setGlobalIllumination(vct);
-            for (int f = 0; f < 20; ++f) e->renderOneFrame();
+            enginetest::frames(e, 20);
             const double inside = centre();
             std::printf("   SPECULAR ENVIRONMENT at roughness %.2f: outside a volume %.4f, inside "
                         "%.4f (%.3fx)\n", rough, outside, inside, inside / outside);
@@ -329,8 +329,8 @@ int main()
             GiParams field = vct;
             field.ddgi = GiToggle::On;
             scene->setGlobalIllumination(field);
-            for (int f = 0; f < 20; ++f) e->renderOneFrame();
-            for (int f = 0; f < 4000 && !scene->giStatus().giAtRest; ++f) e->renderOneFrame();
+            enginetest::frames(e, 20);
+            enginetest::frames(e, 4000 && !scene->giStatus().giAtRest);
             const double withField = centre();
             std::printf("   SPECULAR ENVIRONMENT at roughness %.2f, THE FIELD ON: inside %.4f (%.3fx of outside)\n",
                         rough, withField, withField / outside);
@@ -367,7 +367,7 @@ int main()
         const auto readHdr = [&](View *v) {
             double acc = 0.0;
             for (int f = 0; f < 4; ++f) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 ImageF img;
                 if (!v->readPixelsHdr(img)) return -1.0;
                 double s2 = 0.0; int n = 0;
@@ -394,14 +394,14 @@ int main()
             sky.equirect = open->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) e->renderOneFrame();
+            enginetest::frames(e, 20 && !open->skyAmbientSh(sh));
             open->setAmbientSh(sh);
             open->setEnvironmentLight(Colour(1, 1, 1, 1));
             const NodeId nd = open->createNode();
             open->attachMesh(nd, open->createMesh(enginetest::unitCubeMesh()), open->createPbrMaterial(metal));
             open->setNodeTransform(nd, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(4.0f, 0.1f, 4.0f));
             enginetest::testCameraLookAt(rv, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
-            for (int f = 0; f < 10; ++f) e->renderOneFrame();
+            enginetest::frames(e, 10);
             reference = readHdr(rv);
             rv->setScene(nullptr);
             e->destroyScene(open);
@@ -433,7 +433,7 @@ int main()
         enginetest::testCameraLookAt(rv, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
         GiParams none; none.mode = GiMode::Off;
         room->setGlobalIllumination(none);
-        for (int f = 0; f < 6; ++f) e->renderOneFrame();
+        enginetest::frames(e, 6);
         const double viaNone = readHdr(rv);
         GiParams cones;
         cones.mode = GiMode::Vct;
@@ -445,13 +445,13 @@ int main()
         cones.cascadeCount = 1;
         cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, 64, 0.0f };
         room->setGlobalIllumination(cones);
-        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
+        enginetest::frames(e, 4000 && !room->giStatus().giAtRest);
         const double viaCones = readHdr(rv);
         GiParams field = cones;
         field.ddgi = GiToggle::On;
         room->setGlobalIllumination(field);
-        for (int f = 0; f < 20; ++f) e->renderOneFrame();
-        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
+        enginetest::frames(e, 20);
+        enginetest::frames(e, 4000 && !room->giStatus().giAtRest);
         const double viaField = readHdr(rv);
         std::printf("   ROUGH METAL (0.80) IN A SEALED FURNACE of radiance L = %.4f: the plate under a uniform sky "
                     "of L %.4f; in the furnace GI off %.4f, the cones %.4f (%.3fx), the field %.4f (%.3fx)\n", L,

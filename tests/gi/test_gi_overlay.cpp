@@ -140,7 +140,7 @@ int main(int argc, char **argv)
         // lands on the next frame's record, exactly as in the editor.
         for (int i = 0; i < 3; ++i) {
             mirror.sync(mirrorframe::world(view, cam));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         Image img; view->readPixels(img);
         // A 5x5 window: a one-pixel wireframe aimed at exactly can still land a
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::sky(view));
             mirror.sync(mirrorframe::environment(view));
             mirror.sync(mirrorframe::camera(view, cam));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
     };
     const auto maxCorner = [&] {

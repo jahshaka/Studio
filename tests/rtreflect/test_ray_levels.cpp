@@ -38,7 +38,7 @@ static int failures = 0;
     } while (0)
 
 static const unsigned kWidth = 640, kHeight = 360;
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData permutedSphere(int levels, int rings = 24, int segments = 48)
 {

@@ -67,7 +67,7 @@ struct Rgb { float r = 0, g = 0, b = 0; };
 Rgb probeCube(Engine *engine, View *view, float x)
 {
     enginetest::testCameraLookAt(view, Vec3(x, 0.0f, 3.0f), Vec3(x, 0.0f, 0.0f));
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image img;
     if (!view->readPixels(img)) return Rgb{};
     const Colour c = img.at(img.width / 2, img.height / 2);
@@ -290,7 +290,7 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
     // "the shadow survives" even where it does not.
     const unsigned shadowLo = 74, shadowHi = 112;
     auto groundContrast = [&](int *darkestOut) {
-        for (int i = 0; i < 10; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 10);
         Image img;
         if (!view->readPixels(img)) return -1;
         int darkest = 255, brightest = 0;
@@ -387,7 +387,7 @@ void perObjectCastShadow(Engine *engine, View *view)
 
     const unsigned shadowLo = 74, shadowHi = 112;
     auto shadowStrip = [&]() {
-        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 4);
         Image img;
         if (!view->readPixels(img)) return -1;
         int darkest = 255;

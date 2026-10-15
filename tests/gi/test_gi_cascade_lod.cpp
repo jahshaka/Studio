@@ -138,7 +138,7 @@ static GiParams cascadeGi(bool lods)
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The level the histogram says MOST items took, and the highest one present.

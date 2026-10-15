@@ -73,7 +73,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void showBox(const char *what, const Vec3 &mn, const Vec3 &mx)

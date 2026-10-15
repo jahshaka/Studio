@@ -66,7 +66,7 @@ namespace {
 Engine *gEngine = nullptr;
 constexpr int kW = 256, kH = 160;
 
-void frames(int n) { for (int i = 0; i < n; ++i) gEngine->renderOneFrame(); }
+void frames(int n) { enginetest::frames(gEngine, n);}
 
 /// The picture is sRGB-ENCODED (SRGB-ENCODE-1) and a stop is a ratio of LIGHT, so
 /// every byte is decoded back to the light the display emits for it, 0..255.
@@ -263,7 +263,7 @@ Resolved resolveThroughMirror(const iris::ScenePtr &doc, View *view, SceneMirror
     // ONE HOST FRAME (U0 3a): the sky, the environment and the camera in one record — the camera's block layered
     // over the world's on the view's part — drained by the frame, then read.
     mirror.sync(mirrorframe::world(view, camera));
-    gEngine->renderOneFrame();
+    enginetest::frames(gEngine, 1);
     const PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
     return { fx.exposure, fx.exposureMin, fx.exposureMax, fx.tonemapFixed };
 }

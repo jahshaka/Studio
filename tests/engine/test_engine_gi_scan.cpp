@@ -122,7 +122,7 @@ int main()
         }
     }
 
-    auto render = [&](int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); };
+    auto render = [&](int frames) { enginetest::frames(e, frames);};
     render(30);                                   // settle: the chain builds, once
 
     // =====================================================================
@@ -165,7 +165,7 @@ int main()
                 scene->setNodeVisible(proxy[i], true);
                 scene->setNodeVisible(ray[i], true);
             }
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         const GiStatus st = scene->giStatus();
         std::printf("   session furniture: %llu scans, %llu world-AABB reads over %u frames "
@@ -187,7 +187,7 @@ int main()
         for (unsigned f = 0; f < kFrames; ++f) {
             scene->setNodeTransform(mover, Vec3(0.0f, 0.5f + 0.01f * float(f), 0.0f),
                                     Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const double us = scene->giStatus().giScanMicros;
             if (us > 0.0 && (moverScanMicros == 0.0 || us < moverScanMicros)) moverScanMicros = us;
         }
@@ -216,7 +216,7 @@ int main()
         for (unsigned f = 0; f < kFrames; ++f) {
             scene->setNodeVisible(proxy[0], false);       // already hidden
             scene->setNodeVisible(ray[0], true);          // already shown
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         const GiStatus st = scene->giStatus();
         CHECK(st.giScans == from.giScans && st.staleSerial == serial && st.rebuilds == rebuilds,
@@ -256,7 +256,7 @@ int main()
             for (int i = 0; i < 5; ++i) {
                 scene->setNodeTransform(mover, Vec3(0.0f, 0.5f + 0.01f * float(i), 0.0f),
                                         Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 const double us = scene->giStatus().giScanMicros;
                 if (us > 0.0 && (best == 0.0 || us < best)) best = us;
             }
@@ -273,7 +273,7 @@ int main()
             for (int i = 0; i < 2; ++i)
                 scene->setNodeTransform(proxy[i], Vec3(0.3f, 1.2f + 0.01f * float(f), -0.6f),
                                         Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         CHECK(scene->giStatus().giScans == from.giScans,
               "...and the furniture is free at that scale too (10 frames, zero scans)");

@@ -70,7 +70,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void show(const char *what, const Colour &c)
@@ -93,7 +93,7 @@ static bool fieldWhole(const GiStatus &s)
 static int settleGi(Engine *e, Scene *s, int cap = 4000)
 {
     int n = 0;
-    for (; n < cap && !s->giStatus().giAtRest; ++n) e->renderOneFrame();
+    for (; n < cap && !s->giStatus().giAtRest; ++n) enginetest::frames(e, 1);
     return s->giStatus().giAtRest ? n : -1;
 }
 
@@ -577,13 +577,13 @@ int main(int argc, char **argv)
         CHECK(settleGi(e, r.scene) >= 0, "...and at rest");
         lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
-        e->renderOneFrame();     // the chain's tick lands at the frame's writer point
+        enginetest::frames(e, 1);     // the chain's tick lands at the frame's writer point
         st = r.scene->giStatus();
         CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
         CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
         int frames = 0;
         while (frames < expected + 8) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ++frames;
             if (fieldWhole(r.scene->giStatus())) break;
         }
@@ -596,7 +596,7 @@ int main(int argc, char **argv)
         const int k = int(r.scene->giStatus().ifdTargetSamples);
         int more = 0;
         while (more < (k + 2) * expected && !r.scene->giStatus().giAtRest) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ++more;
         }
         std::printf("   at rest %d frames after the pass (K = %d: %d refinement passes of %d frames)\n",
@@ -636,7 +636,7 @@ int main(int argc, char **argv)
         CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
         int frames = 0;
         while (frames < 4000 && !r.scene->giStatus().giAtRest) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ++frames;
         }
         st = r.scene->giStatus();
@@ -699,7 +699,7 @@ int main(int argc, char **argv)
             const auto step = [&]() {
                 x += 0.01f;
                 enginetest::setNodePosition(r.scene, mover, Vec3(x, 0.5f, 0.5f));
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
             };
             int warm = 0;
             for (; warm < 4000 && !r.scene->giStatus().giAtRest; ++warm) step();
@@ -807,7 +807,7 @@ int main(int argc, char **argv)
     // The chain answers a refresh through its dirty path and its tick, a frame
     // at a time: counted until the field is whole again (bounded), not a fixed 3.
     render(e, 3);
-    for (int f = 0; f < 120 && !fieldWhole(r.scene->giStatus()); ++f) e->renderOneFrame();
+    enginetest::frames(e, 120 && !fieldWhole(r.scene->giStatus()));
     st = r.scene->giStatus();
     CHECK(st.ifdBound && fieldWhole(st),
           "a full refresh under a live field rebuilds it, bound and whole");

@@ -95,7 +95,7 @@ int main()
 
     // A warm frame or two: the first frames of a process are the shader/PSO
     // compile storm, and nothing below is a timing assertion, but a picture is.
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     Image warm;
     CHECK(view->readPixels(warm) && drawnFraction(warm) > 0.02,
           "the fixture renders a picture before anything is faulted");
@@ -106,11 +106,11 @@ int main()
     {
         const std::string errBefore = e->lastError();
         e->setFrameFault(FrameFault::Throw, 0u);          // frames 0 = disarmed
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(e->lastError() == errBefore && !faultFired(e),
               "a fault armed for ZERO frames throws nothing at all");
         e->setFrameFault(FrameFault::None, 5u);           // kind None = disarmed
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(e->lastError() == errBefore && !faultFired(e),
               "...and neither does FrameFault::None with frames to spare");
     }
@@ -131,16 +131,16 @@ int main()
         const unsigned long long rec0 = e->monitorStatus().framesRecorded;
 
         const unsigned kGood = 3u, kThrown = 4u;
-        for (unsigned i = 0; i < kGood; ++i) e->renderOneFrame();
+        enginetest::frames(e, kGood);
         e->setFrameFault(FrameFault::Throw, kThrown);
         unsigned fired = 0;
         for (unsigned i = 0; i < kThrown; ++i) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (faultFired(e)) ++fired;
         }
         CHECK(fired == kThrown, "the fault fired on every frame it was armed for "
                                 "(the case is not vacuous)");
-        for (unsigned i = 0; i < kGood; ++i) e->renderOneFrame();
+        enginetest::frames(e, kGood);
 
         const unsigned long long recorded = e->monitorStatus().framesRecorded - rec0;
         std::printf("   %u frames rendered (%u of them thrown) -> %llu monitor records\n",
@@ -179,11 +179,11 @@ int main()
     {
         const unsigned long long presented0 = view->framesPresented();
         e->setFrameFault(FrameFault::Throw, 2u);
-        e->renderOneFrame();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
+        enginetest::frames(e, 1);
         CHECK(view->framesPresented() == presented0,
               "a thrown frame does not claim to have presented (it did not get that far)");
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        enginetest::frames(e, 3);
         CHECK(view->framesPresented() >= presented0 + 3ull,
               "THE VIEW PRESENTS AGAIN after the faults are spent");
         Image after;
@@ -199,7 +199,7 @@ int main()
     {
         CHECK(!e->deviceLost(), "the device is not lost before the fault (nothing faked it yet)");
         e->setFrameFault(FrameFault::ThrowDeviceLost, 1u);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(faultFired(e) || e->deviceLost(), "the device-lost fault fired");
         CHECK(e->deviceLost(),
               "A DEVICE LOSS INSIDE A FRAME LATCHES: the latch lives after the catch, and "
@@ -210,7 +210,7 @@ int main()
         // the render system or the pictures changed, which is why this frame
         // still draws. (A real loss stops the render system dead — fork d014b064f+1bccc3f93 (was 0072)
         // — and that cannot be exercised without taking the box's GPU with it.)
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         Image alive;
         CHECK(view->readPixels(alive) && drawnFraction(alive) > 0.02,
               "the FAKED loss faked nothing else: the render system is untouched");

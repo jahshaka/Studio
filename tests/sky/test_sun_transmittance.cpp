@@ -112,7 +112,7 @@ int main()
         std::printf("FAIL: the atmosphere applies: %s\n", engine->lastError().c_str());
         return 1;
     }
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     {
         const Colour noon = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(90.0f));
         CHECK_MSG(std::fabs(noon.r - 1.0f) < 1e-4f && std::fabs(noon.g - 1.0f) < 1e-4f &&
@@ -129,7 +129,7 @@ int main()
     referenceTransmittance(1.0, kDefaultHaze, zen);
     for (float e : elevs) {
         if (!s->setSky(atmosphereSky(kDefaultHaze, e))) { ++failures; continue; }
-        engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
         const Colour t = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(e));
         double ref[3];
         referenceTransmittance(std::sin(double(e) * kPi / 180.0), kDefaultHaze, ref);
@@ -149,8 +149,8 @@ int main()
         const float elev = 12.0f;
         auto shoot = [&](float haze, Image &out) {
             if (!s->setSky(atmosphereSky(haze, elev))) return false;
-            engine->renderOneFrame();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
+            enginetest::frames(engine, 1);
             return view->readPixels(out);
         };
         Image a, c;
@@ -164,10 +164,10 @@ int main()
                       "the haze moves the SKY (%zu of %zu bytes differ at haze 40 against 1)", diff,
                       a.rgba.size());
             if (!s->setSky(atmosphereSky(1.0f, elev))) ++failures;
-            engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+            enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
             const Colour clear = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(elev));
             if (!s->setSky(atmosphereSky(40.0f, elev))) ++failures;
-            engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+            enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
             const Colour hazy = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(elev));
             CHECK_MSG(hazy.g < clear.g * 0.8f,
                       "...and the SUN: green %.4f at haze 1 against %.4f at haze 40", clear.g, hazy.g);
@@ -182,7 +182,7 @@ int main()
         bool monotone = true;
         for (float h : hazes) {
             if (!s->setSky(atmosphereSky(h, elev))) { ++failures; continue; }
-            engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+            enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
             const Colour t = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(elev));
             const float ratio = t.r / std::max(t.b, 1e-9f);
             std::printf("    haze %5.1f -> %.4f %.4f %.4f   (r/b %.2f)\n", double(h), t.r, t.g, t.b, double(ratio));
@@ -202,7 +202,7 @@ int main()
                   "...and GREY: the haze leaves r/b where the molecular air put it (worst %.4f)",
                   double(worstRatio));
         if (!s->setSky(atmosphereSky(0.0f, elev))) ++failures;
-        engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
         const Colour molecular = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(elev));
         CHECK_MSG(molecular.r < 1.0f && molecular.g < molecular.r && molecular.b < molecular.g,
                   "no haze at all still absorbs, blue most (Rayleigh and ozone): %.4f %.4f %.4f",
@@ -223,7 +223,7 @@ int main()
         float prev = 1.0f;
         for (const auto &b : band) {
             if (!s->setSky(atmosphereSky(kDefaultHaze, b.elev))) { ++failures; continue; }
-            engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+            enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
             const Colour t = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(b.elev));
             const float m = std::max(std::max(t.r, t.g), t.b);
             std::printf("    %6.2f deg -> %.3e  (%s)\n", double(b.elev), double(m), b.what);
@@ -237,7 +237,7 @@ int main()
     {
         SkyDesc none;
         CHECK_MSG(s->setSky(none), "the sky goes away: %s", engine->lastError().c_str());
-        engine->renderOneFrame();   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        enginetest::frames(engine, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
         const Colour off = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, towardsSun(5.0f));
         CHECK_MSG(off.r == 1.0f && off.g == 1.0f && off.b == 1.0f,
                   "a picture sky knows nothing about the air: the tint is white");

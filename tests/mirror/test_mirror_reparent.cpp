@@ -195,13 +195,13 @@ int main(int argc, char **argv)
         World w;
         build(w, engine.get(), scales[k]);
         view->setScene(w.target);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         // (A) hostA -> hostB, a same-scene move
         a[k] = measure(w, [&] { w.hostB->addChild(w.fragment, false); });
         // (D) ...AND IT DRAWS WHERE IT NOW IS (stage 2b's read, item a): the static fragment kept its local and changed
         // its parent, so its world moved; one frame later the pose the renderer DREW (the static pass's cached
         // derived transform) is the new world pose, for the root and for a leaf deep in the fragment.
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         for (const iris::SceneNodePtr &n : { w.fragment, w.fragmentNodes.back() }) {
             const NodeId id = w.mirror->engineNode(n.data());
             Vec3 drawn, now; Quat qd, qn;

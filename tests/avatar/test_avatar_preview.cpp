@@ -126,7 +126,7 @@ static Image render(AvatarPreviewScene &scene, Engine &engine, View *view, int f
 {
     for (int i = 0; i < frames; ++i) {
         scene.step(0.0f, int(view->width()), int(view->height()));   // dt 0: paused, deterministic
-        engine.renderOneFrame();
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);
@@ -604,7 +604,7 @@ int main(int argc, char **argv)
         CHECK(pushBefore > 0, "S13: the overlay did push the skeleton it is drawing");
         for (int f = 0; f < 60; ++f) {
             scene.step(0.0f, int(view->width()), int(view->height()));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         const unsigned long long pushStill = scene.overlayTransformPushes() - pushBefore;
         const unsigned long long showStill = scene.overlayVisibilityWrites() - showBefore;

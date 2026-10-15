@@ -73,7 +73,7 @@ static const int kWarmFrames = 60;     // the view is warm and the mean converge
 static const int kMoveFrames = 24;
 static const int kSettleFrames = 45;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// Mean absolute difference, in 8-bit codes, over the rows [y0, y1) and the
 /// columns [x0, x1).

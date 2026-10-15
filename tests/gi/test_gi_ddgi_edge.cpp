@@ -65,7 +65,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 5)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -265,7 +265,7 @@ static Reading measure(Engine *e, Box &b)
 
     // THE INTERIOR, settled: counted in frames, until GI is at rest, bounded.
     render(e);
-    for (int f = 0; f < 240 && !b.scene->giStatus().giAtRest; ++f) e->renderOneFrame();
+    enginetest::frames(e, 240 && !b.scene->giStatus().giAtRest);
     b.inside->readPixels(r.interior);
     // The floor patch nearest the red wall (the camera looks from -Z toward +Z,
     // so the far half of the floor is the red wall's side) and one off to the

@@ -50,7 +50,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// Renders `frames` one at a time and returns how many probe FACE SETS the
@@ -62,7 +62,7 @@ static int renderCounting(Engine *e, Scene *s, int frames)
 {
     int captured = 0;
     for (int i = 0; i < frames; ++i) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         captured += s->giStatus().probeCapturesLastFrame;
     }
     return captured;

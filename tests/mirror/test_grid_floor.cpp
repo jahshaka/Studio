@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 
     auto render = [&](Image &img) {
         mirror.sync();
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img);
     };
     auto count = [&](const Image &img, bool (*pred)(const Colour &)) {

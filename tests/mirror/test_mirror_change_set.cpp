@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     auto frame = [&] {
         mirror.sync(mirrorframe::world(view, cam));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     for (int i = 0; i < 40; ++i) frame();   // the open: the arm builds, the static settle runs, everything quiets
 

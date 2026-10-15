@@ -91,7 +91,7 @@ int main(int argc, char **argv)
             quads.push_back(b);
         }
         CHECK(target->setBillboards(node, quads.data(), quads.size()), "setBillboards(8)");
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         CHECK(view->readPixels(img), "readPixels");
         const int lit = countBright(img);
         std::printf("    engine billboards: %d bright pixels\n", lit);
@@ -100,24 +100,24 @@ int main(int argc, char **argv)
         std::vector<BillboardInstance> many(200, quads[0]);
         CHECK(target->setBillboards(node, many.data(), many.size()), "setBillboards over capacity clamps");
         CHECK(target->setBillboards(node, nullptr, 0), "setBillboards(0) clears");
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "no billboards -> black again");
 
         CHECK(target->setBillboards(node, quads.data(), quads.size()), "re-populate");
         CHECK(target->destroyBillboardSet(node), "destroyBillboardSet");
         CHECK(!target->setBillboards(node, quads.data(), quads.size()), "setBillboards after destroy fails");
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "destroyed set renders nothing");
 
         CHECK(target->createBillboardSet(node, 0, true, 64), "recreate set");
         CHECK(target->setBillboards(node, quads.data(), quads.size()), "re-populate again");
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) > 50, "billboards back before node removal");
         CHECK(target->removeNode(node), "removeNode with live billboard set");
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "removeNode freed the billboard set");
     }
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
         CHECK(target->particleCount(eng) == 0, "nothing is alive before the first frame");
 
         const unsigned defsAfterFirst = target->particleDefinitionsCreated();
-        for (int i = 0; i < 90; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 90);
         std::printf("    after 90 engine frames: %u live particles\n", target->particleCount(eng));
         CHECK(target->particleCount(eng) > 0, "the ENGINE emitted, with no document tick at all");
         view->readPixels(img);
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
         // THE POINT OF THE MIGRATION: a still emitter costs the mirror nothing.
         // Before this, every sync rebuilt a BillboardInstance array of every
         // live particle and pushed it into the engine, sixty times a second.
-        for (int f = 0; f < 30; ++f) { mirror.sync(); engine->renderOneFrame(); }
+        for (int f = 0; f < 30; ++f) { mirror.sync(); enginetest::frames(engine, 1); }
         CHECK(target->particleDefinitionsCreated() == defsAfterFirst,
               "30 syncs of an unchanged emitter build no definitions");
         view->readPixels(img);
@@ -289,24 +289,24 @@ int main(int argc, char **argv)
         // Long enough for the particles ALREADY in flight to expire: a rate of 0
         // stops new emission, it does not retroactively shorten anyone's life.
         // ttl is 2 s here, so 150 frames at 1/60 is 2.5 s.
-        for (int i = 0; i < 150; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 150);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "rate 0 in the document stops emission in the engine");
         ps->particlesPerSecond = 300.0f;
         mirror.sync();
-        for (int i = 0; i < 60; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 60);
         view->readPixels(img);
         CHECK(countBright(img) > 100, "and turning it back on refills the plume");
 
         // Visibility follows the document node, and kills particles in flight.
         ps->setVisible(false);
         mirror.sync();
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "hidden emitter renders nothing");
         ps->setVisible(true);
         mirror.sync();
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) > 100, "shown again");
 
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(ps);
         mirror.sync();
         CHECK(mirror.engineNode(ps.data()) == 0, "removed emitter has no engine node");
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "removed emitter renders nothing");
 
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
             churn->texture.clear();
             doc->getRootNode()->addChild(churn);
             mirror.sync();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             doc->getRootNode()->removeChild(churn);
             mirror.sync();
         }

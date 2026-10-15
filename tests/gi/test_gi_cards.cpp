@@ -59,7 +59,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// The helpers' cube carries no UVs; a textured one is needed wherever a card
 /// must show a pattern rather than a silhouette.

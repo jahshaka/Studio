@@ -117,7 +117,7 @@ unsigned long long pump(Engine *e, unsigned long long want, unsigned budget) {
     const unsigned long long start = e->vrStatus().frames;
     for (unsigned i = 0; i < budget && e->vrStatus().frames < start + want; ++i) {
         e->advanceResources();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     return e->vrStatus().frames - start;
 }
@@ -232,7 +232,7 @@ bool session(Engine *e, Scene *s, float worldScale, GatherStatus &out) {
                     rq.hitRecords, rq.hitDropped);
     }
     e->endVrSession();
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     dumpIrradiance(out, worldScale > 0.5f ? "worldscale1" : "worldscale0");
     return CHECK_MSG(ok, "the gather's irradiance was read back from the stereo view (%ux%u)",
                      out.irradianceW, out.irradianceH);
@@ -292,7 +292,7 @@ int main() {
     // different sets of probes.
     t.adaptiveCap = int(2u * ((kEyeW + kStride - 1u) / kStride) * ((kEyeH + kStride - 1u) / kStride));
     scene->setGatherTuning(t);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
 
     // ---- THE CONTROL: worldScale 0 ------------------------------------------
     GatherStatus zero;

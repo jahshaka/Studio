@@ -95,7 +95,7 @@ static int failures = 0;
 
 namespace {
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 unsigned kSize = 768u;   ///< the view (square); --size for the far-cascade rows
 constexpr float kFov = 45.0f;
@@ -433,7 +433,7 @@ GatherStatus settled(Fixture &f)
     unsigned i = 0u;
     const bool perFrame = std::getenv("FARSUN_SETTLE_TRACE") && std::string(std::getenv("FARSUN_SETTLE_TRACE")) == "2";
     for (; i < 600u; ++i) {
-        f.e->renderOneFrame();
+        enginetest::frames(f.e, 1);
         if (perFrame) {
             const GatherStatus t = f.s->giStatus().gather;
             double sum = 0.0;

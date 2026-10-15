@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 
     Image img;
     const auto renderN = [&](int n) {
-        for (int i = 0; i < n; ++i) { mirror.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < n; ++i) { mirror.sync(); enginetest::frames(engine, 1); }
         view->readPixels(img);
     };
     const auto differing = [](const std::vector<unsigned char> &a,

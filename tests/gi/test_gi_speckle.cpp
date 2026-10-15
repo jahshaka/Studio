@@ -63,7 +63,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static const unsigned kW = 640, kH = 360;
 /// The floor band: the bottom of the frame, the floor 2-5 m in front of the

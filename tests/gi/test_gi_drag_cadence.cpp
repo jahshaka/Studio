@@ -60,7 +60,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// THE PROBE REGION IS PINNED TO THE ROOM: the deferral being measured is in the

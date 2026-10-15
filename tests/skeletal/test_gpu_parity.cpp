@@ -36,7 +36,7 @@ using namespace jahshaka::engine;
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-static void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 3) { enginetest::frames(e, frames);}
 
 // The pose, in closed form. It used to come from the document evaluator
 // (updateSceneAnimation -> Skeleton::boneTransforms -> toBonePoses); that
@@ -471,7 +471,7 @@ int main(int argc, char **argv)
                     s->updateMeshVertices(cpuMeshes[size_t(i)], pos, nrm);
                     uploadedMb += double(nv * 12 * sizeof(float)) / (1024.0 * 1024.0);
                 }
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             const double cpuMs = double(timer.nsecsElapsed()) / 1e6 / frames;
             const double cpuMb = uploadedMb / frames;
@@ -485,7 +485,7 @@ int main(int argc, char **argv)
                 const std::vector<BonePose> poses = armPoses(t);
                 for (int i = 0; i < count; ++i)
                     s->setBonePoses(gpuNodes[size_t(i)], poses.data(), poses.size());
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             const double gpuMs = double(timer.nsecsElapsed()) / 1e6 / frames;
 

@@ -63,7 +63,7 @@ static bool settle(Engine *e, View *view, Image &out, int maxFrames = 240)
 {
     Image prev;
     for (int i = 0; i < maxFrames; ++i) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         Image cur;
         if (!view->readPixels(cur)) return false;
         if (i > 0 && cur.rgba == prev.rgba) { out = cur; return true; }
@@ -95,16 +95,16 @@ static int inRecordChild()
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.55f), 3.14159f);
     enginetest::addTestCube(scene, Colour(0.8f, 0.3f, 0.2f), 0.0f, 0.5f);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.6f, 1.4f, 2.2f), Vec3(0, 0, 0)));
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     if (e->gpuFault() != GpuFault::None) { std::printf("CHILD-FAIL: a fault before the door\n"); return 2; }
 
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemoryInRecord, 1u);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->gpuFault()), int(e->deviceLost()));
     std::printf("CHILD frameError=%s\n", e->published().frameError.c_str());
     // A latched engine renders nothing: this call must return, not crash.
     const unsigned long long frames = view->framesPresented();
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     std::printf("CHILD survived-next-frame=%d\n", view->framesPresented() == frames ? 1 : 0);
     // THE HOST'S END (src/viewport/devicelossend.h): exit 1 for an OOM, no teardown.
     std::fflush(nullptr);
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     // CASE 1 — AN OOM IN A FRAME: an honest error, no latch
     // =====================================================================
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemory, 1u);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published for the frame, never in the calls' sink.
     const std::string oomError = e->published().frameError;
     std::printf("the frame's error after the OOM frame: %s\n", oomError.c_str());
@@ -210,8 +210,8 @@ int main(int argc, char **argv)
 
     // A second one is no different: the OOM is an ordinary, repeatable error.
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemory, 2u);
-    e->renderOneFrame();
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
+    enginetest::frames(e, 1);
     CHECK(has(e->published().frameError, "GPU out of memory") && !e->deviceLost(),
           "two more OOM frames: the same honest error, still no latch");
     Image again;
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
     // CASE 3 — THE NEGATIVE CONTROL: VK_ERROR_DEVICE_LOST STILL LATCHES
     // =====================================================================
     e->setFrameFault(FrameFault::VulkanDeviceLost, 1u);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     CHECK(e->deviceLost(),
           "A REAL VK_ERROR_DEVICE_LOST through the same path STILL LATCHES (the fork kept that half)");
     CHECK(e->published().frameError == "the GPU device was lost", "...and the engine says which fact it latched");

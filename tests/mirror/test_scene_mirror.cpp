@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     const int n = mirror.sync();
     CHECK(n == 3, "sync mirrored 3 document nodes (parent, cube, light)");
     CHECK(mirror.engineNode(meshNode.data()) != 0, "cube has an engine node");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image img;
     CHECK(view->readPixels(img), "readPixels");
     show("initial", img);
@@ -128,22 +128,22 @@ int main(int argc, char **argv)
     // ---- move the PARENT: the child must follow through the engine hierarchy ----
     parent->setLocalPos(iris::Vec3(10.0f, 0.0f, 0.0f));
     mirror.sync();
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img); show("parent moved +10x", img);
     CHECK(isBlue(centre(img)), "cube left the view when its PARENT moved");
 
     parent->setLocalPos(iris::Vec3(0, 0, 0));
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("parent back", img);
     CHECK(isMaterial(centre(img)), "cube is back");
 
     // ---- visibility ----
     meshNode->setVisible(false);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("hidden", img);
     CHECK(isBlue(centre(img)), "hidden node renders nothing");
     meshNode->setVisible(true);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("shown", img);
     CHECK(isMaterial(centre(img)), "shown again");
 
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
             return false;
         };
         auto step = [&](const char *tag) {
-            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img); show(tag, img);
         };
 
@@ -222,11 +222,11 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(other);
     parent->removeChild(meshNode);
     other->addChild(meshNode, false);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("re-parented +10y", img);
     CHECK(isBlue(centre(img)), "re-parenting in the document moved the cube in the engine");
     other->setLocalPos(iris::Vec3(0, 0, 0));
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("new parent at origin", img);
     CHECK(isMaterial(centre(img)), "cube visible under its new parent");
 
@@ -238,7 +238,7 @@ int main(int argc, char **argv)
     // mirrored" is the entry map, which is what this line always meant.
     CHECK(mirror.mirroredNodeCount() == 3, "3 nodes remain (parent, other, light)");
     CHECK(mirror.engineNode(meshNode.data()) == 0, "removed node has no engine node");
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img); show("removed", img);
     CHECK(isBlue(centre(img)), "removed node renders nothing");
 
@@ -254,19 +254,19 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(meshNode2);
     PbrParams pp;
     CHECK(SceneMirror::toPbrParams(pbr.data(), pp), "PbrMaterial -> PbrParams");
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("document PbrMaterial", img);
     CHECK(centre(img).b > centre(img).r, "centre takes the document material's colour (blue)");
     // Edit the material in the document (what the property panel does) -> engine follows.
     pbr->setBaseColor(QColor(230, 60, 20));
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("material edited -> red", img);
     CHECK(isMaterial(centre(img)), "runtime material edit reached the engine");
     // The RESTING material the blocks below put back on the cube: green.
     auto resting = iris::PbrMaterial::create();
     resting->setBaseColor(QColor(20, 200, 40));
     meshNode2->setMaterial(resting);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
 
     // ---- step 4b: a diffuse TEXTURE from the document reaches the engine ----
     {
@@ -276,12 +276,12 @@ int main(int argc, char **argv)
         textured->setBaseColor(QColor(255, 255, 255));                 // white tint: the texture decides
         textured->setBaseColorMap(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
         meshNode2->setMaterial(textured);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("diffuse texture (green)", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "document texture colours the cube");
         textured->setBaseColorMap(iris::Texture2DPtr());
         textured->setBaseColor(QColor(230, 60, 20));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img); show("texture removed", img);
         CHECK(isMaterial(centre(img)), "removing the texture goes back to the material colour");
         QFile::remove(pngPath);
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
         flat->setValue(QStringLiteral("shadingModel"), 1);
         flat->setValue(QStringLiteral("baseColor"), QColor(QStringLiteral("#00cc22")));
         meshNode2->setMaterial(flat);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("unlit PbrMaterial", img);
         // Colour components are 0..1 here, and this readback is LINEAR. #00cc22
         // is (0, 204, 34) sRGB, which is (0, 0.604, 0.033) linear — a colour a
@@ -319,7 +319,7 @@ int main(int argc, char **argv)
         pbr->setValue("baseColor", QColor(255, 255, 255));
         pbr->setValue("baseColorMap", grayPath);
         meshNode2->setMaterial(pbr);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("grayscale base map", img);
         const Colour c = centre(img);
         std::printf("    grayscale texel at centre: %.2f %.2f %.2f\n", c.r, c.g, c.b);
@@ -327,7 +327,7 @@ int main(int argc, char **argv)
               "a grayscale image renders grey (all channels), not red");
         QFile::remove(grayPath);
         meshNode2->setMaterial(resting);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- normal-mapped PBR keeps its base colour texture ----
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
         pbr->setValue("baseColorMap", basePath);
         pbr->setValue("normalMap", normalPath);
         meshNode2->setMaterial(pbr);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("PBR base + normal map", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
               "a normal-mapped PBR material still renders its base colour map (tangents exist)");
@@ -385,14 +385,14 @@ int main(int argc, char **argv)
         glassMat->setValue("alpha", 0.3f);
         glassMat->setValue("alphaMode", 2);                      // Fade first
         meshNode2->setMaterial(glassMat);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("blend (fade) glass", img);
         const float fadeLum = centreLum(img);
         glassMat->setValue("alphaMode", 3);                      // Glass
         PbrParams gp;
         CHECK(SceneMirror::toPbrParams(glassMat.data(), gp) && gp.alphaMode == PbrAlphaMode::Glass,
               "document alphaMode 3 maps to PbrAlphaMode::Glass");
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("glass (transparent)", img);
         const float glassLum = centreLum(img);
         // Fade blends 70% bright background through the surface; Transparent
@@ -419,7 +419,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 6; ++i) QFile::remove(facePaths[i]);
         QDir().rmdir(skyDir);
         meshNode2->setMaterial(resting);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- PBR scene round-trip: params + texture maps survive save/load ----
@@ -510,12 +510,12 @@ int main(int argc, char **argv)
         // texture colours the cube.
         reloaded->setValue("alphaMode", 0);
         meshNode2->setMaterial(reloaded);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("round-tripped PBR texture", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
               "texture from the round-tripped material colours the cube");
         meshNode2->setMaterial(resting);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         QFile::remove(pngPath);
         QDir().rmdir(dir);
     }
@@ -533,14 +533,14 @@ int main(int argc, char **argv)
     point->color = QColor(255, 255, 255);
     point->setLocalPos(iris::Vec3(4.0f, 1.0f, 2.5f));   // camera-right of the cube
     doc->getRootNode()->addChild(point);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     auto lum = [&](unsigned x, unsigned y) { const Colour c = img.at(x, y); return c.r + c.g + c.b; };
     const float rightSide = lum(img.width * 3 / 4, img.height / 2), leftSide = lum(img.width / 4, img.height / 2);
     std::printf("    point light right: left-of-frame %.2f  right-of-frame %.2f\n", leftSide, rightSide);
     CHECK(rightSide > leftSide + 0.05f, "point light on the right lights the right side more");
     point->setLocalPos(iris::Vec3(-4.0f, 1.0f, 2.5f));   // move the light node to the left
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const float rightSide2 = lum(img.width * 3 / 4, img.height / 2), leftSide2 = lum(img.width / 4, img.height / 2);
     std::printf("    point light left:  left-of-frame %.2f  right-of-frame %.2f\n", leftSide2, rightSide2);
@@ -553,12 +553,12 @@ int main(int argc, char **argv)
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
     doc->getRootNode()->addChild(cam);
     mirror.sync(mirrorframe::camera(view, cam));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img); show("document camera", img);
     CHECK(!isBlue(centre(img)), "document camera sees the cube");
     cam->setLocalPos(iris::Vec3(0.0f, 20.0f, 4.0f));      // way above: cube leaves the centre
     mirror.sync(mirrorframe::camera(view, cam));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img); show("document camera moved", img);
     CHECK(isBlue(centre(img)), "moving the document camera moves the view");
 
@@ -569,13 +569,13 @@ int main(int argc, char **argv)
     meshNode2->setMaterial(resting);
     auto countYellow = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++n; } return n; };
     mirror.setHighlightedNodes({ meshNode2 });
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const int yellowOn = countYellow(img);
     std::printf("    highlight on (outline): %d yellow pixels\n", yellowOn);
     CHECK(yellowOn > 10, "selected mesh gets a yellow silhouette outline");
     mirror.setHighlightWireframe(true);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const int yellowWire = countYellow(img);
     std::printf("    highlight on (wireframe): %d yellow pixels\n", yellowWire);
@@ -587,19 +587,19 @@ int main(int argc, char **argv)
     // the mirror reads it (fallback: the legacy yellow when never set).
     auto countRed = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g < 0.3f && c.b < 0.3f) ++n; } return n; };
     doc->setOutlineColor(QColor(255, 0, 0));
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const int redOutline = countRed(img);
     std::printf("    outline colour preference: %d red pixels, %d yellow\n", redOutline, countYellow(img));
     CHECK(redOutline > 10, "outline uses the document's outlineColor preference");
     CHECK(countYellow(img) == 0, "the default yellow is replaced by the preference");
     doc->setOutlineColor(QColor());   // invalid = preference never set
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countYellow(img) > 10, "an unset preference falls back to the legacy yellow");
 
     mirror.setHighlightedNodes({});
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countYellow(img) == 0, "highlight cleared");
 
@@ -623,14 +623,14 @@ int main(int argc, char **argv)
         makePart(-1.4f); makePart(1.4f);
         doc->getRootNode()->addChild(group);
         mirror.setHighlightedNodes({ group });
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         auto countYellowIn = [&](unsigned x0, unsigned x1) { int nn = 0; for (unsigned y = 0; y < img.height; ++y) for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++nn; } return nn; };
         const int leftY = countYellowIn(0, img.width / 2), rightY = countYellowIn(img.width / 2, img.width);
         std::printf("    group outline: %d yellow left, %d yellow right\n", leftY, rightY);
         CHECK(leftY > 10 && rightY > 10, "group selection outlines EVERY descendant mesh (both parts)");
         mirror.setHighlightWireframe(true);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         const int leftW = countYellowIn(0, img.width / 2), rightW = countYellowIn(img.width / 2, img.width);
         std::printf("    group wireframe: %d yellow left, %d yellow right\n", leftW, rightW);
@@ -638,7 +638,7 @@ int main(int argc, char **argv)
         mirror.setHighlightWireframe(false);
         mirror.setHighlightedNodes({});
         doc->getRootNode()->removeChild(group);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countYellow(img) == 0, "group highlight cleared");
         cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
@@ -653,17 +653,17 @@ int main(int argc, char **argv)
     mirror.setLightWires(true);
     // Attenuation volumes are selection-gated (the Unreal convention): an
     // UNSELECTED point light shows only its icon, no range rings.
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countMagenta(img) == 0, "unselected point light draws no rings (icon only)");
     mirror.setHighlightedNodes({ point });
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const int wiresOn = countMagenta(img);
     std::printf("    light wires on (selected): %d magenta pixels\n", wiresOn);
     CHECK(wiresOn > 10, "the SELECTED point light draws rings in its colour");
     mirror.setLightWires(false);
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countMagenta(img) == 0, "light wires off");
 
@@ -677,13 +677,13 @@ int main(int argc, char **argv)
         // Icons are always-on with the helpers toggle, selected or not.
         mirror.setLightWires(true);
         mirror.setHighlightedNodes({});
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         std::printf("    unselected: %d white icon px, %d magenta px\n", countWhite(img), countMagenta(img));
         CHECK(countWhite(img) > 5, "unselected point light still shows its icon");
         CHECK(countMagenta(img) == 0, "unselected point light shows no rings");
         mirror.setHighlightedNodes({ point });
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         const int iconOn = countWhite(img);
         const int extentSmall = magentaExtent(img);
@@ -700,7 +700,7 @@ int main(int argc, char **argv)
             ic.save(iconPath);
         }
         point->icon = iris::Texture2D::load(iconPath);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         std::printf("    document icon file: %d white pixels\n", countWhite(img));
         CHECK(countWhite(img) > 5, "the document's own icon image renders at the light");
@@ -723,7 +723,7 @@ int main(int argc, char **argv)
             const double before = whiteCentroidX(img);
             const iris::Vec3 was = point->getLocalPos();
             point->setLocalPos(was + iris::Vec3(0.6f, 0.0f, 0.0f));
-            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
             const double after = whiteCentroidX(img);
             std::printf("    icon centroid x: %.1f -> %.1f after moving the light +0.6x\n",
@@ -731,7 +731,7 @@ int main(int argc, char **argv)
             CHECK(before >= 0 && after >= 0 && std::fabs(after - before) > 2.0,
                   "the light icon billboard follows the light when it moves");
             point->setLocalPos(was);
-            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
         }
 
@@ -741,20 +741,20 @@ int main(int argc, char **argv)
             auto countGreen = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.g > 0.7f && c.r < 0.4f && c.b < 0.4f) ++n; } return n; };
             const QColor wasColour = point->color;
             point->color = QColor(0, 255, 0);
-            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
             std::printf("    recoloured light wires: %d green px, %d magenta px\n",
                         countGreen(img), countMagenta(img));
             CHECK(countGreen(img) > 0 && countMagenta(img) == 0,
                   "editing the light's colour repaints its wires (magenta rings are gone)");
             point->color = wasColour;
-            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
         }
 
         // Range change scales the ring wires (the visible extent grows).
         point->distance = 0.9f;
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         const int extentLarge = magentaExtent(img);
         std::printf("    ring extent: range 0.35 -> %d px, range 0.9 -> %d px\n", extentSmall, extentLarge);
@@ -762,7 +762,7 @@ int main(int argc, char **argv)
 
         // Wires OFF removes the icon too.
         mirror.setLightWires(false);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         CHECK(countMagenta(img) == 0 && countWhite(img) == 0, "light wires off removes the icon too");
         QFile::remove(iconPath);
@@ -820,7 +820,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(point);
         doc->getRootNode()->addChild(meshNode2);
         target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         // The light shines straight down: only the cube's TOP face is lit, and the
         // frame centre is its dark front face. The cube is green and the background
@@ -835,11 +835,11 @@ int main(int argc, char **argv)
         area->color = QColor(255, 255, 255);
         area->setLocalPos(iris::Vec3(0.0f, 1.2f, 0.0f));   // just above the cube, facing down
         doc->getRootNode()->addChild(area);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         const float litApprox = maxGreen();
         area->accurate = true;                             // LT_AREA_LTC
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         const float litLtc = maxGreen();
         std::printf("    area light: unlit %.2f  approx %.2f  ltc %.2f\n", unlit, litApprox, litLtc);
@@ -849,7 +849,7 @@ int main(int argc, char **argv)
         // The helper wire is the emitting rectangle (wire kind 3) + icon billboard.
         area->color = QColor(255, 0, 255);                 // magenta wires
         mirror.setLightWires(true);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         int magenta = 0, white = 0;
         for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
@@ -866,7 +866,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(area);
         doc->getRootNode()->removeChild(meshNode2);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- decals: a DecalNode becomes exactly one engine decal (DECALS_SPEC §5.3) ----
@@ -908,7 +908,7 @@ int main(int argc, char **argv)
         { QImage im(32, 32, QImage::Format_RGBA8888); im.fill(QColor(0, 0, 255, 255)); im.save(bluePath); }
 
         mirror.setLightWires(false);   // the wire box would colour the readback
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         const Colour bare = centre(img);
         show("floor, no decal", img);
@@ -923,7 +923,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->addChild(decal);
         CHECK(doc->decals.size() == 1, "Scene::decals registers the node by guid");
 
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         const Colour painted = centre(img);
         show("floor, red decal", img);
@@ -932,7 +932,7 @@ int main(int argc, char **argv)
 
         // Changing the bound image re-binds (a different atlas slice).
         decal->resolvedTexturePath = bluePath;
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         const Colour rebound = centre(img);
         show("floor, blue decal", img);
@@ -940,7 +940,7 @@ int main(int argc, char **argv)
 
         // Hiding the node hides the decal (the LAYER_VISIBILITY cascade).
         decal->setVisible(false);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "hiding a decal node hides the projection");
         decal->setVisible(true);
@@ -948,16 +948,16 @@ int main(int argc, char **argv)
         // An UNRESOLVABLE image leaves the node decal-free rather than keeping the
         // previous one bound (a stale decal would keep painting the old picture).
         decal->resolvedTexturePath = QStringLiteral("/no/such/decal/image.png");
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f,
               "an unresolvable decal image projects NOTHING (no stale binding)");
         decal->resolvedTexturePath = redPath;
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
 
         // The wire box: kind 4, amber while the decal projects.
         mirror.setLightWires(true);
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         int amber = 0;
         for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
@@ -978,7 +978,7 @@ int main(int argc, char **argv)
         // Removing the node removes the engine decal.
         doc->getRootNode()->removeChild(decal);
         CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "removing a decal node clears the projection");
 
@@ -987,14 +987,14 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(sun);
         mirror.sync(mirrorframe::camera(view, cam));
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
     }
 
     // ---- flat sky colour from the document becomes the background ----
     doc->skyType = iris::SkyType::SINGLE_COLOR;
     doc->skyColor = QColor(200, 30, 200);
     mirror.sync(mirrorframe::sky(view));
-    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("document sky colour", img);
     // A SINGLE_COLOR sky is a real sky now (SKY_LIGHT_SPEC.md §2) and its strip
     // is decoded like every other colour a user picks (§4), so 200,30,200 lands
@@ -1021,12 +1021,12 @@ int main(int argc, char **argv)
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), -90.0f));
         cam->angle = 20.0f;
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("cubemap sky +X", img);
         CHECK(centre(img).r > 0.8f && centre(img).g < 0.2f && centre(img).b < 0.2f, "+X face of the document cubemap is red");
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 90.0f));
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img); show("cubemap sky -X", img);
         CHECK(centre(img).g > 0.8f && centre(img).r < 0.2f && centre(img).b < 0.2f, "-X face is green");
         for (int i = 0; i < 6; ++i) QFile::remove(paths[i]);
@@ -1043,12 +1043,12 @@ int main(int argc, char **argv)
         mirror.sync(mirrorframe::sky(view));
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 89.0f));   // look up
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("gradient sky zenith", img);
         CHECK(centre(img).r > 0.7f && centre(img).g < 0.35f, "gradient sky zenith is the top colour");
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -89.0f));  // look down
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img); show("gradient sky nadir", img);
         CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
     }
@@ -1073,7 +1073,7 @@ int main(int argc, char **argv)
         // Look toward the horizon: daytime sky pixels, blue over red, not black.
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 25.0f));
         mirror.sync(mirrorframe::camera(view, cam));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("analytic sky", img);
         const Colour day = centre(img);
         CHECK(day.b > 0.15f && day.b > day.r, "the analytic sky draws sky-like blue-dominant pixels");
@@ -1083,7 +1083,7 @@ int main(int argc, char **argv)
         skySun->setLocalRot(iris::Quat::fromEulerAngles(-89.0f, 0.0f, 0.0f));
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("analytic sky, sunset", img);
         const Colour dusk = centre(img);
         const float delta = std::fabs(dusk.r - day.r) + std::fabs(dusk.g - day.g) + std::fabs(dusk.b - day.b);
@@ -1101,13 +1101,13 @@ int main(int argc, char **argv)
         dial.sunHaze = 0.0f;
         doc->setSkyRealistic(dial);
         mirror.sync(); mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img);
         const Colour thin = centre(img);
         dial.sunHaze = 8.0f;
         doc->setSkyRealistic(dial);
         mirror.sync(); mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("analytic sky, hazy", img);
         const Colour dense = centre(img);
         const float densityDelta = std::fabs(dense.r - thin.r) + std::fabs(dense.g - thin.g) +
@@ -1120,7 +1120,7 @@ int main(int argc, char **argv)
         // failed texture (§3): a scene with no directional light is legal.
         doc->getRootNode()->removeChild(skySun);
         mirror.sync(); mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("analytic sky, no sun", img);
         const Colour night = centre(img);
         std::printf("    no sun: %.3f %.3f %.3f   vs a 40 deg sun: %.3f %.3f %.3f\n",
@@ -1168,7 +1168,7 @@ int main(int argc, char **argv)
             doc->setSkyTexture(iris::Texture2D::load(path));
             doc->skyType = iris::SkyType::EQUIRECTANGULAR;
             mirror.sync(mirrorframe::sky(view));
-            for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 3);
             return target->skyAmbientSh(sh);
         };
         float sh[27] = { 0.0f };
@@ -1223,7 +1223,7 @@ int main(int argc, char **argv)
         const auto settleEnv = [&](int frames) {
             for (int i = 0; i < frames; ++i) {
                 mirror.sync(mirrorframe::environment(view));
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
         };
         settleEnv(3);
@@ -1273,7 +1273,7 @@ int main(int argc, char **argv)
         cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f));
         cam->lookAt(iris::Vec3(0, 0, 0));
         mirror.sync(mirrorframe::camera(view, cam));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- equirect sky feeds environment reflections (IBL), like cubemaps do ----
@@ -1299,7 +1299,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
         mirror.sync(mirrorframe::camera(view, cam));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("metal cube, equirect IBL", img);
         const Colour c = centre(img);
         CHECK(mirror.engineNode(meshNode.data()) != 0, "the chrome cube is mirrored");
@@ -1314,7 +1314,7 @@ int main(int argc, char **argv)
         doc->skyColor = QColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
         mirror.sync(mirrorframe::sky(view));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("metal cube, blue colour sky", img);
         const Colour swapped = centre(img);
         CHECK(swapped.b > 0.25f && swapped.b > swapped.g * 1.5f && swapped.b > swapped.r * 1.5f,
@@ -1324,7 +1324,7 @@ int main(int argc, char **argv)
         QFile::remove(eqPath);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         mirror.sync(mirrorframe::sky(view));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- pushing an UNCHANGED sky (and world) does nothing at all ----------
@@ -1366,7 +1366,7 @@ int main(int argc, char **argv)
         mirror.sync(mirrorframe::sky(view));
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 4);
         Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
         show("gradient sky + chrome cube (settled)", before);
         const SkyDesc settled = jahshaka::engine::inspect::scene(target)->sky();
@@ -1390,7 +1390,7 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::sky(view));
             mirror.sync(mirrorframe::environment(view));
             mirror.sync();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         Image after; CHECK(view->readPixels(after), "idempotency: the frame after five re-pushes reads back");
         show("gradient sky + chrome cube (after 5 identical pushes)", after);
@@ -1409,7 +1409,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(meshNode);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         mirror.sync(mirrorframe::sky(view));
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
     }
 
     // ---- editor ground grid (EDITOR_SHORTCUTS_SPEC §3) ----
@@ -1427,7 +1427,7 @@ int main(int argc, char **argv)
             return count;
         };
         mirror.setGrid(true, 1.0f);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img); show("grid, spacing 1", img);
         const int at1 = gridPixels(0.08f);
         std::printf("    grid pixels at spacing 1: %d\n", at1);
@@ -1436,14 +1436,14 @@ int main(int argc, char **argv)
         CHECK(gridPixels(0.22f) > 10, "major lines are visibly brighter");
 
         mirror.setGrid(true, 4.0f);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img); show("grid, spacing 4", img);
         const int at4 = gridPixels(0.08f);
         std::printf("    grid pixels at spacing 4: %d\n", at4);
         CHECK(at4 > 20 && at4 < at1, "wider spacing draws fewer lines (grid re-spaces live)");
 
         mirror.setGrid(false, 4.0f);
-        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img); show("grid hidden", img);
         CHECK(gridPixels(0.08f) < 5, "hiding the grid removes every line pixel");
     }
@@ -1494,7 +1494,7 @@ int main(int argc, char **argv)
 
         subject->setMesh(testmesh::load(kCube));
         CHECK(!!subject->getMesh(), "mesh swap: cube loaded");
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("subject = cube", img);
         const int cubePx = litPixels(img);
         std::printf("    cube covers:  %d px\n", cubePx);
@@ -1505,7 +1505,7 @@ int main(int argc, char **argv)
         // the engine — which is why the mesh picker is commented out in the
         // properties panel and the material preview replaced whole nodes.
         subject->setMesh(testmesh::load(kPlane));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("subject = plane", img);
         const int planePx = litPixels(img);
         std::printf("    plane covers: %d px\n", planePx);
@@ -1514,7 +1514,7 @@ int main(int argc, char **argv)
 
         // ...and back, so the swap is not a one-way accident.
         subject->setMesh(testmesh::load(kCube));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(litPixels(img) - cubePx) < cubePx / 40,
               "mesh swap: swapping back restores the cube");
@@ -1524,7 +1524,7 @@ int main(int argc, char **argv)
         CHECK(!subject->getMesh(), "mesh detach: the document node has no mesh");
         mirror.sync();
         const quint64 stillMirrored = mirror.mirroredNodeCount();
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img); show("subject = no mesh", img);
         CHECK(stillMirrored == 2, "mesh detach: the node is still mirrored (light + subject)");
         CHECK(mirror.engineNode(subject.data()) != 0, "mesh detach: its engine node survives");
@@ -1532,7 +1532,7 @@ int main(int argc, char **argv)
 
         // Re-attaching after a detach must work (the entry is reused).
         subject->setMesh(testmesh::load(kCube));
-        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(litPixels(img) > 1000, "mesh detach: giving the node a mesh again re-attaches it");
     }
@@ -1575,7 +1575,7 @@ int main(int argc, char **argv)
             topCam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -90.0f));
             topCam->update(0.0f);
             mirror.sync(mirrorframe::camera(view, topCam));
-            mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 3);
             view->readPixels(img);
             bare2 = centre(img);
 
@@ -1589,7 +1589,7 @@ int main(int argc, char **argv)
             d2->textureGuid = QStringLiteral("guid-%1").arg(round);
             d2->resolvedTexturePath = perWorld;
             wdoc->getRootNode()->addChild(d2);
-            mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            mirror.sync(); enginetest::frames(engine, 3);
             view->readPixels(img);
             withDecal = centre(img);
             projected = withDecal.r > bare2.r + 0.05f || withDecal.g < bare2.g - 0.05f;
@@ -1666,7 +1666,7 @@ int main(int argc, char **argv)
         const quint64 push0 = mirror.target()->giStatus().schedulerPushes, refresh0 = mirror.target()->giStatus().schedulerResolves;
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const quint64 pushAfterFirst = mirror.target()->giStatus().schedulerPushes;
         CHECK(pushAfterFirst == push0 + 1, "GI idle: the first environment record pushes VCT exactly once");
         CHECK(mirror.target()->giStatus().schedulerResolves == refresh0, "GI idle: the first push is not also a refresh");
@@ -1678,7 +1678,7 @@ int main(int argc, char **argv)
         for (int f = 0; f < 60; ++f) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             if (!(gsun->getGlobalTransform() == sun0) || !(gpanel->getGlobalTransform() == panel0)) stable = false;
         }
         CHECK(stable, "GI idle: every light's cached globalTransform is bit-identical after 60 frames");
@@ -1701,13 +1701,13 @@ int main(int argc, char **argv)
         gpanel->setLocalPos(iris::Vec3(1.5f, 2.6f, 0.0f));
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(mirror.target()->giStatus().schedulerResolves == refresh0,
               "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1,
               "GI: once the light holds still, moving it re-solved exactly once");
@@ -1719,7 +1719,7 @@ int main(int argc, char **argv)
             gfloor->setLocalPos(iris::Vec3(0.0f, -0.01f * f, 0.0f));
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1, "GI: moving a MESH does not re-solve");
 
@@ -1759,7 +1759,7 @@ int main(int argc, char **argv)
                 for (int f = 0; f < frames; ++f) {
                     mirror.sync();
                     mirror.sync(mirrorframe::environment(view));
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                 }
             };
             // Read until the counter stops moving: two still windows in a row.
@@ -1840,7 +1840,7 @@ int main(int argc, char **argv)
         gdoc->giMode = iris::GiMode::OFF;
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         mirror.setLightWires(false);
     }
 
@@ -1873,7 +1873,7 @@ int main(int argc, char **argv)
         SceneMirror pmirror(target);
         pmirror.setSource(pdoc);
         pmirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         auto post = iris::picking::raycastMeshes(pdoc.data(), a, b);
         CHECK(!post.isEmpty() && post.first().node == cube,
               "picking: a mirrored document finds the same cube");
@@ -1899,7 +1899,7 @@ int main(int argc, char **argv)
         // `pickable` is honoured exactly, on the candidate.
         cube->setPickable(false);
         pmirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b).isEmpty(),
               "picking: an unpickable node is not a hit");
         CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0, true).isEmpty(),
@@ -2035,7 +2035,7 @@ int main(int argc, char **argv)
         const auto tick = [&]() {
             lampMirror.sync();
             lampMirror.sync(mirrorframe::environment(view));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         };
         tick();
         tick();
@@ -2092,7 +2092,7 @@ int main(int argc, char **argv)
         SceneMirror smirror(target);
         smirror.setSource(sdoc);
         smirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(smirror.engineNode(pre.data()) != 0 && smirror.engineNode(post.data()) != 0,
               "static: both nodes reached the engine");
 
@@ -2101,7 +2101,7 @@ int main(int argc, char **argv)
         CHECK(post->isStaticInGraph(),
               "static: a node with a live Item still switches (the Item goes with it)");
         smirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
 
         // ...and moving it puts both node and Item back (rule 4) — the GRAPH
         // class only: the user's mobility setting survives a drag since
@@ -2111,7 +2111,7 @@ int main(int argc, char **argv)
         CHECK(post->mobility() == iris::Mobility::Static,
               "mobility: ...and the move did NOT clear the user's setting");
         smirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(true, "static: the scene still renders after both switches");
         smirror.setSource(nullptr);
     }
@@ -2144,7 +2144,7 @@ int main(int argc, char **argv)
         SceneMirror mmirror(target);
         mmirror.setSource(mdoc);
         mmirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const NodeId stillId = mmirror.engineNode(still.data());
         const NodeId riderId = mmirror.engineNode(rider.data());
         CHECK(stillId != 0 && riderId != 0, "mobility: both nodes reached the engine");
@@ -2160,7 +2160,7 @@ int main(int argc, char **argv)
         carrier->isPhysicsBody = true;
         carrier->physicsProperty.type = iris::PhysicsType::RigidBody;
         mmirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(jahshaka::engine::inspect::scene(target)->nodeMovable(riderId),
               "mobility: a driver on the PARENT makes the child movable in the engine (rule 2)");
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId), "mobility: ...and leaves the still node alone");
@@ -2279,7 +2279,7 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(sunView, Vec3(0.0f, 4.0f, 4.0f), Vec3(0, -1, 0));
         sunMirror.sync();
         sunMirror.sync(mirrorframe::environment(sunView));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         sunView->readPixels(img);
         const Colour high = centre(img);
         show("sun overhead", img);
@@ -2289,7 +2289,7 @@ int main(int argc, char **argv)
         sunLight->setLocalRot(iris::Quat::fromEulerAngles(-88.0f, 0.0f, 0.0f));
         travelIs("the sun: low -> light points sideways", 0.0f, -0.035f, 0.999f);
         sunMirror.sync();
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         sunView->readPixels(img);
         const Colour low = centre(img);
         show("sun at the horizon", img);
@@ -2371,7 +2371,7 @@ int main(int argc, char **argv)
         SceneMirror smirror2(target);
         smirror2.setSource(sdoc2);
         smirror2.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
 
         jahshaka::engine::ObjectCounts before{};
         CHECK(engine->objectCounts(before), "census: the engine reports its object counts");
@@ -2393,7 +2393,7 @@ int main(int argc, char **argv)
         CHECK(allShared, "document: 16 nodes on one mesh asset hold ONE iris::Mesh");
 
         smirror2.sync();
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         jahshaka::engine::ObjectCounts after{};
         engine->objectCounts(after);
         std::printf("    census: meshes %u -> %u, nodes %u -> %u for 16 added mesh nodes\n",
@@ -2441,11 +2441,11 @@ int main(int argc, char **argv)
         cm3.sync();
         cm3.sync(mirrorframe::environment(cv3));
         CHECK(cm3.engineNode(bare.data()) != 0, "no-material: the node has an engine node");
-        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         cv3->readPixels(img); show("no material", img);
         const Colour c3 = centre(img);
         bare->setVisible(false);
-        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         Image emptyPose;
         cv3->readPixels(emptyPose); show("no material, hidden", emptyPose);
         bare->setVisible(true);
@@ -2456,7 +2456,7 @@ int main(int argc, char **argv)
         // the document's own default material (PbrMaterial::create — pbrmaterial.h's one
         // definition) renders the same picture at the same pose.
         bare->setMaterial(iris::PbrMaterial::create());
-        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         Image withDefault;
         cv3->readPixels(withDefault); show("the default material", withDefault);
         const Colour c4 = centre(withDefault);
@@ -2467,7 +2467,7 @@ int main(int argc, char **argv)
         auto red = iris::PbrMaterial::create();
         red->setBaseColor(QColor(220, 30, 30));
         bare->setMaterial(red);
-        for (int i = 0; i < 3; ++i) { cm3.sync(); engine->renderOneFrame(); }
+        for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         Image withRed;
         cv3->readPixels(withRed); show("a red material", withRed);
         const Colour c5 = centre(withRed);
@@ -2532,11 +2532,11 @@ int main(int argc, char **argv)
                 other->setVisible(false);
                 const iris::Vec3 c = subject->getGlobalPosition();
                 enginetest::testCameraLookAt(cv4, Vec3(c.x() + 0.2f, c.y() - 2.5f, c.z() + 0.3f), Vec3(c.x(), c.y(), c.z()));
-                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                for (int i = 0; i < 3; ++i) { cm4.sync(); enginetest::frames(engine, 1); }
                 Image shown;
                 cv4->readPixels(shown); show(tag, shown);
                 subject->setVisible(false);
-                for (int i = 0; i < 3; ++i) { cm4.sync(); engine->renderOneFrame(); }
+                for (int i = 0; i < 3; ++i) { cm4.sync(); enginetest::frames(engine, 1); }
                 Image empty;
                 cv4->readPixels(empty);
                 subject->setVisible(true);

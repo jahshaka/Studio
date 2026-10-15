@@ -74,7 +74,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static double srgbToLinear(double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); }
 
@@ -152,7 +152,7 @@ int main()
     float skySh[27] = { 0.0f };
     bool shReady = false;
     for (int f = 0; f < 20 && !shReady; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         shReady = s->skyAmbientSh(skySh);
     }
     CHECK(shReady, "the sky's SH is integrated");
@@ -193,7 +193,7 @@ int main()
     const auto readTop = [&](int frames) {
         double acc = 0.0;
         for (int f = 0; f < frames; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img;
             view->readPixelsHdr(img);
             acc += blockMean(img, kSize / 2u, kSize / 2u, 3);
@@ -441,7 +441,7 @@ int main()
         b->setSky(bsky);
         float bsh[27] = { 0.0f };
         bool ready = false;
-        for (int f = 0; f < 20 && !ready; ++f) { e->renderOneFrame(); ready = b->skyAmbientSh(bsh); }
+        for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = b->skyAmbientSh(bsh); }
         b->setAmbientSh(bsh);
         b->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
         // The floor just in front of the wall's foot, from above.

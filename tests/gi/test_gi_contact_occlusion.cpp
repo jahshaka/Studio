@@ -93,7 +93,7 @@ const float kFloorAlbedo = 0.5f;
 const float kDs[7] = { 0.05f, 0.1f, 0.2f, 0.5f, 1.0f, 2.0f, 4.0f };
 const int kNd = 7;
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 CameraDesc topDownCamera()
 {
@@ -385,7 +385,7 @@ Profile measure(Fixture &f, Arm arm, int settle)
     // THE READING: the mean of 8 frames (the gather's per-frame estimate moves).
     for (int i = 0; i < kNd; ++i) p.v[i] = 0.0;
     for (int k = 0; k < 8; ++k) {
-        f.e->renderOneFrame();
+        enginetest::frames(f.e, 1);
         ++frames;
         ImageF img;
         f.view->readPixelsHdr(img);
@@ -483,7 +483,7 @@ int main()
             for (int k = 0; k < 90; ++k, ++frame) {
                 const float a = 0.05f * float(frame);
                 f.s->setNodeTransform(lamp, Vec3(-1.5f + std::cos(a), 1.2f, std::sin(a)), Quat(), Vec3(1, 1, 1));
-                f.e->renderOneFrame();
+                enginetest::frames(f.e, 1);
                 if (k < 30) { std::vector<FrameRecord> d; f.e->takeFrameRecords(d); continue; }
                 f.e->takeFrameRecords(recs);
                 const float rg = f.s->giStatus().cards.relightGpuMs;
@@ -531,7 +531,7 @@ int main()
         const int N = 60;
         for (int k = 1; k <= N; ++k) {
             f.s->setNodeTransform(ball, at(k), Quat(), Vec3(1.2f, 1.2f, 1.2f));
-            f.e->renderOneFrame();
+            enginetest::frames(f.e, 1);
             const GiVoxelStats vs = f.s->giVoxelStats(0);
             if (!prev.empty() && vs.lightDigest != prev) ++changed;
             if (k <= 6 || k == N) std::printf("   mover frame %d: digest %s peak %.4f meanLit %.5f lit %lld\n", k,
@@ -799,7 +799,7 @@ int main()
             settleFrames = std::max(settleFrames, frames + 8);
             double acc = 0.0;
             for (int k = 0; k < 8; ++k) {
-                f.e->renderOneFrame();
+                enginetest::frames(f.e, 1);
                 ImageF img; f.view->readPixelsHdr(img);
                 double sum = 0.0; int n = 0;
                 for (int y = int(kSize / 2) - 2; y <= int(kSize / 2) + 2; ++y)

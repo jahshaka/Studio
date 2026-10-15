@@ -82,8 +82,8 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 2;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds");
-    for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
-    e->renderOneFrame();
+    enginetest::frames(e, 240 && !s->giStatus().giAtRest);
+    enginetest::frames(e, 1);
     GiStatus g0 = s->giStatus();
     const size_t n = g0.cascades.size();
     CHECK_MSG(n >= 4u && g0.giAtRest, "a chain of %zu cascades, at rest", n);
@@ -103,7 +103,7 @@ int main()
 
     e->setFrameMonitor(MonitorLevel::Review);
     std::vector<FrameRecord> drop;
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     e->takeFrameRecords(drop);
     const NodeId box = enginetest::leakroom::addSlab(s, Colour(0.9f, 0.9f, 0.2f), at,
                                                      Vec3(0.6f, 0.6f, 0.6f));
@@ -121,7 +121,7 @@ int main()
             s->refreshGiLighting(false);
             tickAsked = true;
         }
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         std::vector<FrameRecord> recs;
         e->takeFrameRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
@@ -172,14 +172,14 @@ int main()
     // ---- IT IS THE FIXED POINT: a whole sweep changes nothing ---------------
     std::vector<std::string> partial(n);
     for (size_t i = 0; i < n; ++i) partial[i] = s->giVoxelStats(int(i)).lightDigest;
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image a; view->readPixels(a);
     s->refreshGiLighting(false);             // THE WHOLE AT-REST SWEEP, outermost first
     for (int f = 0; f < 60; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (f > 4 && s->giStatus().giAtRest) break;
     }
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image b; view->readPixels(b);
     unsigned same = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -227,7 +227,7 @@ int main()
                 wrote = true;
                 writeFrame = f;
             }
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             std::vector<FrameRecord> recs;
             e->takeFrameRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
@@ -266,7 +266,7 @@ int main()
         for (size_t i = 0; i < n; ++i) mid[i] = s->giVoxelStats(int(i)).lightDigest;
         s->refreshGiLighting(false);
         for (int f = 0; f < 60; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (f > 4 && s->giStatus().giAtRest) break;
         }
         unsigned same2 = 0;

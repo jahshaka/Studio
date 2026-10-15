@@ -180,7 +180,7 @@ int main()
     // false with zeroed counters"). Without this the monitor's per-pass
     // draws/batches/instances/triangles are all zero and a sweep measures
     // nothing it claims to: arm them here, once, before any frame that counts.
-    { RenderStats rs0; e->renderStats(rs0); e->renderOneFrame(); e->renderStats(rs0);
+    { RenderStats rs0; e->renderStats(rs0); enginetest::frames(e, 1); e->renderStats(rs0);
       std::printf("metrics recording armed: %d\n", int(rs0.metricsRecording)); }
 
     const unsigned kWarm = 120u, kMeasure = 300u, kRepeats = 3u;
@@ -283,7 +283,7 @@ int main()
         PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 0;
         view->setPostFx(fx);
         view->setCamera(b.cam);
-        for (unsigned i = 0; i < kWarm; ++i) e->renderOneFrame();
+        enginetest::frames(e, kWarm);
         RenderStats rs; e->renderStats(rs);
         Image img; view->readPixels(img);
         double mean = 0.0; unsigned lit = 0;
@@ -319,7 +319,7 @@ int main()
                 view->setScene(b.scene);
                 view->setShadows(b.arm.shippedDefaults);
                 view->setCamera(b.cam);
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 recs.clear();
                 e->takeFrameRecords(recs);
                 all.insert(all.end(), recs.begin(), recs.end());

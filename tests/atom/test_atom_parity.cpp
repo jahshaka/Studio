@@ -602,7 +602,7 @@ int main()
     setLights(true, true, true);
 
     // ---- two frames so the GPU scene holds every slot ------------------------
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     ogreScene->ensureGpuScene(false);
     ogreScene->gpuScene().flushGeomRows();
     const detail::GpuScene &gs = ogreScene->gpuScene();
@@ -923,7 +923,7 @@ int main()
             prevRef.clear();
             prevDec.clear();
             while (frames < 1200) {
-                for (int i = 0; i < 4; ++i) e->renderOneFrame();
+                enginetest::frames(e, 4);
                 frames += 4;
                 readTarget(refTex, ref);
                 readTarget(decTex, dec);
@@ -1068,7 +1068,7 @@ int main()
                 break;
             }
         const bool destroyed = scene->destroyMaterial(victim.material);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         readTarget(decTex, dec);
         CHECK_MSG(twin && destroyed && atom->decodeTwinCount() + 1 == twinsBefore,
                   "a destroyed material takes its decode twin with it (%zu -> %zu twins), and the decode "

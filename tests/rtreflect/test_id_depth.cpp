@@ -65,7 +65,7 @@ static unsigned kWidth = 640, kHeight = 360;
 static bool gRays = false;   // --rays: the ray reflection's own motion (see the header)
 static const int kWarm = 90, kSettle = 60;
 static const float kStep = 0.06f, kSphereR = 0.45f;
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData sphereMesh(int rings = 24, int segments = 48)
 {
@@ -134,7 +134,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
     for (int round = 0; round < 12; ++round) {
         for (int i = 0; i < 60; ++i) {
             enginetest::setNodePosition(s, sphere, sphereAt(f++ % 66));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         recs.clear();
         e->takeFrameRecords(recs);

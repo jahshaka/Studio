@@ -141,7 +141,7 @@ static View   *gView = nullptr;
 
 static Image shot(int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     Image img;
     if (!gView->readPixels(img)) { std::printf("FAIL: readPixels\n"); ++failures; }
     return img;

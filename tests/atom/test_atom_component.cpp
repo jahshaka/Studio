@@ -121,7 +121,7 @@ int main()
     vb->setShadows(true);
     enginetest::testCameraLookAt(va, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
     enginetest::testCameraLookAt(vb, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
 
     const AtomDrawStatus sa0 = a->atomDrawStatus();
     if (!sa0.on) {
@@ -132,10 +132,10 @@ int main()
     e->setFrameMonitor(MonitorLevel::Review);
     {
         std::vector<FrameRecord> drop;
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         e->takeFrameRecords(drop);
     }
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<FrameRecord> recs;
     e->takeFrameRecords(recs);
@@ -162,16 +162,16 @@ int main()
 
     // ---- 4. the owners retire with their objects ------------------------------------
     e->destroyView(vb);
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
     e->destroyScene(b);
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
     e->setFrameMonitor(MonitorLevel::Review);
     {
         std::vector<FrameRecord> drop;
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         e->takeFrameRecords(drop);
     }
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
     e->takeFrameRecords(recs);

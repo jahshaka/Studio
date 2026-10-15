@@ -90,7 +90,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -525,11 +525,11 @@ static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Ve
     enginetest::testCameraLookAt(view, eye, Vec3(eye.x, 1.6f, eye.z - 4.4f));
     s->setGlobalIllumination(gi);
     render(e, 6);
-    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    enginetest::frames(e, 600 && !s->giStatus().giAtRest);
     Image off; view->readPixels(off);
     s->setAmbient(kAmbientUpper, kAmbientLower);
     render(e, 30);
-    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    enginetest::frames(e, 600 && !s->giStatus().giAtRest);
     render(e, 30);
     Image on; view->readPixels(on);
     unsigned wx = 0, wy = 0;

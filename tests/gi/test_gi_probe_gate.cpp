@@ -79,7 +79,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 6) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 6) { enginetest::frames(e, frames);}
 
 static void show(const char *what, const Colour &c)
 {

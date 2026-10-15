@@ -107,7 +107,7 @@ int main()
             s->setNodeTransform(n, Vec3(0.0f, 4.75f, 3.0f), Quat(), Vec3(1, 1, 1));
         }
         enginetest::testCameraLookAt(v, Vec3(0.0f, 1.0f, 8.0f), Vec3(0.0f, 1.0f, -2.0f));
-        for (int f = 0; f < 30; ++f) e->renderOneFrame();
+        enginetest::frames(e, 30);
         ImageF img;
         if (!v->readPixelsHdr(img)) { std::printf("FAIL: readPixelsHdr\n"); ++failures; }
         else

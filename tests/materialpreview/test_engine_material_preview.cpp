@@ -65,7 +65,7 @@ static Image render(EngineMaterialPreviewScene &preview, Engine &engine, View *v
 {
     for (int i = 0; i < frames; ++i) {
         preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);

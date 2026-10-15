@@ -69,7 +69,7 @@ static int failures = 0;
 
 static const unsigned kSize = 192;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// How red the WALL REGION is: the mean of (r - max(g,b)) over the middle of
 /// the frame, which is wall in every arm of this suite. A grey wall reads 0, a
@@ -1128,7 +1128,7 @@ static int costMain(Engine *e, const char *, const char *)
         std::vector<float> readings;
         std::vector<unsigned long long> hits;
         for (int i = 0; i < 90; ++i) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             const RayQueryStatus rq = s->rayQueryStatus();
             if (rq.reflectMs >= 0.0f) readings.push_back(rq.reflectMs);
             if (i >= 60) hits.push_back(rq.hitRecords);
@@ -1234,7 +1234,7 @@ static int costMain(Engine *e, const char *, const char *)
         PbrParams glossy = mirror;
         glossy.roughness = 0.39f;                 // just inside the 0.40 gate
         CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 1.35f, true);
         glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.28f, true);
     }
@@ -2083,7 +2083,7 @@ static int formatCheckMain(Engine *e, const std::string &logFile)
     view->setPostFx(fx);
     enginetest::addTestCube(s, Colour(0.5f, 0.5f, 0.5f), 1.0f, 0.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 4.0f), Vec3(0.0f, 0.0f, 0.0f));
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     const bool available = e->rayQueryAvailable();
     const RayQueryStatus rq = s->rayQueryStatus();
     const bool refusedLine = logContains(logFile, "ray-query tier refused");
@@ -2170,7 +2170,7 @@ static int envRayMatchMain(Engine *e)
     sky.atmosphere.sunDir[1] = std::sin(rad);
     sky.atmosphere.sunDir[2] = std::cos(rad) * 0.8f;
     CHECK(s->setSky(sky), "the analytic sky binds");
-    for (int f = 0; f < 8; ++f) e->renderOneFrame();
+    enginetest::frames(e, 8);
     float sh[27] = { 0.0f };
     CHECK(s->skyAmbientSh(sh), "the sky's SH is integrated");
     s->setAmbientSh(sh);
@@ -2216,12 +2216,12 @@ static int envRayMatchMain(Engine *e)
 
         // ---- RAYS ON: warm, then the mean of 32 read-backs ---------------
         e->setRayTracing(true);
-        for (int f = 0; f < 120; ++f) e->renderOneFrame();
+        enginetest::frames(e, 120);
         std::vector<double> onSum(size_t(kW) * kH * 3u, 0.0);
         double weightMean = 0.0;
         const int kMean = 32;
         for (int f = 0; f < kMean; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img, refl;
             view->readPixelsHdr(img);
             view->readReflectionHdr(refl);
@@ -2233,7 +2233,7 @@ static int envRayMatchMain(Engine *e)
 
         // ---- RAYS OFF ----------------------------------------------------
         e->setRayTracing(false);
-        for (int f = 0; f < 120; ++f) e->renderOneFrame();
+        enginetest::frames(e, 120);
         ImageF off;
         view->readPixelsHdr(off);
         e->setRayTracing(true);

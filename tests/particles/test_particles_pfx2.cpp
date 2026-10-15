@@ -110,7 +110,7 @@ static ParticleSystemDesc plumeDesc(unsigned quota, TextureId tex) {
 }
 
 static void warm(Engine *engine, int frames) {
-    for (int i = 0; i < frames; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, frames);
 }
 
 int main(int argc, char **argv)
@@ -454,7 +454,7 @@ int main(int argc, char **argv)
                                           : ParticleEmitterShape::Point;
             d.emitters[0].extents = Vec3(0.4f, 0.1f, 0.4f);
             churnOk = scene->setParticleSystem(node, d) && churnOk;
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         CHECK(churnOk, "20 topology flips all succeeded");
         const unsigned created = scene->particleDefinitionsCreated() - before;

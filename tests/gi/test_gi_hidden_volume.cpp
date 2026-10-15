@@ -45,7 +45,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void showBox(const char *what, const GiStatus &st)

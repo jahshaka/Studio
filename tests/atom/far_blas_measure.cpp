@@ -41,7 +41,7 @@ using namespace jahshaka::engine;
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float median(std::vector<float> v)
@@ -176,7 +176,7 @@ static int tlasMode(Engine *e, View *view)
         const float dx = 0.01f * float(f % 2 ? 1 : -1);
         s->setNodeTransform(nodes[0], Vec3{ -half + dx, 0.0f, -half }, Quat(),
                             Vec3{ scale[0], scale[0], scale[0] });
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (f < 30) continue;
         const RayQueryStatus st = s->rayQueryStatus();
         if (st.tlasMs >= 0.0f) tlasMs.push_back(st.tlasMs);
@@ -333,7 +333,7 @@ static int pictureMode(Engine *e, View *view)
         for (int a = 0; a < 3; ++a) {
             tuneFar(s, a == 2 ? diag : 0.0f, a != 0);
             for (int fr = 0; fr < 36; ++fr) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (fr < 6) continue;
                 const GatherStatus q = s->giStatus().gather;
                 if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
             std::printf("FAIL: %s\n", e->lastError().c_str());
             return 1;
         }
-        e->renderOneFrame();   // the arm is latched at the top of a frame
+        enginetest::frames(e, 1);   // the arm is latched at the top of a frame
         return tlasMode(e, view);
     }
     if (mode == "picture") return pictureMode(e, view);

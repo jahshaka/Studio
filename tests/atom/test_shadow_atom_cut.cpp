@@ -374,7 +374,7 @@ static bool probe(World &w, unsigned map, unsigned face, OgreScene::CasterProbe 
     os->armCasterProbeForTest(map, face);
     nudgeLamps(w, 0.001f * float(++gNudge % 2));   // a lamp map renders only when dirty
     for (int i = 0; i < 24; ++i) {
-        gE->renderOneFrame();
+        enginetest::frames(gE, 1);
         if (os->casterProbeForTest(out)) return true;
     }
     return false;
@@ -399,7 +399,7 @@ static int cutMain()
     World w;
     if (!makeWorld(w, "shadow-cut", false)) { std::printf("FAIL: the world\n"); return 1; }
     w.view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f)));
-    for (int i = 0; i < 30; ++i) gE->renderOneFrame();
+    enginetest::frames(gE, 30);
     const AtomDrawStatus st = w.scene->atomDrawStatus();
     CHECK_MSG(st.on && st.atomItems >= 35u, "the split is live (%u atom items)", st.atomItems);
     CHECK_MSG(st.casterValid && st.casterMaps > 0u && st.casterMissing == 0u,
@@ -479,7 +479,7 @@ static int parityMain()
     const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
     a.view->setCamera(cam);
     b.view->setCamera(cam);
-    for (int i = 0; i < 40; ++i) gE->renderOneFrame();
+    enginetest::frames(gE, 40);
     {
         const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
         CHECK_MSG(sa.on && sa.atomItems >= 35u && !sb.on,
@@ -498,7 +498,7 @@ static int parityMain()
     // cut: its first render was before the GPU scene was live, through PBS).
     nudgeLamps(a, 0.002f);
     nudgeLamps(b, 0.002f);
-    for (int i = 0; i < 6; ++i) gE->renderOneFrame();
+    enginetest::frames(gE, 6);
     Atlas A, B;
     CHECK(readAtlas(sa, A) && readAtlas(sb, B) && A.w == B.w && A.h == B.h, "both atlases read back");
     if (A.d.empty() || A.w != B.w || A.h != B.h) return 1;
@@ -626,7 +626,7 @@ static int parityMain()
                 w->scene->attachMesh(n, w->scene->createMesh(gFixtures[0].data), w->scene->createPbrMaterial(cp));
             }
         }
-        for (int i = 0; i < 40; ++i) gE->renderOneFrame();
+        enginetest::frames(gE, 40);
         Atlas A2, B2;
         CHECK(readAtlas(sa, A2) && readAtlas(sb, B2) && A2.w == B2.w, "both atlases read back (high casters)");
         unsigned seen = 0, cutMissing = 0, denseMissing = 0;
@@ -708,7 +708,7 @@ static int firstFrameMain()
         v->setCamera(cam);
         more.push_back(v);
     }
-    for (int i = 0; i < 12; ++i) gE->renderOneFrame();   // the first frame, then its read-back
+    enginetest::frames(gE, 12);// the first frame, then its read-back
     const AtomDrawStatus st = w.scene->atomDrawStatus();
     std::printf("   caster maps: the most in one frame %u, unrecorded %llu (last read: %u maps)\n",
                 st.casterMapsPeak, st.casterUnrecorded, st.casterMaps);

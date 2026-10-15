@@ -496,7 +496,7 @@ void frame(Env &env, int count)
             }
         }
         env.mirror->sync(mirrorframe::camera(env.view, env.camera));
-        env.engine->renderOneFrame();
+        enginetest::frames(env.engine, 1);
     }
 }
 

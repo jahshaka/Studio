@@ -139,7 +139,7 @@ struct Rig {
         mirror->sync();
         mirror->sync(mirrorframe::sky(view));
         mirror->sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     }
     // SETTLED = THE ENVIRONMENT HAS LANDED, counted in FRAMES: the realistic sky
     // is a const-buffer write and a re-capture (no debounce — scenemirror.h

@@ -103,7 +103,7 @@ int main()
     enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, -0.5f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.6f, 3.6f), Vec3(0.0f, 0.0f, 0.0f));
 
-    const auto frames = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+    const auto frames = [&](int n) { enginetest::frames(engine, n);};
     const auto centre = [&]() {
         Image img;
         if (!view->readPixels(img)) { std::printf("FAIL: readPixels\n"); ++failures; return Colour(0, 0, 0); }

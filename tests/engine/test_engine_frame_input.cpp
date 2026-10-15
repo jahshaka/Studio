@@ -58,7 +58,7 @@ int drain(Engine *e)
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.55f), 3.0f);
     enginetest::addTestCube(scene, Colour(0.8f, 0.8f, 0.8f), 0.0f, 0.8f);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(2.5f, 1.8f, 3.0f), Vec3(0, 0.4f, 0)));
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
     // 1. one submit, then N frames: N drains, N-1 empty, the one changed field applied once
     FogDesc fog;
@@ -71,7 +71,7 @@ int drain(Engine *e)
     unsigned firstApplied = 0;
     std::vector<double> costs;
     for (int f = 0; f < N; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (f == 0) firstApplied = e->frameInputStatus().fieldsApplied;
         costs.push_back(e->frameInputStatus().drainMicros);
     }
@@ -85,8 +85,7 @@ int drain(Engine *e)
     CHECK(firstApplied == 1, "the record's one changed field (the fog) applied at the first drain (%u)", firstApplied);
 
     // 2. the same record again: it changes nothing, so it drains to nothing
-    e->submitFrame(sceneRecord(scene, fog));
-    e->renderOneFrame();
+    enginetest::frames(e, 1, sceneRecord(scene, fog));
     CHECK(e->frameInputStatus().fieldsApplied == 0, "an unchanged record drains to nothing (fieldsApplied %u)",
           e->frameInputStatus().fieldsApplied);
 
@@ -97,15 +96,13 @@ int drain(Engine *e)
     const FrameInputStatus s2 = e->frameInputStatus();
     const FrameSubmitStatus u2 = e->frameSubmitStatus();
     e->submitFrame(sceneRecord(scene, fogA));
-    e->submitFrame(sceneRecord(scene, fogB));
-    e->renderOneFrame();
+    enginetest::frames(e, 1, sceneRecord(scene, fogB));
     const FrameInputStatus s3 = e->frameInputStatus();
     const FrameSubmitStatus u3 = e->frameSubmitStatus();
     CHECK(s3.drained - s2.drained == 1 && s3.drainedEmpty == s2.drainedEmpty,
           "two submits then one frame: ONE drain (%llu), not empty", s3.drained - s2.drained);
     CHECK(u3.scenePartsMerged - u2.scenePartsMerged == 1, "...the scene part merged into the pending one, the newer winning (%llu)", u3.scenePartsMerged - u2.scenePartsMerged);
-    e->submitFrame(sceneRecord(scene, fogB));
-    e->renderOneFrame();
+    enginetest::frames(e, 1, sceneRecord(scene, fogB));
     CHECK(e->frameInputStatus().fieldsApplied == 0,
           "...and the NEWEST is the one in force (fogB again applies nothing: %u)", e->frameInputStatus().fieldsApplied);
 
@@ -117,8 +114,7 @@ int drain(Engine *e)
         v.camera = enginetest::testCameraDescLookAt(Vec3(3.0f, 1.5f, 2.0f), Vec3(0, 0.4f, 0));
         in.views.push_back(v);
         in.scenes.push_back(sceneRecord(scene, fogB).scenes.front());
-        e->submitFrame(in);
-        e->renderOneFrame();
+        enginetest::frames(e, 1, in);
         const FrameInputStatus st = e->frameInputStatus();
         CHECK(st.fieldsApplied == 1 && st.viewFieldsApplied == 1,
               "a camera move with a still environment: the per-view part only (%u applied, %u of them per view)",
@@ -129,7 +125,7 @@ int drain(Engine *e)
         Scene *gone = e->createScene("gone");
         e->submitFrame(sceneRecord(gone, fogA));
         e->destroyScene(gone);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(true, "a record naming a scene destroyed before its frame drains without touching it");
     }
     std::sort(costs.begin(), costs.end());
@@ -170,7 +166,7 @@ SettleArm settleArm(Engine *e, const char *name, bool resubmitEveryFrame)
     const unsigned long long scans0 = scene->giStatus().giScans;
     for (int f = 0; f < 600; ++f) {
         if (resubmitEveryFrame && f > 0) e->submitFrame(in);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (f > 2 && scene->giStatus().giAtRest) { arm.frames = f + 1; break; }
     }
     arm.scans = scene->giStatus().giScans - scans0;

@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     mirror.sync();
 
     auto frame = [&](Image &img) {
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(img);
     };
 

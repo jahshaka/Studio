@@ -67,7 +67,7 @@ static Image render(EngineAssetScene &assets, Engine &engine, View *view, int fr
 {
     for (int i = 0; i < frames; ++i) {
         assets.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);

@@ -197,7 +197,7 @@ int main(int argc, char **argv)
         doc->refresh();
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
     const auto mirrorPixel = [&]() {
@@ -438,7 +438,7 @@ int main(int argc, char **argv)
             const auto t0 = std::chrono::steady_clock::now();
             if (scratch) escene->setGlobalIllumination(gi);   // always from scratch
             else         escene->refreshGlobalIllumination(); // takes the reuse arm
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             total += std::chrono::duration<double, std::milli>(
                          std::chrono::steady_clock::now() - t0).count();
         }

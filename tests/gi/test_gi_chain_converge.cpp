@@ -63,7 +63,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void addSlab(Scene *s, const Colour &c, const Vec3 &pos, const Vec3 &size)
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
         for (int f = 0; f < 40; ++f) {
             float sh[27];
             if (bs->skyAmbientSh(sh)) bs->setAmbientSh(sh);     // the mirror's push
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (builtAt < 0 && !bs->giStatus().cascades.empty()) builtAt = f;
         }
         const GiStatus bst = bs->giStatus();
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
               "sky it will read, not before it (audit F7)");
         GiParams off; off.mode = GiMode::Off;
         bs->setGlobalIllumination(off);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         e->destroyView(bv);
         e->destroyScene(bs);
     }

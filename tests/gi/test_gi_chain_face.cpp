@@ -161,7 +161,7 @@ static void placeCamera(Rig &r)
     r.view->setCamera(cam);
 }
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 /// The column profile: the mean luminance of each column over the middle rows.
 static std::vector<float> profile(const Image &img)

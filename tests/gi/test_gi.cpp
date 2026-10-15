@@ -32,7 +32,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void show(const char *what, const Colour &c)
@@ -173,7 +173,7 @@ int main()
         s->refreshGlobalIllumination();
         // THE CHAIN answers a moved box through its dirty path, one cascade a
         // frame, then its settle: count frames until GI is at rest (bounded).
-        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
+        enginetest::frames(engine, 240 && !s->giStatus().giAtRest);
         render(engine.get());
         view->readPixels(img);
         const Colour vctMoved = img.at(floorX, floorY);

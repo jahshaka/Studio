@@ -188,7 +188,7 @@ static void setBoth(Arm &a, Arm &b, const CameraDesc &c)
 /// One frame of both worlds, the two id images compared word for word.
 static void stepCompare(Arm &on, Arm &off, Tally &t, const char *label)
 {
-    gE->renderOneFrame();
+    enginetest::frames(gE, 1);
     ++t.frames;
     std::vector<uint32_t> a, b;
     unsigned aw = 0, ah = 0, bw = 0, bh = 0;
@@ -335,7 +335,7 @@ int main()
     }
     const Vec3 eyeA(0.0f, 1.7f, 4.0f);
     setBoth(on, off, enginetest::testCameraDescLookAt(eyeA, Vec3(0.0f, 1.2f, -20.0f)));
-    for (int i = 0; i < 12; ++i) gE->renderOneFrame();
+    enginetest::frames(gE, 12);
     {
         const AtomDrawStatus st = on.scene->atomDrawStatus();
         CHECK_MSG(st.on && st.atomItems >= 120u, "the split is live and draws the world (%u atom items)", st.atomItems);

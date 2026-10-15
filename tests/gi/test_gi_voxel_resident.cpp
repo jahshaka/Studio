@@ -96,7 +96,7 @@ static MeshData grid(int N, float span)
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static GiParams cascadeGi()
