@@ -13,12 +13,11 @@
 //
 // THE CASES (counts, never clocks):
 //   1. ONE WALK PER FRAME, on frames that rebuild the GI chain too: a GI-visible cube
-//      moved every frame through cascade 0 re-voxelises it (the pre-frame gather reads
-//      the table: OgreGi.cpp gatherAndBuild, twice) and the frame reads it after the
-//      graph (OgreShadow.cpp) — three calls, ONE walk, the other two counted as the
-//      frame's later calls. Run over two movers (RED ON THE BASE without the host counter
-//      — three scans a frame, GpuSceneStatus::scans, because without the epoch every call
-//      walked; since U0 3b the epoch is always the engine's own and always valid).
+//      moved every frame through cascade 0 re-voxelises it and the frame reads the table
+//      after the graph (OgreShadow.cpp) — ONE walk. SINCE ENGINE-UPGRADE-ASYNC-3 the
+//      re-voxelisation, made in the GI step's Compute region, COMPOSES NOTHING (it reads the
+//      table the last frame committed; its two ensureGpuScene calls were deleted): a mover
+//      frame calls the substrate once, so its later calls are ZERO. Run over two movers.
 //   2. ATOM'S WORDS STEP ONCE PER FRAME: the frame records' `engine.atomwords` stage
 //      (FrameRecord.stages) is filed once per frame. RED ON THE BASE: twice (before
 //      and after the ray tier).
@@ -164,7 +163,8 @@ int main()
                     overwrites, recs.size(), wordsMin, wordsMax);
         const std::string at = std::string("[") + tag + "] ";
         CHECK(rebuilds > 0, (at + "the mover re-voxelised the chain on its frames (the pre-frame readers ran)").c_str());
-        CHECK(laterCalls > 0, (at + "...and those frames called the substrate more than once (not vacuous)").c_str());
+        CHECK(laterCalls == 0, (at + "...and the GI step's re-voxelisation composed nothing (the Compute region reads "
+                                     "the table the last frame committed: no later call)").c_str());
         CHECK(maxWalks == 1u && extra == 0u,
               (at + "ONE WALK PER FRAME: the frame's first graph-current call walks, the later ones do not").c_str());
         CHECK(maxScans == 1u, (at + "ONE SCAN PER FRAME by the GPU scene's own counter (GpuSceneStatus::scans)").c_str());

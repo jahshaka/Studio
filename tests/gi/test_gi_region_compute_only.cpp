@@ -11,8 +11,9 @@
 // log sink ("...inside an async compute bracket...").
 //
 // On BOTH scene kinds — a carded scene with rays, and a plain VCT scene — 300 frames each with
-// a mover and a light tick (the sun turns and dims every 30 frames: re-injection, the mips, the
-// field), then a rebuild (refreshGlobalIllumination: re-voxelisation of every cascade):
+// a mover, a light tick (the sun turns and dims every 30 frames: re-injection, the mips, the
+// field) and a still stepped every 50 (re-voxelisation in the GI step: the voxel feed's routed
+// uploads, the gather, the clears, the build), then a refresh and its settle:
 //   1. ZERO graphics-only commands refused inside the region;
 //   2. the check really opened its bracket around the region (the count of brackets > 0);
 //   3. every Photon compute dispatch of the scene's life went through the door inside a
@@ -75,11 +76,20 @@ static void sunAt(Scene *s, NodeId sun, int tick) {
     s->setLight(sun, l);
 }
 
-// 300 frames: the mover crosses, the sun ticks every 30; then a rebuild and its settle.
-static void drive(Engine *e, Scene *s, NodeId mover, NodeId sun) {
+static unsigned long long cascadeRebuilds(Scene *s) {
+    unsigned long long n = 0;
+    for (const GiStatus::CascadeStatus &c : s->giStatus().cascades) n += c.rebuilds;
+    return n;
+}
+
+// 300 frames: the mover crosses, the sun ticks every 30, a STILL steps every 50 (its cascades
+// re-voxelise in the GI step: the voxel feed's uploads, the gather, the build, the clears, the
+// mips - the routed copies and the compute jobs inside the bracket); then a rebuild and its settle.
+static void drive(Engine *e, Scene *s, NodeId mover, NodeId sun, NodeId still) {
     for (int f = 0; f < kFrames; ++f) {
         enginetest::setNodePosition(s, mover, Vec3(-2.0f + 4.0f * float(f) / float(kFrames), 0.3f, 1.0f));
         if (f % 30 == 0) sunAt(s, sun, f / 30);
+        if (f % 50 == 25) enginetest::setNodePosition(s, still, Vec3(-1.0f + 0.1f * float(f / 50), 0.3f, -0.5f));
         e->renderOneFrame();
     }
     s->refreshGlobalIllumination();
@@ -218,7 +228,9 @@ int main()
         fx.allowOffscreen = true;
         fx.ssr = 2;
         view->setPostFx(fx);
-        drive(e, s, mov, sun);
+        const unsigned long long rb0 = cascadeRebuilds(s);
+        drive(e, s, mov, sun, mirror);
+        const unsigned long long rb = cascadeRebuilds(s) - rb0;
         const PhotonDispatchStatus d1 = photonDispatchStatus();
         const unsigned refused = gRefused.load() - r0;
         std::printf("   cards: %u refused; %llu brackets; dispatches %llu in the region (%llu mip levels), "
@@ -226,6 +238,8 @@ int main()
                     d1.mipDispatches - d0.mipDispatches, d1.outsideRegion - d0.outsideRegion);
         if (refused) std::printf("   the first: %s\n", gFirstRefusal.c_str());
         CHECK(s->rayQueryStatus().enabled, "cards: the view traces (rays on)");
+        std::printf("   cards: %llu cascade re-voxelisations\n", rb);
+        CHECK(rb > 0, "cards: the moved still re-voxelised its cascades (inside the bracket)");
         CHECK(refused == 0u, "cards: NO graphics-only command inside the GI region (300 frames, a mover, a light tick, a rebuild)");
         CHECK(d1.regionBrackets > d0.regionBrackets, "cards: the check opened its bracket around the region");
         CHECK(d1.inRegion > d0.inRegion && d1.outsideRegion == d0.outsideRegion,
@@ -265,13 +279,17 @@ int main()
         const PhotonDispatchStatus p0 = photonDispatchStatus();
         const unsigned r0 = gRefused.load();
         s2->setGlobalIllumination(g2);
-        drive(e, s2, mov, sun);
+        const unsigned long long rb0 = cascadeRebuilds(s2);
+        drive(e, s2, mov, sun, still);
+        const unsigned long long rb = cascadeRebuilds(s2) - rb0;
         const PhotonDispatchStatus p1 = photonDispatchStatus();
         const unsigned refused = gRefused.load() - r0;
         std::printf("   plain VCT: %u refused; %llu brackets; dispatches %llu in the region (%llu mip levels), "
                     "%llu outside\n", refused, p1.regionBrackets - p0.regionBrackets, p1.inRegion - p0.inRegion,
                     p1.mipDispatches - p0.mipDispatches, p1.outsideRegion - p0.outsideRegion);
         if (refused) std::printf("   the first: %s\n", gFirstRefusal.c_str());
+        std::printf("   plain VCT: %llu cascade re-voxelisations\n", rb);
+        CHECK(rb > 0, "plain VCT: the moved still re-voxelised its cascades (inside the bracket)");
         CHECK(refused == 0u, "plain VCT: NO graphics-only command inside the GI region (300 frames, a mover, a light tick, a rebuild)");
         CHECK(p1.regionBrackets > p0.regionBrackets, "plain VCT: the check opened its bracket around the region");
         CHECK(p1.inRegion > p0.inRegion && p1.outsideRegion == p0.outsideRegion,
