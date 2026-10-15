@@ -2950,7 +2950,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     // it), reported here because this is where a reader is already looking at
     // what the room's lighting is made of.
     {
-        const jahshaka::engine::MobilityStatus m = view()->scene()->mobilityStatus();
+        const jahshaka::engine::MobilityStatus m = view()->scene()->published().mobility;   // the snapshot (U3 F5)
         out.movableItems     = int(m.movableItems);
         out.movableLights    = int(m.movableLights);
         out.mobilityRebuilds = quint64(m.mobilityRebuilds);
@@ -3326,7 +3326,7 @@ IEditorViewport::RigStatsInfo EngineSceneViewport::rigStats() const
 {
     RigStatsInfo s;
     if (!mEngineScene) return s;   // available stays false: no engine, no counts
-    const jahshaka::engine::RigStats r = mEngineScene->rigStats();
+    const jahshaka::engine::RigStats r = mEngineScene->published().rigs;   // the snapshot (U3 F5)
     s.available = true;
     s.rigged = int(r.rigged);
     s.instances = int(r.instances);
