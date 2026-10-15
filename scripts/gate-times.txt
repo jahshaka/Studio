@@ -316,6 +316,7 @@ gi.voxel_coverage 44.23  quiet n=42
 gi.voxel_emissive 6.75  quiet n=39
 gi.voxel_feed 3.03  quiet n=40
 gi.voxel_lab 1.45  quiet n=34
+gi.voxel_metal_albedo 3.43  solo 2026-10-15 (PHOTON-MARCH-1 stage 2: n=3, 3.43-3.49 s, 1128 frames)
 gi.voxel_resident 4.72  quiet n=45
 gizmo.drag_frame 0.10  ship 3a0422b4e (2026-10-13)
 gizmo.group_transform 0.06  quiet n=46

@@ -1851,6 +1851,26 @@ jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 864)
+# gi.voxel_metal_albedo — A METAL RE-EMITS ITS DIFFUSE LOBE, base x (1 - metalness), INTO THE BOUNCE
+# (PHOTON-MARCH-1 stage 2, VOXEL-METAL-ALBEDO-1): a plate of base colour 0.8 at metalness 0 / 0.5 / 1
+# under a sun, a white panel facing it lit by nothing else: the store and the panel's bounce in the ratio
+# 1 - metalness (field off and on); a live roughness edit and a live metalness edit each re-voxelise once.
+add_executable(test_gi_voxel_metal_albedo test_gi_voxel_metal_albedo.cpp)
+set_target_properties(test_gi_voxel_metal_albedo PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_metal_albedo PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_metal_albedo PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_metal_albedo JahshakaEngineMedia)
+jah_gpu_row(gi.voxel_metal_albedo CLASS engine COMMAND test_gi_voxel_metal_albedo
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_metal_albedo PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.voxel_metal_albedo PROPERTIES JAHSHAKA_TEST_FRAMES 1128)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.
