@@ -14,7 +14,7 @@
 // WHAT THIS PROVES, through the render system's REAL failure path
 // (`FrameFault::VulkanOutOfDeviceMemory` calls `Ogre::onVulkanFailure` with the
 // live device — the fork's own decision is what is exercised, nothing copied):
-//   1. an OOM inside a frame reaches the host as `lastError()` saying "GPU out
+//   1. an OOM inside a frame reaches the host as the FRAME's error (published().frameError) saying "GPU out
 //      of memory", and the device is NOT latched as lost;
 //   2. the process carries on and the frames after it render the SAME bytes as
 //      the settled picture before it;
@@ -101,7 +101,7 @@ static int inRecordChild()
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemoryInRecord, 1u);
     e->renderOneFrame();
     std::printf("CHILD gpuFault=%d deviceLost=%d\n", int(e->gpuFault()), int(e->deviceLost()));
-    std::printf("CHILD lastError=%s\n", e->lastError().c_str());
+    std::printf("CHILD frameError=%s\n", e->published().frameError.c_str());
     // A latched engine renders nothing: this call must return, not crash.
     const unsigned long long frames = view->framesPresented();
     e->renderOneFrame();
@@ -132,8 +132,8 @@ int main(int argc, char **argv)
         const int code = exited ? WEXITSTATUS(status) : -1;
         std::printf("child: exited=%d code=%d signalled=%d\n", int(exited), code,
                     int(status != -1 && WIFSIGNALED(status)));
-        const size_t at = out.find("CHILD lastError=");
-        std::printf("%s\n", at == std::string::npos ? "(no CHILD lastError line)"
+        const size_t at = out.find("CHILD frameError=");
+        std::printf("%s\n", at == std::string::npos ? "(no CHILD frameError line)"
                                                      : out.substr(at, out.find('\n', at) - at).c_str());
         if (!has(out, "VK_ERROR_") && has(out, "injected frame fault")) {
             std::printf("SKIP: this engine has no Vulkan render system linked; nothing to prove\n");
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
               "AN OOM INSIDE THE RECORDING ENDS THE PROCESS WITH EXIT 1 (not a signal, not a crash)");
         CHECK(has(out, "CHILD gpuFault=2 deviceLost=0"),
               "...latched as GpuFault::OutOfMemoryInFrame, and NOT as a device loss");
-        CHECK(has(out, "CHILD lastError=GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost - ") &&
+        CHECK(has(out, "CHILD frameError=GPU out of memory (VK_ERROR_OUT_OF_DEVICE_MEMORY; the device is NOT lost - ") &&
               has(out, "67108864-byte pool"),
               "...with the honest text first, naming the pool");
         CHECK(has(out, "CHILD survived-next-frame=1"),
@@ -177,8 +177,9 @@ int main(int argc, char **argv)
     // =====================================================================
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemory, 1u);
     e->renderOneFrame();
-    const std::string oomError = e->lastError();
-    std::printf("lastError after the OOM frame: %s\n", oomError.c_str());
+    // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published for the frame, never in the calls' sink.
+    const std::string oomError = e->published().frameError;
+    std::printf("the frame's error after the OOM frame: %s\n", oomError.c_str());
     if (!has(oomError, "VK_ERROR_") && has(oomError, "injected frame fault")) {
         // The engine was built without the Vulkan render system linked (no
         // JAH_RAY_QUERY — macOS): the Vulkan kinds degrade to a plain throw.
@@ -211,7 +212,7 @@ int main(int argc, char **argv)
     e->setFrameFault(FrameFault::VulkanOutOfDeviceMemory, 2u);
     e->renderOneFrame();
     e->renderOneFrame();
-    CHECK(has(e->lastError(), "GPU out of memory") && !e->deviceLost(),
+    CHECK(has(e->published().frameError, "GPU out of memory") && !e->deviceLost(),
           "two more OOM frames: the same honest error, still no latch");
     Image again;
     CHECK(settle(e, view, again) && again.rgba == control.rgba,
@@ -224,7 +225,7 @@ int main(int argc, char **argv)
     e->renderOneFrame();
     CHECK(e->deviceLost(),
           "A REAL VK_ERROR_DEVICE_LOST through the same path STILL LATCHES (the fork kept that half)");
-    CHECK(e->lastError() == "the GPU device was lost", "...and the engine says which fact it latched");
+    CHECK(e->published().frameError == "the GPU device was lost", "...and the engine says which fact it latched");
     // The render system now vetoes every frame (it never recreates a lost
     // device); a host ends here, and so does this suite. (Not asserted through
     // `framesPresented`: the engine counts a presentation for every enabled

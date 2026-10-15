@@ -521,7 +521,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
+          "frames, rendered, missedDisplayPeriods, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
           "asymmetricFov, "
           "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
@@ -1510,6 +1510,8 @@ QVariantMap VrApi::state()
     out[QStringLiteral("refreshHz")] = info.refreshHz;
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
+    // The headset refreshes no frame of ours reached, counted on the runtime's own clock (ENGINE-UPGRADE-U3, vr.ui_stall).
+    out[QStringLiteral("missedDisplayPeriods")] = QVariant::fromValue(qulonglong(s.missedDisplayPeriods));
     // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
     // session has rendered before its first committed one, and what they cost.
     // A count and a measured value, like everything else here.

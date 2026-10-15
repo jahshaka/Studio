@@ -65,6 +65,7 @@ int drain(Engine *e)
     fog.enabled = true;
     fog.density = 0.05f;
     const FrameInputStatus s0 = e->frameInputStatus();
+    const FrameSubmitStatus u0 = e->frameSubmitStatus();
     e->submitFrame(sceneRecord(scene, fog));
     const int N = 6;
     unsigned firstApplied = 0;
@@ -75,7 +76,8 @@ int drain(Engine *e)
         costs.push_back(e->frameInputStatus().drainMicros);
     }
     const FrameInputStatus s1 = e->frameInputStatus();
-    CHECK(s1.submitted - s0.submitted == 1, "one submit counted (%llu)", s1.submitted - s0.submitted);
+    const FrameSubmitStatus u1 = e->frameSubmitStatus();
+    CHECK(u1.submitted - u0.submitted == 1, "one submit counted (%llu)", u1.submitted - u0.submitted);
     CHECK(s1.drained - s0.drained == unsigned(N), "one submit then %d frames: %d drains (%llu)", N, N,
           s1.drained - s0.drained);
     CHECK(s1.drainedEmpty - s0.drainedEmpty == unsigned(N - 1), "...%d of them empty (%llu)", N - 1,
@@ -93,13 +95,15 @@ int drain(Engine *e)
     fogA.density = 0.10f;
     fogB.density = 0.02f;
     const FrameInputStatus s2 = e->frameInputStatus();
+    const FrameSubmitStatus u2 = e->frameSubmitStatus();
     e->submitFrame(sceneRecord(scene, fogA));
     e->submitFrame(sceneRecord(scene, fogB));
     e->renderOneFrame();
     const FrameInputStatus s3 = e->frameInputStatus();
+    const FrameSubmitStatus u3 = e->frameSubmitStatus();
     CHECK(s3.drained - s2.drained == 1 && s3.drainedEmpty == s2.drainedEmpty,
           "two submits then one frame: ONE drain (%llu), not empty", s3.drained - s2.drained);
-    CHECK(s3.scenePartsMerged - s2.scenePartsMerged == 1, "...the scene part merged into the pending one, the newer winning (%llu)", s3.scenePartsMerged - s2.scenePartsMerged);
+    CHECK(u3.scenePartsMerged - u2.scenePartsMerged == 1, "...the scene part merged into the pending one, the newer winning (%llu)", u3.scenePartsMerged - u2.scenePartsMerged);
     e->submitFrame(sceneRecord(scene, fogB));
     e->renderOneFrame();
     CHECK(e->frameInputStatus().fieldsApplied == 0,

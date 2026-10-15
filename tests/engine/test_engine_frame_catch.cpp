@@ -30,7 +30,7 @@
 // Types.h), the engine's own test hook — not an environment variable and not a
 // global. It raises the fault inside the frame, after the render has been
 // recorded and before anything closes, which is where a device loss lands; and
-// `lastError()` afterwards carries the fault's own message, so every case below
+// the frame's published error (published().frameError) carries the fault's own message, so every case below
 // proves the fault really fired instead of passing vacuously.
 //
 // WHAT IT CANNOT PROVE, said plainly: a REAL `VK_ERROR_DEVICE_LOST`. Inducing
@@ -59,7 +59,8 @@ static const unsigned kSize = 96;
 /// Did the injected fault really fire? Its message names itself.
 static bool faultFired(const Engine *e)
 {
-    return e->lastError().find("injected frame fault") != std::string::npos;
+    // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published for the frame just rendered, never in the calls' sink.
+    return e->published().frameError.find("injected frame fault") != std::string::npos;
 }
 
 /// How much of a picture is not its corner pixel — "something was drawn".
@@ -203,7 +204,7 @@ int main()
         CHECK(e->deviceLost(),
               "A DEVICE LOSS INSIDE A FRAME LATCHES: the latch lives after the catch, and "
               "until this lane a throw returned straight past it");
-        CHECK(e->lastError() == "the GPU device was lost",
+        CHECK(e->published().frameError == "the GPU device was lost",
               "...and the engine says which fact it latched, not the fault's own message");
         // THE FAKE IS ONLY THE ENGINE'S OWN REPORT: nothing about the driver,
         // the render system or the pictures changed, which is why this frame

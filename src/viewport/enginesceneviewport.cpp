@@ -2678,6 +2678,9 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // the selected node under one would promote it if physics or a script moved it meanwhile (the 3c read, C).
         // Every frame, so the release lands on the frame it happens.
         jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
+        // THE GRID STATE THIS RECORD IS (ENGINE-UPGRADE-U3): the document clock's step count, stamped on every node
+        // record the frame applies (stage 5 interpolates between the last two).
+        if (mScene) frame.stepSerial = mScene->simulationClock().steps();
         if (mEngineScene) {
             jahshaka::engine::FrameInputGesture gesture;
             gesture.active = mGizmo && mGizmo->isDragging();

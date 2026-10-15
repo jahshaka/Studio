@@ -66,6 +66,7 @@ int main(int argc, char **argv)
 
     // 1. a still document: one submit and one drain a frame, every drain empty of changes
     const FrameInputStatus s0 = engine->frameInputStatus();
+    const FrameSubmitStatus u0 = engine->frameSubmitStatus();
     unsigned appliedWhileStill = 0;
     std::vector<double> drainUs;
     for (int i = 0; i < 20; ++i) {
@@ -77,8 +78,9 @@ int main(int argc, char **argv)
     std::printf("    the drain's own cost, a still document's record: median %.2f us, max %.2f us over 20 frames\n",
                 drainUs[drainUs.size() / 2], drainUs.back());
     const FrameInputStatus s1 = engine->frameInputStatus();
-    CHECK(s1.submitted - s0.submitted == 20 && s1.drained - s0.drained == 20 && s1.drainedEmpty == s0.drainedEmpty,
-          "20 still frames: 20 submits, 20 drains, none empty (%llu / %llu / %llu)", s1.submitted - s0.submitted,
+    const FrameSubmitStatus u1 = engine->frameSubmitStatus();
+    CHECK(u1.submitted - u0.submitted == 20 && s1.drained - s0.drained == 20 && s1.drainedEmpty == s0.drainedEmpty,
+          "20 still frames: 20 submits, 20 drains, none empty (%llu / %llu / %llu)", u1.submitted - u0.submitted,
           s1.drained - s0.drained, s1.drainedEmpty - s0.drainedEmpty);
     CHECK(appliedWhileStill == 0, "a still document's records apply nothing (%u fields over 20 drains)",
           appliedWhileStill);

@@ -156,6 +156,7 @@ export.embed 1.40  ship 3a0422b4e (2026-10-13)
 export.raw 0.00  ship 3a0422b4e (2026-10-13)
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
+frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 6.46  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)
 gi.ambient 1.96  quiet n=41
 gi.area_energy 5.29  quiet n=29

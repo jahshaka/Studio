@@ -596,9 +596,12 @@ int main() {
                 CHECK_MSG(twice >= once + 10ull,
                           "THE SKY CHANGED ON A QUAD THE SESSION ALREADY OWNED and the frames "
                           "kept coming (%llu -> %llu)", once, twice);
-                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos,
-                          "no duplicate-material throw: lastError is '%s'",
-                          engine->lastError().c_str());
+                // The throw would be a FRAME's (the quad is rebuilt in the frame): read the frames' published
+                // error as well as the calls' sink (ENGINE-UPGRADE-U3 F3).
+                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos &&
+                              engine->published().lastFrameError.find("Duplicate") == std::string::npos,
+                          "no duplicate-material throw: lastError is '%s', the frames' '%s'",
+                          engine->lastError().c_str(), engine->published().lastFrameError.c_str());
             }
             setFixtureSky(scene, true);
             pump(engine.get(), engine->vrStatus().frames + 5ull, 100u);

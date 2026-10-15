@@ -171,6 +171,13 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // who wants the total.
         mStats.drawing = anythingToDraw;
         if (rendering) {
+            // THE DISPLAY'S PERIOD rides the record (ENGINE-UPGRADE-U3: FrameInput::displayDt) — the driver is the one
+            // that knows it; the engine's clock never reads it (trap 7), stage 5's interpolation weight divides by it.
+            {
+                jahshaka::engine::FrameInput period;
+                period.displayDt = float(scriptPacePeriodMs() / 1000.0);
+                mEngine->submitFrame(period);
+            }
             mEngine->renderOneFrame();
             ++mStats.rendered;
             mDrawn.add(nowMs());

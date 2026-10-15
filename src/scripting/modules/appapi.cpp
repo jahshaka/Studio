@@ -32,6 +32,8 @@ For more information see the LICENSE file
 #include "irisgl/import/parsecensus.h"
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
+#include <QElapsedTimer>
+#include <QThread>
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -216,6 +218,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "the watchdog and the heartbeat can be tested through the registry instead of through a private "
           "sleep. Development builds only: returns false and does nothing in a release build. The verb itself "
           "does not return until the freeze is over, which is the point.",
+          Needs::Window },
+        { "tickStall", "app.tickStall(ms, everyMs) -> {armed, ms, everyMs, stalls}",
+          "Arms a deliberate UI-THREAD STALL inside the render driver's tick: a `ms`-millisecond sleep in a "
+          "beforeFrame slot, at most once every `everyMs` milliseconds of the wall clock (the stimulus of "
+          "vr.ui_stall: an event-loop stall of the size the 2026-10-03 perf audit measured, landing inside the tick "
+          "that also waits for the headset). `app.tickStall(0)` disarms. Returns what is armed now and how many "
+          "stalls were slept since it was armed. Development builds only: refused in a release build, like "
+          "app.blockUiThread.",
           Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
@@ -861,6 +871,49 @@ bool AppApi::blockUiThread(int ms)
         return fail("app.blockUiThread: development builds only");
     if (ms <= 0) return fail("app.blockUiThread: a positive duration is required");
     return MainThreadWatchdog::blockCallingThread(ms);
+}
+
+namespace {
+/// app.tickStall's one armed stall (a dev-build test door, ENGINE-UPGRADE-U3 vr.ui_stall).
+struct TickStall {
+    QMetaObject::Connection connection;
+    int ms = 0, everyMs = 0;
+    qulonglong stalls = 0;
+    QElapsedTimer sinceLast;
+};
+TickStall &tickStallState() { static TickStall s; return s; }
+}   // namespace
+
+QVariantMap AppApi::tickStall(int ms, int everyMs)
+{
+    TickStall &st = tickStallState();
+    const auto report = [&st] {
+        return QVariantMap{ { QStringLiteral("armed"), bool(st.connection) },
+                            { QStringLiteral("ms"), st.ms },
+                            { QStringLiteral("everyMs"), st.everyMs },
+                            { QStringLiteral("stalls"), st.stalls } };
+    };
+    if (!MainThreadWatchdog::isSupported()) {
+        fail("app.tickStall: development builds only");
+        return report();
+    }
+    if (st.connection) QObject::disconnect(st.connection);
+    st.connection = QMetaObject::Connection();
+    if (ms <= 0) { st.ms = st.everyMs = 0; return report(); }
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) { fail("app.tickStall: no render driver"); return report(); }
+    st.ms = ms;
+    st.everyMs = qMax(0, everyMs);
+    st.stalls = 0;
+    st.sinceLast.invalidate();
+    st.connection = QObject::connect(driver, &EngineRenderDriver::beforeFrame, driver, [] {
+        TickStall &s = tickStallState();
+        if (s.sinceLast.isValid() && s.sinceLast.elapsed() < s.everyMs) return;
+        s.sinceLast.start();
+        QThread::msleep(ulong(s.ms));
+        ++s.stalls;
+    });
+    return report();
 }
 
 QVariantMap AppApi::shaderCache()

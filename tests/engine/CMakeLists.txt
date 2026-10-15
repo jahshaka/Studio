@@ -221,6 +221,27 @@ set_tests_properties(engine.frame_input_drain PROPERTIES TIMEOUT 60 LABELS "engi
 jah_gpu_row(engine.frame_input_settle CLASS engine FRAMES 8 COMMAND test_engine_frame_input --settle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
+
+# frame.record_determinism — THE RECORD AND ITS SERIAL ARE DETERMINISTIC (ENGINE-UPGRADE-U3 stage 1, the one-thread
+# arm; stage 4 adds the two-thread arm on the same script). The render loop's hand-over stamps one serial per frame that
+# applied a record (F1: the merge stays — two submits are one hand-over) and an empty frame carries the last (F2); a
+# document node moved by its record over 60 frames in TWO processes reads the identical serial sequence and the
+# byte-identical picture. Laws in frames and bytes (the closed-form serial, the readback's bytes).
+add_executable(test_engine_record_determinism test_engine_record_determinism.cpp)
+set_target_properties(test_engine_record_determinism PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_record_determinism PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_record_determinism PRIVATE JahshakaEngine)
+add_dependencies(test_engine_record_determinism JahshakaEngineMedia)
+# Two engines in sequence (one per child process: Root is a singleton), never at once: the engine class's slots cover it.
+jah_gpu_row(frame.record_determinism CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
+set_tests_properties(frame.record_determinism PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(engine.frame_input_settle PROPERTIES TIMEOUT 60 LABELS "engine"
                      RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 

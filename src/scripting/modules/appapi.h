@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE QVariantMap watchdogStats();
     Q_INVOKABLE QVariantMap watchdog(int stallMs);
     Q_INVOKABLE bool blockUiThread(int ms);
+    Q_INVOKABLE QVariantMap tickStall(int ms, int everyMs = 0);
     Q_INVOKABLE QVariantMap shaderCache();
     Q_INVOKABLE bool clearShaderCache();
     Q_INVOKABLE QVariantMap asyncShaders();

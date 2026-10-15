@@ -397,6 +397,32 @@ set_tests_properties(vr.warmup.timing PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
 set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 
+# vr.ui_stall — A 7 ms UI-THREAD STALL COSTS NO HEADSET FRAME (ENGINE-UPGRADE-U3 stage 1; the spec's premise (c),
+# re-measured). The app free-runs under Monado's simulated headset (`--script-live`, the driver ticking between the
+# script's verbs — JAH_VR_RUNNER_EVENTS=1 is what run_vr_app.sh launches that way); vr_ui_stall.js sleeps 7 ms in a
+# beforeFrame slot every 350 ms (app.tickStall) over 600 accepted headset frames and counts the RUNTIME's missed
+# display periods (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 missed, is the design's law
+# and the spec expected it RED ON MAIN (see THE BASE): the row is `measure` until stage 5 makes it a guard.
+# THE BASE (stage 1's tip = main's one-thread frame + the two new instruments, Debug, Xvfb 1920x1080, 2026-10-15): the
+# row is GREEN — 0 periods missed over 80 stalls of 7 ms (control 0 over 600). Monado's NULL compositor paces at 20 Hz
+# (a 50 ms predicted period; XRT_COMPOSITOR_DEFAULT_FRAMERATE does not move it), so a 7 ms stall never crosses a period
+# here. The instrument counts what it should: 120 ms -> 3.00 missed per stall; 32 ms (7/11.1 of the period, the 90 Hz
+# geometry) -> 1.00 per stall over 31; 45 ms -> 1.00 over 30. THE STIMULUS'S SIZE IS THE LEAD'S RULING (reported).
+set(_vr_ui_stall_home "${CMAKE_CURRENT_BINARY_DIR}/vr-ui-stall-home")
+jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "scripting;measure")
+jah_gpu_exclusive_test(NAME vr.ui_stall CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/vr_ui_stall.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.ui_stall PROPERTIES
+    LABELS "scripting;measure"
+    SKIP_RETURN_CODE 77
+    JAHSHAKA_TEST_FRAMES 1300
+    FIXTURES_REQUIRED vruistallFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;HOME=${_vr_ui_stall_home};JAHSHAKA_DATA_ROOT=${_vr_ui_stall_home}/.local/share/Jahshaka")
+set_property(TEST vr.ui_stall APPEND PROPERTY RESOURCE_LOCK monado)
+
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 #

@@ -34,8 +34,14 @@ void EngineErrorPump::drain(jahshaka::engine::Engine *engine)
     // Returns AND clears (Engine::takeLastError): the reason is consumed here
     // or nowhere. In the overwhelmingly common case this is an empty string.
     const std::string taken = engine->takeLastError();
-    if (taken.empty()) return;
-    record(QString::fromStdString(taken));
+    if (!taken.empty()) record(QString::fromStdString(taken));
+    // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published, never in the sink.
+    const jahshaka::engine::PublishedEngineFrame &pub = engine->published();
+    if (mFrameErrorsEngine != engine) { mFrameErrorsEngine = engine; mFrameErrorsTaken = 0; }
+    if (pub.framesWithError != mFrameErrorsTaken) {
+        mFrameErrorsTaken = pub.framesWithError;
+        record(QString::fromStdString(pub.lastFrameError));
+    }
 }
 
 std::vector<EngineErrorPump::Entry>::iterator EngineErrorPump::find(const QString &message)
