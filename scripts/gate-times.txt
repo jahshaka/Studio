@@ -398,6 +398,7 @@ meshbake.shipped_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.cull_twin 3.36  quiet n=45
 mirror.dirty_equals_full 1.12  quiet n=44
 mirror.document_to_engine 9.72  quiet n=43
+mirror.full_walk_recreate 1.70  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
 mirror.change_set 2.53  solo, warm, the card lock held (EU-1 U0 3b, 2026-10-14)
@@ -926,6 +927,7 @@ ui.tree_scroll 0.06  quiet n=47
 ui.vr_panel 0.00  ship 3a0422b4e (2026-10-13)
 ui.window_minimum 10.63  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.window_minimum.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.eye_grade 137.48  quiet n=41
 vr.eye_grade.fresh_home 0.01  quiet n=3
 vr.frame_budget 102.30  ship 3a0422b4e (2026-10-13)

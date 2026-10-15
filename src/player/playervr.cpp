@@ -94,9 +94,15 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     // keeps the wish and applies it on begin), so the very first frame the
     // runtime accepts already reaches the desktop.
     engine->setVrMirrorView(mirrorView);
-    if (!engine->beginVrSession(scene, cfg)) {
+    bool begun = false;
+    std::string beginWhy;
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        begun = e.beginVrSession(scene, cfg);
+        if (!begun) beginWhy = e.lastError();
+    });
+    if (!begun) {
         engine->setVrMirrorView(nullptr);
-        return fail(QString::fromStdString(engine->lastError()));
+        return fail(QString::fromStdString(beginWhy));
     }
     mOwnsSession = true;
     mMirrorView = mirrorView;

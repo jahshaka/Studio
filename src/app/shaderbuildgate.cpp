@@ -285,7 +285,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 quiet = 0;
                 for (int tf = 0; tf < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames; ++tf) {
                     frame();
-                    engine.waitForAsyncShaders();
+                    engine.request([](jahshaka::engine::Engine &e) { e.waitForAsyncShaders(); });   // a REQUEST (U3 4a)
                     as = engine.published().shaders;
                     engine.shaderBuildProgress(c, f, e);
                     const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
@@ -307,10 +307,12 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // on the UI thread (measured: 5 on Showroom 2, 10 with 16 lamps, on the
         // close that took the session's first tile). Taken here, once, on this
         // view's whole chain.
-        if (view->requestFrameCapture(false)) {
+        bool captureArmed = false;   // REQUESTS (U3 stage 4a): the capture's arm and its take
+        engine.request([&](Engine &) { captureArmed = view->requestFrameCapture(false); });
+        if (captureArmed) {
             frame();
             jahshaka::engine::Image tile;
-            view->takeFrameCapture(tile, true);
+            engine.request([&](Engine &) { view->takeFrameCapture(tile, true); });
         }
         // (4) THE VIDEO RECORDER'S VIEW (VIDEO-REC-2): the view a recording draws
         // (recordingview::create — the recorder's own builder, at the recording's
@@ -330,14 +332,14 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 jahshaka::engine::VideoFrameNv12 picture;
                 recorderView = recordingview::frameView(rv, camera, 0.0f);
                 for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
-                    rv->armVideoFrame(quint64(i));
+                    engine.request([&](Engine &) { rv->armVideoFrame(quint64(i)); });   // REQUESTS (U3 4a)
                     frame();
-                    while (rv->takeVideoFrame(picture, false)) {}
+                    engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, false)) {} });
                     engine.shaderBuildProgress(c, f, e);
                     quiet = (c + f == last) ? quiet + 1 : 0;
                     last = c + f;
                 }
-                while (rv->takeVideoFrame(picture, true)) {}
+                engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, true)) {} });
                 recorderView = SceneMirror::FrameView();
                 engine.destroyView(rv);
             } else {

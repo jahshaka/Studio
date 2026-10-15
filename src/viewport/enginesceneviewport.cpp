@@ -2731,7 +2731,11 @@ bool EngineSceneViewport::requestPresentedFrame(PresentedFrameDone done, bool ke
     // the pending one finished first.
     if (!mPresentedDone.empty() && keepHelpers != mPresentedKeepHelpers) settlePresentedFrame();
     if (mPresentedDone.empty()) {
-        if (!v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers)) {
+        bool armed = false;
+        mEngine->request([&](jahshaka::engine::Engine &) {   // a REQUEST (U3 stage 4a): the capture's arming
+            armed = v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers);
+        });
+        if (!armed) {
             if (done) done(QImage());
             return false;
         }
@@ -2747,7 +2751,8 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
     jahshaka::engine::View *v = view();
     QImage frame;
     if (v) {
-        const jahshaka::engine::FrameCaptureState st = v->frameCaptureState();
+        jahshaka::engine::FrameCaptureState st = jahshaka::engine::FrameCaptureState::Idle;
+        mEngine->request([&](jahshaka::engine::Engine &) { st = v->frameCaptureState(); });   // a REQUEST (U3 4a)
         if (st == jahshaka::engine::FrameCaptureState::Armed) return;   // not drawn yet
         if (st == jahshaka::engine::FrameCaptureState::InFlight && !wait) return;
         // Idle = dropped (the world closed, the view was rebuilt, the readback was
@@ -2761,7 +2766,10 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
             return q;
         };
         Image img, presented;
-        if (st != jahshaka::engine::FrameCaptureState::Idle && v->takeFrameCapture(img, true, &presented)) {
+        bool taken = false;
+        if (st != jahshaka::engine::FrameCaptureState::Idle)
+            mEngine->request([&](jahshaka::engine::Engine &) { taken = v->takeFrameCapture(img, true, &presented); });
+        if (taken) {
             frame = toQImage(img);
             mPresentedCompanion = toQImage(presented);
         }
@@ -2782,7 +2790,12 @@ void EngineSceneViewport::settlePresentedFrame()
 {
     if (mPresentedDone.empty()) return;
     jahshaka::engine::View *v = view();
-    if (mEngine && v && v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed) {
+    const auto captureState = [&] {   // a REQUEST (U3 stage 4a): the capture's state, read on the engine's side
+        jahshaka::engine::FrameCaptureState st = jahshaka::engine::FrameCaptureState::Idle;
+        if (mEngine && v) mEngine->request([&](jahshaka::engine::Engine &) { st = v->frameCaptureState(); });
+        return st;
+    };
+    if (mEngine && v && captureState() == jahshaka::engine::FrameCaptureState::Armed) {
         if (!v->pushedEnabled()) {
             // A HIDDEN VIEW PRESENTS NOTHING, so there is no presented frame to
             // read: its window is not on screen and may have been resized under
@@ -2792,7 +2805,7 @@ void EngineSceneViewport::settlePresentedFrame()
             // the stored tile keeps the last one — the last editor frame, which
             // is what the user last saw of the world (the lead's ruling: a close
             // from a non-editor page keeps it).
-            v->cancelFrameCapture();
+            mEngine->request([&](jahshaka::engine::Engine &) { v->cancelFrameCapture(); });   // a REQUEST (U3 4a)
             cancelPresentedFrame();
             return;
         }
@@ -2805,7 +2818,7 @@ void EngineSceneViewport::settlePresentedFrame()
         // it lands (bounded — a permutation that never builds leaves the request armed and
         // the poll below answers what it can).
         for (int i = 0; i < kCaptureSettleFrames &&
-                        v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed; ++i) {
+                        captureState() == jahshaka::engine::FrameCaptureState::Armed; ++i) {
             renderFrames(1, 0.0f);
             if (mDriver) mDriver->noteExternalFrame();
         }
@@ -4605,7 +4618,8 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
             mEngine->setCompileObserver([&]() { onCompile(++seen); });
             clear.engine = mEngine.get();
         }
-        view()->warmUpShaders();
+        if (jahshaka::engine::View *wv = view())
+            mEngine->request([wv](jahshaka::engine::Engine &) { wv->warmUpShaders(); });   // a REQUEST (U3 stage 4a)
     }
     unsigned after = 0;
     mEngine->shaderBuildProgress(after, cached, expected);

@@ -24,6 +24,8 @@ editor.frame(30);   // the open and the first frames: their reads are not the st
 var before = engine.syncGetters();
 var driverFrames = 0;
 var covered = false, panelShown = false, overlayShown = false;
+var viewRecreated = false, vrProbed = false, cacheSaved = false, captured = false;
+var CAPTURE = "host_sync_getters_capture.png";   // the row's own working directory (a scratch home)
 for (var i = 0; i < 300; ++i) {
     // THE ROW SEES ITS SUBJECTS (ENGINE-UPGRADE-U3 stage 3, decision 18): inside the counted window, the World panel
     // shown and edited (its shadow and GI rows refresh off the snapshot), the stats overlay on (its figures read
@@ -45,6 +47,13 @@ for (var i = 0; i < 300; ++i) {
         cube = scene.addPrimitive("cube", { position: [0, 0.5, 0] });
         editor.select(cube);
     }
+    // ...AND THE STAGE-4 SUBJECTS (U3 stage 4a, decision 39): views made and destroyed (the Materials page's
+    // preview views, then the editor's again), a VR probe, a shader-cache save and a capture of the presented frame.
+    if (i === 230) { app.space("materials"); }
+    if (i === 240) { app.space("editor"); viewRecreated = true; }
+    if (i === 250) { var va = vr.available(); vrProbed = va !== undefined && va !== null; }
+    if (i === 260) { cacheSaved = app.saveShaderCache() !== undefined; }
+    if (i === 270) { var pf = editor.presentedFrame(CAPTURE); captured = !!pf && pf.width > 0; }
     node.transform(cube, { position: [Math.sin(i * 0.05), 0.5, Math.cos(i * 0.05)] });
     editor.frame(1);
     // ...AND ONE OF THE DRIVER'S OWN TICKS after it (the owner's loop: its beforeFrame subscribers, its status reads):
@@ -56,6 +65,8 @@ for (var i = 0; i < 300; ++i) {
 console.log("driver frames in the window: " + driverFrames);
 assert(panelShown && overlayShown, "the World panel and the stats overlay were up inside the window");
 assert(covered, "a cover was on screen inside the window (the load in place under the loading cover)");
+assert(viewRecreated && vrProbed && cacheSaved && captured,
+       "views were made and destroyed, a VR probe, a shader-cache save and a capture ran inside the window");
 assert(driverFrames >= 290, "the driver ticked between the script's frames (" + driverFrames + " of 300)");
 var after = engine.syncGetters();
 var moved = [];

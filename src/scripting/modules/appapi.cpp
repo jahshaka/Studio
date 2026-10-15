@@ -977,7 +977,8 @@ QVariantMap AppApi::setAsyncShaders(bool on)
 
 QVariantMap AppApi::waitForAsyncShaders()
 {
-    if (auto engine = EngineHost::instance().engine()) engine->waitForAsyncShaders();
+    if (auto engine = EngineHost::instance().engine())
+        engine->request([](jahshaka::engine::Engine &e) { e.waitForAsyncShaders(); });   // a REQUEST (U3 stage 4a)
     return asyncShaders();
 }
 

@@ -909,8 +909,11 @@ QVariantMap VrApi::available()
 {
     QVariantMap out;
     Engine *e = engine();
-    const VrInfo info = e ? e->vrInfo() : VrInfo();
-    out[QStringLiteral("available")] = e ? e->vrAvailable() : false;
+    // THE PROBE'S ANSWER IS A REQUEST (U3 stage 4a): read on the engine's side.
+    VrInfo info;
+    bool avail = false;
+    if (e) e->request([&](Engine &eng) { info = eng.vrInfo(); avail = eng.vrAvailable(); });
+    out[QStringLiteral("available")] = avail;
     out[QStringLiteral("headset")] = info.available;
     out[QStringLiteral("failure")] = vrnames::failure(e ? info.failure : VrFailure::Headless);
     out[QStringLiteral("manifest")] = QString::fromStdString(info.manifest);
@@ -1335,8 +1338,13 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     // THE INJECTION FIRST, THE FOCUS ONLY IF IT WAS TAKEN (the lead, from the
     // Fable read at merge): a refused injection (a bound profile, no override —
     // the headset case) must not rewrite the session's focus bit on the way.
-    if (!e->vrInjectInput(index, s))
-        return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));
+    bool injected = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        injected = eng.vrInjectInput(index, s);
+        if (!injected) why = eng.lastError();
+    });
+    if (!injected) return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(why)));
     if (!state.isEmpty())
         e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
     // ...AND THE SKELETON, AFTER THE SAMPLE (stage 3): the joints belong to the
@@ -1354,10 +1362,14 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
             if (!poseFromMap(list.at(j).toMap(), joints[j], &error))
                 return fail(QStringLiteral("vr.inject: joints[%1]: %2").arg(j).arg(error));
         }
-        if (!e->vrInjectJoints(index, list.isEmpty() ? nullptr : joints,
-                               unsigned(list.size())))
-            return refuse(QStringLiteral("vr.inject: %1")
-                              .arg(QString::fromStdString(e->lastError())));
+        bool jointed = false;
+        std::string jointsWhy;
+        e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a)
+            jointed = eng.vrInjectJoints(index, list.isEmpty() ? nullptr : joints, unsigned(list.size()));
+            if (!jointed) jointsWhy = eng.lastError();
+        });
+        if (!jointed)
+            return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(jointsWhy)));
     }
     return true;
 }
@@ -1426,8 +1438,14 @@ QVariantMap VrApi::eyeScreenshot(const QVariant &eye, const QString &path)
     }
     if (path.isEmpty()) { fail(QStringLiteral("vr.eyeScreenshot: a file path is required")); return out; }
     Image img;
-    if (!e->vrEyeScreenshot(unsigned(index), img)) {
-        fail(QStringLiteral("vr.eyeScreenshot: %1").arg(QString::fromStdString(e->lastError())));
+    bool shot = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        shot = eng.vrEyeScreenshot(unsigned(index), img);
+        if (!shot) why = eng.lastError();
+    });
+    if (!shot) {
+        fail(QStringLiteral("vr.eyeScreenshot: %1").arg(QString::fromStdString(why)));
         return out;
     }
     if (!img.width || !img.height || img.rgba.empty()) {
@@ -1477,8 +1495,13 @@ bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
     if (index < 0)
         return fail(QStringLiteral("vr.haptic: hand must be \"left\" or \"right\" (or 0/1), "
                                    "not '%1'").arg(hand.toString()));
-    if (!e->vrHaptic(index, float(amplitude), float(seconds)))
-        return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(e->lastError())));
+    bool buzzed = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        buzzed = eng.vrHaptic(index, float(amplitude), float(seconds));
+        if (!buzzed) why = eng.lastError();
+    });
+    if (!buzzed) return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(why)));
     return true;
 }
 

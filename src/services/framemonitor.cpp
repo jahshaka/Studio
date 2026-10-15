@@ -1505,7 +1505,7 @@ unsigned FrameMonitor::drainOnce()
     mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
     unsigned moved = 0;
     std::vector<MonitorRecord> frames;
-    moved += eng->takeMonitorRecords(frames);
+    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorRecords(frames); });   // a REQUEST (U3 4a)
     for (const MonitorRecord &r : frames) mBundle->writeFrame(r);
     // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
     // 2026-09-18). The bundle is a file a lead opens later; this is the same
@@ -1531,7 +1531,7 @@ unsigned FrameMonitor::drainOnce()
         mLastPasses = rows;
     }
     std::vector<MonitorEvent> events;
-    moved += eng->takeMonitorEvents(events);
+    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorEvents(events); });   // a REQUEST (U3 4a)
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);
     return moved;
 }

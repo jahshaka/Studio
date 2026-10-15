@@ -148,8 +148,11 @@ inline void takePicture(jahshaka::engine::Engine *engine, const PictureRequest &
     // Plus whatever the texture load-request counter still owes (THREADING_ADOPTION_SPEC.md P2 item 4).
     pic.frames += renderStableFrames(engine);
     if (req.view) {
-        pic.ok = req.view->readPixels(pic.rgba);
-        if (req.hdr) req.view->readPixelsHdr(pic.hdr);
+        // THE READBACK IS A REQUEST (U3 stage 4a): answered on the engine's side.
+        engine->request([&](jahshaka::engine::Engine &) {
+            pic.ok = req.view->readPixels(pic.rgba);
+            if (req.hdr) req.view->readPixelsHdr(pic.hdr);
+        });
     }
     if (done) done(std::move(pic));
 }

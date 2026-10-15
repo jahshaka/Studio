@@ -261,7 +261,8 @@ void AvatarPreviewScene::resolvePose()
     // t=0 and t=0.5). Engine::updateScene says what this code always meant,
     // costs strictly less than the old frame, and works whether or not the
     // page is on screen.
-    engine->updateScene(mScene);
+    Scene *const scene = mScene;
+    engine->request([scene](Engine &e) { e.updateScene(scene); });   // a REQUEST: the resolve (U3 stage 4a)
 }
 
 void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)

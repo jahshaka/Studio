@@ -169,6 +169,8 @@ OGRE_SCENE_FUNCTIONS = {
     # ENGINE-UPGRADE-U3 stage 2: the scene's engine bound once; the rigs whose poses the snapshot carries; the
     # fixtures' door onto the engine's record (EngineInspect.h)
     "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
+    # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
+    **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
@@ -210,7 +212,9 @@ OGRE_VIEW_FUNCTIONS = {
                           "workspacePreUpdate", "workspacePosUpdate", "syncGlobalsListener", "applyPendingResize",
                           "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "applyWorkspacesEnabled", "setSessionCovers", "setCamera",
                           "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
-                          "readPixels", "readPixelsHdr")},
+                          "readPixels", "readPixelsHdr",
+                          # U3 stage 4a: the host's setters as record fields, the readbacks as requests, the create's halves
+                          "postRecord", "hostPosts", "requestOnEngine", "adoptTarget", "buildChain")},
     **{f: ["engine"] for f in ("name", "scene", "published", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
                                "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
                                "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",

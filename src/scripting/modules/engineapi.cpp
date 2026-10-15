@@ -60,8 +60,14 @@ QVariant EngineApi::arm(const QString &name, const QVariant &value)
         bool ok = false;
         const double v = value.toDouble(&ok);
         if (!ok) { refuse(QStringLiteral("engine.arm: %1 needs a number").arg(name)); return jsNull(); }
-        if (!engine->setArm(key, v)) {
-            refuse(QStringLiteral("engine.arm: %1").arg(QString::fromStdString(engine->takeLastError())));
+        bool armed = false;
+        std::string why;
+        engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+            armed = e.setArm(key, v);
+            if (!armed) why = e.takeLastError();
+        });
+        if (!armed) {
+            refuse(QStringLiteral("engine.arm: %1").arg(QString::fromStdString(why)));
             return jsNull();
         }
         return v;
