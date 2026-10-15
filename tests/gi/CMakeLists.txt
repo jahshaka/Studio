@@ -2390,6 +2390,26 @@ jah_gpu_row(gi.photon_passes CLASS engine COMMAND test_gi_photon_passes
 set_tests_properties(gi.photon_passes PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.photon_passes PROPERTIES JAHSHAKA_TEST_FRAMES 67)   # counted from the source (12 + 1 + 4 + the probe; the plain scene 12 + 1 + 6; the verb-time step 6 + 6 + 6 + 12)
 
+# gi.reads_gi — THE GI IS BOUND ONLY ON THE PASSES THAT SAMPLE IT (ENGINE-UPGRADE-ASYNC-3 stage 2): the
+# reader list on a carded scene with rays and SSR (the opaque pass, the photon passes read; the prepasses,
+# the card capture, the overlays, the Atom ids, the shadow passes do not) and the binding following it.
+add_executable(test_gi_reads_gi test_gi_reads_gi.cpp)
+set_target_properties(test_gi_reads_gi PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_reads_gi PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_reads_gi PRIVATE JahshakaEngine)
+add_dependencies(test_gi_reads_gi JahshakaEngineMedia)
+jah_gpu_row(gi.reads_gi CLASS engine COMMAND test_gi_reads_gi
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reads_gi PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.reads_gi PROPERTIES JAHSHAKA_TEST_FRAMES 17)   # measured (a temporary renderOneFrame counter: 1 + 16)
+
 # gi.region_compute_only — THE GI REGION IS COMPUTE-LEGAL (ENGINE-UPGRADE-ASYNC-3 stage 1): with the
 # fork's async bracket opened around Photon's GI region on the in-order arm, a carded scene and a plain
 # VCT scene run 300 frames each with a mover and a light tick, then a rebuild: no graphics-only command

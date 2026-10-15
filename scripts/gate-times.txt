@@ -260,6 +260,7 @@ gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
 gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
+gi.reads_gi 2.61  spec ENGINE-UPGRADE-ASYNC-3 stage 2 (2026-10-15, solo, warm cache)
 gi.region_compute_only 2.94  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-15, solo, warm cache)
 gi.probe_gate 7.80  ship 3a0422b4e (2026-10-13)
 gi.probe_inputs 11.39  quiet n=44
