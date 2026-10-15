@@ -63,7 +63,7 @@ static int renderCounting(Engine *e, Scene *s, int frames)
     int captured = 0;
     for (int i = 0; i < frames; ++i) {
         enginetest::frames(e, 1);
-        captured += s->giStatus().probeCapturesLastFrame;
+        captured += s->published().gi.probeCapturesLastFrame;
     }
     return captured;
 }
@@ -163,7 +163,7 @@ int main()
     CHECK(scene->setGlobalIllumination(hybridGi()), "the hybrid arm accepts");
     render(e, 12);
     {
-        const GiStatus before = scene->giStatus();
+        const GiStatus before = scene->published().gi;
         std::printf("   probes %d, probeShadows %d, vctBound %d, arm rebuilds %llu\n",
                     before.probeCount, int(before.probeShadows), int(before.vctBound),
                     before.rebuilds);
@@ -178,7 +178,7 @@ int main()
         // grid of BLACK probes — which reads as "the probes are fine" in every
         // other counter this suite has.
         const int capturedA = renderCounting(e, scene, 40);
-        const GiStatus after = scene->giStatus();
+        const GiStatus after = scene->published().gi;
         const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
         std::printf("   after the rebuild: atlasRebuilds %u -> %u, arm rebuilds %llu -> %llu, "
                     "probes %d -> %d\n",
@@ -190,7 +190,7 @@ int main()
         CHECK(after.probeCount == before.probeCount && after.pccBound && after.vctBound,
               "...and the probe grid is still there, still bound, with the same probes");
         std::printf("   the budget photographed %d probe(s) over the 40 frames after it, "
-                    "%d still stale\n", capturedA, scene->giStatus().staleProbes);
+                    "%d still stale\n", capturedA, scene->published().gi.staleProbes);
         CHECK(capturedA > 0,
               "THE RE-CREATED WORKSPACES CAPTURE: the budget photographs the probes again");
         Image img;
@@ -209,7 +209,7 @@ int main()
     CHECK(scene->setGlobalIllumination(hybridGi()), "the cascade arm accepts");
     render(e, 16);
     {
-        const GiStatus before = scene->giStatus();
+        const GiStatus before = scene->published().gi;
         unsigned long long cascade0 = 0;
         for (const auto &c : before.cascades) cascade0 += c.rebuilds;
         std::printf("   %zu cascades, probes %d, arm rebuilds %llu, cascade rebuilds %llu\n",
@@ -225,7 +225,7 @@ int main()
         capturedB += renderCounting(e, scene, 16);
         addCastingLamp(scene, Vec3(-2.0f, 4.0f,  2.0f));
         capturedB += renderCounting(e, scene, 32);
-        const GiStatus after = scene->giStatus();
+        const GiStatus after = scene->published().gi;
         unsigned long long cascade1 = 0;
         for (const auto &c : after.cascades) cascade1 += c.rebuilds;
         const unsigned atlas1 = e->shadowStatus().atlasRebuilds;
@@ -243,7 +243,7 @@ int main()
               "...and the probe grid kept its probes and its binding");
         std::printf("   under the chain the budget photographed %d probe(s) across the "
                     "lamp additions, %d still stale\n", capturedB,
-                    scene->giStatus().staleProbes);
+                    scene->published().gi.staleProbes);
         CHECK(capturedB > 0, "THE RE-CREATED WORKSPACES CAPTURE under the chain too");
         Image img;
         CHECK(view->readPixels(img) && meanLum(img) > 0.01f,

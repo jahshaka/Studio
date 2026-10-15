@@ -208,7 +208,7 @@ int main()
     tune(s, false);
     render(e, 90);
 
-    const GiStatus gs = s->giStatus();
+    const GiStatus gs = s->published().gi;
     CHECK_MSG(gs.gather.on && gs.gather.running && !gs.cascades.empty(),
               "the gather runs over a cascade chain (on %d running %d, %zu cascades)",
               int(gs.gather.on), int(gs.gather.running), gs.cascades.size());
@@ -248,7 +248,7 @@ int main()
     // 1. THE TABLE
     // =====================================================================
     {
-        const RayQueryStatus st = s->rayQueryStatus();
+        const RayQueryStatus st = s->published().rayQuery;
         std::printf("   instances %d far %d, blas %d (level>0: %d, %llu bytes of %llu), tlas %llu B\n",
                     st.instances, st.farInstances, st.blasCount, st.levelBlasCount,
                     (unsigned long long)st.levelBlasBytes, (unsigned long long)st.blasBytes,

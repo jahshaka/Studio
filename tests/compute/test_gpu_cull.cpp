@@ -223,7 +223,7 @@ int main()
     enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, 60.0f), Vec3(0.0f, 0.0f, -20.0f));
     enginetest::frames(e, 3);
 
-    GpuSceneStatus gs = scene->gpuSceneStatus();
+    GpuSceneStatus gs = scene->published().gpuScene;
     std::printf("\n== the table ==\n   live %d, %u slots, %u mesh entries\n", gs.live ? 1 : 0,
                 gs.slotCount, gs.meshEntries);
     CHECK(gs.live && gs.slotCount == unsigned(side * side), "the table holds every instance");
@@ -384,7 +384,7 @@ int main()
                     "plane\n", nearTexels, (m0h / 4u) * (m0w / 2u));
         CHECK(nearTexels > 1000u, "THE WALL IS IN THE DEPTH BUFFER (the fixture really occludes)");
 
-        const unsigned n = hs->gpuSceneStatus().slotCount;
+        const unsigned n = hs->published().gpuScene.slotCount;
         const std::vector<GpuSceneEntry> htable = readTable(hs, n);
         auto slotsOf = [&](const std::vector<NodeId> &ids) {
             std::vector<unsigned> out;
@@ -502,7 +502,7 @@ int main()
                 scene, n, Vec3(float((i * 17) % 400) - 200.0f, 0.0f, float((i * 31) % 400) - 200.0f));
         }
         enginetest::frames(e, 3);
-        const unsigned n = scene->gpuSceneStatus().slotCount;
+        const unsigned n = scene->published().gpuScene.slotCount;
         GpuCullRequest r = requestFor(e, view, 1.0f, 2u);
         r.flagsRequired = 1u;
         // THE JOBS' GPU TIME is each job's monitor row in a capture (lane TEST-1 deleted
@@ -538,7 +538,7 @@ int main()
     // ---- the ray level's refits (AT-A8r's hysteresis) ----------------------
     std::printf("\n== the ray level's 2x hysteresis ==\n");
     {
-        GpuSceneStatus st0 = scene->gpuSceneStatus();
+        GpuSceneStatus st0 = scene->published().gpuScene;
         // A camera flying in and out, at the engine's fixed 1/60 s: ONE dolly cycle of 900 frames
         // (TESTING-SPEED-B3: it flew four identical cycles, 3,600 frames, for a per-frame ratio
         // that one cycle at the same speed measures the same way).
@@ -549,7 +549,7 @@ int main()
             enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, z), Vec3(0.0f, 0.0f, -20.0f));
             enginetest::frames(e, 1);
         }
-        GpuSceneStatus st1 = scene->gpuSceneStatus();
+        GpuSceneStatus st1 = scene->published().gpuScene;
         const unsigned long long evals = st1.rayLevelEvals - st0.rayLevelEvals;
         const unsigned long long refits = st1.rayLevelRefits - st0.rayLevelRefits;
         const unsigned long long walks = st1.rayLevelWalks - st0.rayLevelWalks;

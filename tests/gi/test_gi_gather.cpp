@@ -99,7 +99,7 @@ static void armGather(Scene *s, GiParams gi, bool on, unsigned stride = 16u,
 }
 
 /// What the engine reports back about the last gathered frame.
-static GatherStatus gatherStatus(Scene *s) { return s->giStatus().gather; }
+static GatherStatus gatherStatus(Scene *s) { return s->published().gi.gather; }
 
 static void writePpm(const Image &img, const std::string &path)
 {
@@ -495,7 +495,7 @@ int main()
         // length IS the diagonal, and the inscribed radius draws the same picture
         // inside the instrument's 1 % bar.
         {
-            const GiStatus g = s->giStatus();
+            const GiStatus g = s->published().gi;
             const float outerHalf = g.cascades.empty() ? 0.0f : g.cascades.back().halfSize;
             const float diagonal = std::sqrt(3.0f) * 2.0f * outerHalf;
             CHECK_MSG(outerHalf > 0.0f, "the cascade chain reports its outer box (half %.2f m)",
@@ -689,7 +689,7 @@ int main()
         // would have taken the rebuilding door.)
         armGather(s, gi, false);
         render(e, 8);
-        const GiStatus before = s->giStatus();
+        const GiStatus before = s->published().gi;
         GiParams toggled = gi;
         toggled.gather = GiToggle::On;
         s->setGiTuning(toggled);
@@ -698,7 +698,7 @@ int main()
         toggled.gather = GiToggle::Off;
         s->setGiTuning(toggled);
         render(e, 8);
-        const GiStatus after = s->giStatus();
+        const GiStatus after = s->published().gi;
         CHECK_MSG(onStatus.running,
                   "the tuning push turned the gather ON without a configuration push (%u probes)",
                   onStatus.probes);
@@ -1109,7 +1109,7 @@ static int shippedCostMain(Engine *e)
             std::printf("   %-6s %-5s  %4u  %4u  %6u(+%u)      %.3f  %.3f  %.3f   %.3f     %.3f   (%u)\n",
                         epic ? "Epic" : "High", cards ? "ON" : "off", q.stride, q.raysPerProbe, q.probes,
                         q.adaptive, double(median(pl)), double(median(tr)), double(median(fi)),
-                        double(median(in)), double(median(tot)), s->giStatus().cards.cardsResident);
+                        double(median(in)), double(median(tot)), s->published().gi.cards.cardsResident);
         }
     return 0;
 }

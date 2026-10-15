@@ -203,7 +203,7 @@ int main(int argc, char **argv)
     };
     render(e, 90);
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK_MSG(st.cards.built && st.cards.cardsResident > 0u, "the floor's cards are resident (%u)",
                   st.cards.cardsResident);
     }
@@ -288,7 +288,7 @@ int main(int argc, char **argv)
                   "(a) the mover's umbra shows the card read's specks at the still control's rate "
                   "(%.1f %% vs %.1f %%, bar +2 points)", 100.0 * rateA, 100.0 * rateC);
     }
-    const GiStatus afterA = s->giStatus();
+    const GiStatus afterA = s->published().gi;
     std::printf("    movers %u, traces %llu, retired %llu, relights %llu\n", afterA.cards.moverCasters,
                 (unsigned long long)afterA.cards.moverTraces, (unsigned long long)afterA.cards.moverRetired,
                 (unsigned long long)afterA.cards.relights);
@@ -344,9 +344,9 @@ int main(int argc, char **argv)
     // ---- (c) THE MOVER STOPS -------------------------------------------------
     std::printf("\n== (c) the mover at rest\n");
     {
-        const GiStatus s0 = s->giStatus();
+        const GiStatus s0 = s->published().gi;
         render(e, 30);
-        const GiStatus s1 = s->giStatus();
+        const GiStatus s1 = s->published().gi;
         std::printf("    relights %llu -> %llu, traces %llu -> %llu, captures %llu -> %llu\n",
                     (unsigned long long)s0.cards.relights, (unsigned long long)s1.cards.relights,
                     (unsigned long long)s0.cards.moverTraces, (unsigned long long)s1.cards.moverTraces,
@@ -367,14 +367,14 @@ int main(int argc, char **argv)
         enginetest::setNodeScale(s, far, Vec3(1.2f, 1.2f, 1.2f));
         enginetest::setNodePosition(s, far, Vec3(9.0f, 0.6f, -2.0f));
         render(e, 30);
-        const GiStatus s0 = s->giStatus();
+        const GiStatus s0 = s->published().gi;
         unsigned traced = 0;
         for (int f = 0; f < 20; ++f) {
             enginetest::setNodePosition(s, far, Vec3(9.0f, 0.6f, -2.0f + 0.1f * float(f + 1)));
             render(e, 1);
-            traced += s->giStatus().cards.moverTracedLastFrame;
+            traced += s->published().gi.cards.moverTracedLastFrame;
         }
-        const GiStatus s1 = s->giStatus();
+        const GiStatus s1 = s->published().gi;
         std::printf("    movers %u; traces %llu -> %llu, relights %llu -> %llu\n", s1.cards.moverCasters,
                     (unsigned long long)s0.cards.moverTraces, (unsigned long long)s1.cards.moverTraces,
                     (unsigned long long)s0.cards.relights, (unsigned long long)s1.cards.relights);
@@ -391,7 +391,7 @@ int main(int argc, char **argv)
         const float oldZ = -5.0f, newZ = -2.0f;
         const float before = cardShadow(s, 0.6f, oldZ);
         CHECK_MSG(before >= 0.0f && before < 0.1f, "the still crate's shadow is captured (%.3f)", before);
-        const GiStatus s0 = s->giStatus();
+        const GiStatus s0 = s->published().gi;
         enginetest::setNodePosition(s, still, Vec3(-0.6f, 0.6f, newZ));
         int frames = -1;
         for (int f = 1; f <= 60; ++f) {
@@ -399,7 +399,7 @@ int main(int argc, char **argv)
             if (cardShadow(s, 0.6f, oldZ) > 0.9f && cardShadow(s, 0.6f, newZ) >= 0.0f &&
                 cardShadow(s, 0.6f, newZ) < 0.1f) { frames = f; break; }
         }
-        const GiStatus s1 = s->giStatus();
+        const GiStatus s1 = s->published().gi;
         const unsigned long long queued = s1.cards.casterRetraces - s0.cards.casterRetraces;
         const unsigned perFrame = std::max(1u, s1.cards.lightBudgetTexels / (128u * 128u));
         const int bar = int((queued + perFrame - 1u) / perFrame) + 2;
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
             enginetest::gesture(e, s, { still });   // the hand is on it (U0 3c)
             enginetest::setNodePosition(s, still, Vec3(-0.6f, 0.6f, stillZ));
             render(e, 1);
-            if (promotedAt < 0 && s->giStatus().dragMovers == 1) promotedAt = f;
+            if (promotedAt < 0 && s->published().gi.dragMovers == 1) promotedAt = f;
             if (promotedAt < 0) continue;
             ++dragFrames;
             if (!dark(stillZ)) ++lateDrag;
@@ -454,7 +454,7 @@ int main(int argc, char **argv)
             render(e, 1);
             ++restFrames;
             if (!dark(stillZ)) ++lateRest;
-            if (demotedAt < 0 && s->giStatus().dragMovers == 0) demotedAt = f;
+            if (demotedAt < 0 && s->published().gi.dragMovers == 0) demotedAt = f;
             if (demotedAt > 0 && f >= demotedAt + 20) break;
         }
         const float leftR = cardRadiance(s, 0.6f, startZ);
@@ -480,7 +480,7 @@ int main(int argc, char **argv)
     // The capture budget's bar for a recapture: the cards queued, at the cards a
     // frame the budget holds, and two frames of slack (arm (f)'s).
     const auto recaptureBar = [&](unsigned long long queued) {
-        const unsigned perFrame = std::max(1u, s->giStatus().cards.lightBudgetTexels / (128u * 128u));
+        const unsigned perFrame = std::max(1u, s->published().gi.cards.lightBudgetTexels / (128u * 128u));
         return int((queued + perFrame - 1u) / perFrame) + 2;
     };
 
@@ -489,7 +489,7 @@ int main(int argc, char **argv)
     // tail into its slot, which is the case a per-slot comparison missed.
     std::printf("\n== (h) the still crate deleted\n");
     {
-        const GiStatus s0 = s->giStatus();
+        const GiStatus s0 = s->published().gi;
         const bool removed = s->removeNode(still);   // once: CHECK_MSG evaluates twice
         CHECK_MSG(removed, "(h) the still crate is removed");
         int frames = -1;
@@ -497,7 +497,7 @@ int main(int argc, char **argv)
             render(e, 1);
             if (cardShadow(s, 0.6f, stillZ) > 0.9f) { frames = f; break; }
         }
-        const unsigned long long queued = s->giStatus().cards.casterRetraces - s0.cards.casterRetraces;
+        const unsigned long long queued = s->published().gi.cards.casterRetraces - s0.cards.casterRetraces;
         const int bar = recaptureBar(queued);
         std::printf("    %llu cards queued; its footprint lit after %d frames (bar %d)\n", queued, frames, bar);
         CHECK_MSG(queued > 0u, "(h) the deletion queued its footprint's cards (%llu)", queued);
@@ -607,13 +607,13 @@ static int costMain(Engine *e)
                 }
                 enginetest::frames(e, 1);
                 {
-                    const CardCacheStatus c = s->giStatus().cards;
+                    const CardCacheStatus c = s->published().gi.cards;
                     maxAge = std::max(maxAge, c.moverPendingAge);
                     maxSelected = std::max(maxSelected, c.moverTracedLastFrame + c.moverPending);
                     if (c.moverPending) minPerFrame = std::min(minPerFrame, c.moverTracedLastFrame);
                 }
                 if (f < 6) continue;   // the arm's first frames carry the last arm's timestamps
-                const CardCacheStatus c = s->giStatus().cards;
+                const CardCacheStatus c = s->published().gi.cards;
                 traced[a] += c.moverTracedLastFrame;
                 texels[a] += c.moverTexelsLastFrame;
                 relit[a] += c.relitLastFrame;
@@ -623,14 +623,14 @@ static int costMain(Engine *e)
             }
         }
     std::printf("cost: 1920x1080, High, Showroom-2-shaped floor; %u cards resident\n",
-                s->giStatus().cards.cardsResident);
+                s->published().gi.cards.cardsResident);
     std::printf("cost: arm        traced cards/f  traced texels/f  trace GPU ms  relit cards/f  relight GPU ms\n");
     for (int a = 0; a < 3; ++a)
         std::printf("cost: %2d movers  %14.2f  %15.0f  %12.4f  %13.2f  %14.4f\n", arms[a],
                     frames[a] ? traced[a] / frames[a] : 0.0, frames[a] ? texels[a] / frames[a] : 0.0,
                     traceN[a] ? traceMs[a] / traceN[a] : 0.0, frames[a] ? relit[a] / frames[a] : 0.0,
                     relightN[a] ? relightMs[a] / relightN[a] : 0.0);
-    std::printf("cost: pending past the budget at the end: %u\n", s->giStatus().cards.moverPending);
+    std::printf("cost: pending past the budget at the end: %u\n", s->published().gi.cards.moverPending);
     // NO STARVATION (oldest pending first): a card pending since frame F waits
     // only behind cards pending at F, at most `maxSelected`, and each frame
     // traces at least `minPerFrame` of them — so it is traced within

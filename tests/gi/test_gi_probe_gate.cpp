@@ -253,7 +253,7 @@ int main()
     show("chrome box", onMirror); show("zeroed panel", onZero);
     show("sheen panel", onSheen); show("wall above", onCeil);
 
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     std::printf("   probes=%d pccBound=%s dropped=%d captureSize=%d\n",
                 st.probeCount, st.pccBound ? "true" : "false",
                 st.probesDropped, st.probeCaptureSize);
@@ -333,7 +333,7 @@ int main()
     // statement of it, and the instrumented measurement in the lane report
     // counted the flushes it produces: ZERO in 100 pushes.
     {
-        const unsigned churnBefore = s->giStatus().probeGateCrossings;
+        const unsigned churnBefore = s->published().gi.probeGateCrossings;
         PbrParams keep = mirrored;
         for (int i = 0; i < 100; ++i) {
             keep.specularColour = Colour(1.0f - 0.001f * float(i % 10),
@@ -351,7 +351,7 @@ int main()
         // "The picture did not move" is not "nothing was flushed" — the shader
         // could have been rebuilt to the identical result. The engine counts
         // the crossings the gate causes, so both halves are gateable.
-        CHECK(s->giStatus().probeGateCrossings == churnBefore,
+        CHECK(s->published().gi.probeGateCrossings == churnBefore,
               "(e) ...and NOTHING was flushed: 100 non-crossing pushes cross the gate\n"
               "          zero times (the count is the measurement, not the picture)");
     }
@@ -363,7 +363,7 @@ int main()
     // (two crossings for one round trip, and only at the crossing itself), and
     // the picture has to land exactly where it started.
     {
-        const unsigned before = s->giStatus().probeGateCrossings;
+        const unsigned before = s->published().gi.probeGateCrossings;
         const Colour startPix = afterEdit;
         PbrParams drag = mirrored;
         for (int i = 20; i >= 0; --i) {         // 1.0 .. 0.0, a slider dragged to black
@@ -372,14 +372,14 @@ int main()
             drag.metalness = v;                 // both controls, as the panel's author would
             s->setPbrMaterial(editedMat, drag);
         }
-        const unsigned atBlack = s->giStatus().probeGateCrossings;
+        const unsigned atBlack = s->published().gi.probeGateCrossings;
         for (int i = 0; i <= 20; ++i) {         // ...and back
             const float v = float(i) * 0.05f;
             drag.specularColour = Colour(v, v, v);
             drag.metalness = v;
             s->setPbrMaterial(editedMat, drag);
         }
-        const unsigned after = s->giStatus().probeGateCrossings;
+        const unsigned after = s->published().gi.probeGateCrossings;
         std::printf("   probe-gate crossings: %u -> %u -> %u (41 pushes through black)\n",
                     before, atBlack, after);
         CHECK(atBlack == before + 1u,
@@ -415,7 +415,7 @@ int main()
     {
         view->readPixels(img);
         const Colour gatedPlain = img.at(zeroX, zeroY);
-        const unsigned c0 = s->giStatus().probeGateCrossings;
+        const unsigned c0 = s->published().gi.probeGateCrossings;
 
         PbrParams coated = zeroed;
         coated.clearCoat = 1.0f;
@@ -425,7 +425,7 @@ int main()
         render(engine.get(), 6);
         view->readPixels(img);
         const Colour gatedCoated = img.at(zeroX, zeroY);
-        const unsigned c1 = s->giStatus().probeGateCrossings;
+        const unsigned c1 = s->published().gi.probeGateCrossings;
         CHECK(c1 == c0,
               "(g) a clear coat does NOT cross the gate — the coat is inside the\n"
               "          predicate, so a zero-reflectance material keeps the loop OFF");
@@ -437,7 +437,7 @@ int main()
         render(engine.get(), 6);
         view->readPixels(img);
         const Colour ungatedCoated = img.at(zeroX, zeroY);
-        const unsigned c2 = s->giStatus().probeGateCrossings;
+        const unsigned c2 = s->published().gi.probeGateCrossings;
         CHECK(c2 == c1 + 1u,
               "(g) ...and THIS push does cross it: the probe loop is now running on a\n"
               "          clear-coated material whose kS is still zero");
@@ -576,7 +576,7 @@ int main()
         high.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
         render(engine.get(), 4);
-        const GiStatus rt = s->giStatus();
+        const GiStatus rt = s->published().gi;
         CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
               "ray tier: High with rays builds no probe grid");
     }

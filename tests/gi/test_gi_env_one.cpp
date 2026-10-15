@@ -153,7 +153,7 @@ int main()
     bool shReady = false;
     for (int f = 0; f < 20 && !shReady; ++f) {
         enginetest::frames(e, 1);
-        shReady = s->skyAmbientSh(skySh);
+        shReady = s->published().copySkyAmbientSh(skySh);
     }
     CHECK(shReady, "the sky's SH is integrated");
     std::printf("   sky L = %.4f (byte %u); its SH band 0 = %.4f (a uniform sky's band 0 is L)\n",
@@ -254,7 +254,7 @@ int main()
         g.ddgi = GiToggle::On;
         CHECK(s->setGlobalIllumination(g), "the field binds");
         render(e, 40);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.ifdBound && st.ifdRefinesOwed < st.ifdTargetSamples, "the field is bound and whole (every probe sampled)");
         const double rc = readTop(4);
         std::printf("   (c) the field's sky term:        %.4f  (%.3f of (a))\n", rc, rc / ra);
@@ -271,7 +271,7 @@ int main()
         GatherTuning t;
         s->setGatherTuning(t);
         render(e, 40);
-        CHECK(s->giStatus().gather.running, "the gather really runs");
+        CHECK(s->published().gi.gather.running, "the gather really runs");
         // AVERAGED OVER 48 FRAMES: the probe's directions are keyed on the frame
         // index, so one frame is one sample of the estimator.
         const double rd = readTop(48);
@@ -380,7 +380,7 @@ int main()
         CHECK(s->setSky(lit), "the uniform sky again");
         render(e, 8);
         float before[27];
-        CHECK(s->skyAmbientSh(before), "its SH");
+        CHECK(s->published().copySkyAmbientSh(before), "its SH");
         const Vec3 sunDir(0.3f, 0.8f, 0.52f);
         const float sl = std::sqrt(sunDir.x * sunDir.x + sunDir.y * sunDir.y + sunDir.z * sunDir.z);
         std::vector<EnvironmentConeAnswer> coneBefore, coneAfter;
@@ -396,7 +396,7 @@ int main()
         CHECK(s->setSky(lit), "a 10-degree disc at 20x the sky, INTO the probes");
         render(e, 8);
         float after[27];
-        CHECK(s->skyAmbientSh(after), "the SH again");
+        CHECK(s->published().copySkyAmbientSh(after), "the SH again");
         CHECK(e->environmentCones(s, q, coneAfter), "the cube again");
         const bool shSame = std::memcmp(before, after, sizeof before) == 0;
         std::printf("   (g) band 0 %.5f -> %.5f; the cube at the disc (mirror / six-cone) "
@@ -441,7 +441,7 @@ int main()
         b->setSky(bsky);
         float bsh[27] = { 0.0f };
         bool ready = false;
-        for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = b->skyAmbientSh(bsh); }
+        for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = b->published().copySkyAmbientSh(bsh); }
         b->setAmbientSh(bsh);
         b->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
         // The floor just in front of the wall's foot, from above.

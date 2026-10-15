@@ -166,7 +166,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(chainGi()), "the cascade chain builds");
     render(e, 8);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(!st.cascades.empty(), "the chain is up");
     if (st.cascades.empty()) return 1;
     // THE WALK IS MEASURED IN THE OUTERMOST CASCADE'S STEP, not the innermost's.
@@ -207,12 +207,12 @@ int main()
         const float walk = stepOut * 2.0f;                 // 30 m on the shipped table
         enginetest::testCameraLookAt(view, Vec3(home.x + walk, home.y, home.z), look);
         render(e, 40);                       // one cascade per frame; the queue drains
-        const GiStatus scrolled = scene->giStatus();
+        const GiStatus scrolled = scene->published().gi;
         const Image afterScroll = picture();
 
         rebuildWhole();                      // the same pose, built from scratch
         enginetest::testCameraLookAt(view, Vec3(home.x + walk, home.y, home.z), look);
-        const GiStatus built = scene->giStatus();
+        const GiStatus built = scene->published().gi;
         const Image afterBuild = picture();
 
         std::printf("   scrolled mean %.5f (c0 rebuilds %llu)\n", meanLum(afterScroll),
@@ -330,7 +330,7 @@ int main()
         render(e, 2);
         rebuildWhole();
         const Image forwardPic = picture();
-        const GiStatus fwdSt = scene->giStatus();
+        const GiStatus fwdSt = scene->published().gi;
         long long dispatches = 0;
         for (const auto &c : fwdSt.cascades) dispatches += c.voxelDispatches;
         std::printf("   forward: %zu objects, %lld dispatches over the chain\n", forward.size(),

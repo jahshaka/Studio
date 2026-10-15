@@ -403,7 +403,7 @@ static int costMain(Engine *e)
             enginetest::setNodePosition(s, sphere, pathAt(++frame));
             enginetest::frames(e, 1);
             if (!measure || i < 10) continue;
-            const RayQueryStatus st = s->rayQueryStatus();
+            const RayQueryStatus st = s->published().rayQuery;
             if (st.reflectMs <= 0.0f) continue;
             if (motion) {
                 on += st.reflectMs; ++nOn;
@@ -495,7 +495,7 @@ static int costPosedMain(Engine *e)
             }
             enginetest::frames(e, 1);
             if (!measure || i < 10) continue;
-            const RayQueryStatus st = s->rayQueryStatus();
+            const RayQueryStatus st = s->published().rayQuery;
             if (st.reflectMs <= 0.0f) continue;
             const double m = st.reflectMotionMs > 0.0f ? st.reflectMotionMs : 0.0;
             if (posed) { onR += st.reflectMs; onM += m; ++nOn; }
@@ -632,7 +632,7 @@ int main(int argc, char **argv)
     render(e, kWarmFrames);
     {
         const AtomDrawStatus as = s->atomDrawStatus();
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         std::printf("    atom: on=%d atomItems=%u pbsItems=%u   rayQuery reflect=%d\n", int(as.on),
                     as.atomItems, as.pbsItems, int(rq.reflect));
     }

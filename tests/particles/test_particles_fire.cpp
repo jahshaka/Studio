@@ -151,8 +151,8 @@ int main(int argc, char **argv)
     // Warm up: the plume has to fill before its SHAPE means anything. 120 frames
     // at 1/60 is 2 s, comfortably past the 0.95 s +/- 0.25 particle lifetime.
     enginetest::frames(engine, 120);
-    std::printf("    warmed up: %u live particles\n", target->particleCount(eng));
-    CHECK(target->particleCount(eng) > 20, "the flame is populated");
+    std::printf("    warmed up: %u live particles\n", target->published().particlesOf(eng));
+    CHECK(target->published().particlesOf(eng) > 20, "the flame is populated");
 
     // Ten captures, averaged, to beat the RNG.
     Average avg;

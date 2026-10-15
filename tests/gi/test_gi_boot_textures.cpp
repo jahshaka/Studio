@@ -156,7 +156,7 @@ int main()
         // (This is the line that separates the two arms at the source: with the
         // rule off, four cascades already exist here, voxelised without the
         // albedo.)
-        const GiStatus waiting = scene->giStatus();
+        const GiStatus waiting = scene->published().gi;
         std::printf("   immediately after the push: %zu cascades\n", waiting.cascades.size());
         CHECK(waiting.cascades.empty(),
               "NOTHING IS VOXELISED WHILE THE ALBEDO IS IN FLIGHT");
@@ -171,7 +171,7 @@ int main()
         // are already right.
         scene->refreshGlobalIllumination();
         render(e, 16);
-        const GiStatus o = scene->giStatus();
+        const GiStatus o = scene->published().gi;
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;
         std::printf("   after the open: %zu cascades, %llu rebuilds in total, "
@@ -216,7 +216,7 @@ int main()
                                              Vec3(1.0f, 1.0f, 1.0f), tex4);
         CHECK(late != 0, "a box wearing it, bound in the same frame");
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade arm is pushed");
-        CHECK(scene->giStatus().cascades.empty(), "the arm is waiting, not built");
+        CHECK(scene->published().gi.cascades.empty(), "the arm is waiting, not built");
         // THE EDIT, while it waits: another object, which the build has to see.
         const NodeId during = enginetest::addTestCube(scene, Colour(0.2f, 0.9f, 0.2f), 0.0f, 0.8f);
         CHECK(during != 0, "an object arrives while the arm is waiting");
@@ -224,7 +224,7 @@ int main()
         render(e, 24);
         CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
-        const GiStatus o = scene->giStatus();
+        const GiStatus o = scene->published().gi;
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;
         std::printf("   after the wait: %zu cascades, %llu rebuilds in total, "

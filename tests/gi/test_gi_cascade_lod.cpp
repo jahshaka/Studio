@@ -222,7 +222,7 @@ int main()
     render(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() == 4, ("the chain has four cascades (" +
           std::to_string(st.cascades.size()) + ")").c_str());
     if (st.cascades.size() != 4) { std::printf("FAIL: no chain, nothing else can be judged\n"); return 1; }
@@ -323,7 +323,7 @@ int main()
     render(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus biased = scene->giStatus();
+    GiStatus biased = scene->published().gi;
     bool biasMoved = false;
     for (size_t i = 0; i < biased.cascades.size() && i < levelsAtBiasOne.size(); ++i)
         if (biased.cascades[i].voxelLevels != levelsAtBiasOne[i] ||
@@ -335,7 +335,7 @@ int main()
     render(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus pinned = scene->giStatus();
+    GiStatus pinned = scene->published().gi;
     bool pinnedMoved = false;
     for (size_t i = 0; i < pinned.cascades.size() && i < levelsAtBiasOne.size(); ++i)
         if (pinned.cascades[i].voxelLevels != levelsAtBiasOne[i]) pinnedMoved = true;
@@ -348,7 +348,7 @@ int main()
     render(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus off = scene->giStatus();
+    GiStatus off = scene->published().gi;
     CHECK(off.cascades.size() == st.cascades.size(), "the same four cascades");
     bool allZero = true;
     for (const auto &c : off.cascades) allZero = allZero && maxLevel(c.voxelLevels) == 0;

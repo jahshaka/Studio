@@ -469,7 +469,7 @@ static int sweepMain(Engine *e, View *view)
             tune(s, 0.0f);
             render(e, 90);
 
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             std::vector<Box> boxes;
             for (const auto &c : gs.cascades) {
                 Box b;
@@ -533,7 +533,7 @@ static int sweepMain(Engine *e, View *view)
                     for (int fr = 0; fr < 36; ++fr) {
                         enginetest::frames(e, 1);
                         if (fr < 6) continue;
-                        const GatherStatus q = s->giStatus().gather;
+                        const GatherStatus q = s->published().gi.gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
                             ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
                     }
@@ -627,7 +627,7 @@ int main()
 
             Row r;
             r.scene = f.name; r.tier = tier.name;
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             std::vector<Box> boxes;
             for (const auto &c : gs.cascades) {
                 Box b;
@@ -754,7 +754,7 @@ static int farBlasMain(Engine *e, View *view)
             s->setGlobalIllumination(giAt(tier));
             tuneFar(s, 0.0f, false);
             render(e, 90);
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             const float outerHalf = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
             const float diag = std::sqrt(3.0f) * 2.0f * outerHalf;
             std::printf("\n-- %s %s: outer half %.2f m, reference length %.2f m, far plane %.1f\n",
@@ -793,7 +793,7 @@ static int farBlasMain(Engine *e, View *view)
                     for (int fr = 0; fr < 36; ++fr) {
                         enginetest::frames(e, 1);
                         if (fr < 6) continue;
-                        const GatherStatus q = s->giStatus().gather;
+                        const GatherStatus q = s->published().gi.gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
                             ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
                     }

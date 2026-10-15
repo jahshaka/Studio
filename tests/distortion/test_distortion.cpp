@@ -449,8 +449,8 @@ int main()
         render(engine.get(), 2);
         Image offBurst;
         REQUIRE(view->readPixels(offBurst));
-        CHECK_MSG(s->particleCount(burst) > 100u,
-                  "the burst is live (%u particles)", s->particleCount(burst));
+        CHECK_MSG(s->published().particlesOf(burst) > 100u,
+                  "the burst is live (%u particles)", s->published().particlesOf(burst));
         CHECK_MSG(pixelDiff(wallOnly, offBurst) == 0,
                   "a distortion BURST draws nothing without the pass: %u px differ from the wall",
                   pixelDiff(wallOnly, offBurst));

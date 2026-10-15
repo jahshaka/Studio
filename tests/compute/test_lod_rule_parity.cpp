@@ -286,7 +286,7 @@ static void productCutParity(Engine *e, View *view)
             // The table's dirty scan (engine.atom_draw's door): a scene whose frames
             // nothing in the view reads the table in (no GI, no rays) stages nothing.
             static_cast<jahshaka::engine::detail::OgreScene *>(sc)->ensureGpuScene(false);
-            slots = sc->gpuSceneStatus().slotCount;
+            slots = sc->published().gpuScene.slotCount;
             table.assign(slots, GpuSceneEntry());
             inTable = 0;
             for (unsigned i = 0; i < slots; ++i)
@@ -467,7 +467,7 @@ int main(int argc, char **argv)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
     enginetest::frames(e, 3);
 
-    const unsigned slots = scene->gpuSceneStatus().slotCount;
+    const unsigned slots = scene->published().gpuScene.slotCount;
     CHECK(slots == unsigned(kInstances + kRotated), "every instance is in the table");
     std::vector<GpuSceneEntry> table;
     for (unsigned i = 0; i < slots; ++i) {

@@ -228,7 +228,7 @@ int main()
                             lum(a4[i].reference), lum(a4[i].lookup) / std::max(lum(a4[i].reference), 1e-9));
             }
             float sh[27] = { 0 };
-            scene->skyAmbientSh(sh);
+            scene->published().copySkyAmbientSh(sh);
             // +Y: 1, y = 1, z = 0, x = 0 -> c0 + c1 + c6 (3z^2 - 1 = -1) x -1 + c8 (x^2 - y^2 = -1) x -1
             float shUp[3];
             for (int c = 0; c < 3; ++c) shUp[c] = sh[c] + sh[3 + c] - sh[18 + c] - sh[24 + c];
@@ -267,7 +267,7 @@ int main()
         scene->setSky(sky);
         enginetest::frames(e, 10);
         float sh[27] = { 0 };
-        scene->skyAmbientSh(sh);
+        scene->published().copySkyAmbientSh(sh);
         scene->setAmbientSh(sh);
         scene->setEnvironmentLight(Colour(1, 1, 1, 1));
         const MeshId cube = scene->createMesh(enginetest::unitCubeMesh());
@@ -330,7 +330,7 @@ int main()
             field.ddgi = GiToggle::On;
             scene->setGlobalIllumination(field);
             enginetest::frames(e, 20);
-            for (int f = 0; f < 4000 && !scene->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+            for (int f = 0; f < 4000 && !scene->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
             const double withField = centre();
             std::printf("   SPECULAR ENVIRONMENT at roughness %.2f, THE FIELD ON: inside %.4f (%.3fx of outside)\n",
                         rough, withField, withField / outside);
@@ -394,7 +394,7 @@ int main()
             sky.equirect = open->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
+            for (int f = 0; f < 20 && !open->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             open->setAmbientSh(sh);
             open->setEnvironmentLight(Colour(1, 1, 1, 1));
             const NodeId nd = open->createNode();
@@ -445,13 +445,13 @@ int main()
         cones.cascadeCount = 1;
         cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, 64, 0.0f };
         room->setGlobalIllumination(cones);
-        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+        for (int f = 0; f < 4000 && !room->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         const double viaCones = readHdr(rv);
         GiParams field = cones;
         field.ddgi = GiToggle::On;
         room->setGlobalIllumination(field);
         enginetest::frames(e, 20);
-        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+        for (int f = 0; f < 4000 && !room->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         const double viaField = readHdr(rv);
         std::printf("   ROUGH METAL (0.80) IN A SEALED FURNACE of radiance L = %.4f: the plate under a uniform sky "
                     "of L %.4f; in the furnace GI off %.4f, the cones %.4f (%.3fx), the field %.4f (%.3fx)\n", L,

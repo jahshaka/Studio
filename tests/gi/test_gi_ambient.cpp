@@ -111,7 +111,7 @@ int main()
         render(engine.get(), 6);
         Image img; view->readPixels(img);
         vct = img.at(64, 96);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::printf("-- VCT on:  floor r=%.3f g=%.3f b=%.3f   (lit volume y %.2f..%.2f)\n",
                     vct.r, vct.g, vct.b, st.boundsMin.y, st.boundsMax.y);
 

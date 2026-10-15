@@ -51,7 +51,7 @@ int main(int argc, char **argv)
     gi.numBounces = 1;
     s->setGlobalIllumination(gi);
     enginetest::frames(e, 16);
-    for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+    for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
     GiVoxelVolume v;
     if (!s->giVoxelVolume(0, v) || !v.available) { std::printf("no store\n"); return 1; }
     long lit = 0, dark = 0;

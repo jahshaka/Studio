@@ -145,11 +145,11 @@ int main(int argc, char **argv)
         int builtAt = -1;
         for (int f = 0; f < 40; ++f) {
             float sh[27];
-            if (bs->skyAmbientSh(sh)) bs->setAmbientSh(sh);     // the mirror's push
+            if (bs->published().copySkyAmbientSh(sh)) bs->setAmbientSh(sh);     // the mirror's push
             enginetest::frames(e, 1);
-            if (builtAt < 0 && !bs->giStatus().cascades.empty()) builtAt = f;
+            if (builtAt < 0 && !bs->published().gi.cascades.empty()) builtAt = f;
         }
-        const GiStatus bst = bs->giStatus();
+        const GiStatus bst = bs->published().gi;
         std::printf("   boot: the chain built on frame %d; settles after 40 frames: %lld\n",
                     builtAt, bst.chainSettles);
         CHECK(builtAt >= 0 && bst.cascades.size() >= 2, "boot: the chain is built");
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
     gi.updateBudget = 0;
     CHECK(scene->setGlobalIllumination(gi), "the cascade chain builds");
     render(e, 6);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     std::printf("   chain: %zu cascades, vctBound %d\n", st.cascades.size(), int(st.vctBound));
     CHECK(st.cascades.size() >= 2, "it is a chain (2+ cascades)");
     CHECK(st.vctBound, "...and the shader is sampling it");
@@ -225,7 +225,7 @@ int main(int argc, char **argv)
     // THE CHAIN'S BYTES, per cascade (the one-sweep proof's instrument).
     const auto digests = [&]() {
         std::vector<std::string> d;
-        const size_t n = scene->giStatus().cascades.size();
+        const size_t n = scene->published().gi.cascades.size();
         for (size_t i = 0; i < n; ++i) d.push_back(scene->giVoxelStats(int(i)).lightDigest);
         return d;
     };
@@ -308,7 +308,7 @@ int main(int argc, char **argv)
         high.quality = GiQuality::High;
         CHECK(scene->setGlobalIllumination(high), "the High chain builds");
         render(e, 6);
-        CHECK(scene->giStatus().cascades.size() >= 2, "...and it is a chain");
+        CHECK(scene->published().gi.cascades.size() >= 2, "...and it is a chain");
         proof("High");
         CHECK(scene->setGlobalIllumination(gi), "back to the Medium chain");
         render(e, 6);
@@ -323,19 +323,19 @@ int main(int argc, char **argv)
     withField.ddgi = GiToggle::On;
     CHECK(scene->setGlobalIllumination(withField), "the chain builds again with the field on");
     render(e, 6);
-    st = scene->giStatus();
+    st = scene->published().gi;
     std::printf("   field: bound %d, probes %d, whole %d\n",
                 int(st.ifdBound), st.ifdProbes, int(fieldWhole(st)));
     CHECK(st.ifdBound && st.ifdProbes > 0, "the irradiance field is bound");
     CHECK(fieldWhole(st), "...and whole on the frame it bound");
     Image fieldA, fieldB;
     jumped(-3.0f, fieldA);
-    CHECK(fieldWhole(scene->giStatus()), "the field is whole after an at-rest injection");
+    CHECK(fieldWhole(scene->published().gi), "the field is whole after an at-rest injection");
     jumped(3.0f, fieldB);
     const float moved = worstDiff(fieldA, fieldB);
     std::printf("   the lamp moved 6 m: the picture moved %.2f/255\n", moved);
     CHECK(moved > 4.0f, "A LIGHT THAT MOVED REACHES THE FIELD (it re-integrated)");
-    CHECK(fieldWhole(scene->giStatus()), "...and the field is whole again");
+    CHECK(fieldWhole(scene->published().gi), "...and the field is whole again");
 
     // ---- 6. A CAMERA WALK THAT COMES BACK LEAVES THE CHAIN WHERE IT WAS ---
     // (LAMPREST-3.) A cascade rebuild ends with ONE injection of THAT cascade
@@ -359,7 +359,7 @@ int main(int argc, char **argv)
     scene->refreshGiLighting(false);
     Image beforeWalk;
     shot(beforeWalk);
-    const long long settlesBefore = scene->giStatus().chainSettles;
+    const long long settlesBefore = scene->published().gi.chainSettles;
 
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 60.0f), Vec3(0.0f, 0.8f, 50.0f));
     render(e, 40);
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
     render(e, 40);
     Image afterWalk;
     shot(afterWalk);
-    const GiStatus walked = scene->giStatus();
+    const GiStatus walked = scene->published().gi;
     const float walkDelta = worstDiff(beforeWalk, afterWalk);
     std::printf("   walked away and back: %.2f/255, cascade 0 rebuilds %llu, settles %lld -> %lld\n",
                 walkDelta, (unsigned long long)walked.cascades[0].rebuilds,
@@ -384,7 +384,7 @@ int main(int argc, char **argv)
     // tick per camera step, and a still scene must pay nothing at all.
     const long long settledAt = walked.chainSettles;
     render(e, 30);
-    CHECK(scene->giStatus().chainSettles == settledAt,
+    CHECK(scene->published().gi.chainSettles == settledAt,
           "...and a still camera pays no further settle (the flag is spent, not standing)");
 
     // AND THE DEFECT ITSELF, so this case proves what it guards rather than
@@ -401,7 +401,7 @@ int main(int argc, char **argv)
     Image afterBare;
     shot(afterBare);
     const float bareDelta = worstDiff(beforeBare, afterBare);
-    const long long bareSettles = scene->giStatus().chainSettles;
+    const long long bareSettles = scene->published().gi.chainSettles;
     e->setArm("gi.rebuildSettle", 1.0);
     std::printf("   with the settle stood down: %.2f/255 (settles %lld -> %lld)\n",
                 bareDelta, settledAt, bareSettles);
@@ -426,7 +426,7 @@ int main(int argc, char **argv)
     Image jitBefore, jitAfter;
     scene->refreshGiLighting(false);
     shot(jitBefore);
-    const long long jitSettles = scene->giStatus().chainSettles;
+    const long long jitSettles = scene->published().gi.chainSettles;
     const auto jitterAt = [&](float z, int frames) {
         for (int f = 0; f < frames; ++f) {
             enginetest::testCameraLookAt(view, Vec3(f % 2 ? 0.001f : 0.0f, 1.6f, z),
@@ -439,7 +439,7 @@ int main(int argc, char **argv)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
     render(e, 6);
     shot(jitAfter);
-    const GiStatus jit = scene->giStatus();
+    const GiStatus jit = scene->published().gi;
     std::printf("   a camera jittering 1 mm a frame: %.2f/255 (settles %lld -> %lld)\n",
                 worstDiff(jitBefore, jitAfter), jitSettles, jit.chainSettles);
     CHECK(jit.chainSettles > jitSettles,
@@ -460,13 +460,13 @@ int main(int argc, char **argv)
     scene->refreshGiLighting(false);
     Image fieldBefore, fieldAfter;
     shot(fieldBefore);
-    const long long fieldSettles = scene->giStatus().chainSettles;
+    const long long fieldSettles = scene->published().gi.chainSettles;
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 60.0f), Vec3(0.0f, 0.8f, 50.0f));
     render(e, 40);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
     render(e, 60);
     shot(fieldAfter);
-    const GiStatus fieldSt = scene->giStatus();
+    const GiStatus fieldSt = scene->published().gi;
     std::printf("   with the field on: %.2f/255, whole %d (settles %lld -> %lld)\n",
                 worstDiff(fieldBefore, fieldAfter), int(fieldWhole(fieldSt)),
                 fieldSettles, fieldSt.chainSettles);

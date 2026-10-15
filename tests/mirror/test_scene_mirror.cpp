@@ -1169,7 +1169,7 @@ int main(int argc, char **argv)
             doc->skyType = iris::SkyType::EQUIRECTANGULAR;
             mirror.sync(mirrorframe::sky(view));
             enginetest::frames(engine, 3);
-            return target->skyAmbientSh(sh);
+            return target->published().copySkyAmbientSh(sh);
         };
         float sh[27] = { 0.0f };
         CHECK(skyShOf(redSkyPath, sh), "the engine integrates the sky it drew");
@@ -1374,7 +1374,7 @@ int main(int argc, char **argv)
         float settledSh[27] = { 0.0f };
         std::printf("    sky desc: mode=%d equirect=%u  sky SH band0 %.3f %.3f %.3f  ws gen %u\n",
                     int(settled.mode), settled.equirect,
-                    target->skyAmbientSh(settledSh) ? settledSh[0] : -1.0f, settledSh[1],
+                    target->published().copySkyAmbientSh(settledSh) ? settledSh[0] : -1.0f, settledSh[1],
                     settledSh[2], ws0);
         CHECK(settled.mode == SkyMode::Equirectangular && settled.equirect != 0,
               "a gradient sky bakes to an equirect image the engine holds");
@@ -1384,7 +1384,7 @@ int main(int argc, char **argv)
         // below (and the metal cube above), plus the integral being non-zero.
         CHECK(!settled.reflections && settled.reflectionFaces[0] == 0,
               "...and the host pushes no reflection faces: the engine captures its own sky");
-        CHECK(target->skyAmbientSh(settledSh) && settledSh[0] > 0.0f,
+        CHECK(target->published().copySkyAmbientSh(settledSh) && settledSh[0] > 0.0f,
               "...which it also integrates for the ambient");
         for (int i = 0; i < 5; ++i) {
             mirror.sync(mirrorframe::sky(view));
@@ -1544,7 +1544,7 @@ int main(int argc, char **argv)
     // every decal in the session then projected nothing, silently. Open more
     // worlds than the atlas has slices and assert the last one still projects.
     {
-        const unsigned capacity = target->decalAtlasCapacity(DecalMap::Diffuse);
+        const unsigned capacity = target->published().decalAtlasCapacity;
         std::printf("    decal atlas capacity: %u\n", capacity);
         const QString decalImg = QDir::current().filePath("mirror_atlas_decal.png");
         { QImage px(4, 4, QImage::Format_RGBA8888); px.fill(QColor(255, 30, 30)); px.save(decalImg); }
@@ -1663,13 +1663,13 @@ int main(int argc, char **argv)
         gcam->update(0.0f);
         mirror.sync(mirrorframe::camera(view, gcam));
 
-        const quint64 push0 = mirror.target()->giStatus().schedulerPushes, refresh0 = mirror.target()->giStatus().schedulerResolves;
+        const quint64 push0 = mirror.target()->published().gi.schedulerPushes, refresh0 = mirror.target()->published().gi.schedulerResolves;
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
         enginetest::frames(engine, 1);
-        const quint64 pushAfterFirst = mirror.target()->giStatus().schedulerPushes;
+        const quint64 pushAfterFirst = mirror.target()->published().gi.schedulerPushes;
         CHECK(pushAfterFirst == push0 + 1, "GI idle: the first environment record pushes VCT exactly once");
-        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0, "GI idle: the first push is not also a refresh");
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0, "GI idle: the first push is not also a refresh");
 
         // The world transforms the signature is built from, captured once.
         const iris::Mat4 sun0 = gsun->getGlobalTransform(), panel0 = gpanel->getGlobalTransform();
@@ -1686,9 +1686,9 @@ int main(int argc, char **argv)
         // that field can never hand the signature two different answers.
         CHECK(gsun->getGlobalTransform() == sun0 && gpanel->getGlobalTransform() == panel0,
               "GI idle: getGlobalTransform() recomputes to the same bits the cache holds");
-        CHECK(mirror.target()->giStatus().schedulerPushes == pushAfterFirst,
+        CHECK(mirror.target()->published().gi.schedulerPushes == pushAfterFirst,
               "GI idle: 60 idle frames pushed no new GI configuration");
-        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0,
               "GI idle: 60 idle frames asked for ZERO GI re-solves");
 
         // A light that really moves must still re-solve — exactly once, but NOT
@@ -1702,14 +1702,14 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
         enginetest::frames(engine, 1);
-        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0,
               "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             enginetest::frames(engine, 1);
         }
-        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 + 1,
               "GI: once the light holds still, moving it re-solved exactly once");
 
         // Moving GEOMETRY is deliberately NOT a re-solve (GI_SPEC: the mirror
@@ -1721,7 +1721,7 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::environment(view));
             enginetest::frames(engine, 1);
         }
-        CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 + 1, "GI: moving a MESH does not re-solve");
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 + 1, "GI: moving a MESH does not re-solve");
 
         // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
         //
@@ -1765,23 +1765,23 @@ int main(int argc, char **argv)
             // Read until the counter stops moving: two still windows in a row.
             const auto drain = [&]() {
                 for (int round = 0; round < 8; ++round) {
-                    const quint64 before = mirror.target()->giStatus().schedulerResolves;
+                    const quint64 before = mirror.target()->published().gi.schedulerResolves;
                     settle(40);
-                    if (mirror.target()->giStatus().schedulerResolves == before) return;
+                    if (mirror.target()->published().gi.schedulerResolves == before) return;
                 }
             };
 
             // ARM A: unflagged. One hover in, one hover out.
             drain();
-            const quint64 beforeA = mirror.target()->giStatus().schedulerResolves;
+            const quint64 beforeA = mirror.target()->published().gi.schedulerResolves;
             const quint64 swaps0 = mirror.materialSwapCount();
             const quint64 attaches0 = mirror.meshAttachCount();
             previewTarget->setMaterial(borrowed);
             settle(20);
-            const quint64 afterHoverA = mirror.target()->giStatus().schedulerResolves;
+            const quint64 afterHoverA = mirror.target()->published().gi.schedulerResolves;
             previewTarget->setMaterial(originalMat);
             settle(20);
-            const quint64 afterRestoreA = mirror.target()->giStatus().schedulerResolves;
+            const quint64 afterRestoreA = mirror.target()->published().gi.schedulerResolves;
             std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu; material swaps +%llu, "
                         "mesh re-attaches +%llu\n",
                         (unsigned long long)(afterHoverA - beforeA),
@@ -1810,16 +1810,16 @@ int main(int argc, char **argv)
             borrowed2->setRoughnessFactor(0.83f);
 
             drain();
-            const quint64 beforeB = mirror.target()->giStatus().schedulerResolves;
+            const quint64 beforeB = mirror.target()->published().gi.schedulerResolves;
             ++gdoc->materialPreviewDepth;
             previewTarget->setMaterial(borrowed2);
             settle(20);
-            CHECK(mirror.target()->giStatus().schedulerResolves == beforeB,
+            CHECK(mirror.target()->published().gi.schedulerResolves == beforeB,
                   "GI preview: a FLAGGED hover held past the stability window asks for NO re-solve");
             previewTarget->setMaterial(originalMat);
             --gdoc->materialPreviewDepth;
             settle(20);
-            CHECK(mirror.target()->giStatus().schedulerResolves == beforeB,
+            CHECK(mirror.target()->published().gi.schedulerResolves == beforeB,
                   "GI preview: ending the preview asks for no re-solve either (the signature never moved)");
 
             // ...and the gate is a GATE, not a mute: an edit to a material the
@@ -1828,11 +1828,11 @@ int main(int argc, char **argv)
             // and `material.set` do — the path the engine's generation counter
             // is actually keyed on.)
             drain();
-            const quint64 beforeC = mirror.target()->giStatus().schedulerResolves;
+            const quint64 beforeC = mirror.target()->published().gi.schedulerResolves;
             if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
                 pbr->setBaseColor(QColor(200, 30, 30));
             settle(20);
-            CHECK(mirror.target()->giStatus().schedulerResolves == beforeC + 1,
+            CHECK(mirror.target()->published().gi.schedulerResolves == beforeC + 1,
                   "GI preview: a COMMITTED material edit after the preview still re-solves, once");
         }
 
@@ -2039,27 +2039,27 @@ int main(int argc, char **argv)
         };
         tick();
         tick();
-        const unsigned long long s0 = target->lightWriteSerial();
+        const unsigned long long s0 = target->published().lightWriteSerial;
         tick();
         tick();
-        CHECK(target->lightWriteSerial() == s0,
+        CHECK(target->published().lightWriteSerial == s0,
               "light writes: a still scene reports none (two idle frames)");
 
         torch->setLocalPos(iris::Vec3(1.0f, 2.0f, 0.0f));
         tick();
-        const unsigned long long s1 = target->lightWriteSerial();
+        const unsigned long long s1 = target->published().lightWriteSerial;
         CHECK(s1 > s0, "light writes: a lamp that moves ITSELF is a light write");
         tick();
-        CHECK(target->lightWriteSerial() == s1,
+        CHECK(target->published().lightWriteSerial == s1,
               "light writes: ...once for the move, not once per frame after it");
 
         // THE CASE THAT WAS INVISIBLE: the lamp's own transform never changes.
         carrier->setLocalPos(iris::Vec3(0.0f, 0.0f, 3.0f));
         tick();
-        const unsigned long long s2 = target->lightWriteSerial();
+        const unsigned long long s2 = target->published().lightWriteSerial;
         CHECK(s2 > s1, "light writes: a lamp CARRIED by its parent is a light write too");
         tick();
-        CHECK(target->lightWriteSerial() == s2,
+        CHECK(target->published().lightWriteSerial == s2,
               "light writes: ...and that one settles back to still as well");
         std::printf("    light-write serial: still %llu, own move %llu, carried %llu\n",
                     (unsigned long long)s0, (unsigned long long)s1, (unsigned long long)s2);
@@ -2180,8 +2180,8 @@ int main(int argc, char **argv)
               "mobility: removing the driver puts the branch back (authoring, not automatic)");
 
         // ---- THE SURPRISE MOVER (O3): play only, warned once, no rebuild ---
-        const quint64 refreshesBefore = mmirror.target()->giStatus().schedulerResolves;
-        const quint64 pushesBefore = mmirror.target()->giStatus().schedulerPushes;
+        const quint64 refreshesBefore = mmirror.target()->published().gi.schedulerResolves;
+        const quint64 pushesBefore = mmirror.target()->published().gi.schedulerPushes;
         mdoc->setPlaying(true);
         mmirror.sync();                       // the frame that sees it standing still
         CHECK(mmirror.mobilityMissCount() == 0, "mobility: standing still during play is not a miss");
@@ -2198,7 +2198,7 @@ int main(int argc, char **argv)
         mmirror.sync();
         CHECK(mmirror.mobilityMissCount() == 1,
               "mobility: ...and NOT once per frame it keeps moving (one warning per play session)");
-        CHECK(mmirror.target()->giStatus().schedulerResolves == refreshesBefore && mmirror.target()->giStatus().schedulerPushes == pushesBefore,
+        CHECK(mmirror.target()->published().gi.schedulerResolves == refreshesBefore && mmirror.target()->published().gi.schedulerPushes == pushesBefore,
               "mobility: the soft promotion costs NO GI refresh (that is the whole point of O3)");
 
         // Play stop clears it: the document drops the soft flag, the mirror

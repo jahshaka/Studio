@@ -650,7 +650,7 @@ static int costMain(Engine *e)
                 for (const CacheWork &w : r.cacheWork)
                     if (w.detail == "sun.contact" && w.gpuMs >= 0.0f) { jobSum[a] += w.gpuMs; ++jobN[a]; }
             }
-            const SunContactStatus st = s->sunContactStatus();
+            const SunContactStatus st = s->published().sunContact;
             if (arms[a].contact && st.gpuMs >= 0.0f && jobN[a] == 0) { jobSum[a] += st.gpuMs; ++jobN[a]; }
         }
     }
@@ -915,14 +915,14 @@ static BoardResult boardArm(Engine *e, bool raysWanted, const char *dumpDir)
 
     // ---- THE DEFAULT IS OFF ------------------------------------------------
     CHECK(!jahshaka::engine::inspect::scene(s)->sunContact().enabled, "the row is off by default");
-    CHECK(!s->sunContactStatus().on, "...and so is the job");
+    CHECK(!s->published().sunContact.on, "...and so is the job");
 
     Image off, onFull, onHalf, onShort, offAgain;
     CHECK(shot(false, SunContactResolution::Full, kSunContactDefaultRange, off), "read back: row off");
     CHECK(shot(true, SunContactResolution::Full, kSunContactDefaultRange, onFull), "read back: row on, full");
-    const SunContactStatus stFull = s->sunContactStatus();
+    const SunContactStatus stFull = s->published().sunContact;
     CHECK(shot(true, SunContactResolution::Half, kSunContactDefaultRange, onHalf), "read back: row on, half");
-    const SunContactStatus stHalf = s->sunContactStatus();
+    const SunContactStatus stHalf = s->published().sunContact;
     CHECK(shot(true, SunContactResolution::Full, kSunContactMinRange, onShort), "read back: row on, shortest range");
     CHECK(shot(false, SunContactResolution::Full, kSunContactDefaultRange, offAgain), "read back: row off again");
 

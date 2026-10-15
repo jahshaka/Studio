@@ -97,7 +97,7 @@ int main()
     e->takeMonitorRecords(recs);
     CHECK(!recs.empty(), "the monitor recorded frames");
 
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("   rays: reflections %d, hit decode draws %d\n", rq.enabled ? 1 : 0, rq.hitDecodeDraws);
     unsigned good = 0, framesSeen = 0;
     std::string listing;

@@ -188,7 +188,7 @@ int main()
             s->setSky(sky);
             float sh[27] = { 0.0f };
             bool ready = false;
-            for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = s->skyAmbientSh(sh); }
+            for (int f = 0; f < 20 && !ready; ++f) { enginetest::frames(e, 1); ready = s->published().copySkyAmbientSh(sh); }
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
         }

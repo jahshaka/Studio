@@ -196,7 +196,7 @@ int main()
     CHECK(s->setGlobalIllumination(gi), "the hybrid arms");
     render(engine.get(), kSweepFrames);
 
-    const GiStatus st0 = s->giStatus();
+    const GiStatus st0 = s->published().gi;
     std::printf("   probes=%d pccBound=%s vctBound=%s\n", st0.probeCount,
                 st0.pccBound ? "true" : "false", st0.vctBound ? "true" : "false");
     CHECK(st0.probeCount == 32, "32 probes were placed");
@@ -245,7 +245,7 @@ int main()
     // the pixels whose probe was dropped fall through to cone tracing, which in
     // a sealed room is black. A budget at least the PROBE COUNT makes the drop
     // impossible, because a cell cannot intersect more probes than exist.
-    const GiStatus st1 = s->giStatus();
+    const GiStatus st1 = s->published().gi;
     std::printf("   Forward+ cubemap probe slots per cell: %d (probes %d)\n",
                 st1.cubemapProbeSlotsPerCell, st1.probeCount);
     CHECK(st1.cubemapProbeSlotsPerCell >= st1.probeCount,
@@ -307,7 +307,7 @@ int main()
         high.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
         render(engine.get(), 4);
-        const GiStatus rt = s->giStatus();
+        const GiStatus rt = s->published().gi;
         CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
               "ray tier: High with rays builds no probe grid");
     }

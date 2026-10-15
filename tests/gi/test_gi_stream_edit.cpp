@@ -143,7 +143,7 @@ int main()
     scene->setGlobalIllumination(hybridGi());
     frames(e, FramePace::Streaming, 6);
     {
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         CHECK_MSG(st.rebuilds == 0, "case 1: no arm built behind the cover (rebuilds %llu)",
                   (unsigned long long)st.rebuilds);
         CHECK(!st.vctBound, "case 1: nothing is bound either");
@@ -151,9 +151,9 @@ int main()
     // ...and a COMPLETE frame during the load does not build it either: that is
     // the sticky flag's whole point (a warm-up target, a project tile).
     frames(e, FramePace::Complete, 2);
-    CHECK_MSG(scene->giStatus().rebuilds == 0,
+    CHECK_MSG(scene->published().gi.rebuilds == 0,
               "case 1: a Complete frame during the load builds nothing either (rebuilds %llu)",
-              (unsigned long long)scene->giStatus().rebuilds);
+              (unsigned long long)scene->published().gi.rebuilds);
     scene->setLoading(false);
 
     // =====================================================================
@@ -161,7 +161,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 2: the window exists ==\n");
     frame(e, FramePace::Streaming);
-    GiStatus mid = scene->giStatus();
+    GiStatus mid = scene->published().gi;
     CHECK_MSG(mid.rebuilds == 1, "case 2: the chain is built (rebuilds %llu)",
               (unsigned long long)mid.rebuilds);
     CHECK(mid.vctBound, "case 2: ...and bound");
@@ -193,7 +193,7 @@ int main()
     CHECK(!e->framePaceOwesWork(),
           "case 3: ONE Complete frame owes nothing afterwards");
 
-    const GiStatus st = scene->giStatus();
+    const GiStatus st = scene->published().gi;
     CHECK_MSG(st.probeCount + st.probesDropped > 0,
               "case 3: the probe grid reached a DECISION (%d kept, %d dropped) — the defect "
               "left both at zero for the life of the scene",

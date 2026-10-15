@@ -153,11 +153,11 @@ int main()
     };
     for (const Step &st : steps) {
         const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
-        const GpuSceneStatus gb = scene->gpuSceneStatus();
+        const GpuSceneStatus gb = scene->published().gpuScene;
         st.run();
         enginetest::frames(e, 4);
         const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
-        const GpuSceneStatus ga = scene->gpuSceneStatus();
+        const GpuSceneStatus ga = scene->published().gpuScene;
         CHECK(after.walkMissed == before.walkMissed,
               "%s: the table holds every slot (%llu misses over %llu checks; last miss slot %u)", st.name,
               after.walkMissed - before.walkMissed, after.walkChecked - before.walkChecked,

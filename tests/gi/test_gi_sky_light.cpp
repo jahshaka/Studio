@@ -249,7 +249,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         for (int f = 0; f < 4; ++f) frame();
         float sh[27] = { 0.0f };
-        CHECK(escene->skyAmbientSh(sh), "5a. the engine integrated the sky it drew");
+        CHECK(escene->published().copySkyAmbientSh(sh), "5a. the engine integrated the sky it drew");
         const iris::LinearColor want = iris::linearOf(QColor(150, 90, 45));
         std::printf("   band0 r=%.4f g=%.4f b=%.4f   linearOf r=%.4f g=%.4f b=%.4f\n",
                     sh[0], sh[1], sh[2], want.r, want.g, want.b);
@@ -504,7 +504,7 @@ int main(int argc, char **argv)
             int still = 0;
             for (int f = 0; f < 240 && still < 3; ++f) {
                 frame();
-                const bool have = escene->skyAmbientSh(cur);
+                const bool have = escene->published().copySkyAmbientSh(cur);
                 still = (have && std::memcmp(cur, prev, sizeof cur) == 0) ? still + 1 : 0;
                 std::memcpy(prev, cur, sizeof cur);
             }
@@ -791,8 +791,8 @@ int main(int argc, char **argv)
     // already applied. It is never an Ogre::Light at all.
     {
         for (int f = 0; f < 20; ++f) frame();      // let anything already owed settle
-        const quint64 refreshes = mirror.target()->giStatus().schedulerResolves;
-        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        const quint64 refreshes = mirror.target()->published().gi.schedulerResolves;
+        const unsigned long long rebuilds = escene->published().gi.rebuilds;
         const Colour before = shade(108);
         skyLight->intensity = 0.3f;
         // WELL PAST THE SETTLE WINDOW (15 stable frames / 250 ms): before the
@@ -801,16 +801,16 @@ int main(int argc, char **argv)
         const Colour dim = shade(108);
         std::printf("   sky light 1.0 -> 0.3: %.3f -> %.3f, re-solves %llu, rebuilds %llu\n",
                     lum(before), lum(dim),
-                    (unsigned long long)(mirror.target()->giStatus().schedulerResolves - refreshes),
-                    escene->giStatus().rebuilds - rebuilds);
+                    (unsigned long long)(mirror.target()->published().gi.schedulerResolves - refreshes),
+                    escene->published().gi.rebuilds - rebuilds);
         CHECK(lum(dim) < lum(before) * 0.6f, "11a. the intensity edit reaches the picture");
-        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refreshes,
               "11b. ...and costs NO full GI re-solve (it is not a voxel light)");
-        CHECK(escene->giStatus().rebuilds == rebuilds,
+        CHECK(escene->published().gi.rebuilds == rebuilds,
               "11c. ...and no from-scratch rebuild of the arm");
         skyLight->intensity = 1.0f;
         for (int f = 0; f < 25; ++f) frame();
-        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes && escene->giStatus().rebuilds == rebuilds,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refreshes && escene->published().gi.rebuilds == rebuilds,
               "11d. and neither does putting it back");
     }
 

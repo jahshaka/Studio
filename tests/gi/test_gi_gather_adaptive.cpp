@@ -79,7 +79,7 @@ int main()
     t.adaptiveCap = 1000;    // lifted: one per cell is the most a grid can ask
     s->setGatherTuning(t);
     enginetest::frames(e, 30);
-    GatherStatus st = s->giStatus().gather;
+    GatherStatus st = s->published().gi.gather;
     const std::vector<unsigned char> asked = st.adaptiveCells;
     const unsigned cells = st.probesX * st.probesY;
     unsigned demand = 0;
@@ -99,7 +99,7 @@ int main()
     unsigned lastFrame = ~0u, frames = 0, fullBudget = 0, firstAll = 0;
     for (int i = 0; i < kWithin + 8 && frames < unsigned(kWithin); ++i) {
         enginetest::frames(e, 1);
-        st = s->giStatus().gather;
+        st = s->published().gi.gather;
         if (st.adaptiveCells.size() != cells || st.irradianceFrame == lastFrame) continue;
         lastFrame = st.irradianceFrame;
         ++frames;

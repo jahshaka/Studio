@@ -202,7 +202,7 @@ void dumpIrradiance(const GatherStatus &g, const char *tag) {
 bool readIrradiance(Engine *e, Scene *s, GatherStatus &out) {
     for (int i = 0; i < 40; ++i) {
         pump(e, 1ull, 8u);
-        out = s->giStatus().gather;
+        out = s->published().gi.gather;
         if (out.running && !out.irradiance.empty() && out.irradianceW == 2u * kEyeW &&
             out.irradianceH == kEyeH)
             return true;
@@ -227,7 +227,7 @@ bool session(Engine *e, Scene *s, float worldScale, GatherStatus &out) {
     pump(e, 150ull, 1500u);
     const bool ok = readIrradiance(e, s, out);
     {
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         std::printf("    (hit list: %llu records the last traced frame, %llu dropped)\n",
                     rq.hitRecords, rq.hitDropped);
     }

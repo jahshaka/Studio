@@ -108,7 +108,7 @@ int main(int argc, char **argv)
     };
     for (int i = 0; i < 40; ++i) frame();   // the open: the arm builds, the static settle runs, everything quiets
 
-    const auto gi = [&] { return target->giStatus(); };
+    const auto gi = [&] { return target->published().gi; };
     const auto walks = [&] { return engine->shadowStatus().casterWalkItems; };
     const auto changes = [&] { return engine->frameInputStatus(); };
 
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 20; ++i) {
             frame();
             moved += changes().changesMoved;
-            composed += target->gpuSceneStatus().lastDirty;
+            composed += target->published().gpuScene.lastDirty;
             scanUs += gi().giScanMicros;
         }
         CHECK(moved == 0, "20 still frames drain 20 EMPTY change sets (%u entries)", moved);
@@ -159,26 +159,26 @@ int main(int argc, char **argv)
 
     // 4. the lamp moved (and, first, written with its OWN pose: named, but no move the debounce answers)
     {
-        const quint64 r0 = mirror.target()->giStatus().schedulerResolves;
+        const quint64 r0 = mirror.target()->published().gi.schedulerResolves;
         lamp->setLocalPos(lamp->getLocalPos());
         frame();
         CHECK(changes().changesMoved == 1, "the lamp written with its own pose: still ONE entry, named (%u)",
               changes().changesMoved);
         for (int i = 0; i < 30; ++i) frame();
-        CHECK(mirror.target()->giStatus().schedulerResolves == r0, "...but no re-solve settles out of a pose that did not change (%llu)",
-              (unsigned long long)(mirror.target()->giStatus().schedulerResolves - r0));
-        const unsigned long long s0 = target->lightWriteSerial();
+        CHECK(mirror.target()->published().gi.schedulerResolves == r0, "...but no re-solve settles out of a pose that did not change (%llu)",
+              (unsigned long long)(mirror.target()->published().gi.schedulerResolves - r0));
+        const unsigned long long s0 = target->published().lightWriteSerial;
         lamp->setLocalPos(lamp->getLocalPos() + iris::Vec3(0.5f, 0.0f, 0.0f));
         frame();
         const FrameInputStatus c = changes();
         CHECK(c.changesMoved == 1 && c.changesLights == 1, "the lamp moved: ONE entry, ONE light in it (%u, %u)",
               c.changesMoved, c.changesLights);
-        CHECK(target->lightWriteSerial() - s0 == 1, "...the light serial up by exactly one, the re-inject's key (%llu)",
-              target->lightWriteSerial() - s0);
-        const quint64 r1 = mirror.target()->giStatus().schedulerResolves;
+        CHECK(target->published().lightWriteSerial - s0 == 1, "...the light serial up by exactly one, the re-inject's key (%llu)",
+              target->published().lightWriteSerial - s0);
+        const quint64 r1 = mirror.target()->published().gi.schedulerResolves;
         for (int i = 0; i < 20; ++i) frame();
-        CHECK(mirror.target()->giStatus().schedulerResolves == r1 + 1, "...and a still lamp that MOVED settles into exactly one re-solve (%llu)",
-              (unsigned long long)(mirror.target()->giStatus().schedulerResolves - r1));
+        CHECK(mirror.target()->published().gi.schedulerResolves == r1 + 1, "...and a still lamp that MOVED settles into exactly one re-solve (%llu)",
+              (unsigned long long)(mirror.target()->published().gi.schedulerResolves - r1));
     }
 
     // 5. the soft promotion, decided by the set

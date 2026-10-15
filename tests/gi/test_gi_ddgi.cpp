@@ -93,8 +93,8 @@ static bool fieldWhole(const GiStatus &s)
 static int settleGi(Engine *e, Scene *s, int cap = 4000)
 {
     int n = 0;
-    for (; n < cap && !s->giStatus().giAtRest; ++n) enginetest::frames(e, 1);
-    return s->giStatus().giAtRest ? n : -1;
+    for (; n < cap && !s->published().gi.giAtRest; ++n) enginetest::frames(e, 1);
+    return s->published().gi.giAtRest ? n : -1;
 }
 
 static unsigned long long frameHash(const Image &img)
@@ -307,7 +307,7 @@ static int runCellSweep()
         render(e, 8);
         const double field = patch(kFarX, kFarY), fieldNear = patch(kFloorX, kFloorY);
         const double cell = 18.0 / double(res);
-        std::printf("   res %3d: the field's probes %d\n", res, r.scene->giStatus().ifdProbes);
+        std::printf("   res %3d: the field's probes %d\n", res, r.scene->published().gi.ifdProbes);
         std::printf("   res %3d (cell %.3f m): far floor field %.5f cones %.5f -> field / cones %.4f (indirect "
                     "only: %.5f / %.5f = %.4f); near floor indirect %.5f / %.5f = %.4f\n",
                     res, cell, field, cones, cones > 0 ? field / cones : 0.0, field - base, cones - base,
@@ -359,7 +359,7 @@ int main(int argc, char **argv)
     std::printf("   VCT red bounce on the floor: %.4f\n", vctBounce);
     CHECK(vctBounce > 0.03f, "the VCT reference has a real red bounce to compare against");
     {
-        GiStatus st = r.scene->giStatus();
+        GiStatus st = r.scene->published().gi;
         CHECK(st.vctBound && !st.ifdBound, "plain VCT binds no irradiance field");
         CHECK(st.ifdProbes == 0 && st.ifdProbesPerFrame == 0 && st.ifdTargetSamples == 0 &&
                   st.ifdRefinesOwed == 0,
@@ -377,7 +377,7 @@ int main(int argc, char **argv)
     show("floor  DDGI", rawFloor);
     show("far    DDGI", rawFar);
     const Colour rawWall   = img.at(kWallX, kWallY);
-    GiStatus st = r.scene->giStatus();
+    GiStatus st = r.scene->published().gi;
     std::printf("   giStatus: ifdBound=%d ifdProbes=%d ifdRefinesOwed=%u/%u ifdProbesPerFrame=%d\n",
                 int(st.ifdBound), st.ifdProbes, st.ifdRefinesOwed, st.ifdTargetSamples,
                 st.ifdProbesPerFrame);
@@ -523,7 +523,7 @@ int main(int argc, char **argv)
         gb.updateBudget = b;
         const bool ok = r.scene->setGlobalIllumination(gb);
         render(e, 2);
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         std::printf("   budget %3d -> ifdProbesPerFrame %d (refines owed %u of target %u)\n",
                     b, st.ifdProbesPerFrame, st.ifdRefinesOwed, st.ifdTargetSamples);
         CHECK(ok && st.ifdBound, ("the field survives update budget " + std::to_string(b)).c_str());
@@ -540,7 +540,7 @@ int main(int argc, char **argv)
         // batches. It must run to convergence without aborting.
         r.scene->refreshGiLighting(true);      // in motion: the drag cadence's own call
         render(e, 40);
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         CHECK(st.ifdBound, ("a re-converge at budget " + std::to_string(b) +
                             " leaves the field bound").c_str());
     }
@@ -556,7 +556,7 @@ int main(int argc, char **argv)
         render(e, 1);
         r.view->readPixels(img);
         CHECK(frameHash(img) == p1, "a PAUSED field renders frame N+1 byte-identical to frame N");
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         CHECK(fieldWhole(st) && st.giAtRest && st.ifdRefinesOwed == 0,
               "a paused field is whole and AT REST (it targets one sample and owes nothing)");
     }
@@ -569,7 +569,7 @@ int main(int argc, char **argv)
         gb.updateBudget = 1;
         CHECK(r.scene->setGlobalIllumination(gb), "setGlobalIllumination(DDGI, budget 1)");
         render(e, 2);
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         const int batch = st.ifdProbesPerFrame;
         const int probes = st.ifdProbes;
         const int expected = (probes + batch - 1) / batch;
@@ -578,14 +578,14 @@ int main(int argc, char **argv)
         lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
         enginetest::frames(e, 1);     // the chain's tick lands at the frame's writer point
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
         CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
         int frames = 0;
         while (frames < expected + 8) {
             enginetest::frames(e, 1);
             ++frames;
-            if (fieldWhole(r.scene->giStatus())) break;
+            if (fieldWhole(r.scene->published().gi)) break;
         }
         std::printf("   re-converge took %d frames at %d probes/frame (expected %d)\n",
                     frames, batch, expected);
@@ -593,15 +593,15 @@ int main(int argc, char **argv)
               "the re-converge takes EXACTLY ceil(probes / batch) frames");
         // ...and GI is AT REST again only after the K - 1 refinement passes the
         // change owes, counted in frames: each pass is ceil(probes / batch) frames.
-        const int k = int(r.scene->giStatus().ifdTargetSamples);
+        const int k = int(r.scene->published().gi.ifdTargetSamples);
         int more = 0;
-        while (more < (k + 2) * expected && !r.scene->giStatus().giAtRest) {
+        while (more < (k + 2) * expected && !r.scene->published().gi.giAtRest) {
             enginetest::frames(e, 1);
             ++more;
         }
         std::printf("   at rest %d frames after the pass (K = %d: %d refinement passes of %d frames)\n",
                     more, k, k - 1, expected);
-        CHECK(r.scene->giStatus().giAtRest && more >= (k - 1) * expected - 1 &&
+        CHECK(r.scene->published().gi.giAtRest && more >= (k - 1) * expected - 1 &&
                   more <= (k - 1) * expected + 2,
               "GI COMES BACK TO REST AFTER THE K - 1 REFINEMENTS, counted in frames");
     }
@@ -625,21 +625,21 @@ int main(int argc, char **argv)
         CHECK(r.scene->setGlobalIllumination(gg) && r.scene->setGiTuning(gg),
               "the gather is on (the field off)");
         render(e, 4);   // the view gains its prepass (a shape change) and the gather starts
-        CHECK(r.scene->giStatus().gather.running, "...the gather runs in the room's view");
+        CHECK(r.scene->published().gi.gather.running, "...the gather runs in the room's view");
         CHECK(settleGi(e, r.scene) >= 0, "...and GI comes to rest with it");
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         CHECK_MSG(st.gather.running && st.gather.settled && st.gather.settleFrames == 16u,
                   "the gather runs and its history is SETTLED at rest (N = %u frames for a 5-code step)",
                   st.gather.settleFrames);
         lightWrite(r.scene, r.light);
         CHECK(r.scene->refreshGiLighting(true), "a light write (the cheap path)");
-        CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
+        CHECK(!r.scene->published().gi.giAtRest, "the write takes GI out of rest");
         int frames = 0;
-        while (frames < 4000 && !r.scene->giStatus().giAtRest) {
+        while (frames < 4000 && !r.scene->published().gi.giAtRest) {
             enginetest::frames(e, 1);
             ++frames;
         }
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         std::printf("   at rest %d frames after the write: rest frames %u, history age %u (N %u)\n",
                     frames, st.gather.restFrames, st.gather.historyAge, st.gather.settleFrames);
         CHECK(st.giAtRest && st.gather.settled && st.gather.restFrames >= st.gather.settleFrames,
@@ -666,7 +666,7 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(young, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
         r.view->setEnabled(false);
         render(e, 2);
-        st = r.scene->giStatus();
+        st = r.scene->published().gi;
         std::printf("   a young view (2 frames): history age %u, settled %d, giAtRest %d\n",
                     st.gather.historyAge, int(st.gather.settled), int(st.giAtRest));
         CHECK(!st.gather.settled && !st.giAtRest,
@@ -675,9 +675,9 @@ int main(int argc, char **argv)
         const int youngFrames = settleGi(e, r.scene);
         // Its first frame is its birth (no previous camera to be still against),
         // then N frames at rest.
-        CHECK_MSG(youngFrames >= 0 && youngFrames + 2 == int(r.scene->giStatus().gather.settleFrames) + 1,
+        CHECK_MSG(youngFrames >= 0 && youngFrames + 2 == int(r.scene->published().gi.gather.settleFrames) + 1,
                   "...and it settles through its own frames: its birth, then N at rest (%d more, N %u)",
-                  youngFrames, r.scene->giStatus().gather.settleFrames);
+                  youngFrames, r.scene->published().gi.gather.settleFrames);
         e->destroyView(young);
         r.view->setEnabled(true);
 
@@ -702,15 +702,15 @@ int main(int argc, char **argv)
                 enginetest::frames(e, 1);
             };
             int warm = 0;
-            for (; warm < 4000 && !r.scene->giStatus().giAtRest; ++warm) step();
-            CHECK_MSG(r.scene->giStatus().giAtRest,
+            for (; warm < 4000 && !r.scene->published().gi.giAtRest; ++warm) step();
+            CHECK_MSG(r.scene->published().gi.giAtRest,
                       "GI comes to rest with the mover moving every frame (%d frames after it arrived)", warm);
             int restless = 0, frames = 0;
             for (int i = 0; i < 40; ++i) {
                 step();
-                if (!r.scene->giStatus().giAtRest) ++restless;
+                if (!r.scene->published().gi.giAtRest) ++restless;
             }
-            st = r.scene->giStatus();
+            st = r.scene->published().gi;
             CHECK_MSG(restless == 0 && st.gather.restFrames == 0u && st.gather.settled,
                       "...and STAYS at rest while it moves: settled every frame (%d frames not), never resting "
                       "(rest frames %u), since its restart %u", restless, st.gather.restFrames,
@@ -718,14 +718,14 @@ int main(int argc, char **argv)
             // THE RESTART: a light write while the mover moves.
             lightWrite(r.scene, r.light);
             CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
-            CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
+            CHECK(!r.scene->published().gi.giAtRest, "the write takes GI out of rest");
             unsigned lastSince = 0u;
-            while (frames < 4000 && !r.scene->giStatus().giAtRest) {
+            while (frames < 4000 && !r.scene->published().gi.giAtRest) {
                 step();
                 ++frames;
-                lastSince = r.scene->giStatus().gather.sinceRestart;
+                lastSince = r.scene->published().gi.gather.sinceRestart;
             }
-            st = r.scene->giStatus();
+            st = r.scene->published().gi;
             const int lightingFrames = frames - int(lastSince);
             std::printf("   at rest %d frames after the write: %d of them the lighting still landing, then %u "
                         "since the restart (N %u)\n", frames, lightingFrames, lastSince, st.gather.settleFrames);
@@ -807,14 +807,14 @@ int main(int argc, char **argv)
     // The chain answers a refresh through its dirty path and its tick, a frame
     // at a time: counted until the field is whole again (bounded), not a fixed 3.
     render(e, 3);
-    for (int f = 0; f < 120 && !fieldWhole(r.scene->giStatus()); ++f) enginetest::frames(e, 1);
-    st = r.scene->giStatus();
+    for (int f = 0; f < 120 && !fieldWhole(r.scene->published().gi); ++f) enginetest::frames(e, 1);
+    st = r.scene->published().gi;
     CHECK(st.ifdBound && fieldWhole(st),
           "a full refresh under a live field rebuilds it, bound and whole");
     // (b) a rebuild over the refreshed arm.
     CHECK(r.scene->setGlobalIllumination(ddgi), "a rebuild over the refreshed arm succeeds");
     render(e, 2);
-    CHECK(r.scene->giStatus().ifdBound, "still bound after the rebuild");
+    CHECK(r.scene->published().gi.ifdBound, "still bound after the rebuild");
     // (c) GI off with a bound field: the field must be unbound and destroyed
     //     BEFORE the VctLighting it points into, and the pixels must return.
     GiParams off;
@@ -824,7 +824,7 @@ int main(int argc, char **argv)
     r.view->readPixels(img);
     const Colour offFloor = img.at(kFloorX, kFloorY);
     show("floor  after GI off", offFloor);
-    st = r.scene->giStatus();
+    st = r.scene->published().gi;
     CHECK(!st.ifdBound && st.ifdProbes == 0, "GI off leaves no field bound and none built");
     CHECK(std::fabs(offFloor.r - baseFloor.r) < 0.02f &&
           std::fabs(offFloor.g - baseFloor.g) < 0.02f,
@@ -835,7 +835,7 @@ int main(int argc, char **argv)
     //     the assertion is this program returning at all.
     CHECK(r.scene->setGlobalIllumination(ddgi), "re-arm DDGI for the destroy-with-live-field case");
     render(e, 2);
-    CHECK(r.scene->giStatus().ifdBound, "field live at shutdown");
+    CHECK(r.scene->published().gi.ifdBound, "field live at shutdown");
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall good\n", failures);
     return failures ? 1 : 0;

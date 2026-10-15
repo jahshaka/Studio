@@ -436,7 +436,7 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     gi.updateBudget = 1;
     s->setGlobalIllumination(gi);
     render(e, 8);
-    const GiStatus g = s->giStatus();
+    const GiStatus g = s->published().gi;
     std::printf("    gi: probes %d, probeShadows %d\n", g.probeCount, int(g.probeShadows));
     CHECK(g.probeShadows, "the probe captures are shadowed (the precondition for R3)");
     // THE REBUILD, through the path a Shadow Quality change takes — the one
@@ -1373,8 +1373,8 @@ static void t3_cache_reflect(Engine *e, View *v)
     enginetest::frames(e, 6);
     ShadowStatus st = e->shadowStatus();
     std::printf("    active reflectors %d; cached instances %u, uncached %u\n",
-                r.scene->activePlanarReflectors(), st.cachedInstances, st.uncachedInstances);
-    CHECK(r.scene->activePlanarReflectors() == 1, "the mirror renders");
+                r.scene->published().activePlanarReflectors, st.cachedInstances, st.uncachedInstances);
+    CHECK(r.scene->published().activePlanarReflectors == 1, "the mirror renders");
     CHECK(st.cachedInstances >= 2u && st.uncachedInstances == 0u,
           "the view AND the mirror cache all three lamps (%u cached, %u not)", st.cachedInstances,
           st.uncachedInstances);
@@ -1417,7 +1417,7 @@ static void t3_cache_probe(Engine *e, View *v)
     // Build, place, and let the grid's first catch-up give every probe its own
     // copy of the three lamp maps.
     for (int i = 0; i < 30; ++i) { enginetest::frames(e, 1); e->shadowStatus(); }
-    GiStatus g = r.scene->giStatus();
+    GiStatus g = r.scene->published().gi;
     std::printf("    gi: probes %d, probeShadows %d, stale %d\n", g.probeCount, int(g.probeShadows), g.staleProbes);
     CHECK(g.probeShadows && g.probeCount == 4, "four shadowed probes");
     // THE REGRESSION THIS CASE FOUND: the GI rebuild's synchronous probe
@@ -1442,7 +1442,7 @@ static void t3_cache_probe(Engine *e, View *v)
     for (int i = 0; i < 12; ++i) {
         enginetest::frames(e, 1);
         const ShadowStatus st = e->shadowStatus();
-        g = r.scene->giStatus();
+        g = r.scene->published().gi;
         captures += g.probeCapturesLastFrame;
         lampTotal += st.probeLampPassesLastFrame;
         if (st.probeLampPassesLastFrame != 8u * unsigned(g.probeCapturesLastFrame)) ++badFrames;
@@ -1459,7 +1459,7 @@ static void t3_cache_probe(Engine *e, View *v)
     for (int i = 0; i < 12; ++i) {
         enginetest::frames(e, 1);
         const ShadowStatus st = e->shadowStatus();
-        captures += r.scene->giStatus().probeCapturesLastFrame;
+        captures += r.scene->published().gi.probeCapturesLastFrame;
         lampTotal += st.probeLampPassesLastFrame;
     }
     std::printf("    colour-only catch-up: %d captures, probe lamp passes %u\n", captures, lampTotal);
@@ -1640,7 +1640,7 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     r.scene->setGlobalIllumination(gi);
     e->shadowStatus();
     for (int i = 0; i < 40; ++i) { enginetest::frames(e, 1); e->shadowStatus(); }
-    const GiStatus g = r.scene->giStatus();
+    const GiStatus g = r.scene->published().gi;
     CHECK(g.probeShadows && g.probeCount == 4, "four shadowed probes (%d)", g.probeCount);
 
     const ShadowStatus st = e->shadowStatus();
@@ -1664,7 +1664,7 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     for (int i = 0; i < 16; ++i) {
         enginetest::frames(e, 1);
         const ShadowStatus f2 = e->shadowStatus();
-        captures += r.scene->giStatus().probeCapturesLastFrame;
+        captures += r.scene->published().gi.probeCapturesLastFrame;
         lampTotal += f2.probeLampPassesLastFrame;
     }
     std::printf("    colour-only catch-up: %d captures, probe lamp passes %u\n", captures, lampTotal);
@@ -1797,7 +1797,7 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     // The probes capture with the sun alone: every probe node builds its light
     // list in these frames, and none of them holds a cached lamp.
     enginetest::frames(e, 24);
-    const int probes = r.scene->giStatus().probeCount;
+    const int probes = r.scene->published().gi.probeCount;
     // NOW the lamp arrives. The cache fixes it into every instance — the view's
     // and every probe's — and the probes keep capturing.
     const NodeId lamp = r.scene->createNode();

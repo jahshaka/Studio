@@ -240,7 +240,7 @@ int main()
           "the far wall's inner face gets NO direct light (black before GI)");
 
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         showStatus("giStatus, GI off", st);
         CHECK(st.mode == GiMode::Off, "giStatus reports mode off");
         CHECK(st.probeCount == 0, "giStatus reports no probes with GI off");
@@ -272,7 +272,7 @@ int main()
     show("floor,   plain VCT", vctFloor);
     show("farwall, plain VCT", vctWall);
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         showStatus("giStatus, plain VCT", st);
         CHECK(st.mode == GiMode::Vct, "giStatus reports mode vct");
         CHECK(st.probeCount == 0, "plain VCT builds NO probes");
@@ -322,7 +322,7 @@ int main()
     // VCT", and exactly these — plus the mirror-hue assertions below — go red
     // while every other suite stays green.
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         showStatus("giStatus, hybrid", st);
         CHECK(st.mode == GiMode::VctPccHybrid, "giStatus reports mode vct_pcc_hybrid");
         CHECK(st.probeCount == expectedProbes,
@@ -371,7 +371,7 @@ int main()
           std::fabs(hyAgain.g - hyMirror.g) < 0.06f,
           "a full probe rebuild reproduces the same reflection (determinism)");
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.probeCount == expectedProbes && st.pccBound,
               "the rebuilt probe grid is the same size and still bound");
     }
@@ -486,7 +486,7 @@ int main()
         view->readPixels(img);
         const Colour oneProbe = img.at(mirrorX, mirrorY);
         show("mirror, 1 probe", oneProbe);
-        CHECK(s->giStatus().probeCount == 1, "multi-probe: exactly one probe exists");
+        CHECK(s->published().gi.probeCount == 1, "multi-probe: exactly one probe exists");
         CHECK(oneProbe.r > 0.10f && oneProbe.r < 0.99f,
               "multi-probe: the 1-probe reading is a real, UNCLIPPED reflection");
 
@@ -495,7 +495,7 @@ int main()
         view->readPixels(img);
         const Colour fourProbes = img.at(mirrorX, mirrorY);
         show("mirror, 4 probes", fourProbes);
-        CHECK(s->giStatus().probeCount == 4, "multi-probe: exactly four probes exist");
+        CHECK(s->published().gi.probeCount == 4, "multi-probe: exactly four probes exist");
         CHECK(fourProbes.r < 0.99f, "multi-probe: the 4-probe reading is unclipped too");
 
         // THE assertion. 10% of the larger reading: a probe reflection may
@@ -608,7 +608,7 @@ int main()
         view->readPixels(img);
         const Colour ldrPix = img.at(mirrorX, mirrorY);
         show("mirror, emissive plate, LDR probe", ldrPix);
-        CHECK(!s->giStatus().probeHdr, "hdr: giStatus reports an LDR capture");
+        CHECK(!s->published().gi.probeHdr, "hdr: giStatus reports an LDR capture");
 
         GiParams hdr = hybrid;
         hdr.probeHdr = GiToggle::On;
@@ -617,8 +617,8 @@ int main()
         view->readPixels(img);
         const Colour hdrPix = img.at(mirrorX, mirrorY);
         show("mirror, emissive plate, HDR probe", hdrPix);
-        CHECK(s->giStatus().probeHdr, "hdr: giStatus reports an HDR capture");
-        CHECK(s->giStatus().probeCount == 4 && s->giStatus().pccBound,
+        CHECK(s->published().gi.probeHdr, "hdr: giStatus reports an HDR capture");
+        CHECK(s->published().gi.probeCount == 4 && s->published().gi.pccBound,
               "hdr: the probe grid still built and bound at RGBA16F "
               "(the IBL compute path accepts a float target)");
 
@@ -668,7 +668,7 @@ int main()
         view->readPixels(img);
         const Colour noShadow = img.at(mirrorX, mirrorY);
         show("mirror, unshadowed capture", noShadow);
-        CHECK(!s->giStatus().probeShadows, "shadows: giStatus reports an unshadowed capture");
+        CHECK(!s->published().gi.probeShadows, "shadows: giStatus reports an unshadowed capture");
         CHECK(noShadow.r > 0.15f,
               "shadows: the unshadowed reflection still shows the lit red wall "
               "(the test is looking at something)");
@@ -680,10 +680,10 @@ int main()
         view->readPixels(img);
         const Colour withShadow = img.at(mirrorX, mirrorY);
         show("mirror, shadowed capture", withShadow);
-        CHECK(s->giStatus().probeShadows,
+        CHECK(s->published().gi.probeShadows,
               "shadows: giStatus reports a shadowed capture (the shadowed workspace was found "
               "and the shadow node existed to recalculate)");
-        CHECK(s->giStatus().probeCount == 4 && s->giStatus().pccBound,
+        CHECK(s->published().gi.probeCount == 4 && s->published().gi.pccBound,
               "shadows: the probe grid still built and bound through the shadowed workspace");
         std::printf("   unshadowed r = %.3f   shadowed r = %.3f\n", noShadow.r, withShadow.r);
         CHECK(withShadow.r < noShadow.r * 0.75f,
@@ -696,7 +696,7 @@ int main()
         GiParams autoMed = hybrid;   // quality Medium, probeShadows Auto
         CHECK(s->setGlobalIllumination(autoMed), "shadows: auto at Medium builds");
         render(engine.get(), 1);
-        CHECK(!s->giStatus().probeShadows && !s->giStatus().probeHdr,
+        CHECK(!s->published().gi.probeShadows && !s->published().gi.probeHdr,
               "shadows: Auto at Medium quality means unshadowed, LDR captures");
         // HIGH IS A RAY TIER (PHOTON-F12-PCC): wherever the scene traces it
         // builds no grid at all, so the grid's High defaults are read with the
@@ -706,7 +706,7 @@ int main()
         autoHigh.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(autoHigh), "shadows: auto at High builds");
         render(engine.get(), 1);
-        CHECK(s->giStatus().probeShadows && s->giStatus().probeHdr,
+        CHECK(s->published().gi.probeShadows && s->published().gi.probeHdr,
               "shadows: Auto at High quality means shadowed, HDR captures");
         s->setRayTracing(RayTracingMode::Auto);
 
@@ -726,10 +726,10 @@ int main()
         GiParams high = hybrid;
         high.quality = GiQuality::High;
         const bool rays = engine->rayQueryAvailable() && s->rayTracingResolved();
-        const GiStatus before = s->giStatus();
+        const GiStatus before = s->published().gi;
         CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
         render(engine.get(), 4);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::printf("   ray tier: rays %s, probes %d, dropped %d, pccBound %s, byRays %s, "
                     "placements %u -> %u, captures %llu -> %llu\n",
                     rays ? "yes" : "no", st.probeCount, st.probesDropped,
@@ -748,7 +748,7 @@ int main()
 
             s->setRayTracing(RayTracingMode::Off);
             render(engine.get(), 4);
-            const GiStatus off = s->giStatus();
+            const GiStatus off = s->published().gi;
             CHECK(!off.probeGridByRays && off.probeCount == expectedProbes && off.pccBound,
                   "ray tier: the scene's rays OFF make High a grid tier — the grid builds");
             CHECK(off.probePlacements == st.probePlacements + 1,
@@ -756,7 +756,7 @@ int main()
 
             s->setRayTracing(RayTracingMode::Auto);
             render(engine.get(), 2);
-            const GiStatus back = s->giStatus();
+            const GiStatus back = s->published().gi;
             CHECK(back.probeGridByRays && back.probeCount == 0 && back.probesDropped == 0 &&
                       !back.pccBound,
                   "ray tier: the rays back ON take the grid down again");
@@ -850,7 +850,7 @@ int main()
     CHECK(endMirror.r < offMirror.r + 0.05f && endMirror.r < 0.10f,
           "turning GI off unbinds the probes: the mirror goes black again");
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         showStatus("giStatus, GI off again", st);
         CHECK(st.mode == GiMode::Off && st.probeCount == 0 && !st.pccBound && !st.vctBound,
               "giStatus reports everything torn down");

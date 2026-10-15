@@ -150,7 +150,7 @@ struct Rig {
         int still = 0;
         for (int f = 0; f < 240 && still < 3; ++f) {
             frame();
-            const bool have = escene->skyAmbientSh(cur);
+            const bool have = escene->published().copySkyAmbientSh(cur);
             still = (have && std::memcmp(cur, prev, sizeof cur) == 0) ? still + 1 : 0;
             std::memcpy(prev, cur, sizeof cur);
         }
@@ -223,7 +223,7 @@ struct Irradiance {
 Irradiance irradianceAt(Rig &r, const std::vector<float> *tau, unsigned n, float tile) {
     Irradiance e;
     float sh[27] = { 0.0f };
-    if (!r.escene->skyAmbientSh(sh)) return e;
+    if (!r.escene->published().copySkyAmbientSh(sh)) return e;
     for (int c = 0; c < 3; ++c)
         e.ambient += M_PI * (double(sh[0 * 3 + c]) + double(sh[1 * 3 + c]) - double(sh[6 * 3 + c]) -
                              double(sh[8 * 3 + c]));
@@ -701,7 +701,7 @@ int caseBakeCost() {
             std::printf("   pass %d %-44s mean %7.2f ms  median %7.2f  worst %7.2f (%d frames)\n", pass, names[k],
                         res[pass][k][0], res[pass][k][2], res[pass][k][1], N);
         }
-    const CloudStatus cs = r.escene->cloudStatus();
+    const CloudStatus cs = r.escene->published().clouds;
     std::printf("   the bake (drag - sun, median, two passes): %.2f / %.2f ms; field bakes %u\n",
                 res[0][2][2] - res[0][1][2], res[1][2][2] - res[1][1][2], cs.fieldBakes);
     return 0;
@@ -719,7 +719,7 @@ int caseBudget() {
     // a second bake (a coverage edit): the field is re-rendered in place, never re-allocated
     r.clouds(true, 0.6f, 1.0f);
     r.settle();
-    const CloudStatus cs = r.escene->cloudStatus();
+    const CloudStatus cs = r.escene->published().clouds;
     CHECK(cs.drawn && cs.fieldBakes >= 2, "the layer is drawn and its field baked twice");
     std::vector<TextureMemoryEntry> tex;
     CHECK(r.engine->textureMemory(tex), "the renderer lists its textures");

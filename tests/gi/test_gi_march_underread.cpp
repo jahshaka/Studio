@@ -114,7 +114,7 @@ int main(int argc, char **argv)
             sky.equirect = s->createTexture(1, 1, skyPx, true);
             CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
             float sh[27] = { 0 };
-            for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
+            for (int f = 0; f < 20 && !s->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
             s->setAmbientSh(sh);
             s->setEnvironmentLight(Colour(1, 1, 1, 1));
             const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
                 cones.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
                 s->setGlobalIllumination(cones);
                 enginetest::frames(e, 20);
-                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+                for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
                 const double withWall = readHdr();
                 if (arm.first == GiToggle::Off && standing) {
                     // THE LIGHT STORE'S MEMORY (the textures PhotonVoxelLighting creates: the total, the
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
                     std::printf("%s, %d cells, one cascade: the light store holds %.2f MB in %d textures\n", tier.second, res,
                                 double(bytes) / (1024.0 * 1024.0), count);
                 }
-                const GiStatus st = s->giStatus();
+                const GiStatus st = s->published().gi;
                 const bool fieldBuilt = st.ifdMax.x > st.ifdMin.x;
                 if (arm.first == GiToggle::On)
                     CHECK(fieldBuilt, "the field-on arm has a field (its volume is not empty)");
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
         const auto settle = [&]() {
             enginetest::frames(e, 20);
-            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+            for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         };
         // one reading: the face's radiance (GI off, the camera square on the face) and the plate's lobe (GI on)
         const auto measure = [&](double &face, double &lobe) {
@@ -284,14 +284,14 @@ int main(int argc, char **argv)
         low.gather = GiToggle::Off;
         s->setGlobalIllumination(low);
         enginetest::frames(e, 20);
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+        for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         const unsigned long long mips = photonDispatchStatus().mipDispatches - mips0;
         std::vector<TextureMemoryEntry> tex;
         unsigned long long bytes = 0; int count = 0;
         if (e->textureMemory(tex))
             for (const TextureMemoryEntry &t : tex)
                 if (t.name.rfind("VctLighting", 0) == 0 || t.name.rfind("VCT/", 0) == 0) { bytes += t.bytes; ++count; }
-        const size_t cascades = s->giStatus().cascades.size();
+        const size_t cascades = s->published().gi.cascades.size();
         std::printf("Low's own chain: %zu cascades, the light store holds %.2f MB in %d textures; %llu mip "
                     "dispatches from the build to rest\n", cascades, double(bytes) / (1024.0 * 1024.0), count, mips);
         CHECK(cascades == 2u, "the Low tier's chain is two cascades");

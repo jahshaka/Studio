@@ -131,7 +131,7 @@ int main()
     Image picDeep, picControl;
     render(e, 120);
     view->readPixels(picDeep);
-    const RayQueryStatus rqDeep = s->rayQueryStatus();
+    const RayQueryStatus rqDeep = s->published().rayQuery;
     s->attachMesh(ball, control, sm);
     render(e, 120);
     view->readPixels(picControl);

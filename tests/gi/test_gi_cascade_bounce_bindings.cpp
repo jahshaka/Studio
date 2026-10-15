@@ -117,7 +117,7 @@ int main()
     gi.updateBudget = 0;
     CHECK(scene->setGlobalIllumination(gi), "the four-cascade chain builds at three bounces");
     render(e, 10);
-    const GiStatus st = scene->giStatus();
+    const GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() >= 3, "the chain is a chain (3+ cascades)");
     CHECK(st.vctBound, "...and the shader is sampling it");
     if (st.cascades.size() < 3 || !st.vctBound) {

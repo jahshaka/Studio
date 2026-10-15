@@ -156,7 +156,7 @@ int main() {
     std::printf("\n== case 0: the field is built over cascade 0 ==\n");
     CHECK(scene->setGlobalIllumination(fieldGi()), "the cascade arm with the field accepts");
     render(e, 8);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(!st.cascades.empty(), "the chain is up");
     CHECK(st.ifdBound, "THE FIELD IS BOUND UNDER A CHAIN (it was torn down before E1)");
     CHECK(st.ifdProbes > 0, "...with probes");
@@ -184,9 +184,9 @@ int main() {
     // =====================================================================
     std::printf("\n== case 1: at rest ==\n");
     {
-        const GiStatus a = scene->giStatus();
+        const GiStatus a = scene->published().gi;
         render(e, 60);
-        const GiStatus b = scene->giStatus();
+        const GiStatus b = scene->published().gi;
         std::printf("   60 still frames: follows %llu -> %llu\n", a.ifdFollows, b.ifdFollows);
         CHECK(b.ifdFollows == a.ifdFollows, "a still camera re-places the field not once");
         CHECK(fieldWhole(b), "...and it stays whole");
@@ -217,7 +217,7 @@ int main() {
     std::printf("\n== case 2: one cascade-0 step, and the follow on the frame after ==\n");
     float nearGroundAtStart = 0.0f, chainGroundAtStart = 0.0f;
     {
-        st = scene->giStatus();
+        st = scene->published().gi;
         const float step0 = st.cascades[0].step;
         const Vec3 fieldBefore = centreOf(st);
         const unsigned long long followsBefore = st.ifdFollows;
@@ -242,7 +242,7 @@ int main() {
             view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
                                                              Vec3(x, 1.0f, 0.0f)));
             render(e, 1);
-            const GiStatus s = scene->giStatus();
+            const GiStatus s = scene->published().gi;
             unsigned long long t = 0;
             for (const auto &c : s.cascades) t += c.rebuilds;
             rebuildsWorstFrame = std::max(rebuildsWorstFrame, t - prevRebuilds);
@@ -291,7 +291,7 @@ int main() {
                 // Those ten frames were rendered at one pose, outside the walk's
                 // cadence: re-sync the per-frame counters so nothing after them
                 // is read as a shared frame.
-                const GiStatus after = scene->giStatus();
+                const GiStatus after = scene->published().gi;
                 prevC0 = after.cascades[0].rebuilds;
                 prevFollows = after.ifdFollows;
                 prevRebuilds = 0;
@@ -418,7 +418,7 @@ int main() {
     // =====================================================================
     std::printf("\n== case 4: 100 m of walking ==\n");
     {
-        const GiStatus a = scene->giStatus();
+        const GiStatus a = scene->published().gi;
         unsigned long long prev = 0, worstFrame = 0;
         for (const auto &c : a.cascades) prev += c.rebuilds;
         const int frames = 200;
@@ -427,13 +427,13 @@ int main() {
             view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
                                                              Vec3(x, 1.0f, 0.0f)));
             render(e, 1);
-            const GiStatus s = scene->giStatus();
+            const GiStatus s = scene->published().gi;
             unsigned long long t = 0;
             for (const auto &c : s.cascades) t += c.rebuilds;
             worstFrame = std::max(worstFrame, t - prev);
             prev = t;
         }
-        const GiStatus b = scene->giStatus();
+        const GiStatus b = scene->published().gi;
         Image img; view->readPixels(img);
         const float endGround = nearGroundLum(img);
         std::printf("   after 100 m: follows %llu -> %llu, worst frame %llu rebuild(s), "
@@ -629,7 +629,7 @@ int main() {
         GiParams down; down.mode = GiMode::Off;
         CHECK(scene->setGlobalIllumination(down), "GI comes down");
         render(e, 2);
-        const GiStatus s = scene->giStatus();
+        const GiStatus s = scene->published().gi;
         CHECK(!s.ifdBound && s.ifdProbes == 0, "the field is gone with it");
         CHECK(s.ifdFollows == 0, "...and its follow counter with it");
     }

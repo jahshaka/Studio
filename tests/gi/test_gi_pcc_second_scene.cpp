@@ -136,7 +136,7 @@ int main()
         CHECK(a->setGlobalIllumination(gi), "scene A builds the hybrid over its room");
     }
     render(engine.get(), 20);
-    const GiStatus stA = a->giStatus();
+    const GiStatus stA = a->published().gi;
     std::printf("   scene A: probes=%d pccBound=%d\n", stA.probeCount, stA.pccBound ? 1 : 0);
     CHECK(stA.probeCount > 0 && stA.pccBound,
           "...and A's passes bind it (texEnvProbeMap is a cube array in A's passes)");
@@ -179,7 +179,7 @@ int main()
         CHECK(a->setGlobalIllumination(gi), "scene A builds its grid one more time");
     }
     render(engine.get(), 20);
-    CHECK(a->giStatus().pccBound, "...and it is bound again");
+    CHECK(a->published().gi.pccBound, "...and it is bound again");
     engine->destroyScene(a);
     a = nullptr;
     render(engine.get(), 10);

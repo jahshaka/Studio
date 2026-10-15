@@ -361,7 +361,7 @@ int main(int argc, char **argv)
     {
         enginetest::GpuTimingWindow gpuTiming(e);   // rq.reflectMs is the monitor's row
         red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24, &img);
-        rq = s->rayQueryStatus();
+        rq = s->published().rayQuery;
     }
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f instances=%d\n",
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.reflectMs,
@@ -1015,7 +1015,7 @@ int main(int argc, char **argv)
         off.ssr = 0;                          // below High: no SSR row, no trace
         view->setPostFx(off);
         render(e, 6);
-        const RayQueryStatus noSsr = s->rayQueryStatus();
+        const RayQueryStatus noSsr = s->published().rayQuery;
         CHECK(!noSsr.reflect,
               "with the SSR row off there is no trace at all, whatever the machine can do");
         view->setPostFx(fx);
@@ -1129,7 +1129,7 @@ static int costMain(Engine *e, const char *, const char *)
         std::vector<unsigned long long> hits;
         for (int i = 0; i < 90; ++i) {
             enginetest::frames(e, 1);
-            const RayQueryStatus rq = s->rayQueryStatus();
+            const RayQueryStatus rq = s->published().rayQuery;
             if (rq.reflectMs >= 0.0f) readings.push_back(rq.reflectMs);
             if (i >= 60) hits.push_back(rq.hitRecords);
         }
@@ -1495,7 +1495,7 @@ static int lampMain(Engine *e, bool target)
     s->refreshGlobalIllumination();
     render(e, 64);
 
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("   rayQuery: available=%d enabled=%d reflect=%d rays=%d instances=%d\n",
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.instances);
     CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
@@ -1708,7 +1708,7 @@ static int hitresMain(Engine *e)
     // THE CLOSED FORM, per pixel of the row: where its ray lands on the panel,
     // and the card's radiance there (0 off the panel). Read once, with the
     // cache on; the voxel arm below is held to the same numbers.
-    const CardCacheStatus st = s->giStatus().cards;
+    const CardCacheStatus st = s->published().gi.cards;
     CHECK_MSG(st.built && st.indirectRelights > 0ull, "the panel's cards are captured, lit and marched"
               " (%u resident, %llu marches)", st.cardsResident, (unsigned long long)st.indirectRelights);
     const double pixW = 2.0 * tanH * zImage / double(kPx);          // one pixel on the panel, metres
@@ -2085,7 +2085,7 @@ static int formatCheckMain(Engine *e, const std::string &logFile)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 4.0f), Vec3(0.0f, 0.0f, 0.0f));
     enginetest::frames(e, 8);
     const bool available = e->rayQueryAvailable();
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     const bool refusedLine = logContains(logFile, "ray-query tier refused");
     std::printf("   rayQueryAvailable %d; status available %d reflect %d; refusal line in the log "
                 "%d\n", int(available), int(rq.available), int(rq.reflect), int(refusedLine));
@@ -2172,7 +2172,7 @@ static int envRayMatchMain(Engine *e)
     CHECK(s->setSky(sky), "the analytic sky binds");
     enginetest::frames(e, 8);
     float sh[27] = { 0.0f };
-    CHECK(s->skyAmbientSh(sh), "the sky's SH is integrated");
+    CHECK(s->published().copySkyAmbientSh(sh), "the sky's SH is integrated");
     s->setAmbientSh(sh);
     s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
 
@@ -2229,7 +2229,7 @@ static int envRayMatchMain(Engine *e)
             for (size_t i = 0; i < onSum.size() / 3u; ++i)
                 for (int k = 0; k < 3; ++k) onSum[i * 3u + k] += img.rgba[i * 4u + k] / kMean;
         }
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
 
         // ---- RAYS OFF ----------------------------------------------------
         e->setRayTracing(false);

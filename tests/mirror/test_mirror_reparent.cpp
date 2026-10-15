@@ -137,12 +137,12 @@ Counts measure(World &w, Edit edit)
 {
     Counts c;
     const quint64 pushes0 = w.mirror->visitPushCount();
-    const SceneChangeStats cs0 = w.target->changeStats();
+    const SceneChangeStats cs0 = w.target->published().changes;
     const unsigned long long sw0 = iris::graph::staticSwitchCount();
     const quint64 sweeps0 = w.mirror->reclaimSweepCount();
     edit();
     c.visited = w.mirror->sync();
-    const SceneChangeStats cs1 = w.target->changeStats();
+    const SceneChangeStats cs1 = w.target->published().changes;
     c.staticSwitches = iris::graph::staticSwitchCount() - sw0;
     c.reclaimSweeps = w.mirror->reclaimSweepCount() - sweeps0;
     c.evicted = w.mirror->evictedNodeCount();

@@ -131,7 +131,7 @@ int main()
     // The hair piece carries ONE bone of the rig — `mid` — through a remap.
     const unsigned short hairMap[] = { 1 };
     CHECK(scene->attachSkinnedMesh(hair, hairMesh, mat, rig, hairMap, 1), "hair rigged, remapped");
-    CHECK(scene->streamedBoneCount(hair) == 1 && scene->streamedBoneCount(body) == 3,
+    CHECK(scene->published().streamedBonesOf(hair) == 1 && scene->published().streamedBonesOf(body) == 3,
           "each piece streams its own bones");
 
     // ---- the share -------------------------------------------------------

@@ -550,13 +550,13 @@ int main()
     };
     std::vector<double> gatherE, conesE, fieldE;
     measure("gather", GiToggle::Off, true, gatherE);
-    const bool gatherRan = s->giStatus().gather.running;
+    const bool gatherRan = s->published().gi.gather.running;
     measure("cones", GiToggle::Off, false, conesE);
     measure("field", GiToggle::On, false, fieldE);
     // ...and whether the FIELD arm was a field at all. It is reported rather
     // than assumed because a column that silently repeats the one beside it is
     // worse than an absent one.
-    const bool fieldBound = s->giStatus().ifdBound;
+    const bool fieldBound = s->published().gi.ifdBound;
     CHECK(gatherRan, "the gather arm above really ran the gather (giStatus().gather.running)");
 
     std::printf("\n THE FIRST MEASUREMENT OF THIS RENDERER'S DIFFUSE GI AGAINST A REFERENCE\n");
@@ -685,10 +685,10 @@ int main()
         int f = 0;
         for (; f < 400; ++f) {
             enginetest::frames(e, 1);
-            const GatherStatus gs = s->giStatus().gather;
+            const GatherStatus gs = s->published().gi.gather;
             if (gs.restFrames > gs.settleFrames) break;
         }
-        const GatherStatus gs = s->giStatus().gather;
+        const GatherStatus gs = s->published().gi.gather;
         CHECK_MSG(gs.restFrames > gs.settleFrames,
                   "the still view HOLDS its rest mean (rest frames %u > N %u, %d frames)", gs.restFrames,
                   gs.settleFrames, f);
@@ -796,7 +796,7 @@ int main()
         std::vector<double> fieldOnE;
         measure("gather+field", GiToggle::On, true, fieldOnE);
         {
-            const GiStatus st2 = s->giStatus();
+            const GiStatus st2 = s->published().gi;
             std::printf("   (the arm really is both: gather running %d, field bound %d; E/pi at "
                         "x = 2.60 m reads %.5f with the field against %.5f without it)\n",
                         int(st2.gather.running), int(st2.ifdBound), fieldOnE[0], gatherE[0]);

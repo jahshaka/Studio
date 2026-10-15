@@ -177,12 +177,12 @@ int main(int argc, char **argv)
 
     // ---- arm ---------------------------------------------------------------
     frame();
-    CHECK(mirror.target()->giStatus().schedulerPushes == 1, "the first sync pushes VCT exactly once");
-    const quint64 refresh0 = mirror.target()->giStatus().schedulerResolves;
-    const quint64 light0 = mirror.target()->giStatus().schedulerLightTicks;
+    CHECK(mirror.target()->published().gi.schedulerPushes == 1, "the first sync pushes VCT exactly once");
+    const quint64 refresh0 = mirror.target()->published().gi.schedulerResolves;
+    const quint64 light0 = mirror.target()->published().gi.schedulerLightTicks;
     CHECK(refresh0 == 0 && light0 == 0, "the push is neither a re-solve nor a light re-inject");
     for (int f = 0; f < 20; ++f) frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 && mirror.target()->giStatus().schedulerLightTicks == light0,
+    CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 && mirror.target()->published().gi.schedulerLightTicks == light0,
           "20 idle frames cost nothing at all (the pre-existing debounce still holds)");
 
     // ---- THE VIEWER AND THE FURNITURE (lane ENGINE-7 item 1) ---------------
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
         // and the rest of the suite ran without one — "no epoch, no skipping" — a mode that no longer exists: the
         // engine's scans re-read exactly what the frame's ChangeSet and its own seams name, always).
         const auto moved = [&]() { return engine->frameInputStatus().changesMoved; };
-        const auto reads = [&]() { return escene->giStatus().giAabbReads; };
+        const auto reads = [&]() { return escene->published().gi.giAabbReads; };
         // A GIZMO-SHAPED node: an engine-owned node carrying an UNLIT, on-top
         // (depth-test off) item, which is what createUnlitMaterial(_, false)
         // and the overlay queue mean. The suite builds one rather than driving
@@ -274,8 +274,8 @@ int main(int argc, char **argv)
     // 60 frames of a light moving every single frame — the shape of a user
     // dragging a light across the scene, which is exactly what used to cost one
     // full re-voxelize per frame. It ends aimed AWAY from the red wall.
-    const quint64 refreshBeforeDrag = mirror.target()->giStatus().schedulerResolves;
-    const quint64 lightBeforeDrag = mirror.target()->giStatus().schedulerLightTicks;
+    const quint64 refreshBeforeDrag = mirror.target()->published().gi.schedulerResolves;
+    const quint64 lightBeforeDrag = mirror.target()->published().gi.schedulerLightTicks;
     for (int f = 0; f < 60; ++f) {
         // +80 degrees (at the wall) swinging to -80 (away from it), so the red
         // bounce the first frame had must be gone by the last one.
@@ -283,8 +283,8 @@ int main(int argc, char **argv)
         sun->setLocalRot(iris::Quat::fromEulerAngles(80.0f - 160.0f * t, 0.0f, 0.0f));
         frame();
     }
-    const quint64 refreshDuringDrag = mirror.target()->giStatus().schedulerResolves - refreshBeforeDrag;
-    const quint64 lightDuringDrag = mirror.target()->giStatus().schedulerLightTicks - lightBeforeDrag;
+    const quint64 refreshDuringDrag = mirror.target()->published().gi.schedulerResolves - refreshBeforeDrag;
+    const quint64 lightDuringDrag = mirror.target()->published().gi.schedulerLightTicks - lightBeforeDrag;
     std::printf("   60-frame drag: full re-solves = %llu, cheap light re-injects = %llu\n",
                 (unsigned long long)refreshDuringDrag, (unsigned long long)lightDuringDrag);
     CHECK(refreshDuringDrag == 0,
@@ -317,12 +317,12 @@ int main(int argc, char **argv)
     // The signature is now still. Within the coalescing window the full
     // re-solve fires, and exactly once however long we keep rendering.
     for (int f = 0; f < 25; ++f) frame();
-    const quint64 refreshAfter = mirror.target()->giStatus().schedulerResolves - refreshBeforeDrag;
+    const quint64 refreshAfter = mirror.target()->published().gi.schedulerResolves - refreshBeforeDrag;
     std::printf("   after the drag stops:   full re-solves = %llu\n",
                 (unsigned long long)refreshAfter);
     CHECK(refreshAfter == 1, "letting go re-solves EXACTLY once for the whole drag");
     for (int f = 0; f < 25; ++f) frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves - refreshBeforeDrag == 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves - refreshBeforeDrag == 1,
           "and never again while nothing moves");
 
     // ---- THE RENDER MONITOR SEES ALL OF IT (ENGINE-5 item 2) ---------------
@@ -347,7 +347,7 @@ int main(int argc, char **argv)
         // (1) STILL: a scene nobody is touching files no GI work at all — once the
         // chain has come to rest after the drag above (its dirty path spends a
         // cascade a frame and then settles: counted, not timed).
-        for (int f = 0; f < 240 && !escene->giStatus().giAtRest; ++f) frame();
+        for (int f = 0; f < 240 && !escene->published().gi.giAtRest; ++f) frame();
         engine->takeMonitorRecords(recs);
         for (int f = 0; f < 20; ++f) frame();
         recs.clear();
@@ -446,13 +446,13 @@ int main(int argc, char **argv)
     // ---- the explicit refresh does NOT wait (P1d) --------------------------
     // world.refreshGi() bumps the document serial. It is a demand, not a hint:
     // it must re-solve on the very next sync, coalescing window or not.
-    const quint64 beforeExplicit = mirror.target()->giStatus().schedulerResolves;
+    const quint64 beforeExplicit = mirror.target()->published().gi.schedulerResolves;
     ++doc->giRefreshSerial;
     frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves == beforeExplicit + 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves == beforeExplicit + 1,
           "world.refreshGi()'s serial re-solves on the NEXT frame, without waiting");
     for (int f = 0; f < 20; ++f) frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves == beforeExplicit + 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves == beforeExplicit + 1,
           "...and only once per bump");
 
     // ---- a ZERO BUDGET means paused ----------------------------------------
@@ -460,15 +460,15 @@ int main(int argc, char **argv)
     // contract, one field instead of two — and it now also stops the probe
     // round-robin, which is the other half of "GI is frozen".)
     doc->giUpdateBudget = 0;
-    const quint64 beforeOff = mirror.target()->giStatus().schedulerResolves;
-    const quint64 lightBeforeOff = mirror.target()->giStatus().schedulerLightTicks;
+    const quint64 beforeOff = mirror.target()->published().gi.schedulerResolves;
+    const quint64 lightBeforeOff = mirror.target()->published().gi.schedulerLightTicks;
     for (int f = 0; f < 30; ++f) {
         sun->setLocalPos(iris::Vec3(0.0f, 6.0f, 6.0f - 0.1f * f));
         frame();
     }
     for (int f = 0; f < 20; ++f) frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves == beforeOff &&
-          mirror.target()->giStatus().schedulerLightTicks == lightBeforeOff,
+    CHECK(mirror.target()->published().gi.schedulerResolves == beforeOff &&
+          mirror.target()->published().gi.schedulerLightTicks == lightBeforeOff,
           "with the update budget at 0, neither path runs however much the light moves");
 
     // ---- RE-FIT ON EXIT (LIGHTING_FIX fix 2) -------------------------------
@@ -498,13 +498,13 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(flyer);
     for (int f = 0; f < 25; ++f) frame();          // let it settle into the volume
 
-    const quint64 refreshBeforeLift = mirror.target()->giStatus().schedulerResolves;
+    const quint64 refreshBeforeLift = mirror.target()->published().gi.schedulerResolves;
     // THE DRAG: 40 frames of the cube climbing out of the lit volume.
     for (int f = 0; f < 40; ++f) {
         flyer->setLocalPos(iris::Vec3(0.0f, 0.6f + 0.6f * float(f + 1), 1.0f));
         frame();
     }
-    const quint64 duringLift = mirror.target()->giStatus().schedulerResolves - refreshBeforeLift;
+    const quint64 duringLift = mirror.target()->published().gi.schedulerResolves - refreshBeforeLift;
     std::printf("   40-frame lift out of the volume: full re-solves = %llu\n",
                 (unsigned long long)duringLift);
     CHECK(duringLift == 0,
@@ -512,18 +512,18 @@ int main(int argc, char **argv)
 
     // ...and letting go re-fits, ONCE, without anyone touching a light.
     for (int f = 0; f < 25; ++f) frame();
-    const quint64 afterLift = mirror.target()->giStatus().schedulerResolves - refreshBeforeLift;
+    const quint64 afterLift = mirror.target()->published().gi.schedulerResolves - refreshBeforeLift;
     std::printf("   after the cube stops:   full re-solves = %llu\n",
                 (unsigned long long)afterLift);
     CHECK(afterLift == 1, "letting go re-fits the volume EXACTLY once");
     for (int f = 0; f < 40; ++f) frame();
-    CHECK(mirror.target()->giStatus().schedulerResolves - refreshBeforeLift == 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves - refreshBeforeLift == 1,
           "...and never again while nothing moves (the re-fit is not self-sustaining)");
 
     // The point of all of it: the cube is now INSIDE the lit volume the
     // renderer is using. Nothing but a re-fit could have put it there.
     {
-        const jahshaka::engine::GiStatus st = escene->giStatus();
+        const jahshaka::engine::GiStatus st = escene->published().gi;
         std::printf("   lit volume after the re-fit: y %.2f .. %.2f (cube at y %.2f)\n",
                     st.boundsMin.y, st.boundsMax.y, flyer->getLocalPos().y());
         CHECK(st.boundsMax.y > flyer->getLocalPos().y(),
@@ -583,7 +583,7 @@ int main(int argc, char **argv)
     const int kHybridProbes = 4;
     const int kAllowed = 1;                           // budget 1 + dynamic 0
     {
-        const jahshaka::engine::GiStatus st = escene->giStatus();
+        const jahshaka::engine::GiStatus st = escene->published().gi;
         CHECK(st.probeCount == kHybridProbes && st.pccBound, "hybrid: the 2x1x2 grid built and bound");
         CHECK(st.staleProbes == 0, "hybrid: settled — nothing stale");
     }
@@ -592,27 +592,27 @@ int main(int argc, char **argv)
         int worst = 0;
         for (int f = 0; f < n; ++f) {
             frame();
-            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+            worst = std::max(worst, escene->published().gi.probeCapturesLastFrame);
         }
         return worst;
     };
 
     // ---- world.refreshGi() (P6) ------------------------------------------------
     {
-        const quint64 before = mirror.target()->giStatus().schedulerResolves;
+        const quint64 before = mirror.target()->published().gi.schedulerResolves;
         ++doc->giRefreshSerial;
         frame();
-        const jahshaka::engine::GiStatus st = escene->giStatus();
+        const jahshaka::engine::GiStatus st = escene->published().gi;
         std::printf("   refreshGi: refresh frame captured %d, stale after it %d (reason %d)\n",
                     st.probeCapturesLastFrame, st.staleProbes, int(st.lastStaleReason));
-        CHECK(mirror.target()->giStatus().schedulerResolves == before + 1, "refreshGi: the re-solve ran on the next frame");
+        CHECK(mirror.target()->published().gi.schedulerResolves == before + 1, "refreshGi: the re-solve ran on the next frame");
         CHECK(st.probeCapturesLastFrame <= kAllowed,
               "refreshGi: the re-solve frame captures no more than budget + dynamic (was: the whole grid)");
         CHECK(st.lastStaleReason == jahshaka::engine::GiStaleReason::Refresh,
               "refreshGi: it STALED the grid instead (reason: refresh)");
         const int worst = worstCaptures(kHybridProbes);
         CHECK(worst <= kAllowed, "refreshGi: every catch-up frame stays within the budget");
-        CHECK(escene->giStatus().staleProbes == 0,
+        CHECK(escene->published().gi.staleProbes == 0,
               "refreshGi: the grid has caught up within ceil(probes / budget) frames");
         CHECK(worstCaptures(20) == 0, "refreshGi: ...and then captures nothing at all");
     }
@@ -622,20 +622,20 @@ int main(int argc, char **argv)
     // or intensity edit never re-solved the voxels, and nothing staled a probe
     // either — only the old endless sweep ever brought the reflections round.
     {
-        const quint64 before = mirror.target()->giStatus().schedulerResolves;
-        const unsigned long long serial = escene->giStatus().staleSerial;
+        const quint64 before = mirror.target()->published().gi.schedulerResolves;
+        const unsigned long long serial = escene->published().gi.staleSerial;
         sun->intensity = 3.0f;
         frame();
-        const jahshaka::engine::GiStatus st = escene->giStatus();
+        const jahshaka::engine::GiStatus st = escene->published().gi;
         CHECK(st.staleSerial > serial && st.lastStaleReason == jahshaka::engine::GiStaleReason::Light,
               "intensity: the edit STALES the grid on its own frame (reason: light)");
         const int worst = worstCaptures(30);
-        const quint64 solves = mirror.target()->giStatus().schedulerResolves - before;
+        const quint64 solves = mirror.target()->published().gi.schedulerResolves - before;
         std::printf("   intensity edit: settle re-solves = %llu, worst frame captured %d\n",
                     (unsigned long long)solves, worst);
         CHECK(solves == 1, "intensity: exactly ONE settle re-solve (it used to be none at all)");
         CHECK(worst <= kAllowed, "intensity: no frame captures more than budget + dynamic");
-        CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
+        CHECK(escene->published().gi.staleProbes == 0 && worstCaptures(20) == 0,
               "intensity: the grid catches up, then idles");
     }
 
@@ -655,38 +655,38 @@ int main(int argc, char **argv)
     // still measured: a re-solve that fires MID-DRAG is spread over the budget
     // instead of capturing the whole grid in one frame.
     {
-        const quint64 before = mirror.target()->giStatus().schedulerResolves;
+        const quint64 before = mirror.target()->published().gi.schedulerResolves;
         int worst = 0;
         const auto dragFrames = [&](int n, float from) {
             for (int f = 0; f < n; ++f) {
                 flyer->setLocalPos(iris::Vec3(from + 0.05f * float(f), 0.6f, 1.0f));
                 frame();
-                worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+                worst = std::max(worst, escene->published().gi.probeCapturesLastFrame);
             }
         };
         dragFrames(10, 0.0f);
-        const quint64 beforePause = mirror.target()->giStatus().schedulerResolves;
+        const quint64 beforePause = mirror.target()->published().gi.schedulerResolves;
         // THE PAUSE: the object holds still while frames keep coming. Long
         // enough to cross the stability window (15) and no longer, so exactly
         // one re-solve fires and the drag below is genuinely a SECOND gesture
         // rather than a continuation of a settle that never fired.
         for (int f = 0; f < 16; ++f) {
             frame();
-            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+            worst = std::max(worst, escene->published().gi.probeCapturesLastFrame);
         }
-        const quint64 pauseSolves = mirror.target()->giStatus().schedulerResolves - beforePause;
+        const quint64 pauseSolves = mirror.target()->published().gi.schedulerResolves - beforePause;
         dragFrames(10, 0.5f);                          // the drag carries on
         for (int f = 0; f < 30; ++f) {                 // and lets go
             frame();
-            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+            worst = std::max(worst, escene->published().gi.probeCapturesLastFrame);
         }
         std::printf("   paused drag: re-solves in the pause = %llu, total = %llu, worst frame "
                     "captured %d\n", (unsigned long long)pauseSolves,
-                    (unsigned long long)(mirror.target()->giStatus().schedulerResolves - before), worst);
+                    (unsigned long long)(mirror.target()->published().gi.schedulerResolves - before), worst);
         CHECK(pauseSolves == 1, "paused drag: the still frames fire one mid-drag re-solve");
         CHECK(worst <= kAllowed,
               "paused drag: no frame of the gesture captures more than budget + dynamic probes");
-        CHECK(escene->giStatus().staleProbes == 0 && worstCaptures(20) == 0,
+        CHECK(escene->published().gi.staleProbes == 0 && worstCaptures(20) == 0,
               "paused drag: the grid catches up after the gesture, then idles");
     }
 
@@ -711,8 +711,8 @@ int main(int argc, char **argv)
         for (int f = 0; f < 30; ++f) frame();
         sun->setMobility(iris::Mobility::Movable);
         for (int f = 0; f < 20; ++f) frame();          // the classification lands
-        const quint64 solves = mirror.target()->giStatus().schedulerResolves;
-        const quint64 injects = mirror.target()->giStatus().schedulerLightTicks;
+        const quint64 solves = mirror.target()->published().gi.schedulerResolves;
+        const quint64 injects = mirror.target()->published().gi.schedulerLightTicks;
         for (int f = 0; f < 60; ++f) {
             const float t = float(f + 1) / 60.0f;
             sun->setLocalRot(iris::Quat::fromEulerAngles(80.0f - 160.0f * t, 0.0f, 0.0f));
@@ -721,8 +721,8 @@ int main(int argc, char **argv)
         // ...and it STOPS, for longer than the settle window, which is the
         // frame a still lamp would have re-solved on.
         for (int f = 0; f < 40; ++f) frame();
-        const quint64 movingSolves = mirror.target()->giStatus().schedulerResolves - solves;
-        const quint64 movingInjects = mirror.target()->giStatus().schedulerLightTicks - injects;
+        const quint64 movingSolves = mirror.target()->published().gi.schedulerResolves - solves;
+        const quint64 movingInjects = mirror.target()->published().gi.schedulerLightTicks - injects;
         std::printf("   MOVABLE lamp, 60 frames of motion + 40 still: re-solves = %llu, "
                     "cheap re-injects = %llu\n", (unsigned long long)movingSolves,
                     (unsigned long long)movingInjects);

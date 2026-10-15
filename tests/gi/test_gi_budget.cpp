@@ -219,7 +219,7 @@ int main(int argc, char **argv)
     std::printf("-- C: updateBudget 0 (paused)\n");
     frames(8);
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("   giStatus: probes=%d pccBound=%s updates/frame=%d\n",
                     st.probeCount, st.pccBound ? "true" : "false", st.probeUpdatesPerFrame);
         std::printf("   volume %.2f %.2f %.2f .. %.2f %.2f %.2f   region %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
@@ -232,16 +232,16 @@ int main(int argc, char **argv)
     }
     const Colour pausedParked = mirrorPixel();
     show("budget 0, mover parked", pausedParked);
-    const quint64 refresh0 = mirror.target()->giStatus().schedulerResolves, light0 = mirror.target()->giStatus().schedulerLightTicks;
+    const quint64 refresh0 = mirror.target()->published().gi.schedulerResolves, light0 = mirror.target()->published().gi.schedulerLightTicks;
     moveMover(kMoverOnRay);
     unsigned pausedCaptures = 0;
     for (int i = 0; i < 40; ++i) {
         frame();
-        pausedCaptures += unsigned(escene->giStatus().probeCapturesLastFrame);
+        pausedCaptures += unsigned(escene->published().gi.probeCapturesLastFrame);
     }
     const Colour pausedMoved = mirrorPixel();
     show("budget 0, mover ON the reflection ray", pausedMoved);
-    CHECK(mirror.target()->giStatus().schedulerResolves == refresh0 && mirror.target()->giStatus().schedulerLightTicks == light0,
+    CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 && mirror.target()->published().gi.schedulerLightTicks == light0,
           "budget 0: moving geometry costs no re-solve and no re-inject");
     // FROZEN = NOTHING WAS CAPTURED, counted (PHOTON-VOXEL-3 round 9). The mirror pixel is
     // the hybrid's blend of the probe with the cone-traced reflection, and the cone half
@@ -258,12 +258,12 @@ int main(int argc, char **argv)
     // refresh captures the whole grid at once, as it always did (P6 spreads
     // re-captures only where there IS a budget).
     {
-        const quint64 before = mirror.target()->giStatus().schedulerResolves;
+        const quint64 before = mirror.target()->published().gi.schedulerResolves;
         ++doc->giRefreshSerial;
         frame();
         const Colour refreshed = mirrorPixel();
         show("budget 0, after world.refreshGi()", refreshed);
-        CHECK(mirror.target()->giStatus().schedulerResolves == before + 1, "budget 0: world.refreshGi() still re-solves");
+        CHECK(mirror.target()->published().gi.schedulerResolves == before + 1, "budget 0: world.refreshGi() still re-solves");
         // 0.3, not the 0.5 the two sweep cases below use: the separation this
         // one reads is +0.380 (r 0.051 g 0.431) since R5-ROOM moved the probe
         // grid off the retired room-measuring rule's region and onto the one
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
         // r 0.533 g 0.263, i.e. the opposite sign.
         CHECK(refreshed.g > refreshed.r + 0.3f,
               "budget 0: ...and re-captures at once (the mirror shows the slab on the next frame)");
-        CHECK(escene->giStatus().staleProbes == 0, "budget 0: nothing is left stale after it");
+        CHECK(escene->published().gi.staleProbes == 0, "budget 0: nothing is left stale after it");
     }
 
     // =======================================================================
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
     doc->giUpdateBudget = 1;
     frames(30);          // the budget change is a param push: one rebuild, then settle
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         CHECK(st.probeUpdatesPerFrame == 1, "budget 1 spends exactly one probe update a frame");
     }
     const Colour sweepParked = mirrorPixel();
@@ -293,14 +293,14 @@ int main(int argc, char **argv)
     // Caught up and IDLE before the move: nothing is stale, so the move below
     // is the only thing the grid has to catch up with.
     frames(30);
-    CHECK(escene->giStatus().staleProbes == 0, "A: settled — no probe is stale before the move");
-    const quint64 refreshA = mirror.target()->giStatus().schedulerResolves, lightA = mirror.target()->giStatus().schedulerLightTicks;
-    const unsigned long long serialA = escene->giStatus().staleSerial;
+    CHECK(escene->published().gi.staleProbes == 0, "A: settled — no probe is stale before the move");
+    const quint64 refreshA = mirror.target()->published().gi.schedulerResolves, lightA = mirror.target()->published().gi.schedulerLightTicks;
+    const unsigned long long serialA = escene->published().gi.staleSerial;
     moveMover(kMoverOnRay);
     frame();
     const Colour afterOne = mirrorPixel();
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("   after the move: staleProbes=%d reason=%d captures=%d\n",
                     st.staleProbes, int(st.lastStaleReason), st.probeCapturesLastFrame);
         CHECK(st.staleSerial > serialA && st.lastStaleReason == GiStaleReason::Moved,
@@ -310,13 +310,13 @@ int main(int argc, char **argv)
     }
     frames(kProbes - 1);
     const Colour afterSweep = mirrorPixel();
-    CHECK(escene->giStatus().staleProbes == 0,
+    CHECK(escene->published().gi.staleProbes == 0,
           "A: within ceil(probes / budget) frames of the change no probe is stale (caught up)");
     show("budget 1, ONE frame after the move", afterOne);
     show("budget 1, a FULL SWEEP after the move", afterSweep);
     std::printf("   during the catch-up: full re-solves = %llu, light re-injects = %llu\n",
-                (unsigned long long)(mirror.target()->giStatus().schedulerResolves - refreshA),
-                (unsigned long long)(mirror.target()->giStatus().schedulerLightTicks - lightA));
+                (unsigned long long)(mirror.target()->published().gi.schedulerResolves - refreshA),
+                (unsigned long long)(mirror.target()->published().gi.schedulerLightTicks - lightA));
 
     // THE SWEEP GUARANTEE: within ceil(probes / budget) frames the whole grid
     // has re-captured, so the reflection is fully caught up.
@@ -330,7 +330,7 @@ int main(int argc, char **argv)
           "one frame of budget 1 has NOT caught up yet (the budget is a rate)");
     // B, first half: no full re-solve happened during the catch-up. The probes
     // did it on the budget, which is the entire point.
-    CHECK(mirror.target()->giStatus().schedulerResolves == refreshA,
+    CHECK(mirror.target()->published().gi.schedulerResolves == refreshA,
           "the catch-up cost ZERO full GI re-solves (the probes did it on the budget)");
 
     // The same move at a budget of `kProbes` lands in ONE frame — the two
@@ -340,7 +340,7 @@ int main(int argc, char **argv)
     frames(30);
     doc->giUpdateBudget = kProbes;
     frames(30);
-    CHECK(escene->giStatus().probeUpdatesPerFrame == kProbes,
+    CHECK(escene->published().gi.probeUpdatesPerFrame == kProbes,
           "budget 4 spends the whole grid every frame");
     const Colour wholeParked = mirrorPixel();
     moveMover(kMoverOnRay);
@@ -358,13 +358,13 @@ int main(int argc, char **argv)
     // =======================================================================
     std::printf("-- B: a 40-frame geometry drag\n");
     frames(30);                       // let the previous move settle completely
-    const quint64 refreshB = mirror.target()->giStatus().schedulerResolves, lightB = mirror.target()->giStatus().schedulerLightTicks;
+    const quint64 refreshB = mirror.target()->published().gi.schedulerResolves, lightB = mirror.target()->published().gi.schedulerLightTicks;
     for (int f = 0; f < 40; ++f) {
         moveMover(kMoverOnRay - 0.06f * float(f));
         frame();
     }
-    const quint64 duringSolves = mirror.target()->giStatus().schedulerResolves - refreshB;
-    const quint64 duringLight  = mirror.target()->giStatus().schedulerLightTicks - lightB;
+    const quint64 duringSolves = mirror.target()->published().gi.schedulerResolves - refreshB;
+    const quint64 duringLight  = mirror.target()->published().gi.schedulerLightTicks - lightB;
     std::printf("   during the drag: full re-solves = %llu, light re-injects = %llu\n",
                 (unsigned long long)duringSolves, (unsigned long long)duringLight);
     CHECK(duringSolves == 0,
@@ -372,11 +372,11 @@ int main(int argc, char **argv)
     CHECK(duringLight > 0,
           "...and the cheap light re-inject runs during it (bounced light follows)");
     frames(25);                       // let go
-    const quint64 afterSolves = mirror.target()->giStatus().schedulerResolves - refreshB;
+    const quint64 afterSolves = mirror.target()->published().gi.schedulerResolves - refreshB;
     std::printf("   after it stops: full re-solves = %llu\n", (unsigned long long)afterSolves);
     CHECK(afterSolves == 1, "letting go re-solves EXACTLY once for the whole drag");
     frames(25);
-    CHECK(mirror.target()->giStatus().schedulerResolves - refreshB == 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves - refreshB == 1,
           "...and never again while nothing moves (the re-solve is not self-sustaining)");
 
     // =======================================================================
@@ -384,7 +384,7 @@ int main(int argc, char **argv)
     // =======================================================================
     std::printf("-- E: 120 idle frames\n");
     frames(30);                       // anything owed (the settle's stale grid) drains
-    CHECK(escene->giStatus().staleProbes == 0, "E: caught up before the idle run");
+    CHECK(escene->published().gi.staleProbes == 0, "E: caught up before the idle run");
     {
         RenderStats rs;
         engine->renderStats(rs);      // switches metrics recording on
@@ -392,10 +392,10 @@ int main(int argc, char **argv)
         engine->renderStats(rs);
         const unsigned long long draws0 = rs.draws;
         int capturingFrames = 0, drawMoves = 0, worstCaptures = 0;
-        const quint64 refreshE = mirror.target()->giStatus().schedulerResolves, lightE = mirror.target()->giStatus().schedulerLightTicks;
+        const quint64 refreshE = mirror.target()->published().gi.schedulerResolves, lightE = mirror.target()->published().gi.schedulerLightTicks;
         for (int f = 0; f < 120; ++f) {
             frame();
-            const GiStatus st = escene->giStatus();
+            const GiStatus st = escene->published().gi;
             if (st.probeCapturesLastFrame != 0) ++capturingFrames;
             worstCaptures = std::max(worstCaptures, st.probeCapturesLastFrame);
             engine->renderStats(rs);
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
         CHECK(capturingFrames == 0,
               "E: 120 idle frames re-capture ZERO probes (probeCapturesLastFrame 0 every frame)");
         CHECK(drawMoves == 0, "E: ...and the frame's draw count never moves");
-        CHECK(mirror.target()->giStatus().schedulerResolves == refreshE && mirror.target()->giStatus().schedulerLightTicks == lightE,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refreshE && mirror.target()->published().gi.schedulerLightTicks == lightE,
               "E: ...and nothing re-solves or re-injects either");
     }
 
@@ -415,7 +415,7 @@ int main(int argc, char **argv)
     // D. THE REUSE ARM, AND WHAT IT SAVES (B4)
     // =======================================================================
     std::printf("-- D: the reuse arm\n");
-    CHECK(escene->giStatus().reusedLastRefresh,
+    CHECK(escene->published().gi.reusedLastRefresh,
           "the settle re-solve RE-USED the voxel arm (nothing was destroyed)");
 
     // The from-scratch reference. setGlobalIllumination ALWAYS tears the arm
@@ -446,10 +446,10 @@ int main(int argc, char **argv)
     };
     timeMs(2, false);
     const double reuse = timeMs(6, false);
-    CHECK(escene->giStatus().reusedLastRefresh, "...and keeps re-using it while nothing dies");
+    CHECK(escene->published().gi.reusedLastRefresh, "...and keeps re-using it while nothing dies");
     timeMs(2, true);
     const double scratch = timeMs(6, true);
-    CHECK(!escene->giStatus().reusedLastRefresh,
+    CHECK(!escene->published().gi.reusedLastRefresh,
           "a from-scratch build reports reusedLastRefresh false");
     std::printf("   MID-SCENE REFRESH COST: reused %.2f ms   from scratch %.2f ms   (%.1fx)\n",
                 reuse, scratch, scratch / (reuse > 0.001 ? reuse : 0.001));
@@ -461,18 +461,18 @@ int main(int argc, char **argv)
     // off the GPU scene at every build (ATOM P4b) — so a deleted node is answered
     // by the cascades its box reaches, never by a from-scratch rebuild.
     escene->refreshGlobalIllumination();
-    CHECK(escene->giStatus().reusedLastRefresh, "the arm is being re-used again");
+    CHECK(escene->published().gi.reusedLastRefresh, "the arm is being re-used again");
     {
         auto doomed = slab(doc, "doomed", white, iris::Vec3(3.4f, 0.6f, -3.4f),
                            iris::Vec3(0.5f, 0.5f, 0.5f));
         frames(30);
-        CHECK(escene->giStatus().reusedLastRefresh,
+        CHECK(escene->published().gi.reusedLastRefresh,
               "adding a node still lets the arm be re-used (growth is safe)");
-        const unsigned long long rebuildsBefore = escene->giStatus().rebuilds;
+        const unsigned long long rebuildsBefore = escene->published().gi.rebuilds;
         doc->getRootNode()->removeChild(doomed);
         frames(4);
-        CHECK(escene->giStatus().reusedLastRefresh &&
-                  escene->giStatus().rebuilds == rebuildsBefore,
+        CHECK(escene->published().gi.reusedLastRefresh &&
+                  escene->published().gi.rebuilds == rebuildsBefore,
               "destroying a node takes the chain's dirty path too (no from-scratch rebuild)");
     }
     frames(30);

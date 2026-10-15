@@ -204,7 +204,7 @@ static void measure(Engine *e, Slab &o, const char *what, float &inside, float &
     Image img;
     render(e, 8);
     o.view->readPixels(img);
-    const GiStatus st = o.scene->giStatus();
+    const GiStatus st = o.scene->published().gi;
     // The edge the engine actually fitted, read back rather than assumed.
     const float edge = st.boundsMin.x;
     const unsigned edgeCol = columnForX(edge);
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
         CHECK(o.scene->setGlobalIllumination(hybridDdgi()), "hybrid + DDGI arms");
         float inside = 0.0f, outside = 0.0f;
         measure(e, o, "flat ambient, GI on", inside, outside);
-        const GiStatus st = o.scene->giStatus();
+        const GiStatus st = o.scene->published().gi;
         CHECK(st.vctBound, "the voxel arm is bound");
         CHECK(st.boundsMax.x - st.boundsMin.x < 48.0f,
               "the lit volume really is smaller than the slab (there IS an edge to cross)");

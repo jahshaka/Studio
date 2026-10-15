@@ -236,7 +236,7 @@ int main(int argc, char **argv)
     }
     std::printf("   converged after %d frames (quiet %d; %u frames with field work)\n", settle, quiet, settleWork);
     CHECK(quiet >= 30, "the field converges and goes quiet on a still scene");
-    const GiStatus g0 = s->giStatus();
+    const GiStatus g0 = s->published().gi;
     std::printf("   the field: bound %d, %d probes, %d a frame\n", g0.ifdBound ? 1 : 0, g0.ifdProbes,
                 g0.ifdProbesPerFrame);
     CHECK(g0.ifdBound && g0.ifdProbes > 0, "the scene's irradiance field is live (not vacuous)");
@@ -300,8 +300,8 @@ int main(int argc, char **argv)
         enginetest::frames(e, 30);
         const PhotonFieldStatus fr = photonFieldStatus(*s);
         std::printf("   at rest: %llu integrations in 30 frames, giAtRest %d\n", fr.integrations - fs.integrations,
-                    s->giStatus().giAtRest ? 1 : 0);
-        CHECK(fr.integrations == fs.integrations && s->giStatus().giAtRest,
+                    s->published().gi.giAtRest ? 1 : 0);
+        CHECK(fr.integrations == fs.integrations && s->published().gi.giAtRest,
               "S5: AT REST after the stop: no integration in 30 frames, the scene at rest");
         // S4: the work.
         std::printf("   THE WORK: %llu integrations with the stop, %llu without (%.2fx less)\n", fs.integrations,
@@ -413,7 +413,7 @@ int main(int argc, char **argv)
         // Settled already (above). Re-integrate with nothing changed, reading the atlas after
         // every pass: a pass is done when the refinements owed move (or the field goes quiet).
         std::vector<GiFieldAtlas> passes;
-        unsigned owedSeen = s->giStatus().ifdRefinesOwed;   // 0: converged
+        unsigned owedSeen = s->published().gi.ifdRefinesOwed;   // 0: converged
         s->refreshGiLighting(false);
         int quietRun = 0;
         bool started = false;
@@ -424,7 +424,7 @@ int main(int argc, char **argv)
             e->takeMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             quietRun = (w.frames && !w.framesWithWork) ? quietRun + 1 : 0;
-            const unsigned owed = s->giStatus().ifdRefinesOwed;
+            const unsigned owed = s->published().gi.ifdRefinesOwed;
             // A PASS ENDED on the frame before the refinements owed fall (this frame began the next)
             // or on the last frame with work (the field went quiet); the reset raising them
             // (0 -> K - 1) is the event's own pass beginning, not an end. The atlas of the frame
@@ -437,7 +437,7 @@ int main(int argc, char **argv)
         }
         // The quiet frame's read repeats the last pass when the refinement's own boundary already
         // captured it: one pass per sample, the target's count.
-        const unsigned target = s->giStatus().ifdTargetSamples;
+        const unsigned target = s->published().gi.ifdTargetSamples;
         if (passes.size() > target) passes.resize(target);
         const unsigned K = unsigned(passes.size());
         if (!K || !passes[0].available) { std::printf("FAIL: no atlas passes read\n"); return 1; }
@@ -446,7 +446,7 @@ int main(int argc, char **argv)
         const unsigned bordered = a0.irradBordered, res = bordered - 2u, width = a0.irradWidth;
         const unsigned bpp = a0.irradBytesPerTexel;
         std::printf("   %u passes read (the target %u samples), %u probes, %ux%u texels each, %u bytes a texel\n", K,
-                    s->giStatus().ifdTargetSamples, np, res, res, bpp);
+                    s->published().gi.ifdTargetSamples, np, res, res, bpp);
         const auto lum = [&](const GiFieldAtlas &a, unsigned p, unsigned tx, unsigned ty) {
             const unsigned x = (p * bordered) % width + 1u + tx, y = ((p * bordered) / width) * bordered + 1u + ty;
             const unsigned short *h = reinterpret_cast<const unsigned short *>(&a.irradiance[(size_t(y) * width + x) * bpp]);
@@ -578,9 +578,9 @@ int main(int argc, char **argv)
     CHECK(movers2.framesWithWork == 0u,
           "MOVERS GENERATE NO FIELD: no field work on any frame (movers are not in the voxels the field reads)");
     // A: the camera walks; the field's window follows cascade 0 and scrolls.
-    const GiStatus g0w = s->giStatus();
+    const GiStatus g0w = s->published().gi;
     const FieldWork walk = run("camera walks", 120, true, false);
-    const GiStatus g1 = s->giStatus();
+    const GiStatus g1 = s->published().gi;
     const unsigned long long scrolls = g1.ifdScrolls - g0w.ifdScrolls;
     const unsigned long long bound = (unsigned long long)g1.ifdScrollProbes * g1.ifdTargetSamples * scrolls;
     std::printf("   follows %llu (scrolls %llu, replacements %llu); the last scroll entered %u probes, the "
@@ -616,7 +616,7 @@ int main(int argc, char **argv)
             e->takeMonitorRecords(recs);
             one.insert(one.end(), recs.begin(), recs.end());
         }
-        const GiStatus gs = s->giStatus();
+        const GiStatus gs = s->published().gi;
         print("one still moved once", fieldWork(one));
         const PhotonFieldStatus i1 = photonFieldStatus(*s);
         std::printf("   the generation job's own count: %llu probe integrations (the stop %s, %u of %u probes stopped)\n",

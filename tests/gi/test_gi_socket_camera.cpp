@@ -79,7 +79,7 @@ int main()
     CHECK(scene->setGlobalIllumination(gi), "the cascade arm accepts");
     enginetest::frames(e, 16);
 
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(!st.cascades.empty(), "the chain is up");
     if (st.cascades.empty()) { std::printf("\n%d failure(s)\n", failures); return 1; }
     printC0("at rest ", st, start);
@@ -91,7 +91,7 @@ int main()
     // handful of frames covers its own schedule; the bar is the distance.
     const int kFrames = int(st.cascades.size()) + 2;
     enginetest::frames(e, kFrames);
-    st = scene->giStatus();
+    st = scene->published().gi;
     printC0("after 30 m", st, moved);
     if (!st.cascades.empty()) {
         const auto &c = st.cascades[0];

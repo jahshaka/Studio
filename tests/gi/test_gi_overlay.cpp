@@ -184,11 +184,11 @@ int main(int argc, char **argv)
         }
     };
     const auto maxCorner = [&] {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         return iris::Vec3(st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
     };
     const auto midPoint = [&] {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         return iris::Vec3((st.boundsMin.x + st.boundsMax.x) * 0.5f,
                           (st.boundsMin.y + st.boundsMax.y) * 0.5f,
                           (st.boundsMin.z + st.boundsMax.z) * 0.5f);
@@ -198,7 +198,7 @@ int main(int argc, char **argv)
     cam->update(0.0f);
     settle(30);
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("   the AUTOMATIC volume: %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
                     st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
                     st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);

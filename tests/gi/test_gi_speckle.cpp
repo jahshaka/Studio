@@ -249,7 +249,7 @@ static Run runArm(Fixture &f, const char *name, bool move, bool dump)
     const unsigned bandPx = (kH - kBand0) * kW;
     const unsigned burstPx = unsigned(std::ceil(0.0006 * bandPx));
     Run r;
-    const GiStatus g0 = f.s->giStatus();
+    const GiStatus g0 = f.s->published().gi;
     Image prev, cur, worstA, worstB;
     for (int i = 0; i < 60; ++i) {
         const float y = move ? 1.2f + 0.6f * std::sin(float(i) * 2.0f * kPi / 40.0f) : 1.2f;
@@ -257,7 +257,7 @@ static Run runArm(Fixture &f, const char *name, bool move, bool dump)
         f.s->setNodeTransform(f.sphere, Vec3(0.0f, y, 0.0f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
         render(f.e, 1);
         f.view->readPixels(cur);
-        r.records += f.s->rayQueryStatus().hitRecords;
+        r.records += f.s->published().rayQuery.hitRecords;
         if (i > 0) {
             const unsigned n = bandChanged(prev, cur);
             ++r.pairs;
@@ -269,7 +269,7 @@ static Run runArm(Fixture &f, const char *name, bool move, bool dump)
         std::swap(prev, cur);
     }
     enginetest::gesture(f.e, f.s, {});
-    const GiStatus g1 = f.s->giStatus();
+    const GiStatus g1 = f.s->published().gi;
     std::printf("   [%s] cards: %llu invalidated by a transform, %llu captures; cascade rebuilds %llu\n", name,
                 g1.cards.invalidTransform - g0.cards.invalidTransform, g1.cards.captures - g0.cards.captures,
                 (unsigned long long)(g1.rebuilds - g0.rebuilds));
@@ -343,7 +343,7 @@ static void routeAgreement(Engine *e)
         quiet.readback = false;
         s->setGatherTuning(quiet);
         render(e, 112);
-        const unsigned since = s->giStatus().gather.frame;
+        const unsigned since = s->published().gi.gather.frame;
         s->setGatherTuning(t);
         render(e, 8);
         mean = 0.0;
@@ -351,9 +351,9 @@ static void routeAgreement(Engine *e)
         records = 0;
         for (int k = 0; k < 8; ++k) {
             render(e, 1);
-            records += s->rayQueryStatus().hitRecords;
-            dropped += s->rayQueryStatus().hitDropped;
-            const GatherStatus g = s->giStatus().gather;
+            records += s->published().rayQuery.hitRecords;
+            dropped += s->published().rayQuery.hitDropped;
+            const GatherStatus g = s->published().gi.gather;
             if (g.irradiance.empty() || g.irradianceFrame < since) continue;
             const double halfW = 4.0 * double(g.irradianceW) / double(g.irradianceH);
             for (unsigned y = 0; y < g.irradianceH; ++y)

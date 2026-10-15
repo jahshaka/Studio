@@ -173,13 +173,13 @@ int main()
     pr.maxDistance = 4.0f;
     CHECK(s->setPlanarReflections(pr), "setPlanarReflections(budget 2) applies");
     CHECK(s->setPlanarReflections(pr), "setPlanarReflections is idempotent");
-    CHECK(s->activePlanarReflectors() == 0, "no actors active before any node is a reflector");
+    CHECK(s->published().activePlanarReflectors == 0, "no actors active before any node is a reflector");
 
     CHECK(s->setNodePlanarReflector(floor, true), "the floor plate accepts the reflector flag");
     CHECK(s->nodePlanarReflector(floor), "planarReflector reads back true");
 
     const float redOn = measure(engine.get(), view, "reflections on");
-    CHECK(s->activePlanarReflectors() == 1, "exactly one actor rendered");
+    CHECK(s->published().activePlanarReflectors == 1, "exactly one actor rendered");
     CHECK(redOn > redOff + 0.10f, "the emitter is REFLECTED in the floor (red appears)");
     // Same statement, said as the self-exclusion assertion it also is: the
     // reflection camera is under the plate looking up, so any red at all proves
@@ -198,7 +198,7 @@ int main()
     CHECK(s->setNodePlanarReflector(floor, false), "the reflector flag clears");
     CHECK(!s->nodePlanarReflector(floor), "planarReflector reads back false");
     const float redCleared = measure(engine.get(), view, "reflector cleared");
-    CHECK(s->activePlanarReflectors() == 0, "no actors active once the flag is cleared");
+    CHECK(s->published().activePlanarReflectors == 0, "no actors active once the flag is cleared");
     CHECK(redCleared < redOff + 0.06f, "clearing the flag restores the original pixels");
 
     // ---- 3b. EDITOR HELPERS ARE NOT REFLECTED (2026-09-07 fix wave) ---------
@@ -275,7 +275,7 @@ int main()
     if (!s->nodePlanarReflector(plateB) || !s->nodePlanarReflector(plateC))
         std::printf("   arm failure: %s\n", engine->lastError().c_str());
     render(engine.get(), 3);
-    const int active = s->activePlanarReflectors();
+    const int active = s->published().activePlanarReflectors;
     std::printf("   active actors with 3 reflectors at budget 2: %d\n", active);
     CHECK(active == 2, "the budget caps how many planes render");
 
@@ -284,8 +284,8 @@ int main()
     pr.budget = 3;
     CHECK(s->setPlanarReflections(pr), "budget raised to 3");
     render(engine.get(), 3);
-    std::printf("   active actors at budget 3: %d\n", s->activePlanarReflectors());
-    CHECK(s->activePlanarReflectors() == 3, "all three planes render at budget 3");
+    std::printf("   active actors at budget 3: %d\n", s->published().activePlanarReflectors);
+    CHECK(s->published().activePlanarReflectors == 3, "all three planes render at budget 3");
     // The reflector flags survived the arm being rebuilt from scratch.
     CHECK(s->nodePlanarReflector(floor) && s->nodePlanarReflector(plateB) &&
           s->nodePlanarReflector(plateC), "reflector flags survive a budget change");

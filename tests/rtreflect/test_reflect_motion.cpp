@@ -316,7 +316,7 @@ int main()
                   still, stillBar);
     }
 
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d\n", int(rq.available),
                 int(rq.enabled), int(rq.reflect));
     if (raysWanted) CHECK(rq.reflect, "the tier is tracing this view's reflections");
@@ -375,7 +375,7 @@ int main()
             view->readPixels(boxed);
             shot->readPixels(plain);
             {
-                const RayQueryStatus lrq = s->rayQueryStatus();
+                const RayQueryStatus lrq = s->published().rayQuery;
                 std::printf("    letterboxed: rayQuery reflect=%d rays=%d\n", int(lrq.reflect),
                             lrq.reflectRays);
             }

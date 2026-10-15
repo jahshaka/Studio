@@ -2083,7 +2083,7 @@ int main() {
                 // reflectMs is the monitor's row (lane TEST-1): a capture for the pump.
                 enginetest::GpuTimingWindow gpuTiming(engine.get());
                 pump(engine.get(), engine->vrStatus().frames + 32ull, 900u);
-                rq = scene->rayQueryStatus();
+                rq = scene->published().rayQuery;
             }
             std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f\n",
                         int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays,
@@ -2738,7 +2738,7 @@ int main() {
             }
             ObjectCounts objBefore;
             engine->objectCounts(objBefore);
-            const GiStatus giBefore = scene->giStatus();
+            const GiStatus giBefore = scene->published().gi;
 
             unsigned toOwn = 0, toEye = 0, disagreements = 0;
             double flipMs = 0.0, steadyMs = 0.0;
@@ -2778,7 +2778,7 @@ int main() {
             // OgreEngine::renderOneFrame), so a desktop that takes the window
             // back must not take the CHAIN with it — that flip cost two
             // from-scratch cascade builds a cycle before that rule existed.
-            const GiStatus giAfter = scene->giStatus();
+            const GiStatus giAfter = scene->published().gi;
             CHECK_MSG(giAfter.rebuilds == giBefore.rebuilds &&
                           giAfter.cascadeFullRebuilds == giBefore.cascadeFullRebuilds,
                       "TWENTY FLIPS REBUILD NO GI: from-scratch %llu -> %llu, whole-chain "

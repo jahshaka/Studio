@@ -1739,7 +1739,7 @@ void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
     };
     const auto band0 = [&]() {
         float sh[27] = { 0.0f };
-        if (!s->skyAmbientSh(sh)) return -1.0f;
+        if (!s->published().copySkyAmbientSh(sh)) return -1.0f;
         return sh[0];
     };
 
@@ -3553,7 +3553,7 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
     // sky, on the GPU), so the engine has an ambient integral for it and nobody
     // had to bake an image.
     float sh[27] = { 0.0f };
-    CHECK_MSG(s->skyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
+    CHECK_MSG(s->published().copySkyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
               "the analytic sky is captured and integrated: band0 %.3f %.3f %.3f",
               sh[0], sh[1], sh[2]);
 }
@@ -3874,7 +3874,7 @@ void sky_ambient_read_is_deferred_through_a_drag() {
     };
     const auto band0 = [&]() {
         float sh[27] = { 0.0f };
-        if (!s->skyAmbientSh(sh)) return -1.0f;
+        if (!s->published().copySkyAmbientSh(sh)) return -1.0f;
         return sh[0];
     };
 
@@ -4000,19 +4000,19 @@ void sun_disc_stays_out_of_the_skys_ambient() {
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
     float shOut[27] = { 0.0f };
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0Out = shOut[0];
 
     sky.sun.inProbes = true;
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0In = shOut[0];
 
     sky.sun.angularDiameterDeg = 170.0f;
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0Huge = shOut[0];
     std::printf("    sky band0: disc out %.6f, 0.53 deg in %.6f, 170 deg in %.6f "
                 "(a 96-grey sky is %.6f)\n",
@@ -6310,7 +6310,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
     rigA.s->setPlanarReflections(planar);
     rigA.s->setNodePlanarReflector(rigA.ground, true);
     render(fx.e, 3);
-    CHECK_MSG(rigA.s->activePlanarReflectors() > 0,
+    CHECK_MSG(rigA.s->published().activePlanarReflectors > 0,
               "the rig's mirror must actually render, or this case guards nothing");
 
     // A SECOND view on its own scene, so the frame still has something to draw
@@ -6348,7 +6348,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
         const std::string err = fx.e->takeLastError();
         CHECK_MSG(err.empty(), "rendering the re-enabled view after a stop: %s", err.c_str());
     }
-    CHECK_MSG(rigA.s->activePlanarReflectors() > 0, "the mirror still renders afterwards");
+    CHECK_MSG(rigA.s->published().activePlanarReflectors > 0, "the mirror still renders afterwards");
 
     // On and off again over the same switch must also be clean.
     fx.e->setFrameMonitor(MonitorLevel::Review);

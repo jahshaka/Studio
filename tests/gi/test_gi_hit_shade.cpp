@@ -463,7 +463,7 @@ static int mirrorArms(Engine *e)
         // MIRROR shot (the raster from the reflected camera traces no mirror).
         show(false, true);
         shot(true);
-        const RayQueryStatus st = s->rayQueryStatus();
+        const RayQueryStatus st = s->published().rayQuery;
         std::printf("   records: %llu appended, %llu dropped, capacity %llu, %d decode draws\n", st.hitRecords,
                     st.hitDropped, st.hitCapacity, st.hitDecodeDraws);
         CHECK_MSG(st.hitRecords > 0 && st.hitDropped == 0 && st.hitDecodeDraws >= 1,
@@ -486,7 +486,7 @@ static int mirrorArms(Engine *e)
     // WHO ANSWERS THE FLOOR'S HITS: the mirror shot above sees the floor and no
     // crate — every hit it traced is a card's (an out-of-frustum card hit writes
     // no record); the hit list must be empty.
-    const unsigned long long floorRecords = s->rayQueryStatus().hitRecords;
+    const unsigned long long floorRecords = s->published().rayQuery.hitRecords;
     show(false, true);
     const NodeId lamp = s->createNode();
     enginetest::setNodePosition(s, lamp, Vec3(1.2f, 1.3f, -6.8f));
@@ -1300,7 +1300,7 @@ static int gatherArm(Engine *e)
     CHECK_MSG(allOk, "(b) the floor's bounce off a MOVER emitter is at least the closed form x (1 - eps) at every "
                      "point (worst ratio %.3f) — the gather's hit on a mover is shaded by the decode (before this "
                      "lane: BLACK)", worstRatio);
-    const RayQueryStatus st = s->rayQueryStatus();
+    const RayQueryStatus st = s->published().rayQuery;
     std::printf("   records: %llu appended, %llu dropped (capacity %llu)\n", st.hitRecords, st.hitDropped,
                 st.hitCapacity);
     e->destroyView(view);
@@ -1395,7 +1395,7 @@ static int offscreenLightsMain(Engine *e)
     s->setNodeVisible(mov, true);
     const ImageF mOn = shot(true);
     // The counters are read back several frames late: read after a MIRROR shot.
-    const RayQueryStatus st = s->rayQueryStatus();
+    const RayQueryStatus st = s->published().rayQuery;
     const ImageF rOn = shot(false);
     e->setArm("atom.hitWorldLights", 1.0);   // off
     const ImageF mListOff = shot(true);
@@ -1551,7 +1551,7 @@ static int planarMain(Engine *e, bool pinnedChain)
     const ImageF mNone = shot(true), rNone = shot(false);
     s->setNodeVisible(b, true);
     const ImageF mB = shot(true);
-    const RayQueryStatus st = s->rayQueryStatus();
+    const RayQueryStatus st = s->published().rayQuery;
     const ImageF rB = shot(false);
     s->setNodePlanarReflector(b, false);
     const ImageF mBefore = shot(true);
@@ -1723,12 +1723,12 @@ static int voxelViewMain(Engine *e)
     const ImageF mNone = shot(true), rNone = shot(false);
     s->setNodeVisible(floorN, true);
     const ImageF mCard = shot(true), rFloor = shot(false);
-    const unsigned long long cardRecords = s->rayQueryStatus().hitRecords;
+    const unsigned long long cardRecords = s->published().rayQuery.hitRecords;
     GiParams noCards = gi;
     noCards.cards = false;
     s->setGlobalIllumination(noCards);
     const ImageF mVox = shot(true);
-    const RayQueryStatus stVox = s->rayQueryStatus();
+    const RayQueryStatus stVox = s->published().rayQuery;
     // The floor in both pictures, kept to the rows whose REFLECTION is the floor
     // behind the camera (the mirror's rows; the direct floor below them is the
     // same picture in both mirror shots and differs from the raster's frame).
@@ -1916,7 +1916,7 @@ static int costMain(Engine *e)
                 for (const CacheWork &w : r.cacheWork)
                     if (w.detail == "hit.composite" && w.gpuMs >= 0.0f) { compSum[a] += w.gpuMs; ++compN[a]; }
             }
-            records[size_t(a)] = s->rayQueryStatus().hitRecords;
+            records[size_t(a)] = s->published().rayQuery.hitRecords;
         }
     }
     e->setFrameMonitor(MonitorLevel::Off);
@@ -2011,7 +2011,7 @@ static int costLampsMain(Engine *e)
             for (const MonitorRecord &r : recs)
                 for (const FramePass &p : r.passes)
                     if (p.pass == "Jahshaka hit decode" && p.gpuMs >= 0.0f) { sum[a] += p.gpuMs; ++n[a]; }
-            rec[a] = s->rayQueryStatus().hitRecords;
+            rec[a] = s->published().rayQuery.hitRecords;
         }
     e->setArm("atom.hitWorldLights", 0.0);
     e->setFrameMonitor(MonitorLevel::Off);

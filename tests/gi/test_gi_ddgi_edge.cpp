@@ -265,7 +265,7 @@ static Reading measure(Engine *e, Box &b)
 
     // THE INTERIOR, settled: counted in frames, until GI is at rest, bounded.
     render(e);
-    for (int f = 0; f < 240 && !b.scene->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+    for (int f = 0; f < 240 && !b.scene->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
     b.inside->readPixels(r.interior);
     // The floor patch nearest the red wall (the camera looks from -Z toward +Z,
     // so the far half of the floor is the red wall's side) and one off to the
@@ -330,7 +330,7 @@ int main()
     GiParams on = vctBase();
     on.ddgi = GiToggle::On;
     CHECK(b.scene->setGlobalIllumination(on), "DDGI arms");
-    const GiStatus st = b.scene->giStatus();
+    const GiStatus st = b.scene->published().gi;
     CHECK(st.ifdBound, "the field is bound (the leak has a source)");
     std::printf("   field: %d probes, GI at rest %d\n", st.ifdProbes, int(st.giAtRest));
     // THE VOLUME IS WHERE THE CASE SAYS (D4-PHOTON-TIERS): the one pinned cascade on
@@ -411,7 +411,7 @@ int main()
     enginetest::testCameraLookAt(b.driver, kDriverCase3, Vec3(0.0f, 0.5f, 1.0f));
     CHECK(b.scene->setGlobalIllumination(enc), "VCT without DDGI, enclosing bounds");
     {
-        const GiStatus es = b.scene->giStatus();
+        const GiStatus es = b.scene->published().gi;
         if (!es.cascades.empty()) {
             const auto &c0 = es.cascades[0];
             std::printf("   cascade 0: centre (%.3f %.3f %.3f) half %.3f -> top %.3f\n", c0.centre.x,

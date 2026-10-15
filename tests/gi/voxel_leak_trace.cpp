@@ -48,7 +48,7 @@ int main(int argc, char **argv)
         enginetest::leakroom::setOutsideIntensity(s, room, lamp);
         s->refreshGlobalIllumination();
         enginetest::frames(e, 16);
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+        for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         Image img;
         view->readPixels(img);
         float r = 0, g = 0;

@@ -110,7 +110,7 @@ static void hiddenGeometry(Engine *engine, View *view)
     render(engine, 4);
     view->readPixels(img);
     const Colour withPanel = img.at(fx, fy);
-    const GiStatus visibleSt = s->giStatus();
+    const GiStatus visibleSt = s->published().gi;
     showBox("volume, panel visible", visibleSt);
     std::printf("   floor no-panel  r=%.3f g=%.3f | panel visible r=%.3f g=%.3f\n",
                 noPanel.r, noPanel.g, withPanel.r, withPanel.g);
@@ -139,7 +139,7 @@ static void hiddenGeometry(Engine *engine, View *view)
     render(engine, 4);
     view->readPixels(img);
     const Colour hidden = img.at(fx, fy);
-    const GiStatus hiddenSt = s->giStatus();
+    const GiStatus hiddenSt = s->published().gi;
     showBox("volume, panel hidden", hiddenSt);
     std::printf("   floor panel hidden r=%.3f g=%.3f\n", hidden.r, hidden.g);
     const float bounceOff = (hidden.r - hidden.g) - (noPanel.r - noPanel.g);
@@ -303,7 +303,7 @@ static void hiddenParentBounce(Engine *engine, View *view)
     render(engine, 6);
     view->readPixels(img);
     const Colour withModel = img.at(kFloorX, kFloorY);
-    const GiStatus shownSt = s->giStatus();
+    const GiStatus shownSt = s->published().gi;
     std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f "
                 "(probes %d, GI at rest %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g,
@@ -384,7 +384,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     gi.ddgi = GiToggle::On;
     CHECK(s->setGlobalIllumination(gi), "the hybrid arms over an AUTOMATIC probe placement fit");
     render(engine, 6);
-    const GiStatus shownSt = s->giStatus();
+    const GiStatus shownSt = s->published().gi;
     showBox("volume, root shown", shownSt);
     CHECK(shownSt.probeFitMax.y - shownSt.probeFitMin.y < 8.5f,
           "the pillar the user hid is not in the lit volume (y 0..10 would be)");
@@ -392,7 +392,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     s->setNodeVisible(h.root, false);
     s->refreshGlobalIllumination();
     render(engine, 6);
-    const GiStatus hiddenSt = s->giStatus();
+    const GiStatus hiddenSt = s->published().gi;
     showBox("volume, root hidden", hiddenSt);
     CHECK(hiddenSt.probeFitMax.y - hiddenSt.probeFitMin.y <
               (shownSt.probeFitMax.y - shownSt.probeFitMin.y) * 0.5f,
@@ -402,7 +402,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     s->refreshGlobalIllumination();
     render(engine, 6);
     view->readPixels(img);
-    const GiStatus againSt = s->giStatus();
+    const GiStatus againSt = s->published().gi;
     showBox("volume, root shown again", againSt);
     CHECK(!isGreen(img.at(kPillarX, kPillarY)),
           "showing the root keeps the pillar the user hid out of the picture");
@@ -413,7 +413,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     s->refreshGlobalIllumination();
     render(engine, 6);
     view->readPixels(img);
-    const GiStatus pillarSt = s->giStatus();
+    const GiStatus pillarSt = s->published().gi;
     showBox("volume, pillar shown", pillarSt);
     CHECK(isGreen(img.at(kPillarX, kPillarY)) &&
               pillarSt.probeFitMax.y - pillarSt.probeFitMin.y > 9.5f,
@@ -470,7 +470,7 @@ static void volumeCeiling(Engine *engine, View *view)
     gi.numBounces = 3;
     CHECK(s->setGlobalIllumination(gi), "VCT arms at High over a 1024 m plane");
     render(engine, 4);
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     showBox("1024 m plane, ceiling on", st);
     const float cap = 64.0f;           // GiParams::autoBoundsMax's default
     const float edge = std::max(std::max(st.probeFitMax.x - st.probeFitMin.x,
@@ -516,7 +516,7 @@ static void volumeCeiling(Engine *engine, View *view)
     gi.testProbeGridFitMax = 0.0f;
     CHECK(s->setGlobalIllumination(gi), "autoBoundsMax = 0 re-pushes");
     render(engine, 4);
-    st = s->giStatus();
+    st = s->published().gi;
     showBox("1024 m plane, ceiling off", st);
     CHECK(st.probeFitMax.x - st.probeFitMin.x > 1000.0f,
           "with the ceiling off the volume is the whole plane again");
@@ -528,7 +528,7 @@ static void volumeCeiling(Engine *engine, View *view)
     gi.testProbeRegionMax = Vec3(150.0f, 10.0f, 150.0f);
     CHECK(s->setGlobalIllumination(gi), "an explicit volume re-pushes");
     render(engine, 4);
-    st = s->giStatus();
+    st = s->published().gi;
     showBox("explicit 300 m volume", st);
     CHECK(st.probeFitMax.x - st.probeFitMin.x > 290.0f,
           "a pinned volume is not clamped by the ceiling");

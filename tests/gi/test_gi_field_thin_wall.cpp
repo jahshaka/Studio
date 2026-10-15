@@ -310,8 +310,8 @@ static int buildConverged(Fixture &f, double lat, double hx, double hy)
 {
     buildWith(f, lat, hx, hy, 1, 1);
     int frames = 1;
-    for (; frames < 4000 && f.scene->giStatus().ifdRefinesOwed > 0u; ++frames) render(f.e, 1);
-    return f.scene->giStatus().ifdRefinesOwed == 0u ? frames : -1;
+    for (; frames < 4000 && f.scene->published().gi.ifdRefinesOwed > 0u; ++frames) render(f.e, 1);
+    return f.scene->published().gi.ifdRefinesOwed == 0u ? frames : -1;
 }
 
 static bool setup(Fixture &f, Engine *e)
@@ -338,7 +338,7 @@ static bool setup(Fixture &f, Engine *e)
     render(e, 4);
     if (!f.scene->setGlobalIllumination(fieldGi(0))) return false;
     render(e, 12);
-    const GiStatus st = f.scene->giStatus();
+    const GiStatus st = f.scene->published().gi;
     GiFieldAtlas a0;
     if (!st.ifdBound || st.cascades.empty() || !f.scene->giFieldAtlas(a0)) return false;
     f.cell = st.cascades[0].cell;
@@ -427,7 +427,7 @@ static int runWall(Fixture &f, double sigma)
     for (double lat : lats) {
         const int frames = buildConverged(f, lat, 0.4, 0.4);
         CHECK_MSG(frames > 0, "the field converged (%d frames at budget 1)", frames);
-        K = double(std::max(1u, f.scene->giStatus().ifdTargetSamples));
+        K = double(std::max(1u, f.scene->published().gi.ifdTargetSamples));
         se = 2.0 * sigma / std::sqrt(K);
         const Reading r = readProbe(f, lat, 0.4, 0.4);
         if (!r.ok) { CHECK(false, "the probe reads back"); continue; }
@@ -507,7 +507,7 @@ static int runAlias(Fixture &f)
     // A build's own pass is the first sample everywhere; its K - 1 refinements run
     // at the budget until the field owes nothing.
     const int frames = buildConverged(f, lat, 0.4, 0.4);
-    const GiStatus st = f.scene->giStatus();
+    const GiStatus st = f.scene->published().gi;
     const Reading conv = readProbe(f, lat, 0.4, 0.4);
     std::printf("   budget 1: the field owes nothing %d frames after its build (K = %u samples a probe, %u "
                 "probes a frame); converged reading %.3f of the truth (count %.0f)\n", frames, st.ifdTargetSamples,
@@ -572,12 +572,12 @@ static int runAlias(Fixture &f)
         const bool built = room->setGlobalIllumination(fieldGi(1));
         f.e->setArm("gi.fieldSamples", 0.0);
         std::printf("   the room: GI %s (%s), field %s, %d probes\n", built ? "built" : "REFUSED", f.e->lastError().c_str(),
-                    room->giStatus().ifdBound ? "bound" : "UNBOUND", room->giStatus().ifdProbes);
+                    room->published().gi.ifdBound ? "bound" : "UNBOUND", room->published().gi.ifdProbes);
         // Every probe's samples out of its own refining mean (read after each whole
         // pass: a probe whose count stepped by one gave up exactly one sample).
         std::vector<double> prevMean, prevCount, sum, sq, cnt;
         int reads = 0;
-        for (int pass = 0; pass <= 17 && room->giStatus().ifdRefinesOwed > 0u; ++pass) {
+        for (int pass = 0; pass <= 17 && room->published().gi.ifdRefinesOwed > 0u; ++pass) {
             GiFieldAtlas at;
             if (room->giFieldAtlas(at) && at.available) {
                 const unsigned total = at.probes[0] * at.probes[1] * at.probes[2];

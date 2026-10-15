@@ -163,13 +163,13 @@ SettleArm settleArm(Engine *e, const char *name, bool resubmitEveryFrame)
     v.camera = enginetest::testCameraDescLookAt(Vec3(2.5f, 1.8f, 3.0f), Vec3(0, 0.4f, 0));
     in.views.push_back(v);
     e->submitFrame(in);
-    const unsigned long long scans0 = scene->giStatus().giScans;
+    const unsigned long long scans0 = scene->published().gi.giScans;
     for (int f = 0; f < 600; ++f) {
         if (resubmitEveryFrame && f > 0) e->submitFrame(in);
         enginetest::frames(e, 1);
-        if (f > 2 && scene->giStatus().giAtRest) { arm.frames = f + 1; break; }
+        if (f > 2 && scene->published().gi.giAtRest) { arm.frames = f + 1; break; }
     }
-    arm.scans = scene->giStatus().giScans - scans0;
+    arm.scans = scene->published().gi.giScans - scans0;
     std::printf("    [%s] frames to giAtRest %d, GI scans %llu\n", name, arm.frames, arm.scans);
     view->setScene(nullptr);
     e->destroyScene(scene);

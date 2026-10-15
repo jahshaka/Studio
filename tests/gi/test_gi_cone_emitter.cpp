@@ -105,10 +105,10 @@ static void render(Engine *e, int frames = 1)
 static bool settle(Engine *e, Scene *s)
 {
     for (int f = 0; f < 4000; ++f) {
-        if (s->giStatus().giAtRest) return true;
+        if (s->published().gi.giAtRest) return true;
         enginetest::frames(e, 1);
     }
-    return s->giStatus().giAtRest;
+    return s->published().gi.giAtRest;
 }
 
 /// The centre 4 x 4 pixels' mean luminance, scene radiance.
@@ -208,7 +208,7 @@ int main(int argc, char **argv)
         sky.equirect = open->createTexture(1, 1, skyPx, true);
         CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
         float sh[27] = { 0 };
-        for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) enginetest::frames(e, 1);
+        for (int f = 0; f < 20 && !open->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
         open->setAmbientSh(sh);
         open->setEnvironmentLight(Colour(1, 1, 1, 1));
         PbrParams metal;
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
                         cover[r] > 0 ? reads[c][r] / cover[r] : 0.0);
         }
         // (c) THE STORE at the panel: every cascade that holds it.
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         for (int k = 0; k < int(st.cascades.size()) && k < 3; ++k) {
             GiVoxelVolume vol;
             if (!s->giVoxelVolume(k, vol) || !vol.available || vol.multiplier <= 0.0f) continue;

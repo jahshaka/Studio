@@ -325,8 +325,8 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
             for (int i = 0; i < 30; ++i) {
                 enginetest::frames(e, 1);
                 if (i < 10) continue;   // the timestamps come back a few frames late
-                const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
-                                     s->sunContactStatus().gpuMs };
+                const float v[3] = { s->published().rayQuery.reflectMs, s->published().gi.gather.traceMs,
+                                     s->published().sunContact.gpuMs };
                 for (int k = 0; k < 3; ++k)
                     if (v[k] > 0.0f) { sum[arm][k] += v[k]; n[arm][k] += 1.0; }
             }
@@ -351,8 +351,8 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
             for (int i = 0; i < 30; ++i) {
                 enginetest::frames(e, 1);
                 if (i < 10) continue;
-                const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
-                                     s->sunContactStatus().gpuMs };
+                const float v[3] = { s->published().rayQuery.reflectMs, s->published().gi.gather.traceMs,
+                                     s->published().sunContact.gpuMs };
                 for (int k = 0; k < 3; ++k)
                     if (v[k] > 0.0f) { ssum[arm][k] += v[k]; sn[arm][k] += 1.0; }
             }
@@ -476,7 +476,7 @@ int main(int argc, char **argv)
     Image pic[3];
     for (int w : { 0, 2, 1 }) {
         wear(w);
-        std::printf("%s %d  ", w == 0 ? "none" : w == 1 ? "cut-out" : "opaque", s->rayQueryStatus().instances);
+        std::printf("%s %d  ", w == 0 ? "none" : w == 1 ? "cut-out" : "opaque", s->published().rayQuery.instances);
         rc[w] = rayCoverage(s, analytic, agree[w]);
         cc[w] = cardCoverage(s, cardRead[w]);
         f.view->readPixels(pic[w]);

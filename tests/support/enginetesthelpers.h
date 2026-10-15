@@ -147,7 +147,7 @@ template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std
 inline int settleVoxelReadings(Engine *e, Scene *s, int maxFrames = 64)
 {
     for (int f = 0;; ++f) {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         bool current = true;
         for (const GiStatus::CascadeStatus &c : st.cascades)
             current = current && c.voxelReadingGather == c.voxelGathers;

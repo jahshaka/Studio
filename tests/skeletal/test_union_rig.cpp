@@ -215,8 +215,8 @@ int main(int argc, char **argv)
     CHECK(jahshaka::engine::inspect::scene(scene)->boneNames(body).size() == rig->bones.size() &&
               jahshaka::engine::inspect::scene(scene)->boneNames(eye).size() == rig->bones.size(),
           "both pieces speak the union's bones");
-    CHECK(scene->streamedBoneCount(body) == 5, "the body streams its 5 bones, not the union's 8");
-    CHECK(scene->streamedBoneCount(eye) == 2, "the eye streams its 2 bones, not the union's 8");
+    CHECK(scene->published().streamedBonesOf(body) == 5, "the body streams its 5 bones, not the union's 8");
+    CHECK(scene->published().streamedBonesOf(eye) == 2, "the eye streams its 2 bones, not the union's 8");
     {
         const RigStats rs = scene->rigStats();
         CHECK(rs.rigged == 2 && rs.instances == 2 && rs.shared == 0,
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
         const MeshId m = scene->createMesh(pieceMeshData(multipiece::sharedPieceMeshes()[2]));
         const NodeId n = scene->createNode();
         CHECK(scene->attachSkinnedMesh(n, m, mat, own), "a lone piece attaches with no map");
-        CHECK(scene->streamedBoneCount(n) == own.bones.size(),
+        CHECK(scene->published().streamedBonesOf(n) == own.bones.size(),
               "...and streams its whole rig, exactly as before (identity map)");
     }
 
@@ -289,7 +289,7 @@ int main(int argc, char **argv)
             const NodeId n = mirror.engineNode(piece.data());
             if (!n || !jahshaka::engine::inspect::scene(ms)->hasSkeleton(n)) continue;
             ++rigged;
-            streamed += ms->streamedBoneCount(n);
+            streamed += ms->published().streamedBonesOf(n);
             const std::vector<std::string> names = jahshaka::engine::inspect::scene(ms)->boneNames(n);
             if (firstNames.empty()) firstNames = names;
             else oneRig = oneRig && names == firstNames;

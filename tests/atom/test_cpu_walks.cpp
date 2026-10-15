@@ -328,7 +328,7 @@ static void verify(Scene *s, const char *what, unsigned expectTraced = ~0u)
             if (first < 0) first = int(i);
             ++mismatched;
         }
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("  [%s] slots %u, device active %zu, reference %zu, mismatched %u (first %d), overlap %.6f / %.6f, "
                 "missing BLAS %u, traced %d, far %d, skinned %d\n",
                 what, rb.slots, dev.size(), ref.size(), mismatched, first, rb.farOverlap, overlap, missing,
@@ -420,7 +420,7 @@ static int tlasMain()
         chars.push_back(n);
     }
     render(e, 20);
-    const RayQueryStatus rq0 = s->rayQueryStatus();
+    const RayQueryStatus rq0 = s->published().rayQuery;
     CHECK_MSG(rq0.enabled && rq0.tlasJobDispatches > 0, "the ray tier is live and wrote its instances on the device "
               "(%llu dispatches)", (unsigned long long)rq0.tlasJobDispatches);
     // Traced: floor + 20 + 5 movers + 3 non-casters + the edit target + 12 LOD + 2 rigged
@@ -434,7 +434,7 @@ static int tlasMain()
         return n;
     };
     verify(s, "(a) the mixed set");
-    const unsigned tracedA = unsigned(s->rayQueryStatus().instances);
+    const unsigned tracedA = unsigned(s->published().rayQuery.instances);
     const unsigned coarseA = coarseSlots(s);
 
     // (a2) THE CAMERA WALKS: the ray rule moves the near levels (patched in place).
@@ -468,7 +468,7 @@ static int tlasMain()
     // (c) AN IN-PLACE EDIT, NOTHING MOVES: the edit target turns cut-out and its
     // instance turns FORCE_NO_OPAQUE in one frame (the reference writes the flag from
     // the mirror's word), staying in the traced set; then it comes back.
-    const unsigned before = unsigned(s->rayQueryStatus().instances);
+    const unsigned before = unsigned(s->published().rayQuery.instances);
     s->setPbrMaterial(editable, cut);
     render(e, 1);
     verify(s, "(c) an in-place cut-out edit", before);
@@ -544,7 +544,7 @@ static int wordsMain()
     render(e, 60);
 
     auto slotOf = [&](NodeId n) {
-        const GpuSceneStatus st = s->gpuSceneStatus();
+        const GpuSceneStatus st = s->published().gpuScene;
         for (unsigned i = 0; i < st.slotCount; ++i) {
             GpuSceneEntry en;
             if (s->gpuSceneEntry(i, en) && en.nodeId == n) return int(i);
@@ -558,7 +558,7 @@ static int wordsMain()
     };
 
     const AtomDrawStatus a0 = s->atomDrawStatus();
-    const RayQueryStatus r0 = s->rayQueryStatus();
+    const RayQueryStatus r0 = s->published().rayQuery;
     std::printf("  settled: atom %u pbs %u materials %u buckets %u screenDraws %u | visits split %llu rays %llu "
                 "| pbs notes %llu datablocks %llu\n",
                 a0.atomItems, a0.pbsItems, a0.materials, a0.buckets, a0.screenDraws,
@@ -570,7 +570,7 @@ static int wordsMain()
     // (a) STILL FRAMES.
     render(e, 60);
     const AtomDrawStatus a1 = s->atomDrawStatus();
-    const RayQueryStatus r1 = s->rayQueryStatus();
+    const RayQueryStatus r1 = s->published().rayQuery;
     CHECK_MSG(a1.wordSlotVisits == a0.wordSlotVisits && r1.feedSlotVisits == r0.feedSlotVisits,
               "(a) 60 still frames visit 0 slots (split +%llu, ray tier +%llu)",
               (unsigned long long)(a1.wordSlotVisits - a0.wordSlotVisits),
@@ -582,7 +582,7 @@ static int wordsMain()
     enginetest::setNodePosition(s, items[17], Vec3(3.0f, 2.0f, 4.0f));
     render(e, 1);
     const AtomDrawStatus a2 = s->atomDrawStatus();
-    const RayQueryStatus r2 = s->rayQueryStatus();
+    const RayQueryStatus r2 = s->published().rayQuery;
     CHECK_MSG(a2.wordSlotVisits - a1.wordSlotVisits >= 1u && a2.wordSlotVisits - a1.wordSlotVisits <= 2u &&
                   r2.feedSlotVisits - r1.feedSlotVisits >= 1u && r2.feedSlotVisits - r1.feedSlotVisits <= 2u,
               "(b) a mover frame visits the mover's slot alone (split +%llu, ray tier +%llu)",
@@ -624,10 +624,10 @@ static int wordsMain()
     // (a) AGAIN, after all of it: still is free.
     render(e, 30);
     const AtomDrawStatus a7 = s->atomDrawStatus();
-    const RayQueryStatus r7 = s->rayQueryStatus();
+    const RayQueryStatus r7 = s->published().rayQuery;
     render(e, 60);
     const AtomDrawStatus a8 = s->atomDrawStatus();
-    const RayQueryStatus r8 = s->rayQueryStatus();
+    const RayQueryStatus r8 = s->published().rayQuery;
     CHECK_MSG(a8.wordSlotVisits == a7.wordSlotVisits && r8.feedSlotVisits == r7.feedSlotVisits &&
                   a8.pbsNotes == a7.pbsNotes,
               "(a) still again after the edits: 0 slots visited, nothing re-hashed");

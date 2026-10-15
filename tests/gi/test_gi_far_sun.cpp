@@ -435,7 +435,7 @@ GatherStatus settled(Fixture &f)
     for (; i < 600u; ++i) {
         enginetest::frames(f.e, 1);
         if (perFrame) {
-            const GatherStatus t = f.s->giStatus().gather;
+            const GatherStatus t = f.s->published().gi.gather;
             double sum = 0.0;
             int n = 0;
             for (const Vec3 &p : gTraceWall) {
@@ -449,19 +449,19 @@ GatherStatus settled(Fixture &f)
             }
             std::printf("     frame %u at %.3f s: rest %u settle %u atRest %d wall mean %.5f (%d)\n", i, std::chrono::duration<double>(
                 std::chrono::steady_clock::now().time_since_epoch()).count(), t.restFrames, t.settleFrames,
-                int(f.s->giStatus().giAtRest), n ? sum / n : -1.0, n);
+                int(f.s->published().gi.giAtRest), n ? sum / n : -1.0, n);
         }
         if (i < gSettleMin) continue;
-        g = f.s->giStatus().gather;
-        if (g.restFrames > g.settleFrames + 4u && !g.irradiance.empty() && f.s->giStatus().giAtRest) break;
+        g = f.s->published().gi.gather;
+        if (g.restFrames > g.settleFrames + 4u && !g.irradiance.empty() && f.s->published().gi.giAtRest) break;
     }
     render(f.e, 4);
     gFrames += i + 1u + 4u;
     if (std::getenv("FARSUN_SETTLE_TRACE"))
-        std::printf("   SETTLE %u frames (rest %u, settle %u) at %.2f s\n", i + 1u + 4u, f.s->giStatus().gather.restFrames,
-                    f.s->giStatus().gather.settleFrames,
+        std::printf("   SETTLE %u frames (rest %u, settle %u) at %.2f s\n", i + 1u + 4u, f.s->published().gi.gather.restFrames,
+                    f.s->published().gi.gather.settleFrames,
                     std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
-    return f.s->giStatus().gather;
+    return f.s->published().gi.gather;
 }
 
 /// The gathered E/pi (luminance) at a world point, a 5 x 5 block of the readback; -1 when the
@@ -537,7 +537,7 @@ double shareRatio(Fixture &f, const Vec3 &cam, const char *label, bool verbose =
 
 void printCascades(Scene *s)
 {
-    const GiStatus g = s->giStatus();
+    const GiStatus g = s->published().gi;
     for (size_t i = 0; i < g.cascades.size(); ++i)
         std::printf("   cascade %zu: cell %.3f m, centre (%.1f, %.1f, %.1f)\n", i, double(g.cascades[i].cell),
                     double(g.cascades[i].centre.x), double(g.cascades[i].centre.y), double(g.cascades[i].centre.z));
@@ -748,7 +748,7 @@ int modeCascade(Fixture &f, bool clutter)
     if (std::getenv("FARSUN_SETTLE_TRACE"))
         std::printf("   SHARE DONE at %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
     // THE POSE: where the measured wall and the floor its rays land on lie
-    const GiStatus g = f.s->giStatus();
+    const GiStatus g = f.s->published().gi;
     printCascades(f.s);
     const int want = gPose == "c2" ? 2 : 3;   // a numeric pose is held to cascade 3
     bool inPose = true;
@@ -874,7 +874,7 @@ int modeHits(Fixture &f)
     GatherStatus g;
     for (int i = 0; i < 120 && g.rays.empty(); ++i) {
         render(f.e, 1);
-        g = f.s->giStatus().gather;
+        g = f.s->published().gi.gather;
     }
     const unsigned raysPerProbe = g.raysPerProbe;
     CHECK_MSG(!g.rays.empty() && g.rays.size() == size_t(g.probes) * raysPerProbe,
@@ -950,7 +950,7 @@ int modeContrast(Fixture &f)
     GiVoxelVolume probe;
     for (int i = 0; i < 1200 && !(f.s->giVoxelVolume(3, probe) && probe.available); ++i) render(f.e, 1);
     CHECK_MSG(probe.available, "cascade 3 is built (its volume reads back; %zu cascades)",
-              f.s->giStatus().cascades.size());
+              f.s->published().gi.cascades.size());
     settled(f);
     // THE STORE AT REST, read once: what a PERFECT point read returns at each counted hit is its own
     // texel's light (the store's resolution, not the read's kernel) - printed beside the read.
@@ -972,7 +972,7 @@ int modeContrast(Fixture &f)
     unsigned litN = 0u, blackN = 0u, otherSource = 0u;
     for (int k = 0; k < 16; ++k) {
         render(f.e, 1);
-        const GatherStatus g = f.s->giStatus().gather;
+        const GatherStatus g = f.s->published().gi.gather;
         for (const GatherRay &r : g.rays) {
             if (r.distance <= 0.0f || r.hitNormal[1] < 0.7f || std::fabs(r.hitPos[1]) > 0.1f) continue;
             // THE VOXEL ROUTE'S CASCADE 3 ONLY: what this row measures is the coarse store and its read
@@ -1153,7 +1153,7 @@ int modeDiag(Fixture &f)
             std::vector<GatherRay> wallRays;
             for (int i = 0; i < 40 && rays.size() < 120000u; ++i) {
                 render(f.e, 1);
-                const GatherStatus g = f.s->giStatus().gather;
+                const GatherStatus g = f.s->published().gi.gather;
                 if (g.rays.empty() || g.raysFrame == lastFrame) continue;
                 lastFrame = g.raysFrame;
                 raysPer = g.raysPerProbe ? g.raysPerProbe : raysPer;
@@ -1204,7 +1204,7 @@ int modeDiag(Fixture &f)
                 }
             std::map<long long, CellMean> cellCache;
             std::vector<double> cells;
-            for (const auto &cs : f.s->giStatus().cascades) cells.push_back(double(cs.cell));
+            for (const auto &cs : f.s->published().gi.cascades) cells.push_back(double(cs.cell));
             unsigned agreeVis = 0u, nVis = 0u;
             for (const GatherRay &r : rays) {
                 const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
@@ -1426,7 +1426,7 @@ int modeLamp(Fixture &f)
         unsigned last = 0u;
         for (int i = 0; i < 10 && out.empty(); ++i) {   // rays through texel centres: one frame's records are the set
             render(f.e, 1);
-            const GatherStatus g = f.s->giStatus().gather;
+            const GatherStatus g = f.s->published().gi.gather;
             if (g.rays.empty() || g.raysFrame == last) continue;
             last = g.raysFrame;
             for (const GatherRay &r : g.rays)
@@ -1481,7 +1481,7 @@ int modeLamp(Fixture &f)
               "direct term (bar 0.90-1.10; %.0f hits)", lit, acc["floor lit"].n);
     CHECK_MSG(glowR >= 0.90 && glowR <= 1.10, "THE GLOW AT THE HIT: the emissive crate's hits read %.3f of their exact radiance "
               "(emissive + the lamp; bar 0.90-1.10; %.0f hits)", glowR, acc["crate"].n);
-    std::printf("   frames rendered (the view's counter): %u\n", f.s->giStatus().gather.frame);
+    std::printf("   frames rendered (the view's counter): %u\n", f.s->published().gi.gather.frame);
     CHECK_MSG(kept >= 0.90, "NOTHING DARKENS: over every voxel-answered hit (%.0f, the same rays) the hit reads %.3f of the "
               "store whole (bar >= 0.90)", all.n, kept);
     return 0;
@@ -1510,7 +1510,7 @@ int modeCost(Fixture &f)
         for (int i = 0; i < 60; ++i) {
             nudge();
             render(f.e, 1);
-            const float ms = f.s->giStatus().gather.traceMs;
+            const float ms = f.s->published().gi.gather.traceMs;
             if (ms > 0.0f) { s += ms; ++n; }
         }
         return n ? s / n : -1.0;

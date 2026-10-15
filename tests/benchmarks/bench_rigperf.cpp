@@ -241,7 +241,7 @@ int main(int argc, char **argv)
             const NodeId n = mirror.engineNode(piece.data());
             if (!n || !jahshaka::engine::inspect::scene(es)->hasSkeleton(n)) continue;
             ++rigged;
-            streamed += es->streamedBoneCount(n);
+            streamed += es->published().streamedBonesOf(n);
         }
     const RigStats rs = es->rigStats();
     recordCounter("scene.characters", double(characters));

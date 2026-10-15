@@ -719,11 +719,11 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     world.firstSyncMs = msSince(t0);
     int f = 0;
     for (; f < settleCap; ++f) {
-        if (env.scene->giStatus().giAtRest) break;
+        if (env.scene->published().gi.giAtRest) break;
         frame(env, 1);
     }
     world.settleFrames = f;
-    const GiStatus gi = env.scene->giStatus();
+    const GiStatus gi = env.scene->published().gi;
     std::printf("WORLD: %d instances of %zu baked meshes at a %.0f m pitch (a %.0f m square) + ground %.0f m, "
                 "far plane %.0f m, %d lamps on %.0f m, "
                 "tier %s, %s materials, %d textures | meshes %.0f ms (%s), document %.0f ms, "

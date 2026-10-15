@@ -1014,7 +1014,7 @@ int main()
             }
         }
         if (P.gi) {
-            const GiStatus st = scene->giStatus();
+            const GiStatus st = scene->published().gi;
             CHECK_MSG(st.vctBound && st.ifdBound,
                       "[%s] the scene's voxel chain and irradiance field are bound (vct %d, field %d)",
                       P.name, int(st.vctBound), int(st.ifdBound));

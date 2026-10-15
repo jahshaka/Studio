@@ -238,7 +238,7 @@ static int planeMain(Engine *e, bool targetRow)
     unsigned lastFrame = ~0u, frames = 0u;
     for (int f = 0; f < 200 && frames < 96u; ++f) {
         enginetest::frames(e, 1);
-        const GatherStatus st = s->giStatus().gather;
+        const GatherStatus st = s->published().gi.gather;
         if (st.irradiance.empty() || st.irradianceFrame == lastFrame) continue;
         lastFrame = st.irradianceFrame;
         ++frames;
@@ -358,7 +358,7 @@ static int deterministicMain(Engine *e)
         GatherStatus st;
         for (int f = 0; f < 60; ++f) {
             enginetest::frames(e, 1);
-            const GatherStatus now = s->giStatus().gather;
+            const GatherStatus now = s->published().gi.gather;
             if (now.irradianceFrame == 50u && !now.irradiance.empty()) st = now;
         }
         std::printf("   cold run %d: gather frame %u read back (%ux%u), %u adaptive probes\n", run,
@@ -476,15 +476,15 @@ static int cardsMain(Engine *e)
         at.readback = true;
         s->setGatherTuning(at);
         // the first copy OF THIS ARM: the status keeps the previous arm's last copy until a new one retires
-        const unsigned since = s->giStatus().gather.frame;
+        const unsigned since = s->published().gi.gather.frame;
         GatherStatus st;
         for (int f = 0; f < 20; ++f) {
             enginetest::frames(e, 1);
-            st = s->giStatus().gather;
+            st = s->published().gi.gather;
             if (!st.irradiance.empty() && st.irradianceFrame >= since) break;
         }
         a.ran = st.running && !st.irradiance.empty();
-        a.cards = s->giStatus().cards.cardsResident;
+        a.cards = s->published().gi.cards.cardsResident;
         // THE LIVE AVERAGE: `liveFrames` distinct read-back frames, summed.
         if (liveFrames > 1 && a.ran) {
             std::vector<double> acc(st.irradiance.size(), 0.0);
@@ -492,7 +492,7 @@ static int cardsMain(Engine *e)
             unsigned lf = st.irradianceFrame;
             for (int f = 0; f < 8 * liveFrames && got < liveFrames; ++f) {
                 enginetest::frames(e, 1);
-                const GatherStatus q = s->giStatus().gather;
+                const GatherStatus q = s->published().gi.gather;
                 if (q.irradiance.size() != acc.size() || q.irradianceFrame == lf) continue;
                 lf = q.irradianceFrame;
                 for (size_t i = 0; i < acc.size(); ++i) acc[i] += q.irradiance[i];

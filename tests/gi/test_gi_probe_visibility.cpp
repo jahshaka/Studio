@@ -153,7 +153,7 @@ int main()
     const Colour on = img.at(mirrorX, mirrorY);
     show("metal box, VCT + probes", on);
 
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     std::printf("   probes=%d pccBound=%s shape %.2f..%.2f (z)  region %.2f..%.2f (z)\n",
                 st.probeCount, st.pccBound ? "true" : "false",
                 st.probeShapeMin.z, st.probeShapeMax.z,
@@ -236,7 +236,7 @@ int main()
     view->readPixels(img);
     const Colour lit = img.at(mirrorX, mirrorY);
     show("long room: metal box, VCT + probes", lit);
-    const GiStatus st2 = s2->giStatus();
+    const GiStatus st2 = s2->published().gi;
     std::printf("   probes=%d pccBound=%s clamped=%d\n", st2.probeCount,
                 st2.pccBound ? "true" : "false", st2.probesClampedToRegion);
     CHECK(st2.probeCount == 2 && st2.pccBound, "long room: the 2x1x1 grid built and bound");

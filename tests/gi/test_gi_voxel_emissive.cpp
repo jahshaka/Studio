@@ -161,7 +161,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(chainGi()), "the cascade chain builds");
     render(e, 12);
-    const GiStatus gst = scene->giStatus();
+    const GiStatus gst = scene->published().gi;
     CHECK(!gst.cascades.empty(), "the chain is up");
     if (gst.cascades.empty()) return 1;
     const int nCascades = int(gst.cascades.size());

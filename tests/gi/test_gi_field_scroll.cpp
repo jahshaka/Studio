@@ -157,7 +157,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(fieldGi(0)), "the chain with the field, paused");
     render(e, 12);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.ifdBound && !st.cascades.empty(), "the field is bound over cascade 0");
     GiFieldAtlas probeA;
     CHECK(scene->giFieldAtlas(probeA) && probeA.available, "the field's atlases read back");
@@ -179,12 +179,12 @@ int main()
         x += 0.1f;
         camAt(x);
         render(e, 1);
-        const GiStatus s = scene->giStatus();
+        const GiStatus s = scene->published().gi;
         if (s.cascades[0].rebuilds != c0Rebuilds) {
             CHECK(scene->giFieldAtlas(before), "the atlases read back on the rebuild frame");
             const unsigned long long follows = s.ifdFollows;
             render(e, 1);                                  // THE STEP FRAME: the follow
-            const GiStatus s2 = scene->giStatus();
+            const GiStatus s2 = scene->published().gi;
             CHECK(s2.ifdFollows == follows + 1u, "the field followed on the very next frame");
             CHECK(scene->giFieldAtlas(after), "...and read back after it");
             stepped = true;
@@ -214,7 +214,7 @@ int main()
             ++kept;
             if (tileOf(before, slot) == tileOf(after, slot)) ++keptSame;
         }
-        const GiStatus s = scene->giStatus();
+        const GiStatus s = scene->published().gi;
         std::printf("   the step moved the window %d,%d,%d spacings: %u probes kept (%u byte-identical), "
                     "%u entered; the follow integrated %u\n", d[0], d[1], d[2], kept, keptSame,
                     entered, s.ifdScrollProbes);
@@ -270,7 +270,7 @@ int main()
         std::vector<MonitorRecord> pre;
         engine->takeMonitorRecords(pre);
         arm.records.insert(arm.records.end(), pre.begin(), pre.end());
-        const unsigned long long replacedBefore = scene->giStatus().ifdReplacements;
+        const unsigned long long replacedBefore = scene->published().gi.ifdReplacements;
         view->setCamera(enginetest::testCameraDescLookAt(p, Vec3(p.x, p.y - 1.0f, p.z - 8.0f)));
         Arm::Jump j;
         Image during, after;
@@ -279,7 +279,7 @@ int main()
             render(e, 1);
             // The frame the field was re-placed on: every probe is invalid until its
             // slab lands, and the picture must be the fallback's, not black.
-            if (!sawDuring && scene->giStatus().ifdReplacements != replacedBefore) {
+            if (!sawDuring && scene->published().gi.ifdReplacements != replacedBefore) {
                 view->readPixels(during);
                 sawDuring = true;
             }
@@ -330,7 +330,7 @@ int main()
         }
         arm.records.insert(arm.records.end(), recs.begin(), recs.end());
         arm.jumps.push_back(j);
-        const GiStatus js = scene->giStatus();
+        const GiStatus js = scene->published().gi;
         arm.fieldBound = arm.fieldBound && js.ifdBound;
         if (!js.cascades.empty()) {
             const float cx = 0.5f * (js.ifdMin.x + js.ifdMax.x) - js.cascades[0].centre.x;
@@ -353,10 +353,10 @@ int main()
         std::vector<MonitorRecord> drop;
         render(e, 8);
         engine->takeMonitorRecords(drop);
-        const unsigned long long f0 = scene->giStatus().ifdFollows;
-        const unsigned long long r0 = scene->giStatus().ifdReplacements;
+        const unsigned long long f0 = scene->published().gi.ifdFollows;
+        const unsigned long long r0 = scene->published().gi.ifdReplacements;
         float x2 = 0.0f;
-        for (int f = 0; f < 800 && scene->giStatus().ifdFollows < f0 + 6u; ++f) {
+        for (int f = 0; f < 800 && scene->published().gi.ifdFollows < f0 + 6u; ++f) {
             x2 += 0.1f;
             camAt(x2);
             render(e, 1);
@@ -378,12 +378,12 @@ int main()
         // field - every probe at its target sample count, the field owing nothing -
         // not the bytes of one pass (two walks integrate different ray rotations).
         render(e, 240);
-        for (int f = 0; f < 3000 && scene->giStatus().ifdRefinesOwed > 0u; ++f) render(e, 1);
-        arm.settled = scene->giStatus().ifdRefinesOwed == 0u;
+        for (int f = 0; f < 3000 && scene->published().gi.ifdRefinesOwed > 0u; ++f) render(e, 1);
+        arm.settled = scene->published().gi.ifdRefinesOwed == 0u;
         render(e, 2);
         view->readPixels(arm.back);
-        arm.follows = scene->giStatus().ifdFollows - f0;
-        arm.replacements = scene->giStatus().ifdReplacements - r0;
+        arm.follows = scene->published().gi.ifdFollows - f0;
+        arm.replacements = scene->published().gi.ifdReplacements - r0;
         std::vector<MonitorRecord> recs;
         engine->takeMonitorRecords(recs);
         recs.insert(recs.begin(), arm.records.begin(), arm.records.end());
@@ -468,7 +468,7 @@ int main()
     // it flaked 1 of 2 on the base under a sibling's load. The wall ms stays PRINTED
     // (information, never gated); the suite runs under the GPU-timing lock.
     const float kTierFrameMs = 1000.0f / 60.0f;
-    const unsigned slabProbes = unsigned(scene->giStatus().ifdProbesPerFrame);
+    const unsigned slabProbes = unsigned(scene->published().gi.ifdProbesPerFrame);
     const unsigned expectFrames = slabProbes ? (total + slabProbes - 1u) / slabProbes : 0u;
     std::printf("   THE JUMPS (%u-probe slabs, %u frames a whole field; the step frame's median %.2f ms "
                 "GPU):\n", slabProbes, expectFrames, scrollMed);

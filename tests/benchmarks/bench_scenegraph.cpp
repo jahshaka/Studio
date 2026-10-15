@@ -1158,7 +1158,7 @@ int main(int argc, char **argv)
                 iris::SceneNodePtr from = (it % 2) ? s.hostB : s.hostA;
                 iris::SceneNodePtr to   = (it % 2) ? s.hostA : s.hostB;
                 const quint64 pushes0 = mirror.visitPushCount();
-                const SceneChangeStats cs0 = es->changeStats();
+                const SceneChangeStats cs0 = es->published().changes;
                 const auto t0 = Clock::now();
                 from->removeChild(s.subtree);
                 const auto t1 = Clock::now();
@@ -1167,7 +1167,7 @@ int main(int argc, char **argv)
                 const int visited = mirror.sync();
                 const auto t3 = Clock::now();
                 const double syncMs = msSince(t0);
-                const SceneChangeStats cs1 = es->changeStats();
+                const SceneChangeStats cs1 = es->published().changes;
                 enginetest::frames(engine, 1);
                 rec.add("c.reparent_500_remove", std::chrono::duration<double, std::milli>(t1 - t0).count());
                 rec.add("c.reparent_500_add", std::chrono::duration<double, std::milli>(t2 - t1).count());

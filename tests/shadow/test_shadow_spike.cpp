@@ -493,7 +493,7 @@ static void r3Case()
     gi.probeShadows = GiToggle::On;
     room.scene->setGlobalIllumination(gi);
     render(engine.get(), 8);
-    const GiStatus st = room.scene->giStatus();
+    const GiStatus st = room.scene->published().gi;
     std::printf("    gi: probes %d, pccBound %d, probeShadows %d\n",
                 st.probeCount, int(st.pccBound), int(st.probeShadows));
     CHECK(st.probeShadows, "the probe captures really are shadowed (the precondition for R3)");
@@ -643,9 +643,9 @@ static void cacheKindsCase()
     gi.updateBudget = 0;               // no captures but the ones this case asks for
     room.scene->setGlobalIllumination(gi);
     render(engine.get(), 12);
-    const GiStatus gst = room.scene->giStatus();
+    const GiStatus gst = room.scene->published().gi;
     std::printf("    gi: probes %d, probeShadows %d, planar active %d\n", gst.probeCount,
-                int(gst.probeShadows), room.scene->activePlanarReflectors());
+                int(gst.probeShadows), room.scene->published().activePlanarReflectors);
     CHECK(gst.probeShadows && gst.probeCount == 4, "four shadowed probes");
 
     std::vector<Ogre::CompositorWorkspace *> probeWs, reflWs;

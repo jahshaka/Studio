@@ -105,7 +105,7 @@ static Box solve(Scene *s)
     gi.updateBudget = 0;
     s->setGlobalIllumination(gi);
     enginetest::frames(gEngine, 2);
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     return Box{ st.probeFitMin, st.probeFitMax };
 }
 

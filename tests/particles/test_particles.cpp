@@ -262,12 +262,12 @@ int main(int argc, char **argv)
         CHECK(n == 1, "sync mirrored the emitter node");
         const NodeId eng = mirror.engineNode(ps.data());
         CHECK(eng != 0, "emitter has an engine node");
-        CHECK(target->particleCount(eng) == 0, "nothing is alive before the first frame");
+        CHECK(target->published().particlesOf(eng) == 0, "nothing is alive before the first frame");
 
-        const unsigned defsAfterFirst = target->particleDefinitionsCreated();
+        const unsigned defsAfterFirst = target->published().particleDefinitionsCreated;
         enginetest::frames(engine, 90);
-        std::printf("    after 90 engine frames: %u live particles\n", target->particleCount(eng));
-        CHECK(target->particleCount(eng) > 0, "the ENGINE emitted, with no document tick at all");
+        std::printf("    after 90 engine frames: %u live particles\n", target->published().particlesOf(eng));
+        CHECK(target->published().particlesOf(eng) > 0, "the ENGINE emitted, with no document tick at all");
         view->readPixels(img);
         const int lit = countBright(img);
         std::printf("    mirrored emitter: %d bright pixels\n", lit);
@@ -277,7 +277,7 @@ int main(int argc, char **argv)
         // Before this, every sync rebuilt a BillboardInstance array of every
         // live particle and pushed it into the engine, sixty times a second.
         for (int f = 0; f < 30; ++f) { mirror.sync(); enginetest::frames(engine, 1); }
-        CHECK(target->particleDefinitionsCreated() == defsAfterFirst,
+        CHECK(target->published().particleDefinitionsCreated == defsAfterFirst,
               "30 syncs of an unchanged emitter build no definitions");
         view->readPixels(img);
         CHECK(countBright(img) > 100, "and it is still running");
@@ -322,7 +322,7 @@ int main(int argc, char **argv)
         // Definitions cannot be destroyed. Add, remove and re-add an emitter ten
         // times and count what the scene is left holding: with the recycling
         // pool it must be a handful, not thirty.
-        const unsigned before = target->particleDefinitionsCreated();
+        const unsigned before = target->published().particleDefinitionsCreated;
         for (int i = 0; i < 10; ++i) {
             auto churn = iris::ParticleSystemNode::create();
             churn->maxParticles = 1024;
@@ -333,10 +333,10 @@ int main(int argc, char **argv)
             doc->getRootNode()->removeChild(churn);
             mirror.sync();
         }
-        const unsigned churned = target->particleDefinitionsCreated() - before;
+        const unsigned churned = target->published().particleDefinitionsCreated - before;
         std::printf("    10 add/remove cycles left %u new definitions "
                     "(%u in the scene overall; ~%u KiB CPU + %u KiB GPU each at quota 1024)\n",
-                    churned, target->particleDefinitionsCreated(),
+                    churned, target->published().particleDefinitionsCreated,
                     unsigned(1024 * 64 / 1024), unsigned(1024 * 32 / 1024));
         CHECK(churned <= 1, "the recycling pool absorbs emitter churn (definitions are immortal)");
 

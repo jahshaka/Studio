@@ -136,7 +136,7 @@ int main()
             gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 6.0f, 64, 0.0f };
             s->setGlobalIllumination(gi);
             enginetest::frames(e, 20);
-            for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+            for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
             bounce[m][a] = readHdr() - dark;
             int n = 0;
             store[m][a] = plateRadiance(s, n);
@@ -148,12 +148,12 @@ int main()
             // re-voxelises the cascade exactly once (its diffuse albedo is the voxel's); a METALNESS
             // edit too, and the store then holds (1 - m) of what it held.
             const auto rebuilds = [&]() {
-                const GiStatus st = s->giStatus();
+                const GiStatus st = s->published().gi;
                 return st.cascades.empty() ? 0ull : st.cascades[0].rebuilds;
             };
             const auto settle = [&]() {
                 enginetest::frames(e, 20);
-                for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) enginetest::frames(e, 1);
+                for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
             };
             settle();
             const unsigned long long r0 = rebuilds();

@@ -577,7 +577,7 @@ static void deviceCrackSweep(DeviceRig &d, const clusterfix::Fixture &f, const f
     // The body's slot, for the drawn set's readback.
     auto bodySlot = [&]() -> unsigned {
         os->ensureGpuScene(false);
-        const unsigned n = d.scene->gpuSceneStatus().slotCount;
+        const unsigned n = d.scene->published().gpuScene.slotCount;
         for (unsigned i = 0; i < n; ++i) {
             GpuSceneEntry en;
             if (d.scene->gpuSceneEntry(i, en) && en.nodeId == unsigned(body)) return i;

@@ -177,7 +177,7 @@ int main(int argc, char **argv)
                     for (int i = 0; i < 30; ++i) {
                         if (which) enginetest::setNodePosition(s, walls[1], Vec3(0.0f, 0.001f * float(i & 1), kWallZ + 0.1f));
                         enginetest::frames(e, 1);
-                        const RayQueryStatus st = s->rayQueryStatus();
+                        const RayQueryStatus st = s->published().rayQuery;
                         if (i >= 10 && st.reflectMs > 0.0f) { sum[arm] += st.reflectMs; ++n[arm]; }
                     }
                 }

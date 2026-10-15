@@ -160,7 +160,7 @@ int main()
             render(e, 10);
             view->readPixels(img);
             float offR = 0.0f, offG = 0.0f; meanRG(img, offR, offG);
-            const GiStatus st = s->giStatus();
+            const GiStatus st = s->published().gi;
             std::printf("   %-6s wall %.2f m: LEAK %.4f (lamp on r %.4f, off r %.4f), green %.4f, "
                         "field %s over %.1f m, cascades %zu\n",
                         what, double(T), double(onR - offR), double(onR), double(offR),
@@ -170,7 +170,7 @@ int main()
         };
 
         const auto chain = leakOf("chain");
-        const GiStatus stChain = s->giStatus();
+        const GiStatus stChain = s->published().gi;
         // The arm must carry a bound field, or the bar below grades the cone
         // leak (~0.97) and would fail for the wrong reason.
         rows[a].leakChain = std::get<0>(chain);

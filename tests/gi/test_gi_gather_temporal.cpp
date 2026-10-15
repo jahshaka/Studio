@@ -261,7 +261,7 @@ static int stableMain(Engine *e)
     CHECK(s->setGlobalIllumination(gatherGi()), "the chain builds over the room");
     setNoTemporal(e, false);
     render(e, 120);   // THE WARM-UP: the chain settled, the history past its floor
-    const GatherStatus st = s->giStatus().gather;
+    const GatherStatus st = s->published().gi.gather;
     CHECK_MSG(st.running && st.temporal && st.historyAge > 60u,
               "the gather runs with its pixel history (running %d, temporal %d, age %u)",
               int(st.running), int(st.temporal), st.historyAge);
@@ -270,7 +270,7 @@ static int stableMain(Engine *e)
     // THE LEVER'S PAIR: the same view, each frame's estimate alone.
     setNoTemporal(e, true);
     render(e, 8);
-    const GatherStatus st2 = s->giStatus().gather;
+    const GatherStatus st2 = s->published().gi.gather;
     CHECK_MSG(!st2.temporal, "the arm gather.temporal = 0 turns the pixel history off (temporal %d)",
               int(st2.temporal));
     const StableReading without = stableReading(e, view, 60, "alone");

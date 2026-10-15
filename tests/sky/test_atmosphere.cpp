@@ -288,9 +288,9 @@ int main()
     {
         r.s->setSky(atmosphere(45.0f, 180.0f));
         enginetest::frames(r.e, 4);
-        const AtmosphereStatus a = r.s->atmosphereStatus();
+        const AtmosphereStatus a = r.s->published().atmosphereStatus;
         enginetest::frames(r.e, 120);
-        const AtmosphereStatus b = r.s->atmosphereStatus();
+        const AtmosphereStatus b = r.s->published().atmosphereStatus;
         std::printf("    tables: transmittance %u multi-scatter %u sky view %u aerial %u -> %u %u %u %u "
                     "over 120 still frames\n", a.transmittanceBuilds, a.multiScatterBuilds,
                     a.skyViewBuilds, a.aerialBuilds, b.transmittanceBuilds, b.multiScatterBuilds,
@@ -301,7 +301,7 @@ int main()
                   "(e) 120 STILL FRAMES REBUILD NO TABLE");
         r.s->setSky(atmosphere(30.0f, 180.0f));
         enginetest::frames(r.e, 1);
-        const AtmosphereStatus c = r.s->atmosphereStatus();
+        const AtmosphereStatus c = r.s->published().atmosphereStatus;
         CHECK_MSG(c.transmittanceBuilds == b.transmittanceBuilds && c.multiScatterBuilds == b.multiScatterBuilds &&
                   c.skyViewBuilds == b.skyViewBuilds + 1 && c.aerialBuilds == b.aerialBuilds + 1,
                   "(e) a SUN move rebuilds the sky view and the aerial volume once, and not the dial "
@@ -309,14 +309,14 @@ int main()
                   c.aerialBuilds);
         r.s->setSky(atmosphere(30.0f, 180.0f, 1.0f, 3.0f));
         enginetest::frames(r.e, 1);
-        const AtmosphereStatus h = r.s->atmosphereStatus();
+        const AtmosphereStatus h = r.s->published().atmosphereStatus;
         CHECK_MSG(h.transmittanceBuilds == c.transmittanceBuilds + 1 &&
                   h.multiScatterBuilds == c.multiScatterBuilds + 1 && h.skyViewBuilds == c.skyViewBuilds + 1 &&
                   h.aerialBuilds == c.aerialBuilds + 1,
                   "(e) a DIAL move (the haze) rebuilds all four once");
         r.s->setSky(atmosphere(30.0f, 180.0f, 0.5f, 3.0f));
         enginetest::frames(r.e, 1);
-        const AtmosphereStatus q = r.s->atmosphereStatus();
+        const AtmosphereStatus q = r.s->published().atmosphereStatus;
         CHECK_MSG(q.transmittanceBuilds == h.transmittanceBuilds && q.skyViewBuilds == h.skyViewBuilds &&
                   q.aerialBuilds == h.aerialBuilds,
                   "(e) the aerial scale is a constant: it rebuilds nothing");
@@ -343,7 +343,7 @@ int main()
         CHECK_MSG(r.s->setSky(no), "NoSky applies");
         shoot(r, none, 6);
         float sh[27];
-        const bool haveSh = r.s->skyAmbientSh(sh);
+        const bool haveSh = r.s->published().copySkyAmbientSh(sh);
         double shSum = 0.0;
         if (haveSh) for (float v : sh) shSum += std::fabs(v);
         const Colour boxLit = centreOf(lit), boxNone = centreOf(none);
@@ -471,7 +471,7 @@ int main()
             a.sky = luma(img.at(kSize / 2, 8));                 // the sky, 30 degrees up
             a.lit = luma(img.at(kSize / 2, kSize - 8));         // the floor, sun + sky
             float sh[27];
-            if (r.s->skyAmbientSh(sh)) a.sh0 = sh[1];           // band 0, green
+            if (r.s->published().copySkyAmbientSh(sh)) a.sh0 = sh[1];           // band 0, green
             sunL.intensity = 0.0f; r.s->setLight(lightNode, sunL);
             shoot(r, img, 6);
             a.dark = luma(img.at(kSize / 2, kSize - 8));        // the floor, sky alone
@@ -517,7 +517,7 @@ int main()
         }
         const double t = std::tan(0.5 * kFovDeg * kPi / 180.0);
         const double edge = std::atan((1.0 - 2.0 * (best + 1.0) / kSize) * t) * 180.0 / kPi;
-        const AtmosphereStatus st = r.s->atmosphereStatus();
+        const AtmosphereStatus st = r.s->published().atmosphereStatus;
         std::printf("    %5.0f m: the horizon between rows %u|%u at %+.3f deg against the dip %.3f deg; "
                     "observer %.0f m (%u band rebuilds)\n", double(h), best, best + 1, edge, -dip,
                     double(st.observerAltitudeM), st.observerRebuilds);

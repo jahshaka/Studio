@@ -184,7 +184,7 @@ int main()
         gi.ddgi = GiToggle::Off;
         CHECK(scene->setGlobalIllumination(gi), "the anisotropic chain builds");
         enginetest::frames(e, 10);
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         CHECK(st.cascades.size() >= 2u, "...and it is a chain");
         measureChain(e, scene, "anisotropic chain", unsigned(st.cascades.size()), true);
     }

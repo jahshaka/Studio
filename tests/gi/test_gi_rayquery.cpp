@@ -233,7 +233,7 @@ int main()
     // =====================================================================
     if (!e->rayTracing()) {
         std::printf("\n== the no-rays run (JAHSHAKA_NO_RAY_QUERY) ==\n");
-        const RayQueryStatus st = scene->rayQueryStatus();
+        const RayQueryStatus st = scene->published().rayQuery;
         CHECK(!st.available, "the DEVICE was built without ray queries — the switch reaches it");
         CHECK(!st.enabled, "...and the tier is off");
         CHECK(st.blasCount == 0 && st.instances == 0 && st.triangles == 0,
@@ -272,7 +272,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 1: the tier is up and inert ==\n");
     {
-        const RayQueryStatus st = scene->rayQueryStatus();
+        const RayQueryStatus st = scene->published().rayQuery;
         std::printf("   blas %d, instances %d, triangles %d, blasBytes %llu, tlasBytes %llu\n",
                     st.blasCount, st.instances, st.triangles,
                     (unsigned long long)st.blasBytes, (unsigned long long)st.tlasBytes);
@@ -346,7 +346,7 @@ int main()
         enginetest::setNodePosition(scene, helper, Vec3(4.0f, 1.0f, 0.0f));
         scene->setNodeHelper(helper, true);
         render(e, 3);
-        CHECK(scene->rayQueryStatus().instances == 2,
+        CHECK(scene->published().rayQuery.instances == 2,
               "a HELPER does not join the traced set (the spike traced gizmos and light icons)");
 
         std::vector<float> rays, hits;
@@ -364,7 +364,7 @@ int main()
         // follows what the world shows, one walk, one predicate.
         scene->setNodeVisible(box, false);
         render(e, 3);
-        CHECK(scene->rayQueryStatus().instances == 1, "a HIDDEN object leaves the traced set");
+        CHECK(scene->published().rayQuery.instances == 1, "a HIDDEN object leaves the traced set");
         {
             std::vector<float> r2, h2;
             pushRay(r2, Vec3(0.0f, 12.0f, 0.0f), Vec3(0.0f, -1.0f, 0.0f), 0.001f, 100.0f);
@@ -374,7 +374,7 @@ int main()
         }
         scene->setNodeVisible(box, true);
         render(e, 3);
-        CHECK(scene->rayQueryStatus().instances == 2, "showing it again puts it back");
+        CHECK(scene->published().rayQuery.instances == 2, "showing it again puts it back");
     }
 
     // =====================================================================
@@ -383,9 +383,9 @@ int main()
     std::printf("\n== case 4: at rest ==\n");
     {
         render(e, 5);
-        const RayQueryStatus before = scene->rayQueryStatus();
+        const RayQueryStatus before = scene->published().rayQuery;
         render(e, 30);
-        const RayQueryStatus after = scene->rayQueryStatus();
+        const RayQueryStatus after = scene->published().rayQuery;
         std::printf("   tlas builds %llu -> %llu, refits %llu -> %llu, blas %llu -> %llu "
                     "over 30 still frames\n",
                     (unsigned long long)before.tlasBuilds, (unsigned long long)after.tlasBuilds,
@@ -402,7 +402,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 5: the structure follows the world ==\n");
     {
-        const RayQueryStatus before = scene->rayQueryStatus();
+        const RayQueryStatus before = scene->published().rayQuery;
         // 3 m further from the ray's origin along -X: the +X face moves from
         // x = 1 to x = 4, so the hit at 9 becomes a hit at 6.
         enginetest::setNodePosition(scene, box, Vec3(-3.0f, 1.0f, 0.0f));
@@ -415,7 +415,7 @@ int main()
             CHECK(hitAt(hits, 0).hit && std::fabs(hitAt(hits, 0).distance - 12.0f) < 0.001f,
                   "the same ray now hits the box's +X face at 12 m — the structure moved with it");
         }
-        const RayQueryStatus after = scene->rayQueryStatus();
+        const RayQueryStatus after = scene->published().rayQuery;
         CHECK(after.tlasBuilds + after.tlasRefits > before.tlasBuilds + before.tlasRefits,
               "...because a MOVED scene did update the top-level structure");
         CHECK(after.blasBuilds == before.blasBuilds,
@@ -431,7 +431,7 @@ int main()
     {
         e->setRayTracing(false);
         render(e, 4);
-        const RayQueryStatus off = scene->rayQueryStatus();
+        const RayQueryStatus off = scene->published().rayQuery;
         CHECK(off.available, "the DEVICE still advertises ray queries — that cannot be switched");
         CHECK(!off.enabled, "...but the tier is off");
         CHECK(off.instances == 0 && off.blasCount == 0,
@@ -444,7 +444,7 @@ int main()
 
         e->setRayTracing(true);
         render(e, 5);
-        const RayQueryStatus on = scene->rayQueryStatus();
+        const RayQueryStatus on = scene->published().rayQuery;
         CHECK(on.enabled && on.instances == 2,
               "switching it back on rebuilds the structure from scratch");
         std::vector<float> r2, h2;
@@ -473,8 +473,8 @@ int main()
             pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 1, 4), Vec3(0, 0, 0)));
             render(e, 6);
 
-            const RayQueryStatus editorSt = scene->rayQueryStatus();
-            const RayQueryStatus previewSt = ps->rayQueryStatus();
+            const RayQueryStatus editorSt = scene->published().rayQuery;
+            const RayQueryStatus previewSt = ps->published().rayQuery;
             std::printf("   editor: %d instances / %d blas   preview: %d instances / %d blas\n",
                         editorSt.instances, editorSt.blasCount,
                         previewSt.instances, previewSt.blasCount);
@@ -487,9 +487,9 @@ int main()
             // rather than frames, the guards below would be the thing that
             // broke first — and silently.
             render(e, 5);
-            const RayQueryStatus e0 = scene->rayQueryStatus(), p0 = ps->rayQueryStatus();
+            const RayQueryStatus e0 = scene->published().rayQuery, p0 = ps->published().rayQuery;
             render(e, 30);
-            const RayQueryStatus e1 = scene->rayQueryStatus(), p1 = ps->rayQueryStatus();
+            const RayQueryStatus e1 = scene->published().rayQuery, p1 = ps->published().rayQuery;
             CHECK(e1.tlasBuilds == e0.tlasBuilds && p1.tlasBuilds == p0.tlasBuilds,
                   "TWO still scenes rebuild nothing over 30 frames");
 
@@ -505,12 +505,12 @@ int main()
             // CASE 8 — destroying it takes the structures with it
             // =================================================================
             std::printf("\n== case 8: a destroyed scene ==\n");
-            const int blasBefore = scene->rayQueryStatus().blasCount;
+            const int blasBefore = scene->published().rayQuery.blasCount;
             pv->setScene(nullptr);
             e->destroyScene(ps);
             ps = nullptr;
             render(e, 6);
-            CHECK(scene->rayQueryStatus().blasCount == blasBefore,
+            CHECK(scene->published().rayQuery.blasCount == blasBefore,
                   "destroying the second scene leaves the editor's structures alone");
             // The editor scene still traces correctly afterwards — the honest
             // proof that nothing of the dead scene's state leaked into it.
@@ -530,7 +530,7 @@ int main()
     std::printf("\n== case 9: an alpha-test flip ==\n");
     {
         render(e, 6);
-        const int before = scene->rayQueryStatus().instances;
+        const int before = scene->published().rayQuery.instances;
         // The box's own material turns cut-out. Nothing moves, no render queue
         // changes, no node is touched — only the datablock's alpha test, in
         // place. SINCE REFLECT-MOVERS-2 A CUT-OUT STAYS IN THE STRUCTURE: its
@@ -546,7 +546,7 @@ int main()
         cut.alphaCutoff = 0.5f;
         CHECK(scene->setPbrMaterial(boxMaterial, cut), "the box's material turns cut-out");
         render(e, 2);
-        const int after = scene->rayQueryStatus().instances;
+        const int after = scene->published().rayQuery.instances;
         std::printf("   instances %d -> %d after the alpha-test flip\n", before, after);
         CHECK(after == before, "a CUT-OUT item stays in the traced set (its candidates are tested, not dropped)");
         {
@@ -561,7 +561,7 @@ int main()
         solid.alphaMode = PbrAlphaMode::Opaque;
         CHECK(scene->setPbrMaterial(boxMaterial, solid), "...and back to opaque");
         render(e, 2);
-        CHECK(scene->rayQueryStatus().instances == before, "...which keeps it, again with nothing moving");
+        CHECK(scene->published().rayQuery.instances == before, "...which keeps it, again with nothing moving");
         std::vector<float> r, h;
         pushRay(r, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
         CHECK(scene->traceRays(r, h) && h.size() == 4u && hitAt(h, 0).hit &&
@@ -601,7 +601,7 @@ int main()
             }
             pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 3, 10), Vec3(0, 0, 0)));
             render(e, 1);                       // build its BLASes, queue the size queries
-            const RayQueryStatus parked = ps->rayQueryStatus();
+            const RayQueryStatus parked = ps->published().rayQuery;
             std::printf("   parked scene holds %d blas\n", parked.blasCount);
             pv->setScene(nullptr);              // PARKED: it never draws again
 
@@ -625,7 +625,7 @@ int main()
             CHECK(ok && hitAt(h, 0).hit && std::fabs(hitAt(h, 0).distance - 9.0f) < 0.001f,
                   "...and still answers 9 m");
             std::printf("   editor now holds %d blas / %d instances\n",
-                        scene->rayQueryStatus().blasCount, scene->rayQueryStatus().instances);
+                        scene->published().rayQuery.blasCount, scene->published().rayQuery.instances);
 
             // UN-PARK IT. This is the half that makes the case bite: the parked
             // scene now runs runCompaction and READS the size queries it queued
@@ -635,7 +635,7 @@ int main()
             // which is a device loss or silently wrong geometry.
             pv->setScene(ps);
             render(e, 12);
-            const RayQueryStatus back = ps->rayQueryStatus();
+            const RayQueryStatus back = ps->published().rayQuery;
             std::printf("   un-parked: %d blas / %d instances / %d tris, %llu blasBytes, enabled=%d\n",
                         back.blasCount, back.instances, back.triangles,
                         (unsigned long long)back.blasBytes, int(back.enabled));

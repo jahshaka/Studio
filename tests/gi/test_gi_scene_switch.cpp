@@ -411,7 +411,7 @@ int main()
     CHECK(buildRoom(b, red), "room B (red) builds its own");
     enginetest::frames(e, 30);
     {
-        const GiStatus sa = a->giStatus(), sb = b->giStatus();
+        const GiStatus sa = a->published().gi, sb = b->published().gi;
         std::printf("    A: vct %d pcc %d (probes %d) ifd %d   B: vct %d pcc %d (probes %d) ifd %d\n",
                     int(sa.vctBound), int(sa.pccBound), sa.probeCount, int(sa.ifdBound),
                     int(sb.vctBound), int(sb.pccBound), sb.probeCount, int(sb.ifdBound));
@@ -492,7 +492,7 @@ int main()
         }
         report("4 A destroyed", "B", tb, false);
         report("4 A destroyed", "thumb (B)", tt, true);
-        const GiStatus sb = b->giStatus();
+        const GiStatus sb = b->published().gi;
         CHECK(sb.vctBound && sb.pccBound && sb.ifdBound, "4 A destroyed: B's arms are still bound in its passes");
     }
     for (View *v : { vB, thumb }) { v->setScene(nullptr); e->destroyView(v); }

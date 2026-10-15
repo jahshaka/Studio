@@ -342,7 +342,7 @@ int main(int argc, char **argv)
             // to push again).
             editorMirror.invalidateEnvironment();
 
-            const GiStatus gi0 = editorScene->giStatus();
+            const GiStatus gi0 = editorScene->published().gi;
             const ShadowStatus sh0 = engine->shadowStatus();
             std::printf("    before the switch: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi0.rebuilds, sh0.atlasRebuilds);
@@ -354,7 +354,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
             Image eSwitch;
             CHECK(editorView->readPixels(eSwitch), "editor readback after taking the screen");
-            const int reflectorsEditor = editorScene->activePlanarReflectors();
+            const int reflectorsEditor = editorScene->published().activePlanarReflectors;
 
             // --- the PLAYER takes it ----------------------------------------
             editorView->setEnabled(false);
@@ -370,7 +370,7 @@ int main(int argc, char **argv)
             }
             Image pSwitch;
             CHECK(playerView->readPixels(pSwitch), "player readback after taking the screen");
-            const int reflectorsPlayer = editorScene->activePlanarReflectors();
+            const int reflectorsPlayer = editorScene->published().activePlanarReflectors;
             std::printf("    planar reflectors rendered: editor %d, player %d\n",
                         reflectorsEditor, reflectorsPlayer);
             // WITHOUT THIS the mirror comparison below is vacuous — two frames
@@ -423,7 +423,7 @@ int main(int argc, char **argv)
             editorMirror.invalidateEnvironment();
             for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
 
-            const GiStatus gi1 = editorScene->giStatus();
+            const GiStatus gi1 = editorScene->published().gi;
             const ShadowStatus sh1 = engine->shadowStatus();
             std::printf("    after the round trip: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi1.rebuilds, sh1.atlasRebuilds);

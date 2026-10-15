@@ -81,7 +81,7 @@ int main()
     gi.updateBudget = 0;
     CHECK(scene->setGlobalIllumination(gi), "the High chain built");
     enginetest::frames(e, 8);
-    GiStatus st0 = scene->giStatus();
+    GiStatus st0 = scene->published().gi;
     CHECK(!st0.cascades.empty(), "the chain has cascades");
     if (st0.cascades.empty()) { std::printf("\n%d CHECK(S) FAILED\n", failures + 1); return 1; }
     const size_t nc = st0.cascades.size();
@@ -92,7 +92,7 @@ int main()
     int statusCalls = 0, statusSubmits = 0, statusUnknown = 0, firstSubmit = -1;
     auto status = [&]() {
         const unsigned long long before = e->queueSubmissionTag();
-        GiStatus st = scene->giStatus();
+        GiStatus st = scene->published().gi;
         const unsigned long long after = e->queueSubmissionTag();
         if (before == 0 || after == 0) ++statusUnknown;
         else if (after != before) { if (firstSubmit < 0) firstSubmit = statusCalls; ++statusSubmits; }

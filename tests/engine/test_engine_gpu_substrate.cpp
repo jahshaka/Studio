@@ -66,7 +66,7 @@ static GiParams chainGi()
 static unsigned long long cascadeRebuilds(Scene *s)
 {
     unsigned long long n = 0;
-    for (const GiStatus::CascadeStatus &c : s->giStatus().cascades) n += c.rebuilds;
+    for (const GiStatus::CascadeStatus &c : s->published().gi.cascades) n += c.rebuilds;
     return n;
 }
 
@@ -128,11 +128,11 @@ int main()
         unsigned long long extra = 0, overwrites = 0;
         const unsigned kMoverFrames = 24;
         for (unsigned f = 0; f < kMoverFrames; ++f) {
-            const GpuSceneStatus a = scene->gpuSceneStatus();
+            const GpuSceneStatus a = scene->published().gpuScene;
             const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
             enginetest::setNodePosition(scene, mover, Vec3(0.3f * float(f % 4) - 0.45f, 0.3f, -0.5f));
             enginetest::frames(e, 1);
-            const GpuSceneStatus b = scene->gpuSceneStatus();
+            const GpuSceneStatus b = scene->published().gpuScene;
             const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
             maxScans = std::max(maxScans, unsigned(b.scans - a.scans));
             maxWalks = std::max(maxWalks, unsigned(sb.walks - sa.walks));
@@ -187,14 +187,14 @@ int main()
     // and the frame writes ONE copy.
     {
         const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
-        const GpuSceneStatus a = scene->gpuSceneStatus();
+        const GpuSceneStatus a = scene->published().gpuScene;
         enginetest::setNodePosition(scene, cubes[27], Vec3(0.45f, 0.3f, -0.5f));
         GiParams g = chainGi();
         g.numBounces = g.numBounces + 1;   // a configuration change: the arm rebuilds (graphics)
         CHECK(scene->setGlobalIllumination(g), "a GI configuration change rebuilds the arm (a graphics-region build)");
         enginetest::frames(e, 1);
         const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
-        const GpuSceneStatus b = scene->gpuSceneStatus();
+        const GpuSceneStatus b = scene->published().gpuScene;
         std::printf("   [graphics build] later calls %llu, walks %llu, scans %llu, copies written %llu\n",
                     (unsigned long long)(sb.laterCalls - sa.laterCalls), (unsigned long long)(sb.walks - sa.walks),
                     (unsigned long long)(b.scans - a.scans), (unsigned long long)(sb.copyWrites - sa.copyWrites));
@@ -212,7 +212,7 @@ int main()
     // write is brought current with everything written to the others since it was
     // last live. Read back the live copy after each of the ring's writes.
     {
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         std::vector<NodeId> walkers(cubes.begin(), cubes.begin() + 8);
         unsigned agreeCopies = 0, rounds = 0;
         std::vector<unsigned> seen;
@@ -247,10 +247,10 @@ int main()
     // ---- 4. A STILL FRAME --------------------------------------------------------
     enginetest::frames(e, 4);
     {
-        const GpuSceneStatus a = scene->gpuSceneStatus();
+        const GpuSceneStatus a = scene->published().gpuScene;
         const GpuSubstrateStatus sa = gpuSubstrateStatus(*scene);
         enginetest::frames(e, 8);
-        const GpuSceneStatus b = scene->gpuSceneStatus();
+        const GpuSceneStatus b = scene->published().gpuScene;
         const GpuSubstrateStatus sb = gpuSubstrateStatus(*scene);
         CHECK(b.scans == a.scans && sb.walks == sa.walks && b.copyRuns == a.copyRuns && sb.copyWrites == sa.copyWrites,
               "A STILL FRAME walks nothing and copies nothing");

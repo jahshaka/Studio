@@ -274,7 +274,7 @@ int main()
     enginetest::frames(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() == 4, "the chain has four cascades");
     if (st.cascades.size() != 4) { std::printf("FAIL: no chain\n"); return 1; }
     judge("high", st, fixture);
@@ -308,7 +308,7 @@ int main()
     enginetest::frames(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus hidden = scene->giStatus();
+    GiStatus hidden = scene->published().gi;
     CHECK(hidden.cascades.size() == 4, "the chain survived the hide");
     if (hidden.cascades.size() == 4) {
         CHECK(hidden.cascades[0].rebuilds > st.cascades[0].rebuilds,
@@ -321,16 +321,16 @@ int main()
 
     // ---- 4. NO UPLOAD IN THE REBUILD --------------------------------------------
     enginetest::frames(e, 4);// settle: nothing owed
-    const GpuSceneStatus before = scene->gpuSceneStatus();
-    const unsigned long long rebuildsBefore = scene->giStatus().rebuilds;
+    const GpuSceneStatus before = scene->published().gpuScene;
+    const unsigned long long rebuildsBefore = scene->published().gi.rebuilds;
     CHECK(before.live, "the GPU scene is live");
     CHECK(scene->setGlobalIllumination(chainGi(GiQuality::Medium)),
           "a from-scratch rebuild of the chain (the Medium tier) over the still scene");
     enginetest::frames(e, 8);
-    const GpuSceneStatus after = scene->gpuSceneStatus();
+    const GpuSceneStatus after = scene->published().gpuScene;
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    const GiStatus med = scene->giStatus();
+    const GiStatus med = scene->published().gi;
     std::printf("   gpu scene copy runs %llu -> %llu, writes %llu -> %llu, rebuilds %llu -> %llu\n",
                 before.copyRuns, after.copyRuns, before.writes, after.writes,
                 rebuildsBefore, med.rebuilds);

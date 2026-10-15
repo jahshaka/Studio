@@ -141,7 +141,7 @@ static Result measure(Scene *scene, Engine *e, const std::map<Shape, NodeId> &no
     render(e, 2);
     scene->setGlobalIllumination(storeGi());
     render(e, 12);
-    for (int i = 0; i < 400 && !scene->giStatus().giAtRest; ++i) render(e, 1);
+    for (int i = 0; i < 400 && !scene->published().gi.giAtRest; ++i) render(e, 1);
     GiVoxelVolume v;
     if (!scene->giVoxelVolume(0, v) || !v.available || v.coverageP.size() != v.light.size()) return r;
     const Store gpu = fromGpu(v);
@@ -417,7 +417,7 @@ static void measureRoof(Engine *e, View *view)
     roofGi.numBounces = bounces;
     CHECK_MSG(s->setGlobalIllumination(roofGi), "the roof fixture's chain builds (%d bounce(s))", bounces);
     render(e, 12);
-    for (int i = 0; i < 400 && !s->giStatus().giAtRest; ++i) render(e, 1);
+    for (int i = 0; i < 400 && !s->published().gi.giAtRest; ++i) render(e, 1);
     std::printf("   %d bounce(s):\n", bounces);
     const int cascades[2] = { 2, 3 };
     for (int k = 0; k < 2; ++k) {
