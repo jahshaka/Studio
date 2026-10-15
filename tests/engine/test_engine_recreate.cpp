@@ -99,7 +99,7 @@ static bool runOnce(int iteration) {
     if (!v || !s) return false;
     v->setScene(s);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     NodeId cube = enginetest::addTestCube(s, Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
     enginetest::setNodeScale(s, cube, Vec3(1.2f, 1.2f, 1.2f));
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
@@ -133,7 +133,7 @@ static bool runOnce(int iteration) {
         LightDesc off;                       // dark the directional and the ambient:
         off.type = LightType::Directional;   // whatever lights the cube now IS the area light
         off.intensity = 0.0f;
-        s->setLight(1u, off);                // the directional is the first node created
+        s->setLight(sun, off);               // ids are one process-wide space (U3 stage 3): never 'the first is 1'
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
         enginetest::frames(e, 2);
         Image dark;

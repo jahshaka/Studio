@@ -171,7 +171,7 @@ struct Fixture {
         os->ensureGpuScene(false);
         const detail::GpuScene &gs = os->gpuScene();
         for (unsigned s = 0; s < gs.slotCount(); ++s)
-            if (gs.entry(s).ids[0] == unsigned(n)) return s;
+            if (os->nodeOfGpuKey(gs.entry(s).ids[0]) == n) return s;
         return 0xFFFFFFFFu;
     }
     /// The pixels whose id names `node` (the atom picture's own coverage).

@@ -609,7 +609,7 @@ int main()
     CHECK(gs.live(), "the GPU scene is live");
     for (Cell &c : cells) {
         for (unsigned s = 0; s < gs.slotCount(); ++s)
-            if (gs.entry(s).ids[0] == unsigned(c.node)) { c.slot = s; break; }
+            if (ogreScene->nodeOfGpuKey(gs.entry(s).ids[0]) == c.node) { c.slot = s; break; }
         if (c.slot != 0xFFFFFFFFu) std::memcpy(c.world, gs.entry(c.slot).world, sizeof(c.world));
     }
     bool slotsOk = true;

@@ -206,8 +206,8 @@ int main()
         // THE FLAGS WORD is what every consumer reads instead of re-deriving.
         GpuSceneEntry one;
         scene->gpuSceneEntry(0u, one);
-        std::printf("   slot 0 flags = 0x%03x meshIndex=%u nodeId=%u\n", one.flags, one.meshIndex,
-                    one.nodeId);
+        std::printf("   slot 0 flags = 0x%03x meshIndex=%u nodeId=%llu\n", one.flags, one.meshIndex,
+                    (unsigned long long)one.nodeId);
         CHECK((one.flags & kFlagVisible) && (one.flags & kFlagGi) && (one.flags & kFlagRayTraced),
               "a lit, shown cube reads visible, GI-visible and TRACED in the flags word");
         CHECK(!(one.flags & (kFlagSkinned | kFlagOverlay | kFlagAlpha)),
@@ -265,9 +265,10 @@ int main()
         const GpuSceneStatus st = scene->published().gpuScene;
         GpuSceneEntry now;
         scene->gpuSceneEntry(0u, now);
-        std::printf("   swap-remove: slots %u -> %u, lastDirty=%u, slot 0's node %u -> %u "
-                    "(the tail's was %u)\n",
-                    from.slotCount, st.slotCount, st.lastDirty, dying.nodeId, now.nodeId, last.nodeId);
+        std::printf("   swap-remove: slots %u -> %u, lastDirty=%u, slot 0's node %llu -> %llu "
+                    "(the tail's was %llu)\n",
+                    from.slotCount, st.slotCount, st.lastDirty, (unsigned long long)dying.nodeId,
+                    (unsigned long long)now.nodeId, (unsigned long long)last.nodeId);
         CHECK(st.slotCount == from.slotCount - 1u, "the item index is one slot shorter");
         CHECK(now.nodeId == last.nodeId,
               "THE TAIL'S ITEM IS IN THE FREED SLOT, with its own node id");
@@ -349,9 +350,9 @@ int main()
         render(1);
         GpuSceneEntry now;
         const bool got = scene->gpuSceneEntry(tail, now);
-        std::printf("   tail removal then a newborn in slot %u: node %u -> %u, "
+        std::printf("   tail removal then a newborn in slot %u: node %llu -> %llu, "
                     "prevWorld == world %d (the dead item's x was %.2f, the newborn's is %.2f)\n",
-                    tail, dead.nodeId, now.nodeId,
+                    tail, (unsigned long long)dead.nodeId, (unsigned long long)now.nodeId,
                     sameFloats(now.world, now.prevWorld, 12) ? 1 : 0, dead.world[3], now.world[3]);
         CHECK(got && now.nodeId == unsigned(fresh),
               "the newborn really landed in the freed tail slot (the arm is not vacuous)");

@@ -537,7 +537,7 @@ int main()
     const detail::GpuScene &gs = ogreScene->gpuScene();
     for (Cell &c : cells) {
         for (unsigned s = 0; s < gs.slotCount(); ++s)
-            if (gs.entry(s).ids[0] == unsigned(c.node)) { c.slot = s; break; }
+            if (ogreScene->nodeOfGpuKey(gs.entry(s).ids[0]) == c.node) { c.slot = s; break; }
         if (c.slot != 0xFFFFFFFFu) std::memcpy(c.world, gs.entry(c.slot).world, sizeof(c.world));
     }
 
@@ -973,7 +973,7 @@ int main()
             ogreScene->ensureGpuScene(false);
             uint32_t slot = 0xFFFFFFFFu;
             for (unsigned sl = 0; sl < gs.slotCount(); ++sl)
-                if (gs.entry(sl).ids[0] == unsigned(ln)) { slot = sl; break; }
+                if (ogreScene->nodeOfGpuKey(gs.entry(sl).ids[0]) == ln) { slot = sl; break; }
             std::vector<uint32_t> gx, gy;
             const bool read = readIds(ogreView, gx, gy);
             std::map<unsigned, size_t> gpuLevels;
@@ -1001,7 +1001,7 @@ int main()
         ogreScene->ensureGpuScene(false);
         uint32_t slot = 0xFFFFFFFFu;
         for (unsigned sl = 0; sl < gs.slotCount(); ++sl)
-            if (gs.entry(sl).ids[0] == unsigned(node)) { slot = sl; break; }
+            if (ogreScene->nodeOfGpuKey(gs.entry(sl).ids[0]) == node) { slot = sl; break; }
         std::vector<uint32_t> gx, gy;
         if (slot == 0xFFFFFFFFu || !readIds(ogreView, gx, gy)) return 99u;
         std::map<unsigned, size_t> seen;

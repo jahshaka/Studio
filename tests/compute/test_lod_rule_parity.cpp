@@ -267,7 +267,7 @@ static void productCutParity(Engine *e, View *view)
         const float at[8] = { 0.3f, 2.0f, 5.0f, 12.0f, 30.0f, 80.0f, 200.0f, 500.0f };
         const float scl[8] = { 1.0f, 0.5f, 2.0f, 1.0f, 4.0f, 1.0f, 0.5f, 2.0f };
         const Quat tilt(0.2f, 0.3f, -0.1f, 0.93f);
-        std::map<unsigned, int> nodeOf;   // node id -> instance index
+        std::map<NodeId, int> nodeOf;   // node id -> instance index
         for (int i = 0; i < 8; ++i) {
             const NodeId n = sc->createNode();
             sc->attachMesh(n, mesh, mat);
