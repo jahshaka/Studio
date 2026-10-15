@@ -166,7 +166,11 @@ if (machineHasRays) {
            "a TYPED range (3.25 + Return) reads back through the verb");
     assert(pushes() === p0 + 1, "...as exactly ONE undo step");
     // THE TYPED SESSION'S OWN END refreshes the section — no other gesture
-    // between the number and this read (the row is focused, typed, Returned).
+    // between the number and this read (the row is focused, typed, Returned):
+    // the section re-reads the renderer once the two frames after the edit have
+    // drawn it (ENGINE-UPGRADE-U3 stage 2 deleted the panel's inline render;
+    // the frames are the editor's own, not a gesture).
+    editor.frame(2);
     var st = row("sunContact.status");
     console.log("   status row after the typed range: " + st.value);
     assert(st.panelVisible && st.value.indexOf("Tracing") === 0 && st.value.indexOf("out to 3.25 m") > 0,

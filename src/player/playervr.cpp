@@ -44,7 +44,7 @@ PlayerVr::~PlayerVr() { end(); }
 bool PlayerVr::isActive() const
 {
     auto engine = mEngine.lock();
-    return mOwnsSession && engine && engine->vrStatus().active;
+    return mOwnsSession && engine && engine->vrSessionLive();
 }
 
 bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &camera,
@@ -59,7 +59,7 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     if (!engine->vrAvailable())
         return fail(QStringLiteral("VR is not available (%1)")
                         .arg(QString::fromStdString(engine->vrInfo().reason)));
-    if (engine->vrStatus().active)
+    if (engine->vrSessionLive())
         return fail(QStringLiteral("a VR session is already running"));
     if (!scene) return fail(QStringLiteral("the player has no scene to show yet"));
 
@@ -151,7 +151,7 @@ void PlayerVr::end()
     auto engine = mEngine.lock();
     if (engine && owned) {
         engine->setVrMirrorView(nullptr);
-        if (engine->vrStatus().active) engine->endVrSession();
+        if (engine->vrSessionLive()) engine->endVrSession();
     }
     mOwnsSession = false;
     mPlacePending = false;

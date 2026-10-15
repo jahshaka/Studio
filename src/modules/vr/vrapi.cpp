@@ -1060,7 +1060,7 @@ bool VrApi::end()
 {
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.end: no engine is running in this process"));
-    if (!e->vrStatus().active) return refuse(QStringLiteral("vr.end: no session is running"));
+    if (!e->vrSessionLive()) return refuse(QStringLiteral("vr.end: no session is running"));
     qWarning("Jahshaka VR: vr.end() called");
     // A PREVIEW ENDS THROUGH ITS OWN OBJECT (the viewport has to get its fly
     // keys and its helpers back); a session somebody ELSE started — the
@@ -1077,7 +1077,7 @@ bool VrApi::endForShutdown()
 {
     if (editor.end()) return true;
     Engine *e = engine();
-    if (!e || !e->vrStatus().active) return false;
+    if (!e || !e->vrSessionLive()) return false;
     if (moduleHost.engine && moduleHost.engine->driver())
         moduleHost.engine->driver()->setVrSessionActive(false);
     e->setVrMirrorView(nullptr);
@@ -1125,7 +1125,9 @@ void VrApi::pushProxies()
     SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr;
     if (!mirror) return;
     Engine *e = engine();
-    const VrStatus st = e ? e->vrStatus() : VrStatus();
+    // THE SESSION AS THE LAST FRAME LEFT IT (ENGINE-UPGRADE-U3 stage 2: the snapshot — the proxies always drew the
+    // last begun frame's pose; the latency is unchanged, now explicit).
+    const VrStatus &st = e ? e->published().vr : VrStatus();
     // A scene that has never worn VR pays one comparison a frame: the mirror's
     // own sync short-circuits on `active` and builds nothing.
     mirror->setVrProxies(showProxies && st.active, st);
@@ -1701,7 +1703,7 @@ void VrApi::installInteraction()
     // the right half, which is what makes every gesture gateable.
     deps.playerMode = [this] {
         Engine *e = engine();
-        return e && e->vrStatus().active && !editor.isActive();
+        return e && e->vrSessionLive() && !editor.isActive();
     };
     // MAY THE WEARER BE MOVED THIS FRAME? Both hosts place the rig on the first
     // located frame they can pair with the rig the engine holds, and both
@@ -1756,7 +1758,7 @@ void VrApi::syncInteractionSession()
 {
     Engine *e = engine();
     engineInput.setEngine(e);
-    const bool active = e && e->vrStatus().active;
+    const bool active = e && e->vrSessionLive();
     if (active == interactionSessionActive) return;
     interactionSessionActive = active;
     if (active) { interaction.begin(); interactionClock.start(); }

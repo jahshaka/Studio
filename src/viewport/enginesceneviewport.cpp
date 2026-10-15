@@ -4476,7 +4476,8 @@ jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
     // Revealed, and something is still owed. The window is bounded so a scene
     // whose textures never arrive cannot leave the frame-edge drain switched
     // off for the rest of the session.
-    if (mStreamFramesLeft > 0 || mEngine->framePaceOwesWork()) return FramePace::Streaming;
+    // (the owed work as the last frame closed it — ENGINE-UPGRADE-U3 stage 2: the snapshot)
+    if (mStreamFramesLeft > 0 || mEngine->published().paceOwesWork) return FramePace::Streaming;
     return FramePace::Complete;
 }
 

@@ -438,7 +438,7 @@ void VrModule::shutdown()
     if (!host.engine) return;
     const auto e = host.engine->engine();
     if (!e) return;
-    if (e->vrStatus().active) {
+    if (e->vrSessionLive()) {
         if (host.engine->driver()) host.engine->driver()->setVrSessionActive(false);
         e->setVrMirrorView(nullptr);
         e->endVrSession();

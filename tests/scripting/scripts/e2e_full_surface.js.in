@@ -137,6 +137,8 @@ assert(world.get().shadowResolution === 2048,
 var sr = world.setShadowResolution(1024);
 assert(sr === 1024, "setShadowResolution(1024) applied (got " + sr + ")");
 assert(world.get().shadowResolution === 1024, "document stores the shadow-resolution override");
+// The verb steps no frame (ENGINE-UPGRADE-U3 stage 2): the atlas rebuild lands in the frames after the next sync.
+editor.frame(2);
 assert(world.shadowResolution() === 1024, "the renderer reports the override");
 // Out-of-window values clamp rather than throw; the engine's window is 256 up
 // to a platform cap (8192 on desktop GL/Vulkan hosts, 4096 on Metal — its max
