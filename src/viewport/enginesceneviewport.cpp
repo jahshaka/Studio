@@ -4249,6 +4249,9 @@ void EngineSceneViewport::presentCovered(int frames)
     // Nothing to present into: an offscreen fallback view owns no pixels of
     // this widget, and no view at all owns nothing.
     if (!view() || view()->isOffscreen() || !mEngine) return;
+    // ...NOR WHILE THE VR SESSION PAINTS THE HEADSET'S EYE ON IT (U3 stage 2 read F2: the snapshot's fact, never the
+    // enable): the desktop shows the eye, not this widget's picture.
+    if (sessionPaintsThisView()) return;
     // AND NOTHING TO PRESENT FOR: a hidden page has no pixels on screen, so a
     // frame drawn for it is pure UI-THREAD COST — the whole scene is still
     // rendered under the cover (the overlay pass composites onto a finished
@@ -4340,6 +4343,7 @@ void EngineSceneViewport::presentBackground()
     // reason there is nothing to do, in the order it is cheapest to find out.
     if (!mActive || !mEngine) return;
     if (!view() || view()->isOffscreen()) return;
+    if (sessionPaintsThisView()) return;   // the desktop shows the headset's eye (U3 read F2)
     if (mEngineScene) return;              // a world is bound: ordinary frames own the picture
     if (!isVisible()) return;              // no pixels of ours on screen to replace
     // THE COVER ON PATH IS presentCovered's, BYTE FOR BYTE. With the preference
@@ -4849,4 +4853,12 @@ void EngineSceneViewport::setEnginePhotonVoxelCascade(int cascade)
     if (!mEngineScene) return;
     mEngineScene->setPhotonVoxelCascade(cascade);
     mEnginePhotonCascade = cascade < 0 ? -1 : cascade;   // the engine's own clamp
+}
+
+bool EngineSceneViewport::sessionPaintsThisView() const
+{
+    // THE FACT IS THE SNAPSHOT'S (ENGINE-UPGRADE-U3 stage 2 read F2): the session's mirror paints the eye over the
+    // desktop view (VrStatus::mirrorShowing), and this viewport's view is the one it was named.
+    return mEngine && view() && view() == mEngine->vrMirrorView() &&
+           mEngine->published().vr.mirrorShowing == jahshaka::engine::VrDesktopPicture::Eye;
 }

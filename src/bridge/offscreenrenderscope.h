@@ -50,8 +50,13 @@ public:
         if (!mEngine) return;
         std::vector<jahshaka::engine::View *> views;
         mEngine->listViews(views);
+        // THE SESSION'S MIRROR VIEW IS THE SESSION'S WHILE IT SHOWS THE EYE (ENGINE-UPGRADE-U3 stage 2 read F2: the
+        // snapshot's fact, never its enable): suspending it would paint the desktop over the headset's picture.
+        const bool eyeOnDesktop =
+            mEngine->published().vr.mirrorShowing == jahshaka::engine::VrDesktopPicture::Eye;
         for (jahshaka::engine::View *v : views) {
             if (!v || v->isOffscreen() || !v->pushedEnabled()) continue;
+            if (eyeOnDesktop && v == mEngine->vrMirrorView()) continue;
             v->setEnabled(false);
             mSuspended.push_back(v);
         }

@@ -237,6 +237,8 @@ public:
     /// THE VIEW AS THE LAST FRAME CLOSED IT (ENGINE-UPGRADE-U3 stage 2: Engine::published(), by the view's name) —
     /// null before its first frame. The achieved size, MSAA and present counts are read here, never from the engine.
     /// framesPresented as the last frame closed it (0 before its first) — every present baseline is taken from it.
+    /// The VR session's mirror paints the headset's eye over this viewport's view (the snapshot's fact, U3 read F2).
+    bool sessionPaintsThisView() const;
     qulonglong presentedNow() const { const auto *pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
     const jahshaka::engine::PublishedEngineFrame::ViewFrames *publishedView() const
     { return (mEngine && view()) ? mEngine->published().view(view()->name()) : nullptr; }
