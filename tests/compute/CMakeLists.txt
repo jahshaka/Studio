@@ -100,8 +100,8 @@ set_tests_properties(chain.hzb.timing PROPERTIES
 # engine.voxel_reader_parity — THE ONE VOXEL READER (PHOTON-READER-1): the same
 # cones through the same bound cascade chain, marched by a FRAGMENT program and
 # by an Hlms COMPUTE job both built from jah_voxel_{sample,march,parity}.glsl,
-# compared bit for bit (Engine::voxelReaderParity), on the anisotropic chain
-# and the isotropic single volume.
+# compared bit for bit (Engine::voxelReaderParity), on the four-cascade chain
+# and a one-cascade chain (one directional store at every tier: PHOTON-MARCH-1).
 add_executable(test_voxel_reader_parity test_voxel_reader_parity.cpp)
 set_target_properties(test_voxel_reader_parity PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
