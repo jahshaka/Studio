@@ -191,6 +191,8 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["gi", "atom", "skeletal", "particles", "engine"] for f in ("applyCounted", "recountNode", "uncountNode")},
     # ENGINE-UPGRADE-U3 stage 3: the facts block (shares, reflectors, clips) the mirror's guards read
     "rebuildFacts": ["skeletal", "sockets", "planar", "avatar", "mirror"],
+    # ...and the messages' completions the mirror reads at the top of a sync (a refused rig, a refused swap)
+    "noteCompletion": ["mirror", "skeletal", "materials", "engine"],
     **{f: ["engine", "gizmo"] for f in ("setNodeHelper", "nodeHelper", "setNodeBackdrop", "nodeBackdrop")},
     **{f: ["vr"] for f in ("setNodeVrHelper", "nodeVrHelper", "setVrProxyNodes", "vrProxyNodes", "setVrRayNodes",
                            "vrRayNodes", "setVrHandBoneNodes", "vrHandBoneNodes")},

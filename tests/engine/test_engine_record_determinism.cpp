@@ -80,7 +80,7 @@ int child(const char *out)
     enginetest::setNodePosition(scene, ground, Vec3(0.0f, -0.05f, 0.0f));
     enginetest::setNodeScale(scene, ground, Vec3(6.0f, 0.1f, 6.0f));
     // THE DOCUMENT NODE: its pose arrives through the record and nowhere else.
-    const NodeId node = scene->createDocumentNode(0);
+    const NodeId node = scene->createDocumentNode(reserveNodeId());   // the document reserves its ids (U3 stage 3, F6)
     const MeshId mesh = node ? scene->createMesh(enginetest::unitCubeMesh()) : 0;
     PbrParams p;
     p.albedo = Colour(0.85f, 0.2f, 0.15f);

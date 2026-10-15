@@ -403,6 +403,7 @@ mirror.ground_plane 1.91  quiet n=44
 mirror.change_set 2.53  solo, warm, the card lock held (EU-1 U0 3b, 2026-10-14)
 mirror.frame_input 1.74  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
 mirror.doc_store 0.75  solo, warm, the card lock held (ENGINE-UPGRADE-U2 stage 1, 2026-10-14)
+mirror.messages_in_order 1.39  stage-3 master rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-15)
 mirror.reparent_local 2.30  solo, warm, the card lock held (EU-1 stage 2, 2026-10-13)
 mirror.scale 1.85  quiet n=48
 mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
@@ -891,6 +892,7 @@ ui.db_handles 0.10  ship 3a0422b4e (2026-10-13)
 ui.dock_state 0.08  quiet n=25
 ui.drag_owner 0.00  ship 3a0422b4e (2026-10-13)
 ui.engine_view_winid 1.58  quiet n=42
+ui.harness_child_log 0.01  stage-3 master rows (ENGINE-UPGRADE-U3, 2026-10-15)
 ui.hierarchy_root 0.00  ship 3a0422b4e (2026-10-13)
 ui.import_dialog 0.07  quiet n=28
 ui.light_channels 0.00  ship 3a0422b4e (2026-10-13)

@@ -1497,9 +1497,11 @@ add_executable(test_harness_child_log test_harness_child_log.cpp)
 set_target_properties(test_harness_child_log PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_harness_child_log PRIVATE Qt6::Core Qt6::Network)
+# The harness header names the app's binary for its spawn(), which this row never calls: no app, so not the app's
+# path (source.gpu_rows_closure reads JAHSHAKA_BINARY = the app as "spawns the app").
 target_compile_definitions(test_harness_child_log PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+    JAHSHAKA_BINARY="/bin/false")
 add_test(NAME ui.harness_child_log COMMAND test_harness_child_log
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.harness_child_log PROPERTIES TIMEOUT 60 LABELS "ui")
