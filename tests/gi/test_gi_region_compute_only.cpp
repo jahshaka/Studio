@@ -92,8 +92,14 @@ static void drive(Engine *e, Scene *s, NodeId mover, NodeId sun, NodeId still) {
         if (f % 50 == 25) enginetest::setNodePosition(s, still, Vec3(-1.0f + 0.1f * float(f / 50), 0.3f, -0.5f));
         e->renderOneFrame();
     }
+    // THE POOL: the refresh re-voxelises every cascade and pools no new mip job (a job per format,
+    // volume size and level, shared by every volume and rebuild of that kind).
+    const unsigned long long jobs0 = photonDispatchStatus().mipJobs;
     s->refreshGlobalIllumination();
     for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    const unsigned long long jobs1 = photonDispatchStatus().mipJobs;
+    std::printf("   mip jobs pooled %llu (the refresh added %llu)\n", jobs1, jobs1 - jobs0);
+    CHECK(jobs1 == jobs0, "the refresh's re-voxelisation pooled NO new mip job (one per kind, not per volume)");
 }
 
 // THE BLIT'S FILTER IN CLOSED FORM: level L's texel (i, j, k) is the linear read of level L - 1 at
