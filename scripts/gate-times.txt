@@ -247,7 +247,7 @@ gi.id_depth 4.81  quiet n=37
 gi.id_depth_rays 4.60  quiet n=34
 gi.lamp_falloff 5.39  quiet n=36
 gi.leak_room 6.00  quiet n=41
-gi.march_underread 2.95  solo 2026-10-15 (PHOTON-MARCH-1 stage 0: n=3, 2.95-3.00 s, 432 frames; red on the base by design)
+gi.march_underread 1.74  solo 2026-10-15 (PHOTON-MARCH-1 stage 1: n=3, 1.74-4.55 s (the first cold), 864 frames: Low + Medium)
 gi.material_swap 2.69  quiet n=44
 gi.mobility 6.80  ship 3a0422b4e (2026-10-13)
 gi.modes 3.48  quiet n=41

@@ -11,24 +11,24 @@
 // its reasons), at EVERY cascade resolution, the field off and on, the wall standing on the
 // plate and free-standing (the plate stopping 0.15 m short of it).
 //
-// WHERE THE BASE LOSES IT (stage 0, measured: spikes/photon-march-1/, the march of the centre
-// pixel's ray dumped per plane through the parity job). The query crosses empty planes and takes
-// the whole of its room (1 - the below-horizon share, 0.614) in ONE plane, the one holding the
-// wall's face: the opacity is exact and nothing accumulates over steps. The colour that comes with
-// that opacity is the isotropic texel's MEAN radiance (jahVoxelReadPlane: cA = s.rgb aA / s.a) -
-// every voxel of the fetch's neighbourhood weighted by its conservative opacity, the plate's
-// voxels too, whose faces are parallel to the ray and give the plane no opacity. The fetch at the
-// wall straddles the texel holding the wall-plate junction (the texel is 0.5625 m at every cell
-// count; the ray meets the wall lower as the one-cell start bias shrinks: y 0.685 / 0.544 / 0.474
-// m), so the plane's colour reads 0.9998 / 0.950 / 0.874 L at 32 / 64 / 128 cells (rebuilt from
-// mip 0 on the CPU to 4 digits) - the readings below. The free-standing wall's texel holds no
-// plate voxel: its plane reads 0.9998 L.
-// THE ANISOTROPIC TIERS (`--all-tiers`, stage 0's second measurement): Medium, High and Epic read
-// the same plane from the directional store and pass, 0.999 / 0.996 / 0.990 on the plate and 1.000
-// free-standing - the plane's colour 0.9998 / 0.995 / 0.990 L; the row reads Low (the tier that fails).
+// THE LAW OF THE READ (PHOTON-MARCH-1): the colour that comes with an opacity is the
+// coverage-weighted radiance of the same half-axis faces the opacity counts - the directional
+// store, (radiance x k, k) per half-axis, at EVERY tier. The Low tier stored one isotropic light
+// per voxel and took a texel's MEAN radiance over every surface in it: the query here takes the
+// whole of its room (0.614) in the one plane holding the wall's face, and at the wall-plate
+// junction that mean holds the plate's voxels too (parallel to the ray, no opacity of theirs in
+// the plane): 0.998 / 0.954 / 0.873 at 32 / 64 / 128 cells on the plate (stage 0's dump,
+// spikes/photon-march-1/). Since stage 1 every tier reads the directional store: 0.999 / 0.996 /
+// 0.990 on the plate, 1.000 free-standing, field off and on. The leftover 1 % at 128 cells is the
+// junction voxel itself, which holds the wall's foot and the plate's top in one light.
+// THE TIERS ARE ONE READER: the row reads Low and Medium and asserts Low reads Medium's value on
+// every arm (`--all-tiers` adds High and Epic). It prints the light store's memory per arm (Low,
+// 64 cells, one cascade: 6.86 MB before stage 1, 14.07 MB after - the directional volumes, the
+// back side and the bounce's per-side twins).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -80,11 +80,12 @@ int main(int argc, char **argv)
     const double L = std::pow((kSkyByte / 255.0 + 0.055) / 1.055, 2.4);
     PbrParams metal; metal.albedo = Colour(1, 1, 1); metal.metalness = 1.0f; metal.roughness = 0.74f;
 
-    // THE TIERS: the row reads Low; `--all-tiers` adds the anisotropic ones (Medium, High, Epic: the
-    // directional store, its level-0 back side and normal) - a measurement, not the row's.
-    std::vector<std::pair<GiQuality, const char *>> tiers = { { GiQuality::Low, "Low" } };
+    // THE TIERS: the row reads Low and Medium (one reader: Low must read Medium's value); `--all-tiers`
+    // adds High and Epic.
+    std::vector<std::pair<GiQuality, const char *>> tiers = { { GiQuality::Low, "Low" }, { GiQuality::Medium, "Medium" } };
     if (argc > 1 && std::string(argv[1]) == "--all-tiers")
-        tiers.insert(tiers.end(), { { GiQuality::Medium, "Medium" }, { GiQuality::High, "High" }, { GiQuality::Epic, "Epic" } });
+        tiers.insert(tiers.end(), { { GiQuality::High, "High" }, { GiQuality::Epic, "Epic" } });
+    std::vector<double> readings[2];   // Low, Medium: per (res, wall, field) arm, in order
     for (const auto &tier : tiers)
     for (int res : { 32, 64, 128 })
         for (int standing = 1; standing >= 0; --standing) {
@@ -130,6 +131,17 @@ int main(int argc, char **argv)
                 for (int f = 0; f < 20; ++f) e->renderOneFrame();
                 for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
                 const double withWall = readHdr();
+                if (arm.first == GiToggle::Off && standing) {
+                    // THE LIGHT STORE'S MEMORY (the textures PhotonVoxelLighting creates: the total, the
+                    // directional axes, the back side, the bounce and direct twins, the mip steps)
+                    std::vector<TextureMemoryEntry> tex;
+                    unsigned long long bytes = 0; int count = 0;
+                    if (e->textureMemory(tex))
+                        for (const TextureMemoryEntry &t : tex)
+                            if (t.name.rfind("VctLighting", 0) == 0 || t.name.rfind("VCT/", 0) == 0) { bytes += t.bytes; ++count; }
+                    std::printf("%s, %d cells, one cascade: the light store holds %.2f MB in %d textures\n", tier.second, res,
+                                double(bytes) / (1024.0 * 1024.0), count);
+                }
                 const GiStatus st = s->giStatus();
                 const bool fieldBuilt = st.ifdMax.x > st.ifdMin.x;
                 if (arm.first == GiToggle::On)
@@ -141,12 +153,24 @@ int main(int argc, char **argv)
                               "value (%.4f / %.4f = %.3f; bar 3 %%)", tier.second, res, standing ? "on the plate" : "free-standing",
                               arm.second, withWall, open, withWall / open);
                 CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
+                if (tier.first == GiQuality::Low) readings[0].push_back(withWall / open);
+                if (tier.first == GiQuality::Medium) readings[1].push_back(withWall / open);
             }
             s->setGlobalIllumination(off);
             rv->setScene(nullptr);
             e->destroyScene(s);
         }
     e->destroyView(rv);
+    {
+        // ONE READER AT EVERY TIER: Low reads Medium's value on every arm (the same store, the same law)
+        double worst = 0.0;
+        for (size_t k = 0; k < readings[0].size() && k < readings[1].size(); ++k)
+            worst = std::max(worst, std::fabs(readings[0][k] / readings[1][k] - 1.0));
+        char msg[200];
+        std::snprintf(msg, sizeof msg, "Low reads Medium's value on all %zu arms (worst %.4f; bar 3 %%)",
+                      readings[0].size(), worst);
+        CHECK(readings[0].size() == 12u && readings[1].size() == 12u && worst <= 0.03, msg);
+    }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
