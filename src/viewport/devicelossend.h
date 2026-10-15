@@ -125,7 +125,10 @@ inline void checkAfterFrame(const jahshaka::engine::Engine *engine)
     if (!engine) return;
     const jahshaka::engine::GpuFault fault = engine->gpuFault();
     // The fault's own words are the FRAME's error (ENGINE-UPGRADE-U3 F3): the close that latched it published them.
-    if (fault != jahshaka::engine::GpuFault::None) endNow(fault, engine->published().lastFrameError);
+    if (fault != jahshaka::engine::GpuFault::None) {
+        const auto &errs = engine->published().frameErrors;
+        endNow(fault, errs.empty() ? std::string() : errs.back().text);
+    }
 }
 
 }   // namespace devicelossend

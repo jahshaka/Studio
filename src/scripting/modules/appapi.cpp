@@ -224,8 +224,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "beforeFrame slot, at most once every `everyMs` milliseconds of the wall clock (the stimulus of "
           "vr.ui_stall: an event-loop stall of the size the 2026-10-03 perf audit measured, landing inside the tick "
           "that also waits for the headset). `app.tickStall(0)` disarms. Returns what is armed now and how many "
-          "stalls were slept since it was armed. Development builds only: refused in a release build, like "
-          "app.blockUiThread.",
+          "stalls were slept since it was armed. Development builds only: compiled into every build and REFUSED AT "
+          "RUN TIME in a release build (false, app.lastError), like app.blockUiThread.",
           Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "

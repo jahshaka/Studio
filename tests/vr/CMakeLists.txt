@@ -409,14 +409,16 @@ set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 # 1.00 missed per stall (31 of 31); 45 ms 1.00 (30/30); 120 ms 3.00 (135/45); 7 ms — under 0.15 of this period —
 # 0.00 (0/80). The control: 0-2 over 200-600 frames. As ruled (32 ms at 20 Hz): 93 missed over 93 stalls = 1.00, RED.
 set(_vr_ui_stall_home "${CMAKE_CURRENT_BINARY_DIR}/vr-ui-stall-home")
-jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "scripting;measure")
+jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "vr;measure")
 jah_gpu_exclusive_test(NAME vr.ui_stall CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
             "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
             "${CMAKE_CURRENT_SOURCE_DIR}/vr_ui_stall.js"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# LABELS vr + measure: the vr subsystem's row (gate-scope's NEVER_SELECTED keeps a `measure` row out of every scoped
+# selection — the ship runs it; the U3 builder runs it by hand at each stage and keeps its log).
 set_tests_properties(vr.ui_stall PROPERTIES
-    LABELS "scripting;measure"
+    LABELS "vr;measure"
     SKIP_RETURN_CODE 77
     JAHSHAKA_TEST_FRAMES 1300
     FIXTURES_REQUIRED vruistallFreshHome

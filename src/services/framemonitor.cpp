@@ -461,6 +461,8 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
 
     QJsonObject o{
         { "frame", double(r.frame) },
+        // the hand-over's serial (ENGINE-UPGRADE-U3): the host's stages in this record rode the hand-over it names
+        { "serial", double(r.serial) },
         { "tMs", r.startMs },
         { "totalMs", double(r.totalMs) },
         { "cause", QLatin1String(causeName(r.cause)) },

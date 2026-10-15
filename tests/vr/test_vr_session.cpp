@@ -598,10 +598,12 @@ int main() {
                           "kept coming (%llu -> %llu)", once, twice);
                 // The throw would be a FRAME's (the quad is rebuilt in the frame): read the frames' published
                 // error as well as the calls' sink (ENGINE-UPGRADE-U3 F3).
-                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos &&
-                              engine->published().lastFrameError.find("Duplicate") == std::string::npos,
-                          "no duplicate-material throw: lastError is '%s', the frames' '%s'",
-                          engine->lastError().c_str(), engine->published().lastFrameError.c_str());
+                bool frameDuplicate = false;
+                for (const auto &fe : engine->published().frameErrors)
+                    frameDuplicate = frameDuplicate || fe.text.find("Duplicate") != std::string::npos;
+                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos && !frameDuplicate,
+                          "no duplicate-material throw: lastError is '%s', %zu frame error(s) kept",
+                          engine->lastError().c_str(), engine->published().frameErrors.size());
             }
             setFixtureSky(scene, true);
             pump(engine.get(), engine->vrStatus().frames + 5ull, 100u);
@@ -2338,7 +2340,8 @@ int main() {
             for (unsigned i = 0; i < kThrown; ++i) {
                 engine->advanceResources();
                 engine->renderOneFrame();
-                if (engine->lastError().find("injected frame fault") != std::string::npos) ++fired;
+                // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published, never in the calls' sink.
+                if (engine->published().frameError.find("injected frame fault") != std::string::npos) ++fired;
             }
             CHECK_MSG(fired == kThrown, "the fault fired on all %u frames (not vacuous)", kThrown);
             const VrStatus thrown = engine->vrStatus();
@@ -2407,13 +2410,13 @@ int main() {
                 engine->renderOneFrame();
             }
             engine->setFrameFault(FrameFault::None, 0u);
-            std::printf("STOPPED after %u thrown frames, active=%d, lastError='%s'\n", rendered,
-                        int(engine->vrStatus().active), engine->lastError().c_str());
+            std::printf("STOPPED after %u thrown frames, active=%d, frameError='%s'\n", rendered,
+                        int(engine->vrStatus().active), engine->published().frameError.c_str());
             // NOT VACUOUS: the frame that ended the session is a frame that
-            // THREW, and its own error is still the one standing.
-            CHECK_MSG(engine->lastError().find("injected frame fault") != std::string::npos,
+            // THREW, and its own (published) error says so.
+            CHECK_MSG(engine->published().frameError.find("injected frame fault") != std::string::npos,
                       "the session was ended by a frame that threw ('%s')",
-                      engine->lastError().c_str());
+                      engine->published().frameError.c_str());
             // ENDED, NOT MERELY WEDGED, and the difference is the whole case:
             // a session that has been TAKEN DOWN reports `Idle` (there is no
             // session object left to ask), while a session whose frames simply

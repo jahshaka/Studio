@@ -82,9 +82,9 @@ public:
     ///
     /// TWO SOURCES (ENGINE-UPGRADE-U3 F3): the failing CALLS' sink
     /// (Engine::takeLastError) and the FRAMES' error, read from the engine's
-    /// published snapshot — the newest one a frame wrote, taken once each time
-    /// the count of frames that wrote one moves (a drain that did not see every
-    /// frame still takes the newest, as the one sink always gave).
+    /// published snapshot — the frames' errors keyed by serial, each taken once
+    /// (a drain that did not see every frame still takes every one the list
+    /// holds, never only the newest).
     void drain(jahshaka::engine::Engine *engine);
 
     /// The same path drain() uses once it has a message — the seam the gates

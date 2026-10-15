@@ -252,6 +252,8 @@ private:
     framepacing::Mode mMode = framepacing::Mode::Display;
     /// 0 until a host tells us (see setRefreshHz) — the fallback interval then.
     double  mRefreshHz = 0.0;
+    /// The display period last told to the engine (Engine::setDisplayPeriod; told on change only).
+    float   mDisplayPeriodSent = -1.0f;
     /// What the script run in flight (if any) is doing to this loop.
     ScriptRun mScriptRun = ScriptRun::None;
     /// holdThisTick's flag: set inside beforeFrame, consumed by the same tick.

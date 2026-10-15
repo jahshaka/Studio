@@ -171,13 +171,11 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // who wants the total.
         mStats.drawing = anythingToDraw;
         if (rendering) {
-            // THE DISPLAY'S PERIOD rides the record (ENGINE-UPGRADE-U3: FrameInput::displayDt) — the driver is the one
-            // that knows it; the engine's clock never reads it (trap 7), stage 5's interpolation weight divides by it.
-            {
-                jahshaka::engine::FrameInput period;
-                period.displayDt = float(scriptPacePeriodMs() / 1000.0);
-                mEngine->submitFrame(period);
-            }
+            // THE DISPLAY'S PERIOD is a display property, not a record (ENGINE-UPGRADE-U3): told to the render loop
+            // when it CHANGES — the driver submits no record of its own, so a tick nothing was submitted for is a real
+            // empty hand-over. The engine's clock never reads it (trap 7); stage 5's interpolation weight does.
+            const float period = float(scriptPacePeriodMs() / 1000.0);
+            if (period != mDisplayPeriodSent) { mEngine->setDisplayPeriod(period); mDisplayPeriodSent = period; }
             mEngine->renderOneFrame();
             ++mStats.rendered;
             mDrawn.add(nowMs());
