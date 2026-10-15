@@ -137,8 +137,11 @@ if (VR_RUNTIME) {
     });
     vr.step({ frames: 30 });
     // The status reaches the mirror on the driver's frame or on this verb (a
-    // script's editor.frame does not tick the driver); the mirror's own sync
+    // script's editor.frame does not tick the driver) — the status as the LAST
+    // FRAME published it (ENGINE-UPGRADE-U3 stage 2: the snapshot), so the frame
+    // that publishes the injected profiles comes first; the mirror's own sync
     // then builds the proxies and picks each one's mesh by its hand's profile.
+    editor.frame(1);
     assert(vr.proxies(true) === true, "vr.proxies(true) — the status pushed to the mirror now");
     editor.frame(4);
     ["left", "right"].forEach(function (hand) {
