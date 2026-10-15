@@ -7,6 +7,7 @@
 //   * the engine assigned NO id of its own (SceneChangeStats::engineAssignedIds unmoved) and the frame refused nothing.
 // A law in counts; two frames.
 #include <QGuiApplication>
+#include <chrono>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -75,13 +76,16 @@ int main(int argc, char **argv)
     }
     for (int i = 0; i < 50; ++i) groupB->addChild(nodes[size_t(i)], false);      // reparent half
     for (int i = 90; i < 100; ++i) nodes[size_t(i)]->removeFromParent();          // destroy ten
+    const auto syncStart = std::chrono::steady_clock::now();
     mirror.sync();
+    const double syncUs = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - syncStart).count();
 
     // BEFORE THE FRAME: nothing was applied on the spot.
     const NodeId first = mirror.engineNode(nodes[0].data());
     CHECK(first == NodeId(nodes[0]->nodeId), "the engine node of a document node IS its document id (%llu)",
           (unsigned long long)first);
-    CHECK(engine->frameSubmitStatus().submitted > 0, "the sync's commands are in the pending record");
+    CHECK(engine->frameSubmitStatus().messagesPosted > 0, "the sync's commands are in the pending record (%llu posted)",
+          engine->frameSubmitStatus().messagesPosted);
 
     enginetest::frames(engine, 1);
 
@@ -90,6 +94,10 @@ int main(int argc, char **argv)
     const unsigned long long messages = engine->published().input.messagesTotal - messagesBefore;
     std::printf("    one tick: %llu messages applied, %llu items created, %llu engine-assigned ids\n", messages,
                 after.itemsCreated - before.itemsCreated, after.engineAssignedIds - before.engineAssignedIds);
+    // THE COST OF THE DOOR (decision 35): messages per adopted node and the adopting sync's time per node — the
+    // numbers of record, printed (the row's law is the counts; the time is Debug's and the box's).
+    std::printf("    the adopting sync: %.2f messages per adopted node, %.1f us per node (%.0f us for 90 + 2 groups)\n",
+                double(messages) / 92.0, syncUs / 92.0, syncUs);
     CHECK(messages >= 300, "the tick's creates, attaches and materials arrived as messages (%llu)", messages);
     CHECK(after.itemsCreated - before.itemsCreated == 90,
           "every surviving node drew an Item, none of the destroyed ten did (%llu)",
