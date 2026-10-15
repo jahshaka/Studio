@@ -339,6 +339,7 @@ hdr.drag_stable 7.69  quiet n=41
 hdr.drag_stable_asan 18.48  quiet n=41
 hdr.meter 9.00  ship 3a0422b4e (2026-10-13)
 hdr.meter_asan 21.39  quiet n=41
+host.sync_getters 11.95  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 2, 2026-10-15)
 import.async 0.20  ship 3a0422b4e (2026-10-13)
 import.shutdown 33.63  quiet n=43
 import.shutdown.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

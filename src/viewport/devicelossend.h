@@ -123,7 +123,7 @@ inline void endNow(jahshaka::engine::GpuFault fault, const std::string &engineTe
 inline void checkAfterFrame(const jahshaka::engine::Engine *engine)
 {
     if (!engine) return;
-    const jahshaka::engine::GpuFault fault = engine->gpuFault();
+    const jahshaka::engine::GpuFault fault = engine->published().gpuFault;   // the frame's close latched it (U3 stage 2)
     // The fault's own words are the FRAME's error (ENGINE-UPGRADE-U3 F3): the close that latched it published them.
     if (fault != jahshaka::engine::GpuFault::None) {
         const auto &errs = engine->published().frameErrors;

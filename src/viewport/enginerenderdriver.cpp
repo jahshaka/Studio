@@ -148,7 +148,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // at the bottom of this tick. Free when nothing is arriving: the whole
         // read is a short loop over the live scenes and two atomics.
         jahshaka::engine::StreamingWork owedBefore;
-        if (mEngine) owedBefore = mEngine->streamingWork();
+        if (mEngine) owedBefore = mEngine->published().streaming;   // the last frame's (U3 stage 2)
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         // A subscriber held this tick (holdThisTick: the offline recorder's
         // backpressure). Still "drawing" — the views are up — but no frame.
@@ -254,7 +254,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             // and the shader counter says whether anything was compiled.
             QString cause;
             if (mEngine) {
-                const jahshaka::engine::StreamingWork after = mEngine->streamingWork();
+                const jahshaka::engine::StreamingWork after = mEngine->published().streaming;   // this frame's
                 const unsigned compiled = after.shadersCompiled >= owedBefore.shadersCompiled
                                               ? after.shadersCompiled - owedBefore.shadersCompiled
                                               : 0u;
@@ -344,7 +344,7 @@ void EngineRenderDriver::setPacingMode(framepacing::Mode m)
 void EngineRenderDriver::syncVrPacing()
 {
     if (!mEngine) return;
-    const jahshaka::engine::VrStatus st = mEngine->vrStatus();
+    const jahshaka::engine::VrStatus &st = mEngine->published().vr;   // the last frame's (U3 stage 2)
     if (!st.active) {
         // THE ENGINE ENDED IT WITHOUT US. A runtime that went away or a device
         // that was lost ends the session inside the frame (OgreEngine::

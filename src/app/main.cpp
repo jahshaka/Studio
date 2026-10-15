@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
             // compiledInBackground, two loads that a service-thread compile could land between
             // (the difference dipped by one and came back: a phantom live compile, measured as
             // shader.sample_opens_quiet's "1 shader(s)" under load).
-            return e->asyncShaderStats().compiledInForeground;
+            return unsigned(e->published().shaders.compiledInForeground);   // the last frame's (U3 stage 2)
         });
         // AFTER THE STARTUP GATE, THE EDITOR COMPILES IN THE BACKGROUND (ASYNC-SHADERS-1):
         // an interactive session's view never waits for a shader outside an open's dialog.

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldmodespropertywidget.h"
+#include "ui/panels/propertywidgets/panelrefresh.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 
@@ -268,10 +269,13 @@ void WorldModesPropertyWidget::refreshRows()
 
 void WorldModesPropertyWidget::applied()
 {
-    // Shadow-atlas and MSAA changes are applied by SceneMirror at the next sync;
-    // step two frames so the readbacks the sibling sections show are the truth.
-    if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
+    // Shadow-atlas and MSAA changes are applied by the mirror at the next sync; the read-backs re-read once two
+    // frames have drawn them (ENGINE-UPGRADE-U3 stage 2: the post-edit render is deleted).
     refreshRows();
+    if (sceneView && sceneView->isInitialized())
+        panelrefresh::afterFrames(this, sceneView, 2, [self = QPointer<WorldModesPropertyWidget>(this)]() {
+            if (self) self->refreshRows();
+        });
     // The sibling World sections (Anti-Aliasing, Shadows, Global Illumination,
     // Sky) display the very backing fields a tier writes through to, and they
     // only read them when they are built: without this they would keep showing

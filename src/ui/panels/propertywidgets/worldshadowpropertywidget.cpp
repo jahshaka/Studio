@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
+#include "ui/panels/propertywidgets/panelrefresh.h"
+#include <QPointer>
 #include "ui/panels/propertyrows.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -55,8 +57,13 @@ WorldShadowPropertyWidget::WorldShadowPropertyWidget()
 void WorldShadowPropertyWidget::contactEdited()
 {
     if (loading || !scene) return;
-    if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
     refreshRows();
+    // The rows that read the renderer back re-read the snapshot once the next two frames have drawn the edit
+    // (ENGINE-UPGRADE-U3 stage 2: the post-edit render is deleted).
+    if (sceneView && sceneView->isInitialized())
+        panelrefresh::afterFrames(this, sceneView, 2, [self = QPointer<WorldShadowPropertyWidget>(this)]() {
+            if (self) self->refreshRows();
+        });
 }
 
 int WorldShadowPropertyWidget::atlasMegabytes(int resolution)
@@ -371,7 +378,10 @@ void WorldShadowPropertyWidget::onQualityChanged(int row)
             worldmodes::setRowValue(scene, QStringLiteral("shadowResolution"), resolution);
         },
         [this]() {
-            if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
             refreshRows();
+            if (sceneView && sceneView->isInitialized())   // the read-back, two frames on (U3 stage 2)
+                panelrefresh::afterFrames(this, sceneView, 2, [self = QPointer<WorldShadowPropertyWidget>(this)]() {
+                    if (self) self->refreshRows();
+                });
         });
 }

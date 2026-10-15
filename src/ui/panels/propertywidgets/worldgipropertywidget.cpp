@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/vec.h"
+#include "ui/panels/propertywidgets/panelrefresh.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 #include "services/editgate.h"
@@ -595,8 +596,10 @@ void WorldGiPropertyWidget::editRegistry(const QString &text, const std::functio
         if (!self) return;
         // Apply first, so the read-only Reflections row rebuild() fills reports
         // what the renderer did with THIS edit (the MSAA section's pattern).
-        if (self->sceneView && self->sceneView->isInitialized()) self->sceneView->renderFrames(2);
         self->rebuild();
+        // ...and again once the next two frames have drawn it (U3 stage 2: the post-edit render is deleted).
+        if (self->sceneView && self->sceneView->isInitialized())
+            panelrefresh::afterFrames(self, self->sceneView, 2, [self]() { if (self) self->rebuild(); });
         // The sibling sections (World Mode above all, which lists every one of
         // these rows with its pin mark) display what was just written.
         emit self->worldSettingsChanged();

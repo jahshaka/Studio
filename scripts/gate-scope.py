@@ -111,6 +111,7 @@ _ALL = ["*engine-fixtures", "*picture", "*vulkan-scripts"]   # everything that r
 OGRE_ENGINE_FUNCTIONS = {
     # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
     **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
+                         "syncHostViews", "noteDevice", "deviceRayQuery", "appliedFrameDelta",
                          "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",
                          "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
                          "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",

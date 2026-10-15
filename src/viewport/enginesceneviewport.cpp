@@ -193,6 +193,7 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // a 1080p render is never paid for a frame nobody records.
         connect(mDriver, &EngineRenderDriver::afterFrame, this, [this]() {
             if (mRecordView) mRecordView->setEnabled(false);
+            emit mEvents.framesDrawn();
         });
 }
 
@@ -3157,6 +3158,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         armRecordingFrame(recordable);
         mEngine->renderOneFrame();
         if (mRecordView) mRecordView->setEnabled(false);
+        emit mEvents.framesDrawn();
         // ...and a compile it caused is said like a driver frame's (SHADER-WARM-2).
         livecompiles::check("a scripted frame");
         // ...and the device-loss end for the same reason (lane XID-2): a
@@ -4050,7 +4052,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
 void EngineSceneViewport::sampleStreamingWork(bool driverFrame)
 {
     if (!mEngine) return;
-    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
     // The frame that has just been drawn either built shaders or it did not.
     mStream.shadersLastFrame = w.shadersCompiled >= mStream.shadersAtSample
                                    ? w.shadersCompiled - mStream.shadersAtSample
@@ -4085,7 +4087,7 @@ IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
 {
     StreamingPending out;
     if (!mEngine) return out;
-    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
     out.gi = w.giStagesLeft;
     out.textures = w.materialsAwaitingTexture;
     out.shaders = mStream.shadersLastFrame;
@@ -4417,7 +4419,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
         mStream = StreamSample();
         mStream.arrived = false;   // this load has not arrived until it settles
         if (mEngine) {
-            const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+            const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
             mStream.shadersAtLoad = mStream.shadersAtSample = w.shadersCompiled;
         }
     }

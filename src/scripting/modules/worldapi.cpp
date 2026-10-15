@@ -417,13 +417,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value.",
           Needs::Document },
         { "setAntiAliasing", "world.setAntiAliasing(samples) -> int",
-          "Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value).",
+          "Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value). Returns the count asked for; the achieved one is world.antiAliasing() once the frames after the next sync have drawn (the verb steps no frame: ENGINE-UPGRADE-U3 stage 2).",
           Needs::Document },
         { "shadowResolution", "world.shadowResolution() -> int",
           "Reads the shadow-map atlas base resolution in pixels. With the engine viewport live this is the value the renderer is actually using; otherwise the scene's setting, or 0 when it is on Auto with no shadow-casting light to derive from.",
           Needs::Document },
         { "setShadowResolution", "world.setShadowResolution(pixels) -> int",
-          "Sets the scene's shadow-map atlas base resolution: 0 = Auto (derive from the largest per-light Shadow Size), otherwise 256..8192 pixels. There is ONE atlas for every light in the scene, sized R x 3.5R at 32-bit depth: 1024 costs ~14 MB, 2048 ~56 MB, 4096 ~224 MB, 8192 ~896 MB of VRAM. Returns the applied value after clamping.",
+          "Sets the scene's shadow-map atlas base resolution: 0 = Auto (derive from the largest per-light Shadow Size), otherwise 256..8192 pixels. There is ONE atlas for every light in the scene, sized R x 3.5R at 32-bit depth: 1024 costs ~14 MB, 2048 ~56 MB, 4096 ~224 MB, 8192 ~896 MB of VRAM. Returns the applied value after clamping. Returns the value asked for: the atlas rebuild lands in the frames after the next sync (ENGINE-UPGRADE-U3 stage 2 — the verb steps no frame).",
           Needs::Document },
         { "skyLight", "world.skyLight() -> {light, name, intensity, tint, reason, skyType, count}",
           "THE SCENE'S SKYLIGHT — the light that reads the World sky and fills the scene with its diffuse ambient. There is no flat \"ambient colour\" any more: ambient IS a Sky Light, a light node of type \"sky\" (scene.addLight(\"sky\")), and a scene with no Sky Light has no ambient at all. `light`/`name` are the resolved one (the FIRST VISIBLE Sky Light in creation order) and `reason` says how it was chosen: \"first\", \"allHidden\" (every Sky Light in the scene is hidden — hiding one is how you switch the skylight off without deleting it) or \"none\". `intensity` is its strength (1.0 = the sky at full physical strength) and `tint` its colour, which multiplies the sky's own integral per channel. `skyType` is the sky it is reading and `count` how many Sky Lights the scene holds — more than one raises the `sky.duplicate` scene issue, because only the first lights anything. Both rows are ordinary light properties: node.property(id, \"intensity\", 2) doubles the skylight and is keyable.",
@@ -543,7 +543,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
           Needs::Document },
         { "setPlanarReflections", "world.setPlanarReflections({budget, resolution, shadows}) -> object",
-          "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
+          "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override. The returned activeActors is the last frame's: the verb steps no frame (ENGINE-UPGRADE-U3 stage 2), so read planarReflections() again after editor.frame.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: none {} (no sky at all: a black background, no environment and no ambient from a sky — the Empty template's); color {color}; gradient {top, mid, bottom, offset}; realistic {sunHaze, skyBrightness, aerialScale, groundAlbedo, rayleighScale, ozone}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE REALISTIC SKY IS THE PLANET'S ATMOSPHERE, a physical model drawn on the GPU (Hillaire's, what Unreal's Sky Atmosphere is): a planet under a shell of air with Rayleigh and Mie scattering and an ozone layer, and ONE model answers the sky's pixels (a sharp horizon over the darker planet below it), the sun's colour (a low sun turns red and dim), the environment the Sky Light captures, the cloud sheet's air and the AERIAL PERSPECTIVE on every lit surface (distant geometry fades into exactly the sky behind it). THE SKY HAS NO SUN OF ITS OWN: its sun is the scene's SUN — the first directional light — which both places it and LIGHTS it (a brighter sun is a brighter sky, and a scene with no sun light has a night sky); rotate that light to move the sun, and the sun DISC is world.sunDisc. The dials mean physical things and 1 is the clear Earth of the reference for each scale: sunHaze is the SKY's haze as a multiple of the reference's very clear air (0 = none, 1 = very clean, 10 = the default, a clean ordinary day with an aerosol optical depth of 0.053, ~50 hazy, up to 100; the aerosol is grey — it dims and whitens, the air's molecules redden): it moves the sky, the horizon's whiteness, the glow round the sun, the sunlight's colour and the Sky Light, and NOT how hazed a scene surface is — that is the World fog's job; skyBrightness (0..10, default 1 = the physical sky, Unreal's sky luminance factor) scales the light the air scatters — the sky's pixels, the Sky Light and reflections, the scene air's in-scatter — and never the sun's direct light or its colour; aerialScale (0..1, default 0 = off) puts this atmosphere's own air on the scene as a distance scale — 1 the real air, 0 none at all — and moves no sky pixel; groundAlbedo (0..1, default 0.3) is the planet's surface under the horizon; rayleighScale (0..10, default 1) is the air's blue; ozone (true/false, default true) is the ozone layer. EVERY dial is held inside its band — the document clamps, so world.get() reports what the renderer actually has. The old density/diffusion/horizon/skyColour/power dials belonged to a non-physical model that is gone and are refused by name. Every sky LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, the texture it bound); a refused call changes nothing.",
@@ -2744,12 +2744,9 @@ int WorldApi::setAntiAliasing(int samples)
     // A direct edit of a backing field is a PIN (POST_CHAIN_SPEC §9.1): without
     // this the next world.mode() switch would silently undo it.
     worldmodes::pinRowValue(scene, QStringLiteral("msaa"), samples);
-    // SceneMirror pushes the document value at the next sync; step two frames so
-    // the pending target rebuild is applied and the achieved count is readable.
-    if (host.isEngineReady() && host.viewport) {
-        host.viewport->renderFrames(2);
-        return host.viewport->sampleCount();
-    }
+    // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2: the post-edit renders are deleted): the mirror pushes the value at
+    // its next sync and the target rebuild lands in the frames after it; the ACHIEVED count is world.antiAliasing()'s once
+    // the script has stepped them (editor.frame). This answers the request.
     return samples;
 }
 
@@ -2800,13 +2797,8 @@ int WorldApi::setShadowResolution(int pixels)
     worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
     if (!WorldModeCommand::same(registryBefore, WorldModeCommand::capture(scene)))
         sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
-    // SceneMirror pushes the document value at the next sync; step a frame so
-    // the atlas rebuild lands and the readback below is the applied truth.
-    if (host.isEngineReady() && host.viewport) {
-        host.viewport->renderFrames(2);
-        const int live = host.viewport->shadowResolution();
-        if (scene->shadowResolution > 0 && live > 0) return live;
-    }
+    // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2): the mirror pushes the value at its next sync and the atlas rebuild
+    // lands in the frames after it; this answers the request (the applied one is the shadow status's, once stepped).
     return scene->shadowResolution;
 }
 
@@ -2921,9 +2913,8 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
         else               scene->planarReflectionShadows = v.toBool() ? 1 : 0;
     }
 
-    // Step the viewport so activeActors in the returned state is the truth
-    // rather than the previous frame's — the arm is rebuilt at the next sync.
-    if (host.isEngineReady() && host.viewport) host.viewport->renderFrames(2);
+    // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2): the arm is rebuilt at the next sync, so activeActors in the
+    // returned state is the last frame's until the script steps (editor.frame) and reads planarReflections() again.
     return planarReflections();
 }
 

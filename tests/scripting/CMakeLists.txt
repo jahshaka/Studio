@@ -92,6 +92,22 @@ foreach(_variant live off)
         TIMEOUT 180)
 endforeach()
 
+# host.sync_getters — THE DOOR, COUNTED (ENGINE-UPGRADE-U3 stage 2): 300 editor frames — the driver ticking between
+# the script's verbs (--script-live, the owner's mode) and the script's own lockstep frames, an object moving and
+# selected — make ZERO synchronous reads of the engine (engine.syncGetters: every getter that stays counts the host's
+# calls; what the editor reads per frame is the published snapshot, what it set it keeps). A count, in frames.
+set(_hsgHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_sync_getters)
+file(MAKE_DIRECTORY ${_hsgHome}/run)
+jah_gpu_row(host.sync_getters CLASS app TIER low NEEDS NONE FRAMES 330
+         COMMAND ${JAH_FRESH_HOME} --warm ${_hsgHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/host_sync_getters.js --script-live
+         WORKING_DIRECTORY ${_hsgHome}/run)
+set_tests_properties(host.sync_getters PROPERTIES
+    ENVIRONMENT "HOME=${_hsgHome};JAHSHAKA_DATA_ROOT=${_hsgHome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
 # toggle with topmost promotion, the owner's Shift range, the World root rule)

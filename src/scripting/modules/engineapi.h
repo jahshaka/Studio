@@ -40,6 +40,7 @@ public:
     Q_INVOKABLE QVariant arm(const QString &name, const QVariant &value = QVariant());
     Q_INVOKABLE QVariantList arms();
     Q_INVOKABLE QVariantMap validation();
+    Q_INVOKABLE QVariantMap syncGetters();
 };
 
 #endif // SCRIPTING_ENGINEAPI_H

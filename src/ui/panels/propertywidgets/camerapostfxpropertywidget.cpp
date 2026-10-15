@@ -418,10 +418,8 @@ void CameraPostFxPropertyWidget::pushLooks(const QString &key, const QJsonArray 
 
 void CameraPostFxPropertyWidget::applied(bool rebuildPanel)
 {
-    // Two frames, like every sibling section: an enable-flag change is a
-    // workspace rebuild applied by SceneMirror at the next sync, and a single
-    // frame can be the one that rebuilds rather than the one that draws with it.
-    if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
+    // (THE TWO FRAMES ARE THE VIEWPORT'S NOW — ENGINE-UPGRADE-U3 stage 2: the post-edit render is deleted; an
+    // enable-flag change is a workspace rebuild the mirror applies at its next sync and the next frames draw.)
     if (!rebuildPanel) return;
     // DEFERRED by one event-loop turn (debt L6): a rebuild destroys the very
     // combo whose currentIndexChanged is still on the stack — the Qt 6.10 +

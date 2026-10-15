@@ -778,7 +778,8 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // the condition does.
     {
         const auto engine = EngineHost::instance().engine();
-        const jahshaka::engine::VrStatus vr = engine ? engine->vrStatus()
+        // The session as the last frame left it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
+        const jahshaka::engine::VrStatus vr = engine ? engine->published().vr
                                                      : jahshaka::engine::VrStatus();
         if (vr.active && !vr.colourEncodedOnce) {
             SceneIssue issue;

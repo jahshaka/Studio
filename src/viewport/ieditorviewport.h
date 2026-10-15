@@ -46,6 +46,10 @@ class EditorViewportEvents : public QObject
 public:
     using QObject::QObject;
 signals:
+    /// A FRAME OF THIS VIEWPORT'S ENGINE HAS CLOSED (a driver tick's, or one of renderFrames' lockstep frames) — the
+    /// moment the published snapshot moved. A panel that edited something re-reads the snapshot after it
+    /// (panelrefresh::afterFrames, ENGINE-UPGRADE-U3 stage 2: the post-edit renders are deleted).
+    void framesDrawn();
     /// A builtin primitive dropped INTO the viewport, at the world point under
     /// the cursor (smoke S2 — the drop used to carry no position at all and
     /// every dropped cube landed in front of the camera).
