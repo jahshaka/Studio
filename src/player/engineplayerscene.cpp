@@ -409,7 +409,11 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
             if (grade == int(IEditorViewport::ScreenshotGrade::Scene)) {
                 // The player's on-screen view is the one that has been measuring this scene; the shot borrows its
                 // exposure (SS1). No view (the player page was never shown) falls back inside applyScene.
-                secondaryfx::applyScene(fx, mView ? mView->measuredExposureScale() : 0.0f);
+                float measured = 0.0f;
+                if (mView)
+                    if (auto engine = mEngine.lock())   // a REQUEST (U3 stage 3): it maps the meter's ticket
+                        engine->request([&](jahshaka::engine::Engine &) { measured = mView->measuredExposureScale(); });
+                secondaryfx::applyScene(fx, measured);
             } else if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
                 fx.allowOffscreen = true;
             } else if (grade == int(IEditorViewport::ScreenshotGrade::Tonemap)) {

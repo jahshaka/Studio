@@ -243,7 +243,7 @@ int main(int argc, char **argv)
             ++rigged;
             streamed += es->published().streamedBonesOf(n);
         }
-    const RigStats rs = es->rigStats();
+    const RigStats rs = es->published().rigs;
     recordCounter("scene.characters", double(characters));
     recordCounter("scene.pieces", double(characters * multipiece::pieces().size()));
     recordCounter("r.rigged_nodes", double(rigged));

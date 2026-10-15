@@ -12,7 +12,10 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
-if (project.create("sync getters") === false) throw new Error("project.create failed: " + app.lastError());
+var OTHER = "sync getters other " + Date.now();   // the world the cover's load in place opens, inside the window
+if (project.create(OTHER) === false) throw new Error("project.create failed: " + app.lastError());
+var NAME = "sync getters " + Date.now();
+if (project.create(NAME) === false) throw new Error("project.create failed: " + app.lastError());
 if (app.columns().space !== "editor") app.space("editor");
 var cube = scene.addPrimitive("cube", { position: [0, 0.5, 0] });
 editor.select(cube);
@@ -20,7 +23,28 @@ editor.frame(30);   // the open and the first frames: their reads are not the st
 
 var before = engine.syncGetters();
 var driverFrames = 0;
+var covered = false, panelShown = false, overlayShown = false;
 for (var i = 0; i < 300; ++i) {
+    // THE ROW SEES ITS SUBJECTS (ENGINE-UPGRADE-U3 stage 3, decision 18): inside the counted window, the World panel
+    // shown and edited (its shadow and GI rows refresh off the snapshot), the stats overlay on (its figures read
+    // off the snapshot), and one cover (a load in place under the loading cover: presentCovered's size check).
+    if (i === 60) { editor.propertiesTab({ tab: "world" }); panelShown = true; }
+    if (i === 80) world.setShadowResolution(1024);
+    if (i === 120) { editor.setOverlays({ stats: true }); overlayShown = true; }
+    if (i === 200) {
+        editor.loadingCover(true);
+        var covers0 = editor.viewportState().coversPresented;
+        if (!project.openAsync(OTHER)) throw new Error("project.openAsync failed: " + app.lastError());
+        for (var g = 0; g < 4000 && project.openState() !== "idle"; ++g) {
+            if (editor.viewportState().cover !== "none") covered = true;
+            editor.frame(1);
+        }
+        covered = covered || editor.viewportState().coversPresented > covers0;
+        console.log("the load in place: covers presented " + covers0 + " -> " + editor.viewportState().coversPresented);
+        editor.loadingCover(false);
+        cube = scene.addPrimitive("cube", { position: [0, 0.5, 0] });
+        editor.select(cube);
+    }
     node.transform(cube, { position: [Math.sin(i * 0.05), 0.5, Math.cos(i * 0.05)] });
     editor.frame(1);
     // ...AND ONE OF THE DRIVER'S OWN TICKS after it (the owner's loop: its beforeFrame subscribers, its status reads):
@@ -30,6 +54,8 @@ for (var i = 0; i < 300; ++i) {
     if (app.frameStats().rendered !== r0) ++driverFrames;
 }
 console.log("driver frames in the window: " + driverFrames);
+assert(panelShown && overlayShown, "the World panel and the stats overlay were up inside the window");
+assert(covered, "a cover was on screen inside the window (the load in place under the loading cover)");
 assert(driverFrames >= 290, "the driver ticked between the script's frames (" + driverFrames + " of 300)");
 var after = engine.syncGetters();
 var moved = [];

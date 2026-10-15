@@ -91,9 +91,9 @@ int main()
     // Every giStatus call goes through this: row 2's tag check around the call.
     int statusCalls = 0, statusSubmits = 0, statusUnknown = 0, firstSubmit = -1;
     auto status = [&]() {
-        const unsigned long long before = e->queueSubmissionTag();
+        const unsigned long long before = jahshaka::engine::inspect::engine(e)->queueSubmissionTag();
         GiStatus st = scene->published().gi;
-        const unsigned long long after = e->queueSubmissionTag();
+        const unsigned long long after = jahshaka::engine::inspect::engine(e)->queueSubmissionTag();
         if (before == 0 || after == 0) ++statusUnknown;
         else if (after != before) { if (firstSubmit < 0) firstSubmit = statusCalls; ++statusSubmits; }
         ++statusCalls;

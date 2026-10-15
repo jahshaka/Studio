@@ -220,7 +220,7 @@ int main(int argc, char **argv)
     CHECK(scene->published().streamedBonesOf(body) == 5, "the body streams its 5 bones, not the union's 8");
     CHECK(scene->published().streamedBonesOf(eye) == 2, "the eye streams its 2 bones, not the union's 8");
     {
-        const RigStats rs = scene->rigStats();
+        const RigStats rs = scene->published().rigs;
         CHECK(rs.rigged == 2 && rs.instances == 2 && rs.shared == 0,
               "two pieces, two instances, nothing shared yet");
         CHECK(rs.streamedBones == 7, "streamed bones is the sum of the maps (5 + 2)");
@@ -303,7 +303,7 @@ int main(int argc, char **argv)
               "every piece is on the SAME rig — the character union");
         CHECK(streamed == multipiece::pieceLocalBoneTotal(),
               "the character streams Sigma piece-local bones (14), not pieces x union (40)");
-        const RigStats rs = ms->rigStats();
+        const RigStats rs = ms->published().rigs;
         CHECK(rs.rigged == 5 && rs.streamedBones == multipiece::pieceLocalBoneTotal(),
               "rigStats agrees");
         std::printf("    instances=%zu shared=%zu streamed=%zu\n", rs.instances, rs.shared,
@@ -335,7 +335,7 @@ int main(int argc, char **argv)
             const NodeId hairNode = mirror.engineNode(hair.data());
             enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(!ms->published().factsBlock().sharesSkeleton(hairNode), "a moved piece stops sharing");
-            const RigStats moved = ms->rigStats();
+            const RigStats moved = ms->published().rigs;
             CHECK(moved.instances == 2 && moved.shared == 3,
                   "...onto an instance of its own; the other three still share");
             // Its clips come back with it: a piece on its own instance that was
@@ -351,7 +351,7 @@ int main(int argc, char **argv)
             mirror.sync();
             enginetest::frames(dg.engine(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(ms->published().factsBlock().sharesSkeleton(hairNode), "moving it back re-shares it");
-            CHECK(ms->rigStats().instances == 1, "one instance again");
+            CHECK(ms->published().rigs.instances == 1, "one instance again");
         }
 
         // ---- a piece LEAVES the character (S16, the 2026-09-11 smoke crash)

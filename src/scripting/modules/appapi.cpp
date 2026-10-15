@@ -921,7 +921,8 @@ QVariantMap AppApi::shaderCache()
     QVariantMap m;
     auto engine = EngineHost::instance().engine();
     if (!engine) { m["enabled"] = false; return m; }
-    const jahshaka::engine::ShaderCacheStats s = engine->shaderCacheStats();
+    jahshaka::engine::ShaderCacheStats s;
+    engine->request([&](jahshaka::engine::Engine &e) { s = e.shaderCacheStats(); });   // a REQUEST (U3 stage 3): a directory scan
     m["enabled"]             = s.enabled;
     m["dir"]                 = QString::fromStdString(s.dir);
     m["fingerprint"]         = QString::fromStdString(s.fingerprint);
@@ -1685,7 +1686,8 @@ QVariantMap AppApi::renderStats()
         QVariantList rows;
         if (jahshaka::engine::Scene *es = host.viewport ? host.viewport->engineScene() : nullptr) {
             std::vector<jahshaka::engine::ObjectLodDesc> lods;
-            es->objectLods(lods);
+            if (auto engine = EngineHost::instance().engine())   // a REQUEST (U3 stage 3): it walks the Items
+                engine->request([&](jahshaka::engine::Engine &) { es->objectLods(lods); });
             rows.reserve(int(lods.size()));
             // THE NAME IS THE DOCUMENT'S. The engine's Items are created
             // unnamed, so `ObjectLodDesc::name` is empty for every row; the
@@ -1743,7 +1745,9 @@ QVariantMap AppApi::engineObjects()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.engineObjects: no engine in this session"); return out; }
     jahshaka::engine::ObjectCounts c;
-    if (!engine->objectCounts(c)) {
+    bool counted = false;
+    engine->request([&](jahshaka::engine::Engine &e) { counted = e.objectCounts(c); });   // a REQUEST (U3 stage 3)
+    if (!counted) {
         fail("app.engineObjects: the engine could not report its object counts");
         return out;
     }
@@ -1782,7 +1786,9 @@ QVariantMap AppApi::memoryStats()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.memoryStats: no engine in this session"); return out; }
     jahshaka::engine::MemoryStats m;
-    if (!engine->memoryStats(m)) {
+    bool read = false;
+    engine->request([&](jahshaka::engine::Engine &e) { read = e.memoryStats(m); });   // a REQUEST (U3 stage 3)
+    if (!read) {
         fail("app.memoryStats: the engine could not report its pools");
         return out;
     }
@@ -1795,7 +1801,9 @@ QVariantMap AppApi::textureMemory(const QVariantMap &options)
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.textureMemory: no engine in this session"); return out; }
     std::vector<jahshaka::engine::TextureMemoryEntry> entries;
-    if (!engine->textureMemory(entries)) {
+    bool walked = false;
+    engine->request([&](jahshaka::engine::Engine &e) { walked = e.textureMemory(entries); });   // a REQUEST (U3 stage 3)
+    if (!walked) {
         fail("app.textureMemory: the engine could not walk its textures");
         return out;
     }
@@ -1881,7 +1889,9 @@ QVariantMap AppApi::threading()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.threading: no engine in this session"); return out; }
     jahshaka::engine::EngineThreading t;
-    if (!engine->threading(t)) {
+    bool read = false;
+    engine->request([&](jahshaka::engine::Engine &e) { read = e.threading(t); });   // a REQUEST (U3 stage 3)
+    if (!read) {
         fail("app.threading: the engine could not report its threading state");
         return out;
     }
@@ -1903,15 +1913,17 @@ QVariantMap AppApi::textureStreaming()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.textureStreaming: no engine in this session"); return out; }
-    out.insert("multiLoadThreads", engine->textureMultiLoadThreads());
-    out.insert("doneStreaming", engine->texturesDoneStreaming());
-    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
-    out.insert("metadataCacheEntries", engine->textureMetadataCacheEntries());
-    out.insert("channelCacheEntries", engine->textureChannelCacheEntries());
-    out.insert("waitTimeouts", engine->textureWaitTimeouts());
-    out.insert("waitWorstMs", engine->textureWaitWorstMs());
-    out.insert("waitBudgetMs", engine->textureWaitBudgetMs());
-    out.insert("waitAdvances", QVariant::fromValue(qulonglong(engine->textureWaitAdvances())));
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 3): the streaming worker's own counters
+        out.insert("multiLoadThreads", e.textureMultiLoadThreads());
+        out.insert("doneStreaming", e.texturesDoneStreaming());
+        out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
+        out.insert("metadataCacheEntries", e.textureMetadataCacheEntries());
+        out.insert("channelCacheEntries", e.textureChannelCacheEntries());
+        out.insert("waitTimeouts", e.textureWaitTimeouts());
+        out.insert("waitWorstMs", e.textureWaitWorstMs());
+        out.insert("waitBudgetMs", e.textureWaitBudgetMs());
+        out.insert("waitAdvances", QVariant::fromValue(qulonglong(e.textureWaitAdvances())));
+    });
     return out;
 }
 
@@ -1920,9 +1932,11 @@ QVariantMap AppApi::waitForTextures()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.waitForTextures: no engine in this session"); return out; }
-    out.insert("waitedMs", engine->waitForTextureLoads());
-    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
-    out.insert("doneStreaming", engine->texturesDoneStreaming());
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 3): the wait, then the counters it moved
+        out.insert("waitedMs", e.waitForTextureLoads());
+        out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
+        out.insert("doneStreaming", e.texturesDoneStreaming());
+    });
     return out;
 }
 

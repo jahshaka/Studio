@@ -216,7 +216,7 @@ static void sectionA(Engine *engine)
         CHECK(after.rebuilds == before.rebuilds, "...and cost no from-scratch GI rebuild");
         CHECK(!after.settlePending && after.schedulerResolves == resolves0,
               "...and the GI scheduler's settle is never armed (no re-solve, nothing pending)");
-        CHECK(s->mobilityStatus().mobilityRebuilds == 0,
+        CHECK(s->published().mobility.mobilityRebuilds == 0,
               "...and no mobility rebuild (the class never changed)");
     }
 
@@ -297,19 +297,19 @@ static void sectionA(Engine *engine)
     {
         frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const unsigned long long rebuilds = cascadeRebuilds(s->published().gi);
-        const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
+        const unsigned long long mob = s->published().mobility.mobilityRebuilds;
         s->setNodeMovable(stayer, true);
         frames(30);
         const GiStatus st = s->published().gi;
         std::printf("-- authoring flip: cascade rebuilds %llu -> %llu, mobilityRebuilds %llu -> %llu\n",
-                    rebuilds, cascadeRebuilds(st), mob, s->mobilityStatus().mobilityRebuilds);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
+                    rebuilds, cascadeRebuilds(st), mob, s->published().mobility.mobilityRebuilds);
+        CHECK(s->published().mobility.mobilityRebuilds == mob + 1,
               "marking a still object Movable costs EXACTLY ONE mobility rebuild");
         // Under the chain an authoring flip is answered by the cascades its box
         // reaches (the dirty path, G1), not by a from-scratch rebuild.
         CHECK(cascadeRebuilds(st) > rebuilds, "...and the chain really did re-voxelise it");
-        CHECK(s->mobilityStatus().movableItems == 2,
-              "...and both twins now read movable (%zu)", s->mobilityStatus().movableItems);
+        CHECK(s->published().mobility.movableItems == 2,
+              "...and both twins now read movable (%zu)", s->published().mobility.movableItems);
         // ...and it is now free to move, like its twin.
         const unsigned long long serial = s->published().gi.staleSerial;
         for (int i = 0; i < 20; ++i) {
@@ -329,7 +329,7 @@ static void sectionA(Engine *engine)
                                     Colour(0.4f, 0.4f, 0.9f), 0.0f, 0.6f);
         frames(30);
         const unsigned long long rebuilds = s->published().gi.rebuilds;
-        const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
+        const unsigned long long mob = s->published().mobility.mobilityRebuilds;
         const unsigned long long serial = s->published().gi.staleSerial;
         s->setNodeMovable(surprise, true, MobilityChange::Soft);
         frame();   // the snapshot reads the grid as the frame closed it (U3 stage 2b)
@@ -353,7 +353,7 @@ static void sectionA(Engine *engine)
             captures += s->published().gi.probeCapturesLastFrame;
             worst = std::max(worst, s->published().gi.probeCapturesLastFrame);
         }
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob && s->published().gi.rebuilds == rebuilds,
+        CHECK(s->published().mobility.mobilityRebuilds == mob && s->published().gi.rebuilds == rebuilds,
               "a SOFT (play-time) promotion costs no rebuild at all");
         CHECK(catchUp <= 4 && catchUp > 0, "its catch-up is ONE pass of the grid (%d captures)", catchUp);
         CHECK(captures == 0 && s->published().gi.staleSerial == after,
@@ -378,16 +378,16 @@ static void sectionA(Engine *engine)
         const NodeId prop = box(s, Vec3(1.4f, 0.6f, 2.0f), Vec3(0.6f, 0.6f, 0.6f),
                                 Colour(0.9f, 0.9f, 0.4f), 0.0f, 0.6f);
         frames(30);
-        unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
+        unsigned long long mob = s->published().mobility.mobilityRebuilds;
         unsigned long long reb = s->published().gi.rebuilds;
         s->setNodeMovable(prop, true, MobilityChange::Soft);
         frames(10);
         s->setNodeMovable(prop, false, MobilityChange::Soft);
         frames(10);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob && s->published().gi.rebuilds == reb,
+        CHECK(s->published().mobility.mobilityRebuilds == mob && s->published().gi.rebuilds == reb,
               "a promotion and its clear cost nothing at all when nothing rebuilt in between");
         // (b) a rebuild DID happen while promoted: the clear pays for the hole.
-        mob = s->mobilityStatus().mobilityRebuilds;
+        mob = s->published().mobility.mobilityRebuilds;
         s->setNodeMovable(prop, true, MobilityChange::Soft);
         frames(5);
         GiParams regrid = gi;
@@ -400,8 +400,8 @@ static void sectionA(Engine *engine)
         s->setNodeMovable(prop, false, MobilityChange::Soft);
         frames(30);
         std::printf("-- ghost heal: mobilityRebuilds %llu -> %llu, rebuilds %llu -> %llu\n",
-                    mob, s->mobilityStatus().mobilityRebuilds, reb, s->published().gi.rebuilds);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
+                    mob, s->published().mobility.mobilityRebuilds, reb, s->published().gi.rebuilds);
+        CHECK(s->published().mobility.mobilityRebuilds == mob + 1,
               "clearing a promotion the voxels were rebuilt under costs ONE counted rebuild");
         CHECK(cascadeRebuilds(s->published().gi) > cascReb,
               "...and the object really is back in the voxels (the chain re-voxelised its box)");
@@ -411,7 +411,7 @@ static void sectionA(Engine *engine)
 
     // ---- A8: the counters ---------------------------------------------------
     {
-        const MobilityStatus m = s->mobilityStatus();
+        const MobilityStatus m = s->published().mobility;
         std::printf("-- mobility: items=%zu lights=%zu nodes=%zu rebuilds=%llu\n",
                     m.movableItems, m.movableLights, m.movableNodes, m.mobilityRebuilds);
         CHECK(m.movableItems == 2 && m.movableLights == 0,

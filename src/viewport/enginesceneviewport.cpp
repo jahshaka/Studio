@@ -3326,6 +3326,14 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     return s;
 }
 
+float EngineSceneViewport::measuredExposureScale() const
+{
+    float measured = 0.0f;
+    if (mEngine && view())
+        mEngine->request([&](jahshaka::engine::Engine &) { measured = view()->measuredExposureScale(); });
+    return measured;
+}
+
 IEditorViewport::RigStatsInfo EngineSceneViewport::rigStats() const
 {
     RigStatsInfo s;
@@ -3349,7 +3357,9 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
     if (!node) return QString();
     const auto material = mMirror->engineMaterial(node.data());
     if (!material) return QString();
-    return QString::fromStdString(mEngineScene->dumpMaterial(material));
+    std::string dump;
+    if (mEngine) mEngine->request([&](jahshaka::engine::Engine &) { dump = mEngineScene->dumpMaterial(material); });   // a REQUEST (U3 stage 3)
+    return QString::fromStdString(dump);
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
@@ -3541,7 +3551,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                     // never measure (two frames), the viewport has been measuring this
                     // same scene for as long as it has been open. 0 (no on-screen view,
                     // no HDR, nothing presented yet) falls back inside applyScene.
-                    secondaryfx::applyScene(fx, view() ? view()->measuredExposureScale() : 0.0f);
+                    secondaryfx::applyScene(fx, measuredExposureScale());
                 } else if (grade == ScreenshotGrade::Viewport) {
                     fx.allowOffscreen = true;
                     // A ONE-SHOT RENDER CANNOT ADAPT (CAMERA_LENS_SPEC §4). The HDR
@@ -3720,7 +3730,7 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
     mRecordHooks = std::move(hooks);
     // ITS FIRST RECORD SEEDS IT (the next synced frame): the seed is derived from the view's chain, so it lands after
     // the chain in the same drain (FrameInputView::seedExposure); 0 = no measure yet = a plain reset.
-    const float measured = view()->measuredExposureScale();
+    const float measured = measuredExposureScale();
     mRecordViewSeed = measured > 0.0f ? measured : 0.0f;
     return rv;
 }
@@ -3958,7 +3968,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             if (jahshaka::engine::Scene *es =
                     const_cast<EngineSceneViewport *>(this)->engineScene()) {
                 std::vector<jahshaka::engine::ObjectLodDesc> lods;
-                es->objectLods(lods);
+                if (mEngine) mEngine->request([&](jahshaka::engine::Engine &) { es->objectLods(lods); });   // a REQUEST (U3 stage 3)
                 for (const jahshaka::engine::ObjectLodDesc &d : lods) {
                     if (d.levels <= 1) continue;      // no chain: nothing to report
                     if (d.cut) continue;              // the cluster cut draws it: no per-object level

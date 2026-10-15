@@ -310,7 +310,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // app.engine_selftest_validation (tests/app/engine_selftest.sh): a layered run whose layer
     // never loaded prints no "Validation Error" and would otherwise read as clean.
     if (const auto eng = EngineHost::instance().engine()) {
-        const jahshaka::engine::ValidationStatus v = eng->validation();
+        jahshaka::engine::ValidationStatus v;
+        eng->request([&](jahshaka::engine::Engine &e) { v = e.validation(); });   // a REQUEST (U3 stage 3)
         QStringList layers;
         for (const std::string &l : v.layers) layers << QString::fromStdString(l);
         std::fprintf(stderr, "engine-selftest: validation requested %s active %s (vkCmdDraw -> %s; layers: %s)\n",

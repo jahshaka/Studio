@@ -91,7 +91,8 @@ QVariantMap EngineApi::validation()
 {
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail(QStringLiteral("engine.validation: no engine in this session")); return {}; }
-    const jahshaka::engine::ValidationStatus v = engine->validation();
+    jahshaka::engine::ValidationStatus v;
+    engine->request([&](jahshaka::engine::Engine &e) { v = e.validation(); });   // a REQUEST (U3 stage 3): a library walk
     QVariantList layers;
     for (const std::string &l : v.layers) layers.push_back(QString::fromStdString(l));
     return { { QStringLiteral("requested"), v.requested },

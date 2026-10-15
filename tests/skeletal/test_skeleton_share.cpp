@@ -141,7 +141,7 @@ int main()
     CHECK(scene->published().factsBlock().sharesSkeleton(hair) && !scene->published().factsBlock().sharesSkeleton(body),
           "the FOLLOWER shares; the master does not (Ogre's refcount would say both)");
     {
-        const RigStats rs = scene->rigStats();
+        const RigStats rs = scene->published().rigs;
         CHECK(rs.rigged == 2 && rs.instances == 1 && rs.shared == 1,
               "two rigged nodes, ONE SkeletonInstance");
     }
@@ -202,10 +202,11 @@ int main()
         enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!scene->published().factsBlock().sharesSkeleton(hair),
               "...which DROPS the share — the host re-arms it, nothing lingers half-shared");
-        const RigStats rs = scene->rigStats();
+        const RigStats rs = scene->published().rigs;
         CHECK(rs.instances == 2 && rs.shared == 0, "both pieces are back on their own instances");
         CHECK(scene->shareSkeleton(hair, body), "and it re-shares cleanly");
-        CHECK(scene->rigStats().instances == 1, "one instance again");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().rigs.instances == 1, "one instance again");
         // The MASTER is still whole: it keeps its clips and still answers.
         ClipState st; st.name = "share/clip"; st.enabled = true; st.weight = 1.0f;
         CHECK(scene->setClipStates(body, &st, 1), "the master still drives its clips");
@@ -216,7 +217,7 @@ int main()
         CHECK(scene->attachSkinnedMesh(body, bodyMesh, mat, rig), "the MASTER's renderable is re-created");
         enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!scene->published().factsBlock().sharesSkeleton(hair), "every follower was released first");
-        const RigStats rs = scene->rigStats();
+        const RigStats rs = scene->published().rigs;
         CHECK(rs.instances == 2 && rs.shared == 0, "...onto their own instances");
         // The released follower must be USABLE, not a corpse: its fresh instance
         // is parentless out of Ogre (OgreItem.cpp:266-280) until the Item is
@@ -295,7 +296,7 @@ int main()
         enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(!scene->published().factsBlock().sharesSkeleton(hair),
               "the follower was un-shared before the master's node died");
-        const RigStats rs = scene->rigStats();
+        const RigStats rs = scene->published().rigs;
         CHECK(rs.rigged == 1 && rs.instances == 1 && rs.shared == 0,
               "the survivor owns its instance");
         std::vector<float> m(3 * 12, 0.0f);

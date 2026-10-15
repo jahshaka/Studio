@@ -38,7 +38,11 @@ namespace {
 /// (SCRIPTING_SPEC §2.3). Nothing here touches the cache directory itself.
 ShaderCacheStats currentStats()
 {
-    if (auto engine = EngineHost::instance().engine()) return engine->shaderCacheStats();
+    if (auto engine = EngineHost::instance().engine()) {
+        jahshaka::engine::ShaderCacheStats s;
+        engine->request([&](jahshaka::engine::Engine &e) { s = e.shaderCacheStats(); });   // a REQUEST (U3 stage 3): a directory scan
+        return s;
+    }
     ShaderCacheStats s;
     s.dir = EngineHost::shaderCacheDirectory().toStdString();
     return s;

@@ -211,7 +211,7 @@ int main()
     CHECK(onMid.dragMovers == 1, "THE DRAGGED OBJECT IS ON THE MOVER CHANNEL while it moves");
     // ...and the renderer has NOT rewritten the document's answer: the host
     // never said this object moves, and `mobilityStatus` is that answer.
-    CHECK(s->mobilityStatus().movableItems == 0,
+    CHECK(s->published().mobility.movableItems == 0,
           "...without the DOCUMENT's mobility being touched (movableItems still 0)");
     CHECK_MSG(onDrag * 2u <= offDrag,
               "A GESTURE COSTS A CONSTANT, NOT A FRAME'S WORK PER FRAME: %llu re-voxelisations "

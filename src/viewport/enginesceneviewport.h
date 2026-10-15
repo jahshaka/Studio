@@ -75,9 +75,7 @@ public:
     /// caller that draws it and cannot wait for this widget's show event (the
     /// Player page, the editor's VR preview). See the definition.
     bool ensureEngineScene() override;
-    float measuredExposureScale() const override {
-        return view() ? view()->measuredExposureScale() : 0.0f;
-    }
+    float measuredExposureScale() const override;   ///< a REQUEST (U3 stage 3): it maps the meter's ticket
     void setSelectedNode(iris::SceneNodePtr sceneNode) override;
     void setSelectedSet(const QList<iris::SceneNodePtr> &nodes) override;
     void clearSelectedNode() override;

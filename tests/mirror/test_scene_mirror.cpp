@@ -2162,7 +2162,7 @@ int main(int argc, char **argv)
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId) && !jahshaka::engine::inspect::scene(target)->nodeMovable(riderId),
               "mobility: a still scene pushes NOTHING as movable");
         CHECK(mmirror.movableNodeCount() == 0, "mobility: ...and the mirror counts zero");
-        CHECK(target->mobilityStatus().movableNodes == 0,
+        CHECK(target->published().mobility.movableNodes == 0,
               "mobility: ...and so does the engine");
 
         // The carrier becomes a SIMULATED physics body: it and everything under
@@ -2177,9 +2177,9 @@ int main(int argc, char **argv)
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId), "mobility: ...and leaves the still node alone");
         CHECK(mmirror.movableNodeCount() == 2,
               "mobility: the mirror counts the carrier and its rider");
-        CHECK(target->mobilityStatus().movableNodes == 2,
+        CHECK(target->published().mobility.movableNodes == 2,
               "mobility: the ENGINE holds the same count (the push landed)");
-        CHECK(target->mobilityStatus().movableItems == 1,
+        CHECK(target->published().mobility.movableItems == 1,
               "mobility: one of them carries geometry");
 
         // ...and back. Nothing here is automatic in the other direction for a

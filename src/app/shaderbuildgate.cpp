@@ -596,8 +596,9 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
     // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
     SettingsManager *settings = SettingsManager::getDefaultManager();
-    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') +
-                            QString::fromStdString(engine->shaderCacheStats().fingerprint);
+    std::string fingerprint;
+    engine->request([&](jahshaka::engine::Engine &e) { fingerprint = e.shaderCacheStats().fingerprint; });   // a REQUEST (U3 stage 3)
+    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') + QString::fromStdString(fingerprint);
     const bool keyMoved = settings->get(settingkeys::shaderWarmPass) != passKey;
     const bool runPass = compiled > 0 || keyMoved;
     if (keyMoved && compiled == 0)
