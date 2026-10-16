@@ -703,8 +703,10 @@ int main(int argc, char **argv)
                 enginetest::setNodePosition(r.scene, mover, Vec3(x, 0.5f, 0.5f));
                 enginetest::frames(e, 1);
             };
+            // THE ARRIVAL IS A FRAME'S (the snapshot is the last frame's — U3 stage 2b): the cube's first frame is stepped
+            // before the rest is asked about, or the read is the scene from before it existed.
             int warm = 0;
-            for (; warm < 4000 && !r.scene->published().gi.giAtRest; ++warm) step();
+            do { step(); ++warm; } while (warm < 4000 && !r.scene->published().gi.giAtRest);
             CHECK_MSG(r.scene->published().gi.giAtRest,
                       "GI comes to rest with the mover moving every frame (%d frames after it arrived)", warm);
             int restless = 0, frames = 0;

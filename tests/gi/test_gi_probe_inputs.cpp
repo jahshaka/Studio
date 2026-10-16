@@ -594,7 +594,8 @@ int main(int argc, char **argv)
         const TextureId lateTex = escene->loadTexture("probe_inputs_late.tga", true);
         CHECK(lateTex != 0, "late texture: loadTexture schedules it");
         const bool streaming = !engine->texturesDoneStreaming();
-        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        // The snapshot of the last of the 30 frames is current here (a load stales nothing): no frame between the load
+        // and the bind, or that frame's head drains the load before the bind it is meant to follow.
         const unsigned long long atBind = escene->published().gi.staleSerial;
         CHECK(escene->setPbrTexture(lateMat, PbrTextureSlot::Albedo, lateTex),
               "late texture: the bind applies");
@@ -606,7 +607,9 @@ int main(int argc, char **argv)
         std::printf("   late texture: streaming at bind=%s, serial %llu -> %llu -> %llu\n",
                     streaming ? "yes" : "no (already resident)", atBind, afterBind, afterArrival);
         if (streaming) {
-            CHECK(afterArrival > afterBind,
+            // Observed a frame at a time (the snapshot): the bind's frame may drain the arrival too, so the two stales
+            // are asserted as two steps of the serial by the arrival's frame.
+            CHECK(afterArrival >= atBind + 2u,
                   "late texture: ...and its ARRIVAL stales the grid a second time, so the "
                   "probes\n          re-capture the material with its texture on");
         } else {

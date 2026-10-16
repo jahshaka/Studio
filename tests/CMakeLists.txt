@@ -91,7 +91,7 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #
 #   jah_tsan_lane(<test>...)   ThreadSanitizer, in its OWN build directory
 #       (TSan cannot combine with ASan and instruments every TU):
-#       cmake -B build-tsan -DJAHSHAKA_TSAN=ON. MEMBERSHIP RULE: the suites
+#       scripts/sanitize.sh tsan (build-tsan-clang, clang required). MEMBERSHIP RULE: the suites
 #       whose subject is an async contract — a runner, a heartbeat, a watchdog,
 #       a shutdown order.
 #

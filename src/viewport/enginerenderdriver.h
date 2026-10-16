@@ -19,6 +19,8 @@
 // Runs on the thread that owns the Engine (its thread-affinity rule).
 #include <QElapsedTimer>
 #include <QObject>
+
+#include <atomic>
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
 #include "viewport/framewindows.h"
@@ -39,9 +41,10 @@ public:
     struct Stats {
         qulonglong ticks    = 0;   ///< timer fires
         qulonglong rendered = 0;   ///< ticks that called Engine::renderOneFrame
-        /// FREE-RUNNING ticks that found the LAST tick's record still waiting for a frame (FrameSubmitStatus::pending at
-        /// the tick's head, before its own sync) — a record a whole tick old that no frame had begun for
-        /// (ENGINE-UPGRADE-U3 decision 50, editor.drag_latency: 0 = every record drawn by the next frame).
+        /// THE LAW, OFF THE SNAPSHOT (ENGINE-UPGRADE-U3 decision 60, editor.drag_latency): FREE-RUNNING ticks judged
+        /// (`checked`) and those whose latched frame had NOT applied the serial the last tick's record was submitted as
+        /// (`carried`): 0 = every tick's record on screen by the next tick.
+        qulonglong checked  = 0;
         qulonglong carried  = 0;
 
         // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
@@ -135,6 +138,13 @@ public:
 
 private:
     bool mFreeRunning = false;
+    /// The tick, from the timer or posted by a published frame (fromPresent: the present paced it).
+    void tick(bool fromPresent);
+    bool mStarted = false;                    ///< start() .. stop()
+    bool mPresentPaced = false;               ///< free-running with views: the published frames post the ticks
+    std::atomic<bool> mTickPosted{ false };   ///< one posted tick at a time (set on the render thread)
+    unsigned long long mLastTickSerial = 0;   ///< the serial the last free tick's record is drawn as (0: none)
+    static constexpr int kPresentFallbackMs = 100;   ///< the timer while the present paces: a stalled loop's fallback
     unsigned long long mFreeFrameSeen = 0;   ///< the snapshot's frame at the last free-running tick
     /// Reconciles this loop with the engine's session, once per tick (F5).
     /// TWO things can make the driver's pacing a lie, and neither of them goes

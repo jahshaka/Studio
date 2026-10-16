@@ -319,7 +319,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "true to clear the record after reading it.",
           Needs::Document },
         { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{carried, submitted, handOvers, recordsHanded, recordsLate, worstLatency, presentAlpha, presentFree}}",
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, submitted, handOvers, presentAlpha, presentFree}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -342,10 +342,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
           "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule. `submit` is the hand-over, running totals "
           "(ENGINE-UPGRADE-U3): `submitted` records and `handOvers`, the frames the render loop began (free-running: "
-          "every display frame; lockstep: every frame); `recordsHanded` the records a frame took, `recordsLate` those "
-          "taken more than one frame after their first submit and `worstLatency` the worst count in frames (1 = every "
-          "record drawn by the next frame begun); `carried` — free-running ticks whose head found the last tick's "
-          "record still waiting (a diagnostic: the ticks are a timer's, their jitter moves it); `presentAlpha` / "
+          "every display frame; lockstep: every frame); THE LAW, off the snapshot: `checked` free-running ticks judged "
+          "and `carried` those whose latched frame had not yet applied the record the previous tick submitted (0 = "
+          "every tick's record on screen by the next tick; the editor's tick is paced by the present); `presentAlpha` / "
           "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
           "free-running frame.",
           Needs::Document },
@@ -1574,14 +1573,12 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     // records submitted and the frames the render loop began (a host-side read under the slot's lock, never a
     // synchronous read of the engine).
     QVariantMap submit;
+    submit.insert("checked", double(s.checked));
     submit.insert("carried", double(s.carried));
     if (engine) {
         const jahshaka::engine::FrameSubmitStatus st = engine->frameSubmitStatus();
         submit.insert("submitted", double(st.submitted));
         submit.insert("handOvers", double(st.handOvers));
-        submit.insert("recordsHanded", double(st.recordsHanded));
-        submit.insert("recordsLate", double(st.recordsLate));
-        submit.insert("worstLatency", double(st.worstLatency));
         submit.insert("presentAlpha", double(engine->published().presentAlpha));
         submit.insert("presentFree", engine->published().presentFree);
     }

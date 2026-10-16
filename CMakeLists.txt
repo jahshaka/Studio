@@ -101,7 +101,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # opt-in JAHSHAKA_ASAN uses, and hence its own build directory: the two runtimes
 # cannot coexist in one process, and every TU has to be recompiled anyway.
 #
-#     cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DJAHSHAKA_TSAN=ON ...
+#     (scripts/sanitize.sh configures it: build-tsan-clang, clang required — CC/CXX clang + the system GCC's libstdc++)
 #     ./scripts/sanitize.sh tsan
 #
 # Ogre-Next, Qt and the Vulkan driver stay uninstrumented (we link installed
