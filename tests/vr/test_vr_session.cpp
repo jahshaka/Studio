@@ -2335,8 +2335,10 @@ int main() {
                       drewBefore);
 
             engine->setFrameMonitor(MonitorLevel::Review);
-            const unsigned long long frames0 = engine->vrStatus().frames;
             enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            // ...and the runtime's count is read AFTER that frame: the delta below is the thrown frames' alone (stage
+            // 2b's frame was counted in it — 6 of 5 — until stage 6 ran the row).
+            const unsigned long long frames0 = engine->vrStatus().frames;
             const unsigned long long rec0 = engine->published().monitor.framesRecorded;
             const unsigned kThrown = 5u;
             engine->setFrameFault(FrameFault::Throw, kThrown);

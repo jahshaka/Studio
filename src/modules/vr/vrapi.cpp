@@ -521,7 +521,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, missedDisplayPeriods, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
+          "frames, rendered, missedDisplayPeriods, framesOffRenderThread, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
           "asymmetricFov, "
           "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
@@ -1093,7 +1093,7 @@ bool VrApi::shutdown()
     const bool ended = endForShutdown();
     interaction.detachHost();
     interactionSessionActive = false;
-    interactionClock.invalidate();
+    interactionDisplayNs = -1;
     // NOTHING OF THE HOST SURVIVES THE TEARDOWN STEP: the per-frame hook comes
     // off the driver and the context copy is emptied, so a verb a script calls
     // from here on reads null everywhere and refuses (no dangling viewport,
@@ -1541,6 +1541,8 @@ QVariantMap VrApi::state()
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
     // The headset refreshes no frame of ours reached, counted on the runtime's own clock (ENGINE-UPGRADE-U3, vr.ui_stall).
     out[QStringLiteral("missedDisplayPeriods")] = QVariant::fromValue(qulonglong(s.missedDisplayPeriods));
+    // THE XR-THREAD LAW (ENGINE-UPGRADE-U3 stage 6): VR frames begun off the engine's render thread — 0 always.
+    out[QStringLiteral("framesOffRenderThread")] = QVariant::fromValue(qulonglong(s.framesOffRenderThread));
     // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
     // session has rendered before its first committed one, and what they cost.
     // A count and a measured value, like everything else here.
@@ -1784,8 +1786,8 @@ void VrApi::syncInteractionSession()
     const bool active = e && e->vrSessionLive();
     if (active == interactionSessionActive) return;
     interactionSessionActive = active;
-    if (active) { interaction.begin(); interactionClock.start(); }
-    else        { interaction.end(); interactionClock.invalidate(); }
+    if (active) { interaction.begin(); interactionDisplayNs = -1; }
+    else        { interaction.end(); interactionDisplayNs = -1; }
 }
 
 void VrApi::stepInteraction()
@@ -1805,13 +1807,15 @@ void VrApi::stepInteraction()
     // engine's since the two halves of stage 1 met, so the question "is a test
     // driving this?" has exactly one answer in the process.
     if (interaction.injectionArmed()) return;
-    // THE FRAME JUST GONE, and it is clamped before it may move anybody
-    // (vrorigin::frameSeconds): a UI-thread block arrives here as one enormous
-    // dt, and in a headset that is an involuntary lurch rather than a nuisance.
-    const float seconds = interactionClock.isValid()
-                              ? float(double(interactionClock.nsecsElapsed()) * 1e-9)
-                              : -1.0f;
-    interactionClock.restart();
+    // THE FRAMES JUST GONE, ON THE RUNTIME'S CLOCK (ENGINE-UPGRADE-U3 stage 6): the delta of the newest frames'
+    // predicted display times since the last step — the time the wearer saw pass, never a wall clock of ours — and
+    // clamped before it may move anybody (vrorigin::frameSeconds): a stall arrives here as one enormous dt, and in a
+    // headset that is an involuntary lurch rather than a nuisance. No new frame since the last step: no time passed.
+    Engine *e = engine();
+    const long long now = e ? e->vrStatus().displayTimeNs : 0;
+    const float seconds = (interactionDisplayNs < 0 || now <= 0) ? -1.0f
+                          : float(double(std::max(0ll, now - interactionDisplayNs)) * 1e-9);
+    if (now > 0) interactionDisplayNs = now;
     interaction.step(seconds);
 }
 

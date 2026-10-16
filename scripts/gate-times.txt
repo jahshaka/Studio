@@ -959,6 +959,8 @@ vr.start_press.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.start_recovery 33.76  quiet n=21
 vr.start_recovery.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.ui_stall.fresh_home 0.10  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.xr_thread 34.16  stage 6's XR-thread row, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.xr_thread.fresh_home 0.10  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.warmup 39.03  quiet n=44
 vr.warmup.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.warmup.timing 40.60  ship 3a0422b4e (2026-10-13)
