@@ -9,7 +9,9 @@
 #include "../support/enginetesthelpers.h"
 #include <chrono>
 #include <cstdio>
+#include <algorithm>
 #include <set>
+#include <vector>
 #include <string>
 #include <thread>
 using namespace jahshaka::engine;
@@ -99,6 +101,66 @@ int main()
           sessionMs);
     CHECK(sessionAlphas >= 2, "the interpolation is not pinned with the session's period: %zu distinct in-between "
           "weights", sessionAlphas);
+    // THE 10k RECORD (decision 66): the drain runs AFTER the runtime's wake-up now (the hand-over is the last thing
+    // before it), so a record of 10,000 moved nodes is inside the frame's time after xrWaitFrame returns — the
+    // runtime at 11 ms with the session's period sent, the mean interval and the drain's own time printed.
+    {
+        const int N = 10000;
+        std::vector<NodeId> many;
+        for (int i = 0; i < N; ++i) many.push_back(scene->createDocumentNode(reserveNodeId()));
+        enginetest::frames(e, 2);
+        unsigned long long s10 = step;
+        const auto recordAll = [&]() {
+            FrameInput in;
+            in.frameDelta = 1.0f / 60.0f;
+            in.stepSerial = ++s10;
+            in.stepPeriod = 1.0f / 60.0f;
+            FrameInputScene part;
+            part.scene = scene;
+            for (int i = 0; i < N; ++i) {
+                NodeRecord r;
+                r.id = many[size_t(i)];
+                r.fields = NodeRecord::Trs;
+                r.position = Vec3(float(s10) * 0.01f, float(i) * 0.001f, 0.0f);
+                r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+                r.scale = Vec3(1.0f, 1.0f, 1.0f);
+                part.nodes.push_back(r);
+                part.changes.moved.push_back(r.id);
+            }
+            in.scenes.push_back(std::move(part));
+            e->submitFrame(std::move(in));
+        };
+        e->request([&](Engine &x) { x.setArm("vr.fakeRuntimePace", 11.0); });
+        e->setDisplayPeriod(0.011f);
+        e->setFreeRunning(true);
+        e->latchSnapshot();
+        const unsigned long long w0 = e->published().frame;
+        while (true) { e->latchSnapshot(); if (e->published().frame >= w0 + 10) break; std::this_thread::yield(); }
+        e->latchSnapshot();
+        const unsigned long long f0 = e->published().frame;
+        const auto t0 = std::chrono::steady_clock::now();
+        auto nextStep = t0;
+        std::vector<double> drains;
+        unsigned long long f1 = f0, seen = f0;
+        while (f1 < f0 + 90) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= nextStep) { recordAll(); nextStep += std::chrono::microseconds(16667); }
+            e->latchSnapshot();
+            const PublishedEngineFrame &p = e->published();
+            if (p.frame != seen) { seen = p.frame; if (p.input.nodeRecords >= unsigned(N)) drains.push_back(p.input.drainMicros); }
+            f1 = p.frame;
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        e->setFreeRunning(false);
+        e->request([&](Engine &x) { x.setArm("vr.fakeRuntimePace", 0.0); });
+        std::sort(drains.begin(), drains.end());
+        const double drainMed = drains.empty() ? -1.0 : drains[drains.size() / 2] / 1000.0;
+        const double mean10k = ms / double(f1 - f0);
+        std::printf("RUNTIME_PACE_10K runtime_ms=11.00 nodes=%d mean_interval_ms=%.2f drain_median_ms=%.2f (%zu frames "
+                    "carried a 10k record)\n", N, mean10k, drainMed, drains.size());
+        CHECK(!drains.empty(), "the 10k records were drained after the runtime's wait (%zu frames)", drains.size());
+    }
     view->setScene(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);
