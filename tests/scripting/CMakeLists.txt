@@ -124,7 +124,7 @@ set_tests_properties(host.error_door PROPERTIES
     ENVIRONMENT "HOME=${_hedHome};JAHSHAKA_DATA_ROOT=${_hedHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
     LABELS "scripting"
     TIMEOUT 120)
-jah_tsan_render(host.sync_getters host.error_door)   # the render thread's TSan arm (U3 decision 47)
+jah_tsan_blocked(host.sync_getters host.error_door)   # TSAN-GCC15-THREAD-REGISTRY under GCC and clang alike (U3 decision 49): the D1 proof is engine.error_door
 
 # editor.drag_latency — A DRAG IN THE EDITOR IS ON SCREEN THE NEXT FRAME (ENGINE-UPGRADE-U3 stage 5's acceptance,
 # decision 50): FREE-RUNNING (JAH_FREE_RUNNING=1), a translate drag through the real viewport path (editor.pointer on

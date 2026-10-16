@@ -313,6 +313,23 @@ add_dependencies(test_engine_runtime_pace JahshakaEngineMedia)
 jah_gpu_row(frame.runtime_pace CLASS engine FRAMES 300 COMMAND test_engine_runtime_pace
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.runtime_pace PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
+# proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
+# read every frame — and in the TSan arm, zero reports.
+add_executable(test_engine_error_door test_engine_error_door.cpp)
+set_target_properties(test_engine_error_door PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_error_door PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_error_door PRIVATE JahshakaEngine)
+add_dependencies(test_engine_error_door JahshakaEngineMedia)
+jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_door
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_tsan_render(engine.error_door)
 jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fixtures: the host reads published() against a publishing render thread (decision 54)
 
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)

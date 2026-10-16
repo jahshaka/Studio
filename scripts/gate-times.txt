@@ -130,6 +130,7 @@ engine.atom_negative_control_validation_lavapipe 3.58  quiet n=42
 engine.atom_parity 30.50  ship 3a0422b4e (2026-10-13)
 engine.atom_parity_validation 3.31  quiet n=44
 engine.descriptor_pools 3.90  quiet n=43
+engine.error_door 3.22  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.error_pump 1.18  quiet n=44
 engine.frame_catch 1.39  quiet n=44
 engine.frame_input_drain 1.64  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
@@ -949,6 +950,7 @@ vr.no_picture_start 51.09  quiet n=49
 vr.no_picture_start.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.session 63.49  quiet n=44
 vr.session_pace 38.26  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.session_pace.fresh_home 0.10  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.session_undithered 6.51  quiet n=45
 vr.start_broken 34.51  quiet n=19
 vr.start_broken.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

@@ -176,7 +176,20 @@ run_tsan() {
     if [ ! -f "$TSAN_BUILD_DIR/CMakeCache.txt" ]; then
         echo "sanitize: configuring $TSAN_BUILD_DIR (-DJAHSHAKA_TSAN=ON)"
         mkdir -p "$TSAN_BUILD_DIR"
-        cmake -S . -B "$TSAN_BUILD_DIR" "${COMMON_CMAKE_ARGS[@]}" -DJAHSHAKA_TSAN=ON \
+        # THE ARM BUILDS WITH CLANG (ENGINE-UPGRADE-U3 decision 49): clang's own libtsan, against the libstdc++ of the
+        # GCC the rest of the tree (and the Ogre install) was built with — clang picks the NEWEST GCC directory it finds,
+        # which on this box (GCC 16's runtime libs without its libstdc++) does not link.
+        local tsan_cc=()
+        if command -v clang++ > /dev/null 2>&1; then
+            local gccdir="/usr/lib/gcc/$(gcc -dumpmachine)/$(gcc -dumpversion | cut -d. -f1)"
+            local pin=""
+            [ -d "$gccdir" ] && pin="--gcc-install-dir=$gccdir"
+            tsan_cc=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+                     "-DCMAKE_C_FLAGS=$pin" "-DCMAKE_CXX_FLAGS=$pin" "-DCMAKE_EXE_LINKER_FLAGS=$pin"
+                     "-DCMAKE_SHARED_LINKER_FLAGS=$pin")
+            echo "sanitize: the race lane builds with clang ($pin)"
+        fi
+        cmake -S . -B "$TSAN_BUILD_DIR" "${COMMON_CMAKE_ARGS[@]}" "${tsan_cc[@]}" -DJAHSHAKA_TSAN=ON \
             ${JAH_TEST_DISPLAY:+-DJAH_TEST_DISPLAY="$JAH_TEST_DISPLAY"} \
             > "$TSAN_BUILD_DIR/configure.log" 2>&1 \
             || { tail -30 "$TSAN_BUILD_DIR/configure.log"; die "configure failed"; }
@@ -195,7 +208,7 @@ run_tsan() {
     local label="${JAH_TSAN_LABEL:-tsan}"
     if [ "$label" = "tsan-render" ]; then
         targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order
-                 test_engine_drag_latency test_engine_interpolation)
+                 test_engine_drag_latency test_engine_interpolation test_engine_error_door)
     fi
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]} at -j$(build_jobs)"
