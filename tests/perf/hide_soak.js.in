@@ -82,7 +82,12 @@ editor.frame(60, DT);          // warm the shaders and the caches
 app.renderStats();
 
 function reading(tag) {
+    // THE COUNTERS ARE SUBSCRIBED BY A CALL (U3 stage 3, app.renderStats' doc): one read, one frame counted, then the
+    // read the reading is — the same shape at both readings, so the equality compares like with like.
+    app.renderStats();
+    editor.frame(1, DT);
     var rs = app.renderStats();
+    assert(rs.metricsRecording, tag + ": the reading's frame was counted (metricsRecording)");
     var gi = world.giStatus();
     var ms = editor.mirrorStats();
     var r = {

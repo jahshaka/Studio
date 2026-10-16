@@ -1357,7 +1357,9 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
-    eng->setFrameMonitor(MonitorLevel::Review);
+    // THE START IS THE ENGINE'S BEFORE THE VERB RETURNS (U3 stage 4b): a request — the monitor is live and the
+    // snapshot says so for the next read.
+    eng->request([](jahshaka::engine::Engine &e) { e.setFrameMonitor(MonitorLevel::Review); });
     gActive = true;
     mBlockedNs = 0;
     mBlockedAt = 0;
@@ -1446,7 +1448,7 @@ void FrameMonitor::finish(bool early)
     }
     drain();
     gActive = false;
-    if (eng) eng->setFrameMonitor(MonitorLevel::Off);
+    if (eng) eng->request([](jahshaka::engine::Engine &e) { e.setFrameMonitor(MonitorLevel::Off); });   // the stop, the same
     // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
     // the NEXT drain hands it back with the monitor already off (Engine.h
     // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
@@ -1758,8 +1760,10 @@ QVariantMap FrameMonitor::status() const
     QVariantMap eng;
     if (auto e = engine()) {
         const MonitorStatus s = e->published().monitor;
-        eng["level"] = s.level == MonitorLevel::Review ? QStringLiteral("review")
-                                                       : QStringLiteral("off");
+        // THE LEVEL IS THE HOST'S OWN RECORD (U3 stage 4a: setFrameMonitor is a message; the snapshot below is the last
+        // frame's): what this session asked the engine for, at the call.
+        eng["level"] = e->frameMonitor() == MonitorLevel::Review ? QStringLiteral("review")
+                                                                 : QStringLiteral("off");
         eng["attachedListeners"] = s.attachedListeners;
         eng["ringCapacity"] = s.ringCapacity;
         eng["ringFrames"] = s.ringFrames;

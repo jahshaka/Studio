@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
+#include "viewport/enginerenderdriver.h"
 #include "scripting/scriptengine.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
@@ -454,6 +455,13 @@ int main(int argc, char *argv[])
         // the background path with app.setAsyncShaders(true); the selftest asserts it drew
         // no placeholder.
         livecompiles::setAsyncPolicy(!cli.isScriptRun() && cli.selftestPng.isEmpty() && !cli.mcpServe);
+        // THE TWO MODES (ENGINE-UPGRADE-U3 stage 4b): an interactive session is FREE-RUNNING — the driver's tick hands
+        // the record over and the render thread draws while the UI thread goes on; a scripted run, an MCP session
+        // and the selftest are LOCKSTEP — every frame the caller's, finished before the call returns (every test,
+        // every hash). JAH_FREE_RUNNING=1 puts a scripted run in the owner's mode (vr.ui_stall measures that one).
+        const bool freeRunning = (!cli.isScriptRun() && cli.selftestPng.isEmpty() && !cli.mcpServe) ||
+                                 qEnvironmentVariableIntValue("JAH_FREE_RUNNING") == 1;
+        if (EngineRenderDriver *d = EngineHost::instance().driver()) d->setFreeRunning(freeRunning);
     }
     // From now on any NEW compile burst (a scene open, a material edit) is
     // written to disk a few seconds after it settles, so a crash costs at most

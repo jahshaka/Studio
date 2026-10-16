@@ -176,10 +176,11 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             // empty hand-over. The engine's clock never reads it (trap 7); stage 5's interpolation weight does.
             const float period = float(scriptPacePeriodMs() / 1000.0);
             if (period != mDisplayPeriodSent) { mEngine->setDisplayPeriod(period); mDisplayPeriodSent = period; }
-            // THE FREE-RUNNING FRAME (ENGINE-UPGRADE-U3 stage 4b): the record is handed over now and the frame runs on
-            // the render thread while this tick returns to the event loop; a tick that finds the last frame still
-            // running draws nothing (the render thread is the pacer). One thread (no render thread): the frame, here.
-            if (mEngine->kickFrame()) {
+            // THE TWO MODES (ENGINE-UPGRADE-U3 stage 4b). FREE-RUNNING (the owner's): the record is handed over now and
+            // the frame runs on the render thread while this tick returns to the event loop; a tick that finds the last
+            // frame still running draws nothing (the render thread is the pacer). LOCKSTEP (every test): the frame is
+            // this tick's and done before it returns.
+            if (mFreeRunning ? mEngine->kickFrame() : (mEngine->renderOneFrame(), true)) {
                 ++mStats.rendered;
                 mDrawn.add(nowMs());
             }

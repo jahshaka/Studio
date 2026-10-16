@@ -422,7 +422,7 @@ set_tests_properties(vr.ui_stall PROPERTIES
     SKIP_RETURN_CODE 77
     JAHSHAKA_TEST_FRAMES 1300
     FIXTURES_REQUIRED vruistallFreshHome
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;HOME=${_vr_ui_stall_home};JAHSHAKA_DATA_ROOT=${_vr_ui_stall_home}/.local/share/Jahshaka")
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_ui_stall_home};JAHSHAKA_DATA_ROOT=${_vr_ui_stall_home}/.local/share/Jahshaka")
 set_property(TEST vr.ui_stall APPEND PROPERTY RESOURCE_LOCK monado)
 
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;

@@ -29,6 +29,10 @@ class EngineRenderDriver : public QObject
 {
     Q_OBJECT
 public:
+    /// THE OWNER'S MODE (ENGINE-UPGRADE-U3 stage 4b): the tick kicks the frame onto the render thread and returns
+    /// (Engine::kickFrame); off = LOCKSTEP, the tick's frame finished before it returns (scripts, MCP, the selftest).
+    void setFreeRunning(bool on) { mFreeRunning = on; }
+    bool freeRunning() const { return mFreeRunning; }
     /// What the loop has actually been doing — the numbers behind `app.frameStats()`
     /// and the frame-pacing gate. Cumulative for the life of the driver.
     struct Stats {
@@ -122,6 +126,7 @@ public:
     bool vrSessionActive() const { return mVrSession; }
 
 private:
+    bool mFreeRunning = false;
     /// Reconciles this loop with the engine's session, once per tick (F5).
     /// TWO things can make the driver's pacing a lie, and neither of them goes
     /// through the host: the engine ENDS a session by itself when the runtime
