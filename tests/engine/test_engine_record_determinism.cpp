@@ -24,6 +24,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -67,7 +68,11 @@ FrameInput nodeRecord(Scene *scene, NodeId node, int f, int half)
 int child(const char *out)
 {
     std::string err;
-    auto engine = Engine::create(enginetest::testEngineConfig("test-record-determinism-ogre.log"), err);
+    EngineConfig cfg = enginetest::testEngineConfig("test-record-determinism-ogre.log");
+    // THE TWO-THREAD ARM (ENGINE-UPGRADE-U3 stage 4b): the same script with the engine on its own render thread —
+    // every call of this script a record field, a message, a request or a join, every frame the lockstep verb.
+    if (std::getenv("JAH_TEST_RENDER_THREAD")) cfg.renderThread = true;
+    auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("CHILD-FAIL: engine create: %s\n", err.c_str()); return 2; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
@@ -134,9 +139,10 @@ int child(const char *out)
     return 0;
 }
 
-std::string runChild(const char *self, const std::string &out, int &code)
+std::string runChild(const char *self, const std::string &out, int &code, bool renderThread = false)
 {
-    const std::string cmd = std::string("'") + self + "' --run '" + out + "' 2>&1";
+    const std::string cmd = std::string(renderThread ? "JAH_TEST_RENDER_THREAD=1 " : "") + "'" + self + "' --run '" +
+                            out + "' 2>&1";
     FILE *pipe = ::popen(cmd.c_str(), "r");
     std::string text;
     if (pipe) {
@@ -192,6 +198,19 @@ int main(int argc, char **argv)
     CHECK(!serA.empty() && serA == serB, "THE SAME SCRIPT TWICE: the identical serial sequence (%s)", serA.c_str());
     const std::vector<char> pixA = slurp(outA), pixB = slurp(outB);
     CHECK(!pixA.empty() && pixA == pixB, "...and the byte-identical picture (%zu bytes)", pixA.size());
+    // ---- THE TWO-THREAD ARM (stage 4b): the same laws, the identical serial sequence and the same bytes ----------
+    int codeT = -1;
+    const std::string outT = "record_determinism_t.rgba";
+    const std::string t = runChild(argv[0], outT, codeT, true);
+    CHECK(codeT == 0, "the run on two threads finished (exit %d)", codeT);
+    if (codeT != 0) std::printf("--- run T ---\n%s\n", t.c_str());
+    const std::string lawT = line(t, "CHILD serialLaw=");
+    std::printf("    run T (two threads): %s\n", lawT.c_str());
+    CHECK(lawT.rfind(want, 0) == 0, "ON TWO THREADS the same laws (%s)", lawT.c_str());
+    CHECK(line(t, "CHILD serials=") == serA, "...the identical serial sequence");
+    const std::vector<char> pixT = slurp(outT);
+    CHECK(!pixT.empty() && pixT == pixA, "...and the byte-identical picture (%zu bytes)", pixT.size());
+    std::remove(outT.c_str());
     const std::string cube = line(a, "CHILD cubePixels=");
     CHECK(!cube.empty() && cube != "CHILD cubePixels=0", "the document node's cube is drawn (%s)", cube.c_str());
     std::remove(outA.c_str());

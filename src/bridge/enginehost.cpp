@@ -315,6 +315,8 @@ bool EngineHost::start(QString &error)
     // THE APP'S CALLS ARE RECORDS (ENGINE-UPGRADE-U3 stage 4a, decision 39): every View setter, engine verb and scene
     // command this process makes reaches the engine as a field of the record or a message of its stream.
     cfg.hostRecords = true;
+    // ...AND THE ENGINE RUNS ON ITS OWN THREAD (stage 4b): Root, the device, the windows, every frame.
+    cfg.renderThread = true;
 #ifdef Q_OS_MACOS
     // The MoltenVK ICD probe is pointless without Vulkan — and a headless run
     // must not depend on a driver being installed at all.
