@@ -146,6 +146,15 @@ function(jah_tsan_lane)
         set_property(TEST ${_t} APPEND PROPERTY LABELS tsan)
     endforeach()
 endfunction()
+#   jah_tsan_render(<test>...)   THE RENDER THREAD'S TSan ARM (ENGINE-UPGRADE-U3 decision 47): label tsan-render, run by
+#   hand (JAH_TSAN_LABEL=tsan-render scripts/sanitize.sh tsan) — green = zero reports. Never the shipped lane.
+function(jah_tsan_render)
+    foreach(_t IN LISTS ARGV)
+        if(TEST ${_t})
+            set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-render)
+        endif()
+    endforeach()
+endfunction()
 
 #   jah_tsan_blocked(<test>...)   the race lane's quarantine, same idea as
 #       jah_lsan_blocked. As of 2026-09-04 it holds every suite that drives the
@@ -1237,3 +1246,8 @@ foreach(_t IN LISTS JAH_MEASURE_ROWS)
     endif()
 endforeach()
 
+
+# THE RENDER THREAD'S TSan ARM (ENGINE-UPGRADE-U3 decision 47): the two-thread determinism arm, the window on the
+# render thread, the one order across streams, the host's door counted and the host's error door free-running.
+jah_tsan_render(frame.record_determinism view.window_on_render_thread engine.message_order host.sync_getters
+                host.error_door)

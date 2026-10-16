@@ -190,6 +190,12 @@ run_tsan() {
     local targets=(Jahshaka test_import_async test_import_shutdown test_open_responsive
                    test_archive_responsive test_shutdown_order test_watchdog_stall
                    test_memory_ownership test_staging_race)
+    # THE RENDER THREAD'S ARM (ENGINE-UPGRADE-U3 decision 47): JAH_TSAN_LABEL=tsan-render runs the rows labelled so —
+    # measured by price, run by hand, never part of the shipped lane — and builds their targets.
+    local label="${JAH_TSAN_LABEL:-tsan}"
+    if [ "$label" = "tsan-render" ]; then
+        targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order)
+    fi
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]} at -j$(build_jobs)"
         cmake --build "$TSAN_BUILD_DIR" -j"$(build_jobs)" --target "${targets[@]}" \
@@ -226,7 +232,7 @@ run_tsan() {
     echo "sanitize: TSAN_OPTIONS=$TSAN_OPTIONS"
     [ -n "${DISPLAY:-}" ] || echo "sanitize: WARNING - no DISPLAY; the suites that spawn Jahshaka will fail"
 
-    ( cd "$TSAN_BUILD_DIR" && ctest -L '^tsan$' --output-on-failure "$@" )
+    ( cd "$TSAN_BUILD_DIR" && ctest -L "^${label}\$" --output-on-failure "$@" )
     local rc=$?
 
     local tblocked
