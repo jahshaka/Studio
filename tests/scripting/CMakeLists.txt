@@ -109,6 +109,22 @@ set_tests_properties(host.sync_getters PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# host.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decision 44, D1): 300
+# FREE-RUNNING driver frames (JAH_FREE_RUNNING=1) with every scene message refused (engine.arm messages.refuse) and
+# one posted per frame, the error pump draining every tick; every refusal reaches it through the snapshot. A count,
+# in frames (the race it guards is TSan's to see: the 47 arm).
+set(_hedHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_error_door)
+file(MAKE_DIRECTORY ${_hedHome}/run)
+jah_gpu_row(host.error_door CLASS app TIER low NEEDS NONE FRAMES 340
+         COMMAND ${JAH_FRESH_HOME} --warm ${_hedHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/host_error_door.js --script-live
+         WORKING_DIRECTORY ${_hedHome}/run)
+set_tests_properties(host.error_door PROPERTIES
+    ENVIRONMENT "HOME=${_hedHome};JAHSHAKA_DATA_ROOT=${_hedHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
 # toggle with topmost promotion, the owner's Shift range, the World root rule)

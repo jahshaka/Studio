@@ -16,6 +16,8 @@
 #include "../support/enginetesthelpers.h"
 #include "../support/testmesh.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -123,6 +125,49 @@ int main(int argc, char **argv)
             if (c.r + c.g + c.b > 0.05f) ++lit;
         }
     CHECK(lit > 100, "the cubes draw in that frame (%d pixels)", lit);
+
+    // ---- THE LARGE IMPORT'S SYNC (decision 46 (3), MEASURED): one 512 x 512-vertex grid adopted — the UI thread's
+    // cost of handing its mesh to the engine (the host's copy of the vertex data is what a move removes).
+    {
+        const int N = 512;
+        std::vector<float> pos, nrm;
+        std::vector<unsigned> idx;
+        pos.reserve(size_t(N) * N * 3); nrm.reserve(size_t(N) * N * 3);
+        for (int z = 0; z < N; ++z)
+            for (int x = 0; x < N; ++x) {
+                pos.insert(pos.end(), { float(x) * 0.01f - 2.5f, 0.0f, float(z) * 0.01f - 2.5f });
+                nrm.insert(nrm.end(), { 0.0f, 1.0f, 0.0f });
+            }
+        for (int z = 0; z + 1 < N; ++z)
+            for (int x = 0; x + 1 < N; ++x) {
+                const unsigned a0 = unsigned(z * N + x), a1 = a0 + 1, b0 = a0 + unsigned(N), b1 = b0 + 1;
+                idx.insert(idx.end(), { a0, b0, a1, a1, b0, b1 });
+            }
+        auto big = iris::Mesh::create();
+        auto addBuf = [&big](iris::VertexAttribUsage usage, const std::vector<float> &data, int comps) {
+            iris::VertexLayout layout;
+            layout.addAttrib(usage, iris::AttribTypeFloat, comps, comps * int(sizeof(float)));
+            auto vb = iris::VertexBuffer::create(layout);
+            vb->setData(const_cast<float *>(data.data()), unsigned(data.size() * sizeof(float)));
+            big->addVertexBuffer(vb);
+        };
+        addBuf(iris::VertexAttribUsage::Position, pos, 3);
+        addBuf(iris::VertexAttribUsage::Normal, nrm, 3);
+        auto ib = iris::IndexBuffer::create();
+        ib->setData(idx.data(), unsigned(idx.size() * sizeof(unsigned)));
+        big->setIndexBuffer(ib);
+        big->setVertexCount(N * N);
+        auto mn = iris::MeshNode::create();
+        mn->setMesh(big);
+        mn->setMaterial(iris::PbrMaterial::create());
+        doc->getRootNode()->addChild(mn, false);
+        const auto t0 = std::chrono::steady_clock::now();
+        mirror.sync();
+        const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+        std::printf("    the large import's adopting sync: %.0f us for one %d-vertex mesh (the UI thread's)\n", us, N * N);
+        enginetest::frames(engine, 1);
+        CHECK(mirror.engineNode(mn.data()) != 0, "the large mesh is adopted");
+    }
 
     std::printf(gFailures ? "mirror.messages_in_order: FAILED\n" : "mirror.messages_in_order: PASS\n");
     return gFailures ? 1 : 0;

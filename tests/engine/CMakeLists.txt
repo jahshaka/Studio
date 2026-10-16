@@ -245,6 +245,22 @@ set_tests_properties(frame.record_determinism PROPERTIES TIMEOUT 60 LABELS "engi
 set_tests_properties(engine.frame_input_settle PROPERTIES TIMEOUT 60 LABELS "engine"
                      RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
+# engine.message_order — ONE ORDER ACROSS STREAMS (ENGINE-UPGRADE-U3 decision 46 (1)): a scene message and an engine
+# message of one record land in the order they were posted (the shadow resolution's last word). A law in values.
+add_executable(test_engine_message_order test_engine_message_order.cpp)
+set_target_properties(test_engine_message_order PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_message_order PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_message_order PRIVATE JahshakaEngine)
+add_dependencies(test_engine_message_order JahshakaEngineMedia)
+jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_message_order
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
+
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
 set_target_properties(test_engine_gi_scan PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
