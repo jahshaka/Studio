@@ -3789,6 +3789,11 @@ bool EngineSceneViewport::waitRecorderReady()
     // recording): the driver's ticks are held instead, but a script's frame is
     // one the script asked for, so it WAITS — the event loop runs (the encoder
     // drains, a video texture's frame lands), bounded at 10 s.
+    // THE LAW (ENGINE-UPGRADE-U3 decision 57): this waits on HOST work — the
+    // encoder's queue and a stepped video texture's decode, both workers of this
+    // process — NEVER on an engine frame. The recorder's frames come off the
+    // render thread by queue (OgreView::harvestVideoFrames); nothing here may
+    // wait for one.
     const std::function<bool()> hold = mRecordHooks.hold;
     if (!hold || !hold()) return true;
     QEventLoop loop;
