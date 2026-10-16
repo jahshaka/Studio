@@ -1357,9 +1357,12 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
-    // THE START IS THE ENGINE'S BEFORE THE VERB RETURNS (U3 stage 4b): a request — the monitor is live and the
-    // snapshot says so for the next read.
-    eng->request([](jahshaka::engine::Engine &e) { e.setFrameMonitor(MonitorLevel::Review); });
+    // THE START IS THE ENGINE'S BEFORE THE VERB RETURNS (U3 stage 4b): the host's call — its record of the level is
+    // written at the call (decision 45 D5: the engine side never writes a host record), the message rides the stream —
+    // then an empty request, which applies the pending messages first: the monitor is live and the snapshot says so
+    // for the next read.
+    eng->setFrameMonitor(MonitorLevel::Review);
+    eng->request([](jahshaka::engine::Engine &) {});
     gActive = true;
     mBlockedNs = 0;
     mBlockedAt = 0;
@@ -1448,7 +1451,10 @@ void FrameMonitor::finish(bool early)
     }
     drain();
     gActive = false;
-    if (eng) eng->request([](jahshaka::engine::Engine &e) { e.setFrameMonitor(MonitorLevel::Off); });   // the stop, the same
+    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it
+        eng->setFrameMonitor(MonitorLevel::Off);
+        eng->request([](jahshaka::engine::Engine &) {});
+    }
     // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
     // the NEXT drain hands it back with the monitor already off (Engine.h
     // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
