@@ -318,8 +318,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
           Needs::Document },
-        { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews}",
+        { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{carried, submitted, handOvers, recordsHanded, recordsLate, worstLatency, presentAlpha, presentFree}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -340,7 +340,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "is how long the frame's work actually took, averaged over the last ~60 rendered ticks; "
           "`worstMs` is the worst single tick since startup and `slowFrames` counts the ticks that "
           "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
-          "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule.",
+          "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule. `submit` is the hand-over, running totals "
+          "(ENGINE-UPGRADE-U3): `submitted` records and `handOvers`, the frames the render loop began (free-running: "
+          "every display frame; lockstep: every frame); `recordsHanded` the records a frame took, `recordsLate` those "
+          "taken more than one frame after their first submit and `worstLatency` the worst count in frames (1 = every "
+          "record drawn by the next frame begun); `carried` — free-running ticks whose head found the last tick's "
+          "record still waiting (a diagnostic: the ticks are a timer's, their jitter moves it); `presentAlpha` / "
+          "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
+          "free-running frame.",
           Needs::Document },
         { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
           "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
@@ -1548,6 +1555,8 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     const EngineRenderDriver::Stats s = driver ? driver->stats() : EngineRenderDriver::Stats{};
     out.insert("running", driver ? driver->isRunning() : false);
     out.insert("intervalMs", driver ? driver->intervalMs() : 0);
+    // THE PERIOD THE RENDER LOOP PACES TO (U3 decision 53): the session's while one pumps, 0 under Unlimited, the panel's.
+    out.insert("displayPeriodMs", driver ? double(driver->displayPeriodSeconds()) * 1000.0 : 0.0);
     out.insert("ticks", QVariant::fromValue(s.ticks));
     out.insert("rendered", QVariant::fromValue(s.rendered));
     // The live state and the two ROLLING numbers that replaced the lifetime

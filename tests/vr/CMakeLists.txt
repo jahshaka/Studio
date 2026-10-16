@@ -424,6 +424,24 @@ set_tests_properties(vr.ui_stall PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_ui_stall_home};JAHSHAKA_DATA_ROOT=${_vr_ui_stall_home}/.local/share/Jahshaka")
 set_property(TEST vr.ui_stall APPEND PROPERTY RESOURCE_LOCK monado)
 
+# vr.session_pace — THE SESSION'S PERIOD PACES THE RENDER LOOP (ENGINE-UPGRADE-U3 decision 53, the driver's half):
+# FREE-RUNNING under Monado's null compositor, the period sent while the session pumps is the runtime's, never the
+# panel's; 300 headset frames, 0 missed. The engine's half (a headset faster than the panel) is frame.runtime_pace.
+set(_vr_pace_home "${CMAKE_CURRENT_BINARY_DIR}/vr-session-pace-home")
+jah_fresh_home_fixture(vr.session_pace.fresh_home vrSessionPaceFreshHome "${_vr_pace_home}" WARM LABELS "vr")
+jah_gpu_exclusive_test(NAME vr.session_pace CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/vr_session_pace.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_pace PROPERTIES
+    LABELS "vr"
+    SKIP_RETURN_CODE 77
+    JAHSHAKA_TEST_FRAMES 520
+    FIXTURES_REQUIRED vrSessionPaceFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_pace_home};JAHSHAKA_DATA_ROOT=${_vr_pace_home}/.local/share/Jahshaka")
+set_property(TEST vr.session_pace APPEND PROPERTY RESOURCE_LOCK monado)
+
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 #

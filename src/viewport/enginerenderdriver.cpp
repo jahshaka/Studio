@@ -181,7 +181,7 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             // THE DISPLAY'S PERIOD is a display property, not a record (ENGINE-UPGRADE-U3): told to the render loop
             // when it CHANGES — the driver submits no record of its own, so a tick nothing was submitted for is a real
             // empty hand-over. The engine's clock never reads it (trap 7); stage 5's interpolation weight does.
-            const float period = float(scriptPacePeriodMs() / 1000.0);
+            const float period = displayPeriodSeconds();
             if (period != mDisplayPeriodSent) { mEngine->setDisplayPeriod(period); mDisplayPeriodSent = period; }
             // THE TWO MODES (ENGINE-UPGRADE-U3 stage 4b). FREE-RUNNING (the owner's): the record is handed over now and
             // the frame runs on the render thread while this tick returns to the event loop; a tick that finds the last
@@ -415,6 +415,20 @@ void EngineRenderDriver::setRefreshHz(double hz)
     if (qFuzzyCompare(hz + 1.0, mRefreshHz + 1.0)) return;
     mRefreshHz = hz;
     applyPacing();
+}
+
+float EngineRenderDriver::displayPeriodSeconds() const
+{
+    // THE PERIOD THE RENDER LOOP PACES TO (ENGINE-UPGRADE-U3 decision 53, worth-a-look 3): while a session pumps, the
+    // RUNTIME's predicted period (xrWaitFrame paces those frames; the panel's would pad a 90 Hz headset to 60 and pin
+    // the interpolation) — none until the runtime has said; under Unlimited none (the frames go as fast as they can,
+    // the interpolation advancing by the measured interval); otherwise the panel's.
+    if (mVrSession && mVrPumping && mEngine) {
+        const float hz = mEngine->published().vr.refreshHz;
+        return hz > 0.0f ? 1.0f / hz : 0.0f;
+    }
+    if (mMode == framepacing::Mode::Unlimited) return 0.0f;
+    return float(scriptPacePeriodMs() / 1000.0);
 }
 
 double EngineRenderDriver::scriptPacePeriodMs() const

@@ -161,6 +161,7 @@ export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
+frame.runtime_pace 5.09  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 gate.selection 6.46  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)
 gi.ambient 1.96  quiet n=41
 gi.area_energy 5.29  quiet n=29
@@ -946,6 +947,7 @@ vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.no_picture_start 51.09  quiet n=49
 vr.no_picture_start.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.session 63.49  quiet n=44
+vr.session_pace 38.26  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.session_undithered 6.51  quiet n=45
 vr.start_broken 34.51  quiet n=19
 vr.start_broken.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

@@ -105,6 +105,9 @@ public:
     /// swapchains — a user action, never a per-frame one).
     void setPacingMode(framepacing::Mode m);
     framepacing::Mode pacingMode() const { return mMode; }
+    /// The display period sent to the render loop (U3 decision 53): the session's while one pumps, 0 under Unlimited,
+    /// the panel's otherwise.
+    float displayPeriodSeconds() const;
     /// The refresh rate of the screen the viewport lives on, in Hz. The host
     /// pushes it at startup and again whenever the window changes screen or the
     /// screen changes mode; 0 means "unknown" and the loop falls back to 16 ms.

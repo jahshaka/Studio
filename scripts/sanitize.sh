@@ -194,7 +194,8 @@ run_tsan() {
     # measured by price, run by hand, never part of the shipped lane — and builds their targets.
     local label="${JAH_TSAN_LABEL:-tsan}"
     if [ "$label" = "tsan-render" ]; then
-        targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order)
+        targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order
+                 test_engine_drag_latency test_engine_interpolation)
     fi
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]} at -j$(build_jobs)"

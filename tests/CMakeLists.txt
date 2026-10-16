@@ -300,7 +300,7 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     app.input_keys app.play_select shadergraph.bake_output gi.budget
     app.watchdog_stall
     # ENGINE-UPGRADE-U3: a 7 ms UI stall's dropped headset refreshes (a GUARD since stage 5) and the extract at K = 100
-    vr.ui_stall gi.extract_cost
+    vr.ui_stall gi.extract_cost vr.session_pace
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).

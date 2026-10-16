@@ -297,6 +297,23 @@ add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
 jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.runtime_pace — A HEADSET FASTER THAN THE PANEL IS PACED BY ITS RUNTIME (ENGINE-UPGRADE-U3 decision 53): free frames
+# under a fake runtime at 11 ms (vr.fakeRuntimePace) are never padded to the panel's 16.7 ms; with the session's period
+# sent the interpolation draws in-between weights. Its bars are the decision's (mean interval <= 11.5 ms, 90 frames).
+add_executable(test_engine_runtime_pace test_engine_runtime_pace.cpp)
+set_target_properties(test_engine_runtime_pace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_runtime_pace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_runtime_pace PRIVATE JahshakaEngine)
+add_dependencies(test_engine_runtime_pace JahshakaEngineMedia)
+jah_gpu_row(frame.runtime_pace CLASS engine FRAMES 300 COMMAND test_engine_runtime_pace
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.runtime_pace PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fixtures: the host reads published() against a publishing render thread (decision 54)
 
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
 set_target_properties(test_engine_gi_scan PROPERTIES
