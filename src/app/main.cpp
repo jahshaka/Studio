@@ -110,6 +110,19 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
         return 2;
     }
+    // ONE THREAD AND THE OWNER'S MODE DO NOT GO TOGETHER (ENGINE-UPGRADE-U3 worth-a-look 5): JAH_ENGINE_ONE_THREAD=1 is
+    // a measurement's A arm for LOCKSTEP runs; a free-running run (interactive, or JAH_FREE_RUNNING=1) on one thread has
+    // no render loop to draw its frames and would show nothing — refused here, like any other unhonourable request.
+    {
+        const bool interactive = !cli.isScriptRun() && cli.selftestPng.isEmpty() && !cli.mcpServe;
+        const bool freeRunning = interactive || qEnvironmentVariableIntValue("JAH_FREE_RUNNING") == 1;
+        if (freeRunning && qEnvironmentVariableIntValue("JAH_ENGINE_ONE_THREAD") == 1) {
+            std::fprintf(stderr, "Jahshaka: JAH_ENGINE_ONE_THREAD=1 is for lockstep runs (--script, --mcp, "
+                                 "--engine-selftest) without JAH_FREE_RUNNING; a free-running run needs the render "
+                                 "thread\n");
+            return 2;
+        }
+    }
     // THE PROCESS'S TEST TIER (TEST-TIER-1, services/testtier.h): the flag, else
     // JAHSHAKA_TEST_TIER; validated here, where the World Mode names are known,
     // and refused like any other argument the app cannot honour.

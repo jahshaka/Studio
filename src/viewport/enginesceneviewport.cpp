@@ -2694,6 +2694,9 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // THE GRID STATE THIS RECORD IS (ENGINE-UPGRADE-U3): the document clock's step count, stamped on every node
         // record the frame applies (stage 5 interpolates between the last two).
         if (mScene) frame.stepSerial = mScene->simulationClock().steps();
+        // ...AND THE GRID'S STEP (decision 55): the interpolation's period is the clock's 1/60, never this record's
+        // frameDelta (the particles' — simulated x particleTimeScale).
+        frame.stepPeriod = float(iris::SimulationClock::kStepSeconds);
         if (mEngineScene) {
             jahshaka::engine::FrameInputGesture gesture;
             gesture.active = mGizmo && mGizmo->isDragging();

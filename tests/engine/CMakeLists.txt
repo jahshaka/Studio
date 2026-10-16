@@ -452,6 +452,12 @@ jah_gpu_row(engine.gpu_walk_parity CLASS engine COMMAND test_engine_gpu_walk_par
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine"
     JAHSHAKA_TEST_FRAMES 103)   # counted from the source (4 + 8 + 2 + 4 + 21 steps x 4 + the drag's own one)
+# engine.gpu_walk_parity_free — THE INTERPOLATED POSE IS THE TABLE'S (ENGINE-UPGRADE-U3 decision 56): FREE-RUNNING on the
+# render thread, a mover drawn between its grid states at 90 over 60 and then stopped: 0 misses moving and stopped.
+jah_gpu_row(engine.gpu_walk_parity_free CLASS engine COMMAND test_engine_gpu_walk_parity --free-running
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpu_walk_parity_free PROPERTIES TIMEOUT 60 LABELS "engine"
+    JAHSHAKA_TEST_FRAMES 39)   # 6 + 2 + 24 free + 6 free + 1
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)

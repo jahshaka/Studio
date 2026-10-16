@@ -140,6 +140,7 @@ engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
 engine.gpu_substrate 2.73  solo (ASYNC-3 stage-1 read F4: + the graphics-build frame, 2026-10-15)
 engine.gpu_walk_parity 6.12  spec EU-2B stage 3 fix (2026-10-15)
+engine.gpu_walk_parity_free 1.15  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)

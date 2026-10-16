@@ -110,6 +110,7 @@ PIECE_TOKENS = ["atom", "engine.atom_"]
 _ALL = ["*engine-fixtures", "*picture", "*vulkan-scripts"]   # everything that renders: the fixtures, the app rows
 OGRE_ENGINE_FUNCTIONS = {
     # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
+    **{f: _ALL for f in ("beginPresentation", "interpolateScene", "interpolateFrame")},   # U3 stage 5's fix round
     **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
                          "applySceneStream", "syncHostViews", "noteDevice", "deviceRayQuery", "appliedFrameDelta",
                          "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",

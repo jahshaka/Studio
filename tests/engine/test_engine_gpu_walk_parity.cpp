@@ -20,6 +20,7 @@
 // its node (its flags word or its transform), or the step tested nothing.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GpuSubstrate.h"
+#include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/gesture.h"
 
@@ -39,8 +40,108 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", m_); ++failures; }                     \
     } while (0)
 
-int main()
+// engine.gpu_walk_parity_free (`--free-running`, ENGINE-UPGRADE-U3 decision 56): THE INTERPOLATED POSE IS THE TABLE'S.
+// The owner's mode on its render thread: a document mover recorded at 60 Hz steps and drawn by FREE frames at a 90 Hz
+// display period (inspect::EngineEcho::presentationFrame, an exact count) — every in-between pose the interpolation
+// writes, and the cur it puts back when the motion stops, must be named to the GPU-scene walk, or the table rests
+// between grid states while the raster shows another pose. The guard's arm compares every slot after every compose:
+// 0 misses while it moves and after it stops.
+static int freeRunningArm()
 {
+    std::string err;
+    EngineConfig cfg = enginetest::testEngineConfig("test-engine-gpu-walk-parity-free-ogre.log");
+    cfg.renderThread = true;
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    Engine *e = engine.get();
+    const inspect::EngineEcho *echo = inspect::engine(e);
+    if (!echo) { std::printf("FAIL: the engine's probes\n"); return 1; }
+    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
+    View *view = e->createOffscreenView("parity-free", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    Scene *scene = e->createScene("parity-free");
+    if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.3f, 0.3f, 0.3f));
+    enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 12.0f), Vec3(0.0f, 0.5f, 0.0f));
+    const MeshId cubeMesh = scene->createMesh(enginetest::unitCubeMesh());
+    std::vector<NodeId> movers;
+    for (int i = 0; i < 4; ++i) {
+        const NodeId n = scene->createDocumentNode(reserveNodeId());
+        PbrParams p;
+        p.albedo = Colour(0.3f + 0.1f * float(i), 0.5f, 0.6f);
+        scene->attachMesh(n, cubeMesh, scene->createPbrMaterial(p));
+        movers.push_back(n);
+    }
+    // ON ITS RENDER THREAD every engine entry is a request (the affinity law); the probes ride the same door.
+    const auto arm = [&](double v) { bool ok = false; e->request([&](Engine &x) { ok = x.setArm("gpuscene.walkParity", v); }); return ok; };
+    const auto status = [&]() { GpuSubstrateStatus st; e->request([&](Engine &) { st = gpuSubstrateStatus(*scene); }); return st; };
+    const auto record = [&](unsigned long long step) {
+        FrameInput in;
+        in.frameDelta = 1.0f / 60.0f;
+        in.stepSerial = step;
+        in.stepPeriod = 1.0f / 60.0f;
+        FrameInputScene part;
+        part.scene = scene;
+        for (size_t i = 0; i < movers.size(); ++i) {
+            NodeRecord r;
+            r.id = movers[i];
+            r.fields = NodeRecord::Trs;
+            r.position = Vec3(float(i) - 1.5f + 0.05f * float(step), 0.3f, 0.0f);
+            r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+            r.scale = Vec3(0.4f, 0.4f, 0.4f);
+            part.nodes.push_back(r);
+            part.changes.moved.push_back(r.id);
+        }
+        in.scenes.push_back(part);
+        e->submitFrame(in);
+    };
+    unsigned long long step = 1;
+    record(step);
+    enginetest::frames(e, 6);
+    CHECK(arm(1.0), "the guard's arm");
+    enginetest::frames(e, 2);
+    const GpuSubstrateStatus s0 = status();
+    CHECK(s0.live && s0.walkChecked > 0 && s0.walkMissed == 0, "the guard runs on a settled scene (%llu checked, %llu "
+          "missed)", s0.walkChecked, s0.walkMissed);
+    e->setDisplayPeriod(1.0f / 90.0f);
+    auto *ech = const_cast<inspect::EngineEcho *>(echo);
+    int between = 0;
+    // MOVING: three free frames per two steps (90 over 60), the records arriving between them.
+    for (int pair = 0; pair < 8; ++pair)
+        for (int k : { 2, 1 }) {
+            record(++step);
+            for (int f = 0; f < k; ++f) {
+                ech->presentationFrame();
+                e->latchSnapshot();
+                const float a = e->published().presentAlpha;
+                if (a > 1e-4f && a < 1.0f - 1e-4f) ++between;
+            }
+        }
+    const GpuSubstrateStatus s1 = status();
+    // STOPPED: no more records, the free frames go on — the interpolation puts cur back, named.
+    for (int f = 0; f < 6; ++f) ech->presentationFrame();
+    const GpuSubstrateStatus s2 = status();
+    std::printf("    free frames drawn between two grid states: %d; misses moving %llu, after the stop %llu "
+                "(%llu slots checked)\n", between, s1.walkMissed - s0.walkMissed, s2.walkMissed - s1.walkMissed,
+                s2.walkChecked - s0.walkChecked);
+    CHECK(between >= 8, "the free frames drew in-between poses (%d)", between);
+    CHECK(s1.walkMissed == s0.walkMissed, "every interpolated pose is the table's while it moves (%llu missed)",
+          s1.walkMissed - s0.walkMissed);
+    CHECK(s2.walkMissed == s1.walkMissed, "...and the cur put back when it stops (%llu missed)",
+          s2.walkMissed - s1.walkMissed);
+    arm(0.0);
+    view->setScene(nullptr);
+    e->destroyScene(scene);
+    e->destroyView(view);
+    enginetest::frames(e, 1);
+    std::printf(failures ? "engine.gpu_walk_parity_free: FAILED\n" : "engine.gpu_walk_parity_free: PASS\n");
+    return failures ? 1 : 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1 && std::string(argv[1]) == "--free-running") return freeRunningArm();
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-engine-gpu-walk-parity-ogre.log");
     auto engine = Engine::create(cfg, err);
