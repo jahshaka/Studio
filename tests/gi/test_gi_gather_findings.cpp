@@ -71,7 +71,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static const unsigned kSize = 256u;
 
@@ -265,7 +265,7 @@ static int glassMain(Engine *e)
         setGather(s, gi, true);
         render(e, 48);
         Image on; view->readPixels(on);
-        const GatherStatus st = s->giStatus().gather;
+        const GatherStatus st = s->published().gi.gather;
         CHECK_MSG(st.running, "%s: the gather runs (%u probes)", arm.name, st.probes);
         if (std::getenv("JAH_GATHER_DUMP")) {
             const std::string dir = std::getenv("JAH_GATHER_DUMP");
@@ -472,9 +472,9 @@ static int nestMain(Engine *e)
                 std::fclose(f);
             }
         }
-        CHECK(s->activePlanarReflectors() == 1, "the mirror renders");
-        CHECK_MSG(s->giStatus().gather.running, "the gather runs (%u probes)",
-                  s->giStatus().gather.probes);
+        CHECK(s->published().activePlanarReflectors == 1, "the mirror renders");
+        CHECK_MSG(s->published().gi.gather.running, "the gather runs (%u probes)",
+                  s->published().gi.gather.probes);
         // ...AND A THIRD ARM WITH NO DIFFUSE GI AT ALL (GiMode::Off), so the
         // share of the mirror's picture that IS the bounce is measured rather
         // than assumed (audit F5: a 2 % bar discriminates a lost bounce only
@@ -550,7 +550,7 @@ static int nestMain(Engine *e)
             s->setGatherTuning(t);
             s->setGlobalIllumination(gi);
             render(e, 90);
-            const GiStatus g = s->giStatus();
+            const GiStatus g = s->published().gi;
             Image img; view->readPixels(img);
             if (const char *dump = std::getenv("JAH_GATHER_DUMP")) {
                 FILE *f = std::fopen((std::string(dump) + "/nest-pcc-" + (gather ? "on" : "off") + ".ppm").c_str(), "wb");
@@ -642,7 +642,7 @@ static int skyMain(Engine *e)
     enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0001f), 3.0f);
     float sh[27] = {};
     bool shReady = false;
-    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->skyAmbientSh(sh); }
+    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->published().copySkyAmbientSh(sh); }
     CHECK(shReady, "the sky's SH is integrated");
     s->setAmbientSh(sh);
     s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
@@ -663,7 +663,7 @@ static int skyMain(Engine *e)
                                   : Colour(2000.0f, 2000.0f, 1800.0f, 1.0f);
         CHECK(s->setSky(sky), "the disc's radiance is set");
         render(e, 60);
-        const GatherStatus st = s->giStatus().gather;
+        const GatherStatus st = s->published().gi.gather;
         CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
                   st.irradianceW, st.irradianceH);
         // The floor's lower half of the shot: every probe there sees nothing but sky.
@@ -747,7 +747,7 @@ static int planeWeightMain(Engine *e)
         s->setGlobalIllumination(gi);
         setGather(s, gi, true, true);
         render(e, 150);
-        st = s->giStatus().gather;
+        st = s->published().gi.gather;
         view->readPixels(img);
         e->destroyScene(s);
     };
@@ -906,7 +906,7 @@ static int letterboxMain(Engine *e)
     enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0001f), 3.0f);
     float sh[27] = {};
     bool shReady = false;
-    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->skyAmbientSh(sh); }
+    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->published().copySkyAmbientSh(sh); }
     s->setAmbientSh(sh);
     s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
     // A STEEP view: the floor fills the frame to its top, so the inner
@@ -918,7 +918,7 @@ static int letterboxMain(Engine *e)
     CHECK(s->setGlobalIllumination(gi), "the chain builds");
     setGather(s, gi, true, true);
     render(e, 60);
-    GatherStatus st = s->giStatus().gather;
+    GatherStatus st = s->published().gi.gather;
     CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
               st.irradianceW, st.irradianceH);
     const IrrMean square = irrIn(st, 0.05f, 0.05f, 0.95f, 0.95f);
@@ -926,7 +926,7 @@ static int letterboxMain(Engine *e)
     cam.aspect = 2.0f;            // a 2:1 shot in a square target: bars of a quarter each
     view->setCamera(cam);
     render(e, 60);
-    st = s->giStatus().gather;
+    st = s->published().gi.gather;
     const IrrMean inner = irrIn(st, 0.05f, 0.26f, 0.95f, 0.74f);
     const IrrMean edges[2] = { irrIn(st, 0.05f, 0.26f, 0.95f, 0.32f), irrIn(st, 0.05f, 0.68f, 0.95f, 0.74f) };
     const IrrMean bar = irrIn(st, 0.05f, 0.80f, 0.95f, 0.98f, false);
@@ -987,7 +987,7 @@ static int edgeMain(Engine *e)
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 3.0f);
     float sh[27] = {};
     bool shReady = false;
-    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->skyAmbientSh(sh); }
+    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->published().copySkyAmbientSh(sh); }
     s->setAmbientSh(sh);
     s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
     // Below the block's top (1.6 m < 2 m): the front face's top edge is the
@@ -998,7 +998,7 @@ static int edgeMain(Engine *e)
     CHECK(s->setGlobalIllumination(gi), "the chain builds (with the field)");
     setGather(s, gi, true, true);
     render(e, 90);
-    GatherStatus st = s->giStatus().gather;
+    GatherStatus st = s->published().gi.gather;
     CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
               st.irradianceW, st.irradianceH);
     Image img;
@@ -1063,7 +1063,7 @@ static int edgeMain(Engine *e)
     {
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.3f, 2.12f, 5.0f), Vec3(0.0f, 1.2f, 0.0f)));
         render(e, 90);
-        st = s->giStatus().gather;
+        st = s->published().gi.gather;
         unsigned yt = 0;
         for (unsigned y = 0; y < kSize; ++y) if (isSurface(cx, y)) { yt = y; break; }
         double cov = 0.0;

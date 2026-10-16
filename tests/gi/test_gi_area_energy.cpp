@@ -64,7 +64,7 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kRough = 1.0;
 double disneyEnergyFactor(double r) { return 1.0 + (1.0 / 1.51 - 1.0) * r; }
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// The point-to-rectangle form factor on the rectangle's axis (half sizes a, b; height h).
 double rectFormFactor(double a, double b, double h)

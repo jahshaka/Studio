@@ -38,7 +38,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 static void show(const char *what, const Colour &c)
 {
     std::printf("   %-34s r=%.4f g=%.4f b=%.4f\n", what, c.r, c.g, c.b);
@@ -136,7 +136,7 @@ int main()
         CHECK(a->setGlobalIllumination(gi), "scene A builds the hybrid over its room");
     }
     render(engine.get(), 20);
-    const GiStatus stA = a->giStatus();
+    const GiStatus stA = a->published().gi;
     std::printf("   scene A: probes=%d pccBound=%d\n", stA.probeCount, stA.pccBound ? 1 : 0);
     CHECK(stA.probeCount > 0 && stA.pccBound,
           "...and A's passes bind it (texEnvProbeMap is a cube array in A's passes)");
@@ -179,7 +179,7 @@ int main()
         CHECK(a->setGlobalIllumination(gi), "scene A builds its grid one more time");
     }
     render(engine.get(), 20);
-    CHECK(a->giStatus().pccBound, "...and it is bound again");
+    CHECK(a->published().gi.pccBound, "...and it is bound again");
     engine->destroyScene(a);
     a = nullptr;
     render(engine.get(), 10);

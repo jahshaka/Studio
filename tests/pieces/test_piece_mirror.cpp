@@ -21,6 +21,7 @@
 #include <cstdio>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include "bridge/enginematerialpreviewscene.h"
@@ -95,8 +96,8 @@ int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int 
 {
     int lo = 255, hi = 0;
     for (int f = 0; f < frames; ++f) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
         Image img;
         if (view->readPixels(img)) {
             const Colour c = img.at(img.width / 2, img.height / 2);
@@ -145,8 +146,8 @@ int main(int argc, char **argv)
     // first 0.4 s and 0/255 once warm. The house rule, again: warm up, then
     // measure.
     for (int i = 0; i < 12; ++i) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine->renderOneFrame();
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
     }
 
     // ---- the control FIRST: a plain material must not move ------------------
@@ -174,22 +175,22 @@ int main(int argc, char **argv)
     // THE CLOCK IS FRAME-COUNTED: N syncs advance it by exactly N grid steps,
     // however long the frames took on the wall.
     {
-        const float before = preview.engineScene()->shaderTime();
+        const float before = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
         const int n = 30;
         for (int f = 0; f < n; ++f) {
-            preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-            engine->renderOneFrame();
+            preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
+            enginetest::frames(engine, 1);
         }
-        const float advanced = preview.engineScene()->shaderTime() - before;
+        const float advanced = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before;
         std::printf("    shader clock advanced %.6f s over %d frames\n", double(advanced), n);
         CHECK(std::fabs(advanced - float(n) / 60.0f) < 1e-4f,
               "the mirror's shader clock advances one 1/60 s grid step per frame (no wall clock)");
         // A FRAME THAT BUYS TWO STEPS (a 30 fps host) advances it two steps:
         // the clock is the document's simulated time, not a count of syncs.
-        const float before2 = preview.engineScene()->shaderTime();
-        preview.step(2.0f / 60.0f, int(view->width()), int(view->height()));
-        engine->renderOneFrame();
-        const float advanced2 = preview.engineScene()->shaderTime() - before2;
+        const float before2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
+        preview.step(2.0f / 60.0f, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
+        const float advanced2 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before2;
         std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));
         CHECK(std::fabs(advanced2 - 2.0f / 60.0f) < 1e-4f,
               "a frame that buys two grid steps advances the shader clock 2/60 s (stepped, not sync-counted)");

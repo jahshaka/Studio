@@ -201,7 +201,7 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
     const auto mirrorPixel = [&]() {
@@ -215,7 +215,7 @@ int main(int argc, char **argv)
         int worst = 0;
         for (int f = 0; f < n; ++f) {
             frame();
-            worst = std::max(worst, escene->giStatus().probeCapturesLastFrame);
+            worst = std::max(worst, escene->published().gi.probeCapturesLastFrame);
         }
         return worst;
     };
@@ -224,11 +224,11 @@ int main(int argc, char **argv)
     // (never more than the budget per frame), caught up, then idle.
     const auto input = [&](const char *what, GiStaleReason why, const std::function<void()> &edit,
                            int settleFrames) {
-        const unsigned long long serial = escene->giStatus().staleSerial;
-        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        const unsigned long long serial = escene->published().gi.staleSerial;
+        const unsigned long long rebuilds = escene->published().gi.rebuilds;
         edit();
         frame();
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("-- %s: reason=%s serial %llu -> %llu, stale=%d, captured=%d\n", what,
                     reasonName(st.lastStaleReason), serial, st.staleSerial, st.staleProbes,
                     st.probeCapturesLastFrame);
@@ -241,18 +241,18 @@ int main(int argc, char **argv)
                       "(worst %d)", what, worst);
         CHECK(worst <= kAllowed, msg);
         std::snprintf(msg, sizeof msg, "%s: the grid has caught up (no probe stale)", what);
-        CHECK(escene->giStatus().staleProbes == 0, msg);
+        CHECK(escene->published().gi.staleProbes == 0, msg);
         std::snprintf(msg, sizeof msg, "%s: ...and then the scene IDLES (20 frames, zero captures)", what);
         CHECK(worstOver(20) == 0, msg);
         std::snprintf(msg, sizeof msg, "%s: no from-scratch GI rebuild (the probes were re-captured, "
                       "never re-placed)", what);
-        CHECK(escene->giStatus().rebuilds == rebuilds, msg);
+        CHECK(escene->published().gi.rebuilds == rebuilds, msg);
     };
 
     // ---- settle ------------------------------------------------------------
     frames(40);
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         CHECK(st.probeCount == kProbes && st.pccBound, "the 2x1x2 probe grid built and bound");
         CHECK(st.staleProbes == 0, "settled: the post-build catch-up is done");
         CHECK(worstOver(20) == 0, "a still room re-captures nothing (the old sweep never idled)");
@@ -270,10 +270,10 @@ int main(int argc, char **argv)
     // host's transform-write epoch first now, and the walk is what the epoch
     // gates: zero scans over a still stretch, exactly one per frame that wrote.
     {
-        const unsigned long long stillFrom = escene->giStatus().giScans;
-        const unsigned long long readsFrom = escene->giStatus().giAabbReads;
+        const unsigned long long stillFrom = escene->published().gi.giScans;
+        const unsigned long long readsFrom = escene->published().gi.giAabbReads;
         frames(20);
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("   still: %llu movement scans and %llu world-AABB reads over 20 still "
                     "frames (last scan %.1f us)\n",
                     st.giScans - stillFrom, st.giAabbReads - readsFrom, st.giScanMicros);
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
             mirrorCube->setLocalPos(home + iris::Vec3(0.0f, 0.02f * float(f + 1), 0.0f));
             frame();
         }
-        const GiStatus moved = escene->giStatus();
+        const GiStatus moved = escene->published().gi;
         std::printf("   moving: %llu scans over 10 frames that each moved a node\n",
                     moved.giScans - movedFrom);
         CHECK(moved.giScans - movedFrom == 10ull,
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
               "moving: ...and the mover stales the grid, as it always did");
         mirrorCube->setLocalPos(home);
         frames(40);                       // put it back and let the grid catch up
-        CHECK(escene->giStatus().staleProbes == 0, "moving: the grid caught up again");
+        CHECK(escene->published().gi.staleProbes == 0, "moving: the grid caught up again");
         CHECK(worstOver(20) == 0, "moving: ...and the room is idle once more");
     }
 
@@ -312,38 +312,43 @@ int main(int argc, char **argv)
     // it. It also re-voxelizes ONCE on settle (the wall's bounce changes colour
     // too): VctMaterial caches each datablock's conversion by pointer, so the
     // voxel arm is rebuilt fresh under the probes it keeps.
-    const quint64 solvesBeforeAlbedo = mirror.target()->giStatus().schedulerResolves;
-    const quint64 injectsBeforeAlbedo = mirror.target()->giStatus().schedulerLightTicks;
+    const quint64 solvesBeforeAlbedo = mirror.target()->published().gi.schedulerResolves;
+    const quint64 injectsBeforeAlbedo = mirror.target()->published().gi.schedulerLightTicks;
     input("albedo", GiStaleReason::Material,
           [&]() { wallMat->setBaseColor(QColor(5, 5, 255)); }, 40);
     // A material-only edit waits for the settle WITHOUT the light re-inject
     // cadence (and its irradiance-field reset): nothing a re-inject reads
     // changed. The material generation is its own term for exactly this.
-    CHECK(mirror.target()->giStatus().schedulerLightTicks == injectsBeforeAlbedo,
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(mirror.target()->published().gi.schedulerLightTicks == injectsBeforeAlbedo,
           "albedo: the settle wait runs NO light re-inject (the material term is its own)");
     const Colour blueMirror = mirrorPixel();
     std::printf("   mirror, after the albedo edit   r=%.3f g=%.3f b=%.3f\n",
                 blueMirror.r, blueMirror.g, blueMirror.b);
     CHECK(blueMirror.b > blueMirror.r + 0.3f,
           "albedo: the mirror pixel FOLLOWS the edit — it now shows the BLUE wall");
-    CHECK(mirror.target()->giStatus().schedulerResolves - solvesBeforeAlbedo == 1,
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(mirror.target()->published().gi.schedulerResolves - solvesBeforeAlbedo == 1,
           "albedo: the voxel half re-solves exactly once (coalesced, like a moved object)");
 
     // A ROUGHNESS edit is seen by the probes but not by the voxelizer (which
     // reads albedo/emissive/alpha only): it re-captures and costs no re-solve.
-    const quint64 solvesBeforeRough = mirror.target()->giStatus().schedulerResolves;
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const quint64 solvesBeforeRough = mirror.target()->published().gi.schedulerResolves;
     input("roughness", GiStaleReason::Material,
           [&]() { wallMat->setRoughnessFactor(0.5f); }, 12);
-    CHECK(mirror.target()->giStatus().schedulerResolves == solvesBeforeRough,
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(mirror.target()->published().gi.schedulerResolves == solvesBeforeRough,
           "roughness: probes re-capture, the voxels do not re-solve");
 
     // An edit that changes NOTHING stales nothing (the mirror pushes materials
     // on change, and the engine compares the parameters itself as well).
     {
-        const unsigned long long serial = escene->giStatus().staleSerial;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long serial = escene->published().gi.staleSerial;
         wallMat->setRoughnessFactor(0.5f);
         frames(3);
-        CHECK(escene->giStatus().staleSerial == serial, "a no-op material write stales nothing");
+        CHECK(escene->published().gi.staleSerial == serial, "a no-op material write stales nothing");
     }
 
     // ---- a SKY change --------------------------------------------------------
@@ -362,7 +367,7 @@ int main(int argc, char **argv)
     // row and the ambient is the second one. The assertion below is the one
     // that matters either way — the probes re-capture and nothing is re-placed.
     {
-        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        const unsigned long long rebuilds = escene->published().gi.rebuilds;
         input("sky", GiStaleReason::Sky, [&]() {
             doc->skyType = iris::SkyType::GRADIENT;
             doc->gradientTop = QColor(40, 60, 200);
@@ -370,7 +375,7 @@ int main(int argc, char **argv)
             doc->gradientBot = QColor(30, 30, 30);
             doc->gradientOffset = 0.5f;
         }, 40);
-        CHECK(escene->giStatus().rebuilds == rebuilds,
+        CHECK(escene->published().gi.rebuilds == rebuilds,
               "sky: swapping one sky for another costs NO from-scratch GI build");
     }
 
@@ -379,10 +384,10 @@ int main(int argc, char **argv)
     // now hashes the light's parameters, so the voxels re-inject on the drag
     // cadence and re-solve ONCE on settle — before, a colour edit never reached
     // the voxel bounce at all.
-    const quint64 solvesBeforeLight = mirror.target()->giStatus().schedulerResolves;
+    const quint64 solvesBeforeLight = mirror.target()->published().gi.schedulerResolves;
     input("light colour", GiStaleReason::Light,
           [&]() { sun->color = QColor(255, 180, 120); }, 40);
-    CHECK(mirror.target()->giStatus().schedulerResolves - solvesBeforeLight == 1,
+    CHECK(mirror.target()->published().gi.schedulerResolves - solvesBeforeLight == 1,
           "light colour: exactly ONE settle re-solve (it used to be none)");
 
     // ---- an AMBIENT change ----------------------------------------------------
@@ -405,11 +410,11 @@ int main(int argc, char **argv)
     // the mirror's GI light signature (the voxel bounce follows on settle).
     {
         const Colour lit = mirrorPixel();
-        const unsigned long long serial = escene->giStatus().staleSerial;
-        const quint64 solves = mirror.target()->giStatus().schedulerResolves;
+        const unsigned long long serial = escene->published().gi.staleSerial;
+        const quint64 solves = mirror.target()->published().gi.schedulerResolves;
         sun->setVisible(false);
         frame();
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         CHECK(st.staleSerial > serial && st.lastStaleReason == GiStaleReason::Light,
               "lamp off: switching the only lamp off STALES the grid (reason light)");
         frames(kProbes - 1);                                  // ceil(P / N) frames in all
@@ -418,9 +423,9 @@ int main(int argc, char **argv)
                     lit.r, lit.g, lit.b, dark.r, dark.g, dark.b);
         CHECK(lum(dark) < lum(lit) - 0.3f,
               "lamp off: the chrome probe pixel DARKENS within ceil(probes / budget) frames");
-        CHECK(worstOver(40) <= kAllowed && escene->giStatus().staleProbes == 0,
+        CHECK(worstOver(40) <= kAllowed && escene->published().gi.staleProbes == 0,
               "lamp off: spread, then caught up");
-        CHECK(mirror.target()->giStatus().schedulerResolves - solves == 1,
+        CHECK(mirror.target()->published().gi.schedulerResolves - solves == 1,
               "lamp off: the voxel bounce re-solves once on settle (the signature sees it)");
         CHECK(worstOver(20) == 0, "lamp off: ...and then the scene idles");
         sun->setVisible(true);
@@ -435,16 +440,17 @@ int main(int argc, char **argv)
     // now does, and the voxels are left alone (no re-solve).
     {
         const Colour before = mirrorPixel();
-        const quint64 solves = mirror.target()->giStatus().schedulerResolves;
+        const quint64 solves = mirror.target()->published().gi.schedulerResolves;
         auto plateMat = pbr(QColor(5, 255, 5));
         plateMat->setShadingModel(1);                         // Unlit
         iris::MeshNodePtr plate;
-        const unsigned long long serial = escene->giStatus().staleSerial;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long serial = escene->published().gi.staleSerial;
         plate = slab(doc, "unlit plate", plateMat, iris::Vec3(0.0f, 2.0f, 3.85f),
                      iris::Vec3(2.0f, 2.0f, 0.1f));
         frame();
-        CHECK(escene->giStatus().staleSerial > serial &&
-              escene->giStatus().lastStaleReason == GiStaleReason::Moved,
+        CHECK(escene->published().gi.staleSerial > serial &&
+              escene->published().gi.lastStaleReason == GiStaleReason::Moved,
               "unlit plane: its arrival STALES the probes (reason moved)");
         frames(kProbes - 1);
         const Colour shown = mirrorPixel();
@@ -452,12 +458,12 @@ int main(int argc, char **argv)
                     shown.r, shown.g, shown.b, before.r, before.g, before.b);
         CHECK(shown.g > shown.r + 0.3f && shown.g > shown.b + 0.3f,
               "unlit plane: it APPEARS in the chrome reflection within ceil(probes / budget) frames");
-        CHECK(worstOver(20) == 0 && escene->giStatus().staleProbes == 0, "unlit plane: then idles");
+        CHECK(worstOver(20) == 0 && escene->published().gi.staleProbes == 0, "unlit plane: then idles");
 
-        const unsigned long long serialMove = escene->giStatus().staleSerial;
+        const unsigned long long serialMove = escene->published().gi.staleSerial;
         plate->setLocalPos(iris::Vec3(-2.8f, 2.0f, 3.85f));    // off the reflection ray
         frame();
-        CHECK(escene->giStatus().staleSerial > serialMove,
+        CHECK(escene->published().gi.staleSerial > serialMove,
               "unlit plane: MOVING it stales the probes (the movement scan sees unlit items)");
         frames(kProbes - 1);
         const Colour moved = mirrorPixel();
@@ -468,25 +474,25 @@ int main(int argc, char **argv)
         plate->setLocalPos(iris::Vec3(0.0f, 2.0f, 3.85f));     // back on the ray
         frames(kProbes + 4);
         CHECK(mirrorPixel().g > mirrorPixel().b + 0.3f, "unlit plane: back on the ray, back in the reflection");
-        const unsigned long long serialDel = escene->giStatus().staleSerial;
-        const unsigned long long rebuildsDel = escene->giStatus().rebuilds;
+        const unsigned long long serialDel = escene->published().gi.staleSerial;
+        const unsigned long long rebuildsDel = escene->published().gi.rebuilds;
         doc->getRootNode()->removeChild(plate);
         plate.reset();
         frame();
-        CHECK(escene->giStatus().staleSerial > serialDel,
+        CHECK(escene->published().gi.staleSerial > serialDel,
               "unlit plane: DELETING it stales the probes");
         frames(kProbes - 1);
         const Colour gone = mirrorPixel();
         CHECK(std::fabs(lum(gone) - lum(before)) < 0.15f && gone.g < gone.b,
               "unlit plane: deleted, it leaves the reflection within ceil(probes / budget) frames");
-        CHECK(mirror.target()->giStatus().schedulerResolves == solves,
+        CHECK(mirror.target()->published().gi.schedulerResolves == solves,
               "unlit plane: all of it re-captured probes only — the voxels never re-solved");
         // The delete destroys the node's OWN mesh, and a destroyed node-owned
         // mesh is a from-scratch GI rebuild by the pre-existing rule (Instant
         // Radiosity caches mesh VAOs; releaseNode) — lit or unlit. Its
         // catch-up runs after the stale above; the scene idles once it is done.
         std::printf("   unlit plane delete: from-scratch rebuilds %llu -> %llu (the node-owned "
-                    "mesh rule)\n", rebuildsDel, escene->giStatus().rebuilds);
+                    "mesh rule)\n", rebuildsDel, escene->published().gi.rebuilds);
         frames(20);
         CHECK(worstOver(20) == 0, "unlit plane: then idles");
     }
@@ -507,7 +513,7 @@ int main(int argc, char **argv)
               "freeze: a cube wearing a LIVE texture");
         escene->setNodeTransform(liveNode, Vec3(2.5f, 1.0f, -2.5f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
         frames(40);                                  // its arrival rebuilds and catches up
-        const unsigned long long serial = escene->giStatus().staleSerial;
+        const unsigned long long serial = escene->published().gi.staleSerial;
         int captured = 0;
         float clock = 0.0f;
         for (int f = 0; f < 60; ++f) {
@@ -519,11 +525,11 @@ int main(int argc, char **argv)
             clock += 1.0f / 60.0f;
             escene->setShaderTime(clock);
             frame();
-            captured += escene->giStatus().probeCapturesLastFrame;
+            captured += escene->published().gi.probeCapturesLastFrame;
         }
         std::printf("   freeze: 60 frames of a live texture + a running clock: %d probe captures\n",
                     captured);
-        CHECK(captured == 0 && escene->giStatus().staleSerial == serial,
+        CHECK(captured == 0 && escene->published().gi.staleSerial == serial,
               "freeze: animated content present + idle -> ZERO probe captures, nothing staled");
         escene->removeNode(liveNode);
         frames(40);
@@ -588,17 +594,22 @@ int main(int argc, char **argv)
         const TextureId lateTex = escene->loadTexture("probe_inputs_late.tga", true);
         CHECK(lateTex != 0, "late texture: loadTexture schedules it");
         const bool streaming = !engine->texturesDoneStreaming();
-        const unsigned long long atBind = escene->giStatus().staleSerial;
+        // The snapshot of the last of the 30 frames is current here (a load stales nothing): no frame between the load
+        // and the bind, or that frame's head drains the load before the bind it is meant to follow.
+        const unsigned long long atBind = escene->published().gi.staleSerial;
         CHECK(escene->setPbrTexture(lateMat, PbrTextureSlot::Albedo, lateTex),
               "late texture: the bind applies");
-        const unsigned long long afterBind = escene->giStatus().staleSerial;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long afterBind = escene->published().gi.staleSerial;
         CHECK(afterBind > atBind, "late texture: the BIND stales the grid, as it always did");
         frame();                                      // the frame head drains the load
-        const unsigned long long afterArrival = escene->giStatus().staleSerial;
+        const unsigned long long afterArrival = escene->published().gi.staleSerial;
         std::printf("   late texture: streaming at bind=%s, serial %llu -> %llu -> %llu\n",
                     streaming ? "yes" : "no (already resident)", atBind, afterBind, afterArrival);
         if (streaming) {
-            CHECK(afterArrival > afterBind,
+            // Observed a frame at a time (the snapshot): the bind's frame may drain the arrival too, so the two stales
+            // are asserted as two steps of the serial by the arrival's frame.
+            CHECK(afterArrival >= atBind + 2u,
                   "late texture: ...and its ARRIVAL stales the grid a second time, so the "
                   "probes\n          re-capture the material with its texture on");
         } else {
@@ -607,7 +618,7 @@ int main(int argc, char **argv)
                         "the deadline exists for)\n");
         }
         frames(20);
-        CHECK(escene->giStatus().staleProbes == 0, "late texture: the grid caught up");
+        CHECK(escene->published().gi.staleProbes == 0, "late texture: the grid caught up");
         escene->removeNode(lateNode);
         frames(20);
     }
@@ -657,7 +668,8 @@ int main(int argc, char **argv)
         gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
         gi.testProbeRegionMin = Vec3(-3.0f, -1.0f, -3.0f);
         gi.testProbeRegionMax = Vec3(3.0f, 4.0f, 3.0f);
-        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long rebuilds = escene->published().gi.rebuilds;
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
         // THE CHAIN IS BUILT AROUND A TRACKED CAMERA (it waits for one), so the second
         // scene gets a view of its own; the first scene's view keeps drawing it.
@@ -667,8 +679,8 @@ int main(int argc, char **argv)
         otherView->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.5f, 2.0f),
                                                               Vec3(0.0f, 1.0f, -2.0f)));
         frames(4);
-        const GiStatus kept = escene->giStatus();
-        CHECK(kept.pccBound && kept.vctBound && other->giStatus().pccBound && other->giStatus().vctBound,
+        const GiStatus kept = escene->published().gi;
+        CHECK(kept.pccBound && kept.vctBound && other->published().gi.pccBound && other->published().gi.vctBound,
               "P10: ...and BOTH scenes' passes bind their own probes and voxels");
         CHECK(kept.rebuilds == rebuilds, "P10: nothing of this scene was rebuilt");
         frames(4);
@@ -682,8 +694,8 @@ int main(int argc, char **argv)
         engine->destroyView(otherView);
         engine->destroyScene(other);
         frames(2);
-        CHECK(escene->giStatus().pccBound && escene->giStatus().vctBound &&
-                  escene->giStatus().rebuilds == rebuilds,
+        CHECK(escene->published().gi.pccBound && escene->published().gi.vctBound &&
+                  escene->published().gi.rebuilds == rebuilds,
               "P10: destroying the other scene leaves this scene's binding alone");
     }
 

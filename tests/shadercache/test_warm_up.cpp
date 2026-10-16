@@ -103,7 +103,7 @@ int main() {
         CHECK(ok, "warmUpShaders() succeeded");
         CHECK(afterWarm > before, "the warm-up compiled the scene's shaders");
 
-        gEngine->renderOneFrame();
+        enginetest::frames(gEngine, 1);
         const unsigned afterFrame = compiledSoFar();
         std::printf("    first REAL frame after the warm-up compiled %u shader(s)\n",
                     afterFrame - afterWarm);
@@ -157,7 +157,7 @@ int main() {
         enginetest::testCameraLookAt(v, Vec3(3.0f, 2.5f, 3.5f), Vec3(0, 0, 0));
 
         const unsigned before = compiledSoFar();
-        gEngine->renderOneFrame();
+        enginetest::frames(gEngine, 1);
         const unsigned after = compiledSoFar();
         std::printf("    control: first frame compiled %u shader(s)\n", after - before);
         CHECK(after > before,
@@ -265,7 +265,7 @@ int main() {
             enginetest::addTestCube(s, Colour(0.2f + 0.2f * float(round), 0.4f, 0.6f), 0.0f, 0.5f);
             enginetest::testCameraLookAt(v, Vec3(3.0f, 2.5f, 3.5f), Vec3(0, 0, 0));
             const bool ok = v->warmUpShaders();
-            gEngine->renderOneFrame();
+            enginetest::frames(gEngine, 1);
             char msg[64];
             std::snprintf(msg, sizeof msg, "rebind round %d: warm-up then a real frame", round);
             CHECK(ok, msg);
@@ -292,7 +292,7 @@ int main() {
         gi.quality = GiQuality::Low;
         gi.numBounces = 1;
         CHECK(s && s->setGlobalIllumination(gi), "voxel GI on");
-        for (int i = 0; i < 12; ++i) gEngine->renderOneFrame();   // the arm builds (it needs a drawn frame)
+        enginetest::frames(gEngine, 12);// the arm builds (it needs a drawn frame)
         // ...then A NEW MATERIAL FAMILY in the GI scene: a glass cube, a permutation no case
         // above compiled, now with the GI's pass properties.
         {
@@ -309,7 +309,7 @@ int main() {
         const unsigned before = compiledSoFar();
         const bool ok = v->warmUpShaders();
         const unsigned afterWarm = compiledSoFar();
-        gEngine->renderOneFrame();
+        enginetest::frames(gEngine, 1);
         const unsigned afterFrame = compiledSoFar();
         std::printf("    GI scene: the warm-up compiled %u shader(s), the first real frame %u\n",
                     afterWarm - before, afterFrame - afterWarm);

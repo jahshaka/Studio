@@ -221,9 +221,9 @@ int main()
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, 60.0f), Vec3(0.0f, 0.0f, -20.0f));
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
-    GpuSceneStatus gs = scene->gpuSceneStatus();
+    GpuSceneStatus gs = scene->published().gpuScene;
     std::printf("\n== the table ==\n   live %d, %u slots, %u mesh entries\n", gs.live ? 1 : 0,
                 gs.slotCount, gs.meshEntries);
     CHECK(gs.live && gs.slotCount == unsigned(side * side), "the table holds every instance");
@@ -356,7 +356,7 @@ int main()
         }
         enginetest::addDirectionalLight(hs, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
         enginetest::testCameraLookAt(hv, Vec3(0.0f, 0.0f, 10.0f), Vec3(0.0f, 0.0f, -40.0f));
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
 
         HzbStatus hst;
         CHECK(e->hzbStatus(hv, hst) && hst.built, "the fixture's view builds a pyramid");
@@ -384,7 +384,7 @@ int main()
                     "plane\n", nearTexels, (m0h / 4u) * (m0w / 2u));
         CHECK(nearTexels > 1000u, "THE WALL IS IN THE DEPTH BUFFER (the fixture really occludes)");
 
-        const unsigned n = hs->gpuSceneStatus().slotCount;
+        const unsigned n = hs->published().gpuScene.slotCount;
         const std::vector<GpuSceneEntry> htable = readTable(hs, n);
         auto slotsOf = [&](const std::vector<NodeId> &ids) {
             std::vector<unsigned> out;
@@ -501,8 +501,8 @@ int main()
             enginetest::setNodePosition(
                 scene, n, Vec3(float((i * 17) % 400) - 200.0f, 0.0f, float((i * 31) % 400) - 200.0f));
         }
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
-        const unsigned n = scene->gpuSceneStatus().slotCount;
+        enginetest::frames(e, 3);
+        const unsigned n = scene->published().gpuScene.slotCount;
         GpuCullRequest r = requestFor(e, view, 1.0f, 2u);
         r.flagsRequired = 1u;
         // THE JOBS' GPU TIME is each job's monitor row in a capture (lane TEST-1 deleted
@@ -511,13 +511,13 @@ int main()
         e->setFrameMonitor(MonitorLevel::Review);
         GpuCullResult big;
         const bool culled = e->gpuCull(scene, view, r, false, big);
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         double jobMs[3] = { -1.0, -1.0, -1.0 };
         static const char *kJobs[3] = { "cull.test", "cull.compact", "cull.draws" };
-        for (const FrameRecord &f : recs)
+        for (const MonitorRecord &f : recs)
             for (const CacheWork &w : f.cacheWork)
                 for (int k = 0; k < 3; ++k)
                     if (w.detail == kJobs[k] && w.gpuMs >= 0.0f && jobMs[k] < 0.0) jobMs[k] = w.gpuMs;
@@ -538,7 +538,7 @@ int main()
     // ---- the ray level's refits (AT-A8r's hysteresis) ----------------------
     std::printf("\n== the ray level's 2x hysteresis ==\n");
     {
-        GpuSceneStatus st0 = scene->gpuSceneStatus();
+        GpuSceneStatus st0 = scene->published().gpuScene;
         // A camera flying in and out, at the engine's fixed 1/60 s: ONE dolly cycle of 900 frames
         // (TESTING-SPEED-B3: it flew four identical cycles, 3,600 frames, for a per-frame ratio
         // that one cycle at the same speed measures the same way).
@@ -547,9 +547,9 @@ int main()
             const float t = float(f) / float(kDollyFrames);
             const float z = 20.0f + 120.0f * (0.5f - 0.5f * std::cos(t * 6.2831853f));
             enginetest::testCameraLookAt(view, Vec3(0.0f, 12.0f, z), Vec3(0.0f, 0.0f, -20.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
-        GpuSceneStatus st1 = scene->gpuSceneStatus();
+        GpuSceneStatus st1 = scene->published().gpuScene;
         const unsigned long long evals = st1.rayLevelEvals - st0.rayLevelEvals;
         const unsigned long long refits = st1.rayLevelRefits - st0.rayLevelRefits;
         const unsigned long long walks = st1.rayLevelWalks - st0.rayLevelWalks;

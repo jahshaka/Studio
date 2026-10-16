@@ -46,6 +46,10 @@ class EditorViewportEvents : public QObject
 public:
     using QObject::QObject;
 signals:
+    /// A FRAME OF THIS VIEWPORT'S ENGINE HAS CLOSED (a driver tick's, or one of renderFrames' lockstep frames) — the
+    /// moment the published snapshot moved. A panel that edited something re-reads the snapshot after it
+    /// (panelrefresh::afterFrames, ENGINE-UPGRADE-U3 stage 2: the post-edit renders are deleted).
+    void framesDrawn();
     /// A builtin primitive dropped INTO the viewport, at the world point under
     /// the cursor (smoke S2 — the drop used to carry no position at all and
     /// every dropped cube landed in front of the camera).
@@ -141,6 +145,19 @@ public:
     /// in every windowed process on its first tick, editor or no editor.
     virtual jahshaka::engine::Scene *engineScene() { return nullptr; }
     virtual SceneMirror *sceneMirror() { return nullptr; }
+    /// ATOM's LOD DIAL ON THE ONE SCENE (editor.lodBias): the viewport keeps what it set (ENGINE-UPGRADE-U3 stage 2 —
+    /// Scene::lodBias is deleted; the host keeps its own). Back to the engine's 1 with every new engine scene.
+    virtual float engineLodBias() const { return 1.0f; }
+    virtual void  setEngineLodBias(float) {}
+    /// THE DEBUG VIEWS ON THE ONE SCENE (world.setAtomView / world.setPhotonView, the editor's menus): set through the
+    /// viewport, which keeps what it set (U3 stage 2 — Scene::atomView / photonView / photonVoxelCascade deleted).
+    /// Off / Off / -1 with every new engine scene.
+    virtual int  engineAtomView() const { return 0; }
+    virtual void setEngineAtomView(int) {}
+    virtual int  enginePhotonView() const { return 0; }
+    virtual void setEnginePhotonView(int) {}
+    virtual int  enginePhotonVoxelCascade() const { return -1; }
+    virtual void setEnginePhotonVoxelCascade(int) {}
 
     /// BUILD THE ONE SCENE NOW IF IT DOES NOT EXIST — the explicit ask, for the
     /// two callers that are entitled to make it: the Player page as it is
@@ -1093,6 +1110,14 @@ public:
     /// ask, so callers do not report a failure they cannot see.
     virtual bool planarReflectorAccepted(iris::SceneNodePtr node) const
     { Q_UNUSED(node); return true; }
+
+    /// THE DOCUMENT'S CURRENT STATE ON SCREEN, AS A COMPLETION (ENGINE-UPGRADE-U3 decision 50): `done` runs on this
+    /// thread once the record the next sync submits has been applied by the engine AND one more frame has been drawn
+    /// after it (what a renderer-side derivation — a planar reflector's arm — needs to be readable). Never a wait: in
+    /// the owner's free-running editor it rides the frames as they close; in lockstep (a script's editor.frame, a
+    /// test) it is the two frames the caller steps. `owner` scopes the wait (gone first = `done` never runs). Hosts with
+    /// no engine run `done` at once.
+    virtual void afterApplied(QObject *owner, std::function<void()> done) { Q_UNUSED(owner); if (done) done(); }
 
     /// The viewport's document→engine mirror, as counters (see mirrorStats).
     /// `available` false means this viewport has no mirror to ask — the

@@ -49,7 +49,7 @@ static bool isBlue(const Colour &c) { return c.b > 0.6f && c.r < 0.1f; }
 static void show(const char *tag, const Colour &c) {
     std::printf("    %-34s %3.0f %3.0f %3.0f\n", tag, c.r * 255, c.g * 255, c.b * 255);
 }
-static void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 3) { enginetest::frames(e, frames);}
 
 // ---- the two-bone arm -------------------------------------------------------------
 // A flat quad strip at z=0 facing +Z: rows y=0 and y=1 weighted to bone 0

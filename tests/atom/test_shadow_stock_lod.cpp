@@ -369,7 +369,7 @@ int main()
         fx.ssr = 0;
         view->setPostFx(fx);
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.8f, 4.0f), Vec3(0.0f, 0.8f, -30.0f)));
-        for (int i = 0; i < 40; ++i) e->renderOneFrame();
+        enginetest::frames(e, 40);
         for (Probe &p : probes) p.item = itemOf(os, p.node);
         CHECK(probes[0].item && probes[1].item && probes[2].item && probes[3].item, "every probe has its Item");
         if (!probes[0].item || !probes[1].item || !probes[2].item || !probes[3].item) return 1;
@@ -399,7 +399,7 @@ int main()
                 for (const auto &l : lamps)
                     s->setNodeTransform(l.first, Vec3(l.second.x, l.second.y + 0.001f * float(f % 2 + 1), l.second.z),
                                         Quat(), Vec3(1, 1, 1));
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
             }
             ws->removeListener(&lis);
             lis.armed = false;
@@ -410,7 +410,7 @@ int main()
             const char *armName = split ? "split on" : "split off";
             if (!split) {
                 s->setAtomDrawEnabled(false);
-                for (int i = 0; i < 20; ++i) e->renderOneFrame();
+                enginetest::frames(e, 20);
                 CHECK_MSG(!s->atomDrawStatus().on && probes[3].item->getRenderQueueGroup() != 11u,
                           "%s: every item is on the stock PBS path", armName);
             }
@@ -506,7 +506,7 @@ int main()
                 const Ogre::uint8 coarsest = Ogre::uint8(levels - 1u);
                 atomItem->_setCurrentMeshLod(coarsest);
                 stockItem->_setCurrentMeshLod(coarsest);
-                for (int i = 0; i < 3; ++i) e->renderOneFrame();
+                enginetest::frames(e, 3);
                 CHECK_MSG(atomItem->getCurrentMeshLod() == coarsest,
                           "(d) the Atom-routed item's level is no pass's to walk (still %u after 3 frames; the view's "
                           "rule would say %u)",

@@ -86,6 +86,9 @@ ENGINE_SUBSYSTEMS = [
     (r"Grid|Clips", ["engine", "gizmo"], "the grid and clip planes"),
     (r"src/OgreMaterials\.cpp$|src/OgreMesh\.cpp$", ["engine", "pieces", "materialpreview", "atom", "*picture"],
      "materials and meshes (every lit pixel)"),
+    # THE RENDER LOOP (ENGINE-UPGRADE-U3): the hand-over, the serial and the publish of every frame — the frame loop's
+    # own reach (OgreEngine.cpp's renderOneFrame / runFrame): everything that renders, the app rows too
+    (r"src/RenderThread\.(h|cpp)$", ["*engine-fixtures", "*picture", "*vulkan-scripts"], "the render loop"),
     (r"VkDescriptorPools|src/EnginePrivate\.h$", ["*engine-fixtures", "*picture"],
      "the Vulkan descriptor pools / the private header's includers (every engine fixture)"),
     (r"^media/Hlms/Jahshaka/", ["*picture"], "a Jahshaka Hlms medium (the picture set)"),
@@ -107,7 +110,10 @@ PIECE_TOKENS = ["atom", "engine.atom_"]
 _ALL = ["*engine-fixtures", "*picture", "*vulkan-scripts"]   # everything that renders: the fixtures, the app rows
 OGRE_ENGINE_FUNCTIONS = {
     # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
-    **{f: _ALL for f in ("init", "renderOneFrame", "closeRenderFrame", "frameCloseStep", "createView",
+    **{f: _ALL for f in ("beginPresentation", "interpolateScene", "interpolateFrame")},   # U3 stage 5's fix round
+    **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
+                         "applySceneStream", "syncHostViews", "noteDevice", "deviceRayQuery", "appliedFrameDelta",
+                         "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",
                          "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
                          "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",
                          "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
@@ -161,6 +167,17 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: _CORE for f in ("OgreScene", "~OgreScene", "destroy", "sceneManager")},
     "name": ["engine"],
     "engine": ["engine", "mirror"],   # the scene's engine: where the mirror submits the frame's input (U0 3a)
+    # ENGINE-UPGRADE-U3 stage 2: the scene's engine bound once; the rigs whose poses the snapshot carries; the
+    # fixtures' door onto the engine's record (EngineInspect.h)
+    "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
+    # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
+    **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage", "requestOnEngine")},
+    # U3 stage 5: the two grid states drawn between (the free frames' interpolation)
+    **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask",
+                          "forgetInterpolationPointers")},
+    # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
+    #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
+    "scene": _CORE, "view": _CORE,
     **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
                                          "setNodeCastShadow", "nodeCastShadow", "setLight", "removeLight", "ogreLight",
                                          "nodeOfLight")},
@@ -176,6 +193,12 @@ OGRE_SCENE_FUNCTIONS = {
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},
     "particleVisibilityBits": ["particles", "engine"],
     **{f: ["gi", "atom", "engine"] for f in ("writeIsSceneMovement", "setNodeMovable", "nodeMovable", "mobilityStatus")},
+    # ENGINE-UPGRADE-U3 stage 2 read 12(b): the running mobility / rig / particle counts the snapshot carries
+    **{f: ["gi", "atom", "skeletal", "particles", "engine"] for f in ("applyCounted", "recountNode", "uncountNode")},
+    # ENGINE-UPGRADE-U3 stage 3: the facts block (shares, reflectors, clips) the mirror's guards read
+    "rebuildFacts": ["skeletal", "sockets", "planar", "avatar", "mirror"],
+    # ...and the messages' completions the mirror reads at the top of a sync (a refused rig, a refused swap)
+    "noteCompletion": ["mirror", "skeletal", "materials", "engine"],
     **{f: ["engine", "gizmo"] for f in ("setNodeHelper", "nodeHelper", "setNodeBackdrop", "nodeBackdrop")},
     **{f: ["vr"] for f in ("setNodeVrHelper", "nodeVrHelper", "setVrProxyNodes", "vrProxyNodes", "setVrRayNodes",
                            "vrRayNodes", "setVrHandBoneNodes", "vrHandBoneNodes")},
@@ -191,16 +214,19 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: _CORE for f in ("OgreView", "~OgreView", "setScene", "detachScene", "attachWorkspace", "detachWorkspace",
                           "rebuildWorkspaceDef", "rebuildDetachedWorkspaceDef", "destroy", "createRtt", "passPreExecute",
                           "workspacePreUpdate", "workspacePosUpdate", "syncGlobalsListener", "applyPendingResize",
-                          "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "setCamera",
-                          "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground",
-                          "readPixels", "readPixelsHdr")},
-    **{f: ["engine"] for f in ("name", "scene", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
+                          "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "applyWorkspacesEnabled", "setSessionCovers", "setCamera",
+                          "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
+                          "readPixels", "readPixelsHdr",
+                          # U3 stage 4a: the host's setters as record fields, the readbacks as requests, the create's halves
+                          "postRecord", "hostPosts", "callIsTheHosts", "requestOnEngine", "adoptTarget",
+                          "buildChain")},
+    **{f: ["engine"] for f in ("name", "scene", "published", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
                                "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
                                "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",
                                "attachBlankWorkspace", "detachBlankWorkspace")},
     **{f: _CHAIN for f in ("orthoPostFxAdapted", "chainDesc", "writeLiveClearColour", "applyFixedExposure",
                            "pipTonemapEffective", "pipAllowed", "setPip", "pip", "syncPip", "pipGeneration",
-                           "pipTexFactors", "destroyPip", "applyLetterboxAndPip", "applyPip", "setPostFx", "postFx",
+                           "pipTexFactors", "destroyPip", "applyLetterboxAndPip", "applyPip", "setPostFx", "applyPostFx", "postFx",
                            "resetExposureHistory", "seedExposureHistory", "measuredExposureScale", "destroyBlankChain",
                            "applyLensShift", "applyLetterbox", "readChainTexture", "chainLocal", "chainTexture")},
     **{f: ["atom", "engine", "scale"] for f in ("hzbLevelsFor", "finishAtomOcclusion", "setLodHysteresisOffscreen",
@@ -209,7 +235,7 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: ["vr"] for f in ("setVrHelpersVisible", "setStereo", "setHiddenAreaMask")},
     "setVrSsrOverride": ["vr"] + _REFL,
     **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
-    **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "dropWorkspaceForShadowRebuild",
+    **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "applyShadows", "dropWorkspaceForShadowRebuild",
                                          "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},
     **{f: _REFL for f in ("readReflectionHdr", "readSsrHistoryHdr")},
     "updateParticles": ["particles"],

@@ -32,7 +32,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void show(const char *what, const Colour &c)
@@ -173,7 +173,8 @@ int main()
         s->refreshGlobalIllumination();
         // THE CHAIN answers a moved box through its dirty path, one cascade a
         // frame, then its settle: count frames until GI is at rest (bounded).
-        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        for (int f = 0; f < 240 && !s->published().gi.giAtRest; ++f) enginetest::frames(engine, 1);
         render(engine.get());
         view->readPixels(img);
         const Colour vctMoved = img.at(floorX, floorY);

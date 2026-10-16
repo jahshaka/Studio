@@ -73,7 +73,7 @@ static const int kWarmFrames = 60;     // the view is warm and the mean converge
 static const int kMoveFrames = 24;
 static const int kSettleFrames = 45;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// Mean absolute difference, in 8-bit codes, over the rows [y0, y1) and the
 /// columns [x0, x1).
@@ -316,7 +316,7 @@ int main()
                   still, stillBar);
     }
 
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d\n", int(rq.available),
                 int(rq.enabled), int(rq.reflect));
     if (raysWanted) CHECK(rq.reflect, "the tier is tracing this view's reflections");
@@ -375,7 +375,7 @@ int main()
             view->readPixels(boxed);
             shot->readPixels(plain);
             {
-                const RayQueryStatus lrq = s->rayQueryStatus();
+                const RayQueryStatus lrq = s->published().rayQuery;
                 std::printf("    letterboxed: rayQuery reflect=%d rays=%d\n", int(lrq.reflect),
                             lrq.reflectRays);
             }

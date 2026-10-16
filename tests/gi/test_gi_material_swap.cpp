@@ -39,7 +39,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 // Renders until no cascade is pending and the rebuild counters have held still
@@ -50,7 +50,7 @@ static std::vector<unsigned long long> settle(Engine *e, Scene *s)
     int still = 0;
     for (int f = 0; f < 400 && still < 8; ++f) {
         render(e, 1);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::vector<unsigned long long> now;
         bool pending = false;
         for (const auto &c : st.cascades) { now.push_back(c.rebuilds); pending |= c.pending != 0; }
@@ -112,7 +112,7 @@ int main()
     gi.updateBudget = 1;
     CHECK(scene->setGlobalIllumination(gi), "the cascade chain built");
     render(e, 8);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() >= 3, ("the chain has at least three cascades (" +
                                     std::to_string(st.cascades.size()) + ")").c_str());
     if (st.cascades.size() < 3) return 1;
@@ -128,7 +128,7 @@ int main()
         std::printf("[half %.1f centre %.1f,%.1f,%.1f] ", c.halfSize, c.centre.x, c.centre.y, c.centre.z);
     std::printf("\n    the far box at x = %.1f\n", farX);
     std::vector<unsigned long long> base = settle(e, scene);
-    st = scene->giStatus();
+    st = scene->published().gi;
     std::vector<bool> reaches;
     for (const auto &c : st.cascades) {
         const float dx = std::fabs(farX - c.centre.x);

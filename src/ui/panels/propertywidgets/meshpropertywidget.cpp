@@ -128,26 +128,31 @@ void MeshPropertyWidget::onCullModeChanged(const QString& cullMode)
 void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 {
     if (loading || meshNode.isNull()) return;
-    QString error;
-    if (planarreflectors::set(meshNode, enabled, sceneView, &error)) {
-        // Applied and accepted: record it. The undo replays the same service
-        // call (NodeEditCommand's contract) — the flag alone would skip the
-        // renderer-side registration the service performs.
-        auto node = meshNode;
-        IEditorViewport *view = sceneView;
-        panelundo::pushEdit(services, tr("Planar Reflector"),
-                            [node, enabled, view]() { planarreflectors::set(node, enabled, view); },
-                            [node, enabled, view]() { planarreflectors::set(node, !enabled, view); });
-        return;
-    }
-    {
+    auto node = meshNode;
+    IEditorViewport *view = sceneView;
+    // THE RENDERER'S ANSWER ARRIVES ON ITS COMPLETION (ENGINE-UPGRADE-U3 decision 50): the panel never waits a frame.
+    planarreflectors::set(node, enabled, view, this, [this, node, enabled, view](bool accepted, const QString &error) {
+        if (accepted) {
+            // Applied and accepted: record it. The undo replays the same service
+            // call (NodeEditCommand's contract) — the flag alone would skip the
+            // renderer-side registration the service performs.
+            panelundo::pushEdit(services, tr("Planar Reflector"),
+                                [node, enabled, view]() { planarreflectors::set(node, enabled, view, nullptr); },
+                                [node, enabled, view]() { planarreflectors::set(node, !enabled, view, nullptr); });
+            return;
+        }
         // The service already put the document flag back; the checkbox has to
-        // follow, without re-entering this slot.
-        planarReflector->blockSignals(true);
-        planarReflector->setValue(false);
-        planarReflector->blockSignals(false);
-        QMessageBox::warning(this, tr("Not a reflection plane"), error);
-    }
+        // follow, without re-entering this slot — if this panel still shows that node.
+        if (meshNode == node) {
+            planarReflector->blockSignals(true);
+            planarReflector->setValue(false);
+            planarReflector->blockSignals(false);
+        }
+        // The dialog is its own event-loop turn: the completion runs as a frame closes.
+        QMetaObject::invokeMethod(this, [this, error]() {
+            QMessageBox::warning(this, tr("Not a reflection plane"), error);
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)

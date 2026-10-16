@@ -110,7 +110,7 @@ static ParticleSystemDesc plumeDesc(unsigned quota, TextureId tex) {
 }
 
 static void warm(Engine *engine, int frames) {
-    for (int i = 0; i < frames; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, frames);
 }
 
 int main(int argc, char **argv)
@@ -207,9 +207,9 @@ int main(int argc, char **argv)
         CHECK(!scene->setParticleSystem(node, empty), "setParticleSystem rejects a desc with no emitters");
 
         // Nothing is alive before the first frame: the host never seeded it.
-        CHECK(scene->particleCount(node) == 0, "no particles before the first frame");
+        CHECK(scene->published().particlesOf(node) == 0, "no particles before the first frame");
         warm(engine.get(), 60);
-        const unsigned alive = scene->particleCount(node);
+        const unsigned alive = scene->published().particlesOf(node);
         std::printf("    after 60 frames: %u live particles\n", alive);
         CHECK(alive > 0, "the ENGINE emitted particles with no host simulation at all");
         CHECK(alive <= 2048, "live particles stay within the quota");
@@ -447,17 +447,18 @@ int main(int argc, char **argv)
     {
         ParticleSystemDesc d = plumeDesc(1024, blob);
         CHECK(scene->setParticleSystem(node, d), "baseline system for the churn");
-        const unsigned before = scene->particleDefinitionsCreated();
+        enginetest::frames(engine, 1);   // the baseline is the snapshot a frame closed (U3 stage 2b)
+        const unsigned before = scene->published().particleDefinitionsCreated;
         bool churnOk = true;
         for (int i = 0; i < 20; ++i) {
             d.emitters[0].shape = (i % 2) ? ParticleEmitterShape::Box
                                           : ParticleEmitterShape::Point;
             d.emitters[0].extents = Vec3(0.4f, 0.1f, 0.4f);
             churnOk = scene->setParticleSystem(node, d) && churnOk;
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         CHECK(churnOk, "20 topology flips all succeeded");
-        const unsigned created = scene->particleDefinitionsCreated() - before;
+        const unsigned created = scene->published().particleDefinitionsCreated - before;
         std::printf("    20 shape flips created %u definitions (recycling pool)\n", created);
         CHECK(created <= 2, "topology churn recycles definitions instead of leaking one per flip");
         warm(engine.get(), 30);
@@ -466,14 +467,16 @@ int main(int argc, char **argv)
 
         // Quota buckets: 300, 900 and 1024 all land in the 1024 bucket, so none
         // of them may cost a definition.
-        const unsigned b2 = scene->particleDefinitionsCreated();
+        const unsigned b2 = scene->published().particleDefinitionsCreated;
         for (unsigned q : { 300u, 900u, 1024u }) {
             d.quota = q;
             scene->setParticleSystem(node, d);
         }
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("    3 within-bucket quota edits created %u definitions\n",
-                    scene->particleDefinitionsCreated() - b2);
-        CHECK(scene->particleDefinitionsCreated() == b2,
+                    scene->published().particleDefinitionsCreated - b2);
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().particleDefinitionsCreated == b2,
               "quota changes inside one bucket never rebuild");
     }
 
@@ -498,7 +501,7 @@ int main(int argc, char **argv)
     }
 
     std::printf("    scene created %u particle definitions in total\n",
-                scene->particleDefinitionsCreated());
+                scene->published().particleDefinitionsCreated);
 
     engine->destroyView(view);
     engine->destroyScene(scene);

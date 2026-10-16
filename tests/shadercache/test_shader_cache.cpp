@@ -82,7 +82,7 @@ ShaderCacheStats runCycle(const char *what, bool *createdOut = nullptr) {
     Scene *s = v ? e->createScene("scene") : nullptr;
     if (v && s) {
         v->setScene(s);
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        enginetest::frames(e, 3);
     }
     e->saveShaderCache();
     // AND WAIT FOR IT (FSYNC-1): the save serializes here and writes on the
@@ -362,7 +362,7 @@ static void denominator_is_last_run() {
         if (!e) return;
         View *v = e->createOffscreenView("view", 64, 64, Colour(0.0f, 0.0f, 0.0f));
         Scene *s = v ? e->createScene("scene") : nullptr;
-        if (v && s) { v->setScene(s); for (int i = 0; i < 3; ++i) e->renderOneFrame(); }
+        if (v && s) { v->setScene(s); enginetest::frames(e, 3);}
         // AFTER the first view, not after Engine::create: the cache is loaded
         // lazily from ensureHlms(), which the first View is what triggers.
         CHECK(e->shaderCacheStats().expectedShaders == 99999u,
@@ -646,7 +646,7 @@ static ShaderCacheStats enginePipelineCycle(const char *what) {
         enginetest::testCameraLookAt(v, Vec3(0.0f, 1.5f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
         for (int i = 0; i < 60; ++i) {
             enginetest::setNodePosition(s, box, Vec3(-1.5f + 0.05f * float(i), 0.5f, 0.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
     }
     e->saveShaderCache();
@@ -759,7 +759,7 @@ int main(int argc, char **argv) {
         if (!e) { std::printf("child: create failed: %s\n", error.c_str()); return 1; }
         View *v = e->createOffscreenView("view", 32, 32, Colour(0.0f, 0.0f, 0.0f));
         Scene *s = v ? e->createScene("scene") : nullptr;
-        if (v && s) { v->setScene(s); for (int i = 0; i < 2; ++i) e->renderOneFrame(); }
+        if (v && s) { v->setScene(s); enginetest::frames(e, 2);}
         e->saveShaderCache();
         e->flushShaderCache(30000);
         if (s) e->destroyScene(s);
@@ -778,7 +778,7 @@ int main(int argc, char **argv) {
         if (!e) { std::printf("child: create failed: %s\n", error.c_str()); return 1; }
         View *v = e->createOffscreenView("view", 32, 32, Colour(0.0f, 0.0f, 0.0f));
         Scene *s = v ? e->createScene("scene") : nullptr;
-        if (v && s) { v->setScene(s); for (int i = 0; i < 2; ++i) e->renderOneFrame(); }
+        if (v && s) { v->setScene(s); enginetest::frames(e, 2);}
         // A WARM child compiles nothing, and a save with nothing dirty is a
         // no-op — which would make this case assert nothing at all. clear()
         // is the engine's own "the next save must write" hook (it empties the

@@ -56,7 +56,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The mean colour of a band of the picture — a band and not a pixel so one
@@ -117,7 +117,7 @@ int main()
     gi.updateBudget = 0;
     CHECK(scene->setGlobalIllumination(gi), "the four-cascade chain builds at three bounces");
     render(e, 10);
-    const GiStatus st = scene->giStatus();
+    const GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() >= 3, "the chain is a chain (3+ cascades)");
     CHECK(st.vctBound, "...and the shader is sampling it");
     if (st.cascades.size() < 3 || !st.vctBound) {

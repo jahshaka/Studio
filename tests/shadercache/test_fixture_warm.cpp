@@ -96,7 +96,7 @@ ShaderCacheStats boot(const char *what, const std::string &piecePath)
         }
         v->setScene(s);
         enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 4.0f), Vec3(0.0f, 0.0f, 0.0f));
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        enginetest::frames(e, 3);
     }
     e->saveShaderCache();
     CHECK(e->flushShaderCache(30000), "[%s] the cache's write finished", what);

@@ -1,6 +1,7 @@
 // THE SCALE FIXTURES — see scale_world.h for what they are and why they are built
 // this way.
 #include "scale_world.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../support/proceduralshell.h"
 
@@ -478,24 +479,24 @@ void frame(Env &env, int count)
             // measured view directly and then setting the flag would rebuild that
             // view's workspace twice a frame.
             env.mirror->sync(mirrorframe::environment(env.envView));
-            PostFxDesc fx = env.envView->postFx();
+            PostFxDesc fx = jahshaka::engine::inspect::view(env.envView)->postFx();
             fx.allowOffscreen = true;
             if (env.fxOverride) env.fxOverride(fx);
-            if (fx != env.view->postFx()) env.view->setPostFx(fx);
-            if (env.view->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
+            if (fx != jahshaka::engine::inspect::view(env.view)->postFx()) env.view->setPostFx(fx);
+            if (jahshaka::engine::inspect::view(env.view)->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
         } else {
             env.mirror->sync(mirrorframe::environment(env.view));
             if (env.fxOverride) {
                 // A MEASUREMENT'S OWN POST FLAGS (W7's depth pyramid) on a window
                 // view: pushed over the world's description after it — a rebuild
                 // only on the frame the flag first differs, then the same value.
-                PostFxDesc fx = env.view->postFx();
+                PostFxDesc fx = jahshaka::engine::inspect::view(env.view)->postFx();
                 env.fxOverride(fx);
-                if (fx != env.view->postFx()) env.view->setPostFx(fx);
+                if (fx != jahshaka::engine::inspect::view(env.view)->postFx()) env.view->setPostFx(fx);
             }
         }
         env.mirror->sync(mirrorframe::camera(env.view, env.camera));
-        env.engine->renderOneFrame();
+        enginetest::frames(env.engine, 1);
     }
 }
 
@@ -718,11 +719,11 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     world.firstSyncMs = msSince(t0);
     int f = 0;
     for (; f < settleCap; ++f) {
-        if (env.scene->giStatus().giAtRest) break;
+        if (env.scene->published().gi.giAtRest) break;
         frame(env, 1);
     }
     world.settleFrames = f;
-    const GiStatus gi = env.scene->giStatus();
+    const GiStatus gi = env.scene->published().gi;
     std::printf("WORLD: %d instances of %zu baked meshes at a %.0f m pitch (a %.0f m square) + ground %.0f m, "
                 "far plane %.0f m, %d lamps on %.0f m, "
                 "tier %s, %s materials, %d textures | meshes %.0f ms (%s), document %.0f ms, "
@@ -745,20 +746,20 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
 void armMonitor(Env &env)
 {
     RenderStats rs;
-    env.engine->renderStats(rs);
+    enginetest::renderStats(env.engine, rs);
     env.engine->setFrameMonitor(MonitorLevel::Review);
 }
 
-std::vector<FrameRecord> drain(Env &env)
+std::vector<MonitorRecord> drain(Env &env)
 {
-    std::vector<FrameRecord> out;
-    env.engine->takeFrameRecords(out);
+    std::vector<MonitorRecord> out;
+    env.engine->takeMonitorRecords(out);
     return out;
 }
 
 bool gpuTimed(Env &env)
 {
-    const MonitorStatus st = env.engine->monitorStatus();
+    const MonitorStatus st = env.engine->published().monitor;
     return st.gpuCompiled && st.gpuSupported;
 }
 

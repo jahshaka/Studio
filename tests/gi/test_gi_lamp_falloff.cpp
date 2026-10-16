@@ -41,7 +41,7 @@ static int failures = 0;
 
 namespace {
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// Re-injects the lights at rest (what the host's at-rest tick does after a lamp
 /// moves) and reads the store until the value at (x, y, z) stops moving

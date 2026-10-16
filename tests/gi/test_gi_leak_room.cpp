@@ -22,6 +22,7 @@
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -39,7 +40,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
 // (its fix round, B1): gi.gather measures the same room with a third arm
@@ -159,7 +160,7 @@ int main()
             render(e, 10);
             view->readPixels(img);
             float offR = 0.0f, offG = 0.0f; meanRG(img, offR, offG);
-            const GiStatus st = s->giStatus();
+            const GiStatus st = s->published().gi;
             std::printf("   %-6s wall %.2f m: LEAK %.4f (lamp on r %.4f, off r %.4f), green %.4f, "
                         "field %s over %.1f m, cascades %zu\n",
                         what, double(T), double(onR - offR), double(onR), double(offR),
@@ -169,7 +170,7 @@ int main()
         };
 
         const auto chain = leakOf("chain");
-        const GiStatus stChain = s->giStatus();
+        const GiStatus stChain = s->published().gi;
         // The arm must carry a bound field, or the bar below grades the cone
         // leak (~0.97) and would fail for the wrong reason.
         rows[a].leakChain = std::get<0>(chain);
@@ -227,7 +228,7 @@ int main()
         // (measured: the sphere's unlit side came back at 1.0000 and its LIT side
         // at 0.2609 before this was pinned). tonemapFixed is the same filmic
         // curve with the metering taken out.
-        PostFxDesc fx = view->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(view)->postFx();
         fx.allowOffscreen = true;
         fx.hdr = true;
         fx.tonemapFixed = true;

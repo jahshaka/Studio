@@ -59,7 +59,7 @@ static int failures = 0;
         if (!(cond)) ++failures;                                                \
     } while (0)
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// The helpers' cube carries no UVs; a textured one is needed wherever a card
 /// must show a pattern rather than a silhouette.
@@ -195,7 +195,7 @@ static int caseCapture()
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 2.0f, -8.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(f.e, 24);
 
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     // COPIES, NOT REFERENCES: `st` is re-assigned below and a reference into it
     // would silently read the LATEST values in every comparison (this lane made
     // that mistake once — the material counter compared equal to itself).
@@ -273,7 +273,7 @@ static int caseCapture()
     const unsigned pagesBefore = c0.pagesUsed;
     enginetest::setNodePosition(s, crate[1], Vec3(2.5f, 1.0f, 0.0f));
     render(f.e, 8);
-    st = s->giStatus();
+    st = s->published().gi;
     const CardCacheStatus c1 = st.cards;
     CHECK_MSG(c1.invalidTransform > transformBefore,
               "the moved instance was seen to move (%llu -> %llu)",
@@ -304,7 +304,7 @@ static int caseCapture()
         CHECK(s->setPbrMaterial(crateMat[1], p), "a crate's material is edited");
     }
     render(f.e, 12);
-    st = s->giStatus();
+    st = s->published().gi;
     const CardCacheStatus c2 = st.cards;
     CHECK_MSG(c2.invalidMaterial > c1.invalidMaterial,
               "the material edit reached the cache (%llu -> %llu)",
@@ -418,7 +418,7 @@ static int caseCapture()
         CardSample small;
         CHECK(s->readCardAt(Vec3(-3.0f, 0.5f, -2.05f), Vec3(0, 0, -1), small) && small.ok,
               "the 10 cm mesh's card is allocated and captured");
-        const CardCacheStatus st2 = s->giStatus().cards;
+        const CardCacheStatus st2 = s->published().gi.cards;
         std::printf("    after a 10 cm mesh: %u instances, %u cards, %u of %u pages\n",
                     st2.instancesResident, st2.cardsResident, st2.pagesUsed, st2.pages);
         CHECK_MSG(st2.pagesUsed <= st2.pages, "the page count is sane (%u of %u)", st2.pagesUsed,
@@ -431,12 +431,12 @@ static int caseCapture()
     // the box alone cannot see it; this arm is why the signature carries the
     // derived orientation too.
     {
-        const CardCacheStatus before = s->giStatus().cards;
+        const CardCacheStatus before = s->published().gi.cards;
         const float s45 = 0.70710678f;
         s->setNodeTransform(crate[0], Vec3(-2.0f, 1.0f, 0.0f), Quat(0.0f, s45, 0.0f, s45),
                             Vec3(2.0f, 2.0f, 2.0f));
         render(f.e, 16);
-        const CardCacheStatus after2 = s->giStatus().cards;
+        const CardCacheStatus after2 = s->published().gi.cards;
         std::printf("    a 90 degree turn: invalidTransform %llu -> %llu, captures +%llu\n",
                     (unsigned long long)before.invalidTransform,
                     (unsigned long long)after2.invalidTransform,
@@ -459,11 +459,12 @@ static int caseCapture()
         p.albedo = Colour(0.05f, 0.05f, 0.95f);
         p.roughness = 0.4f;
         const MaterialId preset = s->createPbrMaterial(p);
-        const CardCacheStatus before = s->giStatus().cards;
+        render(f.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const CardCacheStatus before = s->published().gi.cards;
         CHECK(preset && s->setNodeMaterial(crate[0], preset),
               "a preset is hovered onto a carded crate (an in-place swap)");
         render(f.e, 16);
-        const CardCacheStatus after2 = s->giStatus().cards;
+        const CardCacheStatus after2 = s->published().gi.cards;
         CHECK_MSG(after2.invalidMaterial > before.invalidMaterial,
                   "the SWAP reached the cache (%llu -> %llu)",
                   (unsigned long long)before.invalidMaterial,
@@ -486,7 +487,7 @@ static int caseCapture()
     gi.cardResidencyRadius = 4.0f;   // the camera is 8 m back: both crates leave
     CHECK(s->setGlobalIllumination(gi), "the residency radius shrinks");
     render(f.e, 8);
-    st = s->giStatus();
+    st = s->published().gi;
     CHECK_MSG(st.cards.instancesResident == 0u,
               "nothing beyond the radius holds pages (%u instances)", st.cards.instancesResident);
     CHECK_MSG(st.cards.pagesUsed == 0u, "...and every page came back (%u used)",
@@ -494,7 +495,7 @@ static int caseCapture()
     gi.cardResidencyRadius = 60.0f;
     CHECK(s->setGlobalIllumination(gi), "the radius grows again");
     render(f.e, 12);
-    st = s->giStatus();
+    st = s->published().gi;
     // FOUR, not two: the arms above added a v-asymmetric cube and a 10 cm mesh
     // to the scene, and both are carded. What this asserts is that widening the
     // radius brings the whole resident set BACK, whatever its size.
@@ -505,7 +506,7 @@ static int caseCapture()
     gi.cards = false;
     CHECK(s->setGlobalIllumination(gi), "the card row goes off");
     render(f.e, 4);
-    st = s->giStatus();
+    st = s->published().gi;
     CHECK_MSG(!st.cards.built, "the atlas is gone with the row");
     return failures ? 1 : 0;
 }
@@ -646,7 +647,7 @@ static int caseShadow()
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -10.0f), Vec3(0.0f, 0.0f, 0.0f));
     render(f.e, 32);
 
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     CHECK(st.cards.built && st.cards.cardsResident > 0u, "the floor's cards are resident");
     std::printf("    %u cards resident, %llu captured, %.3f ms last frame\n",
                 st.cards.cardsResident, (unsigned long long)st.cards.captures,
@@ -761,7 +762,7 @@ static int caseShadow()
     s->setNodeTransform(sun, Vec3(0, 0, 0), tilt, Vec3(1, 1, 1));
     const unsigned long long sunBefore = st.cards.invalidSun, capBefore = st.cards.captures;
     render(f.e, 40);
-    st = s->giStatus();
+    st = s->published().gi;
     CHECK_MSG(st.cards.invalidSun > sunBefore, "the sun's turn reached the cache (%llu)",
               (unsigned long long)st.cards.invalidSun);
     CHECK_MSG(st.cards.captures == capBefore && st.cards.stillPending == 0u,
@@ -800,15 +801,15 @@ static int caseShadow()
     {
         s->setRayTracing(RayTracingMode::Off);
         render(f.e, 10);
-        CHECK(!s->giStatus().cards.built, "rays off: the cache is gone");
+        CHECK(!s->published().gi.cards.built, "rays off: the cache is gone");
         s->setRayTracing(RayTracingMode::On);
         for (int i = 0; i < 300; ++i) {
             render(f.e, 1);
-            const CardCacheStatus c = s->giStatus().cards;
+            const CardCacheStatus c = s->published().gi.cards;
             if (i > 8 && c.built && c.cardsResident && !c.queueLength && !c.stillPending) break;
         }
         render(f.e, 8);
-        const CardCacheStatus c = s->giStatus().cards;
+        const CardCacheStatus c = s->published().gi.cards;
         std::printf("    after the round trip: %u resident, %u queued, %u still pending, %llu still traces\n",
                     c.cardsResident, c.queueLength, c.stillPending, (unsigned long long)c.stillTraces);
         unsigned compared = 0u, dark = 0u;
@@ -861,14 +862,14 @@ static int caseBudget()
     unsigned frames = 0u;
     for (; frames < 200u; ++frames) {
         render(f.e, 1);
-        const CardCacheStatus st = s->giStatus().cards;
+        const CardCacheStatus st = s->published().gi.cards;
         if (!st.built) continue;
         worstCaptures = std::max(worstCaptures, st.capturesLastFrame);
         worstTexels = std::max(worstTexels, st.texelsLastFrame);
         total = st.captures;
         if (st.queueLength == 0u && st.captures > 0ull) break;
     }
-    const CardCacheStatus st = s->giStatus().cards;
+    const CardCacheStatus st = s->published().gi.cards;
     std::printf("    %u instances, %u cards, drained in %u frames; worst frame %u captures /"
                 " %u texels against a %u budget\n",
                 st.instancesResident, st.cardsResident, frames + 1u, worstCaptures, worstTexels,
@@ -896,7 +897,7 @@ static int caseBudget()
     CHECK(s->setGlobalIllumination(big), "the budget grows to sixteen cards a frame");
     // Move every instance so the whole set re-allocates and re-queues.
     render(f.e, 2);
-    const unsigned long long before = s->giStatus().cards.captures;
+    const unsigned long long before = s->published().gi.cards.captures;
     {
         GiParams shrink = big;
         shrink.cardResidencyRadius = 1.0f;
@@ -907,7 +908,7 @@ static int caseBudget()
     unsigned bigFrames = 0u;
     for (; bigFrames < 200u; ++bigFrames) {
         render(f.e, 1);
-        const CardCacheStatus b = s->giStatus().cards;
+        const CardCacheStatus b = s->published().gi.cards;
         if (b.built && b.queueLength == 0u && b.captures > before) break;
     }
     std::printf("    re-queued at sixteen a frame: drained in %u frames (was %u at two)\n",
@@ -1013,7 +1014,7 @@ static int caseLighting()
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -12.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(f.e, 40);
 
-    const CardCacheStatus st = s->giStatus().cards;
+    const CardCacheStatus st = s->published().gi.cards;
     std::printf("    radiance layer %s; %u cards; %llu relit (%u last frame, budget %u texels);"
                 " %u bytes a texel, %.1f MB; last relight recorded in %.3f ms CPU\n",
                 st.radianceFormat.c_str(), st.cardsResident, (unsigned long long)st.relights,
@@ -1086,14 +1087,14 @@ static int caseLighting()
     //    and a side lights up, so the Disney lobe's lightScatter term is live.
     //    A colour-only arm first: the radiance must follow an INTENSITY change
     //    with no recapture (the radiance signature, not the shadow one).
-    const unsigned long long capturesBefore = s->giStatus().cards.captures;
-    const unsigned long long radianceBefore = s->giStatus().cards.invalidRadiance;
+    const unsigned long long capturesBefore = s->published().gi.cards.captures;
+    const unsigned long long radianceBefore = s->published().gi.cards.invalidRadiance;
     l.intensity = float(2.0 * E / 3.14159265358979323846);
     CHECK(s->setLight(sun, l), "the sun's intensity doubles");
     curE = 2.0 * E;
     render(f.e, 20);
     {
-        const CardCacheStatus a = s->giStatus().cards;
+        const CardCacheStatus a = s->published().gi.cards;
         CHECK_MSG(a.invalidRadiance > radianceBefore, "an intensity change reached the cache as a"
                   " RADIANCE change (%llu -> %llu)", (unsigned long long)radianceBefore,
                   (unsigned long long)a.invalidRadiance);
@@ -1185,8 +1186,8 @@ static int caseLighting()
     };
     double behind = -1.0, seen = -1.0;
     lampArm("lamp and panel behind the camera", behind);
-    CHECK_MSG(s->giStatus().cards.lightsDropped == 0u,
-              "no light was dropped from the relight's list (%u)", s->giStatus().cards.lightsDropped);
+    CHECK_MSG(s->published().gi.cards.lightsDropped == 0u,
+              "no light was dropped from the relight's list (%u)", s->published().gi.cards.lightsDropped);
     // ...and with the camera turned round to see both, the relight asked for
     // by a light write (twice the intensity, then back), the same number.
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 2.0f, -22.0f), Vec3(0.0f, 1.5f, -32.0f));
@@ -1313,7 +1314,7 @@ static int caseLightingIndirect()
     view->setCamera(cam);
     render(e, 60);
 
-    const CardCacheStatus st = s->giStatus().cards;
+    const CardCacheStatus st = s->published().gi.cards;
     std::printf("    indirect: on %d, %llu marches (budget %u texels), %llu relights\n",
                 int(st.indirectOn), (unsigned long long)st.indirectRelights,
                 st.indirectBudgetTexels, (unsigned long long)st.relights);
@@ -1420,13 +1421,13 @@ static int caseLightingIndirect()
         CHECK(lamp && s->setLight(lamp, pl), "a lamp stands in front of the wall");
         s->refreshGlobalIllumination();
         render(e, 90);   // its arrival lands and settles
-        const CardCacheStatus d0 = s->giStatus().cards;
+        const CardCacheStatus d0 = s->published().gi.cards;
         for (int i = 0; i < 30; ++i) {
             s->setNodeTransform(lamp, Vec3(-1.5f + 0.1f * float(i), 1.0f, -3.0f), Quat(),
                                 Vec3(1, 1, 1));
             render(e, 1);
         }
-        const CardCacheStatus d1 = s->giStatus().cards;
+        const CardCacheStatus d1 = s->published().gi.cards;
         std::printf("    a 30-frame lamp drag with no refresh: indirect marches %llu -> %llu,"
                     " re-injections seen %llu -> %llu\n",
                     (unsigned long long)d0.indirectRelights, (unsigned long long)d1.indirectRelights,
@@ -1437,7 +1438,7 @@ static int caseLightingIndirect()
                   (unsigned long long)d0.indirectRelights, (unsigned long long)d1.indirectRelights);
         s->refreshGlobalIllumination();
         render(e, 90);
-        const CardCacheStatus d2 = s->giStatus().cards;
+        const CardCacheStatus d2 = s->published().gi.cards;
         std::printf("    ...then the refresh + settle: re-injections seen %llu -> %llu, marches"
                     " %llu -> %llu (%u cards resident)\n",
                     (unsigned long long)d1.invalidIndirect, (unsigned long long)d2.invalidIndirect,
@@ -1459,8 +1460,8 @@ static int caseLightingIndirect()
     // half — a light write, so the chain re-injects (the light tick) and the
     // wall's INDIRECT is marched again; the shadow signature does not move, so
     // nothing is recaptured.
-    const unsigned long long capturesBefore = s->giStatus().cards.captures;
-    const unsigned long long indBefore = s->giStatus().cards.invalidIndirect;
+    const unsigned long long capturesBefore = s->published().gi.cards.captures;
+    const unsigned long long indBefore = s->published().gi.cards.invalidIndirect;
     CardSample before;
     s->readCardAt(Vec3(-1.5f, 1.6f, 0.0f), Vec3(0, 0, -1), before);
     {
@@ -1475,7 +1476,7 @@ static int caseLightingIndirect()
     s->refreshGlobalIllumination();
     render(e, 60);
     {
-        const CardCacheStatus a = s->giStatus().cards;
+        const CardCacheStatus a = s->published().gi.cards;
         CardSample after;
         s->readCardAt(Vec3(-1.5f, 1.6f, 0.0f), Vec3(0, 0, -1), after);
         std::printf("    the sun x1.5: wall indirect %.4f -> %.4f (x%.3f); invalidIndirect"
@@ -1687,7 +1688,7 @@ static int caseConeParity(bool offAxisTarget)
         view->setCamera(cam);
         render(e, std::getenv("JAH_CONE_PARITY_FRAMES") ? std::atoi(std::getenv("JAH_CONE_PARITY_FRAMES")) : 90);
         {
-            const CardCacheStatus cs = s->giStatus().cards;
+            const CardCacheStatus cs = s->published().gi.cards;
             std::printf("    %s: indirect marches %llu, relights %llu\n", a.name,
                         (unsigned long long)cs.indirectRelights, (unsigned long long)cs.relights);
         }
@@ -1758,7 +1759,7 @@ static int caseConeParity(bool offAxisTarget)
                     CHECK_MSG(false, "%s: the card answers at (%+.1f, %.1f)", a.name, x, h);
                     continue;
                 }
-                const CardCacheStatus st = s->giStatus().cards;
+                const CardCacheStatus st = s->published().gi.cards;
                 {
                     // THE CARD'S NORMAL (C1 F8): the cone basis the relight builds from the
                     // stored shading normal, against the face's own (an axis of the card's view).
@@ -1954,7 +1955,7 @@ static int caseReadParity()
     CHECK(s->setGlobalIllumination(gi), "GI builds");
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 4.0f, -8.0f), Vec3(0.5f, 1.0f, 0.0f));
     render(e, 90);
-    const CardCacheStatus st = s->giStatus().cards;
+    const CardCacheStatus st = s->published().gi.cards;
     CHECK_MSG(st.built && st.cardsResident >= 6u && st.indirectRelights >= 6u,
               "the crate's cards are captured, lit and marched (%u resident, %llu marches)",
               st.cardsResident, (unsigned long long)st.indirectRelights);
@@ -2062,15 +2063,15 @@ static int caseReadParity()
 
     // THE TOGGLE: off and on again through the tuning door — the atlas goes and
     // comes back, and not one GI rebuild is paid for it.
-    const unsigned long long rebuildsBefore = s->giStatus().rebuilds;
+    const unsigned long long rebuildsBefore = s->published().gi.rebuilds;
     GiParams off = gi;
     off.cards = false;
     CHECK(s->setGiTuning(off), "cards off through setGiTuning");
     render(e, 3);
-    const bool freed = !s->giStatus().cards.built;
+    const bool freed = !s->published().gi.cards.built;
     CHECK(s->setGiTuning(gi), "cards on again");
     render(e, 30);
-    const GiStatus after = s->giStatus();
+    const GiStatus after = s->published().gi;
     CHECK_MSG(freed && after.cards.built, "the toggle freed the atlas and built it again (%d -> %d)",
               int(!freed), int(after.cards.built));
     CHECK_MSG(after.rebuilds == rebuildsBefore, "...with no GI rebuild (rebuilds %llu -> %llu)",
@@ -2206,7 +2207,7 @@ static int caseBlend()
     CHECK(s->setGlobalIllumination(gi), "GI builds with the card row and the gather on");
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 2.0f, -8.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(f.e, 24);
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     CHECK_MSG(st.cards.instancesResident == 1u && st.cards.cardsResident == 6u,
               "only the opaque crate is carded (%u instances, %u cards)",
               st.cards.instancesResident, st.cards.cardsResident);
@@ -2791,14 +2792,14 @@ static int caseViewBatch()
     // light-only RECAPTURE past the relight budget, read with the capture's
     // alpha while the card's lit flag stood — has no trigger left: every capture
     // now changes the surface, so its read falls back until the card is relit.)
-    const unsigned long long capBefore = s->giStatus().cards.captures;
-    const unsigned long long traceBefore = s->giStatus().cards.stillTraces;
+    const unsigned long long capBefore = s->published().gi.cards.captures;
+    const unsigned long long traceBefore = s->published().gi.cards.stillTraces;
     s->setNodeTransform(sun, Vec3(0, 0, 0), sunQuat(0.3 * 3.14159265358979323846 / 180.0), Vec3(1, 1, 1));
     unsigned overBudgetFrames = 0u, frames = 0u;
     std::vector<std::vector<CardReadPick>> perFrame;
     for (int fr = 0; fr < 24; ++fr) {
         render(e, 1);
-        const CardCacheStatus st = s->giStatus().cards;
+        const CardCacheStatus st = s->published().gi.cards;
         if (st.texelsLastFrame > st.lightBudgetTexels) ++overBudgetFrames;
         std::vector<CardReadPick> now;
         if (!e->cardReadParity(s, q, now) || now.size() != nf) continue;
@@ -2828,7 +2829,7 @@ static int caseViewBatch()
                 }
             }
         }
-    const unsigned long long capAfter = s->giStatus().cards.captures;
+    const unsigned long long capAfter = s->published().gi.cards.captures;
     for (size_t i = 0; i < nf && i < after.size(); ++i)
         std::printf("    face %zu: grazing read before the turn %.4f, after %.4f\n", i, settled[i].viewed[1],
                     after[i].viewed[1]);
@@ -2836,8 +2837,8 @@ static int caseViewBatch()
                 " the worst frame's read off both the before and the after value: %.2f %% (face %zu)\n",
                 capAfter - capBefore, overBudgetFrames, 100.0 * worst, worstFace);
     std::printf("    the worst read: frame %zu, %.4f\n", worstFrame, worstValue);
-    const unsigned long long traced = s->giStatus().cards.stillTraces - traceBefore;
-    const unsigned resident = s->giStatus().cards.cardsResident;
+    const unsigned long long traced = s->published().gi.cards.stillTraces - traceBefore;
+    const unsigned resident = s->published().gi.cards.cardsResident;
     CHECK_MSG(capAfter == capBefore && traced >= resident,
               "the turn re-traced every resident card (%llu of %u) and re-captured none (%llu)", traced,
               resident, capAfter - capBefore);
@@ -2920,11 +2921,11 @@ static int caseLightTrigger()
     // Settle: every card captured and relit, the queue empty.
     for (int i = 0; i < 120; ++i) {
         render(f.e, 1);
-        const CardCacheStatus c = s->giStatus().cards;
+        const CardCacheStatus c = s->published().gi.cards;
         if (i > 8 && c.built && c.cardsResident && !c.queueLength) break;
     }
     render(f.e, 8);
-    const CardCacheStatus c0 = s->giStatus().cards;
+    const CardCacheStatus c0 = s->published().gi.cards;
     CHECK_MSG(c0.built && c0.cardsResident == 12u && c0.queueLength == 0u,
               "twelve cards resident and the queue drained (%u resident, %u queued)", c0.cardsResident,
               c0.queueLength);
@@ -2938,7 +2939,7 @@ static int caseLightTrigger()
     // THE LAMP MOVES: no capture, the stored layers unchanged, the radiance relit.
     s->setNodeTransform(lamp, Vec3(1.0f, 3.5f, -1.0f), Quat(), Vec3(1, 1, 1));
     render(f.e, 30);
-    const CardCacheStatus c1 = s->giStatus().cards;
+    const CardCacheStatus c1 = s->published().gi.cards;
     std::printf("    lamp move: captures %llu -> %llu, relights %llu -> %llu, queue %u\n",
                 (unsigned long long)c0.captures, (unsigned long long)c1.captures,
                 (unsigned long long)c0.relights, (unsigned long long)c1.relights, c1.queueLength);
@@ -2961,7 +2962,7 @@ static int caseLightTrigger()
     // THE SUN TURNS: every resident card's sun term is stale.
     s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(0.35f, 0.0f, -0.2f, 0.91f), Vec3(1, 1, 1));
     render(f.e, 40);
-    const CardCacheStatus c2 = s->giStatus().cards;
+    const CardCacheStatus c2 = s->published().gi.cards;
     std::printf("    sun turn: captures %llu -> %llu, still traces %llu -> %llu, pending %u\n",
                 (unsigned long long)c1.captures, (unsigned long long)c2.captures,
                 (unsigned long long)c1.stillTraces, (unsigned long long)c2.stillTraces, c2.stillPending);
@@ -3029,7 +3030,7 @@ static int caseShadowGrid(const char *path)
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -10.0f), Vec3(0.0f, 0.0f, 0.0f));
     for (int i = 0; i < 200; ++i) {
         render(f.e, 1);
-        const CardCacheStatus c = s->giStatus().cards;
+        const CardCacheStatus c = s->published().gi.cards;
         if (i > 8 && c.built && c.cardsResident && !c.queueLength) break;
     }
     render(f.e, 8);

@@ -63,13 +63,19 @@ public:
     /// ensureEngineScene() and nothing else. They are read per frame.
     jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
     SceneMirror *sceneMirror() override { return mMirror.get(); }
+    float engineLodBias() const override { return mEngineLodBias; }
+    void  setEngineLodBias(float bias) override;
+    int  engineAtomView() const override { return mEngineAtomView; }
+    void setEngineAtomView(int mode) override;
+    int  enginePhotonView() const override { return mEnginePhotonView; }
+    void setEnginePhotonView(int mode) override;
+    int  enginePhotonVoxelCascade() const override { return mEnginePhotonCascade; }
+    void setEnginePhotonVoxelCascade(int cascade) override;
     /// IEditorViewport: build the one scene now if it does not exist, for a
     /// caller that draws it and cannot wait for this widget's show event (the
     /// Player page, the editor's VR preview). See the definition.
     bool ensureEngineScene() override;
-    float measuredExposureScale() const override {
-        return view() ? view()->measuredExposureScale() : 0.0f;
-    }
+    float measuredExposureScale() const override;   ///< a REQUEST (U3 stage 3): it maps the meter's ticket
     void setSelectedNode(iris::SceneNodePtr sceneNode) override;
     void setSelectedSet(const QList<iris::SceneNodePtr> &nodes) override;
     void clearSelectedNode() override;
@@ -226,8 +232,22 @@ public:
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     void readRadianceWithNextScreenshot() override { mShotRadianceWanted = true; }
     QVector<float> takeScreenshotRadiance(int *width, int *height) override;
+    /// THE VIEW AS THE LAST FRAME CLOSED IT (ENGINE-UPGRADE-U3 stage 2: Engine::published(), by the view's name) —
+    /// null before its first frame. The achieved size, MSAA and present counts are read here, never from the engine.
+    /// framesPresented as the last frame closed it (0 before its first) — every present baseline is taken from it.
+    /// The VR session's mirror paints the headset's eye over this viewport's view (the snapshot's fact, U3 read F2).
+    bool sessionPaintsThisView() const;
+    qulonglong presentedNow() const { const auto pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
+    /// The view's row of the last frame, BY VALUE — one lookup per use, by the view's id (U3 stage 3, decision 23);
+    /// empty before its first frame.
+    std::optional<jahshaka::engine::PublishedEngineFrame::ViewFrames> publishedView() const
+    {
+        if (!mEngine || !view()) return std::nullopt;
+        if (const auto *row = mEngine->published().view(view()->id())) return *row;
+        return std::nullopt;
+    }
     int sampleCount() const override
-    { return view() ? int(view()->sampleCount()) : 1; }
+    { const auto pv = publishedView(); return pv ? int(pv->sampleCount) : 1; }
     bool isOffscreen() const override
     { return view() ? view()->isOffscreen() : true; }
     /// The size of what is actually being rendered into, in pixels — View::
@@ -237,17 +257,18 @@ public:
     /// own request the selftest's post-resize check compared the pushed values
     /// with themselves and could not fail (deep audit area 7 F3).
     QSize renderTargetSize() const override
-    { return view() ? QSize(int(view()->width()), int(view()->height())) : QSize(); }
+    { const auto pv = publishedView(); return pv ? QSize(int(pv->width), int(pv->height)) : QSize(); }
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     int activePlanarReflectors() const override
-    { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
+    { return (view() && view()->scene()) ? view()->scene()->published().activePlanarReflectors : 0; }
     GiStatusInfo giStatus() const override;
     GiVoxelStatsInfo giVoxelStats(int cascade) override;
     ShadowStatusInfo shadowStatus() const override;
     SunContactInfo sunContactInfo() const override;
     bool sceneTracesRays() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
+    void afterApplied(QObject *owner, std::function<void()> done) override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
     void stepFrames(int n, float dt) override;
@@ -657,6 +678,12 @@ private:
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
+    /// The LOD bias this viewport set on mEngineScene (the engine clamps a negative to 0, as here).
+    float mEngineLodBias = 1.0f;
+    /// The pace this viewport last set on the engine (Engine::setFramePace; set on change, lowered after its frame).
+    jahshaka::engine::FramePace mPaceSet = jahshaka::engine::FramePace::Complete;
+    /// ...and the debug views it set on it (AtomView / PhotonView as ints; the cascade -1 = the finest).
+    int mEngineAtomView = 0, mEnginePhotonView = 0, mEnginePhotonCascade = -1;
     /// F3 / editor.setOverlays({stats}) / Preferences show_fps.
     bool mShowStats = false;
     /// The readout's text, rebuilt at most every kStatsRefreshMs. A number that
@@ -666,6 +693,8 @@ private:
     mutable QStringList mStatsLines;
     mutable QElapsedTimer mStatsClock;
     static constexpr qint64 kStatsRefreshMs = 200;
+    /// A reader's subscription to the shadow / render statuses, in frames, renewed at each read (U3 stage 3).
+    static constexpr unsigned kStatusWindowFrames = 120;
     /// Whether the last refreshOverlay left a cover up — the rising edge that
     /// makes a raise synchronous (see refreshOverlay).
     bool mCoverUp = false;

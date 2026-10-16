@@ -99,11 +99,11 @@ static bool runOnce(int iteration) {
     if (!v || !s) return false;
     v->setScene(s);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     NodeId cube = enginetest::addTestCube(s, Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
     enginetest::setNodeScale(s, cube, Vec3(1.2f, 1.2f, 1.2f));
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
 
     if (gShadowVaoOnly) { shadowVaoArm(e.get(), s, iteration); e->destroyView(v); e->destroyScene(s);
                           e.reset();
@@ -133,9 +133,9 @@ static bool runOnce(int iteration) {
         LightDesc off;                       // dark the directional and the ambient:
         off.type = LightType::Directional;   // whatever lights the cube now IS the area light
         off.intensity = 0.0f;
-        s->setLight(1u, off);                // the directional is the first node created
+        s->setLight(sun, off);               // ids are one process-wide space (U3 stage 3): never 'the first is 1'
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
-        for (int i = 0; i < 2; ++i) e->renderOneFrame();
+        enginetest::frames(e, 2);
         Image dark;
         v->readPixels(dark);
         const Colour d = dark.at(48, 48);
@@ -157,7 +157,7 @@ static bool runOnce(int iteration) {
         a.rectHeight = 3.0f;
         std::snprintf(msg, sizeof msg, "iteration %d: area light accepted", iteration);
         CHECK(s->setLight(area, a), msg);
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        enginetest::frames(e, 3);
         Image lit;
         v->readPixels(lit);
         const Colour L = lit.at(48, 48);
@@ -174,9 +174,9 @@ static bool runOnce(int iteration) {
     // NOT stop it — the destructor must; cycles 2 and 3 are the regression test.
     {
         e->setFrameMonitor(MonitorLevel::Review);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        enginetest::frames(e, 8);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         std::snprintf(msg, sizeof msg, "iteration %d: a capture records frames (%zu)", iteration,
                       recs.size());
         CHECK(!recs.empty(), msg);

@@ -92,6 +92,56 @@ foreach(_variant live off)
         TIMEOUT 180)
 endforeach()
 
+# host.sync_getters — THE DOOR, COUNTED (ENGINE-UPGRADE-U3 stage 2): 600 editor frames — 300 driver ticks (--script-live,
+# the owner's mode: one after each script frame) and 300 lockstep frames, an object moving and selected — make ZERO
+# synchronous reads of the engine (engine.syncGetters: every getter that stays counts the host's
+# calls; what the editor reads per frame is the published snapshot, what it set it keeps). A count, in frames.
+set(_hsgHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_sync_getters)
+file(MAKE_DIRECTORY ${_hsgHome}/run)
+jah_gpu_row(host.sync_getters CLASS app TIER low NEEDS NONE FRAMES 630
+         NEEDS_WHY "a count of the host's synchronous engine entries, the capture inside the window is a subject, its picture no claim"
+         COMMAND ${JAH_FRESH_HOME} --warm ${_hsgHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/host_sync_getters.js --script-live
+         WORKING_DIRECTORY ${_hsgHome}/run)
+set_tests_properties(host.sync_getters PROPERTIES
+    ENVIRONMENT "HOME=${_hsgHome};JAHSHAKA_DATA_ROOT=${_hsgHome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 120)
+
+# host.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decision 44, D1): 300
+# FREE-RUNNING driver frames (JAH_FREE_RUNNING=1) with every scene message refused (engine.arm messages.refuse) and
+# one posted per frame, the error pump draining every tick; every refusal reaches it through the snapshot. A count,
+# in frames (the race it guards is TSan's to see: the 47 arm).
+set(_hedHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_error_door)
+file(MAKE_DIRECTORY ${_hedHome}/run)
+jah_gpu_row(host.error_door CLASS app TIER low NEEDS NONE FRAMES 340
+         COMMAND ${JAH_FRESH_HOME} --warm ${_hedHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/host_error_door.js --script-live
+         WORKING_DIRECTORY ${_hedHome}/run)
+set_tests_properties(host.error_door PROPERTIES
+    ENVIRONMENT "HOME=${_hedHome};JAHSHAKA_DATA_ROOT=${_hedHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
+    LABELS "scripting"
+    TIMEOUT 120)
+jah_tsan_blocked(host.sync_getters host.error_door)   # TSAN-GCC15-THREAD-REGISTRY under GCC and clang alike (U3 decision 49): the D1 proof is engine.error_door
+
+# editor.drag_latency — A DRAG IN THE EDITOR IS ON SCREEN THE NEXT FRAME (ENGINE-UPGRADE-U3 stage 5's acceptance,
+# decision 50): FREE-RUNNING (JAH_FREE_RUNNING=1), a translate drag through the real viewport path (editor.pointer on
+# the gizmo's X arrow, 60 moves, the driver ticking between them): every move written by the gizmo, every tick's record
+# drawn by the next frame the render thread began (none merged into the next tick's), zero synchronous engine reads.
+set(_edlHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_drag_latency)
+file(MAKE_DIRECTORY ${_edlHome}/run)
+jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 260
+         COMMAND ${JAH_FRESH_HOME} --warm ${_edlHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/editor_drag_latency.js --script-live
+         WORKING_DIRECTORY ${_edlHome}/run)
+set_tests_properties(editor.drag_latency PROPERTIES
+    ENVIRONMENT "HOME=${_edlHome};JAHSHAKA_DATA_ROOT=${_edlHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
 # toggle with topmost promotion, the owner's Shift range, the World root rule)

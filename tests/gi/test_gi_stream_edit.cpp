@@ -51,6 +51,7 @@
 //
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>
@@ -71,12 +72,13 @@ static int failures = 0;
 
 static const unsigned kSize = 128;
 
-/// One frame at a named pace. The pace is consumed per frame, so it is set per
-/// frame — exactly as `EngineSceneViewport`'s driver tick does.
+/// One frame at a named pace (Engine::setFramePace: in force until set again — the driver sets its frame's and
+/// lowers it after; here every frame names its own).
 static void frame(Engine *e, FramePace pace)
 {
-    e->submitFrame(jahshaka::engine::FrameInput::withPace(pace));
-    e->renderOneFrame();
+    e->setFramePace(pace);
+    enginetest::frames(e, 1);
+    e->setFramePace(FramePace::Complete);
 }
 
 static void frames(Engine *e, FramePace pace, int n)
@@ -137,11 +139,11 @@ int main()
     // =====================================================================
     std::printf("\n== case 1: the arm waits for the world to be on screen ==\n");
     scene->setLoading(true);
-    CHECK(scene->isLoading(), "Scene::setLoading(true) sticks");
+    CHECK(jahshaka::engine::inspect::scene(scene)->isLoading(), "Scene::setLoading(true) sticks");
     scene->setGlobalIllumination(hybridGi());
     frames(e, FramePace::Streaming, 6);
     {
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         CHECK_MSG(st.rebuilds == 0, "case 1: no arm built behind the cover (rebuilds %llu)",
                   (unsigned long long)st.rebuilds);
         CHECK(!st.vctBound, "case 1: nothing is bound either");
@@ -149,9 +151,9 @@ int main()
     // ...and a COMPLETE frame during the load does not build it either: that is
     // the sticky flag's whole point (a warm-up target, a project tile).
     frames(e, FramePace::Complete, 2);
-    CHECK_MSG(scene->giStatus().rebuilds == 0,
+    CHECK_MSG(scene->published().gi.rebuilds == 0,
               "case 1: a Complete frame during the load builds nothing either (rebuilds %llu)",
-              (unsigned long long)scene->giStatus().rebuilds);
+              (unsigned long long)scene->published().gi.rebuilds);
     scene->setLoading(false);
 
     // =====================================================================
@@ -159,11 +161,11 @@ int main()
     // =====================================================================
     std::printf("\n== case 2: the window exists ==\n");
     frame(e, FramePace::Streaming);
-    GiStatus mid = scene->giStatus();
+    GiStatus mid = scene->published().gi;
     CHECK_MSG(mid.rebuilds == 1, "case 2: the chain is built (rebuilds %llu)",
               (unsigned long long)mid.rebuilds);
     CHECK(mid.vctBound, "case 2: ...and bound");
-    CHECK_MSG(e->framePaceOwesWork(), "case 2: the engine says it still owes work");
+    CHECK_MSG(e->published().paceOwesWork, "case 2: the engine says it still owes work");
     CHECK_MSG(mid.probeCount == 0 && mid.probesDropped == 0,
               "case 2: no probe decision yet (%d kept, %d dropped)",
               mid.probeCount, mid.probesDropped);
@@ -182,16 +184,16 @@ int main()
     // ONE streaming frame spends ONE stage — the machine must still owe the
     // rest, which is what "the world streams in" means.
     frame(e, FramePace::Streaming);
-    CHECK(e->framePaceOwesWork(), "case 3: one streaming frame spends one stage, no more");
+    CHECK(e->published().paceOwesWork, "case 3: one streaming frame spends one stage, no more");
     // ...and then a COMPLETE frame finishes whatever is left, in itself. That is
     // the rule every pixel suite and both selftest hashes rest on, and it is why
     // a `--script` run can never see a half-built arm: `editor.frame` is always
     // Complete.
     frame(e, FramePace::Complete);
-    CHECK(!e->framePaceOwesWork(),
+    CHECK(!e->published().paceOwesWork,
           "case 3: ONE Complete frame owes nothing afterwards");
 
-    const GiStatus st = scene->giStatus();
+    const GiStatus st = scene->published().gi;
     CHECK_MSG(st.probeCount + st.probesDropped > 0,
               "case 3: the probe grid reached a DECISION (%d kept, %d dropped) — the defect "
               "left both at zero for the life of the scene",

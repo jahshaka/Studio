@@ -62,7 +62,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -146,18 +146,22 @@ int main()
         // a single one of its cascades — the honest form of the defect.
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(200.0f, 2.0f, 206.0f),
                                                          Vec3(200.0f, 1.0f, 200.0f)));
-        const unsigned long long rebuildsBefore = scene->giStatus().rebuilds;
+        const unsigned long long rebuildsBefore = scene->published().gi.rebuilds;
         CHECK(scene->setGlobalIllumination(cascadeGi()),
               "the cascade arm accepts before any frame has rendered");
         // WAITING IS NOT A REBUILD, and it says so rather than looking like a
-        // failed build (round-2 review F4/F5).
-        const GiStatus waiting = scene->giStatus();
+        // failed build (round-2 review F4/F5). The host reads it off a frame's snapshot (U3 stage 2b): one frame
+        // with the only view disabled — nothing draws the scene, so nothing tracks a camera — then the view back on.
+        view->setEnabled(false);
+        render(e, 1);
+        const GiStatus waiting = scene->published().gi;
+        view->setEnabled(true);
         CHECK(waiting.cascadesAwaitingCamera && waiting.cascades.empty(),
               "...and reports that it is WAITING FOR A CAMERA, not that it built nothing");
         CHECK(waiting.rebuilds == rebuildsBefore,
               "...without counting the wait as a from-scratch rebuild");
         render(e, 24);
-        const GiStatus o = scene->giStatus();
+        const GiStatus o = scene->published().gi;
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;
         std::printf("   after the open: %zu cascades, %llu rebuilds in total, "
@@ -190,7 +194,7 @@ int main()
     std::printf("\n== case 1: the chain builds ==\n");
     CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade arm accepts");
     render(e, 4);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.vctBound, "the chain's head is bound to the shader");
     CHECK(st.cascades.size() >= 2, "more than one cascade exists");
     float prevCell = 0.0f, prevHalf = 0.0f;
@@ -217,9 +221,9 @@ int main()
     // CASE 2 — at rest it costs exactly nothing
     // =====================================================================
     std::printf("\n== case 2: at rest ==\n");
-    const GiStatus rest0 = scene->giStatus();
+    const GiStatus rest0 = scene->published().gi;
     render(e, 60);
-    const GiStatus rest1 = scene->giStatus();
+    const GiStatus rest1 = scene->published().gi;
     unsigned long long moved = 0;
     for (size_t i = 0; i < rest1.cascades.size(); ++i)
         moved += rest1.cascades[i].rebuilds - rest0.cascades[i].rebuilds;
@@ -251,14 +255,14 @@ int main()
     // =====================================================================
     std::printf("\n== case 2b: a sway on a step plane, and a walk past the band ==\n");
     {
-        const GiStatus s0 = scene->giStatus();
+        const GiStatus s0 = scene->published().gi;
         const float stepH = s0.cascades[0].step;
         // PARK THE CAMERA ON A STEP PLANE. The lattice the test quantises on is
         // step*(1-0.1) metres, so x = 0 is a plane of it whatever the tier.
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
                                                          Vec3(0.0f, 1.0f, 0.0f)));
         render(e, 8);
-        const GiStatus a = scene->giStatus();
+        const GiStatus a = scene->published().gi;
         unsigned long long beforeSway = 0;
         for (const auto &c : a.cascades) beforeSway += c.rebuilds;
         const unsigned long long followsBeforeSway = a.ifdFollows;
@@ -274,7 +278,7 @@ int main()
                                                              Vec3(x, 1.0f, 0.0f)));
             render(e, 1);
         }
-        const GiStatus b = scene->giStatus();
+        const GiStatus b = scene->published().gi;
         unsigned long long afterSway = 0;
         for (const auto &c : b.cascades) afterSway += c.rebuilds;
         std::printf("   200 frames of +-%.2f m sway about a step plane (step %.2f m, "
@@ -292,7 +296,7 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.1f * stepH, 2.0f, 6.0f),
                                                          Vec3(1.1f * stepH, 1.0f, 0.0f)));
         render(e, 12);
-        const GiStatus c = scene->giStatus();
+        const GiStatus c = scene->published().gi;
         std::printf("   a %.2f m move (1.1 steps): c0 rebuilds %llu -> %llu\n",
                     1.1f * stepH, c0Before, c.cascades[0].rebuilds);
         CHECK(c.cascades[0].rebuilds == c0Before + 1ull,
@@ -314,7 +318,7 @@ int main()
     // rebuild, so the at-rest snapshot no longer describes where the chain is.
     // (Reading a stale baseline here made the first frame of the walk look like
     // it had paid for two cascades.)
-    const GiStatus scroll0 = scene->giStatus();
+    const GiStatus scroll0 = scene->published().gi;
     const float step0 = scroll0.cascades[0].step;
     const Vec3 centreBefore = scroll0.cascades[0].centre;
     unsigned long long before = 0, worstFrame = 0;
@@ -327,13 +331,13 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
                                                          Vec3(x, 1.0f, 0.0f)));
         render(e, 1);
-        const GiStatus s = scene->giStatus();
+        const GiStatus s = scene->published().gi;
         unsigned long long t = 0;
         for (const auto &c : s.cascades) t += c.rebuilds;
         worstFrame = std::max(worstFrame, t - prevTotal);
         prevTotal = t;
     }
-    st = scene->giStatus();
+    st = scene->published().gi;
     std::printf("   after %.1f m of travel: c0 centre %.2f -> %.2f, rebuilds %llu, "
                 "worst frame %llu rebuild(s), deferrals %llu, dirtyMajority %llu\n",
                 6.0f * step0, centreBefore.x, st.cascades[0].centre.x,
@@ -385,7 +389,7 @@ int main()
         std::printf("   ground lit by the ambient alone: GI off %.4f "
                     "| 1 cascade %.4f (%.2fx) | %zu cascades %.4f (%.2fx)\n",
                     ambientOff, ambientOne, ambientOne / ambientOff,
-                    scene->giStatus().cascades.size(), ambientChain, ambientChain / ambientOff);
+                    scene->published().gi.cascades.size(), ambientChain, ambientChain / ambientOff);
         // THE CONTRACT IS AGAINST ONE CAMERA-CENTRED CASCADE, not against GI-off:
         // cone-traced diffuse always eats some of the ambient (the cone's own
         // starting surface occludes it — fork 8f09c0cd4 (was 0021) measures 65% surviving
@@ -424,7 +428,7 @@ int main()
         // must change nothing: the outer cascades' cones are the whole answer.
         GiParams chainF  = cascadeGi(); chainF.ddgi = GiToggle::On; chainF.updateBudget = 1;
         const float fieldChain = measureArm(chainF, "the chain with the field on");
-        const GiStatus fst = scene->giStatus();
+        const GiStatus fst = scene->published().gi;
         std::printf("   WITH THE FIELD: chain %.4f (%.2fx of the chain without it, %.2fx of GI "
                     "off) | field bound %s, %d probes\n",
                     fieldChain, ambientChain > 0.0f ? fieldChain / ambientChain : 0.0f,
@@ -441,7 +445,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 5: a 1 km teleport ==\n");
     {
-        const GiStatus b = scene->giStatus();
+        const GiStatus b = scene->published().gi;
         const size_t n = b.cascades.size();
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(1000.0f, 2.0f, 1000.0f),
                                                          Vec3(1000.0f, 1.0f, 980.0f)));
@@ -451,11 +455,11 @@ int main()
             render(e, 1);
             Image img; view->readPixels(img);
             darkest = std::min(darkest, groundLum(img));
-            const GiStatus s = scene->giStatus();
+            const GiStatus s = scene->published().gi;
             if (!framesToSettle && s.cascadeFullRebuilds - b.cascadeFullRebuilds >= n)
                 framesToSettle = f + 1;
         }
-        st = scene->giStatus();
+        st = scene->published().gi;
         std::printf("   full rebuilds %llu (cascades %zu), settled after %zu frames, "
                     "darkest ground during the window %.4f\n",
                     st.cascadeFullRebuilds - b.cascadeFullRebuilds, n, framesToSettle, darkest);
@@ -494,7 +498,7 @@ int main()
         render(e, 2);
         CHECK(scene->setGlobalIllumination(tiny), "a chain whose cascades contain nothing builds");
         render(e, 6);
-        st = scene->giStatus();
+        st = scene->published().gi;
         CHECK(st.cascades.size() == 2, "and it is a whole chain, not a half-built one");
         CHECK(st.vctBound, "and it is bound");
         Image img; view->readPixels(img);
@@ -503,7 +507,7 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
                                                          Vec3(0.0f, 1.0f, 0.0f)));
         render(e, 8);
-        st = scene->giStatus();
+        st = scene->published().gi;
         CHECK(st.cascades.size() == 2 && st.cascades[0].rebuilds > 0,
               "and the cascades re-fill when the camera returns to the geometry");
     }
@@ -591,7 +595,7 @@ int main()
         bad.cascadeSet[2] = GiParams::GiCascadeDesc{  8.0f, 128, 0.0f };   // SMALLER
         CHECK(scene->setGlobalIllumination(bad), "the arm accepts the call");
         render(e, 6);
-        st = scene->giStatus();
+        st = scene->published().gi;
         std::printf("   non-monotonic table -> %zu cascades (outermost half %.1f m)\n",
                     st.cascades.size(), st.cascades.empty() ? 0.0f : st.cascades.back().halfSize);
         CHECK(st.cascades.size() == 4 && std::fabs(st.cascades.back().halfSize - 60.0f) < 0.01f,
@@ -603,7 +607,7 @@ int main()
         steps.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f,  64, 10000.0f };  // runaway
         CHECK(scene->setGlobalIllumination(steps), "a table with out-of-range steps is accepted");
         render(e, 6);
-        st = scene->giStatus();
+        st = scene->published().gi;
         std::printf("   pinned steps -> c0 step %.4f m (cell %.4f), c1 step %.3f m (cell %.3f)\n",
                     st.cascades[0].step, st.cascades[0].cell,
                     st.cascades[1].step, st.cascades[1].cell);
@@ -630,17 +634,18 @@ int main()
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the walk");
         render(e, 8);
         e->setFrameMonitor(MonitorLevel::Review);
-        const float step = scene->giStatus().cascades[0].step;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const float step = scene->published().gi.cascades[0].step;
         for (int f = 1; f <= 40; ++f) {
             const float x = float(f) * step / 4.0f;
             view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
                                                              Vec3(x, 1.0f, 0.0f)));
             render(e, 1);
         }
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         unsigned rows = 0, camera = 0, other = 0, worstPerFrame = 0, counterTotal = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             unsigned inFrame = 0;
             for (const CacheWork &w : r.cacheWork) {
                 if (w.cache != CacheKind::Gi) continue;
@@ -662,7 +667,7 @@ int main()
               "EVERY SCROLL REBUILD IS FILED UNDER `Camera`, not under the last probe reason");
         CHECK(worstPerFrame <= 1, "...at most one row per frame");
         CHECK(counterTotal == rows,
-              "...and FrameRecord::cascadeRebuilds counts exactly them");
+              "...and MonitorRecord::cascadeRebuilds counts exactly them");
     }
 
     // =====================================================================
@@ -688,7 +693,7 @@ int main()
         render(e, 8);
         CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
-        st = scene->giStatus();
+        st = scene->published().gi;
         const int near = st.cascades[0].items;
         const float step = st.cascades[0].step;
         for (int f = 1; f <= 40; ++f) {
@@ -699,7 +704,7 @@ int main()
         }
         CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
-        st = scene->giStatus();
+        st = scene->published().gi;
         const int far = st.cascades[0].items;
         std::printf("   cascade 0 items: %d beside the prop -> %d %.0f m away\n",
                     near, far, 10.0f * step);
@@ -722,7 +727,7 @@ int main()
     // the texture-wait budget uses (JAH_TEXTURE_WAIT_FAULT).
     std::printf("\n== case 11: a failed rebuild ==\n");
     {
-        st = scene->giStatus();
+        st = scene->published().gi;
         const GiStatus::CascadeStatus c0 = st.cascades[0];
         const float step = c0.step;
         const float x0 = c0.centre.x;
@@ -730,7 +735,7 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0 + 1.5f * step, 2.0f, 6.0f),
                                                          Vec3(x0 + 1.5f * step, 1.0f, 0.0f)));
         render(e, 1);
-        GiStatus bad = scene->giStatus();
+        GiStatus bad = scene->published().gi;
         std::printf("   forced failure: rebuilds %llu -> %llu, centre %.2f -> %.2f, pending %d\n",
                     c0.rebuilds, bad.cascades[0].rebuilds, c0.centre.x, bad.cascades[0].centre.x,
                     bad.cascades[0].pending);
@@ -739,10 +744,10 @@ int main()
         CHECK(std::fabs(bad.cascades[0].centre.x - c0.centre.x) < 1e-3f,
               "AND THE CASCADE KEEPS THE PLACEMENT ITS VOXELS ARE FOR (the revert path)");
         CHECK(bad.cascades[0].pending != 0, "...with the rebuild still owed");
-        CHECK(scene->giStatus().vctBound, "...and the chain still bound and rendering");
+        CHECK(scene->published().gi.vctBound, "...and the chain still bound and rendering");
         e->setArm("gi.cascadeFault", -1.0);
         render(e, 1);
-        st = scene->giStatus();
+        st = scene->published().gi;
         std::printf("   after the fault is cleared: rebuilds %llu, centre %.2f, pending %d\n",
                     st.cascades[0].rebuilds, st.cascades[0].centre.x, st.cascades[0].pending);
         CHECK(st.cascades[0].rebuilds == c0.rebuilds + 1u, "the NEXT FRAME retries, and succeeds");
@@ -776,25 +781,25 @@ int main()
     {
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the edit cases");
         render(e, 8);
-        const size_t nCascades = scene->giStatus().cascades.size();
+        const size_t nCascades = scene->published().gi.cascades.size();
 
         // A PLACE ONLY THE OUTERMOST CASCADE REACHES, derived from the chain as
         // it actually stands: the camera has been walked and teleported by the
         // cases above, so a hard-coded world coordinate measures nothing (it was
         // 96 m from the chain the first time this was written).
         const auto farPlace = [&]() {
-            const auto &cs = scene->giStatus().cascades;
+            const auto &cs = scene->published().gi.cascades;
             const float inner = cs[cs.size() - 2u].halfSize, outer = cs.back().halfSize;
             return Vec3(cs.back().centre.x + (inner + outer) * 0.5f, 0.5f, cs.back().centre.z);
         };
         const auto chainRebuilds = [&]() {
             unsigned long long t = 0;
-            for (const auto &c : scene->giStatus().cascades) t += c.rebuilds;
+            for (const auto &c : scene->published().gi.cascades) t += c.rebuilds;
             return t;
         };
         const auto pendingCount = [&]() {
             int n = 0;
-            for (const auto &c : scene->giStatus().cascades) n += c.pending ? 1 : 0;
+            for (const auto &c : scene->published().gi.cascades) n += c.pending ? 1 : 0;
             return n;
         };
         // Runs `frames` frames one at a time after an edit and reports the worst
@@ -816,7 +821,7 @@ int main()
             }
             outTotal = prev - first;
             outWorst = worst;
-            const unsigned long long arm1 = scene->giStatus().rebuilds;
+            const unsigned long long arm1 = scene->published().gi.rebuilds;
             std::printf("   %-22s chain builds %llu -> %llu, cascade rebuilds %llu "
                         "(worst frame %d), pending left %d\n",
                         what, arm0, arm1, outTotal, worst, pendingCount());
@@ -841,7 +846,7 @@ int main()
         enginetest::setNodePosition(scene, dragged, Vec3(1.0f, 0.5f, 1.0f));
         render(e, 8);                                    // the spawn's own work drains
         {
-            const unsigned long long arm0 = scene->giStatus().rebuilds;
+            const unsigned long long arm0 = scene->published().gi.rebuilds;
             unsigned long long prev = chainRebuilds();
             const unsigned long long dragFirst = prev;
             int worstDrag = 0;
@@ -855,15 +860,15 @@ int main()
             }
             std::printf("   the drag itself: chain builds %llu -> %llu, cascade rebuilds %llu, "
                         "worst frame %d\n",
-                        arm0, scene->giStatus().rebuilds, prev - dragFirst, worstDrag);
-            CHECK(scene->giStatus().rebuilds == arm0,
+                        arm0, scene->published().gi.rebuilds, prev - dragFirst, worstDrag);
+            CHECK(scene->published().gi.rebuilds == arm0,
                   "a drag in flight costs ZERO whole-chain builds");
             CHECK(worstDrag <= 1,
                   "...and never more than one cascade in a frame");
             CHECK(prev - dragFirst >= 1,
                   "...but the moving object IS re-voxelised while it moves, not left stale");
         }
-        const unsigned long long armDrag = scene->giStatus().rebuilds;
+        const unsigned long long armDrag = scene->published().gi.rebuilds;
         scene->refreshGlobalIllumination();              // the settle, as the mirror fires it
         measure("a box released", armDrag, 12, total, worst);
         // The RELEASE costs almost nothing, and that is the point rather than a
@@ -882,7 +887,7 @@ int main()
             d.type = LightType::Directional;
             d.colour = Colour(1.0f, 0.4f, 0.2f);
             d.intensity = 3.0f;
-            const unsigned long long arm0 = scene->giStatus().rebuilds;
+            const unsigned long long arm0 = scene->published().gi.rebuilds;
             scene->setLight(lamp, d);
             scene->refreshGlobalIllumination();
             measure("a light edit", arm0, 12, total, worst);
@@ -900,7 +905,7 @@ int main()
             const NodeId doomed =
                 enginetest::addDirectionalLight(scene, Vec3(-0.3f, -1.0f, 0.2f), 1.0f);
             render(e, 16);
-            const unsigned long long arm0 = scene->giStatus().rebuilds;
+            const unsigned long long arm0 = scene->published().gi.rebuilds;
             CHECK(scene->removeLight(doomed), "a light is removed");
             scene->refreshGlobalIllumination();
             measure("a light removal", arm0, 16, total, worst);
@@ -922,13 +927,14 @@ int main()
             enginetest::setNodePosition(scene, painted, Vec3(-1.5f, 0.5f, 1.0f));
             render(e, 16);
             pp.albedo = Colour(0.9f, 0.9f, 0.1f);
-            const unsigned long long armMat = scene->giStatus().rebuilds;
+            const unsigned long long armMat = scene->published().gi.rebuilds;
             CHECK(scene->setPbrMaterial(mat, pp), "a material parameter is edited");
             scene->refreshGlobalIllumination();
             measure("a material edit", armMat, 16, total, worst);
             CHECK(total == (unsigned long long)nCascades,
                   "...and EVERY cascade got fresh voxels — one cascade per frame");
-            CHECK(scene->giStatus().vctBound,
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            CHECK(scene->published().gi.vctBound,
                   "...with the chain still bound after every voxeliser was replaced");
 
             // ---- (d) a PRESET APPLY: the datablock itself is destroyed ------
@@ -938,29 +944,34 @@ int main()
             // cache paint the new material with the old one's colour. Answered
             // the same way a parameter edit is — a replacement voxeliser per
             // cascade, one cascade per frame.
-            const unsigned long long armPre = scene->giStatus().rebuilds;
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            const unsigned long long armPre = scene->published().gi.rebuilds;
             CHECK(scene->setShadingModel(mat, ShadingModel::Unlit),
                   "a preset apply destroys the datablock (the item leaves GI)");
             measure("a preset apply", armPre, 16, total, worst);
-            const unsigned long long armPre2 = scene->giStatus().rebuilds;
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            const unsigned long long armPre2 = scene->published().gi.rebuilds;
             CHECK(scene->setShadingModel(mat, ShadingModel::Lit),
                   "...and another preset puts it back");
             measure("a preset undone", armPre2, 16, total, worst);
             CHECK(total >= 1 && total <= (unsigned long long)nCascades,
                   "...with fresh voxels spread one cascade per frame");
-            CHECK(scene->giStatus().vctBound, "...and the chain still bound");
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            CHECK(scene->published().gi.vctBound, "...and the chain still bound");
         }
 
         // ---- (e) a SPAWN ---------------------------------------------------
         {
-            unsigned long long arm0 = scene->giStatus().rebuilds;
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            unsigned long long arm0 = scene->published().gi.rebuilds;
             const NodeId spawned =
                 enginetest::addTestCube(scene, Colour(0.8f, 0.8f, 0.2f), 0.0f, 0.6f);
             enginetest::setNodePosition(scene, spawned, Vec3(0.0f, 0.5f, 2.0f));
             measure("a spawn", arm0, 16, total, worst);
 
             // ---- (f) a HIDE ------------------------------------------------
-            arm0 = scene->giStatus().rebuilds;
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            arm0 = scene->published().gi.rebuilds;
             scene->setNodeVisible(spawned, false);
             measure("a hide", arm0, 16, total, worst);
             scene->setNodeVisible(spawned, true);
@@ -974,12 +985,13 @@ int main()
                 enginetest::addTestCube(scene, Colour(0.3f, 0.3f, 0.9f), 0.0f, 0.6f);
             enginetest::setNodePosition(scene, promoted, Vec3(2.0f, 0.5f, 2.0f));
             render(e, 16);
-            arm0 = scene->giStatus().rebuilds;
+            arm0 = scene->published().gi.rebuilds;
             scene->setNodeMovable(promoted, true, MobilityChange::Authoring);
             measure("an authoring flip", arm0, 16, total, worst);
 
             // ---- (h) a DELETE of LIT geometry -------------------------------
-            arm0 = scene->giStatus().rebuilds;
+            render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            arm0 = scene->published().gi.rebuilds;
             scene->removeNode(spawned);
             measure("a delete", arm0, 16, total, worst);
             CHECK(total >= 1, "...and the cascades that held it DID re-voxelise");
@@ -995,16 +1007,16 @@ int main()
             enginetest::setNodePosition(scene, distant, far1);
             render(e, 16);
             std::vector<unsigned long long> delBefore;
-            for (const auto &c : scene->giStatus().cascades) delBefore.push_back(c.rebuilds);
+            for (const auto &c : scene->published().gi.cascades) delBefore.push_back(c.rebuilds);
             scene->removeNode(distant);
             render(e, 16);
             unsigned long long delInner = 0, delOuter = 0;
             for (size_t i = 0; i < delBefore.size(); ++i) {
-                const unsigned long long d = scene->giStatus().cascades[i].rebuilds - delBefore[i];
+                const unsigned long long d = scene->published().gi.cascades[i].rebuilds - delBefore[i];
                 std::printf("   a delete at %.1f m out: c%zu +%llu (half %.1f m)\n",
-                            far1.x - scene->giStatus().cascades.back().centre.x, i, d,
-                            scene->giStatus().cascades[i].halfSize);
-                if (i + 1u < scene->giStatus().cascades.size()) delInner += d; else delOuter += d;
+                            far1.x - scene->published().gi.cascades.back().centre.x, i, d,
+                            scene->published().gi.cascades[i].halfSize);
+                if (i + 1u < scene->published().gi.cascades.size()) delInner += d; else delOuter += d;
             }
             CHECK(delInner == 0,
                   "a DELETE beyond the inner cascades costs them nothing");
@@ -1024,17 +1036,17 @@ int main()
             enginetest::setNodePosition(scene, faraway, far2);
             render(e, 16);                                   // its arrival drains
             std::vector<unsigned long long> before;
-            for (const auto &c : scene->giStatus().cascades) before.push_back(c.rebuilds);
+            for (const auto &c : scene->published().gi.cascades) before.push_back(c.rebuilds);
             enginetest::setNodePosition(scene, faraway, Vec3(far2.x + 1.0f, far2.y, far2.z));
             render(e, 2);
             scene->refreshGlobalIllumination();
             render(e, 12);
             std::vector<unsigned long long> after;
-            for (const auto &c : scene->giStatus().cascades) after.push_back(c.rebuilds);
+            for (const auto &c : scene->published().gi.cascades) after.push_back(c.rebuilds);
             unsigned long long inner = 0, outer = 0;
             for (size_t i = 0; i < after.size(); ++i) {
                 std::printf("   c%zu rebuilds +%llu (half %.1f m)\n", i, after[i] - before[i],
-                            scene->giStatus().cascades[i].halfSize);
+                            scene->published().gi.cascades[i].halfSize);
                 if (i + 1u < after.size()) inner += after[i] - before[i];
                 else outer += after[i] - before[i];
             }
@@ -1144,14 +1156,14 @@ int main()
         scene->attachMesh(fnode, fm, fmat);
         enginetest::setNodePosition(scene, fnode, Vec3(0.0f, 0.5f, 1.0f));
         render(e, 24);
-        const GiStatus pre = scene->giStatus();
+        const GiStatus pre = scene->published().gi;
         // A material edit: every cascade now owes a rebuild in place.
         fp.albedo = Colour(0.9f, 0.2f, 0.2f);
         CHECK(scene->setPbrMaterial(fmat, fp), "a material edit dirties every cascade");
         e->setArm("gi.cascadeFaultPost", 0.0);
         scene->refreshGlobalIllumination();
         render(e, 2);
-        const GiStatus bad = scene->giStatus();
+        const GiStatus bad = scene->published().gi;
         std::printf("   post-build fault: c0 rebuilds %llu -> %llu, pending %d, vctBound %d\n",
                     pre.cascades[0].rebuilds, bad.cascades[0].rebuilds, bad.cascades[0].pending,
                     int(bad.vctBound));
@@ -1163,7 +1175,7 @@ int main()
         CHECK(view->readPixels(live), "...and the scene still renders (no dangling voxeliser)");
         e->setArm("gi.cascadeFaultPost", -1.0);
         render(e, 24);
-        const GiStatus healed = scene->giStatus();
+        const GiStatus healed = scene->published().gi;
         unsigned long long after13 = 0, before13 = 0;
         for (size_t i = 0; i < healed.cascades.size(); ++i) {
             after13 += healed.cascades[i].rebuilds;
@@ -1233,7 +1245,7 @@ int main()
             render(e, 6);
             CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
                   "the voxel read-back landed: every cascade's reading is its newest gather's");
-            const GiStatus st = scene->giStatus();
+            const GiStatus st = scene->published().gi;
             if (st.cascades.empty()) { CHECK(false, "the chain is up at this cap"); continue; }
             std::printf("   cap %-4d :", caps[ci]);
             bool capHeld = true;
@@ -1312,7 +1324,7 @@ int main()
     {
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the mover case");
         render(e, 8);
-        const GiStatus base = scene->giStatus();
+        const GiStatus base = scene->published().gi;
         if (base.cascades.size() < 2) {
             CHECK(false, "case 15 needs a chain of at least two cascades");
         } else {
@@ -1339,12 +1351,12 @@ int main()
 
             const auto perCascade = [&]() {
                 std::vector<unsigned long long> out;
-                for (const auto &c : scene->giStatus().cascades) out.push_back(c.rebuilds);
+                for (const auto &c : scene->published().gi.cascades) out.push_back(c.rebuilds);
                 return out;
             };
             std::vector<unsigned long long> before = perCascade();
-            const unsigned long long fullBefore = scene->giStatus().cascadeFullRebuilds;
-            const long long settlesBefore = scene->giStatus().chainSettles;
+            const unsigned long long fullBefore = scene->published().gi.cascadeFullRebuilds;
+            const long long settlesBefore = scene->published().gi.chainSettles;
 
             // THE MOVEMENT: every mover moves every frame, by more than the
             // scan's quantisation, for 24 frames.
@@ -1364,7 +1376,7 @@ int main()
                 if (i + 1u == during.size()) outerRebuilds += d; else innerRebuilds += d;
             }
             std::printf("  (full-chain guards %llu)\n",
-                        scene->giStatus().cascadeFullRebuilds - fullBefore);
+                        scene->published().gi.cascadeFullRebuilds - fullBefore);
             CHECK(innerRebuilds == 0ull,
                   "twenty movers past the dirty-box cap do NOT dirty the cascades that "
                   "cannot see them (F14: the cap merges, it does not give up)");
@@ -1381,7 +1393,7 @@ int main()
             // rebuilds of the cascade that can see the movers), so the two
             // belong in one assertion: the debt must actually be paid once the
             // gesture ends, not carried.
-            const long long settlesAtStop = scene->giStatus().chainSettles;
+            const long long settlesAtStop = scene->published().gi.chainSettles;
             // At rest: nothing at all.
             render(e, 4);
             before = perCascade();
@@ -1391,7 +1403,7 @@ int main()
             for (size_t i = 0; i < during.size(); ++i) atRest += during[i] - before[i];
             std::printf("   30 frames after they stop: %llu cascade rebuilds\n", atRest);
             CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
-            const long long settlesAfter = scene->giStatus().chainSettles;
+            const long long settlesAfter = scene->published().gi.chainSettles;
             std::printf("   chain settles: %lld before the movement, %lld at the stop, %lld "
                         "after the rest\n", settlesBefore, settlesAtStop, settlesAfter);
             CHECK(settlesAfter > settlesAtStop,
@@ -1431,7 +1443,7 @@ int main()
     {
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the flat-mover case");
         render(e, 8);
-        const GiStatus base = scene->giStatus();
+        const GiStatus base = scene->published().gi;
         if (base.cascades.size() < 3) {
             CHECK(false, "case 15b needs a chain of at least three cascades");
         } else {
@@ -1468,7 +1480,7 @@ int main()
 
             const auto perCascade = [&]() {
                 std::vector<unsigned long long> out;
-                for (const auto &c : scene->giStatus().cascades) out.push_back(c.rebuilds);
+                for (const auto &c : scene->published().gi.cascades) out.push_back(c.rebuilds);
                 return out;
             };
             std::vector<unsigned long long> before = perCascade();
@@ -1574,7 +1586,7 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0, 2.0f, z0),
                                                          Vec3(x0 + 1.0f, 2.0f, z0 - 1.0f)));
         render(e, 8);
-        const GiStatus w0 = scene->giStatus();
+        const GiStatus w0 = scene->published().gi;
         CHECK(!w0.cascades.empty(), "the chain is up before the walk is measured");
         if (w0.cascades.empty()) { std::printf("   (no chain: the walk is skipped)\n"); }
         else {
@@ -1589,7 +1601,7 @@ int main()
             view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, z0),
                                                              Vec3(x + 1.0f, 2.0f, z0 - 1.0f)));
             render(e, 1);
-            const GiStatus s = scene->giStatus();
+            const GiStatus s = scene->published().gi;
             const GiStatus::CascadeStatus &c = s.cascades[0];
             const float off = std::max(std::max(std::fabs(x - c.centre.x),
                                                 std::fabs(2.0f - c.centre.y)),
@@ -1606,7 +1618,7 @@ int main()
             // outright; the stride is what the assertion may not.
             if (c.halfSize - off < required - stride) ok = false;
         }
-        const GiStatus w1 = scene->giStatus();
+        const GiStatus w1 = scene->published().gi;
         std::printf("   %d frames, 10.0 m at 1.4 m/s: worst offset from the centre %.3f m, "
                     "worst live guarantee %.3f m (required %.3f), c0 rebuilds %llu "
                     "(%.2f m per rebuild), deferrals %llu\n",
@@ -1632,7 +1644,7 @@ int main()
     GiParams off; off.mode = GiMode::Off;
     CHECK(scene->setGlobalIllumination(off), "the chain comes down");
     render(e, 2);
-    CHECK(scene->giStatus().cascades.empty(), "and leaves no cascades behind");
+    CHECK(scene->published().gi.cascades.empty(), "and leaves no cascades behind");
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");

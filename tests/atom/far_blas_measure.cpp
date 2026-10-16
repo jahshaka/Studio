@@ -41,7 +41,7 @@ using namespace jahshaka::engine;
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float median(std::vector<float> v)
@@ -94,7 +94,7 @@ static int assetsMode(Engine *e, View *view)
         enginetest::addDirectionalLight(s, Vec3{ -0.4f, -1.0f, -0.55f }, 3.0f);
         view->setCamera(enginetest::testCameraDescLookAt(Vec3{ 1.5f, 1.0f, 2.0f }, Vec3{ 0, 0, 0 }));
         render(e, 60);
-        const RayQueryStatus st = s->rayQueryStatus();
+        const RayQueryStatus st = s->published().rayQuery;
         const unsigned levels = unsigned(b.data.lodIndices.size()) + 1u;
         const unsigned coarse =
             b.data.lodIndices.empty() ? tris(b.data.indices) : tris(b.data.lodIndices.back());
@@ -113,7 +113,7 @@ static int assetsMode(Engine *e, View *view)
             s2->setNodeTransform(n2, Vec3{ 0, 0, -400.0f }, Quat(), Vec3{ k, k, k });
             view->setCamera(enginetest::testCameraDescLookAt(Vec3{ 0, 0, 0 }, Vec3{ 0, 0, -400.0f }));
             render(e, 60);
-            const RayQueryStatus st2 = s2->rayQueryStatus();
+            const RayQueryStatus st2 = s2->published().rayQuery;
             farCount = st2.levelBlasCount;
             farBytes = st2.levelBlasBytes;
         }
@@ -176,13 +176,13 @@ static int tlasMode(Engine *e, View *view)
         const float dx = 0.01f * float(f % 2 ? 1 : -1);
         s->setNodeTransform(nodes[0], Vec3{ -half + dx, 0.0f, -half }, Quat(),
                             Vec3{ scale[0], scale[0], scale[0] });
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (f < 30) continue;
-        const RayQueryStatus st = s->rayQueryStatus();
+        const RayQueryStatus st = s->published().rayQuery;
         if (st.tlasMs >= 0.0f) tlasMs.push_back(st.tlasMs);
         if (st.gatherMs >= 0.0f) gatherMs.push_back(st.gatherMs);
     }
-    const RayQueryStatus st = s->rayQueryStatus();
+    const RayQueryStatus st = s->published().rayQuery;
     std::printf("== the lattice: %u instances over %zu meshes + a ground; %s every frame ==\n",
                 kInstances, ids.size(), refit ? "REFIT (the arm rayquery.tlasRefit)" : "REBUILD");
     std::printf("   tlas instances %d (+%d far), blas %d (%d tris, %llu bytes; coarse %d, %llu B), "
@@ -292,10 +292,10 @@ static int pictureMode(Engine *e, View *view)
     s->setGlobalIllumination(gi);
     tuneFar(s, 0.0f, false);
     render(e, 90);
-    const GiStatus gs = s->giStatus();
+    const GiStatus gs = s->published().gi;
     const float half = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
     const float diag = std::sqrt(3.0f) * 2.0f * half;
-    const RayQueryStatus rq = s->rayQueryStatus();
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("== the far field's picture on chained content: %u ring objects at 70-150 m, "
                 "ground %s x%.1f; outer half %.2f m, reference %.2f m ==\n",
                 ring, plane->name.c_str(), double(gk), double(half), double(diag));
@@ -333,9 +333,9 @@ static int pictureMode(Engine *e, View *view)
         for (int a = 0; a < 3; ++a) {
             tuneFar(s, a == 2 ? diag : 0.0f, a != 0);
             for (int fr = 0; fr < 36; ++fr) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (fr < 6) continue;
-                const GatherStatus q = s->giStatus().gather;
+                const GatherStatus q = s->published().gi.gather;
                 if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
                     ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
             }
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
             std::printf("FAIL: %s\n", e->lastError().c_str());
             return 1;
         }
-        e->renderOneFrame();   // the arm is latched at the top of a frame
+        enginetest::frames(e, 1);   // the arm is latched at the top of a frame
         return tlasMode(e, view);
     }
     if (mode == "picture") return pictureMode(e, view);

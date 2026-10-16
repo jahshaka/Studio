@@ -433,7 +433,7 @@ void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
     (void)shot;
     const float exposure = iris::lens::exposureStopsToChain(mDocument->exposure);
     pushFrame(mCamera, width, height, [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
         secondaryfx::apply(fx, true, exposure);
         part.postFx = fx;
     });

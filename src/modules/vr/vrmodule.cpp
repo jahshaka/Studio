@@ -319,7 +319,9 @@ void VrModule::scheduleStartCheck()
 void VrModule::runStartCheck()
 {
     jahshaka::engine::Engine *e = engineOf(host);
-    if (!e || e->vrProbe()) { refreshUi(); return; }
+    bool probed = false;
+    if (e) e->request([&](jahshaka::engine::Engine &eng) { probed = eng.vrProbe(); });   // a REQUEST (U3 stage 4a)
+    if (!e || probed) { refreshUi(); return; }
     // THE PREFERENCE'S CHECK IS A NOTICE (the user did not ask for VR this
     // launch); an explicit --vr / JAHSHAKA_VR=1 is answered with the dialog.
     reportStartFailure(vrLaunch().source != QLatin1String("setting"));
@@ -438,7 +440,7 @@ void VrModule::shutdown()
     if (!host.engine) return;
     const auto e = host.engine->engine();
     if (!e) return;
-    if (e->vrStatus().active) {
+    if (e->vrSessionLive()) {
         if (host.engine->driver()) host.engine->driver()->setVrSessionActive(false);
         e->setVrMirrorView(nullptr);
         e->endVrSession();

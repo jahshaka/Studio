@@ -231,7 +231,7 @@ static void shellRoom(Scene *s)
 }
 
 
-static void render(Engine *e, int frames = 4) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 4) { enginetest::frames(e, frames);}
 
 static int lum(const Image &img, unsigned x, unsigned y)
 {
@@ -493,7 +493,7 @@ static void r3Case()
     gi.probeShadows = GiToggle::On;
     room.scene->setGlobalIllumination(gi);
     render(engine.get(), 8);
-    const GiStatus st = room.scene->giStatus();
+    const GiStatus st = room.scene->published().gi;
     std::printf("    gi: probes %d, pccBound %d, probeShadows %d\n",
                 st.probeCount, int(st.pccBound), int(st.probeShadows));
     CHECK(st.probeShadows, "the probe captures really are shadowed (the precondition for R3)");
@@ -643,9 +643,9 @@ static void cacheKindsCase()
     gi.updateBudget = 0;               // no captures but the ones this case asks for
     room.scene->setGlobalIllumination(gi);
     render(engine.get(), 12);
-    const GiStatus gst = room.scene->giStatus();
+    const GiStatus gst = room.scene->published().gi;
     std::printf("    gi: probes %d, probeShadows %d, planar active %d\n", gst.probeCount,
-                int(gst.probeShadows), room.scene->activePlanarReflectors());
+                int(gst.probeShadows), room.scene->published().activePlanarReflectors);
     CHECK(gst.probeShadows && gst.probeCount == 4, "four shadowed probes");
 
     std::vector<Ogre::CompositorWorkspace *> probeWs, reflWs;
@@ -836,7 +836,7 @@ static void scanCostCase(int n)
     // cache walks on its own after updateSceneGraph (cached world AABBs).
     gi.updateBudget = std::getenv("JAH_SCANCOST_NOGI") ? 0 : 1;
     s->setGlobalIllumination(gi);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
     const auto sample = [&](int frames, bool move, double &shadowUs, double &giUs, double &frameMs) {
         shadowUs = giUs = frameMs = 0.0;
         for (int f = 0; f < frames; ++f) {
@@ -849,7 +849,7 @@ static void scanCostCase(int n)
                                         Quat(), Vec3(step * 0.4f, 0.5f, step * 0.4f));
                 }
             const auto t0 = std::chrono::steady_clock::now();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             frameMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
             shadowUs += scene->shadowScanMicros() + scene->casterWalkMicros();
             giUs += scene->giScanMicros();

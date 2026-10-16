@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "modules/vr/vrarc.h"
+#include "irisgl/mirror/scenecommands.h"   // the commands are messages (U3 stage 3)
 
 #include <algorithm>
 #include <cmath>
@@ -64,37 +65,37 @@ bool VrArc::ensureBuilt()
     // changes shape every frame rebuilds no geometry at all. A line has no
     // thickness to distort under the non-uniform scale.
     const std::vector<Vec3> unit = { Vec3(0, 0, 0), Vec3(0, 0, -1) };
-    mSegmentMesh = mTarget->createLineMesh(unit, false);
-    mMarkerMesh = mTarget->createLineMesh(markerGeometry(), false);
+    mSegmentMesh = scenecmd::newLineMesh(mTarget, unit, false);
+    mMarkerMesh = scenecmd::newLineMesh(mTarget, markerGeometry(), false);
     if (!mSegmentMesh || !mMarkerMesh) return false;
     // DEPTH-TESTED FOR THE CURVE, ON TOP FOR THE MARKER — the ray's own pair of
     // materials and the same two reasons: an arc that passed through a wall
     // would promise a landing behind it, and a marker lying on the floor it
     // marks cannot be depth-tested against it.
-    mMaterial = mTarget->createUnlitMaterial(okColour(0.9f), true);
-    mMarkerMaterial = mTarget->createUnlitMaterial(okColour(0.95f), false);
+    mMaterial = scenecmd::newUnlitMaterial(mTarget, okColour(0.9f), true);
+    mMarkerMaterial = scenecmd::newUnlitMaterial(mTarget, okColour(0.95f), false);
     if (!mMaterial || !mMarkerMaterial) return false;
 
     mSegments.reserve(size_t(kMaxSegments));
     for (int i = 0; i < kMaxSegments; ++i) {
-        const NodeId n = mTarget->createNode();
+        const NodeId n = scenecmd::newNode(mTarget);
         if (!n) break;
         // BOTH HELPER CHANNELS (the wands' and the ray's pair): kHelperBit puts
         // it in the desktop editor's picture, kVrHelperBit in every VR eye of
         // both hosts — and out of every probe capture, shadow map, GI input and
         // user-grade screenshot.
-        mTarget->setNodeHelper(n, true);
-        mTarget->setNodeVrHelper(n, true);
-        mTarget->attachMesh(n, mSegmentMesh, mMaterial);
-        mTarget->setNodeVisible(n, false);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeHelper, n, true);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVrHelper, n, true);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, n, mSegmentMesh, mMaterial);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, n, false);
         mSegments.push_back(n);
     }
-    mMarker = mTarget->createNode();
+    mMarker = scenecmd::newNode(mTarget);
     if (mMarker) {
-        mTarget->setNodeHelper(mMarker, true);
-        mTarget->setNodeVrHelper(mMarker, true);
-        mTarget->attachMesh(mMarker, mMarkerMesh, mMarkerMaterial);
-        mTarget->setNodeVisible(mMarker, false);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeHelper, mMarker, true);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVrHelper, mMarker, true);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, mMarker, mMarkerMesh, mMarkerMaterial);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, mMarker, false);
     }
     return !mSegments.empty();
 }
@@ -107,15 +108,15 @@ void VrArc::showSegment(int index, const iris::Vec3 &from, const iris::Vec3 &to)
     iris::Vec3 delta = to - from;
     const float length = delta.length();
     if (!(length > 1e-5f) || !std::isfinite(length)) {
-        mTarget->setNodeVisible(node, false);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, node, false);
         return;
     }
     delta = delta / length;
     const iris::Quat rot = iris::Quat::rotationTo(iris::Vec3(0, 0, -1), delta).normalized();
-    mTarget->setNodeTransform(node, Vec3(from.x(), from.y(), from.z()),
+    scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeTransform, node, Vec3(from.x(), from.y(), from.z()),
                               Quat(rot.x(), rot.y(), rot.z(), rot.scalar()),
                               Vec3(1.0f, 1.0f, length));
-    mTarget->setNodeVisible(node, true);
+    scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, node, true);
 }
 
 void VrArc::update(const QVector<iris::Vec3> &points, bool valid, bool landing)
@@ -128,15 +129,15 @@ void VrArc::update(const QVector<iris::Vec3> &points, bool valid, bool landing)
     // setUnlitMaterial schedules a constant-buffer write, and the only thing
     // that ever changes this one is the landing becoming legal or illegal.
     if (valid != mMaterialValid) {
-        mTarget->setUnlitMaterial(mMaterial, valid ? okColour(0.9f) : noColour(0.9f));
-        mTarget->setUnlitMaterial(mMarkerMaterial, valid ? okColour(0.95f) : noColour(0.95f));
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setUnlitMaterial, mMaterial, valid ? okColour(0.9f) : noColour(0.9f));
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setUnlitMaterial, mMarkerMaterial, valid ? okColour(0.95f) : noColour(0.95f));
         mMaterialValid = valid;
     }
 
     const int wanted = std::min(int(points.size()) - 1, int(mSegments.size()));
     for (int i = 0; i < wanted; ++i) showSegment(i, points[i], points[i + 1]);
     for (int i = wanted; i < int(mSegments.size()); ++i)
-        if (mSegments[size_t(i)]) mTarget->setNodeVisible(mSegments[size_t(i)], false);
+        if (mSegments[size_t(i)]) scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, mSegments[size_t(i)], false);
     mShown = wanted;
 
     // THE MARKER STANDS WHERE THE ARC ENDS, and only when the arc ENDED on
@@ -146,18 +147,18 @@ void VrArc::update(const QVector<iris::Vec3> &points, bool valid, bool landing)
     if (mMarker) {
         if (mMarkerShown) {
             const iris::Vec3 &p = points.last();
-            mTarget->setNodeTransform(mMarker, Vec3(p.x(), p.y(), p.z()),
+            scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeTransform, mMarker, Vec3(p.x(), p.y(), p.z()),
                                       Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1, 1, 1));
         }
-        mTarget->setNodeVisible(mMarker, mMarkerShown);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, mMarker, mMarkerShown);
     }
 }
 
 void VrArc::hide()
 {
     if (!mTarget) return;
-    for (NodeId n : mSegments) if (n) mTarget->setNodeVisible(n, false);
-    if (mMarker) mTarget->setNodeVisible(mMarker, false);
+    for (NodeId n : mSegments) if (n) scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, n, false);
+    if (mMarker) scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, mMarker, false);
     mShown = 0;
     mMarkerShown = false;
 }
@@ -165,12 +166,12 @@ void VrArc::hide()
 void VrArc::clear()
 {
     if (mTarget) {
-        for (NodeId n : mSegments) if (n) mTarget->removeNode(n);
-        if (mMarker) mTarget->removeNode(mMarker);
-        if (mSegmentMesh) mTarget->destroyMesh(mSegmentMesh);
-        if (mMarkerMesh) mTarget->destroyMesh(mMarkerMesh);
-        if (mMaterial) mTarget->destroyMaterial(mMaterial);
-        if (mMarkerMaterial) mTarget->destroyMaterial(mMarkerMaterial);
+        for (NodeId n : mSegments) if (n) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, n);
+        if (mMarker) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, mMarker);
+        if (mSegmentMesh) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMesh, mSegmentMesh);
+        if (mMarkerMesh) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMesh, mMarkerMesh);
+        if (mMaterial) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMaterial, mMaterial);
+        if (mMarkerMaterial) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMaterial, mMarkerMaterial);
     }
     forget();
 }

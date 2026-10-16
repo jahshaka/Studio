@@ -55,6 +55,7 @@
 // at 1920x1080, paired arms in ONE process (the lead's measurement law) — run
 // it under scripts/gpu-exclusive.sh.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -92,7 +93,7 @@ static Vec3 kCamPos(2.2f, 3.0f, 4.2f);
 static Vec3 kCamTarget(1.8f, 0.0f, 0.0f);
 static const float kFaceX = 0.5f;           // the board's shaded face
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static float luma(const Image &img, unsigned x, unsigned y)
 {
@@ -639,17 +640,17 @@ static int costMain(Engine *e)
             sc.resolution = arms[a].res;
             s->setSunContact(sc);
             render(e, 30);                           // warm: the shape rebuilt, the queries back
-            std::vector<FrameRecord> drop;
-            e->takeFrameRecords(drop);
+            std::vector<MonitorRecord> drop;
+            e->takeMonitorRecords(drop);
             render(e, 60);
-            std::vector<FrameRecord> recs;
-            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeFrameRecords(recs); }
-            for (const FrameRecord &r : recs) {
+            std::vector<MonitorRecord> recs;
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeMonitorRecords(recs); }
+            for (const MonitorRecord &r : recs) {
                 if (r.gpuMs > 0.0f) { frameSum[a] += r.gpuMs; ++frameN[a]; }
                 for (const CacheWork &w : r.cacheWork)
                     if (w.detail == "sun.contact" && w.gpuMs >= 0.0f) { jobSum[a] += w.gpuMs; ++jobN[a]; }
             }
-            const SunContactStatus st = s->sunContactStatus();
+            const SunContactStatus st = s->published().sunContact;
             if (arms[a].contact && st.gpuMs >= 0.0f && jobN[a] == 0) { jobSum[a] += st.gpuMs; ++jobN[a]; }
         }
     }
@@ -813,7 +814,7 @@ static int legsArm(Engine *e, bool raysWanted, const char *dumpDir)
     };
     render(e, 60);   // a new scene's first frames carry no sun shadow yet
     {
-        const ShadowStatus st = e->shadowStatus();
+        const ShadowStatus st = enginetest::shadowStatus(e);
         std::printf("    atlas %u px base (%ux%u): the largest split has %u texels, so the floor's lookup is lifted "
                     ">= 0.826 x 168 / %u = %.3f m against the board's %.2f m top\n",
                     st.resolution, st.atlasWidth, st.atlasHeight, st.resolution, st.resolution,
@@ -913,15 +914,15 @@ static BoardResult boardArm(Engine *e, bool raysWanted, const char *dumpDir)
     };
 
     // ---- THE DEFAULT IS OFF ------------------------------------------------
-    CHECK(!s->sunContact().enabled, "the row is off by default");
-    CHECK(!s->sunContactStatus().on, "...and so is the job");
+    CHECK(!jahshaka::engine::inspect::scene(s)->sunContact().enabled, "the row is off by default");
+    CHECK(!s->published().sunContact.on, "...and so is the job");
 
     Image off, onFull, onHalf, onShort, offAgain;
     CHECK(shot(false, SunContactResolution::Full, kSunContactDefaultRange, off), "read back: row off");
     CHECK(shot(true, SunContactResolution::Full, kSunContactDefaultRange, onFull), "read back: row on, full");
-    const SunContactStatus stFull = s->sunContactStatus();
+    const SunContactStatus stFull = s->published().sunContact;
     CHECK(shot(true, SunContactResolution::Half, kSunContactDefaultRange, onHalf), "read back: row on, half");
-    const SunContactStatus stHalf = s->sunContactStatus();
+    const SunContactStatus stHalf = s->published().sunContact;
     CHECK(shot(true, SunContactResolution::Full, kSunContactMinRange, onShort), "read back: row on, shortest range");
     CHECK(shot(false, SunContactResolution::Full, kSunContactDefaultRange, offAgain), "read back: row off again");
 

@@ -93,7 +93,7 @@ const float kFloorAlbedo = 0.5f;
 const float kDs[7] = { 0.05f, 0.1f, 0.2f, 0.5f, 1.0f, 2.0f, 4.0f };
 const int kNd = 7;
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 CameraDesc topDownCamera()
 {
@@ -362,9 +362,9 @@ Profile measure(Fixture &f, Arm arm, int settle)
     } else {
         render(f.e, 60);
         frames += 60;
-        while (!f.s->giStatus().giAtRest && frames < 1200) { render(f.e, 10); frames += 10; }
+        while (!f.s->published().gi.giAtRest && frames < 1200) { render(f.e, 10); frames += 10; }
     }
-    p.rest = f.s->giStatus().giAtRest;
+    p.rest = f.s->published().gi.giAtRest;
     // ...and until the strip stops moving (trap 7: read until the value stops).
     double prev[kNd] = { 0 };
     for (int round = 0; round < 8; ++round) {
@@ -385,7 +385,7 @@ Profile measure(Fixture &f, Arm arm, int settle)
     // THE READING: the mean of 8 frames (the gather's per-frame estimate moves).
     for (int i = 0; i < kNd; ++i) p.v[i] = 0.0;
     for (int k = 0; k < 8; ++k) {
-        f.e->renderOneFrame();
+        enginetest::frames(f.e, 1);
         ++frames;
         ImageF img;
         f.view->readPixelsHdr(img);
@@ -472,21 +472,21 @@ int main()
         render(f.e, 300);
         f.e->setFrameMonitor(MonitorLevel::Review);
         render(f.e, 10);
-        std::vector<FrameRecord> sink; f.e->takeFrameRecords(sink);
+        std::vector<MonitorRecord> sink; f.e->takeMonitorRecords(sink);
         double sum[2] = { 0, 0 }; int n[2] = { 0, 0 };
         double relight[2] = { 0, 0 }; int nr[2] = { 0, 0 };
         int frame = 0;
         for (int block = 0; block < 12; ++block) {
             const int arm = block & 1;
             f.s->setEnvironmentLight(arm ? Colour(0, 0, 0) : Colour(1, 1, 1));
-            std::vector<FrameRecord> recs;
+            std::vector<MonitorRecord> recs;
             for (int k = 0; k < 90; ++k, ++frame) {
                 const float a = 0.05f * float(frame);
                 f.s->setNodeTransform(lamp, Vec3(-1.5f + std::cos(a), 1.2f, std::sin(a)), Quat(), Vec3(1, 1, 1));
-                f.e->renderOneFrame();
-                if (k < 30) { std::vector<FrameRecord> d; f.e->takeFrameRecords(d); continue; }
-                f.e->takeFrameRecords(recs);
-                const float rg = f.s->giStatus().cards.relightGpuMs;
+                enginetest::frames(f.e, 1);
+                if (k < 30) { std::vector<MonitorRecord> d; f.e->takeMonitorRecords(d); continue; }
+                f.e->takeMonitorRecords(recs);
+                const float rg = f.s->published().gi.cards.relightGpuMs;
                 if (rg > 0.0f) { relight[arm] += rg; ++nr[arm]; }
             }
             for (size_t r = 0; r < recs.size(); ++r)
@@ -531,7 +531,7 @@ int main()
         const int N = 60;
         for (int k = 1; k <= N; ++k) {
             f.s->setNodeTransform(ball, at(k), Quat(), Vec3(1.2f, 1.2f, 1.2f));
-            f.e->renderOneFrame();
+            enginetest::frames(f.e, 1);
             const GiVoxelStats vs = f.s->giVoxelStats(0);
             if (!prev.empty() && vs.lightDigest != prev) ++changed;
             if (k <= 6 || k == N) std::printf("   mover frame %d: digest %s peak %.4f meanLit %.5f lit %lld\n", k,
@@ -605,7 +605,7 @@ int main()
             if (term.raysOnly && (!rayTier || !rays)) continue;
             setTier(f, t, term.gather, term.ddgi);
             const Profile open = measure(f, Arm::Open, t.settle);
-            const GiStatus st = f.s->giStatus();
+            const GiStatus st = f.s->published().gi;
             Profile A, B;
             if (whiteFirst) { B = measure(f, Arm::White, t.settle); A = measure(f, Arm::Black, t.settle); }
             else { A = measure(f, Arm::Black, t.settle); B = measure(f, Arm::White, t.settle); }
@@ -795,11 +795,11 @@ int main()
             f.s->refreshGlobalIllumination();
             int frames = 120;
             render(f.e, 120);
-            while (!f.s->giStatus().giAtRest && frames < 1020) { render(f.e, 10); frames += 10; }
+            while (!f.s->published().gi.giAtRest && frames < 1020) { render(f.e, 10); frames += 10; }
             settleFrames = std::max(settleFrames, frames + 8);
             double acc = 0.0;
             for (int k = 0; k < 8; ++k) {
-                f.e->renderOneFrame();
+                enginetest::frames(f.e, 1);
                 ImageF img; f.view->readPixelsHdr(img);
                 double sum = 0.0; int n = 0;
                 for (int y = int(kSize / 2) - 2; y <= int(kSize / 2) + 2; ++y)

@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     CHECK(gizmo.drawItems(iris::Vec3(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).isEmpty(), "nothing selected -> no items");
     GizmoOverlay overlay(target);
     overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     Image img; view->readPixels(img);
     CHECK(countNonBg(img) == 0, "unselected gizmo draws nothing");
 
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
     }
     overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     CHECK(overlay.visibleItems() == 4, "overlay shows 4 items");
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img);
     const int drawn = countNonBg(img);
     std::printf("    pixels drawn by the gizmo: %d\n", drawn);
@@ -157,7 +157,7 @@ int main(int argc, char **argv)
         overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
         CHECK(overlay.visibleItems() == 5, "and the overlay shows all five");
         Image bigImg;
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         big->readPixels(bigImg);
         CHECK(hasColour(bigImg, 179/255.f, 135/255.f, 55/255.f),
               "the XY plane handle is on screen, in its two axes' mixed colour");
@@ -184,7 +184,7 @@ int main(int argc, char **argv)
         // Back to the state the rest of the suite expects.
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
         overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
     }
 
     // ------------------------------------------------------------------
@@ -269,7 +269,7 @@ int main(int argc, char **argv)
             cam->getGlobalRotation().rotatedVector(iris::Vec3(1, 0, 0)).normalized();
         ballOverlay.update(&gizmo, eye, miss, fwd);
         Image ballImg;
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         ballView->readPixels(ballImg);
         saveShot(ballImg, "translate-centre-ball.png");
         // The disc's radius in pixels: the ball's radius taken perpendicular to
@@ -345,7 +345,7 @@ int main(int argc, char **argv)
             const iris::Vec3 miss =
                 cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 1, 0)).normalized();
             depthOverlay.update(&gizmo, eye, miss, fwd);
-            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 2);
             Image shot;
             depthView->readPixels(shot);
             return shot.width ? shot.at(shot.width / 2, shot.height / 2) : Colour(0, 0, 0);
@@ -429,7 +429,7 @@ int main(int argc, char **argv)
     // (Hit-testing is the gizmo's own; here we only prove colour changes flow through.)
     gizmo.clearSelectedNode();
     overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countNonBg(img) == 0, "cleared selection hides the gizmo");
 
@@ -454,13 +454,13 @@ int main(int argc, char **argv)
         }
     }
     overlay.update(&rot, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img);
     std::printf("    rotation pixels drawn (reused overlay): %d\n", countNonBg(img));
     overlay.clear();
     GizmoOverlay overlay2(target);
     overlay2.update(&rot, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 2);
     view->readPixels(img);
     std::printf("    rotation pixels drawn (fresh overlay):  %d\n", countNonBg(img));
     overlay2.clear();
@@ -521,7 +521,7 @@ int main(int argc, char **argv)
         }
         dragOverlay.update(&drag, eye, rayDir, viewDir);
         Image dragImg;
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         big->readPixels(dragImg);
         int redRight = 0, farthest = 0;
         for (unsigned y = 0; y < dragImg.height; ++y)
@@ -572,7 +572,7 @@ int main(int argc, char **argv)
                   "the marker draws for a ring grabbed from a 3/4 view too");
             dragOverlay.update(&iso, isoEye, isoDir, isoView);
             Image isoImg;
-            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 2);
             big->readPixels(isoImg);
             saveShot(isoImg, "rotate-dragging-iso.png");
             iso.endDragging();
@@ -641,19 +641,19 @@ int main(int argc, char **argv)
         const iris::Vec3 fwd(0, 0, -1);
         Image bg, opaque, half, opaqueAgain;
         alphaOverlay.update(nullptr, eye, fwd, fwd);
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         blend->readPixels(bg);
         const Colour back = bg.at(128, 128);
 
         one.item.colour = QColor(255, 255, 255, 255);
         alphaOverlay.update(&one, eye, fwd, fwd);
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         blend->readPixels(opaque);
         const Colour full = opaque.at(128, 128);
 
         one.item.colour = QColor(255, 255, 255, 128);          // alphaF() = 0.502
         alphaOverlay.update(&one, eye, fwd, fwd);
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         blend->readPixels(half);
         const Colour mixed = half.at(128, 128);
 
@@ -668,7 +668,7 @@ int main(int argc, char **argv)
         // ...and back to opaque: the same material, the same pixels as before.
         one.item.colour = QColor(255, 255, 255, 255);
         alphaOverlay.update(&one, eye, fwd, fwd);
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         blend->readPixels(opaqueAgain);
         CHECK(opaqueAgain.rgba == opaque.rgba,
               "and the OPAQUE path is byte-identical across the round trip");
@@ -706,19 +706,19 @@ int main(int argc, char **argv)
         overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
                        iris::Vec3(0, 0, -1));
         std::printf("    the overlay shows %d parts\n", overlay.visibleItems());
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         Image withHelpers;
         view->readPixels(withHelpers);
         const int onPx = countNonBg(withHelpers);
 
         view->setHelpersVisible(false);            // the Player's own call
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         Image noHelpers;
         view->readPixels(noHelpers);
         const int offPx = countNonBg(noHelpers);
 
         view->setHelpersVisible(true);             // ...and the editor's
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         Image backOn;
         view->readPixels(backOn);
         const int againPx = countNonBg(backOn);

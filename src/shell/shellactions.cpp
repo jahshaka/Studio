@@ -156,8 +156,7 @@ void define(ActionHost &actions, MainWindow &w)
                 int next = w.editorPage()->photonViewMode();
                 for (int step = 0; step < n; ++step) {
                     next = (next + 1) % n;
-                    if (next == 0 || es->photonViewRefusal(
-                                         static_cast<jahshaka::engine::PhotonView>(next)).empty())
+                    if (next == 0 || es->published().photonViewRefusals[next].empty())
                         break;
                 }
                 w.editorPage()->setPhotonViewMode(next);

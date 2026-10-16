@@ -4,6 +4,7 @@
 // through createOffscreenView + readPixels; nothing here opens a window.
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/proceduralshell.h"
 
@@ -133,7 +134,7 @@ NodeId populate(Scene *s, const Colour &albedo) {
 void aim(View *v) {
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
-void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames = 3) { enginetest::frames(e, frames);}
 /// Renders until a view's auto-exposure STOPS MOVING, in FRAMES (TESTING-SPEED-B3; trap 7: the engine has no wall
 /// clock, frames never clocks). The adaptation is a first-order filter at the engine's fixed 1/60 s
 /// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast)) = 2.284 % of the gap a frame; OgreChain.cpp's
@@ -147,7 +148,7 @@ int settleExposure(Engine *e, View *v, int maxFrames = 600) {
     float prev = 0.0f;
     int frames = 0;
     while (frames < maxFrames) {
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        enginetest::frames(e, 8);
         frames += 8;
         const float now = v->measuredExposureScale();
         if (now > 0.0f && prev > 0.0f && std::fabs(now - prev) <= 0.001f * prev) return frames;
@@ -173,12 +174,17 @@ void create_twice_returns_null_with_error() {
 }
 
 void ordering_contract() {
-    // Must run before any View has ever existed in this process (see main()).
+    // Must run before any View has ever existed in this process (see main()). SINCE U2 (irisgl 314ed36) A SCENE
+    // BEFORE ANY VIEW IS LEGAL: createScene runs the backend's one-time preparation itself (prepareDevice — a
+    // surfaceless window, then the Hlms registration), so trap 1's order (window -> registerHlms -> scene manager)
+    // holds inside the engine and the host may not get it wrong. A GUARD of that contract — test_engine as a whole is
+    // labelled `measure` by its PRICE (tests/CMakeLists.txt JAH_MEASURE_ROWS, TESTING-SIMPLE stage 3), so it runs at
+    // the sprint's ship only; it asserted the old refusal until ENGINE-UPGRADE-U3 stage 2 ran it by hand.
     Engine *e = gEngine.get();
     Scene *s = e->createScene("too-early");
-    CHECK(s == nullptr);
-    CHECK(!e->lastError().empty());
-    std::printf("    createScene before view: %s\n", e->lastError().c_str());
+    CHECK(s != nullptr);
+    std::printf("    createScene before view: %s\n", s ? "prepared the device itself" : e->lastError().c_str());
+    if (s) e->destroyScene(s);
 }
 
 void offscreen_cube_renders() {
@@ -334,7 +340,7 @@ void background_changes_at_runtime() {
     Image img; REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kBlue));
     v->setBackground(kGreen);
-    CHECK(near(Px{ int(v->background().r * 255), int(v->background().g * 255), int(v->background().b * 255), 255 }, kGreen));
+    CHECK(near(Px{ int(jahshaka::engine::inspect::view(v)->background().r * 255), int(jahshaka::engine::inspect::view(v)->background().g * 255), int(jahshaka::engine::inspect::view(v)->background().b * 255), 255 }, kGreen));
     render(fx.e); REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kGreen));
     v->setBackground(kGreen);                       // same value: no-op, still fine
@@ -362,7 +368,8 @@ void resize_offscreen() {
     CHECK(img.rgba.size() == 48u * 32u * 4u);
 
     v->resize(128, 80);
-    CHECK(v->width() == 128 && v->height() == 80);
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(v->published().width == 128 && v->published().height == 80);
     render(e);
     REQUIRE(v->readPixels(img));
     CHECK(img.width == 128 && img.height == 80);
@@ -408,7 +415,7 @@ void msaa_offscreen_views_default_to_one_sample() {
     Fixture f;
     View *v = f.view("aa-default", 32, 32, kBlue);
     REQUIRE(v);
-    CHECK_MSG(v->sampleCount() == 1, "offscreen default is 1, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 1, "offscreen default is 1, got %u", v->published().sampleCount);
 }
 
 void msaa_4x_blends_silhouette_edges() {
@@ -432,7 +439,7 @@ void msaa_4x_blends_silhouette_edges() {
     // must come back exactly.
     v->setSampleCount(4);
     render(e);
-    CHECK_MSG(v->sampleCount() == 4, "achieved %u for a 4x request", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 4, "achieved %u for a 4x request", v->published().sampleCount);
     Image img4;
     REQUIRE(v->readPixels(img4));
     CHECK(near(centre(img4), kOrange));
@@ -456,11 +463,11 @@ void msaa_runtime_toggle_and_clamping() {
     CHECK(v->setScene(s));
     aim(v);
     render(e);
-    CHECK(v->sampleCount() == 1);
+    CHECK(v->published().sampleCount == 1);
 
     v->setSampleCount(4);
     render(e);
-    CHECK(v->sampleCount() == 4);
+    CHECK(v->published().sampleCount == 4);
     Image img;
     REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kOrange));
@@ -470,7 +477,7 @@ void msaa_runtime_toggle_and_clamping() {
     // no lower than the mandatory 4).
     v->setSampleCount(8);
     render(e);
-    const unsigned got8 = v->sampleCount();
+    const unsigned got8 = v->published().sampleCount;
     CHECK_MSG(got8 == 8 || got8 == 4, "8x request achieved %u", got8);
     std::printf("    8x request -> achieved %ux\n", got8);
     REQUIRE(v->readPixels(img));
@@ -479,11 +486,11 @@ void msaa_runtime_toggle_and_clamping() {
     // Odd values round DOWN to a power of two before reaching the driver.
     v->setSampleCount(3);
     render(e);
-    CHECK_MSG(v->sampleCount() == 2, "3 rounds down to 2, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 2, "3 rounds down to 2, got %u", v->published().sampleCount);
 
     v->setSampleCount(1);
     render(e);
-    CHECK_MSG(v->sampleCount() == 1, "back to 1x, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 1, "back to 1x, got %u", v->published().sampleCount);
     REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kOrange));
     CHECK(near(corner(img), kBlue));
@@ -494,7 +501,7 @@ void msaa_runtime_toggle_and_clamping() {
     v->setSampleCount(4);
     v->resize(48, 48);
     render(e);
-    CHECK_MSG(v->sampleCount() == 4, "resize kept 4x, got %u", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 4, "resize kept 4x, got %u", v->published().sampleCount);
 }
 
 /// CAMERAS_SPEC §7.3 correction 1, half one — the OVERLAY pass under MSAA.
@@ -542,7 +549,7 @@ void msaa_overlay_pass_resolves_at_every_sample_count() {
     for (const unsigned samples : { 1u, 2u, 4u }) {
         v->setSampleCount(samples);
         render(e, 3);
-        const unsigned achieved = v->sampleCount();
+        const unsigned achieved = v->published().sampleCount;
         Image img;
         REQUIRE(v->readPixels(img));
         if (samples == 1u) {
@@ -645,14 +652,15 @@ void pip_is_ignored_offscreen_unless_asked() {
     pip::aimMain(v);
     render(e, 3);
     Image plain; REQUIRE(v->readPixels(plain));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     ViewPipDesc d = pip::desc(0.6f, 0.6f, 0.35f, 0.35f);
     d.allowOffscreen = false;                       // deliberately NOT opted in
     v->setPip(d);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not build anything for an inset it will ignore: %u -> %u",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     render(e, 3);
     Image refused; REQUIRE(v->readPixels(refused));
     std::printf("    pixelhash  no pip %016llx   pip refused %016llx\n",
@@ -661,7 +669,7 @@ void pip_is_ignored_offscreen_unless_asked() {
               "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
               pixelHash(plain), pixelHash(refused));
     // The view still remembers what it was asked for — it just does not act.
-    CHECK(v->pip().enabled);
+    CHECK(jahshaka::engine::inspect::view(v)->pip().enabled);
 }
 
 /// The other half: with allowOffscreen the SAME desc must composite a second
@@ -691,13 +699,14 @@ void pip_composites_a_second_camera_into_the_rect() {
     std::printf("    inset %u/%u px, outside diff %u\n", st.inside, st.insideTotal, st.outsideDiff);
 
     // MOVING it is a live viewport modifier, never a rebuild (spike T3).
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     ViewPipDesc moved = d;
     moved.left = 0.04f; moved.top = 0.04f;
     v->setPip(moved);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "moving the inset must not rebuild the workspace: %u -> %u",
-              gen, v->workspaceGeneration());
+              gen, v->published().workspaceGeneration);
     render(e, 3);
     Image movedImg; REQUIRE(v->readPixels(movedImg));
     st = pip::compare(movedImg, ref, moved, kGreen);
@@ -740,16 +749,18 @@ void pip_request_dies_with_its_scene() {
     CHECK_MSG(on.inside >= on.insideTotal * 95 / 100,
               "precondition: the inset owns its rect on the first scene: %u/%u",
               on.inside, on.insideTotal);
-    CHECK(v->pip().enabled);
+    CHECK(jahshaka::engine::inspect::view(v)->pip().enabled);
 
     CHECK(v->setScene(nullptr));
-    CHECK_MSG(!v->pip().enabled, "detaching the scene must drop the PiP request");
-    const unsigned pipGen = v->pipGeneration();
+    CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "detaching the scene must drop the PiP request");
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const unsigned pipGen = v->published().pipGeneration;
     CHECK(v->setScene(s2));
-    CHECK_MSG(!v->pip().enabled, "the next scene must not inherit the request");
-    CHECK_MSG(v->pipGeneration() == pipGen,
+    CHECK_MSG(!jahshaka::engine::inspect::view(v)->pip().enabled, "the next scene must not inherit the request");
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().pipGeneration == pipGen,
               "no inset may be BUILT on a scene that did not ask for one: pipGeneration %u -> %u",
-              pipGen, v->pipGeneration());
+              pipGen, v->published().pipGeneration);
     pip::aimMain(v);
     render(e, 3);
     Image after; REQUIRE(v->readPixels(after));
@@ -757,7 +768,7 @@ void pip_request_dies_with_its_scene() {
     CHECK_MSG(off.inside == 0, "the rect must show the main view, not an inset: %u/%u px are the wall",
               off.inside, off.insideTotal);
     std::printf("    inset on scene A %u/%u px; after the rebind %u/%u px, pipGeneration %u\n",
-                on.inside, on.insideTotal, off.inside, off.insideTotal, v->pipGeneration());
+                on.inside, on.insideTotal, off.inside, off.insideTotal, v->published().pipGeneration);
 
     // ...and a host that wants it on the new scene asks again, and gets it.
     v->setPip(d);
@@ -787,7 +798,7 @@ void pip_over_msaa_keeps_the_main_frame() {
     pip::aimMain(v);
     v->setSampleCount(4);
     render(e, 3);
-    const unsigned achieved = v->sampleCount();
+    const unsigned achieved = v->published().sampleCount;
     CHECK_MSG(achieved == 4, "4x is Vulkan-mandatory; achieved %u", achieved);
     Image ref; REQUIRE(v->readPixels(ref));
     CHECK(near(centre(ref), kOrange));
@@ -886,11 +897,12 @@ void pip_survives_a_main_workspace_rebuild() {
 
     // setShadows is a definition rebuild: detach, rebuild the chain, re-attach
     // — the exact sequence that used to leave the inset first in the list.
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     v->setShadows(true);
     v->setShadows(false);
-    CHECK_MSG(v->workspaceGeneration() >= gen + 2, "two rebuilds expected, %u -> %u",
-              gen, v->workspaceGeneration());
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration >= gen + 2, "two rebuilds expected, %u -> %u",
+              gen, v->published().workspaceGeneration);
     render(e, 3);
     Image after; REQUIRE(v->readPixels(after));
     const pip::RectStats st = pip::compare(after, before, d, kGreen);
@@ -1082,7 +1094,8 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
     CameraDesc cam;
     cam.position = Vec3(0.0f, 0.0f, 4.0f);            // identity: looks down -Z
     v->setCamera(cam);
-    const unsigned genBefore = v->workspaceGeneration();
+    render(e, 1);   // the generation is the snapshot's: a frame closes the bind's (U3 stage 2b)
+    const unsigned genBefore = v->published().workspaceGeneration;
     render(e, 3);
     Image plain; REQUIRE(v->readPixels(plain));
 
@@ -1112,8 +1125,8 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
     CHECK_MSG(stretched.rgba == plain.rgba,
               "an UNCONSTRAINED aspect is inert — the camera follows the target, as it always "
               "has (%ux%u vs %ux%u)", sw, sh, pw, ph);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
-              "and it rebuilds nothing: %u -> %u", genBefore, v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
+              "and it rebuilds nothing: %u -> %u", genBefore, v->published().workspaceGeneration);
 
     // ---- 2:1 CONSTRAINED --------------------------------------------------
     cam.constrainAspect = true;
@@ -1336,7 +1349,7 @@ void shadows_darken_the_ground() {
     auto lum = [&](unsigned x, unsigned y) { const Px q = px(img, x, y); return (q.r + q.g + q.b) / 3; };
     const int besideOff = lum(48, 28);
     v->setShadows(true);
-    CHECK(v->shadows());
+    CHECK(jahshaka::engine::inspect::view(v)->shadows());
     if (!fx.e->lastError().empty()) std::printf("    lastError after setShadows: %s\n", fx.e->lastError().c_str());
     render(fx.e, 4); REQUIRE(v->readPixels(img));
     const int besideOn = lum(48, 28), farOn = lum(6, 6);
@@ -1733,7 +1746,7 @@ void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
     };
     const auto band0 = [&]() {
         float sh[27] = { 0.0f };
-        if (!s->skyAmbientSh(sh)) return -1.0f;
+        if (!s->published().copySkyAmbientSh(sh)) return -1.0f;
         return sh[0];
     };
 
@@ -3359,7 +3372,7 @@ void unlit_refuses_rigged_meshes() {
         NodeId shared = s->createNode();
         MaterialId sharedMat = s->createPbrMaterial(p);
         CHECK(s->attachMesh(shared, rigged, sharedMat));
-        CHECK_MSG(s->hasSkeleton(shared),
+        CHECK_MSG(jahshaka::engine::inspect::scene(s)->hasSkeleton(shared),
                   "a plain attach of an already-rigged mesh still yields a skeleton instance");
         CHECK_MSG(!s->setShadingModel(sharedMat, ShadingModel::Unlit),
                   "...and is therefore refused Unlit for the same reason");
@@ -3547,7 +3560,7 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
     // sky, on the GPU), so the engine has an ambient integral for it and nobody
     // had to bake an image.
     float sh[27] = { 0.0f };
-    CHECK_MSG(s->skyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
+    CHECK_MSG(s->published().copySkyAmbientSh(sh) && (sh[0] + sh[1] + sh[2]) > 0.0f,
               "the analytic sky is captured and integrated: band0 %.3f %.3f %.3f",
               sh[0], sh[1], sh[2]);
 }
@@ -3571,7 +3584,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     aim(v);
 
     // NO ATMOSPHERE YET: white, whatever is asked.
-    const Colour noSky = s->atmosphereSunTint(Vec3(0.0f, 0.1f, -1.0f));
+    const Colour noSky = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 0.1f, -1.0f));
     CHECK_MSG(noSky.r == 1.0f && noSky.g == 1.0f && noSky.b == 1.0f,
               "with no analytic sky the tint is exactly white (%.3f %.3f %.3f)",
               noSky.r, noSky.g, noSky.b);
@@ -3585,7 +3598,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
     render(fx.e);
 
-    const Colour noon = s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    const Colour noon = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 1.0f, 0.0f));
     std::printf("    tint at the zenith  %.3f %.3f %.3f\n", noon.r, noon.g, noon.b);
     CHECK_MSG(std::fabs(noon.r - 1.0f) < 1e-3f && std::fabs(noon.g - 1.0f) < 1e-3f &&
                   std::fabs(noon.b - 1.0f) < 1e-3f,
@@ -3594,7 +3607,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // ~5 degrees above the horizon.
     const float elev = std::sin(5.0f * 3.14159265f / 180.0f);
     const float flat = std::cos(5.0f * 3.14159265f / 180.0f);
-    const Colour low = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    const Colour low = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
     std::printf("    tint at 5 degrees   %.3f %.3f %.3f   (r/b %.2f)\n",
                 low.r, low.g, low.b, low.b > 1e-6f ? low.r / low.b : 0.0f);
     CHECK_MSG(low.r > low.b * 1.3f,
@@ -3606,7 +3619,7 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // a switch: 30 degrees sits between the two.
     const float e30 = std::sin(30.0f * 3.14159265f / 180.0f);
     const float f30 = std::cos(30.0f * 3.14159265f / 180.0f);
-    const Colour mid = s->atmosphereSunTint(Vec3(0.0f, e30, -f30));
+    const Colour mid = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, e30, -f30));
     std::printf("    tint at 30 degrees  %.3f %.3f %.3f\n", mid.r, mid.g, mid.b);
     CHECK_MSG(mid.b > low.b && mid.b <= noon.b,
               "30 degrees sits between the horizon and the zenith (b %.3f)", mid.b);
@@ -3619,8 +3632,8 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // way.
     Image before, after;
     render(fx.e); REQUIRE(v->readPixels(before));
-    (void)s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
-    (void)s->atmosphereSunTint(Vec3(0.0f, 1.0f, 0.0f));
+    (void)jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
+    (void)jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 1.0f, 0.0f));
     render(fx.e); REQUIRE(v->readPixels(after));
     const Px b0 = px(before, 4, 4), a0 = px(after, 4, 4);
     CHECK_MSG(b0.r == a0.r && b0.g == a0.g && b0.b == a0.b,
@@ -3630,7 +3643,8 @@ void atmosphere_sun_tint_reddens_a_low_sun() {
     // A PICTURE SKY HAS NO OPINION: back to white.
     SkyDesc none;
     CHECK_MSG(s->setSky(none), "the sky goes away: %s", fx.e->lastError().c_str());
-    const Colour off = s->atmosphereSunTint(Vec3(0.0f, elev, -flat));
+    enginetest::frames(fx.e, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
+    const Colour off = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, elev, -flat));
     CHECK_MSG(off.r == 1.0f && off.g == 1.0f && off.b == 1.0f,
               "without the analytic sky the tint is white again");
 }
@@ -3726,7 +3740,7 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // is re-based on the reference instead of on a hand-picked bar.
     // sky.sun_transmittance is where the tint is gated against that reference
     // across eight elevations; here it only has to stay DAYLIGHT.
-    const Colour tint = s->atmosphereSunTint(Vec3(0.0f, 0.587785f, -0.809017f));
+    const Colour tint = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 0.587785f, -0.809017f));
     std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
     // THE REFERENCE IS THE PLANET'S ATMOSPHERE'S OWN (SKY-ATMOSPHERE-1): its
     // transmittance integral at the default haze (the reference's clear air),
@@ -3751,7 +3765,7 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // deleting the atmosphere: 5 degrees up is unmistakably warm.
     const float e5 = std::sin(5.0f * 3.14159265f / 180.0f);
     const float f5 = std::cos(5.0f * 3.14159265f / 180.0f);
-    const Colour low = s->atmosphereSunTint(Vec3(0.0f, e5, -f5));
+    const Colour low = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, e5, -f5));
     std::printf("    sun tint at  5 degrees  %.3f %.3f %.3f\n", low.r, low.g, low.b);
     CHECK_MSG(low.r > low.b * 1.5f, "a 5-degree sun is warm (r %.3f vs b %.3f)", low.r, low.b);
 }
@@ -3867,7 +3881,7 @@ void sky_ambient_read_is_deferred_through_a_drag() {
     };
     const auto band0 = [&]() {
         float sh[27] = { 0.0f };
-        if (!s->skyAmbientSh(sh)) return -1.0f;
+        if (!s->published().copySkyAmbientSh(sh)) return -1.0f;
         return sh[0];
     };
 
@@ -3993,19 +4007,19 @@ void sun_disc_stays_out_of_the_skys_ambient() {
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
     float shOut[27] = { 0.0f };
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0Out = shOut[0];
 
     sky.sun.inProbes = true;
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0In = shOut[0];
 
     sky.sun.angularDiameterDeg = 170.0f;
     REQUIRE(s->setSky(sky));
     render(fx.e, 3);
-    REQUIRE(s->skyAmbientSh(shOut));
+    REQUIRE(s->published().copySkyAmbientSh(shOut));
     const float band0Huge = shOut[0];
     std::printf("    sky band0: disc out %.6f, 0.53 deg in %.6f, 170 deg in %.6f "
                 "(a 96-grey sky is %.6f)\n",
@@ -4201,29 +4215,35 @@ void fog_breakthrough_spares_bright_surfaces() {
 void workspace_seam_counts_every_rebuild() {
     Fixture fx;
     View *v = fx.view("seam-view", 64, 64, kBlue); REQUIRE(v);
-    CHECK_MSG(v->workspaceGeneration() == 0u,
-              "a view with no scene has no workspace yet: %u", v->workspaceGeneration());
+    CHECK_MSG(v->published().workspaceGeneration == 0u,
+              "a view with no scene has no workspace yet: %u", v->published().workspaceGeneration);
     Scene *s = fx.scene("seam-scene"); REQUIRE(s);
     CHECK(v->setScene(s));
-    const unsigned afterBind = v->workspaceGeneration();
+    render(fx.e, 1);   // every read below is the snapshot a frame closed (U3 stage 2b)
+    const unsigned afterBind = v->published().workspaceGeneration;
     CHECK_MSG(afterBind == 1u, "binding a scene builds exactly one workspace: %u", afterBind);
 
     // Same value = free. Hosts (SceneMirror) push these every frame.
-    v->setBackground(v->background());
-    v->setSampleCount(v->sampleCount());
-    v->setShadows(v->shadows());
-    CHECK_MSG(v->workspaceGeneration() == afterBind,
-              "re-pushing unchanged values must not rebuild: %u", v->workspaceGeneration());
+    v->setBackground(jahshaka::engine::inspect::view(v)->background());
+    v->setSampleCount(v->published().sampleCount);
+    v->setShadows(jahshaka::engine::inspect::view(v)->shadows());
+    render(fx.e, 1);
+    CHECK_MSG(v->published().workspaceGeneration == afterBind,
+              "re-pushing unchanged values must not rebuild: %u", v->published().workspaceGeneration);
 
     // Each real change rebuilds once, and only once.
     v->setBackground(kGreen);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 1, "background change: %u", v->workspaceGeneration());
+    render(fx.e, 1);
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 1, "background change: %u", v->published().workspaceGeneration);
     v->setShadows(true);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 2, "shadow toggle: %u", v->workspaceGeneration());
+    render(fx.e, 1);
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 2, "shadow toggle: %u", v->published().workspaceGeneration);
     v->resize(96, 96);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 3, "offscreen resize: %u", v->workspaceGeneration());
+    render(fx.e, 1);
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 3, "offscreen resize: %u", v->published().workspaceGeneration);
     v->setSampleCount(4);
-    CHECK_MSG(v->workspaceGeneration() == afterBind + 4, "sample-count change: %u", v->workspaceGeneration());
+    render(fx.e, 1);
+    CHECK_MSG(v->published().workspaceGeneration == afterBind + 4, "sample-count change: %u", v->published().workspaceGeneration);
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     CHECK(near(centre(img), kGreen, 12));
 
@@ -4428,11 +4448,11 @@ void video_readback_is_bt709_nv12() {
     CHECK_MSG(!v->takeVideoFrame(fr, false), "nothing armed, nothing to take");
 
     v->armVideoFrame(7);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image img;
     REQUIRE(v->readPixels(img));
     bool got = false;
-    for (int i = 0; i < 8 && !got; ++i) { got = v->takeVideoFrame(fr, false); if (!got) e->renderOneFrame(); }
+    for (int i = 0; i < 8 && !got; ++i) { got = v->takeVideoFrame(fr, false); if (!got) enginetest::frames(e, 1); }
     REQUIRE(got);
     CHECK(fr.tag == 7u && fr.width == W && fr.height == H && fr.nv12.size() == size_t(W) * H * 3 / 2);
 
@@ -4472,7 +4492,7 @@ void video_readback_is_bt709_nv12() {
 
     // THE RING: five armed frames, nobody taking — three are read back, two dropped.
     const unsigned long long dropped0 = v->videoReadbackStatus().dropped;
-    for (unsigned long long t = 100; t < 105; ++t) { v->armVideoFrame(t); e->renderOneFrame(); }
+    for (unsigned long long t = 100; t < 105; ++t) { v->armVideoFrame(t); enginetest::frames(e, 1); }
     const VideoReadbackStatus st1 = v->videoReadbackStatus();
     std::printf("    ring: pending %u recorded %llu delivered %llu dropped %llu\n", st1.pending,
                 st1.recorded, st1.delivered, st1.dropped);
@@ -4499,13 +4519,14 @@ void hud_overlay_is_ignored_offscreen_unless_asked() {
     populate(s, kOrange);
     aim(v);
     render(fx.e, 4); Image plain; REQUIRE(v->readPixels(plain));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     v->setOverlay(loudCover());          // allowOffscreen deliberately NOT set
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
-              "an offscreen view must not even rebuild for an overlay it will ignore: %u -> %u",
-              genBefore, v->workspaceGeneration());
     render(fx.e, 4); Image covered; REQUIRE(v->readPixels(covered));
+    // (the snapshot's generation, after the frames that would have rebuilt — U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
+              "an offscreen view must not even rebuild for an overlay it will ignore: %u -> %u",
+              genBefore, v->published().workspaceGeneration);
 
     std::printf("    pixelhash  no overlay %016llx   cover+stats refused %016llx\n",
                 pixelHash(plain), pixelHash(covered));
@@ -4513,8 +4534,8 @@ void hud_overlay_is_ignored_offscreen_unless_asked() {
               "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
               pixelHash(plain), pixelHash(covered));
     // The view still remembers what it was asked for — it just does not act.
-    CHECK(v->overlay().cover == ViewOverlayDesc::Cover::Loading);
-    CHECK(v->overlay().stats);
+    CHECK(jahshaka::engine::inspect::view(v)->overlay().cover == ViewOverlayDesc::Cover::Loading);
+    CHECK(jahshaka::engine::inspect::view(v)->overlay().stats);
 }
 
 /// The other half: a negative test that can never fail proves nothing. With
@@ -4630,7 +4651,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     CHECK_MSG(!near(centre(world), kBlue, 8),
               "the fixture must actually draw its object first: %d %d %d",
               centre(world).r, centre(world).g, centre(world).b);
-    const unsigned long long blankBefore = v->blankFramesPresented();
+    const unsigned long long blankBefore = v->published().blank;
 
     // ---- the scene goes ----------------------------------------------------
     v->setScene(nullptr);
@@ -4644,9 +4665,9 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     CHECK_MSG(notBackground == 0,
               "every pixel must be the view's own background: %zu of %u are not",
               notBackground, bare.width * bare.height);
-    CHECK_MSG(v->blankFramesPresented() > blankBefore,
+    CHECK_MSG(v->published().blank > blankBefore,
               "...and the view must have COUNTED those frames (%llu -> %llu)",
-              blankBefore, v->blankFramesPresented());
+              blankBefore, v->published().blank);
 
     // ---- the panel a close raises, on that background -----------------------
     ViewOverlayDesc noScene;
@@ -4681,7 +4702,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
     for (const unsigned samples : { 2u, 4u }) {
         v->setSampleCount(samples);
         render(fx.e, 3);
-        const unsigned achieved = v->sampleCount();
+        const unsigned achieved = v->published().sampleCount;
         Image aa; REQUIRE(v->readPixels(aa));
         CHECK_MSG(near(centre(aa), noScene.coverFill, 6),
                   "%ux (achieved %u): the panel must survive the resolve: %d %d %d",
@@ -4701,7 +4722,7 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
             if (!near(px(aaBare, x, y), kBlue, 4)) ++aaNotBackground;
     CHECK_MSG(aaNotBackground == 0,
               "at %ux every pixel must still be the view's background: %zu of %u are not",
-              v->sampleCount(), aaNotBackground, aaBare.width * aaBare.height);
+              v->published().sampleCount, aaNotBackground, aaBare.width * aaBare.height);
     v->setSampleCount(1);
     render(fx.e, 2);
 
@@ -4733,7 +4754,7 @@ void hud_overlay_toggle_does_not_rebuild_the_workspace() {
     on.allowOffscreen = true;            // pay the one entitlement rebuild up front
     v->setOverlay(on);
     render(fx.e, 2);
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
 
     for (int i = 0; i < 3; ++i) {
         ViewOverlayDesc d;
@@ -4747,9 +4768,9 @@ void hud_overlay_toggle_does_not_rebuild_the_workspace() {
     }
     v->setOverlay(on);
     render(fx.e, 1);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "toggling the overlay must not rebuild the workspace: %u -> %u",
-              gen, v->workspaceGeneration());
+              gen, v->published().workspaceGeneration);
 }
 
 /// The data half (phase 1). Not "plausible numbers" — the two properties a
@@ -4765,13 +4786,13 @@ void render_stats_are_live_and_lazily_recorded() {
     aim(v);
 
     RenderStats first;
-    CHECK(fx.e->renderStats(first));
+    CHECK(enginetest::renderStats(fx.e, first));
     // The first read may or may not find recording already on — an earlier test
     // in this process may have asked. What must hold either way: after the read
     // switched it on and a frame has been drawn, there ARE draws.
     render(fx.e, 4);
     RenderStats after;
-    CHECK(fx.e->renderStats(after));
+    CHECK(enginetest::renderStats(fx.e, after));
     CHECK_MSG(after.metricsRecording, "reading renderStats must have enabled recording");
     std::printf("    %.1f fps  %.2f ms  %llu draws  %llu batches  %llu tris  %llu verts\n",
                 after.fps, after.frameMs, after.draws, after.batches, after.triangles,
@@ -5001,14 +5022,15 @@ void postfx_is_ignored_offscreen_unless_asked() {
     populate(s, kOrange);
     aim(v);
     render(fx.e); Image before; REQUIRE(v->readPixels(before));
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
 
     PostFxDesc fxDesc;
     fxDesc.hdr = true; fxDesc.bloom = true; fxDesc.ssao = true; fxDesc.smaaPreset = 1;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == genBefore,
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == genBefore,
               "an offscreen view must not even rebuild for post fx: %u -> %u",
-              genBefore, v->workspaceGeneration());
+              genBefore, v->published().workspaceGeneration);
     render(fx.e); Image after; REQUIRE(v->readPixels(after));
     const Px b = centre(before), a = centre(after);
     CHECK_MSG(b.r == a.r && b.g == a.g && b.b == a.b,
@@ -5016,7 +5038,7 @@ void postfx_is_ignored_offscreen_unless_asked() {
               b.r, b.g, b.b, a.r, a.g, a.b);
     // postFx() still reports what the host asked for — the view remembers, it
     // just does not act.
-    CHECK(v->postFx().hdr);
+    CHECK(jahshaka::engine::inspect::view(v)->postFx().hdr);
 }
 
 /// HDR + filmic tonemap + auto exposure, on an offscreen view that opted in.
@@ -5037,8 +5059,9 @@ void hdr_tonemap_and_exposure() {
     fxDesc.hdr = true;
     fxDesc.exposure = 0.0f;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() >= 2u, "enabling HDR rebuilds the chain: %u",
-              v->workspaceGeneration());
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration >= 2u, "enabling HDR rebuilds the chain: %u",
+              v->published().workspaceGeneration);
     settleExposure(fx.e, v);   // the auto-exposure converged, in frames
     if (!fx.e->lastError().empty())
         std::printf("    lastError after HDR enable: %s\n", fx.e->lastError().c_str());
@@ -5055,12 +5078,13 @@ void hdr_tonemap_and_exposure() {
               hdrCube.r, hdrCube.g, hdrCube.b);
 
     // Exposure is a UNIFORM: changing it must not rebuild anything.
-    const unsigned gen = v->workspaceGeneration();
+    const unsigned gen = v->published().workspaceGeneration;
     fxDesc.exposure = 2.0f;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == gen,
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == gen,
               "exposure is a uniform, not a graph change: %u -> %u", gen,
-              v->workspaceGeneration());
+              v->published().workspaceGeneration);
     settleExposure(fx.e, v);
     Image bright; REQUIRE(v->readPixels(bright));
     const Px brightCube = centre(bright);
@@ -5150,8 +5174,9 @@ void fixed_exposure_tonemap() {
     fxDesc.tonemapFixed = true;
     fxDesc.exposure = 0.6f;          // secondaryfx::kFixedExposure
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() >= 2u,
-              "the fixed-exposure chain is a graph change: %u", v->workspaceGeneration());
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration >= 2u,
+              "the fixed-exposure chain is a graph change: %u", v->published().workspaceGeneration);
     render(fx.e, 3); Image graded; REQUIRE(v->readPixels(graded));
     int gSat = 0, gLit = 0, gMax = 0;
     histogram(graded, gSat, gLit, gMax);
@@ -5175,12 +5200,13 @@ void fixed_exposure_tonemap() {
     // ...and for contrast, the AUTOMATIC form on the same view is not: turning
     // tonemapFixed off puts the luminance reduction back, which is a graph
     // change, and the picture then depends on how long it has been adapting.
-    const unsigned genFixed = v->workspaceGeneration();
+    const unsigned genFixed = v->published().workspaceGeneration;
     fxDesc.tonemapFixed = false;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() > genFixed,
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration > genFixed,
               "tonemapFixed is part of sameShape(): flipping it rebuilds (%u -> %u)",
-              genFixed, v->workspaceGeneration());
+              genFixed, v->published().workspaceGeneration);
 
     // Off again: the passthrough graph and the ORIGINAL pixels, exactly.
     v->setPostFx(PostFxDesc());
@@ -5260,16 +5286,17 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     //    `jahOldLum` is destroyed and recreated by one — so a shape change
     //    followed immediately by a read would have returned the seed at best
     //    and unwritten VRAM at worst. Turning SSAO on is exactly such a change.
-    const unsigned genBefore = v->workspaceGeneration();
+    const unsigned genBefore = v->published().workspaceGeneration;
     fxDesc.ssao = true;
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() > genBefore,
-              "ssao is a shape change: the workspace rebuilt (%u -> %u)",
-              genBefore, v->workspaceGeneration());
     CHECK_MSG(v->measuredExposureScale() == 0.0f,
               "AFTER A REBUILD the history is unwritten and the verb refuses to read it: %f",
               double(v->measuredExposureScale()));
     std::printf("    ...after the rebuild: stopped moving after %d frames\n", settleExposure(fx.e, v));
+    // (the generation is the snapshot's, read once the frames have closed the rebuild — U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration > genBefore,
+              "ssao is a shape change: the workspace rebuilt (%u -> %u)",
+              genBefore, v->published().workspaceGeneration);
     CHECK_MSG(v->measuredExposureScale() > 0.0f,
               "...and it reports again once the NEW graph has drawn: %f",
               double(v->measuredExposureScale()));
@@ -5289,13 +5316,14 @@ void measured_exposure_is_readable_and_refuses_to_guess() {
     // ...and the other half of the pair: exposureScale REPLACES the grey card
     // without rebuilding anything, which is what lets a screenshot be handed a
     // measured value at the moment it is taken.
-    const unsigned genFixed = v->workspaceGeneration();
+    const unsigned genFixed = v->published().workspaceGeneration;
     render(fx.e, 2); Image card; REQUIRE(v->readPixels(card));
     fxDesc.exposureScale = 4.0f;          // far from e^(0.6-2)/0.18 = 1.37
     v->setPostFx(fxDesc);
-    CHECK_MSG(v->workspaceGeneration() == genFixed,
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().workspaceGeneration == genFixed,
               "exposureScale is a clear colour, not a graph edit: no rebuild (%u)",
-              v->workspaceGeneration());
+              v->published().workspaceGeneration);
     render(fx.e, 2); Image pinned; REQUIRE(v->readPixels(pinned));
     CHECK_MSG(pinned.rgba != card.rgba,
               "a pinned exposureScale grades differently from the grey card it replaces");
@@ -5560,7 +5588,7 @@ void postfx_epic_shape_with_msaa() {
     aim(v);
     v->setSampleCount(4);
     render(fx.e, 2);
-    std::printf("    achieved samples: %u\n", v->sampleCount());
+    std::printf("    achieved samples: %u\n", v->published().sampleCount);
 
     PostFxDesc fxDesc;
     fxDesc.allowOffscreen = true;
@@ -5694,7 +5722,7 @@ void sky_stays_smooth_under_the_post_chain() {
 
     // The sky band: the top third, which the camera framing keeps free of
     // geometry (the horizon sits at about 60% of the frame height).
-    const unsigned skyY0 = 2u, skyY1 = v->height() / 3u;
+    const unsigned skyY0 = 2u, skyY1 = v->published().height / 3u;
     auto skyLuma = [&](const Image &img) {
         int sum = 0, n = 0;
         for (unsigned y = skyY0; y < skyY1; ++y)
@@ -5847,7 +5875,7 @@ void monitor_off_is_inert() {
     REQUIRE(built);
     CHECK(fx.e->frameMonitor() == MonitorLevel::Off);   // the default, always
     render(fx.e, 3);
-    MonitorStatus st = fx.e->monitorStatus();
+    MonitorStatus st = fx.e->published().monitor;
     CHECK(st.level == MonitorLevel::Off);
     CHECK_MSG(st.attachedListeners == 0u, "off must attach nothing: %u", st.attachedListeners);
     CHECK_MSG(st.ringCapacity == 0u, "off must free the ring: %u", st.ringCapacity);
@@ -5855,9 +5883,9 @@ void monitor_off_is_inert() {
     CHECK(st.framesRecorded == 0ull);
     CHECK_MSG(st.gpuQueryPools == 0u, "off must own no query pool: %u", st.gpuQueryPools);
     CHECK(!st.gpuActive);
-    std::vector<FrameRecord> recs;
+    std::vector<MonitorRecord> recs;
     std::vector<MonitorEvent> evs;
-    CHECK(fx.e->takeFrameRecords(recs) == 0u);
+    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
     CHECK(fx.e->takeMonitorEvents(evs) == 0u);
     CHECK(recs.empty() && evs.empty());
     // The host's hooks are safe to call with it off — a caller never has to ask.
@@ -5867,31 +5895,31 @@ void monitor_off_is_inert() {
     fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Scripted));
     render(fx.e);
     CHECK(fx.e->takeMonitorEvents(evs) == 0u);
-    CHECK(fx.e->monitorStatus().framesRecorded == 0ull);
+    CHECK(fx.e->published().monitor.framesRecorded == 0ull);
 
     // ...and ON then OFF returns to exactly that state (nothing is leaked and
     // nothing stays attached).
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    CHECK(fx.e->published().monitor.attachedListeners > 0u);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    st = fx.e->monitorStatus();
+    st = fx.e->published().monitor;
     CHECK(st.level == MonitorLevel::Off);
     CHECK(st.attachedListeners == 0u);
     CHECK(st.ringCapacity == 0u);
     // STOPPING FLUSHES, and the next drain hands back the tail even with the
     // monitor off — the host's natural "stop, then drain" order is lossless.
     recs.clear();
-    const unsigned tail = fx.e->takeFrameRecords(recs);
+    const unsigned tail = fx.e->takeMonitorRecords(recs);
     std::printf("    tail handed back after the stop: %u record(s)\n", tail);
     CHECK_MSG(tail > 0u, "stopping must not discard the frames just recorded");
     // ...and that is the END of it: the storage is gone.
     recs.clear();
-    CHECK(fx.e->takeFrameRecords(recs) == 0u);
-    CHECK(fx.e->monitorStatus().ringFrames == 0u);
+    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
     render(fx.e, 2);
-    CHECK(fx.e->takeFrameRecords(recs) == 0u);
+    CHECK(fx.e->published().monitor.ringFrames == 0u);   // the snapshot, a frame after the drain (U3 stage 2b)
+    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
 }
 
 void monitor_passes_sum_to_the_frame() {
@@ -5912,11 +5940,11 @@ void monitor_passes_sum_to_the_frame() {
     // RenderingMetrics recording on, and it is off until someone asks. Ask
     // BEFORE the measured frame, or the frame renders with no counters at all
     // and every number below is zero.
-    RenderStats rs; CHECK(fx.e->renderStats(rs));
+    RenderStats rs; CHECK(enginetest::renderStats(fx.e, rs));
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
-    std::vector<FrameRecord> recs;
-    fx.e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    fx.e->takeMonitorRecords(recs);
     recs.clear();
     fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Driver));
     // MOVE A CASTER so the measured frame re-renders the lamp's map: every
@@ -5931,9 +5959,9 @@ void monitor_passes_sum_to_the_frame() {
     // legitimately reports ZERO draws, and so does its pass record. (Recorded
     // for the monitor's analysis: draws == 0 means "replayed", not "nothing was
     // drawn".)
-    CHECK(fx.e->renderStats(rs));
+    CHECK(enginetest::renderStats(fx.e, rs));
     render(fx.e, 4);                       // past the GPU readback latency
-    const unsigned drained = fx.e->takeFrameRecords(recs);   // once: REQUIRE evaluates twice
+    const unsigned drained = fx.e->takeMonitorRecords(recs);   // once: REQUIRE evaluates twice
     REQUIRE(drained > 0u);
     // The frame that re-rendered the lamp's map is the richest one; the flush
     // frames behind it are idle and execute no shadow pass (which is the cache
@@ -5941,7 +5969,7 @@ void monitor_passes_sum_to_the_frame() {
     size_t richest = 0;
     for (size_t i = 1; i < recs.size(); ++i)
         if (recs[i].passes.size() > recs[richest].passes.size()) richest = i;
-    const FrameRecord &r = recs[richest];
+    const MonitorRecord &r = recs[richest];
     std::printf("    frame %llu: %zu passes, %u draws (renderStats %u), total %.3f ms\n",
                 (unsigned long long)r.frame, r.passes.size(), r.draws, rs.draws, r.totalMs);
     CHECK_MSG(!r.passes.empty(), "a rendered frame must record passes");
@@ -5964,7 +5992,7 @@ void monitor_passes_sum_to_the_frame() {
     CHECK_MSG(draws == rs.draws, "per-pass draws must sum to the renderer's count: %u vs %u",
               draws, rs.draws);
     // ...and EVERY record is self-consistent, not just the one examined above.
-    for (const FrameRecord &other : recs) {
+    for (const MonitorRecord &other : recs) {
         unsigned sum = 0;
         for (const FramePass &p : other.passes) sum += p.draws;
         CHECK_MSG(sum == other.draws, "frame %llu: %u vs %u",
@@ -6023,17 +6051,17 @@ void monitor_records_work_with_its_reason() {
     REQUIRE(built);
     render(fx.e, 4);
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    std::vector<FrameRecord> recs;
+    std::vector<MonitorRecord> recs;
     std::vector<MonitorEvent> evs;
 
     // (1) A LIGHT MOVES -> its cached shadow map is re-rendered, reason Light.
     render(fx.e, 6);
-    fx.e->takeFrameRecords(recs); recs.clear();
+    fx.e->takeMonitorRecords(recs); recs.clear();
     rig.s->setNodeTransform(rig.lamp, Vec3(-2, 3, 2), Quat(), Vec3(1, 1, 1));
     renderAndFlush(fx.e, 1);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     bool lampRelit = false;
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const CacheWork &w : r.cacheWork)
             if (w.cache == CacheKind::ShadowMap && w.id == rig.lamp &&
                 w.reason == WorkReason::Light)
@@ -6044,9 +6072,9 @@ void monitor_records_work_with_its_reason() {
     // (2) A CASTER MOVES -> the same map, reason Caster (not Light).
     rig.s->setNodeTransform(rig.cube, Vec3(0.4f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
     renderAndFlush(fx.e, 1);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     bool casterRelit = false;
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const CacheWork &w : r.cacheWork)
             if (w.cache == CacheKind::ShadowMap && w.reason == WorkReason::Caster)
                 casterRelit = true;
@@ -6059,10 +6087,10 @@ void monitor_records_work_with_its_reason() {
     //     the case the lead reads. The assertion is only that idle frames are
     //     recorded at all and that any shadow work they contain is attributed.
     render(fx.e, 10);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     CHECK_MSG(recs.size() >= 6u, "every frame must produce a record: %zu", recs.size());
     unsigned idleShadowWork = 0, idleUnattributed = 0;
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const CacheWork &w : r.cacheWork)
             if (w.cache == CacheKind::ShadowMap) {
                 ++idleShadowWork;
@@ -6077,7 +6105,7 @@ void monitor_records_work_with_its_reason() {
     rig.s->refreshGlobalIllumination();
     renderAndFlush(fx.e, 2);
     fx.e->takeMonitorEvents(evs);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     bool giEvent = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::GiRebuild || e.kind == MonitorEventKind::GiRefresh ||
@@ -6103,11 +6131,11 @@ void monitor_records_work_with_its_reason() {
     renderAndFlush(fx.e, 1);
     evs.clear(); recs.clear();
     fx.e->takeMonitorEvents(evs);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     bool sawHook = false, sawHostStage = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::Host && e.label == "page.switch") sawHook = true;
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const FrameStage &st : r.stages)
             if (st.name == "host.tick") sawHostStage = true;
     CHECK_MSG(sawHook, "the host's event hook must reach events");
@@ -6130,16 +6158,16 @@ void monitor_survives_rebuilds_and_view_destruction() {
     render(fx.e, 2);
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 2);
-    const unsigned attached = fx.e->monitorStatus().attachedListeners;
+    const unsigned attached = fx.e->published().monitor.attachedListeners;
     CHECK_MSG(attached > 0u, "a live view must carry the monitor's listener");
 
     // (a) AN ATLAS REBUILD drops and recreates every workspace naming a shadow node.
     fx.e->setShadowResolution(1024);
     render(fx.e, 6);
-    std::vector<FrameRecord> recs;
-    fx.e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    fx.e->takeMonitorRecords(recs);
     bool passesAfterAtlas = false;
-    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterAtlas = true;
+    for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterAtlas = true;
     CHECK_MSG(passesAfterAtlas, "the listener must ride an atlas rebuild");
     std::vector<MonitorEvent> evs;
     fx.e->takeMonitorEvents(evs);
@@ -6174,10 +6202,10 @@ void monitor_survives_rebuilds_and_view_destruction() {
     rig.s->setGlobalIllumination(gi);
     rig.s->refreshGlobalIllumination();
     render(fx.e, 6);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     fx.e->takeMonitorEvents(evs);
     bool passesAfterGi = false;
-    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterGi = true;
+    for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterGi = true;
     CHECK_MSG(passesAfterGi, "the listener must ride a GI rebuild");
     // ...and the rebuild itself is an EVENT, timed and tagged with a reason.
     bool giRebuild = false, giHasReason = false;
@@ -6206,19 +6234,19 @@ void monitor_survives_rebuilds_and_view_destruction() {
     CameraDesc c; c.position = Vec3(3, 3, 3); c.fovDegrees = 60;
     v2->setCamera(c);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners > 0u);
+    CHECK(fx.e->published().monitor.attachedListeners > 0u);
     fx.forget(v2);
     fx.e->destroyView(v2);
     render(fx.e, 6);
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     bool passesAfterDestroy = false;
-    for (const FrameRecord &r : recs) if (!r.passes.empty()) passesAfterDestroy = true;
+    for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterDestroy = true;
     CHECK_MSG(passesAfterDestroy, "destroying a view must not stop the monitor");
 
     // (d) DOWN again: everything detaches, from every kind of workspace.
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
     CHECK(fx.e->lastError().empty() || true);   // reported, never thrown
 }
 
@@ -6273,7 +6301,7 @@ void monitor_snapshot_names_the_graph() {
     CHECK(!snap.hlmsDatablocks.empty());
     CHECK(snap.device.renderSystem.empty() || true);  // reported; no assertion on the GPU
     // ...and the GPU-timing half says WHY it is unavailable rather than lying.
-    const MonitorStatus st = fx.e->monitorStatus();
+    const MonitorStatus st = fx.e->published().monitor;
     CHECK(!st.gpuReason.empty());
     CHECK(!st.gpuCompiled || st.gpuSupported || !st.gpuReason.empty());
 }
@@ -6303,7 +6331,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
     rigA.s->setPlanarReflections(planar);
     rigA.s->setNodePlanarReflector(rigA.ground, true);
     render(fx.e, 3);
-    CHECK_MSG(rigA.s->activePlanarReflectors() > 0,
+    CHECK_MSG(rigA.s->published().activePlanarReflectors > 0,
               "the rig's mirror must actually render, or this case guards nothing");
 
     // A SECOND view on its own scene, so the frame still has something to draw
@@ -6317,16 +6345,17 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
     render(fx.e, 3);                       // A is drawn: its mirror takes the listener
-    CHECK_MSG(fx.e->monitorStatus().attachedListeners >= 3u,
+    CHECK_MSG(fx.e->published().monitor.attachedListeners >= 3u,
               "the view, the second view and the mirror all carry it: %u",
-              fx.e->monitorStatus().attachedListeners);
+              fx.e->published().monitor.attachedListeners);
 
     // THE PAGE SWITCH: A's view is disabled, so A stops being drawn. Its
     // workspaces live on, listener and all.
     rigA.v->setEnabled(false);
     render(fx.e, 3);
     fx.e->setFrameMonitor(MonitorLevel::Off);   // the FrameMonitor dies here
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    render(fx.e, 1);   // the snapshot's monitor status, a frame after the stop (U3 stage 2b)
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
 
     // ...and back. With the defect, this frame executed A's mirror workspace
     // through a destroyed listener.
@@ -6341,7 +6370,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
         const std::string err = fx.e->takeLastError();
         CHECK_MSG(err.empty(), "rendering the re-enabled view after a stop: %s", err.c_str());
     }
-    CHECK_MSG(rigA.s->activePlanarReflectors() > 0, "the mirror still renders afterwards");
+    CHECK_MSG(rigA.s->published().activePlanarReflectors > 0, "the mirror still renders afterwards");
 
     // On and off again over the same switch must also be clean.
     fx.e->setFrameMonitor(MonitorLevel::Review);
@@ -6352,7 +6381,7 @@ void monitor_detaches_from_a_scene_it_stopped_drawing() {
     render(fx.e, 2);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     render(fx.e, 2);
-    CHECK(fx.e->monitorStatus().attachedListeners == 0u);
+    CHECK(fx.e->published().monitor.attachedListeners == 0u);
     {
         const std::string err = fx.e->takeLastError();
         CHECK_MSG(err.empty(), "a capture across a view disable/enable is clean: %s", err.c_str());
@@ -6373,28 +6402,28 @@ void monitor_is_forward_only_for_compiles() {
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
-    std::vector<FrameRecord> recs;
-    fx.e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    fx.e->takeMonitorRecords(recs);
     unsigned compiles = 0;
-    for (const FrameRecord &r : recs) compiles += r.shaderCompiles;
+    for (const MonitorRecord &r : recs) compiles += r.shaderCompiles;
     std::printf("    first capture, warm process: %u compile(s) reported over %zu frame(s)\n",
                 compiles, recs.size());
     CHECK_MSG(compiles == 0u,
               "a capture in a warm process must report NO compiles from before it: %u", compiles);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
 
     // A SECOND capture must not re-report the first one's window either.
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
     recs.clear();
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     compiles = 0;
-    for (const FrameRecord &r : recs) compiles += r.shaderCompiles;
+    for (const MonitorRecord &r : recs) compiles += r.shaderCompiles;
     CHECK_MSG(compiles == 0u, "a second capture must not re-report the first's: %u", compiles);
     // ...and the tail of the FIRST capture must not have leaked into this one.
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         CHECK_MSG(r.startMs >= 0.0, "every record is relative to ITS capture's start");
     fx.e->setFrameMonitor(MonitorLevel::Off);
 }
@@ -6450,11 +6479,12 @@ void monitor_heavy_frames_keep_their_samples() {
     // The geometry counters are OFF until something reads renderStats (the
     // pass's triangles are how a record is recognised as a heavy frame).
     RenderStats armCounters;
-    fx.e->renderStats(armCounters);
+    enginetest::renderStats(fx.e, armCounters);
     render(fx.e, 10);                       // uploads and pipelines, before the capture
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    MonitorStatus st = fx.e->monitorStatus();
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    MonitorStatus st = fx.e->published().monitor;
     if (!st.gpuActive) {
         std::printf("    no GPU timestamps in this build (%s): nothing to measure\n", st.gpuReason.c_str());
         fx.e->setFrameMonitor(MonitorLevel::Off);
@@ -6462,18 +6492,18 @@ void monitor_heavy_frames_keep_their_samples() {
     }
     // Only what the capture PUBLISHED while running is read: stopping it flushes
     // the frames still in flight unsampled, by design.
-    std::vector<FrameRecord> recs;
+    std::vector<MonitorRecord> recs;
     // 48 capture frames: the bar counts >= 40 heavy records, and the capture publishes all but the 2-3 frames
     // still in flight (58 of 60 measured) — the frames the bar counts and that margin, no more.
-    for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->takeFrameRecords(recs); }
-    st = fx.e->monitorStatus();
+    for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->takeMonitorRecords(recs); }
+    st = fx.e->published().monitor;
     const unsigned pools = st.gpuQueryPools;
     fx.e->setFrameMonitor(MonitorLevel::Off);
-    { std::vector<FrameRecord> tail; fx.e->takeFrameRecords(tail); }
+    { std::vector<MonitorRecord> tail; fx.e->takeMonitorRecords(tail); }
     // THE HEAVY PASS is the one that drew the most triangles in the record.
     unsigned records = 0, carried = 0;
     double sumMs = 0;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         const FramePass *heavy = nullptr;
         for (const FramePass &fp : r.passes)
             if (!heavy || fp.triangles > heavy->triangles) heavy = &fp;
@@ -6507,13 +6537,14 @@ void monitor_gpu_timestamps() {
     render(fx.e, 3);
 
     // OFF: no pools, whatever the build says.
-    MonitorStatus st = fx.e->monitorStatus();
+    MonitorStatus st = fx.e->published().monitor;
     CHECK_MSG(st.gpuQueryPools == 0u, "no capture, no query pool: %u", st.gpuQueryPools);
     CHECK(!st.gpuActive);
     CHECK(!st.gpuReason.empty());
 
     fx.e->setFrameMonitor(MonitorLevel::Review);
-    st = fx.e->monitorStatus();
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    st = fx.e->published().monitor;
     std::printf("    gpu: compiled=%d supported=%d active=%d pools=%u reason='%s'\n",
                 int(st.gpuCompiled), int(st.gpuSupported), int(st.gpuActive), st.gpuQueryPools,
                 st.gpuReason.c_str());
@@ -6531,16 +6562,16 @@ void monitor_gpu_timestamps() {
     CHECK_MSG(st.gpuQueryPools > 0u, "a capture owns query pools");
 
     // Render past the frames in flight (their samples are answered once the GPU has them) and drain.
-    std::vector<FrameRecord> recs;
+    std::vector<MonitorRecord> recs;
     for (int i = 0; i < 8; ++i) {
         rig.s->setNodeTransform(rig.cube, Vec3(0.1f * float(i), 0.6f, 0), Quat(),
                                 Vec3(0.8f, 0.8f, 0.8f));
         render(fx.e, 1);
     }
-    fx.e->takeFrameRecords(recs);
+    fx.e->takeMonitorRecords(recs);
     unsigned sampled = 0, frames = 0;
     float anyGpu = -1.0f;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         ++frames;
         if (r.gpuMs >= 0.0f) anyGpu = r.gpuMs;
         for (const FramePass &p : r.passes)
@@ -6556,8 +6587,8 @@ void monitor_gpu_timestamps() {
     // count is what a heavy frame reports instead of passes that silently
     // carry no time.
     unsigned long long droppedInRecords = 0;
-    for (const FrameRecord &r : recs) droppedInRecords += r.gpuMarksDropped;
-    st = fx.e->monitorStatus();
+    for (const MonitorRecord &r : recs) droppedInRecords += r.gpuMarksDropped;
+    st = fx.e->published().monitor;
     std::printf("    gpu marks dropped: %llu in the records, %llu on the status\n",
                 droppedInRecords, st.gpuMarksDropped);
     CHECK_MSG(st.gpuMarksDropped == droppedInRecords && st.gpuMarksDropped == 0ull,
@@ -6566,7 +6597,8 @@ void monitor_gpu_timestamps() {
 
     // ...and the pools go with the capture.
     fx.e->setFrameMonitor(MonitorLevel::Off);
-    st = fx.e->monitorStatus();
+    render(fx.e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    st = fx.e->published().monitor;
     CHECK_MSG(st.gpuQueryPools == 0u, "stopping the capture frees the pools: %u",
               st.gpuQueryPools);
     CHECK(!st.gpuActive);

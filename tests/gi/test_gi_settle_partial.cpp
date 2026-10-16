@@ -82,9 +82,9 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.numBounces = 2;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds");
-    for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
-    e->renderOneFrame();
-    GiStatus g0 = s->giStatus();
+    for (int f = 0; f < 240 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
+    enginetest::frames(e, 1);
+    GiStatus g0 = s->published().gi;
     const size_t n = g0.cascades.size();
     CHECK_MSG(n >= 4u && g0.giAtRest, "a chain of %zu cascades, at rest", n);
     if (n < 4u) { std::printf("FAILED\n"); return 1; }
@@ -102,9 +102,9 @@ int main()
     for (size_t i = 0; i < n; ++i) before[i] = g0.cascades[i].rebuilds;
 
     e->setFrameMonitor(MonitorLevel::Review);
-    std::vector<FrameRecord> drop;
-    e->renderOneFrame();
-    e->takeFrameRecords(drop);
+    std::vector<MonitorRecord> drop;
+    enginetest::frames(e, 1);
+    e->takeMonitorRecords(drop);
     const NodeId box = enginetest::leakroom::addSlab(s, Colour(0.9f, 0.9f, 0.2f), at,
                                                      Vec3(0.6f, 0.6f, 0.6f));
     CHECK(box != 0, "the edit's box exists");
@@ -114,26 +114,26 @@ int main()
     unsigned settleInjections = 0, tickInCascade2Frame = 0;
     bool tickAsked = false, tickRanWithCascade2 = false;
     std::vector<std::string> order;
-    std::vector<FrameRecord> all;
+    std::vector<MonitorRecord> all;
     for (int f = 0; f < 160; ++f) {
-        const GiStatus now = s->giStatus();
+        const GiStatus now = s->published().gi;
         if (!tickAsked && now.cascades[1].rebuilds > before[1] && now.cascades[2].rebuilds == before[2]) {
             s->refreshGiLighting(false);
             tickAsked = true;
         }
-        e->renderOneFrame();
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        enginetest::frames(e, 1);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
-        if (f > 30 && s->giStatus().giAtRest) break;
+        if (f > 30 && s->published().gi.giAtRest) break;
     }
     e->setFrameMonitor(MonitorLevel::Off);
     {
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);      // what the monitor still held (GPU samples come back late)
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);      // what the monitor still held (GPU samples come back late)
         all.insert(all.end(), recs.begin(), recs.end());
     }
-    for (const FrameRecord &r : all) {
+    for (const MonitorRecord &r : all) {
         bool c2Here = false;
         unsigned tickUnits = 0;
         for (const CacheWork &w : r.cacheWork) {
@@ -146,7 +146,7 @@ int main()
         }
         if (c2Here && tickUnits) { tickRanWithCascade2 = true; tickInCascade2Frame = tickUnits; }
     }
-    const GiStatus g1 = s->giStatus();
+    const GiStatus g1 = s->published().gi;
     std::printf("   rebuilds per cascade after the edit:");
     std::vector<unsigned long long> delta(n);
     for (size_t i = 0; i < n; ++i) {
@@ -172,14 +172,14 @@ int main()
     // ---- IT IS THE FIXED POINT: a whole sweep changes nothing ---------------
     std::vector<std::string> partial(n);
     for (size_t i = 0; i < n; ++i) partial[i] = s->giVoxelStats(int(i)).lightDigest;
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image a; view->readPixels(a);
     s->refreshGiLighting(false);             // THE WHOLE AT-REST SWEEP, outermost first
     for (int f = 0; f < 60; ++f) {
-        e->renderOneFrame();
-        if (f > 4 && s->giStatus().giAtRest) break;
+        enginetest::frames(e, 1);
+        if (f > 4 && s->published().gi.giAtRest) break;
     }
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     Image b; view->readPixels(b);
     unsigned same = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -204,7 +204,7 @@ int main()
     // as it runs: a settle across a light write is the fixed point of neither),
     // and the restart must pay on the frame it is seen, not after the idle count.
     {
-        GiStatus gb = s->giStatus();
+        GiStatus gb = s->published().gi;
         std::vector<unsigned long long> rb(n);
         for (size_t i = 0; i < n; ++i) rb[i] = gb.cascades[i].rebuilds;
         const NodeId box2 = enginetest::leakroom::addSlab(s, Colour(0.2f, 0.9f, 0.9f),
@@ -216,9 +216,9 @@ int main()
         bool wrote = false;
         int writeFrame = -1, firstSettleAfter = -1;
         unsigned settleAfter = 0;
-        std::vector<FrameRecord> keep;
+        std::vector<MonitorRecord> keep;
         for (int f = 0; f < 160; ++f) {
-            if (!wrote && s->giStatus().cascades[3].rebuilds > rb[3]) {
+            if (!wrote && s->published().gi.cascades[3].rebuilds > rb[3]) {
                 LightDesc l;
                 l.type = LightType::Directional;
                 l.colour = Colour(1.f, 1.f, 1.f);
@@ -227,25 +227,25 @@ int main()
                 wrote = true;
                 writeFrame = f;
             }
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
-            if (f > writeFrame + 20 && wrote && s->giStatus().giAtRest) break;
+            if (f > writeFrame + 20 && wrote && s->published().gi.giAtRest) break;
         }
         e->setFrameMonitor(MonitorLevel::Off);
         {
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
         }
         // The records carry the engine's frame numbers; the write happened before
         // the frame whose cascade-3 rebuild row came first, plus one.
         unsigned long long c3Frame = 0;
-        for (const FrameRecord &r : keep)
+        for (const MonitorRecord &r : keep)
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi && w.detail == "vct.cascade3" && !c3Frame) c3Frame = r.frame;
-        for (const FrameRecord &r : keep) {
+        for (const MonitorRecord &r : keep) {
             if (r.frame <= c3Frame) continue;
             for (const CacheWork &w : r.cacheWork)
                 if (w.cache == CacheKind::Gi && w.detail == "vct.light.settle" && w.units) {
@@ -266,8 +266,8 @@ int main()
         for (size_t i = 0; i < n; ++i) mid[i] = s->giVoxelStats(int(i)).lightDigest;
         s->refreshGiLighting(false);
         for (int f = 0; f < 60; ++f) {
-            e->renderOneFrame();
-            if (f > 4 && s->giStatus().giAtRest) break;
+            enginetest::frames(e, 1);
+            if (f > 4 && s->published().gi.giAtRest) break;
         }
         unsigned same2 = 0;
         for (size_t i = 0; i < n; ++i)

@@ -82,7 +82,7 @@ double converge(const char *what) {
     double prev = -1.0;
     int frames = 0;
     for (int i = 0; i < 4000; ++i) {
-        gEngine->renderOneFrame();
+        enginetest::frames(gEngine, 1);
         ++frames;
         const double lum = double(gView->measuredExposureScale());
         if (lum > 0.0 && prev > 0.0 && std::fabs(lum - prev) <= prev * 1e-7) break;

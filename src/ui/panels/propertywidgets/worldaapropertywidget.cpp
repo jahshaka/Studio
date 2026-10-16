@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
+#include "ui/panels/propertywidgets/panelrefresh.h"
+#include <QPointer>
 #include "ui/panels/propertyrows.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -109,8 +111,11 @@ void WorldAaPropertyWidget::onSamplesChanged(int row)
     panelundo::runWorldModeEdit(services, scene, tr("MSAA"),
         [this, samples]() { worldmodes::setRowValue(scene, QStringLiteral("msaa"), samples); },
         [this]() {
-            // Apply now so the achieved count the row reads back is the truth.
-            if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
+            // The achieved count the row reads back is the snapshot's, two frames on (U3 stage 2).
             refreshRows();
+            if (sceneView && sceneView->isInitialized())
+                panelrefresh::afterFrames(this, sceneView, 2, [self = QPointer<WorldAaPropertyWidget>(this)]() {
+                    if (self) self->refreshRows();
+                });
         });
 }

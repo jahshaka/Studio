@@ -207,7 +207,7 @@ static float timeOf(const iris::AvatarLocomotion *loco, const char *clip)
 /// out of `clipNames` rather than assuming it is what keeps that true.
 static std::string engineNameFor(Scene *scene, NodeId node, const char *want)
 {
-    for (const auto &n : scene->clipNames(node))
+    for (const auto &n : scene->published().factsBlock().clipNamesOf(node))
         if (n == want || n.rfind(std::string(want) + "_", 0) == 0) return n;
     return std::string();
 }
@@ -272,13 +272,13 @@ int main(int argc, char **argv)
 
     editorMirror.setSource(doc);
     editorMirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
 
     const NodeId editorNode = editorMirror.engineNode(avatar.mesh.data());
     CHECK(editorNode != 0, "the rigged mesh reached the editor's engine scene");
     if (!editorNode) return 1;
     {
-        const auto names = editorScene->clipNames(editorNode);
+        const auto names = editorScene->published().factsBlock().clipNamesOf(editorNode);
         std::printf("      engine clips on the editor node:");
         for (const auto &n : names) std::printf(" '%s'", n.c_str());
         std::printf("\n");
@@ -295,7 +295,7 @@ int main(int argc, char **argv)
               && std::fabs(weightOf(avatar.loco, "Both") - 0.5f) < 1e-5f,
           "the machine published an exact 0.5/0.5 split (raw intent, not normalized)");
     editorMirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
 
     {
         const auto wTip = editorScene->clipBoneWeights(editorNode, engTip);
@@ -324,7 +324,7 @@ int main(int argc, char **argv)
         auto fast = walkingAt(2.0f);          // the top sample: "Both" alone
         avatar.loco->step(fast, avatar.loco->clipLengths(), dt);
         editorMirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const auto wTip = editorScene->clipBoneWeights(editorNode, engTip);
         const auto wBoth = editorScene->clipBoneWeights(editorNode, engBoth);
         const bool tipGone = wTip.empty() || (std::fabs(wTip[0]) < 1e-4f
@@ -343,7 +343,7 @@ int main(int argc, char **argv)
         avatar.loco->step(params, avatar.loco->clipLengths(), dt);
         editorMirror.sync();
     }
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
 
     const float phaseBefore = avatar.loco->statePhase();
     const QString stateBefore = avatar.loco->currentState();
@@ -376,9 +376,10 @@ int main(int argc, char **argv)
     const NodeId playerNode = playerMirror.engineNode(avatar.mesh.data());
     CHECK(playerNode != 0, "...and the winning mirror rebuilt the avatar from scratch");
     if (!playerNode) return 1;
+    enginetest::frames(engine, 1);   // the facts (the clips' engine names) move at a frame's close (U3 stage 3)
     const std::string pTip = engineNameFor(playerScene, playerNode, "TipOnly");
     const std::string pBoth = engineNameFor(playerScene, playerNode, "Both");
-    CHECK(playerScene->clipNames(playerNode).size() == 2 && !pTip.empty() && !pBoth.empty(),
+    CHECK(playerScene->published().factsBlock().clipNamesOf(playerNode).size() == 2 && !pTip.empty() && !pBoth.empty(),
           "...including RE-ATTACHING both clips (attachClipsFor ran on the new entry)");
 
     // The DOCUMENT-side claim: the swap is not a step. Nothing about the phase,
@@ -402,7 +403,7 @@ int main(int argc, char **argv)
     // page switch", but attachClipsFor and the state push both run inside
     // syncClips, at the end of the same sync() that created the node, so the
     // first frame the new node renders is already posed.
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     {
         const auto wTip = playerScene->clipBoneWeights(playerNode, pTip);
         const auto wBoth = playerScene->clipBoneWeights(playerNode, pBoth);
@@ -420,7 +421,7 @@ int main(int argc, char **argv)
         avatar.loco->step(params, avatar.loco->clipLengths(), dt);
         playerMirror.sync();
     }
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     const float phaseAfterPlayer = avatar.loco->statePhase();
     const QVector<iris::LocomotionClipWeight> weightsMid = avatar.loco->weights();
 
@@ -442,7 +443,7 @@ int main(int argc, char **argv)
     CHECK(std::fabs(advanced - 11.0f * dt / 0.8f) < 1e-4f,
           "the per-avatar clock kept running across the page it was not visible on");
 
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     {
         const std::string e2Tip = engineNameFor(editorScene, editorNode2, "TipOnly");
         const std::string e2Both = engineNameFor(editorScene, editorNode2, "Both");
@@ -474,7 +475,7 @@ int main(int argc, char **argv)
 
         doc->updateSceneAnimation(0.4f);      // the scene clock the authored path reads
         editorMirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const NodeId plainNode = editorMirror.engineNode(plain.data());
         CHECK(plainNode != 0, "the plain rigged mesh reached the engine");
         if (plainNode) {
@@ -510,7 +511,7 @@ int main(int argc, char **argv)
 
         doc->updateSceneAnimation(0.1f);
         editorMirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const NodeId swapNode = editorMirror.engineNode(swapper.data());
         CHECK(swapNode != 0, "the rigged node reached the engine");
         const std::string firstName = engineNameFor(editorScene, swapNode, "Padded");
@@ -522,10 +523,10 @@ int main(int argc, char **argv)
 
         doc->updateSceneAnimation(0.1f);
         editorMirror.sync();              // the re-attach + the clip re-attach
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         doc->updateSceneAnimation(0.1f);
         editorMirror.sync();              // and a second sync on the new instance
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
 
         const NodeId afterNode = editorMirror.engineNode(swapper.data());
         CHECK(afterNode != 0, "the node survived the material swap");
@@ -554,7 +555,7 @@ int main(int argc, char **argv)
         avatar.mesh->setAnimation(solo);
         doc->updateSceneAnimation(0.3f);
         editorMirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const NodeId n = editorMirror.engineNode(avatar.mesh.data());
         const std::string soloName = engineNameFor(editorScene, n, "AvatarSolo");
         CHECK(!soloName.empty(), "the scrubbed clip attached to the avatar's rig");

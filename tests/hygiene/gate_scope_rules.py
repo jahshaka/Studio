@@ -167,17 +167,18 @@ def speed_cases(source, build):
     ep = "irisgl/engine/src/OgreEngine.cpp"
     ea = open(os.path.join(source, ep), errors="replace").read()
     fx = None
-    for fn, needle in (("renderOneFrame", "void OgreEngine::renderOneFrame() {\n"),
+    # (the frame's BODY is runFrame since ENGINE-UPGRADE-U3 stage 1: renderOneFrame is one turn of the render loop)
+    for fn, needle in (("runFrame", "bool OgreEngine::runFrame(FrameInput &record, bool any) {\n"),
                        ("vrHaptic", "bool OgreEngine::vrHaptic(int hand, float amplitude01, float seconds) {\n")):
         check(needle in ea, "18. %s is in OgreEngine.cpp" % fn)
         if needle not in ea:
             continue
         S = sel([ep], revs=fake({ep: (ea, ea.replace(needle, needle + "    (void)0x5a; // tsa\n", 1))}))
-        if fn == "renderOneFrame":
+        if fn == "runFrame":
             fx = S
             pics = [n for n, t in inv0.items() if t.get("picture")]
             check(len(S.selected) > 300 and all(p in S.selected for p in pics) and of(S, "gi") and of(S, "hdr"),
-                  "18. an edit inside renderOneFrame -> every engine fixture + the picture set + every rendering app "
+                  "18. an edit inside the frame body (runFrame) -> every engine fixture + the picture set + every rendering app "
                   "row (%d rows)" % len(S.selected))
         else:
             check(of(S, "vr") and not of(S, "gi") and not of(S, "hdr") and len(S.selected) < 120,

@@ -67,7 +67,7 @@ static void worldToPixel(float wx, float wz, unsigned &px, unsigned &py)
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void show(const char *what, const Colour &c)
@@ -223,8 +223,8 @@ int main()
           "the bare floor is lit and neutral grey");
 
     // ---- (a) the pool recipe --------------------------------------------
-    CHECK(s->decalAtlasCapacity(DecalMap::Diffuse) > 0, "the decal atlas reports a capacity");
-    CHECK(s->decalAtlasUsed(DecalMap::Diffuse) == 0, "the decal atlas starts empty");
+    CHECK(s->published().decalAtlasCapacity > 0, "the decal atlas reports a capacity");
+    CHECK(s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 0, "the decal atlas starts empty");
 
     if (!writeSolidTga("decal_red.tga", 255, 0, 0)) { std::printf("FAIL: write decal_red.tga\n"); return 1; }
     if (!writeSolidTga("decal_green.tga", 0, 255, 0)) { std::printf("FAIL: write decal_green.tga\n"); return 1; }
@@ -233,9 +233,11 @@ int main()
     TextureId redTex = s->loadDecalTexture("decal_red.tga", DecalMap::Diffuse);
     CHECK(redTex != 0, "loadDecalTexture accepts an ordinary image file");
     if (!redTex) { std::printf("   lastError: %s\n", engine->lastError().c_str()); return 1; }
-    CHECK(s->decalAtlasUsed(DecalMap::Diffuse) == 1, "one image consumes exactly one atlas slice");
-    CHECK(s->loadDecalTexture("decal_red.tga", DecalMap::Diffuse) == redTex &&
-          s->decalAtlasUsed(DecalMap::Diffuse) == 1,
+    enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+    CHECK(s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 1, "one image consumes exactly one atlas slice");
+    const bool reused = s->loadDecalTexture("decal_red.tga", DecalMap::Diffuse) == redTex;
+    enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+    CHECK(reused && s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 1,
           "the same path loaded twice reuses one slice");
 
     // ---- the decal projects ---------------------------------------------
@@ -388,8 +390,9 @@ int main()
 
     // ---- the budget is refused LOUDLY, never silently aliased -------------
     {
-        const unsigned cap = s->decalAtlasCapacity(DecalMap::Diffuse);
-        unsigned made = s->decalAtlasUsed(DecalMap::Diffuse);
+        enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+        const unsigned cap = s->published().decalAtlasCapacity;
+        unsigned made = s->published().decalAtlasUsed[int(DecalMap::Diffuse)];
         bool allOk = true;
         for (unsigned i = made; i < cap; ++i) {
             char name[64];
@@ -399,7 +402,8 @@ int main()
                           (unsigned char)(i * 5 + 3));
             if (!s->loadDecalTexture(name, DecalMap::Diffuse)) { allOk = false; break; }
         }
-        CHECK(allOk && s->decalAtlasUsed(DecalMap::Diffuse) == cap,
+        enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+        CHECK(allOk && s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == cap,
               "the atlas accepts exactly its reserved capacity");
         writeSolidTga("decal_overflow.tga", 9, 99, 199);
         const TextureId over = s->loadDecalTexture("decal_overflow.tga", DecalMap::Diffuse);
@@ -431,7 +435,8 @@ int main()
         if (!normTex) std::printf("   lastError: %s\n", engine->lastError().c_str());
         CHECK(emisTex != 0, "loadDecalTexture(Emissive) fills the emissive atlas");
         if (!emisTex) std::printf("   lastError: %s\n", engine->lastError().c_str());
-        CHECK(s->decalAtlasUsed(DecalMap::Normal) == 1 && s->decalAtlasUsed(DecalMap::Emissive) == 1,
+        enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+        CHECK(s->published().decalAtlasUsed[int(DecalMap::Normal)] == 1 && s->published().decalAtlasUsed[int(DecalMap::Emissive)] == 1,
               "the three atlases are independent (one slice each, diffuse untouched)");
         // Cross-kind ids must be refused: they are in the wrong pool.
         DecalDesc wrongKind = dd;
@@ -459,7 +464,8 @@ int main()
         CHECK(again.g < 0.05f, "unbinding the emissive map removes the glow");
         CHECK(s->destroyTexture(normTex) && s->destroyTexture(emisTex),
               "the phase-3 slices are released");
-        CHECK(s->decalAtlasUsed(DecalMap::Normal) == 0 && s->decalAtlasUsed(DecalMap::Emissive) == 0,
+        enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
+        CHECK(s->published().decalAtlasUsed[int(DecalMap::Normal)] == 0 && s->published().decalAtlasUsed[int(DecalMap::Emissive)] == 0,
               "releasing the last user frees the atlas slice");
     }
 

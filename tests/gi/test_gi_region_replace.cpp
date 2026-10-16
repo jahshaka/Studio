@@ -41,7 +41,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// Frames until the GI owes nothing and the grid has caught up (capped).
@@ -49,8 +49,8 @@ static int toRest(Engine *e, Scene *s)
 {
     int n = 0;
     for (; n < 2000; ++n) {
-        e->renderOneFrame();
-        const GiStatus st = s->giStatus();
+        enginetest::frames(e, 1);
+        const GiStatus st = s->published().gi;
         if (n > 2 && st.giAtRest && st.pccBound && st.staleProbes == 0) break;
     }
     return n + 1;
@@ -93,7 +93,7 @@ int main()
     gi.gather = GiToggle::Off;
     CHECK(s->setGlobalIllumination(gi), "the hybrid builds");
     render(e, 120);
-    const GiStatus st0 = s->giStatus();
+    const GiStatus st0 = s->published().gi;
     std::printf("   built: %d probes, %u placements, %llu from-scratch builds, fit (%.2f %.2f %.2f)..(%.2f %.2f %.2f)\n",
                 st0.probeCount, st0.probePlacements, st0.rebuilds, st0.probeFitMin.x, st0.probeFitMin.y,
                 st0.probeFitMin.z, st0.probeFitMax.x, st0.probeFitMax.y, st0.probeFitMax.z);
@@ -109,7 +109,7 @@ int main()
     enginetest::setNodePosition(s, boxes[0], Vec3(-10.0f, 0.25f, -9.8f));
     s->refreshGlobalIllumination(GiRefreshReason::Explicit);
     render(e, 30);
-    const GiStatus sa = s->giStatus();
+    const GiStatus sa = s->published().gi;
     CHECK(sa.probePlacements == st0.probePlacements && sa.rebuilds == st0.rebuilds,
           "(a) a move inside the region places nothing and builds nothing from scratch");
 
@@ -124,7 +124,7 @@ int main()
     const double replaceMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     render(e, 30);
-    const GiStatus sb = s->giStatus();
+    const GiStatus sb = s->published().gi;
     const std::vector<unsigned long long> after = cascadeRebuilds(sb);
     unsigned long long extra = 0;
     bool atMostOnce = before.size() == after.size();
@@ -174,7 +174,8 @@ int main()
     const int replaceFrames2 = toRest(e, s);
     const double replaceMs2 =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t2).count();
-    const GiStatus sc = s->giStatus();
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const GiStatus sc = s->published().gi;
     s->setGlobalIllumination(offGi);
     render(e, 4);
     const auto t3 = std::chrono::steady_clock::now();

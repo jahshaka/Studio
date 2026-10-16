@@ -22,6 +22,7 @@
 // view's shadow maps) in the same process, deliberately AFTER the hybrid
 // section, so the hybrid is measured with the process to itself.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -150,7 +151,7 @@ static void sectionA(Engine *engine)
     // node, before any geometry attaches), and why a scene full of movers never
     // pays a rebuild for its own classification.
     s->setNodeMovable(mover, true);
-    CHECK(s->nodeMovable(mover) && !s->nodeMovable(stayer), "the mover reads back movable");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeMovable(mover) && !jahshaka::engine::inspect::scene(s)->nodeMovable(stayer), "the mover reads back movable");
 
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
@@ -168,15 +169,14 @@ static void sectionA(Engine *engine)
         part.gi = gi;
         jahshaka::engine::FrameInput in;
         in.scenes.push_back(part);
-        engine->submitFrame(in);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1, in);
     };
     frame();
-    CHECK(s->giStatus().schedulerPushes == 1, "the hybrid arm builds (one configuration, from the frame's record)");
+    CHECK(s->published().gi.schedulerPushes == 1, "the hybrid arm builds (one configuration, from the frame's record)");
     const auto frames = [&](int n) { for (int i = 0; i < n; ++i) frame(); };
     const auto worstOver = [&](int n) {
         int worst = 0;
-        for (int f = 0; f < n; ++f) { frame(); worst = std::max(worst, s->giStatus().probeCapturesLastFrame); }
+        for (int f = 0; f < n; ++f) { frame(); worst = std::max(worst, s->published().gi.probeCapturesLastFrame); }
         return worst;
     };
     const auto chromePixel = [&]() {
@@ -186,7 +186,7 @@ static void sectionA(Engine *engine)
     // ---- A1: the still room settles and then costs nothing ----------------
     frames(40);
     {
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.probeCount == 4 && st.pccBound, "the 2x1x2 probe grid built and bound (%d probes)",
               st.probeCount);
         CHECK(st.staleProbes == 0, "settled: the post-build catch-up is done");
@@ -197,16 +197,16 @@ static void sectionA(Engine *engine)
     // (the fail-before reading on the base tree: reason `moved`, the serial
     // advancing every frame and a capture every frame for ever.)
     {
-        const GiStatus before = s->giStatus();
+        const GiStatus before = s->published().gi;
         const unsigned long long resolves0 = before.schedulerResolves;
         int captures = 0;
         for (int i = 0; i < 120; ++i) {
             const float t = float(i) * 0.04f;
             s->setNodeTransform(mover, Vec3(-2.6f + t, 1.0f, -1.5f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
             frame();
-            captures += s->giStatus().probeCapturesLastFrame;
+            captures += s->published().gi.probeCapturesLastFrame;
         }
-        const GiStatus after = s->giStatus();
+        const GiStatus after = s->published().gi;
         std::printf("-- mover, 120 frames: captures=%d serial %llu -> %llu (%s), rebuilds %llu -> %llu\n",
                     captures, before.staleSerial, after.staleSerial, reasonName(after.lastStaleReason),
                     before.rebuilds, after.rebuilds);
@@ -216,16 +216,16 @@ static void sectionA(Engine *engine)
         CHECK(after.rebuilds == before.rebuilds, "...and cost no from-scratch GI rebuild");
         CHECK(!after.settlePending && after.schedulerResolves == resolves0,
               "...and the GI scheduler's settle is never armed (no re-solve, nothing pending)");
-        CHECK(s->mobilityStatus().mobilityRebuilds == 0,
+        CHECK(s->published().mobility.mobilityRebuilds == 0,
               "...and no mobility rebuild (the class never changed)");
     }
 
     // ---- A3: the STATIC twin still stales the grid, exactly as before ------
     {
-        const unsigned long long serial = s->giStatus().staleSerial;
+        const unsigned long long serial = s->published().gi.staleSerial;
         s->setNodeTransform(stayer, Vec3(2.0f, 1.0f, -1.5f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
         frame();
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.staleSerial > serial && st.lastStaleReason == GiStaleReason::Moved,
               "a STATIC object moving still stales the grid (reason %s)", reasonName(st.lastStaleReason));
         CHECK(st.settlePending, "...and arms the GI scheduler's settle, so it still re-solves once at rest");
@@ -258,7 +258,7 @@ static void sectionA(Engine *engine)
         s->setNodeTransform(mover, Vec3(0.6f, 2.0f, 3.4f), Quat(), Vec3(1.2f, 1.2f, 1.2f));
         s->setAmbient(Colour(0.03f, 0.03f, 0.03f), Colour(0.015f, 0.015f, 0.015f));
         frames(30);
-        CHECK(s->giStatus().staleProbes == 0, "the forced re-capture caught up");
+        CHECK(s->published().gi.staleProbes == 0, "the forced re-capture caught up");
         const Colour withMover = chromePixel();
         std::printf("   chrome pixel  before %.3f/%.3f/%.3f  with the MOVER in the same place "
                     "%.3f/%.3f/%.3f\n", before.r, before.g, before.b,
@@ -280,12 +280,13 @@ static void sectionA(Engine *engine)
 
     // ---- A5: hiding, showing and DELETING a mover costs no capture ---------
     {
-        const unsigned long long serial = s->giStatus().staleSerial;
+        const unsigned long long serial = s->published().gi.staleSerial;
         s->setNodeVisible(mover, false);
         const int hidden = worstOver(6);
         s->setNodeVisible(mover, true);
         const int shown = worstOver(6);
-        CHECK(hidden == 0 && shown == 0 && s->giStatus().staleSerial == serial,
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(hidden == 0 && shown == 0 && s->published().gi.staleSerial == serial,
               "hiding and showing a mover stales nothing and captures nothing (%d/%d)", hidden, shown);
     }
 
@@ -294,28 +295,29 @@ static void sectionA(Engine *engine)
     // a GI edge: exactly one from-scratch rebuild, reported as such. (This is
     // the honest cost the play-time promotion below refuses to pay.)
     {
-        const unsigned long long rebuilds = cascadeRebuilds(s->giStatus());
-        const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
+        frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long rebuilds = cascadeRebuilds(s->published().gi);
+        const unsigned long long mob = s->published().mobility.mobilityRebuilds;
         s->setNodeMovable(stayer, true);
         frames(30);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::printf("-- authoring flip: cascade rebuilds %llu -> %llu, mobilityRebuilds %llu -> %llu\n",
-                    rebuilds, cascadeRebuilds(st), mob, s->mobilityStatus().mobilityRebuilds);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
+                    rebuilds, cascadeRebuilds(st), mob, s->published().mobility.mobilityRebuilds);
+        CHECK(s->published().mobility.mobilityRebuilds == mob + 1,
               "marking a still object Movable costs EXACTLY ONE mobility rebuild");
         // Under the chain an authoring flip is answered by the cascades its box
         // reaches (the dirty path, G1), not by a from-scratch rebuild.
         CHECK(cascadeRebuilds(st) > rebuilds, "...and the chain really did re-voxelise it");
-        CHECK(s->mobilityStatus().movableItems == 2,
-              "...and both twins now read movable (%zu)", s->mobilityStatus().movableItems);
+        CHECK(s->published().mobility.movableItems == 2,
+              "...and both twins now read movable (%zu)", s->published().mobility.movableItems);
         // ...and it is now free to move, like its twin.
-        const unsigned long long serial = s->giStatus().staleSerial;
+        const unsigned long long serial = s->published().gi.staleSerial;
         for (int i = 0; i < 20; ++i) {
             s->setNodeTransform(stayer, Vec3(2.0f + 0.02f * float(i), 1.0f, -1.5f), Quat(),
                                 Vec3(0.8f, 0.8f, 0.8f));
             frame();
         }
-        CHECK(s->giStatus().staleSerial == serial, "...and moving it now costs the probes nothing");
+        CHECK(s->published().gi.staleSerial == serial, "...and moving it now costs the probes nothing");
     }
 
     // ---- A7: the PLAY-TIME SOFT promotion costs no rebuild at all ----------
@@ -326,39 +328,42 @@ static void sectionA(Engine *engine)
         const NodeId surprise = box(s, Vec3(-1.0f, 0.6f, 2.0f), Vec3(0.6f, 0.6f, 0.6f),
                                     Colour(0.4f, 0.4f, 0.9f), 0.0f, 0.6f);
         frames(30);
-        const unsigned long long rebuilds = s->giStatus().rebuilds;
-        const unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
-        const unsigned long long serial = s->giStatus().staleSerial;
+        const unsigned long long rebuilds = s->published().gi.rebuilds;
+        const unsigned long long mob = s->published().mobility.mobilityRebuilds;
+        const unsigned long long serial = s->published().gi.staleSerial;
         s->setNodeMovable(surprise, true, MobilityChange::Soft);
-        CHECK(s->giStatus().staleSerial == serial + 1 &&
-              s->giStatus().lastStaleReason == GiStaleReason::Mobility,
+        frame();   // the snapshot reads the grid as the frame closed it (U3 stage 2b)
+        CHECK(s->published().gi.staleSerial == serial + 1 &&
+              s->published().gi.lastStaleReason == GiStaleReason::Mobility,
               "the promotion stales the grid ONCE, with its own reason — the probes that "
               "hold the object's picture owe one re-capture (%s)",
-              reasonName(s->giStatus().lastStaleReason));
+              reasonName(s->published().gi.lastStaleReason));
         // The one-off catch-up, at the budget, and then nothing for ever: this
         // is the whole difference from what the base did, where every frame of
         // the movement staled the grid again.
-        int catchUp = 0, worst = 0;
-        for (int i = 0; i < 8; ++i) { frame(); catchUp += s->giStatus().probeCapturesLastFrame; }
-        const unsigned long long after = s->giStatus().staleSerial;
+        // (the frame the promotion's read stepped is the catch-up's first: its captures count — 8 frames in all)
+        int catchUp = s->published().gi.probeCapturesLastFrame, worst = 0;
+        for (int i = 1; i < 8; ++i) { frame(); catchUp += s->published().gi.probeCapturesLastFrame; }
+        const unsigned long long after = s->published().gi.staleSerial;
         int captures = 0;
         for (int i = 0; i < 30; ++i) {
             s->setNodeTransform(surprise, Vec3(-1.0f + 0.03f * float(i), 0.6f, 2.0f), Quat(),
                                 Vec3(0.6f, 0.6f, 0.6f));
             frame();
-            captures += s->giStatus().probeCapturesLastFrame;
-            worst = std::max(worst, s->giStatus().probeCapturesLastFrame);
+            captures += s->published().gi.probeCapturesLastFrame;
+            worst = std::max(worst, s->published().gi.probeCapturesLastFrame);
         }
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob && s->giStatus().rebuilds == rebuilds,
+        CHECK(s->published().mobility.mobilityRebuilds == mob && s->published().gi.rebuilds == rebuilds,
               "a SOFT (play-time) promotion costs no rebuild at all");
         CHECK(catchUp <= 4 && catchUp > 0, "its catch-up is ONE pass of the grid (%d captures)", catchUp);
-        CHECK(captures == 0 && s->giStatus().staleSerial == after,
+        CHECK(captures == 0 && s->published().gi.staleSerial == after,
               "...and then 30 frames of MOVING cost nothing at all (%d captures)", captures);
         // And deleting it — a mover leaving the scene — costs nothing either.
-        const unsigned long long r2 = s->giStatus().rebuilds;
+        const unsigned long long r2 = s->published().gi.rebuilds;
         s->removeNode(surprise);
         const int onDelete = worstOver(6);
-        CHECK(onDelete == 0 && s->giStatus().rebuilds == r2,
+        frame();   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(onDelete == 0 && s->published().gi.rebuilds == r2,
               "deleting a mover costs no capture and no rebuild (%d)", onDelete);
     }
 
@@ -373,32 +378,32 @@ static void sectionA(Engine *engine)
         const NodeId prop = box(s, Vec3(1.4f, 0.6f, 2.0f), Vec3(0.6f, 0.6f, 0.6f),
                                 Colour(0.9f, 0.9f, 0.4f), 0.0f, 0.6f);
         frames(30);
-        unsigned long long mob = s->mobilityStatus().mobilityRebuilds;
-        unsigned long long reb = s->giStatus().rebuilds;
+        unsigned long long mob = s->published().mobility.mobilityRebuilds;
+        unsigned long long reb = s->published().gi.rebuilds;
         s->setNodeMovable(prop, true, MobilityChange::Soft);
         frames(10);
         s->setNodeMovable(prop, false, MobilityChange::Soft);
         frames(10);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob && s->giStatus().rebuilds == reb,
+        CHECK(s->published().mobility.mobilityRebuilds == mob && s->published().gi.rebuilds == reb,
               "a promotion and its clear cost nothing at all when nothing rebuilt in between");
         // (b) a rebuild DID happen while promoted: the clear pays for the hole.
-        mob = s->mobilityStatus().mobilityRebuilds;
+        mob = s->published().mobility.mobilityRebuilds;
         s->setNodeMovable(prop, true, MobilityChange::Soft);
         frames(5);
         GiParams regrid = gi;
         regrid.pccProbesX = 2; regrid.pccProbesY = 1; regrid.pccProbesZ = 3;   // 6 probes: a from-scratch build
         s->setGlobalIllumination(regrid);
         frames(30);
-        reb = s->giStatus().rebuilds;
+        reb = s->published().gi.rebuilds;
         CHECK(reb > 0, "...a from-scratch rebuild happened while it was promoted");
-        const unsigned long long cascReb = cascadeRebuilds(s->giStatus());
+        const unsigned long long cascReb = cascadeRebuilds(s->published().gi);
         s->setNodeMovable(prop, false, MobilityChange::Soft);
         frames(30);
         std::printf("-- ghost heal: mobilityRebuilds %llu -> %llu, rebuilds %llu -> %llu\n",
-                    mob, s->mobilityStatus().mobilityRebuilds, reb, s->giStatus().rebuilds);
-        CHECK(s->mobilityStatus().mobilityRebuilds == mob + 1,
+                    mob, s->published().mobility.mobilityRebuilds, reb, s->published().gi.rebuilds);
+        CHECK(s->published().mobility.mobilityRebuilds == mob + 1,
               "clearing a promotion the voxels were rebuilt under costs ONE counted rebuild");
-        CHECK(cascadeRebuilds(s->giStatus()) > cascReb,
+        CHECK(cascadeRebuilds(s->published().gi) > cascReb,
               "...and the object really is back in the voxels (the chain re-voxelised its box)");
         s->removeNode(prop);
         frames(20);
@@ -406,7 +411,7 @@ static void sectionA(Engine *engine)
 
     // ---- A8: the counters ---------------------------------------------------
     {
-        const MobilityStatus m = s->mobilityStatus();
+        const MobilityStatus m = s->published().mobility;
         std::printf("-- mobility: items=%zu lights=%zu nodes=%zu rebuilds=%llu\n",
                     m.movableItems, m.movableLights, m.movableNodes, m.mobilityRebuilds);
         CHECK(m.movableItems == 2 && m.movableLights == 0,
@@ -439,7 +444,7 @@ static void sectionB(Engine *engine)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
 
     const auto lowerRed = [&](int frames, const char *what) {
-        for (int i = 0; i < frames; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, frames);
         Image img; view->readPixels(img);
         const float r = maxRedExcess(img, img.height / 2, img.height);
         std::printf("   %s: max red excess (lower half) = %.3f\n", what, r);
@@ -458,7 +463,8 @@ static void sectionB(Engine *engine)
         const float before = lowerRed(3, "mover movable, no reflector yet");
         CHECK(s->setNodePlanarReflector(floor, true), "the floor is a reflector");
         const float on = lowerRed(3, "mover movable, reflector on");
-        CHECK(s->activePlanarReflectors() == 1, "exactly one actor rendered");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(s->published().activePlanarReflectors == 1, "exactly one actor rendered");
         CHECK(on > before + 0.10f,
               "a MOVABLE object is drawn into the planar mirror (kMovableBit is in the pass)");
         // ...and it follows the object in the frame it moves.
@@ -499,16 +505,16 @@ static void sectionB(Engine *engine)
         s->setLight(lamp, d);
         s->setNodeTransform(lamp, Vec3(0.0f, 5.0f, 0.0f), Quat(), Vec3(1, 1, 1));
         view->setShadows(true);
-        engine->shadowStatus();                    // arms the per-frame counters
-        for (int i = 0; i < 12; ++i) engine->renderOneFrame();
+        enginetest::shadowStatus(engine);                    // arms the per-frame counters
+        enginetest::frames(engine, 12);
         // At rest: the lamp's map is a cache and re-renders nothing.
         unsigned rest = 0;
-        for (int i = 0; i < 20; ++i) { engine->renderOneFrame(); rest += engine->shadowStatus().cachedMapRendersLastFrame; }
+        for (int i = 0; i < 20; ++i) { enginetest::frames(engine, 1); rest += enginetest::shadowStatus(engine).cachedMapRendersLastFrame; }
         CHECK(rest == 0u, "a still scene re-renders no cached lamp map (%u)", rest);
         // The mover moves: its lamp's map re-renders in the VIEW, that frame.
         s->setNodeTransform(mover, Vec3(1.5f, 2.2f, 0.0f), Quat(), Vec3(1.5f, 1.5f, 1.5f));
-        engine->renderOneFrame();
-        const ShadowStatus st = engine->shadowStatus();
+        enginetest::frames(engine, 1);
+        const ShadowStatus st = enginetest::shadowStatus(engine);
         std::printf("-- mover moved: cached-map renders %u, view passes %u, probe passes %u\n",
                     st.cachedMapRendersLastFrame, st.shadowPassesLastFrame, st.probePassesLastFrame);
         CHECK(st.cachedMapRendersLastFrame > 0u,
@@ -571,7 +577,7 @@ static void sectionC(Engine *engine)
     gi.testProbeRegionMin = Vec3(-6.5f, -0.6f, -6.5f);
     gi.testProbeRegionMax = Vec3(6.5f, 6.6f, 6.5f);
     CHECK(s->setGlobalIllumination(gi), "VCT at the full bounce count");
-    for (int i = 0; i < 6; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 6);
     Image img;
     v->readPixels(img);
     // WHOLE-IMAGE readings, not one pixel: the difference between one bounce
@@ -604,7 +610,7 @@ static void sectionC(Engine *engine)
 
     // IN MOTION: the document's own count, whatever the scene asks for (F-D).
     CHECK(s->refreshGiLighting(true), "the in-motion re-inject runs");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image moving;
     v->readPixels(moving);
     unsigned movedFromOld = 0; float movedFromOldWorst = 0.0f;
@@ -615,7 +621,7 @@ static void sectionC(Engine *engine)
 
     // AT REST: the full solve of the SAME new lighting, and the frame the user is left with.
     CHECK(s->refreshGiLighting(false), "the at-rest re-inject runs");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image rested;
     v->readPixels(rested);
     unsigned movedPixels = 0; float movedWorst = 0.0f;
@@ -626,7 +632,7 @@ static void sectionC(Engine *engine)
     d.intensity = 0.15f;
     s->setLight(lamp, d);
     CHECK(s->refreshGiLighting(false), "the old lighting solved again");
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image restored;
     v->readPixels(restored);
     unsigned restedPixels = 0; float restedWorst = 0.0f;
@@ -694,7 +700,7 @@ static void sectionD(Engine *engine)
                               Colour(0.1f, 0.1f, 0.8f), 0.0f, 0.7f);
     CHECK(keeper && mover, "the twins exist");
     enginetest::testCameraLookAt(v, Vec3(0.0f, 3.0f, 9.0f), Vec3(0.0f, 0.5f, 0.0f));
-    const auto frames = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+    const auto frames = [&](int n) { enginetest::frames(engine, n);};
 
     GiParams gi;
     gi.mode = GiMode::Vct;
@@ -712,7 +718,7 @@ static void sectionD(Engine *engine)
     frames(8);
     CHECK(enginetest::settleVoxelReadings(engine, s) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     if (st.cascades.empty()) { CHECK(false, "the chain exists"); return; }
     const int items0 = st.cascades[0].items;
     const unsigned long long rebuilds0 = st.rebuilds;
@@ -725,7 +731,7 @@ static void sectionD(Engine *engine)
     frames(4);
     CHECK(enginetest::settleVoxelReadings(engine, s) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    st = s->giStatus();
+    st = s->published().gi;
     CHECK(st.rebuilds == rebuilds0, "a SOFT promotion under cascades costs no rebuild at all");
     CHECK(st.cascades[0].rebuilds == c0rebuilds, "...and no cascade re-voxelisation either");
     CHECK(st.cascades[0].items == items0,
@@ -741,14 +747,14 @@ static void sectionD(Engine *engine)
     }
     CHECK(enginetest::settleVoxelReadings(engine, s) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    st = s->giStatus();
+    st = s->published().gi;
     std::printf("   after %.1f m of walking: cascade 0 rebuilt %llu time(s), items %d\n",
                 12.0f * step0 * 0.15f, st.cascades[0].rebuilds - c0rebuilds, st.cascades[0].items);
     CHECK(st.cascades[0].rebuilds > c0rebuilds, "the walk re-voxelised cascade 0");
     CHECK(st.cascades[0].items == items0 - 1,
           "AND THE PROMOTED MOVER IS NOT IN IT: a mover is never re-voxelised by a scroll (%d)",
           st.cascades[0].items);
-    CHECK(s->giStatus().rebuilds == rebuilds0, "...at no cost in from-scratch rebuilds");
+    CHECK(s->published().gi.rebuilds == rebuilds0, "...at no cost in from-scratch rebuilds");
 }
 
 int main()

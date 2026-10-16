@@ -19,7 +19,7 @@ MeshId GizmoOverlay::meshFor(iris::Mesh *mesh)
     if (it != mMeshes.constEnd()) return it.value();
     MeshData data;
     if (!SceneMirror::toMeshData(mesh, data)) return 0;
-    MeshId id = mTarget->createMesh(data);
+    MeshId id = scenecmd::newMesh(mTarget, data);
     if (id) mMeshes.insert(mesh, id);
     return id;
 }
@@ -34,7 +34,7 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         if (i >= mSlots.size()) mSlots.append(Slot());
         Slot &slot = mSlots[i];
         if (!slot.node) {
-            slot.node = mTarget->createNode();
+            slot.node = scenecmd::newNode(mTarget);
             // EDITOR FURNITURE, in the engine's sense (EnginePrivate.h's bit
             // scheme, Scene::setNodeHelper): kHelperBit instead of kVisibleBit.
             //
@@ -54,15 +54,15 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
             // Marked at CREATION rather than after attachMesh because the slots
             // are POOLED and re-attached to different meshes — the same trap
             // the selection shells and the light icons record.
-            if (slot.node) mTarget->setNodeHelper(slot.node, true);
+            if (slot.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeHelper, slot.node, true);
         }
         if (!slot.material)
-            slot.material = mTarget->createUnlitMaterial(Colour(1, 1, 1), false);   // on top
+            slot.material = scenecmd::newUnlitMaterial(mTarget, Colour(1, 1, 1), false);   // on top
         if (!slot.node || !slot.material) continue;
         iris::Mesh *src = item.mesh.data();
         if (slot.source != src) {
             MeshId m = meshFor(src);
-            if (m && mTarget->attachMesh(slot.node, m, slot.material)) { slot.mesh = m; slot.source = src; }
+            if (m) { scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, slot.node, m, slot.material); slot.mesh = m; slot.source = src; }
         }
         // ON CHANGE ONLY, TRANSFORM INCLUDED (ENGINE-4 F5; the colour half is
         // fps audit F14 below). The gizmo is screen-scaled and follows the
@@ -84,7 +84,12 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
             }
         }
         if (!slot.transformPushed || slot.transformKey != xk) {
-            SceneMirror::pushTransform(mTarget, slot.node, item.transform);
+            {
+                jahshaka::engine::Vec3 p, sc;
+                jahshaka::engine::Quat r;
+                SceneMirror::decomposeTransform(item.transform, p, r, sc);
+                scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeTransform, slot.node, p, r, sc);
+            }
             slot.transformKey = xk;
             slot.transformPushed = true;
         }
@@ -99,24 +104,24 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         //half-transparent only has to say so in its colour. Nothing does yet —
         // every handle is opaque — so this changes no pixel today.
         if (!slot.colourPushed || slot.colour != item.colour) {
-            mTarget->setUnlitMaterial(slot.material, Colour(item.colour.redF(), item.colour.greenF(),
+            scenecmd::call(mTarget, &jahshaka::engine::Scene::setUnlitMaterial, slot.material, Colour(item.colour.redF(), item.colour.greenF(),
                                                             item.colour.blueF(), item.colour.alphaF()));
             slot.colour = item.colour;
             slot.colourPushed = true;
         }
-        if (!slot.shown) { mTarget->setNodeVisible(slot.node, true); slot.shown = true; }
+        if (!slot.shown) { scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, slot.node, true); slot.shown = true; }
         ++mVisible;
     }
     for (int i = items.size(); i < mSlots.size(); ++i) {
-        if (mSlots[i].shown && mSlots[i].node) mTarget->setNodeVisible(mSlots[i].node, false);
+        if (mSlots[i].shown && mSlots[i].node) scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, mSlots[i].node, false);
         mSlots[i].shown = false;
     }
 }
 
 void GizmoOverlay::clear()
 {
-    for (Slot &s : mSlots) if (s.node) mTarget->removeNode(s.node);
-    for (Slot &s : mSlots) if (s.material) mTarget->destroyMaterial(s.material);
-    for (MeshId m : mMeshes) mTarget->destroyMesh(m);
+    for (Slot &s : mSlots) if (s.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, s.node);
+    for (Slot &s : mSlots) if (s.material) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMaterial, s.material);
+    for (MeshId m : mMeshes) scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMesh, m);
     mSlots.clear(); mMeshes.clear(); mVisible = 0;
 }

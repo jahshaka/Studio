@@ -397,6 +397,69 @@ set_tests_properties(vr.warmup.timing PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
 set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 
+# vr.ui_stall — A UI-THREAD STALL SHORTER THAN THE DISPLAY PERIOD NEVER COSTS A DISPLAY PERIOD (ENGINE-UPGRADE-U3; the
+# lead's ruling after stage 1). The app free-runs under Monado's simulated headset (`--script-live`, the driver ticking
+# between the script's verbs — JAH_VR_RUNNER_EVENTS=1 is what run_vr_app.sh launches that way); vr_ui_stall.js sleeps
+# 0.63 of the RUNTIME's predicted display period (7 ms at 90 Hz, the perf audit's figure, as a share) in a beforeFrame
+# slot every 350 ms (app.tickStall) over 600 accepted headset frames and counts the runtime's missed display periods
+# (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 per stall, is the design's law: a GUARD
+# since stage 5 (FREE-RUNNING, JAH_FREE_RUNNING=1: the render thread draws on its own, the UI thread only submits).
+# THE BASE (stage 1's one-thread frame = main's, Debug, Xvfb 1920x1080, 2026-10-15; Monado's null compositor paces at
+# 20 Hz, a 50 ms period, and XRT_COMPOSITOR_DEFAULT_FRAMERATE does not move it): at 0.63 of the period (32 ms)
+# 1.00 missed per stall (31 of 31); 45 ms 1.00 (30/30); 120 ms 3.00 (135/45); 7 ms — under 0.15 of this period —
+# 0.00 (0/80). The control: 0-2 over 200-600 frames. As ruled (32 ms at 20 Hz): 93 missed over 93 stalls = 1.00, RED.
+set(_vr_ui_stall_home "${CMAKE_CURRENT_BINARY_DIR}/vr-ui-stall-home")
+jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "vr")
+jah_gpu_exclusive_test(NAME vr.ui_stall CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/vr_ui_stall.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# LABELS vr: the vr subsystem's GUARD (stage 5 flipped it from `measure`).
+set_tests_properties(vr.ui_stall PROPERTIES
+    LABELS "vr"
+    SKIP_RETURN_CODE 77
+    JAHSHAKA_TEST_FRAMES 1300
+    FIXTURES_REQUIRED vruistallFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_ui_stall_home};JAHSHAKA_DATA_ROOT=${_vr_ui_stall_home}/.local/share/Jahshaka")
+set_property(TEST vr.ui_stall APPEND PROPERTY RESOURCE_LOCK monado)
+
+# vr.session_pace — THE SESSION'S PERIOD PACES THE RENDER LOOP (ENGINE-UPGRADE-U3 decision 53, the driver's half):
+# FREE-RUNNING under Monado's null compositor, the period sent while the session pumps is the runtime's, never the
+# panel's; 300 headset frames, 0 missed. The engine's half (a headset faster than the panel) is frame.runtime_pace.
+set(_vr_pace_home "${CMAKE_CURRENT_BINARY_DIR}/vr-session-pace-home")
+jah_fresh_home_fixture(vr.session_pace.fresh_home vrSessionPaceFreshHome "${_vr_pace_home}" WARM LABELS "vr")
+jah_gpu_exclusive_test(NAME vr.session_pace CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/vr_session_pace.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_pace PROPERTIES
+    LABELS "vr"
+    SKIP_RETURN_CODE 77
+    JAHSHAKA_TEST_FRAMES 520
+    FIXTURES_REQUIRED vrSessionPaceFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_pace_home};JAHSHAKA_DATA_ROOT=${_vr_pace_home}/.local/share/Jahshaka")
+set_property(TEST vr.session_pace APPEND PROPERTY RESOURCE_LOCK monado)
+
+# vr.xr_thread — THE XR FRAME LOOP IS THE RENDER THREAD'S (ENGINE-UPGRADE-U3 stage 6, the XR-thread spike as a row):
+# FREE-RUNNING under Monado's null compositor, 300 headset frames: frames = rendered, none begun off the render thread,
+# no runtime error, the UI's driver ticks never holding xrWaitFrame's wait.
+set(_vr_xr_home "${CMAKE_CURRENT_BINARY_DIR}/vr-xr-thread-home")
+jah_fresh_home_fixture(vr.xr_thread.fresh_home vrXrThreadFreshHome "${_vr_xr_home}" WARM LABELS "vr")
+jah_gpu_exclusive_test(NAME vr.xr_thread CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/vr_xr_thread.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.xr_thread PROPERTIES
+    LABELS "vr"
+    SKIP_RETURN_CODE 77
+    JAHSHAKA_TEST_FRAMES 520
+    FIXTURES_REQUIRED vrXrThreadFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAH_VR_RUNNER_EVENTS=1;JAH_FREE_RUNNING=1;HOME=${_vr_xr_home};JAHSHAKA_DATA_ROOT=${_vr_xr_home}/.local/share/Jahshaka")
+set_property(TEST vr.xr_thread APPEND PROPERTY RESOURCE_LOCK monado)
+
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 #

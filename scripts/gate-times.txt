@@ -123,12 +123,14 @@ document.reader_defaults 0.00  ship 3a0422b4e (2026-10-13)
 document.simulation_clock 0.00  ship 3a0422b4e (2026-10-13)
 document.sky_write 0.04  quiet n=46
 drawers.db 0.00  ship 3a0422b4e (2026-10-13)
+editor.drag_latency 15.71  decision 65's three shapes, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.atom_draw 28.50  ship 3a0422b4e (2026-10-13)
 engine.atom_negative_control_validation 2.56  quiet n=43
 engine.atom_negative_control_validation_lavapipe 3.58  quiet n=42
 engine.atom_parity 30.50  ship 3a0422b4e (2026-10-13)
 engine.atom_parity_validation 3.31  quiet n=44
 engine.descriptor_pools 3.90  quiet n=43
+engine.error_door 3.22  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.error_pump 1.18  quiet n=44
 engine.frame_catch 1.39  quiet n=44
 engine.frame_input_drain 1.64  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
@@ -139,6 +141,8 @@ engine.gpu_cull.timing 8.60  ship 3a0422b4e (2026-10-13)
 engine.gpu_scene 1.62  quiet n=43
 engine.gpu_substrate 2.73  solo (ASYNC-3 stage-1 read F4: + the graphics-build frame, 2026-10-15)
 engine.gpu_walk_parity 6.12  spec EU-2B stage 3 fix (2026-10-15)
+engine.gpu_walk_parity_free 1.15  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
 engine.lod_hysteresis 1.61  quiet n=44
@@ -156,6 +160,10 @@ export.embed 1.40  ship 3a0422b4e (2026-10-13)
 export.raw 0.00  ship 3a0422b4e (2026-10-13)
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
+frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
+frame.runtime_pace 5.09  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 gate.selection 6.46  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)
 gi.ambient 1.96  quiet n=41
 gi.area_energy 5.29  quiet n=29
@@ -338,6 +346,8 @@ hdr.drag_stable 7.69  quiet n=41
 hdr.drag_stable_asan 18.48  quiet n=41
 hdr.meter 9.00  ship 3a0422b4e (2026-10-13)
 hdr.meter_asan 21.39  quiet n=41
+host.error_door 18.86  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+host.sync_getters 23.28  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 2, 2026-10-15; 300 lockstep + 300 driver frames)
 import.async 0.20  ship 3a0422b4e (2026-10-13)
 import.shutdown 33.63  quiet n=43
 import.shutdown.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
@@ -396,11 +406,13 @@ meshbake.shipped_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.cull_twin 3.36  quiet n=45
 mirror.dirty_equals_full 1.12  quiet n=44
 mirror.document_to_engine 9.72  quiet n=43
+mirror.full_walk_recreate 1.70  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
 mirror.change_set 2.53  solo, warm, the card lock held (EU-1 U0 3b, 2026-10-14)
 mirror.frame_input 1.74  solo, warm, the card lock held (EU-1 U0 3a, 2026-10-14)
 mirror.doc_store 0.75  solo, warm, the card lock held (ENGINE-UPGRADE-U2 stage 1, 2026-10-14)
+mirror.messages_in_order 1.39  stage-3 master rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-15)
 mirror.reparent_local 2.30  solo, warm, the card lock held (EU-1 stage 2, 2026-10-13)
 mirror.scale 1.85  quiet n=48
 mirror.settle_incremental 70.24  hand: MIRROR-SETTLE-1's quiet runs at B=24, 2026-10-11 (71.59, 68.89 s), n=2 median
@@ -889,6 +901,7 @@ ui.db_handles 0.10  ship 3a0422b4e (2026-10-13)
 ui.dock_state 0.08  quiet n=25
 ui.drag_owner 0.00  ship 3a0422b4e (2026-10-13)
 ui.engine_view_winid 1.58  quiet n=42
+ui.harness_child_log 0.01  stage-3 master rows (ENGINE-UPGRADE-U3, 2026-10-15)
 ui.hierarchy_root 0.00  ship 3a0422b4e (2026-10-13)
 ui.import_dialog 0.07  quiet n=28
 ui.light_channels 0.00  ship 3a0422b4e (2026-10-13)
@@ -922,6 +935,7 @@ ui.tree_scroll 0.06  quiet n=47
 ui.vr_panel 0.00  ship 3a0422b4e (2026-10-13)
 ui.window_minimum 10.63  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.window_minimum.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.eye_grade 137.48  quiet n=41
 vr.eye_grade.fresh_home 0.01  quiet n=3
 vr.frame_budget 102.30  ship 3a0422b4e (2026-10-13)
@@ -935,6 +949,8 @@ vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.no_picture_start 51.09  quiet n=49
 vr.no_picture_start.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.session 63.49  quiet n=44
+vr.session_pace 38.26  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.session_pace.fresh_home 0.10  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.session_undithered 6.51  quiet n=45
 vr.start_broken 34.51  quiet n=19
 vr.start_broken.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
@@ -942,6 +958,9 @@ vr.start_press 43.46  quiet n=11
 vr.start_press.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.start_recovery 33.76  quiet n=21
 vr.start_recovery.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+vr.ui_stall.fresh_home 0.10  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.xr_thread 34.16  stage 6's XR-thread row, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.xr_thread.fresh_home 0.10  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.warmup 39.03  quiet n=44
 vr.warmup.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 vr.warmup.timing 40.60  ship 3a0422b4e (2026-10-13)

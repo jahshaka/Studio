@@ -62,7 +62,7 @@ namespace {
 
 void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// A white disc on transparent black, RGBA8 — the shape of every bundled light

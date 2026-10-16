@@ -40,6 +40,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -108,7 +109,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(other);
 
     mirror.setSource(doc);
-    auto frames = [&](int n) { for (int i = 0; i < n; ++i) { mirror.sync(); engine->renderOneFrame(); } };
+    auto frames = [&](int n) { for (int i = 0; i < n; ++i) { mirror.sync(); enginetest::frames(engine, 1); } };
     // An unworn twin outlives its last wearer by the engine's kCullTwinGraceFrames
     // (60) of the scene's drawn frames; two more for the sweep that ends it.
     const int kGrace = 62;
@@ -118,15 +119,16 @@ int main(int argc, char **argv)
     // ---- 1. BOOKKEEPING ----------------------------------------------------
     CHECK(plane->getFaceCullingMode() == iris::FaceCullingMode::DefinedInMaterial,
           "a mesh node is born leaving the cull to its material");
-    CHECK(scene->cullTwinCount() == 0, "no node names a cull: no twin");
+    frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(scene->published().cullTwins == 0, "no node names a cull: no twin");
     other->setFaceCullingMode(iris::FaceCullingMode::Back);
     frames(2);
-    CHECK(scene->cullTwinCount() == 0, "Back on a one-sided material restates it: no twin");
+    CHECK(scene->published().cullTwins == 0, "Back on a one-sided material restates it: no twin");
     other->setFaceCullingMode(iris::FaceCullingMode::None);
     frames(2);
-    CHECK(scene->cullTwinCount() == 1, "one material worn one-sided AND two-sided: ONE twin");
+    CHECK(scene->published().cullTwins == 1, "one material worn one-sided AND two-sided: ONE twin");
     const NodeId otherNode = mirror.engineNode(other.data());
-    CHECK(otherNode && scene->nodeFaceCull(otherNode) == FaceCull::TwoSided,
+    CHECK(otherNode && jahshaka::engine::inspect::scene(scene)->nodeFaceCull(otherNode) == FaceCull::TwoSided,
           "the mirror pushed the node's cull (None -> TwoSided)");
 
     // ---- 2. THE PICTURE: a plane from below ------------------------------
@@ -157,11 +159,11 @@ int main(int argc, char **argv)
     plane->setFaceCullingMode(iris::FaceCullingMode::Front);
     CHECK(drawn(plane, below, "Front, from below"), "cull Front draws the back face from below");
     CHECK(!drawn(plane, above, "Front, from above"), "...and nothing from above");
-    CHECK(scene->cullTwinCount() == 2, "two cull modes worn beside the material's own: two twins");
+    CHECK(scene->published().cullTwins == 2, "two cull modes worn beside the material's own: two twins");
     plane->setFaceCullingMode(iris::FaceCullingMode::Back);
     CHECK(!drawn(plane, below, "Back, from below"), "cull Back hides it again");
     frames(kGrace);
-    CHECK(scene->cullTwinCount() == 1, "the Front twin died with its last wearer (after its grace)");
+    CHECK(scene->published().cullTwins == 1, "the Front twin died with its last wearer (after its grace)");
 
     // ---- 3. THE TWIN FOLLOWS ITS MASTER ----------------------------------
     {
@@ -180,7 +182,7 @@ int main(int argc, char **argv)
     // ---- the twin goes when its last wearer leaves -------------------------
     other->removeFromParent();
     frames(kGrace);
-    CHECK(scene->cullTwinCount() == 0, "the two-sided node left the document: its twin is gone");
+    CHECK(scene->published().cullTwins == 0, "the two-sided node left the document: its twin is gone");
 
     // ---- 4. A CLOSED BOX FROM INSIDE ---------------------------------------
     {
@@ -236,14 +238,14 @@ int main(int argc, char **argv)
         const AtomDrawStatus st = scene->atomDrawStatus();
         std::printf("    atom: on %d atomItems %u (two-sided %u) cullFront %u pbs %u buckets %u, cull twins %u\n",
                     int(st.on), st.atomItems, st.atomTwoSided, st.cullFront, st.pbsItems, st.buckets,
-                    scene->cullTwinCount());
-        CHECK(scene->cullTwinCount() == 1, "two TwoSided nodes on one material share ONE twin");
+                    scene->published().cullTwins);
+        CHECK(scene->published().cullTwins == 1, "two TwoSided nodes on one material share ONE twin");
         CHECK(st.atomItems == 3 && st.atomTwoSided == 2 && st.pbsItems == 0,
               "the two TwoSided nodes route to Atom drawn from both sides, the third as itself");
         CHECK(st.buckets == 2, "...the twin ONE bucket, not one per node; the master its own");
         for (auto &n : nodes) n->removeFromParent();
         frames(kGrace);
-        CHECK(scene->cullTwinCount() == 0, "every twin gone with its wearers");
+        CHECK(scene->published().cullTwins == 0, "every twin gone with its wearers");
     }
 
     // ---- 6. A CULL TOGGLED EVERY FRAME ---------------------------------------
@@ -259,13 +261,13 @@ int main(int argc, char **argv)
             toggled->setFaceCullingMode((i & 1) ? iris::FaceCullingMode::DefinedInMaterial
                                                 : iris::FaceCullingMode::None);
             frames(1);
-            if (scene->cullTwinCount() != 1) ++unbornFrames;
+            if (scene->published().cullTwins != 1) ++unbornFrames;
         }
         std::printf("    per-frame toggle: %d of %d frames ended with no twin alive\n", unbornFrames, frameCount);
         CHECK(unbornFrames == 0, "a cull toggled every frame keeps ONE twin alive (no datablock built per frame)");
         toggled->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
         frames(kGrace);
-        CHECK(scene->cullTwinCount() == 0, "...and it dies once the toggling stops for its grace");
+        CHECK(scene->published().cullTwins == 0, "...and it dies once the toggling stops for its grace");
         toggled->removeFromParent();
         frames(2);
     }
@@ -282,14 +284,14 @@ int main(int argc, char **argv)
         swapped->setLocalPos(iris::Vec3(-8.0f, 0.0f, 0.0f));
         doc->getRootNode()->addChild(swapped);
         frames(2);
-        CHECK(scene->cullTwinCount() == 1, "(a) a TwoSided node on the first material: one twin");
+        CHECK(scene->published().cullTwins == 1, "(a) a TwoSided node on the first material: one twin");
         auto mat2 = iris::PbrMaterial::create();
         mat2->setBaseColor(QColor(40, 40, 220));
         swapped->setMaterial(mat2);
         CHECK(drawn(swapped, below, "(a) swapped, None, from below"),
               "(a) the swapped material is still drawn from below (the node kept its cull)");
         frames(kGrace);
-        CHECK(scene->cullTwinCount() == 1, "(a) ...through the NEW material's twin; the old one has gone");
+        CHECK(scene->published().cullTwins == 1, "(a) ...through the NEW material's twin; the old one has gone");
 
         // (c) TWINS ACROSS A SHADING-MODEL SWITCH: Unlit and back, the node stays two-sided.
         mat2->setShadingModel(1);
@@ -303,7 +305,7 @@ int main(int argc, char **argv)
               "(c) its own (one-sided) cull hides the back again after the switches");
         swapped->removeFromParent();
         frames(kGrace);
-        CHECK(scene->cullTwinCount() == 0, "(a)/(c) every twin gone");
+        CHECK(scene->published().cullTwins == 0, "(a)/(c) every twin gone");
     }
 
     // ---- 8. A CULL EDIT RE-VOXELISES NOTHING ---------------------------------
@@ -320,7 +322,8 @@ int main(int argc, char **argv)
         enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 10.0f), Vec3(0.0f, 0.5f, 0.0f));
         auto rebuilds = [&] {
             unsigned long long n = 0;
-            for (const auto &c : scene->giStatus().cascades) n += c.rebuilds;
+            frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            for (const auto &c : scene->published().gi.cascades) n += c.rebuilds;
             return n;
         };
         unsigned long long settled = rebuilds();
@@ -353,17 +356,17 @@ int main(int argc, char **argv)
                   "(9) a cube in it");
             for (int i = 0; i < 1000; ++i)
                 hidden->setNodeFaceCull(n, (i & 1) ? FaceCull::Material : FaceCull::TwoSided);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             std::printf("    never-drawn scene after 1000 cull edits: %u twin(s), %u candidate(s)\n",
-                        hidden->cullTwinCount(), hidden->cullTwinCandidateCount());
-            CHECK(hidden->cullTwinCount() == 1 && hidden->cullTwinCandidateCount() <= hidden->cullTwinCount(),
+                        hidden->published().cullTwins, hidden->published().cullTwinCandidates);
+            CHECK(hidden->published().cullTwins == 1 && hidden->published().cullTwinCandidates <= hidden->published().cullTwins,
                   "(9) 1000 cull edits on a never-drawn scene: one twin, the sweep list no longer than the twins");
             engine->destroyScene(hidden);
         }
     }
 
     mirror.setSource(nullptr);
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     engine->destroyView(view);
     engine->destroyScene(scene);
     std::printf(failures ? "FAILURES: %d\n" : "all good (%d failures)\n", failures);

@@ -65,7 +65,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// An 8x8 grey PPM, written the way test_engine's sRGB-key fixture is (a
@@ -152,14 +152,9 @@ int main()
         CHECK(ground != 0, "a ground wearing it, bound in the same frame");
         CHECK(scene->setGlobalIllumination(cascadeGi()),
               "and the cascade arm is pushed in that same frame");
-        // Nothing may have been voxelised yet: the arm is WAITING, not built.
-        // (This is the line that separates the two arms at the source: with the
-        // rule off, four cascades already exist here, voxelised without the
-        // albedo.)
-        const GiStatus waiting = scene->giStatus();
-        std::printf("   immediately after the push: %zu cascades\n", waiting.cascades.size());
-        CHECK(waiting.cascades.empty(),
-              "NOTHING IS VOXELISED WHILE THE ALBEDO IS IN FLIGHT");
+        // (The state BETWEEN the push and the next frame — the arm waiting, nothing voxelised yet — is no host's to
+        // see since U3 stage 2b: a host reads the engine off a frame's snapshot. The line that separates the two arms
+        // is the count below: the rule voxelises each cascade ONCE, the base twice.)
         render(e, 8);
         // AND THEN THE HOST ASKS FOR A REFRESH, which is what the boot really
         // does (the mirror pushes one as the scene finishes assembling). THIS
@@ -171,7 +166,7 @@ int main()
         // are already right.
         scene->refreshGlobalIllumination();
         render(e, 16);
-        const GiStatus o = scene->giStatus();
+        const GiStatus o = scene->published().gi;
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;
         std::printf("   after the open: %zu cascades, %llu rebuilds in total, "
@@ -216,7 +211,8 @@ int main()
                                              Vec3(1.0f, 1.0f, 1.0f), tex4);
         CHECK(late != 0, "a box wearing it, bound in the same frame");
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade arm is pushed");
-        CHECK(scene->giStatus().cascades.empty(), "the arm is waiting, not built");
+        // (the wait itself is between the push and the next frame: no host's to see — U3 stage 2b; the build's
+        // count and what it holds, below, are the guard)
         // THE EDIT, while it waits: another object, which the build has to see.
         const NodeId during = enginetest::addTestCube(scene, Colour(0.2f, 0.9f, 0.2f), 0.0f, 0.8f);
         CHECK(during != 0, "an object arrives while the arm is waiting");
@@ -224,7 +220,7 @@ int main()
         render(e, 24);
         CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
-        const GiStatus o = scene->giStatus();
+        const GiStatus o = scene->published().gi;
         unsigned long long total = 0;
         for (const auto &c : o.cascades) total += c.rebuilds;
         std::printf("   after the wait: %zu cascades, %llu rebuilds in total, "

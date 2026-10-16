@@ -125,7 +125,7 @@ double inputFor(double value)          // the tonemapper input that develops to 
 bool shoot(float e, double &code)
 {
     if (!gScene->setPbrMaterial(gMat, emitter(e))) return false;
-    for (int i = 0; i < 6; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, 6);
     Image img;
     if (!gView->readPixels(img) || img.width != kSide || img.height != kSide) return false;
     double sum = 0.0; int n = 0;

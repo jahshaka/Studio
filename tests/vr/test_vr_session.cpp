@@ -30,6 +30,7 @@
 // runner and asserted here — the user-level manifest belongs to whatever
 // headset last connected (VR_SPEC §2.6).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <chrono>
@@ -234,7 +235,7 @@ bool stableReadback(Engine *e, View *v, Image &out, unsigned budget = 120u) {
     Image prev;
     if (!v->readPixels(prev)) return false;
     for (unsigned i = 0; i < budget; ++i) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (!v->readPixels(out)) return false;
         if (out.rgba == prev.rgba && !out.rgba.empty()) return true;
         prev = out;
@@ -248,7 +249,7 @@ bool stableReadback(Engine *e, View *v, Image &out, unsigned budget = 120u) {
 unsigned long long pump(Engine *e, unsigned long long want, unsigned budget) {
     for (unsigned i = 0; i < budget && e->vrStatus().frames < want; ++i) {
         e->advanceResources();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     return e->vrStatus().frames;
 }
@@ -307,7 +308,7 @@ int main() {
     buildScene(scene);
     REQUIRE(desktop->setScene(scene));
     testCameraLookAt(desktop, Vec3{ 0.6f, 1.5f, 2.4f }, Vec3{ 0.0f, 1.3f, -0.6f });
-    const PostFxDesc desktopFxBefore = desktop->postFx();
+    const PostFxDesc desktopFxBefore = jahshaka::engine::inspect::view(desktop)->postFx();
 
     // ---- THE DESKTOP'S PICTURE, BEFORE ------------------------------------
     // VR_SPEC §0's constraint, measured in this process: without a headset the
@@ -330,20 +331,16 @@ int main() {
         REQUIRE(engine->vrStatus().active);
         View *vrView = engine->vrView();
         REQUIRE(vrView != nullptr);
-        CHECK_MSG(vrView->width() == info.eyeWidth * 2u && vrView->height() == info.eyeHeight,
-                  "the session's target is two eyes wide (%ux%u for a %ux%u eye)",
-                  vrView->width(), vrView->height(), info.eyeWidth, info.eyeHeight);
 
         // THE PHASE-2 PROFILE (VR_SPEC §9 item 6), applied by the session:
         // HDR on, MSAA 1 (HDR + MSAA segfaults this driver), and every effect
         // that samples a NEIGHBOURHOOD off, because at the middle of this
         // target the neighbourhood is the other eye.
-        const PostFxDesc fx = vrView->postFx();
+        const PostFxDesc fx = jahshaka::engine::inspect::view(vrView)->postFx();
         CHECK(fx.hdr);
         CHECK(!fx.ssao);
         CHECK(fx.smaaPreset < 0);
         CHECK(fx.ssr == 0);
-        CHECK(vrView->sampleCount() == 1u);
 
         // THE DESKTOP KEEPS DRAWING WHILE A SESSION RUNS (F4). The runtime's
         // first frames carry shouldRender = 0, and the pump used to answer
@@ -351,9 +348,15 @@ int main() {
         // so a headset that was taken off, a dashboard that came up or a
         // runtime that paused froze the editor's viewport and every host that
         // counts frames. The desktop view's own counter is the witness.
-        const unsigned long long deskBefore = desktop->framesPresented();
+        const unsigned long long deskBefore = desktop->published().presented;
         const unsigned long long frames = pump(engine.get(), 60ull, 600u);
-        const unsigned long long deskDrawn = desktop->framesPresented() - deskBefore;
+        const unsigned long long deskDrawn = desktop->published().presented - deskBefore;
+        // THE SESSION'S TARGET, as the frames drew it (the view's row of the snapshot — U3 stage 2b): two eyes wide,
+        // and MSAA 1 (the phase-2 profile above).
+        CHECK_MSG(vrView->published().width == info.eyeWidth * 2u && vrView->published().height == info.eyeHeight,
+                  "the session's target is two eyes wide (%ux%u for a %ux%u eye)",
+                  vrView->published().width, vrView->published().height, info.eyeWidth, info.eyeHeight);
+        CHECK(vrView->published().sampleCount == 1u);
         const VrStatus st = engine->vrStatus();
         CHECK_MSG(frames >= 60ull, "the runtime accepted %llu frames (>= 60)", frames);
         CHECK_MSG(st.state == VrState::Focused, "the session reached FOCUSED (state %d)",
@@ -596,9 +599,14 @@ int main() {
                 CHECK_MSG(twice >= once + 10ull,
                           "THE SKY CHANGED ON A QUAD THE SESSION ALREADY OWNED and the frames "
                           "kept coming (%llu -> %llu)", once, twice);
-                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos,
-                          "no duplicate-material throw: lastError is '%s'",
-                          engine->lastError().c_str());
+                // The throw would be a FRAME's (the quad is rebuilt in the frame): read the frames' published
+                // error as well as the calls' sink (ENGINE-UPGRADE-U3 F3).
+                bool frameDuplicate = false;
+                for (const auto &fe : engine->published().frameErrors)
+                    frameDuplicate = frameDuplicate || fe.text.find("Duplicate") != std::string::npos;
+                CHECK_MSG(engine->lastError().find("Duplicate") == std::string::npos && !frameDuplicate,
+                          "no duplicate-material throw: lastError is '%s', %zu frame error(s) kept",
+                          engine->lastError().c_str(), engine->published().frameErrors.size());
             }
             setFixtureSky(scene, true);
             pump(engine.get(), engine->vrStatus().frames + 5ull, 100u);
@@ -906,7 +914,7 @@ int main() {
                   engine->vrStatus().frames);
         engine->endVrSession();               // ...and this must not touch it
         CHECK(!engine->vrStatus().active);
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         CHECK_MSG(true, "the session ended after its screen quad was destroyed");
     }
 
@@ -953,7 +961,7 @@ int main() {
             // ACCEPTED must climb while `rendered` stays at nothing — that is
             // the pair the owner's log could not show: a session that stopped
             // being pumped answers "no picture" for ever.
-            for (int i = 0; i < 20; ++i) { engine->advanceResources(); engine->renderOneFrame(); }
+            for (int i = 0; i < 20; ++i) { engine->advanceResources(); enginetest::frames(engine, 1); }
             const VrStatus noPicture = engine->vrStatus();
             CHECK_MSG(noPicture.frames >= 15ull && noPicture.rendered == 0ull,
                       "THE LOOP RUNS WITH NOTHING ENABLED: %llu frames accepted, %llu drawn",
@@ -976,12 +984,12 @@ int main() {
             // ...AND IT DOES PAINT once the runtime asks for a picture again.
             for (int i = 0; i < 200 && engine->vrStatus().rendered == 0ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             CHECK_MSG(engine->vrStatus().rendered > 0ull,
                       "the runtime asked for a picture again after the forced stretch (%llu drawn)",
                       engine->vrStatus().rendered);
-            for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 3);
             Image mirroredNow;
             REQUIRE(desktop->readPixels(mirroredNow));
             CHECK_MSG(differingBytes(mirroredNow.rgba, quiet.rgba) > 0u,
@@ -1023,7 +1031,7 @@ int main() {
             int frames = 0;
             for (; frames < 400 && !ended; ++frames) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 ended = !engine->vrStatus().active;
             }
             CHECK_MSG(ended,
@@ -1098,7 +1106,7 @@ int main() {
             for (int i = 0; i < 30; ++i) {
                 if (engine->hasEnabledViews()) {
                     engine->advanceResources();
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                 } else {
                     ++skipped;
                 }
@@ -1288,8 +1296,8 @@ int main() {
             if (began) {
                 View *vrView = engine->vrView();
                 REQUIRE(vrView != nullptr);
-                CHECK(!vrView->helpersVisible());
-                CHECK(vrView->vrHelpersVisible());
+                CHECK(!jahshaka::engine::inspect::view(vrView)->helpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->vrHelpersVisible());
                 pump(engine.get(), 50ull, 500u);
                 Image eyes;
                 REQUIRE(vrView->readPixels(eyes));
@@ -1319,8 +1327,8 @@ int main() {
             if (began) {
                 View *vrView = engine->vrView();
                 REQUIRE(vrView != nullptr);
-                CHECK(vrView->helpersVisible());
-                CHECK(vrView->vrHelpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->helpersVisible());
+                CHECK(jahshaka::engine::inspect::view(vrView)->vrHelpersVisible());
                 pump(engine.get(), 50ull, 500u);
                 Image eyes;
                 REQUIRE(vrView->readPixels(eyes));
@@ -1368,7 +1376,7 @@ int main() {
     // is a fixture bug, not a VR one, and it read 230,400 bytes when this line
     // was missing.
     setFixtureSky(scene, false);
-    CHECK_MSG(desktop->postFx() == desktopFxBefore,
+    CHECK_MSG(jahshaka::engine::inspect::view(desktop)->postFx() == desktopFxBefore,
               "the desktop view's post chain is exactly what it was before the session");
     Image after;
     REQUIRE(stableReadback(engine.get(), desktop, after));
@@ -2077,7 +2085,7 @@ int main() {
                 // reflectMs is the monitor's row (lane TEST-1): a capture for the pump.
                 enginetest::GpuTimingWindow gpuTiming(engine.get());
                 pump(engine.get(), engine->vrStatus().frames + 32ull, 900u);
-                rq = scene->rayQueryStatus();
+                rq = scene->published().rayQuery;
             }
             std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f\n",
                         int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays,
@@ -2327,21 +2335,25 @@ int main() {
                       drewBefore);
 
             engine->setFrameMonitor(MonitorLevel::Review);
+            enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            // ...and the runtime's count is read AFTER that frame: the delta below is the thrown frames' alone (stage
+            // 2b's frame was counted in it — 6 of 5 — until stage 6 ran the row).
             const unsigned long long frames0 = engine->vrStatus().frames;
-            const unsigned long long rec0 = engine->monitorStatus().framesRecorded;
+            const unsigned long long rec0 = engine->published().monitor.framesRecorded;
             const unsigned kThrown = 5u;
             engine->setFrameFault(FrameFault::Throw, kThrown);
             unsigned fired = 0;
             for (unsigned i = 0; i < kThrown; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
-                if (engine->lastError().find("injected frame fault") != std::string::npos) ++fired;
+                enginetest::frames(engine, 1);
+                // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published, never in the calls' sink.
+                if (engine->published().frameError.find("injected frame fault") != std::string::npos) ++fired;
             }
             CHECK_MSG(fired == kThrown, "the fault fired on all %u frames (not vacuous)", kThrown);
             const VrStatus thrown = engine->vrStatus();
             std::printf("THROWN frames %llu -> %llu, monitor records +%llu, state=%d\n",
                         frames0, thrown.frames,
-                        engine->monitorStatus().framesRecorded - rec0, int(thrown.state));
+                        engine->published().monitor.framesRecorded - rec0, int(thrown.state));
             // THE RUNTIME WAS GIVEN EVERY ONE OF THEM. `VrSession::endFrame`
             // counts a frame when xrEndFrame succeeds, so this number IS the
             // proof that the close ran on a thrown frame — and with it that the
@@ -2349,15 +2361,15 @@ int main() {
             CHECK_MSG(thrown.frames - frames0 == (unsigned long long)kThrown,
                       "EVERY THROWN FRAME STILL CLOSED THE RUNTIME'S FRAME (%llu of %u)",
                       thrown.frames - frames0, kThrown);
-            CHECK_MSG(engine->monitorStatus().framesRecorded - rec0 ==
+            CHECK_MSG(engine->published().monitor.framesRecorded - rec0 ==
                           (unsigned long long)kThrown,
                       "...and each one closed the monitor's record too");
             CHECK_MSG(thrown.active && thrown.state != VrState::Lost,
                       "...and the session is neither lost nor wedged (state %d)",
                       int(thrown.state));
             engine->setFrameMonitor(MonitorLevel::Off);
-            std::vector<FrameRecord> sink;
-            engine->takeFrameRecords(sink);
+            std::vector<MonitorRecord> sink;
+            engine->takeMonitorRecords(sink);
 
             // AND THE EYES ARE NOT BLACK. A leaked acquire cannot be seen in a
             // counter alone: the next frames' copies would have no image to
@@ -2373,7 +2385,7 @@ int main() {
             CHECK_MSG(drewAfter > 0.02,
                       "THE HEADSET IS NOT BLACK AFTER N THROWN FRAMES: the eye target still "
                       "draws (%.3f of it, against %.3f before)", drewAfter, drewBefore);
-            CHECK(!engine->deviceLost());
+            CHECK(!engine->published().deviceLost);
             engine->endVrSession();
             CHECK(!engine->vrStatus().active);
         }
@@ -2401,16 +2413,16 @@ int main() {
             unsigned rendered = 0;
             for (; rendered < 400u && engine->vrStatus().active; ++rendered) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             engine->setFrameFault(FrameFault::None, 0u);
-            std::printf("STOPPED after %u thrown frames, active=%d, lastError='%s'\n", rendered,
-                        int(engine->vrStatus().active), engine->lastError().c_str());
+            std::printf("STOPPED after %u thrown frames, active=%d, frameError='%s'\n", rendered,
+                        int(engine->vrStatus().active), engine->published().frameError.c_str());
             // NOT VACUOUS: the frame that ended the session is a frame that
-            // THREW, and its own error is still the one standing.
-            CHECK_MSG(engine->lastError().find("injected frame fault") != std::string::npos,
+            // THREW, and its own (published) error says so.
+            CHECK_MSG(engine->published().frameError.find("injected frame fault") != std::string::npos,
                       "the session was ended by a frame that threw ('%s')",
-                      engine->lastError().c_str());
+                      engine->published().frameError.c_str());
             // ENDED, NOT MERELY WEDGED, and the difference is the whole case:
             // a session that has been TAKEN DOWN reports `Idle` (there is no
             // session object left to ask), while a session whose frames simply
@@ -2675,13 +2687,13 @@ int main() {
             engine->setVrMirrorView(desktop);
             for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             const VrStatus drawing = engine->vrStatus();
             CHECK_MSG(drawing.mirrorShowing == VrDesktopPicture::Eye,
                       "THE DESKTOP IS THE EYE'S COPY while the runtime draws (rendered %llu)",
                       drawing.rendered);
-            CHECK_MSG(!desktop->isEnabled(),
+            CHECK_MSG(!jahshaka::engine::inspect::view(desktop)->isEnabled(),
                       "...which is ONE RENDER PIPELINE: the desktop's own View is switched "
                       "off by the ENGINE, not by a host");
 
@@ -2692,12 +2704,12 @@ int main() {
             unsigned disagreed = 0, ownFrames = 0;
             for (int i = 0; i < 120; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 const bool own = engine->vrStatus().mirrorShowing == VrDesktopPicture::Own;
                 if (own) ++ownFrames;
                 // The reported answer and the View's own flag are one fact:
                 // "the desktop shows the eye" IS "its View is not drawing".
-                if (own != desktop->isEnabled()) ++disagreed;
+                if (own != jahshaka::engine::inspect::view(desktop)->isEnabled()) ++disagreed;
             }
             CHECK_MSG(ownFrames == 0u && disagreed == 0u,
                       "A ONE-FRAME BLINK DOES NOT FLAP THE DESKTOP: %u of 120 frames showed "
@@ -2705,7 +2717,7 @@ int main() {
                       ownFrames, disagreed);
         }
         if (began) { engine->setVrMirrorView(nullptr); engine->endVrSession(); }
-        CHECK_MSG(desktop->isEnabled(),
+        CHECK_MSG(jahshaka::engine::inspect::view(desktop)->isEnabled(),
                   "(5) A SESSION THAT ENDS LEAVES THE DESKTOP DRAWING: the engine switched "
                   "the View off, so the engine switched it back on");
 
@@ -2727,11 +2739,11 @@ int main() {
             engine->setVrMirrorView(desktop);
             for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             ObjectCounts objBefore;
             engine->objectCounts(objBefore);
-            const GiStatus giBefore = scene->giStatus();
+            const GiStatus giBefore = scene->published().gi;
 
             unsigned toOwn = 0, toEye = 0, disagreements = 0;
             double flipMs = 0.0, steadyMs = 0.0;
@@ -2741,11 +2753,11 @@ int main() {
             for (int i = 0; i < 400 && (toOwn < 10u || toEye < 10u); ++i) {
                 engine->advanceResources();
                 const auto t0 = std::chrono::steady_clock::now();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 const double ms = std::chrono::duration<double, std::milli>(
                                       std::chrono::steady_clock::now() - t0).count();
                 const bool eyeNow = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
-                if (eyeNow == desktop->isEnabled()) ++disagreements;
+                if (eyeNow == jahshaka::engine::inspect::view(desktop)->isEnabled()) ++disagreements;
                 if (eyeNow != showingEye) {
                     if (eyeNow) ++toEye; else ++toOwn;
                     flipMs += ms; ++flipFrames;
@@ -2771,7 +2783,7 @@ int main() {
             // OgreEngine::renderOneFrame), so a desktop that takes the window
             // back must not take the CHAIN with it — that flip cost two
             // from-scratch cascade builds a cycle before that rule existed.
-            const GiStatus giAfter = scene->giStatus();
+            const GiStatus giAfter = scene->published().gi;
             CHECK_MSG(giAfter.rebuilds == giBefore.rebuilds &&
                           giAfter.cascadeFullRebuilds == giBefore.cascadeFullRebuilds,
                       "TWENTY FLIPS REBUILD NO GI: from-scratch %llu -> %llu, whole-chain "
@@ -2789,15 +2801,15 @@ int main() {
             for (int i = 0; i < 200 &&
                             engine->vrStatus().mirrorShowing != VrDesktopPicture::Own; ++i) {
                 engine->advanceResources();
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             if (CHECK_MSG(engine->vrStatus().mirrorShowing == VrDesktopPicture::Own,
                           "parked on a frame where the desktop draws its own camera")) {
                 Image a;
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 REQUIRE(desktop->readPixels(a));
                 testCameraLookAt(desktop, Vec3{ -1.4f, 1.9f, 2.9f }, Vec3{ 0.0f, 1.0f, -0.6f });
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 Image b;
                 REQUIRE(desktop->readPixels(b));
                 CHECK_MSG(differingBytes(a.rgba, b.rgba) > 0u,
@@ -2809,7 +2821,7 @@ int main() {
             engine->endVrSession();
         }
         CHECK(!engine->vrStatus().active);
-        CHECK_MSG(desktop->isEnabled(), "the desktop draws again after the second session");
+        CHECK_MSG(jahshaka::engine::inspect::view(desktop)->isEnabled(), "the desktop draws again after the second session");
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------

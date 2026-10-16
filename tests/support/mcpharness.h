@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -75,6 +76,35 @@ inline QString oneLine(const QString &script)
     return s;
 }
 
+/// A CHILD THAT DIED OF A DEVICE LOSS KEEPS ITS WHOLE LOG (ENGINE-UPGRADE-U3 decision 26). The tail childReport
+/// prints is the last 40 lines, and a lost device fills them with the same VK_ERROR_DEVICE_LOST line — the cause, which
+/// is BEFORE the first loss, never reaches the row's log. When `log` names a device loss, the whole of it is written
+/// to `<dir>/child-<pid>-device-lost.log` (`dir` = the row's working directory, which lives in the build tree and
+/// outlives the run) and the lines around the FIRST loss are returned for the row's own log. Returns an empty string
+/// (and writes nothing) for a log with no loss; `pathOut` gets the file written.
+inline QString keepDeviceLostLog(const QByteArray &log, qint64 pid, const QString &dir, QString *pathOut = nullptr,
+                                 int before = 30, int after = 5)
+{
+    static const QByteArray kLost("VK_ERROR_DEVICE_LOST");
+    const int at = log.indexOf(kLost);
+    if (at < 0) return QString();
+    QDir().mkpath(dir);
+    const QString path = QDir(dir).filePath(QStringLiteral("child-%1-device-lost.log").arg(pid));
+    QFile f(path);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(log);
+    if (pathOut) *pathOut = f.error() == QFileDevice::NoError ? path : QString();
+    const QList<QByteArray> all = log.split('\n');
+    int lineOf = 0;
+    for (int i = 0, offset = 0; i < all.size(); offset += int(all[i].size()) + 1, ++i)
+        if (offset + all[i].size() > at) { lineOf = i; break; }
+    QStringList ctx;
+    for (int i = qMax(0, lineOf - before); i <= qMin(int(all.size()) - 1, lineOf + after); ++i)
+        ctx << QStringLiteral("%1%2").arg(i == lineOf ? QStringLiteral(">> ") : QStringLiteral("   "),
+                                            QString::fromUtf8(all[i]));
+    return QStringLiteral("the first device loss is line %1 of %2:\n").arg(lineOf + 1).arg(all.size())
+           + ctx.join(QLatin1Char('\n'));
+}
+
 struct McpClient
 {
     QNetworkAccessManager net;
@@ -127,10 +157,15 @@ struct McpClient
     /// returns before the client is done: `mcp.ownLog = log; mcp.attach(process, mcp.ownLog);`.
     QByteArray ownLog;
 
+    /// The child's pid as attach() saw it: QProcess answers 0 once the process has exited, which is exactly when a
+    /// device-lost log is named after it.
+    qint64 appPid = 0;
+
     void attach(QProcess &process, QByteArray &log)
     {
         app = &process;
         appLog = &log;
+        appPid = process.processId();
     }
 
     /// The child's state, exit code, exit status and error, and the last `tailLines` lines of
@@ -163,6 +198,19 @@ struct McpClient
         std::printf("info: ---- the child's last %lld log line(s) ----\n", static_cast<long long>(lines.size()));
         for (const QString &l : lines) std::printf("info: | %s\n", qUtf8Printable(l));
         std::printf("info: ---- end of the child's log ----\n");
+        if (appLog) {
+            QString path;
+            const qint64 pid = app->processId() ? app->processId() : appPid;
+            const QString lost = keepDeviceLostLog(*appLog, pid, QDir::currentPath(), &path);
+            if (!lost.isEmpty()) {
+                std::printf("info: ---- THE CHILD LOST THE DEVICE: its whole log (%lld bytes) is kept at %s ----\n",
+                            static_cast<long long>(appLog->size()),
+                            qUtf8Printable(path.isEmpty() ? QStringLiteral("(write failed)") : path));
+                for (const QString &l : lost.split(QLatin1Char('\n'))) std::printf("info: | %s\n", qUtf8Printable(l));
+                std::printf("info: ---- end of the device-loss context ----\n");
+                out += QStringLiteral("\ndevice-lost log: ") + path;
+            }
+        }
         std::fflush(stdout);
         return out + QLatin1Char('\n') + lines.join(QLatin1Char('\n'));
     }

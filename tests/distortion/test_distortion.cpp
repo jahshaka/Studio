@@ -96,7 +96,7 @@ static void writePpm(const Image &img, const char *path)
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static unsigned pixelDiff(const Image &a, const Image &b)
@@ -229,7 +229,7 @@ int main()
     Image wallOnly;
     REQUIRE(view->readPixels(wallOnly));
     writePpm(wallOnly, "distortion-wall.ppm");
-    const unsigned genPlain = view->workspaceGeneration();
+    const unsigned genPlain = view->published().workspaceGeneration;
 
     // ---- the emitter: a flat quad with a Distortion material ---------------
     const TextureId map = [&] {
@@ -264,7 +264,7 @@ int main()
     Image passthrough;
     REQUIRE(view->readPixels(passthrough));
     writePpm(passthrough, "distortion-passthrough.ppm");
-    CHECK_MSG(view->workspaceGeneration() == genPlain,
+    CHECK_MSG(view->published().workspaceGeneration == genPlain,
               "adding a distortion emitter does not rebuild the passthrough workspace");
     CHECK_MSG(pixelDiff(wallOnly, passthrough) == 0,
               "distortion_item_never_draws_in_the_passthrough_shape: %u pixels differ",
@@ -276,10 +276,10 @@ int main()
         d.distortion = true;
         d.distortionStrength = 0.0f;
         view->setPostFx(d);
-        const unsigned genOn = view->workspaceGeneration();
+        render(engine.get(), 4);   // the snapshot names the workspace the frames drew with (U3 stage 2b)
+        const unsigned genOn = view->published().workspaceGeneration;
         CHECK_MSG(genOn != genPlain,
                   "turning distortion on IS a shape change (%u -> %u)", genPlain, genOn);
-        render(engine.get(), 4);
         Image zero;
         REQUIRE(view->readPixels(zero));
         writePpm(zero, "distortion-strength0.ppm");
@@ -291,9 +291,10 @@ int main()
         PostFxDesc up = d;
         up.distortionStrength = 1.0f;
         view->setPostFx(up);
-        CHECK_MSG(view->workspaceGeneration() == genOn,
+        render(engine.get(), 1);
+        CHECK_MSG(view->published().workspaceGeneration == genOn,
                   "changing the STRENGTH must not rebuild the workspace (%u -> %u)",
-                  genOn, view->workspaceGeneration());
+                  genOn, view->published().workspaceGeneration);
     }
 
     // ---- 2 + 3. it warps the background, where the emitter is --------------
@@ -449,8 +450,8 @@ int main()
         render(engine.get(), 2);
         Image offBurst;
         REQUIRE(view->readPixels(offBurst));
-        CHECK_MSG(s->particleCount(burst) > 100u,
-                  "the burst is live (%u particles)", s->particleCount(burst));
+        CHECK_MSG(s->published().particlesOf(burst) > 100u,
+                  "the burst is live (%u particles)", s->published().particlesOf(burst));
         CHECK_MSG(pixelDiff(wallOnly, offBurst) == 0,
                   "a distortion BURST draws nothing without the pass: %u px differ from the wall",
                   pixelDiff(wallOnly, offBurst));

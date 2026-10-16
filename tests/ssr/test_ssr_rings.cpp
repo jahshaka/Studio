@@ -173,7 +173,7 @@ int main()
 
     const auto shoot = [&](const PostFxDesc &fx, Image &out, const char *dumpName) {
         view->setPostFx(fx);
-        for (int i = 0; i < 5; ++i) engine->renderOneFrame();   // the history is a frame late
+        enginetest::frames(engine, 5);// the history is a frame late
         if (!view->readPixels(out)) { std::printf("FAIL: readPixels\n"); ++failures; }
         if (dumpName && envOn("JAH_SSR_RINGS_DUMP"))
             writePpm(out, std::string(dumpName) + ".ppm");
@@ -319,9 +319,9 @@ int main()
                 PostFxDesc v = off;
                 if (a >= 0) { v.ssr = 2; v.ssrMarchPhase = arms[a].phase; }
                 bench->setPostFx(v);
-                for (int i = 0; i < 60; ++i) engine->renderOneFrame();
+                enginetest::frames(engine, 60);
                 const auto t0 = std::chrono::steady_clock::now();
-                for (int i = 0; i < 300; ++i) engine->renderOneFrame();
+                enginetest::frames(engine, 300);
                 const double ms =
                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                         .count() / 300.0;

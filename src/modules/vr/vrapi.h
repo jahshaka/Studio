@@ -28,7 +28,6 @@ For more information see the LICENSE file
 // refuse() contract, and it is the difference between "the editor works
 // without a headset" being a claim and being a test.
 
-#include <QElapsedTimer>
 #include <QVariantMap>
 #include <memory>
 
@@ -179,9 +178,10 @@ private:
     /// Was a session active at the last tick — the edge that installs and
     /// removes the interaction.
     bool interactionSessionActive = false;
-    /// The wall clock of the frame just gone, clamped by vrorigin::frameSeconds
-    /// before it may move anybody (the rule the Player's VR mode follows).
-    QElapsedTimer interactionClock;
+    /// THE RUNTIME'S CLOCK at the last interaction step (VrStatus::displayTimeNs; ENGINE-UPGRADE-U3 stage 6: the
+    /// record's dt, never a wall clock of ours) — the step's seconds are the runtime's display-time delta, clamped by
+    /// vrorigin::frameSeconds before it may move anybody. -1: no step yet this session.
+    long long interactionDisplayNs = -1;
 
     /// Are the controller proxies drawn at all? `vr.proxies(false)` is the
     /// off switch, and it survives a session ending — a user who turned the

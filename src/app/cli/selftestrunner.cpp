@@ -254,7 +254,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // The background compiler's counts BEFORE the selftest's own frames: the startup gate's
     // tier sweep draws placeholders on purpose (it builds them), in its own scenes.
     jahshaka::engine::AsyncShaderStats asyncAtStart;
-    if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->asyncShaderStats();
+    if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->published().shaders;
     window.show();
     app.processEvents();
     // THE SELFTEST OWNS THE LOOP (TESTING-CLEANUP-2 H5). Every frame it hashes is a frame IT asked
@@ -310,7 +310,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // app.engine_selftest_validation (tests/app/engine_selftest.sh): a layered run whose layer
     // never loaded prints no "Validation Error" and would otherwise read as clean.
     if (const auto eng = EngineHost::instance().engine()) {
-        const jahshaka::engine::ValidationStatus v = eng->validation();
+        jahshaka::engine::ValidationStatus v;
+        eng->request([&](jahshaka::engine::Engine &e) { v = e.validation(); });   // a REQUEST (U3 stage 3)
         QStringList layers;
         for (const std::string &l : v.layers) layers << QString::fromStdString(l);
         std::fprintf(stderr, "engine-selftest: validation requested %s active %s (vkCmdDraw -> %s; layers: %s)\n",
@@ -751,7 +752,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // inside the frame (they never turn View::setAsyncShaders on), so anything else here means
     // a placeholder could reach a hash.
     if (const auto eng = EngineHost::instance().engine()) {
-        const jahshaka::engine::AsyncShaderStats a = eng->asyncShaderStats();
+        const jahshaka::engine::AsyncShaderStats a = eng->published().shaders;
         const unsigned long long ph = a.placeholderDraws - asyncAtStart.placeholderDraws;
         const unsigned long long skips = a.pendingSkips - asyncAtStart.pendingSkips;
         std::fprintf(stderr, "engine-selftest: placeholder draws %llu, pending skips %llu (%s)\n",

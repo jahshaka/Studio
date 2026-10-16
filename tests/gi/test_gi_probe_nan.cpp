@@ -39,7 +39,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 // An IEEE half from its bits; `finite` false for an Inf or NaN (exponent all ones).
 static float halfBits(uint16_t h, bool &finite)

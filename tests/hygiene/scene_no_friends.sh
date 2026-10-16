@@ -26,7 +26,7 @@ count() {  # $1 file, $2 class-head regex
 }
 PHOTON="$ROOT/irisgl/engine/src/photon/PhotonComponent.h"
 [ -f "$PHOTON" ] || { echo "source.scene_no_friends: FAIL — no $PHOTON"; exit 1; }
-friends=$(( $(count "$FILE" '^class OgreScene final : public Scene \{') + $(count "$PHOTON" '^class PhotonComponent \{') ))
+friends=$(( $(count "$FILE" '^class OgreScene final : public Scene[ ,]') + $(count "$PHOTON" '^class PhotonComponent \{') ))
 if [ "$friends" = 0 ]; then
     echo "source.scene_no_friends: ok — OgreScene and PhotonComponent declare no friend"
     exit 0

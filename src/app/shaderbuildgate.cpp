@@ -221,7 +221,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             ev.view = view;
             ev.environment = true;
             ev.finish = [](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
                 secondaryfx::applyScene(fx, 0.0f);
                 part.postFx = fx;
             };
@@ -241,7 +241,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         while (frames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
             frame();
             engine.shaderBuildProgress(c, f, e);
-            const GiStatus gi = es->giStatus();
+            const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
             const bool armed = gi.mode == GiMode::Off || gi.vctBound;
             quiet = (c == last && armed) ? quiet + 1 : 0;
             last = c;
@@ -278,17 +278,17 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 if (tier == born) continue;
                 worldmodes::setPhoton(doc, photonOn, tier);
                 environmentOnce();
-                AsyncShaderStats as = engine.asyncShaderStats();
+                AsyncShaderStats as = engine.published().shaders;
                 unsigned long long lastDone = as.completed;
                 engine.shaderBuildProgress(c, f, e);
                 last = c;
                 quiet = 0;
                 for (int tf = 0; tf < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames; ++tf) {
                     frame();
-                    engine.waitForAsyncShaders();
-                    as = engine.asyncShaderStats();
+                    engine.request([](jahshaka::engine::Engine &e) { e.waitForAsyncShaders(); });   // a REQUEST (U3 4a)
+                    as = engine.published().shaders;
                     engine.shaderBuildProgress(c, f, e);
-                    const GiStatus gi = es->giStatus();
+                    const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                     const bool armed = gi.mode == GiMode::Off || gi.vctBound;
                     quiet = (c == last && as.completed == lastDone && armed) ? quiet + 1 : 0;
                     last = c;
@@ -307,10 +307,12 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // on the UI thread (measured: 5 on Showroom 2, 10 with 16 lamps, on the
         // close that took the session's first tile). Taken here, once, on this
         // view's whole chain.
-        if (view->requestFrameCapture(false)) {
+        bool captureArmed = false;   // REQUESTS (U3 stage 4a): the capture's arm and its take
+        engine.request([&](Engine &) { captureArmed = view->requestFrameCapture(false); });
+        if (captureArmed) {
             frame();
             jahshaka::engine::Image tile;
-            view->takeFrameCapture(tile, true);
+            engine.request([&](Engine &) { view->takeFrameCapture(tile, true); });
         }
         // (4) THE VIDEO RECORDER'S VIEW (VIDEO-REC-2): the view a recording draws
         // (recordingview::create — the recorder's own builder, at the recording's
@@ -330,14 +332,14 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 jahshaka::engine::VideoFrameNv12 picture;
                 recorderView = recordingview::frameView(rv, camera, 0.0f);
                 for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
-                    rv->armVideoFrame(quint64(i));
+                    engine.request([&](Engine &) { rv->armVideoFrame(quint64(i)); });   // REQUESTS (U3 4a)
                     frame();
-                    while (rv->takeVideoFrame(picture, false)) {}
+                    engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, false)) {} });
                     engine.shaderBuildProgress(c, f, e);
                     quiet = (c + f == last) ? quiet + 1 : 0;
                     last = c + f;
                 }
-                while (rv->takeVideoFrame(picture, true)) {}
+                engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, true)) {} });
                 recorderView = SceneMirror::FrameView();
                 engine.destroyView(rv);
             } else {
@@ -596,8 +598,9 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
     // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
     SettingsManager *settings = SettingsManager::getDefaultManager();
-    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') +
-                            QString::fromStdString(engine->shaderCacheStats().fingerprint);
+    std::string fingerprint;
+    engine->request([&](jahshaka::engine::Engine &e) { fingerprint = e.shaderCacheStats().fingerprint; });   // a REQUEST (U3 stage 3)
+    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') + QString::fromStdString(fingerprint);
     const bool keyMoved = settings->get(settingkeys::shaderWarmPass) != passKey;
     const bool runPass = compiled > 0 || keyMoved;
     if (keyMoved && compiled == 0)
@@ -613,11 +616,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         if (!haveWarmGi || warmGi.mode == GiMode::Off) return true;
         // Every GI mode the tiers ship voxelises (VCT, alone or under the probes): the arm is
         // bound when the cone tracer is.
-        return warmScene->giStatus().vctBound;
+        return warmScene->published().gi.vctBound;
     };
     int boundFrames = 0;
     for (; runPass && warmScene && giFrames < kWarmUpGiFrames &&
-           ((quiet < kGiQuietFrames && !warmScene->giStatus().giAtRest) || boundFrames < kWarmUpFrames);
+           ((quiet < kGiQuietFrames && !warmScene->published().gi.giAtRest) || boundFrames < kWarmUpFrames);
          ++giFrames) {
         engine->renderOneFrame();
         poll();
@@ -669,7 +672,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             engine->shaderBuildProgress(compiled, cached, expected);
             unsigned tierLast = compiled;
             for (; tierFrames < kWarmUpGiFrames &&
-                   (tierQuiet < kGiQuietFrames || !warmScene->giStatus().vctBound);
+                   (tierQuiet < kGiQuietFrames || !warmScene->published().gi.vctBound);
                  ++tierFrames) {
                 engine->renderOneFrame();
                 poll();

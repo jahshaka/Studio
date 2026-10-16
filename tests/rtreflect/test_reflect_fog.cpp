@@ -59,7 +59,7 @@ const unsigned kSize = 256u;
 const float kWallZ = 30.0f;      // the wall's mirror-facing side, metres from the mirror
 const float kEyeZ = 2.0f;        // camera A in front of the mirror
 
-void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 struct Rgb { double r = 0, g = 0, b = 0; };
 Rgb centre(View *v)
@@ -176,8 +176,8 @@ int main(int argc, char **argv)
                     s->setReflectionFogEnabled(arm == 0);
                     for (int i = 0; i < 30; ++i) {
                         if (which) enginetest::setNodePosition(s, walls[1], Vec3(0.0f, 0.001f * float(i & 1), kWallZ + 0.1f));
-                        e->renderOneFrame();
-                        const RayQueryStatus st = s->rayQueryStatus();
+                        enginetest::frames(e, 1);
+                        const RayQueryStatus st = s->published().rayQuery;
                         if (i >= 10 && st.reflectMs > 0.0f) { sum[arm] += st.reflectMs; ++n[arm]; }
                     }
                 }
@@ -287,10 +287,10 @@ int main(int argc, char **argv)
             e->setFrameMonitor(MonitorLevel::Review);
             std::vector<double> frameMs;
             for (int i = 0; i < 300; ++i) {
-                e->renderOneFrame();
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
-                for (const FrameRecord &r : recs) {
+                enginetest::frames(e, 1);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
+                for (const MonitorRecord &r : recs) {
                     double g = 0.0;
                     bool any = false;
                     for (const FramePass &fp : r.passes)

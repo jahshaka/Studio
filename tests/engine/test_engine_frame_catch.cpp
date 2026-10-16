@@ -30,7 +30,7 @@
 // Types.h), the engine's own test hook — not an environment variable and not a
 // global. It raises the fault inside the frame, after the render has been
 // recorded and before anything closes, which is where a device loss lands; and
-// `lastError()` afterwards carries the fault's own message, so every case below
+// the frame's published error (published().frameError) carries the fault's own message, so every case below
 // proves the fault really fired instead of passing vacuously.
 //
 // WHAT IT CANNOT PROVE, said plainly: a REAL `VK_ERROR_DEVICE_LOST`. Inducing
@@ -59,7 +59,8 @@ static const unsigned kSize = 96;
 /// Did the injected fault really fire? Its message names itself.
 static bool faultFired(const Engine *e)
 {
-    return e->lastError().find("injected frame fault") != std::string::npos;
+    // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published for the frame just rendered, never in the calls' sink.
+    return e->published().frameError.find("injected frame fault") != std::string::npos;
 }
 
 /// How much of a picture is not its corner pixel — "something was drawn".
@@ -94,7 +95,7 @@ int main()
 
     // A warm frame or two: the first frames of a process are the shader/PSO
     // compile storm, and nothing below is a timing assertion, but a picture is.
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     Image warm;
     CHECK(view->readPixels(warm) && drawnFraction(warm) > 0.02,
           "the fixture renders a picture before anything is faulted");
@@ -105,11 +106,11 @@ int main()
     {
         const std::string errBefore = e->lastError();
         e->setFrameFault(FrameFault::Throw, 0u);          // frames 0 = disarmed
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(e->lastError() == errBefore && !faultFired(e),
               "a fault armed for ZERO frames throws nothing at all");
         e->setFrameFault(FrameFault::None, 5u);           // kind None = disarmed
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         CHECK(e->lastError() == errBefore && !faultFired(e),
               "...and neither does FrameFault::None with frames to spare");
     }
@@ -124,29 +125,29 @@ int main()
     // one per throw, and the frame numbers had a hole in them.
     {
         e->setFrameMonitor(MonitorLevel::Review);
-        std::vector<FrameRecord> drained;
-        e->takeFrameRecords(drained);                     // start from a clean ring
+        std::vector<MonitorRecord> drained;
+        e->takeMonitorRecords(drained);                     // start from a clean ring
         drained.clear();
-        const unsigned long long rec0 = e->monitorStatus().framesRecorded;
+        const unsigned long long rec0 = e->published().monitor.framesRecorded;
 
         const unsigned kGood = 3u, kThrown = 4u;
-        for (unsigned i = 0; i < kGood; ++i) e->renderOneFrame();
+        enginetest::frames(e, kGood);
         e->setFrameFault(FrameFault::Throw, kThrown);
         unsigned fired = 0;
         for (unsigned i = 0; i < kThrown; ++i) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (faultFired(e)) ++fired;
         }
         CHECK(fired == kThrown, "the fault fired on every frame it was armed for "
                                 "(the case is not vacuous)");
-        for (unsigned i = 0; i < kGood; ++i) e->renderOneFrame();
+        enginetest::frames(e, kGood);
 
-        const unsigned long long recorded = e->monitorStatus().framesRecorded - rec0;
+        const unsigned long long recorded = e->published().monitor.framesRecorded - rec0;
         std::printf("   %u frames rendered (%u of them thrown) -> %llu monitor records\n",
                     kGood * 2u + kThrown, kThrown, recorded);
         CHECK(recorded == (unsigned long long)(kGood * 2u + kThrown),
               "ONE MONITOR RECORD PER FRAME, THROWN OR NOT (it was one short per throw)");
-        CHECK(!e->monitorStatus().framesDropped,
+        CHECK(!e->published().monitor.framesDropped,
               "...and the ring dropped none of them, so the count above is the ring's");
 
         // THE RING IS DRAINED AFTER THE MONITOR IS STOPPED, deliberately: a
@@ -157,15 +158,15 @@ int main()
         // not about this lane.
         e->setFrameMonitor(MonitorLevel::Off);
         drained.clear();
-        e->takeFrameRecords(drained);
+        e->takeMonitorRecords(drained);
         unsigned long long last = 0ull;
         bool increasing = !drained.empty();
-        for (const FrameRecord &r : drained) {
+        for (const MonitorRecord &r : drained) {
             if (last && r.frame <= last) increasing = false;
             last = r.frame;
         }
         std::printf("   the ring holds %zu records, frames", drained.size());
-        for (const FrameRecord &r : drained) std::printf(" %llu", r.frame);
+        for (const MonitorRecord &r : drained) std::printf(" %llu", r.frame);
         std::printf("\n");
         CHECK(drained.size() == size_t(kGood * 2u + kThrown) && increasing,
               "...and every record carries its OWN frame number, strictly increasing "
@@ -176,14 +177,14 @@ int main()
     // CASE 2 — THE FRAME AFTER A THROW IS AN ORDINARY FRAME
     // =====================================================================
     {
-        const unsigned long long presented0 = view->framesPresented();
+        const unsigned long long presented0 = view->published().presented;
         e->setFrameFault(FrameFault::Throw, 2u);
-        e->renderOneFrame();
-        e->renderOneFrame();
-        CHECK(view->framesPresented() == presented0,
+        enginetest::frames(e, 1);
+        enginetest::frames(e, 1);
+        CHECK(view->published().presented == presented0,
               "a thrown frame does not claim to have presented (it did not get that far)");
-        for (int i = 0; i < 3; ++i) e->renderOneFrame();
-        CHECK(view->framesPresented() >= presented0 + 3ull,
+        enginetest::frames(e, 3);
+        CHECK(view->published().presented >= presented0 + 3ull,
               "THE VIEW PRESENTS AGAIN after the faults are spent");
         Image after;
         CHECK(view->readPixels(after) && drawnFraction(after) > 0.02,
@@ -196,20 +197,20 @@ int main()
     // LAST, because the latch is one-way by design (a lost device never comes
     // back) and because it writes `lastError`.
     {
-        CHECK(!e->deviceLost(), "the device is not lost before the fault (nothing faked it yet)");
+        CHECK(!e->published().deviceLost, "the device is not lost before the fault (nothing faked it yet)");
         e->setFrameFault(FrameFault::ThrowDeviceLost, 1u);
-        e->renderOneFrame();
-        CHECK(faultFired(e) || e->deviceLost(), "the device-lost fault fired");
-        CHECK(e->deviceLost(),
+        enginetest::frames(e, 1);
+        CHECK(faultFired(e) || e->published().deviceLost, "the device-lost fault fired");
+        CHECK(e->published().deviceLost,
               "A DEVICE LOSS INSIDE A FRAME LATCHES: the latch lives after the catch, and "
               "until this lane a throw returned straight past it");
-        CHECK(e->lastError() == "the GPU device was lost",
+        CHECK(e->published().frameError == "the GPU device was lost",
               "...and the engine says which fact it latched, not the fault's own message");
         // THE FAKE IS ONLY THE ENGINE'S OWN REPORT: nothing about the driver,
         // the render system or the pictures changed, which is why this frame
         // still draws. (A real loss stops the render system dead — fork d014b064f+1bccc3f93 (was 0072)
         // — and that cannot be exercised without taking the box's GPU with it.)
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         Image alive;
         CHECK(view->readPixels(alive) && drawnFraction(alive) > 0.02,
               "the FAKED loss faked nothing else: the render system is untouched");

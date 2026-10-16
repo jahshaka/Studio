@@ -41,6 +41,13 @@ QVector<VerbInfo> EngineApi::verbs() const
           "layer library the process loaded. A script run under the layer asserts `requested && "
           "active`: a layer that never loaded reports no error and reads as a clean run.",
           Needs::Engine },
+        { "syncGetters", "engine.syncGetters() -> {total, getters:{name: calls}}",
+          "THE DOOR, COUNTED (host.sync_getters, ENGINE-UPGRADE-U3): every synchronous getter of the engine that is "
+          "still a read of its state on the caller's thread, with the calls the HOST made of it since the process "
+          "started (a call inside one of the render loop's frames is the engine's own and is not counted). A host "
+          "path reads the per-frame snapshot instead; a script differences two readings around the frames it "
+          "measures. Itself not counted.",
+          Needs::Engine },
     };
 }
 
@@ -53,8 +60,14 @@ QVariant EngineApi::arm(const QString &name, const QVariant &value)
         bool ok = false;
         const double v = value.toDouble(&ok);
         if (!ok) { refuse(QStringLiteral("engine.arm: %1 needs a number").arg(name)); return jsNull(); }
-        if (!engine->setArm(key, v)) {
-            refuse(QStringLiteral("engine.arm: %1").arg(QString::fromStdString(engine->takeLastError())));
+        bool armed = false;
+        std::string why;
+        engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+            armed = e.setArm(key, v);
+            if (!armed) why = e.takeLastError();
+        });
+        if (!armed) {
+            refuse(QStringLiteral("engine.arm: %1").arg(QString::fromStdString(why)));
             return jsNull();
         }
         return v;
@@ -84,11 +97,26 @@ QVariantMap EngineApi::validation()
 {
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail(QStringLiteral("engine.validation: no engine in this session")); return {}; }
-    const jahshaka::engine::ValidationStatus v = engine->validation();
+    jahshaka::engine::ValidationStatus v;
+    engine->request([&](jahshaka::engine::Engine &e) { v = e.validation(); });   // a REQUEST (U3 stage 3): a library walk
     QVariantList layers;
     for (const std::string &l : v.layers) layers.push_back(QString::fromStdString(l));
     return { { QStringLiteral("requested"), v.requested },
              { QStringLiteral("active"), v.active },
              { QStringLiteral("layers"), layers },
              { QStringLiteral("drawEntry"), QString::fromStdString(v.drawEntry) } };
+}
+
+QVariantMap EngineApi::syncGetters()
+{
+    QVariantMap getters;
+    qulonglong total = 0;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail(QStringLiteral("engine.syncGetters: no engine in this session")); return QVariantMap(); }
+    for (const jahshaka::engine::SyncGetterCount &g : engine->syncGetters()) {
+        getters.insert(QString::fromStdString(g.name), QVariant::fromValue(qulonglong(g.calls)));
+        total += qulonglong(g.calls);
+    }
+    return QVariantMap{ { QStringLiteral("total"), QVariant::fromValue(total) },
+                        { QStringLiteral("getters"), getters } };
 }

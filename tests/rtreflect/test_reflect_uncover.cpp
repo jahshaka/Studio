@@ -34,6 +34,7 @@
 //
 // Every number is frames-counted (the engine has no wall clock).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
 #include "../support/enginetesthelpers.h"
 
@@ -73,7 +74,7 @@ static const float kHalfRun = 1.6f;
 // the arm "reflect.metalDecode"'s shipped default (GpuScene.h kReflectMetalDecodeRoughness)
 static const double kReflectMetalDecodeDefault = 0.30;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData sphereMesh(int rings = 48, int segments = 96)
 {
@@ -245,7 +246,7 @@ static int uncoverMain(Engine *e, Scene *s, View *view, const char *dumpDir)
             ++frame;
             enginetest::gesture(e, s, { room.box });   // a gesture moves it (U0 3c: the host says so)
             s->setNodeTransform(room.box, boxAt(frame), Quat(), Vec3(kBox, kBox, kBox));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         Image moving, settled;
         if (!view->readPixels(moving)) { std::printf("FAIL: readPixels: %s\n", e->lastError().c_str()); return 1; }
@@ -443,7 +444,7 @@ static int helpersMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         render(e, 60);
         view->readPixels(marchBare);
         helpersOn(true);
-        PostFxDesc plain = view->postFx();
+        PostFxDesc plain = jahshaka::engine::inspect::view(view)->postFx();
         plain.ssr = 0;
         view->setPostFx(plain);
         render(e, 60);
@@ -512,7 +513,7 @@ static int cardsMain(Engine *e, Scene *s, View *view)
         crates.push_back(n);
     }
     render(e, 240);
-    const CardCacheStatus c0 = s->giStatus().cards;
+    const CardCacheStatus c0 = s->published().gi.cards;
     std::printf("   the field: %u instances, %u cards resident, %u of %u pages (gate at %u)\n", c0.instancesResident,
                 c0.cardsResident, c0.pagesUsed, c0.pages, c0.pages * 7u / 8u);
     CHECK_MSG(c0.pages > 0 && c0.pagesUsed * 8u >= c0.pages * 7u,
@@ -533,7 +534,7 @@ static int cardsMain(Engine *e, Scene *s, View *view)
     }
     s->setNodeTransform(subject, pos, Quat(), Vec3(1.4f, 1.4f, 1.4f));
     render(e, 1);
-    const CardCacheStatus c1 = s->giStatus().cards;
+    const CardCacheStatus c1 = s->published().gi.cards;
     const int kRecapture = 60;
     int capturedAt = -1;
     for (int f = 0; f < kRecapture; ++f) {
@@ -542,7 +543,7 @@ static int cardsMain(Engine *e, Scene *s, View *view)
         if (s->readCardTexel(subject, 4u, 0.5f, 0.5f, after) && after.ok) { capturedAt = f + 2; break; }
     }
     render(e, 30);
-    const CardCacheStatus c2 = s->giStatus().cards;
+    const CardCacheStatus c2 = s->published().gi.cards;
     std::printf("   after the move: %u instances / %u cards (frame 1), %u / %u (at rest); %llu transform "
                 "invalidations; the moved crate's card read back at frame %d\n",
                 c1.instancesResident, c1.cardsResident, c2.instancesResident, c2.cardsResident,
@@ -564,7 +565,7 @@ static int cardsMain(Engine *e, Scene *s, View *view)
         s->setNodeTransform(subject, pos, Quat(), Vec3(1.4f, 1.4f, 1.4f));
         render(e, 1);
     }
-    const CardCacheStatus c3 = s->giStatus().cards;
+    const CardCacheStatus c3 = s->published().gi.cards;
     int backAt = -1;
     for (int f = 0; f < 240; ++f) {
         render(e, 1);
@@ -572,7 +573,7 @@ static int cardsMain(Engine *e, Scene *s, View *view)
         if (s->readCardTexel(subject, 4u, 0.5f, 0.5f, back) && back.ok) { backAt = f + 1; break; }
     }
     render(e, 30);
-    const CardCacheStatus c4 = s->giStatus().cards;
+    const CardCacheStatus c4 = s->published().gi.cards;
     std::printf("   a 40-frame gesture: %u / %u resident during it, %u / %u at rest; the crate's card read back %d "
                 "frames after the gesture\n", c3.instancesResident, c3.cardsResident, c4.instancesResident,
                 c4.cardsResident, backAt);
@@ -718,7 +719,7 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         e->setArm("reflect.metalDecode", arm);
         render(e, 120);
         std::vector<unsigned long long> r;
-        for (int f = 0; f < 30; ++f) { e->renderOneFrame(); r.push_back(s->rayQueryStatus().hitRecords); }
+        for (int f = 0; f < 30; ++f) { enginetest::frames(e, 1); r.push_back(s->published().rayQuery.hitRecords); }
         std::sort(r.begin(), r.end());
         return r[r.size() / 2];
     };
@@ -787,7 +788,7 @@ static int metalMeasureMain(Engine *e, Scene *s, View *view)
             }
             std::printf("MEASURE metal %.2f reflector r %.2f: %d px, full-decode lum %.1f, the voxel/card route "
                         "%.2f codes from it (records full %llu)\n", m, r, n, n ? lumRef / n : 0.0,
-                        n ? d / (3.0 * n) : 0.0, (unsigned long long)s->rayQueryStatus().hitRecords);
+                        n ? d / (3.0 * n) : 0.0, (unsigned long long)s->published().rayQuery.hitRecords);
         }
     }
     return 0;

@@ -45,7 +45,7 @@ static int failures = 0;
 
 static const unsigned kW = 256, kH = 144;
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 /// How many float components differ (bit for bit) between two readbacks.
 static size_t floatsDiffering(const ImageF &a, const ImageF &b)
@@ -140,7 +140,7 @@ int main()
         // field, the far floor in the ring outside it.
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -1.5f), Vec3(0.0f, 0.4f, 30.0f));
         render(e, 90);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK_MSG(st.ifdBound && st.cascades.size() > 1, "the field is bound under a chain (%zu cascades)", st.cascades.size());
 
         ImageF on, off, on2, noField;
@@ -190,7 +190,7 @@ int main()
         view->setPostFx(fx);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, -1.5f), Vec3(0.0f, 0.4f, 30.0f));
         render(e, 120);
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         if (!rq.available) {
             std::printf("SKIP: no ray-query device; PH-1's ray half cannot run here\n");
         } else {

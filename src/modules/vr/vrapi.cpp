@@ -135,9 +135,9 @@ bool profileFromName(const QString &raw, VrProfileName &out, QString *error)
 /// views report theirs here — `View::postFx()` is what the view is really
 /// carrying, the VR policy already applied — so the answer is an assertion on
 /// the fields rather than on a picture, and a difference names ITSELF.
-QVariantMap postFxMap(const View &view)
+QVariantMap postFxMap(const View &view, const PublishedEngineFrame::ViewFrames &pv)
 {
-    const PostFxDesc &fx = view.postFx();
+    const PostFxDesc &fx = pv.postFx;   // the effective chain, as the last frame drew it (U3 stage 2)
     const auto lookName = [](LookKind k) {
         switch (k) {
         case LookKind::Desaturate: return QStringLiteral("desaturate");
@@ -211,7 +211,7 @@ QVariantMap postFxMap(const View &view)
     // need rides that one push, immediately before this view's passes; a count
     // that does not climb means this picture is rendering with whatever the
     // last workspace to update left in the process-wide materials.
-    m[QStringLiteral("globalsPushes")] = QVariant::fromValue(qulonglong(view.globalsPushes()));
+    m[QStringLiteral("globalsPushes")] = QVariant::fromValue(qulonglong(pv.globalsPushes));
     QVariantList looks;
     for (const LookDesc &l : fx.looks) {
         QVariantMap one;
@@ -521,7 +521,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
+          "frames, rendered, missedDisplayPeriods, framesOffRenderThread, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
           "asymmetricFov, "
           "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
@@ -909,8 +909,11 @@ QVariantMap VrApi::available()
 {
     QVariantMap out;
     Engine *e = engine();
-    const VrInfo info = e ? e->vrInfo() : VrInfo();
-    out[QStringLiteral("available")] = e ? e->vrAvailable() : false;
+    // THE PROBE'S ANSWER IS A REQUEST (U3 stage 4a): read on the engine's side.
+    VrInfo info;
+    bool avail = false;
+    if (e) e->request([&](Engine &eng) { info = eng.vrInfo(); avail = eng.vrAvailable(); });
+    out[QStringLiteral("available")] = avail;
     out[QStringLiteral("headset")] = info.available;
     out[QStringLiteral("failure")] = vrnames::failure(e ? info.failure : VrFailure::Headless);
     out[QStringLiteral("manifest")] = QString::fromStdString(info.manifest);
@@ -1060,7 +1063,7 @@ bool VrApi::end()
 {
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.end: no engine is running in this process"));
-    if (!e->vrStatus().active) return refuse(QStringLiteral("vr.end: no session is running"));
+    if (!e->vrSessionLive()) return refuse(QStringLiteral("vr.end: no session is running"));
     qWarning("Jahshaka VR: vr.end() called");
     // A PREVIEW ENDS THROUGH ITS OWN OBJECT (the viewport has to get its fly
     // keys and its helpers back); a session somebody ELSE started — the
@@ -1077,7 +1080,7 @@ bool VrApi::endForShutdown()
 {
     if (editor.end()) return true;
     Engine *e = engine();
-    if (!e || !e->vrStatus().active) return false;
+    if (!e || !e->vrSessionLive()) return false;
     if (moduleHost.engine && moduleHost.engine->driver())
         moduleHost.engine->driver()->setVrSessionActive(false);
     e->setVrMirrorView(nullptr);
@@ -1090,7 +1093,7 @@ bool VrApi::shutdown()
     const bool ended = endForShutdown();
     interaction.detachHost();
     interactionSessionActive = false;
-    interactionClock.invalidate();
+    interactionDisplayNs = -1;
     // NOTHING OF THE HOST SURVIVES THE TEARDOWN STEP: the per-frame hook comes
     // off the driver and the context copy is emptied, so a verb a script calls
     // from here on reads null everywhere and refuses (no dangling viewport,
@@ -1125,7 +1128,9 @@ void VrApi::pushProxies()
     SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr;
     if (!mirror) return;
     Engine *e = engine();
-    const VrStatus st = e ? e->vrStatus() : VrStatus();
+    // THE SESSION AS THE LAST FRAME LEFT IT (ENGINE-UPGRADE-U3 stage 2: the snapshot — the proxies always drew the
+    // last begun frame's pose; the latency is unchanged, now explicit).
+    const VrStatus &st = e ? e->published().vr : VrStatus();
     // A scene that has never worn VR pays one comparison a frame: the mirror's
     // own sync short-circuits on `active` and builds nothing.
     mirror->setVrProxies(showProxies && st.active, st);
@@ -1206,8 +1211,12 @@ QVariantMap VrApi::proxyPose(const QString &hand)
     Scene *scene = moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
     Vec3 position;
     Quat rotation;
-    const bool drawn = scene && nodes[index] &&
-                       scene->nodeWorldPose(nodes[index], position, rotation);
+    // THE PROXY AS THE LAST FRAME DREW IT (ENGINE-UPGRADE-U3 stage 2: the snapshot's named nodes, never a read of
+    // the engine).
+    bool drawn = false;
+    if (scene && nodes[index])
+        for (const auto &np : scene->published().nodePoses)
+            if (np.node == nodes[index]) { position = np.position; rotation = np.rotation; drawn = true; break; }
     out = vrnames::pose(position, rotation, drawn);
     // `valid` on a POSE means "the runtime located it"; here the question is
     // "is there a marker in the scene at all", so it is named for what it is.
@@ -1329,8 +1338,13 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
     // THE INJECTION FIRST, THE FOCUS ONLY IF IT WAS TAKEN (the lead, from the
     // Fable read at merge): a refused injection (a bound profile, no override —
     // the headset case) must not rewrite the session's focus bit on the way.
-    if (!e->vrInjectInput(index, s))
-        return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));
+    bool injected = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        injected = eng.vrInjectInput(index, s);
+        if (!injected) why = eng.lastError();
+    });
+    if (!injected) return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(why)));
     if (!state.isEmpty())
         e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
     // ...AND THE SKELETON, AFTER THE SAMPLE (stage 3): the joints belong to the
@@ -1348,10 +1362,14 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
             if (!poseFromMap(list.at(j).toMap(), joints[j], &error))
                 return fail(QStringLiteral("vr.inject: joints[%1]: %2").arg(j).arg(error));
         }
-        if (!e->vrInjectJoints(index, list.isEmpty() ? nullptr : joints,
-                               unsigned(list.size())))
-            return refuse(QStringLiteral("vr.inject: %1")
-                              .arg(QString::fromStdString(e->lastError())));
+        bool jointed = false;
+        std::string jointsWhy;
+        e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a)
+            jointed = eng.vrInjectJoints(index, list.isEmpty() ? nullptr : joints, unsigned(list.size()));
+            if (!jointed) jointsWhy = eng.lastError();
+        });
+        if (!jointed)
+            return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(jointsWhy)));
     }
     return true;
 }
@@ -1420,8 +1438,14 @@ QVariantMap VrApi::eyeScreenshot(const QVariant &eye, const QString &path)
     }
     if (path.isEmpty()) { fail(QStringLiteral("vr.eyeScreenshot: a file path is required")); return out; }
     Image img;
-    if (!e->vrEyeScreenshot(unsigned(index), img)) {
-        fail(QStringLiteral("vr.eyeScreenshot: %1").arg(QString::fromStdString(e->lastError())));
+    bool shot = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        shot = eng.vrEyeScreenshot(unsigned(index), img);
+        if (!shot) why = eng.lastError();
+    });
+    if (!shot) {
+        fail(QStringLiteral("vr.eyeScreenshot: %1").arg(QString::fromStdString(why)));
         return out;
     }
     if (!img.width || !img.height || img.rgba.empty()) {
@@ -1471,8 +1495,13 @@ bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
     if (index < 0)
         return fail(QStringLiteral("vr.haptic: hand must be \"left\" or \"right\" (or 0/1), "
                                    "not '%1'").arg(hand.toString()));
-    if (!e->vrHaptic(index, float(amplitude), float(seconds)))
-        return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(e->lastError())));
+    bool buzzed = false;
+    std::string why;
+    e->request([&](jahshaka::engine::Engine &eng) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        buzzed = eng.vrHaptic(index, float(amplitude), float(seconds));
+        if (!buzzed) why = eng.lastError();
+    });
+    if (!buzzed) return refuse(QStringLiteral("vr.haptic: %1").arg(QString::fromStdString(why)));
     return true;
 }
 
@@ -1510,6 +1539,10 @@ QVariantMap VrApi::state()
     out[QStringLiteral("refreshHz")] = info.refreshHz;
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
+    // The headset refreshes no frame of ours reached, counted on the runtime's own clock (ENGINE-UPGRADE-U3, vr.ui_stall).
+    out[QStringLiteral("missedDisplayPeriods")] = QVariant::fromValue(qulonglong(s.missedDisplayPeriods));
+    // THE XR-THREAD LAW (ENGINE-UPGRADE-U3 stage 6): VR frames begun off the engine's render thread — 0 always.
+    out[QStringLiteral("framesOffRenderThread")] = QVariant::fromValue(qulonglong(s.framesOffRenderThread));
     // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
     // session has rendered before its first committed one, and what they cost.
     // A count and a measured value, like everything else here.
@@ -1613,10 +1646,12 @@ QVariantMap VrApi::state()
     // headset looks wrong" should read first.
     if (Engine *eng = e) {
         if (View *eyes = eng->vrView()) {
+            // AS THE LAST FRAME DREW THEM (ENGINE-UPGRADE-U3 stage 2: the snapshot's effective chains, by name).
+            const PublishedEngineFrame &pub = eng->published();
             QVariantMap fx;
-            fx[QStringLiteral("eye")] = postFxMap(*eyes);
+            if (const auto *pe = pub.view(eyes->id())) fx[QStringLiteral("eye")] = postFxMap(*eyes, *pe);
             if (View *desk = desktopViewOf(eng, eyes))
-                fx[QStringLiteral("desktop")] = postFxMap(*desk);
+                if (const auto *pd = pub.view(desk->id())) fx[QStringLiteral("desktop")] = postFxMap(*desk, *pd);
             out[QStringLiteral("postFx")] = fx;
         }
     }
@@ -1693,7 +1728,7 @@ void VrApi::installInteraction()
     // the right half, which is what makes every gesture gateable.
     deps.playerMode = [this] {
         Engine *e = engine();
-        return e && e->vrStatus().active && !editor.isActive();
+        return e && e->vrSessionLive() && !editor.isActive();
     };
     // MAY THE WEARER BE MOVED THIS FRAME? Both hosts place the rig on the first
     // located frame they can pair with the rig the engine holds, and both
@@ -1748,11 +1783,11 @@ void VrApi::syncInteractionSession()
 {
     Engine *e = engine();
     engineInput.setEngine(e);
-    const bool active = e && e->vrStatus().active;
+    const bool active = e && e->vrSessionLive();
     if (active == interactionSessionActive) return;
     interactionSessionActive = active;
-    if (active) { interaction.begin(); interactionClock.start(); }
-    else        { interaction.end(); interactionClock.invalidate(); }
+    if (active) { interaction.begin(); interactionDisplayNs = -1; }
+    else        { interaction.end(); interactionDisplayNs = -1; }
 }
 
 void VrApi::stepInteraction()
@@ -1772,13 +1807,15 @@ void VrApi::stepInteraction()
     // engine's since the two halves of stage 1 met, so the question "is a test
     // driving this?" has exactly one answer in the process.
     if (interaction.injectionArmed()) return;
-    // THE FRAME JUST GONE, and it is clamped before it may move anybody
-    // (vrorigin::frameSeconds): a UI-thread block arrives here as one enormous
-    // dt, and in a headset that is an involuntary lurch rather than a nuisance.
-    const float seconds = interactionClock.isValid()
-                              ? float(double(interactionClock.nsecsElapsed()) * 1e-9)
-                              : -1.0f;
-    interactionClock.restart();
+    // THE FRAMES JUST GONE, ON THE RUNTIME'S CLOCK (ENGINE-UPGRADE-U3 stage 6): the delta of the newest frames'
+    // predicted display times since the last step — the time the wearer saw pass, never a wall clock of ours — and
+    // clamped before it may move anybody (vrorigin::frameSeconds): a stall arrives here as one enormous dt, and in a
+    // headset that is an involuntary lurch rather than a nuisance. No new frame since the last step: no time passed.
+    Engine *e = engine();
+    const long long now = e ? e->vrStatus().displayTimeNs : 0;
+    const float seconds = (interactionDisplayNs < 0 || now <= 0) ? -1.0f
+                          : float(double(std::max(0ll, now - interactionDisplayNs)) * 1e-9);
+    if (now > 0) interactionDisplayNs = now;
     interaction.step(seconds);
 }
 

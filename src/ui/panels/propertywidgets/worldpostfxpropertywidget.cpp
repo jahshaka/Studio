@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
+#include "ui/panels/propertywidgets/panelrefresh.h"
+#include <QPointer>
 
 #include "irisgl/document/scenegraph/scene.h"
 
@@ -330,12 +332,14 @@ void WorldPostFxPropertyWidget::commitLooks(const QJsonArray &before, const QStr
 
 void WorldPostFxPropertyWidget::applied()
 {
-    // Two frames, like the sibling sections: the chain's shape changes are
-    // applied by SceneMirror at the next sync and a single frame can be the one
-    // that rebuilds the workspace rather than the one that draws with it.
-    if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
     if (loading) return;
     refreshRows();
+    // The chain's shape changes are applied by the mirror at its next sync and drawn by the frames after it: the
+    // rows re-read once two have (ENGINE-UPGRADE-U3 stage 2: the post-edit render is deleted).
+    if (sceneView && sceneView->isInitialized())
+        panelrefresh::afterFrames(this, sceneView, 2, [self = QPointer<WorldPostFxPropertyWidget>(this)]() {
+            if (self && !self->loading) self->refreshRows();
+        });
     // NOTE the sibling notification (worldSettingsChanged) is NOT raised here:
     // it is raised by the rows that write a World-Mode-backed field, because
     // those are the only edits the World Mode section can be showing. A looks

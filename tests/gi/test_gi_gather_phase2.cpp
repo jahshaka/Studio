@@ -49,7 +49,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static NodeId addBox(Scene *s, const PbrParams &p, const Vec3 &pos, const Vec3 &scale)
 {
@@ -237,8 +237,8 @@ static int planeMain(Engine *e, bool targetRow)
     };
     unsigned lastFrame = ~0u, frames = 0u;
     for (int f = 0; f < 200 && frames < 96u; ++f) {
-        e->renderOneFrame();
-        const GatherStatus st = s->giStatus().gather;
+        enginetest::frames(e, 1);
+        const GatherStatus st = s->published().gi.gather;
         if (st.irradiance.empty() || st.irradianceFrame == lastFrame) continue;
         lastFrame = st.irradianceFrame;
         ++frames;
@@ -357,8 +357,8 @@ static int deterministicMain(Engine *e)
         // (inside the 60 rendered — a cold view's sequence starts at 0).
         GatherStatus st;
         for (int f = 0; f < 60; ++f) {
-            e->renderOneFrame();
-            const GatherStatus now = s->giStatus().gather;
+            enginetest::frames(e, 1);
+            const GatherStatus now = s->published().gi.gather;
             if (now.irradianceFrame == 50u && !now.irradiance.empty()) st = now;
         }
         std::printf("   cold run %d: gather frame %u read back (%ux%u), %u adaptive probes\n", run,
@@ -476,23 +476,24 @@ static int cardsMain(Engine *e)
         at.readback = true;
         s->setGatherTuning(at);
         // the first copy OF THIS ARM: the status keeps the previous arm's last copy until a new one retires
-        const unsigned since = s->giStatus().gather.frame;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned since = s->published().gi.gather.frame;
         GatherStatus st;
         for (int f = 0; f < 20; ++f) {
-            e->renderOneFrame();
-            st = s->giStatus().gather;
+            enginetest::frames(e, 1);
+            st = s->published().gi.gather;
             if (!st.irradiance.empty() && st.irradianceFrame >= since) break;
         }
         a.ran = st.running && !st.irradiance.empty();
-        a.cards = s->giStatus().cards.cardsResident;
+        a.cards = s->published().gi.cards.cardsResident;
         // THE LIVE AVERAGE: `liveFrames` distinct read-back frames, summed.
         if (liveFrames > 1 && a.ran) {
             std::vector<double> acc(st.irradiance.size(), 0.0);
             int got = 0;
             unsigned lf = st.irradianceFrame;
             for (int f = 0; f < 8 * liveFrames && got < liveFrames; ++f) {
-                e->renderOneFrame();
-                const GatherStatus q = s->giStatus().gather;
+                enginetest::frames(e, 1);
+                const GatherStatus q = s->published().gi.gather;
                 if (q.irradiance.size() != acc.size() || q.irradianceFrame == lf) continue;
                 lf = q.irradianceFrame;
                 for (size_t i = 0; i < acc.size(); ++i) acc[i] += q.irradiance[i];

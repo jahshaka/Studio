@@ -3,7 +3,7 @@
 //
 // Two scenes, each drawn by its own view with shadows: A holds six Atom cubes, a floor and
 // a sun; B two cubes, a floor and a sun. On every recorded frame:
-//   1. THE PASS ORDER, by the compositor's own listing (FrameRecord.passes): in each view's
+//   1. THE PASS ORDER, by the compositor's own listing (MonitorRecord.passes): in each view's
 //      workspace the id pass ("Jahshaka atom id") runs ONCE and before the first screen
 //      decode ("Jahshaka atom decode*"); the late pass, where the chain has it, between the
 //      two; and every caster pass ("Jahshaka atom caster") directly follows a shadow scene
@@ -38,7 +38,7 @@ static int failures = 0;
 
 static const unsigned kSize = 128;
 
-static unsigned stageCount(const FrameRecord &r, const char *name) {
+static unsigned stageCount(const MonitorRecord &r, const char *name) {
     unsigned n = 0;
     for (const FrameStage &s : r.stages)
         if (s.name == name) ++n;
@@ -63,8 +63,8 @@ struct Order {
 };
 
 /// Rule 1 for the workspace whose name holds `tag`, and the caster rule frame-wide.
-static void readOrder(const std::vector<FrameRecord> &recs, const char *tagA, const char *tagB, Order &o) {
-    for (const FrameRecord &r : recs) {
+static void readOrder(const std::vector<MonitorRecord> &recs, const char *tagA, const char *tagB, Order &o) {
+    for (const MonitorRecord &r : recs) {
         if (r.passes.empty()) continue;
         ++o.frames;
         const unsigned w = stageCount(r, "engine.atomwords");
@@ -121,7 +121,7 @@ int main()
     vb->setShadows(true);
     enginetest::testCameraLookAt(va, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
     enginetest::testCameraLookAt(vb, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
 
     const AtomDrawStatus sa0 = a->atomDrawStatus();
     if (!sa0.on) {
@@ -131,14 +131,14 @@ int main()
 
     e->setFrameMonitor(MonitorLevel::Review);
     {
-        std::vector<FrameRecord> drop;
-        e->renderOneFrame();
-        e->takeFrameRecords(drop);
+        std::vector<MonitorRecord> drop;
+        enginetest::frames(e, 1);
+        e->takeMonitorRecords(drop);
     }
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> recs;
-    e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    e->takeMonitorRecords(recs);
     Order o;
     readOrder(recs, "atomcompA", "atomcompB", o);
     const AtomDrawStatus sa = a->atomDrawStatus(), sb = b->atomDrawStatus();
@@ -162,19 +162,19 @@ int main()
 
     // ---- 4. the owners retire with their objects ------------------------------------
     e->destroyView(vb);
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
     e->destroyScene(b);
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
     e->setFrameMonitor(MonitorLevel::Review);
     {
-        std::vector<FrameRecord> drop;
-        e->renderOneFrame();
-        e->takeFrameRecords(drop);
+        std::vector<MonitorRecord> drop;
+        enginetest::frames(e, 1);
+        e->takeMonitorRecords(drop);
     }
-    for (int i = 0; i < 3; ++i) e->renderOneFrame();
+    enginetest::frames(e, 3);
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    e->takeFrameRecords(recs);
+    e->takeMonitorRecords(recs);
     Order o2;
     readOrder(recs, "atomcompA", "atomcompA", o2);
     const AtomDrawStatus sa2 = a->atomDrawStatus();

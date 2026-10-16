@@ -31,6 +31,7 @@
 //   C  NO BAND: at both ends of the hot spot's row the bloomed picture equals
 //      the bloom-off picture within one code (the base: +34).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -68,7 +69,7 @@ MeshData planeMesh(float half)
 
 bool shoot(Image &out, int frames)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     return gView->readPixels(out);
 }
 
@@ -244,7 +245,7 @@ int main()
     Image on, off;
     if (!shoot(on, 8)) { std::printf("FAIL: readPixels (bloom)\n"); return 1; }
     {
-        PostFxDesc fx = gView->postFx();
+        PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
         fx.bloomAmount = 0.0f;
         gView->setPostFx(fx);
     }

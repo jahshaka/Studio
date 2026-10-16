@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
 
 #include "bridge/sceneworkerthreads.h"
@@ -58,7 +59,7 @@ static int failures = 0;
 // record helpers
 // ---------------------------------------------------------------------------
 
-static float stageMs(const FrameRecord &r, const char *name)
+static float stageMs(const MonitorRecord &r, const char *name)
 {
     float ms = 0.0f;
     for (const FrameStage &s : r.stages)
@@ -66,7 +67,7 @@ static float stageMs(const FrameRecord &r, const char *name)
     return ms;
 }
 
-static const FramePass *passNamed(const FrameRecord &r, const char *name)
+static const FramePass *passNamed(const MonitorRecord &r, const char *name)
 {
     for (const FramePass &p : r.passes)
         if (p.pass == name) return &p;
@@ -77,27 +78,27 @@ static const FramePass *passNamed(const FrameRecord &r, const char *name)
 /// rendered from the call on (records arrive late: attributed by frame number).
 /// A path longer than the monitor's ring (kRingCapacity, 4,096 frames — the 2 km walk is
 /// 6,000) drains into collect()'s buffer as it goes (midDrain), or its first frames are lost.
-static std::vector<FrameRecord> *g_midDrain = nullptr;
+static std::vector<MonitorRecord> *g_midDrain = nullptr;
 static void midDrain(Env &env)
 {
     if (!g_midDrain) return;
-    for (FrameRecord &r : drain(env)) g_midDrain->push_back(std::move(r));
+    for (MonitorRecord &r : drain(env)) g_midDrain->push_back(std::move(r));
 }
-static std::vector<FrameRecord> collect(Env &env, const std::function<void()> &body, int tail = 8)
+static std::vector<MonitorRecord> collect(Env &env, const std::function<void()> &body, int tail = 8)
 {
     frame(env, 4);
     unsigned long long before = 0;
-    for (const FrameRecord &r : drain(env)) before = std::max(before, r.frame);
-    std::vector<FrameRecord> mid;
+    for (const MonitorRecord &r : drain(env)) before = std::max(before, r.frame);
+    std::vector<MonitorRecord> mid;
     g_midDrain = &mid;
     body();
     frame(env, tail);
     midDrain(env);
     g_midDrain = nullptr;
-    std::vector<FrameRecord> out;
-    for (FrameRecord &r : mid)
+    std::vector<MonitorRecord> out;
+    for (MonitorRecord &r : mid)
         if (r.frame > before) out.push_back(std::move(r));
-    std::sort(out.begin(), out.end(), [](const FrameRecord &a, const FrameRecord &b) { return a.frame < b.frame; });
+    std::sort(out.begin(), out.end(), [](const MonitorRecord &a, const MonitorRecord &b) { return a.frame < b.frame; });
     return out;
 }
 
@@ -176,11 +177,11 @@ static void pathFly(Env &env, float seconds)
     }
 }
 
-static void printPath(const char *label, const std::vector<FrameRecord> &recs)
+static void printPath(const char *label, const std::vector<MonitorRecord> &recs)
 {
     std::vector<double> total, swap, gpu, pre, record;
     unsigned rebuilds = 0;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         total.push_back(r.totalMs);
         swap.push_back(stageMs(r, "engine.swap"));
         pre.push_back(stageMs(r, "engine.pre"));
@@ -246,7 +247,7 @@ static int voxelScrollMain()
     World w;
     if (!bootWorld(env, w, "test-scale-voxel-scroll-ogre.log")) return 1;
     REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
-    const GiStatus gi0 = env.scene->giStatus();
+    const GiStatus gi0 = env.scene->published().gi;
     for (size_t c = 0; c < gi0.cascades.size(); ++c)
         std::printf("   cascade %zu: halfSize %.1f m, %d^3, cell %.3f m, step %.2f m, items %d\n", c,
                     double(gi0.cascades[c].halfSize), gi0.cascades[c].resolution, double(gi0.cascades[c].cell),
@@ -275,8 +276,8 @@ static int voxelScrollMain()
     }
 
     struct Row { std::vector<double> cpu, gpu; };
-    auto harvest = [](const std::vector<FrameRecord> &recs, std::map<std::string, Row> &rows) {
-        for (const FrameRecord &r : recs)
+    auto harvest = [](const std::vector<MonitorRecord> &recs, std::map<std::string, Row> &rows) {
+        for (const MonitorRecord &r : recs)
             for (const CacheWork &c : r.cacheWork)
                 if (c.detail.rfind("vct.cascade", 0) == 0) {
                     rows[c.detail].cpu.push_back(c.ms);
@@ -380,7 +381,7 @@ static void lightListArms(Env &env)
     auto settle = [&] {
         for (int f = 0; f < 600; ++f) {
             frame(env, 1);
-            if (f > 30 && env.scene->giStatus().giAtRest) break;
+            if (f > 30 && env.scene->published().gi.giAtRest) break;
         }
     };
     // Dim fillers inside cascade 0's box, behind the camera (+z), away from the wall.
@@ -399,7 +400,7 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, at);
         settle();
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         GiVoxelStats on = env.scene->giVoxelStats(0);
         if (!st.cascades.empty()) {
             r.inRange = st.cascades[0].lightsInRange;
@@ -459,7 +460,7 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, at);
         settle();
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         REQUIRE(st.cascades.size() >= 2, "C: the chain has its cascades (%zu)", st.cascades.size());
         bool allMatch = !st.cascades.empty();
         int anyOver = 0;
@@ -510,7 +511,7 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, at);
         settle();
-        const GiStatus g0 = env.scene->giStatus();
+        const GiStatus g0 = env.scene->published().gi;
         REQUIRE(!g0.cascades.empty(), "E: the chain is built");
         if (g0.cascades.empty()) return;
         const float half = g0.cascades[0].halfSize;
@@ -548,7 +549,7 @@ static void lightListArms(Env &env)
         }
         env.doc->getRootNode()->applyStaticDefaults();
         settle();
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         const GiVoxelStats on = env.scene->giVoxelStats(0);
         area->setPropertyValue(QStringLiteral("intensity"), 0.0f);
         area->markChanged(iris::NodeChange::Params);
@@ -597,7 +598,7 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, at);
         settle();
-        const GiStatus g0 = env.scene->giStatus();
+        const GiStatus g0 = env.scene->published().gi;
         REQUIRE(!g0.cascades.empty(), "F: the chain is built");
         if (g0.cascades.empty()) return;
         const GiStatus::CascadeStatus &c0 = g0.cascades[0];
@@ -616,7 +617,7 @@ static void lightListArms(Env &env)
         auto farL = lamp(QStringLiteral("far"), iris::Vec3(c0.centre.x + half + dFar, c0.centre.y, c0.centre.z), farI, rF);
         env.doc->getRootNode()->applyStaticDefaults();
         settle();
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         const GiVoxelStats base = env.scene->giVoxelStats(0);
         auto toggleMoves = [&](iris::LightNodePtr l, float I) {
             l->setPropertyValue(QStringLiteral("intensity"), 0.0f);
@@ -654,9 +655,9 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, at);
         settle();
-        for (int f = 0; f < 600 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
+        for (int f = 0; f < 600 && env.scene->published().gi.cards.queueLength > 0; ++f) frame(env, 1);
         frame(env, 30);
-        CardCacheStatus c0 = env.scene->giStatus().cards;
+        CardCacheStatus c0 = env.scene->published().gi.cards;
         // A FULL RELIGHT PASS (not the last batch, which depends on which cards it held):
         // a radiance change (the key 6 -> 6.01) stales every resident card's direct half;
         // the pass's reading is the largest batch box's — the one holding the floor card,
@@ -669,7 +670,7 @@ static void lightListArms(Env &env)
             key->markChanged(iris::NodeChange::Params);
             for (int f = 0; f < 600; ++f) {
                 frame(env, 1);
-                const CardCacheStatus s = env.scene->giStatus().cards;
+                const CardCacheStatus s = env.scene->published().gi.cards;
                 if (s.relitLastFrame > 0 && s.lightsInRange >= passInRange) {
                     passInRange = s.lightsInRange;
                     passDropped = s.lightsDropped;
@@ -677,7 +678,7 @@ static void lightListArms(Env &env)
                 if (s.relights - rel0 >= resident && s.queueLength == 0) break;
             }
             frame(env, 30);
-            c0 = env.scene->giStatus().cards;
+            c0 = env.scene->published().gi.cards;
             std::printf("   D: the full relight pass: %llu relights of %u resident cards\n",
                         (unsigned long long)(c0.relights - rel0), resident);
         }
@@ -689,7 +690,7 @@ static void lightListArms(Env &env)
             key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
             key->markChanged(iris::NodeChange::Params);
             settle();
-            for (int f = 0; f < 600 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
+            for (int f = 0; f < 600 && env.scene->published().gi.cards.queueLength > 0; ++f) frame(env, 1);
             frame(env, 30);
             CardSample off;
             const bool okOff = env.scene->readCardAt(Vec3(0.0f, 0.1f, -1.5f), Vec3(0, 1, 0), off) && off.ok;
@@ -792,11 +793,11 @@ static int lightsMain()
         auto settle = [&] {
             for (int f = 0; f < 600; ++f) {
                 frame(env, 1);
-                if (f > 30 && env.scene->giStatus().giAtRest) break;
+                if (f > 30 && env.scene->published().gi.giAtRest) break;
             }
         };
         settle();
-        const GiStatus gi = env.scene->giStatus();
+        const GiStatus gi = env.scene->published().gi;
         if (gi.cascades.empty()) return out;
         const GiStatus::CascadeStatus &c0 = gi.cascades[0];
         out.inRange = c0.lightsInRange;
@@ -900,11 +901,11 @@ static int lightsCostMain()
         }
         for (int f = 0; f < 600; ++f) {
             frame(env, 1);
-            if (f > 30 && env.scene->giStatus().giAtRest) break;
+            if (f > 30 && env.scene->published().gi.giAtRest) break;
         }
     }
     {
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         for (size_t c = 0; c < st.cascades.size(); ++c)
             std::printf("   cascade %zu (half %.1f m): lights in range %d, injected %d, over budget %d\n", c,
                         double(st.cascades[c].halfSize), st.cascades[c].lightsInRange,
@@ -917,7 +918,7 @@ static int lightsCostMain()
             frame(env, 8);
         }
     });
-    for (const FrameRecord &r : recs)
+    for (const MonitorRecord &r : recs)
         for (const CacheWork &cw : r.cacheWork)
             if (cw.detail == "vct.light" && cw.gpuMs > 0.0f) ms.push_back(cw.gpuMs);
     const Stats s = stats(ms);
@@ -991,7 +992,7 @@ struct IdRead {
 };
 /// The opaque side of one frame (see IdRead): negative when the opaque pass carries
 /// no GPU sample.
-static double opaqueSideMs(const FrameRecord &r, double *decodePassMs = nullptr)
+static double opaqueSideMs(const MonitorRecord &r, double *decodePassMs = nullptr)
 {
     const FramePass *o = passNamed(r, "Jahshaka opaque");
     if (!o || o->gpuMs < 0) return -1;
@@ -1028,7 +1029,7 @@ static IdRead readIdPass(Env &env, int frames)
         const auto recs = collect(env, [&] { frame(env, frames); }, 8);
         drawn += frames + 12;
         records += recs.size();
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             dropped += r.gpuMarksDropped;
             if (const FramePass *p = passNamed(r, "Jahshaka atom id")) {
                 tris.push_back(double(p->triangles));
@@ -1080,7 +1081,7 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
         v.scale = k;
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        v.tolerance = root ? 1e30f : kLodBudgetPixels * env.scene->lodBias();
+        v.tolerance = root ? 1e30f : kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
@@ -1223,7 +1224,7 @@ static int cutCostMain()
         GpuCullRequest req;
         if (!env.engine->fillCullView(env.view, req)) continue;
         req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
-        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+        req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
         req.mode = 3u;
         GpuCullResult r;
         if (!env.engine->gpuCull(env.scene, env.view, req, false, r)) continue;
@@ -1450,7 +1451,7 @@ static int decodeMain()
     std::vector<std::pair<unsigned, double>> rows;
     for (const auto &a : arms) {
         applyMaterials(w, a.materials, a.textures);
-        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }
         pathStill(env, 30);
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         const IdRead r = readIdPass(env, 60);
@@ -1576,7 +1577,7 @@ static int decodeExactMain()
         bool prepassRan = false, decodeRan = false;
         {
             const auto recs = collect(env, [&] { frame(env, 2); });
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 prepassRan = prepassRan || passNamed(r, "Jahshaka atom decode prepass");
                 decodeRan = decodeRan || passNamed(r, "Jahshaka atom decode");
             }
@@ -1757,7 +1758,7 @@ static int occlusionMain()
         GpuCullRequest req;
         if (env.engine->hzbStatus(env.view, hz) && hz.primed && env.engine->fillCullView(env.view, req)) {
             req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h): the id pass's
-            req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+            req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
             req.mode = 3u;
             req.hzbLevels = hz.levels;
             GpuCullResult ref;
@@ -1848,7 +1849,7 @@ static int tlasMain()
     pathStill(env, 30);
     std::vector<double> gather, stage, stillStage, tlasGpu;
     const auto still = collect(env, [&] { frame(env, 60); });
-    for (const FrameRecord &r : still) stillStage.push_back(stageMs(r, "engine.rayquery"));
+    for (const MonitorRecord &r : still) stillStage.push_back(stageMs(r, "engine.rayquery"));
     // ONE MOVABLE ITEM moving every frame (a physics body / an animated prop — the
     // user's word, Mobility::Movable): a STATIC item nudged by a script is held by
     // the static settle and moves the ray tier's epoch a handful of times, not per
@@ -1856,19 +1857,19 @@ static int tlasMain()
     iris::MeshNodePtr mover = w.items[w.items.size() / 2];
     mover->setMobility(iris::Mobility::Movable);
     frame(env, 30);
-    const unsigned long long builds0 = env.scene->rayQueryStatus().tlasBuilds + env.scene->rayQueryStatus().tlasRefits;
+    const unsigned long long builds0 = env.scene->published().rayQuery.tlasBuilds + env.scene->published().rayQuery.tlasRefits;
     const iris::Vec3 home = mover->getLocalPos();
     const auto moving = collect(env, [&] {
         for (int f = 0; f < 120; ++f) {
             mover->setLocalPos(home + iris::Vec3(0.02f * float(f % 2 ? 1 : -1), 0, 0));
             frame(env, 1);
-            const RayQueryStatus rq = env.scene->rayQueryStatus();
+            const RayQueryStatus rq = env.scene->published().rayQuery;
             if (f >= 20 && rq.gatherMs >= 0) gather.push_back(rq.gatherMs);
             if (f >= 20 && rq.tlasMs >= 0) tlasGpu.push_back(rq.tlasMs);
         }
     });
-    for (const FrameRecord &r : moving) stage.push_back(stageMs(r, "engine.rayquery"));
-    const RayQueryStatus rq = env.scene->rayQueryStatus();
+    for (const MonitorRecord &r : moving) stage.push_back(stageMs(r, "engine.rayquery"));
+    const RayQueryStatus rq = env.scene->published().rayQuery;
     REQUIRE(rq.enabled, "the ray tier is enabled (instances %d, far %d)", rq.instances, rq.farInstances);
     REQUIRE(rq.tlasBuilds + rq.tlasRefits - builds0 >= 100, "the TLAS was re-made on (nearly) every moving frame (%llu of 128)",
             (unsigned long long)(rq.tlasBuilds + rq.tlasRefits - builds0));
@@ -1897,8 +1898,8 @@ static int atlasMain()
     World w;
     if (!bootWorld(env, w, "test-scale-atlas-ogre.log")) return 1;
     pathStill(env, 240);
-    for (int f = 0; f < 900 && env.scene->giStatus().cards.queueLength > 0; ++f) frame(env, 1);
-    const CardCacheStatus c = env.scene->giStatus().cards;
+    for (int f = 0; f < 900 && env.scene->published().gi.cards.queueLength > 0; ++f) frame(env, 1);
+    const CardCacheStatus c = env.scene->published().gi.cards;
     REQUIRE(c.built, "the card atlas exists at High");
     const iris::Vec3 eye = env.camera->getLocalPos();
     size_t wanted = 0, instances = 0;
@@ -1915,7 +1916,7 @@ static int atlasMain()
     // THE ONE LIGHT LIST on the P0 world (P1C-LIGHT-LIST): each cascade's lights, culled by range
     // against its box and over its budget by contribution — the overflow a count, never silent.
     {
-        const GiStatus st = env.scene->giStatus();
+        const GiStatus st = env.scene->published().gi;
         for (size_t k = 0; k < st.cascades.size(); ++k)
             std::printf("W9/W2 cascade %zu (half %.1f m): lights in range %d, injected %d, over budget %d\n", k,
                         double(st.cascades[k].halfSize), st.cascades[k].lightsInRange,
@@ -1932,10 +1933,10 @@ static int atlasMain()
     int f = 0;
     for (; f < 900; ++f) {
         frame(env, 1);
-        const CardCacheStatus s = env.scene->giStatus().cards;
+        const CardCacheStatus s = env.scene->published().gi.cards;
         if (f > 10 && s.queueLength == 0 && s.capturesLastFrame == 0 && s.relitLastFrame == 0) break;
     }
-    const CardCacheStatus c1 = env.scene->giStatus().cards;
+    const CardCacheStatus c1 = env.scene->published().gi.cards;
     std::printf("W9 one lamp moved 1 m: recaptures %llu, sun invalidations %llu, relights %llu over %d frames\n",
                 (unsigned long long)(c1.captures - cap0), (unsigned long long)(c1.invalidSun - inv0),
                 (unsigned long long)(c1.relights - rel0), f);
@@ -2012,7 +2013,7 @@ static bool farShot(Env &env, Image &img, GpuCullRequest &req, const char *shotN
     env.doc->getRootNode()->applyStaticDefaults();
     for (int f = 0; f < 900; ++f) {
         frame(env, 1);
-        if (f > 60 && env.scene->giStatus().giAtRest) break;
+        if (f > 60 && env.scene->published().gi.giAtRest) break;
     }
     frame(env, 30);
     if (!env.view->readPixels(img) || !img.width) return false;
@@ -2065,7 +2066,7 @@ static int farFieldMain()
         std::printf("W10 diffuse   post at %5.0f m: %.4f %s\n", double(dists[i]), v, v > kLit ? "LIT" : "sky-only");
         if (v > kLit && (i == 0 || diffuseReach >= dists[i - 1])) diffuseReach = dists[i];
     }
-    const GiStatus gi = env.scene->giStatus();
+    const GiStatus gi = env.scene->published().gi;
     double outer = 0, diag = 0;
     if (!gi.cascades.empty()) {
         outer = gi.cascades.back().halfSize;
@@ -2181,7 +2182,7 @@ static int hitListMain()
         for (int f = 0; f < frames; ++f) {
             step(f);
             frame(env, 1);
-            const RayQueryStatus rq = env.scene->rayQueryStatus();
+            const RayQueryStatus rq = env.scene->published().rayQuery;
             if (f > 8) { rec.push_back(double(rq.hitRecords)); drop.push_back(double(rq.hitDropped)); }
             cap = std::max(cap, rq.hitCapacity);
         }
@@ -2194,7 +2195,7 @@ static int hitListMain()
         setCamera(env, iris::Vec3(x, 1.7f, 0), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
     });
     const Stats rw = stats(rec), dw = stats(drop);
-    const RayQueryStatus rq = env.scene->rayQueryStatus();
+    const RayQueryStatus rq = env.scene->published().rayQuery;
     REQUIRE(cap > 0, "the hit list exists at Epic (capacity %llu)", cap);
     std::printf("W12 capacity %llu | still: records med %.0f max %.0f, dropped med %.0f max %.0f | walk: records med %.0f "
                 "max %.0f, dropped med %.0f max %.0f | decode draws %d\n",
@@ -2260,9 +2261,9 @@ static int cpuWalksMain()
     struct Visits { unsigned long long feed = 0, words = 0, rays = 0; };
     auto visits = [&] {
         Visits v;
-        v.feed = env.scene->gpuSceneStatus().feedNotifies;
+        v.feed = env.scene->published().gpuScene.feedNotifies;
         v.words = env.scene->atomDrawStatus().wordSlotVisits;
-        v.rays = env.scene->rayQueryStatus().feedSlotVisits;
+        v.rays = env.scene->published().rayQuery.feedSlotVisits;
         return v;
     };
     size_t frames = 0;
@@ -2272,14 +2273,14 @@ static int cpuWalksMain()
             for (int f = 0; f < 120; ++f) {
                 if (move) mover->setLocalPos(home + iris::Vec3(0.02f * float(f % 2 ? 1 : -1), 0, 0));
                 frame(env, 1);
-                giScan.push_back(env.scene->giStatus().giScanMicros);
+                giScan.push_back(env.scene->published().gi.giScanMicros);
             }
         });
         std::array<double, 5> med{};
         std::array<size_t, 5> seen{};
         for (int k = 0; k < 5; ++k) {
             std::vector<double> v;
-            for (const FrameRecord &r : recs) {
+            for (const MonitorRecord &r : recs) {
                 bool has = false;
                 for (const FrameStage &st : r.stages) has |= st.name == kWalks[k];
                 if (has) v.push_back(stageMs(r, kWalks[k]));
@@ -2417,7 +2418,7 @@ static void buildLattice(Env &env)
     lamp->setPropertyValue(QStringLiteral("distance"), 40.0f);
     env.doc->getRootNode()->applyStaticDefaults();
     setCamera(env, iris::Vec3(0, 12, 30), iris::Vec3(0, 8, 0));
-    for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+    for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }
 }
 
 /// THE PAIRED FRAME ARMS (ATOM-CPU-WALKS-1, a TOOL, not a suite): a still frame and
@@ -2458,7 +2459,7 @@ static int frameArmsMain(bool lattice)
         std::printf("WALKS %-9s", label);
         for (const char *wk : kWalks) {
             std::vector<double> v;
-            for (const FrameRecord &r : recs) v.push_back(stageMs(r, wk));
+            for (const MonitorRecord &r : recs) v.push_back(stageMs(r, wk));
             std::printf(" | %s %.3f", wk, stats(v).median);
         }
         std::printf("\n");
@@ -2473,7 +2474,7 @@ static int frameArmsMain(bool lattice)
 
 // ===========================================================================
 // scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
-// The frame monitor's records carry the frame's OWN GPU span (FrameRecord::frameGpuMs), and the
+// The frame monitor's records carry the frame's OWN GPU span (MonitorRecord::frameGpuMs), and the
 // monitor times every stretch in which none of its rows is open: a stretch that crossed a CPU
 // submission is the GPU WAITING (gpuIdleMs — a frame-schedule reading, printed, never a coverage
 // hole: the irradiance field's raster submits every 8 probes and the CPU records on), one inside a
@@ -2492,7 +2493,7 @@ static int gpuCoverageMain()
     buildLattice(env);
     worldmodes::setMode(env.doc, worldmodes::Mode::Epic);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::Epic);
-    for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+    for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }
     armMonitor(env);
     frame(env, 120);
     for (int arm = 0; arm < 2; ++arm) {
@@ -2509,8 +2510,8 @@ static int gpuCoverageMain()
         });
         std::vector<double> span, busy, idle, rest, share, mismatch;
         unsigned unmeasured = 0;
-        const FrameRecord *worst = nullptr, *worstIdle = nullptr;
-        for (const FrameRecord &r : recs) {
+        const MonitorRecord *worst = nullptr, *worstIdle = nullptr;
+        for (const MonitorRecord &r : recs) {
             if (r.frameGpuMs <= 0.0f || r.unattributedGpuMs < 0.0f || r.gpuIdleMs < 0.0f) { ++unmeasured; continue; }
             const double b = double(r.frameGpuMs) - double(r.gpuIdleMs);
             span.push_back(r.frameGpuMs);
@@ -2527,7 +2528,7 @@ static int gpuCoverageMain()
                     "busy median %.2f %% p95 %.2f %% (bar %.0f %%)\n",
                     what, span.size(), unmeasured, sp.median, bu.median, id.median, id.p95, un.median, un.p95,
                     100.0 * sh.median, 100.0 * sh.p95, 100.0 * kCoverageBar);
-        const auto dump = [&](const char *label, const FrameRecord *r) {
+        const auto dump = [&](const char *label, const MonitorRecord *r) {
             if (!r) return;
             std::printf("COVERAGE %-5s %s frame %llu: span %.3f idle %.3f unattributed %.3f ms, CPU %.3f ms; rows",
                         what, label, r->frame, r->frameGpuMs, r->gpuIdleMs, r->unattributedGpuMs, r->totalMs);
@@ -2577,7 +2578,7 @@ static int shadowCutMain()
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
     auto measure = [&](Env &env, Arm &arm) {
         const auto recs = collect(env, [&] { frame(env, 120); });
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             double cpu = 0, gpu = 0;
             bool gpuOk = true;
             unsigned n = 0;
@@ -2665,12 +2666,12 @@ static int latticeOwedMain()
         const worldmodes::PhotonTier t = tierArm ? worldmodes::PhotonTier::Epic : worldmodes::PhotonTier::High;
         worldmodes::setMode(env.doc, worldmodes::Mode(int(t)));
         worldmodes::setPhoton(env.doc, true, t);
-        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         std::vector<double> dec, id, pre;
         unsigned decodePasses = 0;
         const auto recs = collect(env, [&] { frame(env, 90); });
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             // The PREPASS SIDE too, when the tier carries one: its decode pass + the prepass.
             if (const FramePass *p = passNamed(r, "Jahshaka SSR prepass")) {
                 const FramePass *dp = passNamed(r, "Jahshaka atom decode prepass");
@@ -2706,7 +2707,7 @@ static int latticeOwedMain()
     iris::SceneNodePtr cubeNode = doc->getRootNode()->children().at(4210);
     for (int arm = 0; arm < 2; ++arm) {
         doc->giDragMoverChannel = arm == 0 ? 1 : 0;
-        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }
         const iris::Vec3 p0 = cubeNode->getLocalPos();
         int dragMovers = 0;
         const auto drag = collect(env, [&] {
@@ -2715,12 +2716,12 @@ static int latticeOwedMain()
                 enginetest::gesture(env.engine.get(), env.scene, { held });   // the hand is on it (U0 3c)
                 cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));
                 frame(env, 1);
-                dragMovers = std::max(dragMovers, env.scene->giStatus().dragMovers);
+                dragMovers = std::max(dragMovers, env.scene->published().gi.dragMovers);
             }
             enginetest::gesture(env.engine.get(), env.scene, {});
         });
         std::vector<double> calls, ms;
-        for (const FrameRecord &r : drag) {
+        for (const MonitorRecord &r : drag) {
             unsigned n = 0;
             double t = 0;
             for (const FrameStage &st2 : r.stages)
@@ -2752,7 +2753,7 @@ struct OcclArm {
 };
 static void occlCollect(Env &env, OcclArm &arm, const std::function<void()> &body)
 {
-    for (const FrameRecord &r : collect(env, body)) {
+    for (const MonitorRecord &r : collect(env, body)) {
         if (r.gpuMs >= 0) arm.frame.push_back(r.gpuMs);
         double hz = 0.0;
         bool anyHz = false;

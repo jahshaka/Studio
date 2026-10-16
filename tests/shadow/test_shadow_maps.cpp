@@ -41,7 +41,7 @@ static int failures = 0;
         std::printf("\n");                                                      \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 // The room: a floor, and `lamps` pillars in the far corners each lit from above
 // and outward by its own shadow-casting point light. The quadrants are far
@@ -184,7 +184,7 @@ static void t0_light_path_parity(Engine *e, View *v)
     if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
     e->setShadowMapBudget(2u);
     render(e, 10);
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     Image mapped;
     v->readPixels(mapped);
     std::printf("    casters %u, focusedMaps %u, unmapped %zu\n",
@@ -225,7 +225,7 @@ static void t1_four_lamps(Engine *e, View *v)
     render(e, 10);
     Image two;
     if (!v->readPixels(two)) { std::printf("FAIL: readPixels\n"); ++failures; return; }
-    const ShadowStatus st2 = e->shadowStatus();
+    const ShadowStatus st2 = enginetest::shadowStatus(e);
     std::printf("    status: casters %u, focusedMaps %u, unmapped %zu\n",
                 st2.casters, st2.focusedMaps, st2.unmapped.size());
     CHECK(st2.casters == 4u, "the status counts all four casters (%u)", st2.casters);
@@ -240,7 +240,7 @@ static void t1_four_lamps(Engine *e, View *v)
     render(e, 10);
     Image four;
     v->readPixels(four);
-    const ShadowStatus st4 = e->shadowStatus();
+    const ShadowStatus st4 = enginetest::shadowStatus(e);
     std::printf("    status: casters %u, focusedMaps %u, unmapped %zu, atlas %ux%u (%llu MB)\n",
                 st4.casters, st4.focusedMaps, st4.unmapped.size(), st4.atlasWidth, st4.atlasHeight,
                 (unsigned long long)(st4.atlasBytes / (1024ull * 1024ull)));
@@ -259,7 +259,7 @@ static void t2_two_casters_keep_the_old_atlas(Engine *e, View *v)
     e->setShadowMapBudget(8u);
     e->setShadowResolution(2048u);
     render(e, 10);
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    atlas %ux%u, focusedMaps %u, casters %u\n",
                 st.atlasWidth, st.atlasHeight, st.focusedMaps, st.casters);
     CHECK(st.focusedMaps == 2u, "two casters never grow the atlas (%u maps)", st.focusedMaps);
@@ -274,7 +274,7 @@ static void t4_over_budget(Engine *e, View *v)
     Room room = buildRoom(e, v, "t4", 4);
     e->setShadowMapBudget(2u);
     render(e, 10);
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    casters %u, budget %u, unmapped %zu\n", st.casters, st.budget, st.unmapped.size());
     CHECK(st.budget == 2u, "the effective budget is what was asked for (%u)", st.budget);
     CHECK(st.unmapped.size() == 2u, "the two lights with no map are NAMED (%zu)", st.unmapped.size());
@@ -343,17 +343,17 @@ static void t5_rebuild_churn(Engine *e, View *v)
     render(e, 6);
     for (int i = 1; i < 8; ++i) addLamp(i);
     render(e, 10);
-    ShadowStatus st = e->shadowStatus();
+    ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    8 casters -> %u maps, atlas %ux%u\n", st.focusedMaps, st.atlasWidth, st.atlasHeight);
     CHECK(st.focusedMaps == 8u, "eight casters step to eight maps (%u)", st.focusedMaps);
     e->setShadowResolution(1024u);
     render(e, 6);
-    st = e->shadowStatus();
+    st = enginetest::shadowStatus(e);
     std::printf("    after 1024: %u maps, atlas %ux%u\n", st.focusedMaps, st.atlasWidth, st.atlasHeight);
     CHECK(st.focusedMaps == 8u, "the count survives a resolution change (%u)", st.focusedMaps);
     for (size_t i = 1; i < lamps.size(); ++i) s->removeLight(lamps[i]);
     render(e, 10);
-    st = e->shadowStatus();
+    st = enginetest::shadowStatus(e);
     CHECK(st.casters == 1u, "one caster left (%u)", st.casters);
     CHECK(st.focusedMaps == 8u, "the atlas does NOT shrink in-session (%u maps) — owner D4",
           st.focusedMaps);
@@ -436,19 +436,19 @@ static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
     gi.updateBudget = 1;
     s->setGlobalIllumination(gi);
     render(e, 8);
-    const GiStatus g = s->giStatus();
+    const GiStatus g = s->published().gi;
     std::printf("    gi: probes %d, probeShadows %d\n", g.probeCount, int(g.probeShadows));
     CHECK(g.probeShadows, "the probe captures are shadowed (the precondition for R3)");
     // THE REBUILD, through the path a Shadow Quality change takes — the one
     // that could always fire this, and that the derived count would have made
     // routine. (The count itself cannot be relied on to rebuild here: the atlas
     // never shrinks, so by this point in the suite it may already be at eight.)
-    const unsigned before = e->shadowStatus().focusedMaps;
+    const unsigned before = enginetest::shadowStatus(e).focusedMaps;
     e->setShadowResolution(1024u);
     render(e, 8);
     Image img;
     CHECK(v->readPixels(img), "the engine survived the rebuild under shadowed probes");
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     CHECK(st.resolution == 1024u && st.focusedMaps == before,
           "the atlas was rebuilt at 1024 with its map count intact (%u -> %u maps)",
           before, st.focusedMaps);
@@ -609,8 +609,8 @@ static bool lampCached(const ShadowStatus &st, NodeId lamp)
 /// One frame, then the three lamps' readings.
 static ShadowStatus frame(Engine *e, int out[3], const CacheRoom &r)
 {
-    e->renderOneFrame();
-    const ShadowStatus st = e->shadowStatus();
+    enginetest::frames(e, 1);
+    const ShadowStatus st = enginetest::shadowStatus(e);
     for (int i = 0; i < 3; ++i) out[i] = lampPasses(st, r.lamps[i]);
     return st;
 }
@@ -621,9 +621,9 @@ static ShadowStatus frame(Engine *e, int out[3], const CacheRoom &r)
 static void ensureRoomForThreeLamps(Engine *e, View *v)
 {
     e->setShadowMapBudget(8u);
-    if (e->shadowStatus().focusedMaps >= 3u) return;
+    if (enginetest::shadowStatus(e).focusedMaps >= 3u) return;
     CacheRoom warm = buildCacheRoom(e, v, "t3warm");
-    for (int i = 0; i < 12 && e->shadowStatus().focusedMaps < 3u; ++i) e->renderOneFrame();
+    for (int i = 0; i < 12 && enginetest::shadowStatus(e).focusedMaps < 3u; ++i) enginetest::frames(e, 1);
     e->destroyScene(warm.scene);
 }
 
@@ -633,7 +633,7 @@ static void t3_cache_view(Engine *e, View *v)
     ensureRoomForThreeLamps(e, v);
     CacheRoom r = buildCacheRoom(e, v, "t3");
     if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
-    e->shadowStatus();                       // arms the counters for the frames below
+    enginetest::shadowStatus(e);                       // arms the counters for the frames below
     int p[3];
 
     // (a) THE FIRST FRAME: every lamp map renders exactly once...
@@ -830,8 +830,8 @@ static std::vector<int> lampPassesOf(const ShadowStatus &st, const std::vector<N
 
 static ShadowStatus frameN(Engine *e, const std::vector<NodeId> &lamps, std::vector<int> &out)
 {
-    e->renderOneFrame();
-    const ShadowStatus st = e->shadowStatus();
+    enginetest::frames(e, 1);
+    const ShadowStatus st = enginetest::shadowStatus(e);
     out = lampPassesOf(st, lamps);
     return st;
 }
@@ -857,7 +857,7 @@ static const int kPointMapPasses = 8, kSpotMapPasses = 2;
 /// A few quiet frames, so the next one measures one edit and nothing else.
 static void settle(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) { e->renderOneFrame(); e->shadowStatus(); }
+    for (int i = 0; i < frames; ++i) { enginetest::frames(e, 1); enginetest::shadowStatus(e); }
 }
 
 /// The atlas must hold `n` focused maps BEFORE a case that adds an n-th lamp,
@@ -866,7 +866,7 @@ static void settle(Engine *e, int frames = 3)
 static void ensureRoomForLamps(Engine *e, View *v, unsigned n)
 {
     e->setShadowMapBudget(8u);
-    if (e->shadowStatus().focusedMaps >= n) return;
+    if (enginetest::shadowStatus(e).focusedMaps >= n) return;
     Scene *s = e->createScene("warmlamps");
     v->setScene(s);
     for (unsigned i = 0; i < n; ++i) {
@@ -875,7 +875,7 @@ static void ensureRoomForLamps(Engine *e, View *v, unsigned n)
         const float a = float(i) * 1.2f;
         s->setNodeTransform(lamp, Vec3(9.0f * std::cos(a), 3.0f, 9.0f * std::sin(a)), Quat(), Vec3(1, 1, 1));
     }
-    for (int i = 0; i < 16 && e->shadowStatus().focusedMaps < n; ++i) e->renderOneFrame();
+    for (int i = 0; i < 16 && enginetest::shadowStatus(e).focusedMaps < n; ++i) enginetest::frames(e, 1);
     e->destroyScene(s);
 }
 
@@ -886,7 +886,7 @@ static void t3n_cache_shape(Engine *e, View *v)
     ensureRoomForThreeLamps(e, v);
     CacheRoom r = buildCacheRoom(e, v, "t3n");
     if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
-    e->shadowStatus();
+    enginetest::shadowStatus(e);
     int p[3];
     for (int i = 0; i < 4; ++i) frame(e, p, r);
 
@@ -1069,7 +1069,7 @@ static void t3q_cache_pose(Engine *e, View *v)
     st2[0].name = "Left";  st2[0].time = 0.25f; st2[0].weight = 0.5f;
     st2[1].name = "Right"; st2[1].time = 0.25f; st2[1].weight = 0.5f;
     CHECK(r.scene->setClipStates(actor, st2, 2), "the blend is pushed");
-    e->shadowStatus();
+    enginetest::shadowStatus(e);
     settle(e, 5);
     int p[3];
     frame(e, p, r);
@@ -1174,7 +1174,7 @@ static void t3t_cache_spots_and_slots(Engine *e, View *v)
     ensureRoomForLamps(e, v, 5u);
     SpotRoom r = buildSpotRoom(e, v, "t3t");
     if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
-    e->shadowStatus();
+    enginetest::shadowStatus(e);
     std::vector<int> p;
     ShadowStatus st = frameN(e, r.lamps, p);
     settle(e, 3);
@@ -1298,19 +1298,19 @@ static void t3v_atlas_rebuild(Engine *e, View *v)
     ensureRoomForThreeLamps(e, v);
     CacheRoom r = buildCacheRoom(e, v, "t3v");
     if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
-    e->shadowStatus();
+    enginetest::shadowStatus(e);
     settle(e, 6);
     int p[3];
     frame(e, p, r);
     CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0, "quiet before the rebuild (%d/%d/%d)", p[0], p[1], p[2]);
-    const unsigned mapsBefore = e->shadowStatus().focusedMaps;
+    const unsigned mapsBefore = enginetest::shadowStatus(e).focusedMaps;
     e->setShadowResolution(1024u);
     int total[3] = { 0, 0, 0 };
     for (int i = 0; i < 6; ++i) {
         frame(e, p, r);
         for (int k = 0; k < 3; ++k) if (p[k] > 0) total[k] += p[k];
     }
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    after the 1024 rebuild: passes %d/%d/%d over six frames, %u maps at %u\n",
                 total[0], total[1], total[2], st.focusedMaps, st.resolution);
     CHECK(st.resolution == 1024u && st.focusedMaps == mapsBefore,
@@ -1369,27 +1369,27 @@ static void t3_cache_reflect(Engine *e, View *v)
     PlanarReflectionParams pr; pr.budget = 1; pr.resolution = 256; pr.shadows = true;
     CHECK(r.scene->setPlanarReflections(pr), "planar arm up");
     CHECK(r.scene->setNodePlanarReflector(r.floor, true), "the floor is a reflector");
-    e->shadowStatus();
-    for (int i = 0; i < 6; ++i) e->renderOneFrame();
-    ShadowStatus st = e->shadowStatus();
+    enginetest::shadowStatus(e);
+    enginetest::frames(e, 6);
+    ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    active reflectors %d; cached instances %u, uncached %u\n",
-                r.scene->activePlanarReflectors(), st.cachedInstances, st.uncachedInstances);
-    CHECK(r.scene->activePlanarReflectors() == 1, "the mirror renders");
+                r.scene->published().activePlanarReflectors, st.cachedInstances, st.uncachedInstances);
+    CHECK(r.scene->published().activePlanarReflectors == 1, "the mirror renders");
     CHECK(st.cachedInstances >= 2u && st.uncachedInstances == 0u,
           "the view AND the mirror cache all three lamps (%u cached, %u not)", st.cachedInstances,
           st.uncachedInstances);
     unsigned rest = 0, restAll = 0;
     for (int i = 0; i < 30; ++i) {
-        e->renderOneFrame();
-        st = e->shadowStatus();
+        enginetest::frames(e, 1);
+        st = enginetest::shadowStatus(e);
         rest += st.reflectLampPassesLastFrame;
         restAll += st.reflectPassesLastFrame;
     }
     std::printf("    30 frames at rest: mirror lamp passes %u (all %u)\n", rest, restAll);
     CHECK(rest == 0u, "the mirror renders ZERO lamp-map passes at rest (%u)", rest);
     r.scene->setNodeTransform(r.mover, Vec3(kMoverAt.x + 1.0f, kMoverAt.y, kMoverAt.z), Quat(), Vec3(1, 1, 1));
-    e->renderOneFrame();
-    st = e->shadowStatus();
+    enginetest::frames(e, 1);
+    st = enginetest::shadowStatus(e);
     std::printf("    mover near Light0 moved: mirror lamp passes %u\n", st.reflectLampPassesLastFrame);
     CHECK(st.reflectLampPassesLastFrame == 8u,
           "a mover re-renders the mirror's copy of Light0's map once, that frame (%u)",
@@ -1413,11 +1413,11 @@ static void t3_cache_probe(Engine *e, View *v)
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
     r.scene->setGlobalIllumination(gi);
-    e->shadowStatus();
+    enginetest::shadowStatus(e);
     // Build, place, and let the grid's first catch-up give every probe its own
     // copy of the three lamp maps.
-    for (int i = 0; i < 30; ++i) { e->renderOneFrame(); e->shadowStatus(); }
-    GiStatus g = r.scene->giStatus();
+    for (int i = 0; i < 30; ++i) { enginetest::frames(e, 1); enginetest::shadowStatus(e); }
+    GiStatus g = r.scene->published().gi;
     std::printf("    gi: probes %d, probeShadows %d, stale %d\n", g.probeCount, int(g.probeShadows), g.staleProbes);
     CHECK(g.probeShadows && g.probeCount == 4, "four shadowed probes");
     // THE REGRESSION THIS CASE FOUND: the GI rebuild's synchronous probe
@@ -1426,7 +1426,7 @@ static void t3_cache_probe(Engine *e, View *v)
     // every lamp OFF for good (OgreForwardClustered.cpp:925-951). A switched-off
     // lamp leaves the cache's list — so all three must still be cached here.
     {
-        const ShadowStatus st = e->shadowStatus();
+        const ShadowStatus st = enginetest::shadowStatus(e);
         CHECK(lampCached(st, r.lamps[0]) && lampCached(st, r.lamps[1]) && lampCached(st, r.lamps[2]),
               "after the GI build every lamp is still on and cached (a lamp listed twice goes dark)");
     }
@@ -1440,9 +1440,9 @@ static void t3_cache_probe(Engine *e, View *v)
     int captures = 0, badFrames = 0;
     unsigned lampTotal = 0;
     for (int i = 0; i < 12; ++i) {
-        e->renderOneFrame();
-        const ShadowStatus st = e->shadowStatus();
-        g = r.scene->giStatus();
+        enginetest::frames(e, 1);
+        const ShadowStatus st = enginetest::shadowStatus(e);
+        g = r.scene->published().gi;
         captures += g.probeCapturesLastFrame;
         lampTotal += st.probeLampPassesLastFrame;
         if (st.probeLampPassesLastFrame != 8u * unsigned(g.probeCapturesLastFrame)) ++badFrames;
@@ -1457,9 +1457,9 @@ static void t3_cache_probe(Engine *e, View *v)
     r.scene->setLight(r.lamps[2], cacheLamp(9.0f, Colour(1.0f, 0.9f, 0.6f)));
     captures = 0; lampTotal = 0;
     for (int i = 0; i < 12; ++i) {
-        e->renderOneFrame();
-        const ShadowStatus st = e->shadowStatus();
-        captures += r.scene->giStatus().probeCapturesLastFrame;
+        enginetest::frames(e, 1);
+        const ShadowStatus st = enginetest::shadowStatus(e);
+        captures += r.scene->published().gi.probeCapturesLastFrame;
         lampTotal += st.probeLampPassesLastFrame;
     }
     std::printf("    colour-only catch-up: %d captures, probe lamp passes %u\n", captures, lampTotal);
@@ -1488,7 +1488,7 @@ static void t3_cache_probe(Engine *e, View *v)
 static void t3x_one_rebuild_per_open(Engine *e, View *v)
 {
     std::printf("-- T3x: a world that opens with lamps costs ONE atlas rebuild, then none\n");
-    const unsigned before = e->shadowStatus().atlasRebuilds;
+    const unsigned before = enginetest::shadowStatus(e).atlasRebuilds;
     CHECK(before == 0u, "the engine has not rebuilt its atlas yet (%u)", before);
     e->setShadowMapBudget(8u);
     CacheRoom r = buildCacheRoom(e, v, "t3x");     // three casting point lamps
@@ -1496,7 +1496,7 @@ static void t3x_one_rebuild_per_open(Engine *e, View *v)
     // The open: long enough for BOTH decisions (the count's debounce and the
     // clear flip's presented-frame debounce) to have settled.
     render(e, 40);
-    const ShadowStatus opened = e->shadowStatus();
+    const ShadowStatus opened = enginetest::shadowStatus(e);
     std::printf("    after the open: %u rebuild(s), %u maps, clears-per-map view cached %d\n",
                 opened.atlasRebuilds, opened.focusedMaps, int(opened.viewCached));
     CHECK(opened.atlasRebuilds == 1u,
@@ -1516,9 +1516,9 @@ static void t3x_one_rebuild_per_open(Engine *e, View *v)
             c.fovDegrees = 60.0f;
             v->setCamera(c);
         }
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
-    const ShadowStatus played = e->shadowStatus();
+    const ShadowStatus played = enginetest::shadowStatus(e);
     std::printf("    after 600 more frames: %u rebuild(s)\n", played.atlasRebuilds);
     CHECK(played.atlasRebuilds == 1u,
           "600 frames of the open world rebuild nothing (%u total)", played.atlasRebuilds);
@@ -1550,7 +1550,7 @@ static void t3x_one_rebuild_per_open(Engine *e, View *v)
 static void t3y_binding_world_rebuilds_nothing(Engine *e, View *v)
 {
     std::printf("-- T3y: an atlas rebuild waits for the first present, and then there is only one\n");
-    CHECK(e->shadowStatus().atlasRebuilds == 0u, "the engine has not rebuilt its atlas yet");
+    CHECK(enginetest::shadowStatus(e).atlasRebuilds == 0u, "the engine has not rebuilt its atlas yet");
     e->setShadowMapBudget(8u);
     CacheRoom r = buildCacheRoom(e, v, "t3y");     // three casting point lamps
     if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
@@ -1568,15 +1568,15 @@ static void t3y_binding_world_rebuilds_nothing(Engine *e, View *v)
         c.fovDegrees = 60.0f;
         v->setCamera(c);
         v->setShadows(true);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
-    const unsigned binding = e->shadowStatus().atlasRebuilds;
+    const unsigned binding = enginetest::shadowStatus(e).atlasRebuilds;
     std::printf("    while binding (6 frames, framesPresented reset each): %u rebuild(s)\n", binding);
     CHECK(binding == 0u, "nothing rebuilds the atlas while the world is still binding (%u)", binding);
 
     // Now let it be up. Both answers settle together, in ONE rebuild.
     render(e, 40);
-    const ShadowStatus up = e->shadowStatus();
+    const ShadowStatus up = enginetest::shadowStatus(e);
     std::printf("    once presenting: %u rebuild(s), %u maps, viewCached %d\n",
                 up.atlasRebuilds, up.focusedMaps, int(up.viewCached));
     CHECK(up.atlasRebuilds == 1u,
@@ -1585,8 +1585,8 @@ static void t3y_binding_world_rebuilds_nothing(Engine *e, View *v)
           "...carrying BOTH answers: %u maps and the per-map clears the cache needs (viewCached %d)",
           up.focusedMaps, int(up.viewCached));
     render(e, 120);
-    CHECK(e->shadowStatus().atlasRebuilds == 1u,
-          "and it stays at one (%u)", e->shadowStatus().atlasRebuilds);
+    CHECK(enginetest::shadowStatus(e).atlasRebuilds == 1u,
+          "and it stays at one (%u)", enginetest::shadowStatus(e).atlasRebuilds);
     Image img;
     CHECK(v->readPixels(img) && meanLum(img) > 1.0, "the room renders (%.1f mean)", meanLum(img));
     e->destroyScene(r.scene);
@@ -1624,9 +1624,9 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     }
     // Let the atlas grow to hold all five in the VIEW (it steps {2,4,8,16} and
     // never shrinks), so nothing below is the view standing down.
-    for (int i = 0; i < 24 && e->shadowStatus().focusedMaps < 5u; ++i) e->renderOneFrame();
-    CHECK(e->shadowStatus().focusedMaps >= 5u,
-          "the view atlas holds all five lamps (%u maps)", e->shadowStatus().focusedMaps);
+    for (int i = 0; i < 24 && enginetest::shadowStatus(e).focusedMaps < 5u; ++i) enginetest::frames(e, 1);
+    CHECK(enginetest::shadowStatus(e).focusedMaps >= 5u,
+          "the view atlas holds all five lamps (%u maps)", enginetest::shadowStatus(e).focusedMaps);
 
     wallCacheRoom(r.scene, r);   // this case needs probes: see the helper
     GiParams gi;
@@ -1638,12 +1638,12 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
     r.scene->setGlobalIllumination(gi);
-    e->shadowStatus();
-    for (int i = 0; i < 40; ++i) { e->renderOneFrame(); e->shadowStatus(); }
-    const GiStatus g = r.scene->giStatus();
+    enginetest::shadowStatus(e);
+    for (int i = 0; i < 40; ++i) { enginetest::frames(e, 1); enginetest::shadowStatus(e); }
+    const GiStatus g = r.scene->published().gi;
     CHECK(g.probeShadows && g.probeCount == 4, "four shadowed probes (%d)", g.probeCount);
 
-    const ShadowStatus st = e->shadowStatus();
+    const ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    five lamps: cached instances %u, uncached %u, viewCached %d\n",
                 st.cachedInstances, st.uncachedInstances, int(st.viewCached));
     // THE MEASUREMENT. Before this change every probe instance was uncached
@@ -1662,9 +1662,9 @@ static void t3p5_probe_over_cap(Engine *e, View *v)
     int captures = 0;
     unsigned lampTotal = 0;
     for (int i = 0; i < 16; ++i) {
-        e->renderOneFrame();
-        const ShadowStatus f2 = e->shadowStatus();
-        captures += r.scene->giStatus().probeCapturesLastFrame;
+        enginetest::frames(e, 1);
+        const ShadowStatus f2 = enginetest::shadowStatus(e);
+        captures += r.scene->published().gi.probeCapturesLastFrame;
         lampTotal += f2.probeLampPassesLastFrame;
     }
     std::printf("    colour-only catch-up: %d captures, probe lamp passes %u\n", captures, lampTotal);
@@ -1688,28 +1688,28 @@ static void t3_counters(Engine *e, View *v)
     LightDesc d; d.type = LightType::Directional; d.intensity = 0.3f; d.castShadows = true;
     r.scene->setLight(sun, d);
     r.scene->setNodeTransform(sun, Vec3(0, 10, 0), Quat(0.9238795f, 0.3826834f, 0, 0), Vec3(1, 1, 1));
-    e->shadowStatus();
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
-    ShadowStatus st = e->shadowStatus();
+    enginetest::shadowStatus(e);
+    enginetest::frames(e, 4);
+    ShadowStatus st = enginetest::shadowStatus(e);
     std::printf("    with a sun: %u passes a frame\n", st.shadowPassesLastFrame);
     CHECK(st.shadowPassesLastFrame > 0u, "the sun's splits render every frame (%u)", st.shadowPassesLastFrame);
     v->setShadows(false);
-    e->renderOneFrame();
-    st = e->shadowStatus();
-    e->renderOneFrame();
-    const ShadowStatus st2 = e->shadowStatus();
+    enginetest::frames(e, 1);
+    st = enginetest::shadowStatus(e);
+    enginetest::frames(e, 1);
+    const ShadowStatus st2 = enginetest::shadowStatus(e);
     std::printf("    shadows off: %u, then %u\n", st.shadowPassesLastFrame, st2.shadowPassesLastFrame);
     CHECK(st.shadowPassesLastFrame == 0u && st2.shadowPassesLastFrame == 0u,
           "shadows off reads 0 passes, not the last count (%u, %u)", st.shadowPassesLastFrame,
           st2.shadowPassesLastFrame);
     v->setShadows(true);
-    for (int i = 0; i < 3; ++i) { e->renderOneFrame(); e->shadowStatus(); }
+    for (int i = 0; i < 3; ++i) { enginetest::frames(e, 1); enginetest::shadowStatus(e); }
     // Nobody asks for 130 frames: the counters come off; the next ask is a
     // fresh start (0), and the frame after it reads the truth again.
-    for (int i = 0; i < 130; ++i) e->renderOneFrame();
-    st = e->shadowStatus();
-    e->renderOneFrame();
-    const ShadowStatus st3 = e->shadowStatus();
+    enginetest::frames(e, 130);
+    st = enginetest::shadowStatus(e);
+    enginetest::frames(e, 1);
+    const ShadowStatus st3 = enginetest::shadowStatus(e);
     std::printf("    after 130 unpolled frames: %u, then %u\n", st.shadowPassesLastFrame, st3.shadowPassesLastFrame);
     CHECK(st.shadowPassesLastFrame == 0u, "the counters switched themselves off (%u)", st.shadowPassesLastFrame);
     CHECK(st3.shadowPassesLastFrame > 0u, "and asking turns them back on (%u)", st3.shadowPassesLastFrame);
@@ -1796,8 +1796,8 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     r.scene->setGlobalIllumination(gi);
     // The probes capture with the sun alone: every probe node builds its light
     // list in these frames, and none of them holds a cached lamp.
-    for (int i = 0; i < 24; ++i) e->renderOneFrame();
-    const int probes = r.scene->giStatus().probeCount;
+    enginetest::frames(e, 24);
+    const int probes = r.scene->published().gi.probeCount;
     // NOW the lamp arrives. The cache fixes it into every instance — the view's
     // and every probe's — and the probes keep capturing.
     const NodeId lamp = r.scene->createNode();
@@ -1810,8 +1810,8 @@ static void t3w_lamp_arrives_under_probes(Engine *e, View *v)
     r.scene->setLight(lamp, s2);
     r.scene->setNodeTransform(lamp, Vec3(-5.0f, 5.0f, -5.0f), Quat(), Vec3(1, 1, 1));
     r.scene->refreshGlobalIllumination();
-    for (int i = 0; i < 24; ++i) e->renderOneFrame();
-    const ShadowStatus st = e->shadowStatus();
+    enginetest::frames(e, 24);
+    const ShadowStatus st = enginetest::shadowStatus(e);
     const long after = compileFailures("test-shadow-maps-ogre.log");
     std::printf("    %d probes; lamp cached %d; shader compile failures %ld -> %ld\n",
                 probes, int(lampCached(st, lamp)), before, after);
@@ -1847,7 +1847,7 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
     gi.updateBudget = 1;
     a.scene->setGlobalIllumination(gi);
-    for (int i = 0; i < 20; ++i) e->renderOneFrame();
+    enginetest::frames(e, 20);
     // Off screen: the view draws another scene; A keeps its GI arm. B has more
     // shadow-casting lamps than the atlas has maps, so the engine GROWS the
     // atlas — a rebuild at the TOP OF A FRAME (deriveShadowMapCount), the same
@@ -1855,7 +1855,7 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
     // placed inside that frame, which is what the hazard needs (a rebuild
     // between frames leaves the capture a frame later, and the probe node then
     // rebuilds its light list honestly).
-    const unsigned mapsBefore = e->shadowStatus().focusedMaps;
+    const unsigned mapsBefore = enginetest::shadowStatus(e).focusedMaps;
     v->setScene(nullptr);                       // a view shows one scene at a time
     CacheRoom b = buildCacheRoom(e, v, "t3u-other");
     for (int i = 0; i < 6; ++i) {
@@ -1864,13 +1864,13 @@ static void t3_undrawn_gi_rebuild(Engine *e, View *v)
         const float ang = float(i) * 1.047f;
         b.scene->setNodeTransform(lamp, Vec3(9.0f * std::cos(ang), 3.0f, 9.0f * std::sin(ang)), Quat(), Vec3(1, 1, 1));
     }
-    for (int i = 0; i < 10; ++i) e->renderOneFrame();
-    const unsigned mapsAfter = e->shadowStatus().focusedMaps;
+    enginetest::frames(e, 10);
+    const unsigned mapsAfter = enginetest::shadowStatus(e).focusedMaps;
     std::printf("    atlas grew %u -> %u maps while the GI scene was off screen\n", mapsBefore, mapsAfter);
     CHECK(mapsAfter > mapsBefore, "the drawn scene's lamps grew the atlas (%u -> %u)", mapsBefore, mapsAfter);
     v->setScene(nullptr);
     CHECK(v->setScene(a.scene), "the GI scene goes back on screen");
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
     Image img;
     CHECK(v->readPixels(img), "the scene renders again once it is back on screen");
     CHECK(!logHasCompileFailure("test-shadow-maps-ogre.log"),
@@ -1904,7 +1904,7 @@ static void t3z_still_frame_walk(Engine *e, View *v)
     int p[3];
     for (int i = 0; i < 6; ++i) frame(e, p, r);     // the scene settles, the walk primes
 
-    const auto walked = [&]() { return e->shadowStatus().casterWalkItems; };
+    const auto walked = [&]() { return enginetest::shadowStatus(e).casterWalkItems; };
     unsigned long long before = walked();
     for (int i = 0; i < 30; ++i) frame(e, p, r);
     const unsigned long long rest = walked() - before;
@@ -2010,7 +2010,7 @@ static void t3d_one_deforming_material(Engine *e, View *v)
 
     int p[3];
     for (int i = 0; i < 8; ++i) frame(e, p, r);     // settle, prime the walk
-    const auto walked = [&]() { return e->shadowStatus().casterWalkItems; };
+    const auto walked = [&]() { return enginetest::shadowStatus(e).casterWalkItems; };
 
     // The control: with no deforming material this is T3z's statement again,
     // now with 300 statics in the room.

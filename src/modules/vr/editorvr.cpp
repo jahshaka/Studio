@@ -65,7 +65,7 @@ EditorVrPreview::~EditorVrPreview() { end(); }
 bool EditorVrPreview::isActive() const
 {
     const auto engine = mEngine.lock();
-    return mOwnsSession && engine && engine->vrStatus().active;
+    return mOwnsSession && engine && engine->vrSessionLive();
 }
 
 bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewport *viewport,
@@ -80,7 +80,7 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     if (!engine->vrAvailable())
         return fail(QStringLiteral("VR is not available (%1)")
                         .arg(QString::fromStdString(engine->vrInfo().reason)));
-    if (engine->vrStatus().active)
+    if (engine->vrSessionLive())
         return fail(QStringLiteral("a session is already running"));
     // THE SESSION DRAWS THE EDITOR'S SCENE, so it is entitled to ask for it to
     // exist — a `--vr` boot that has not opened the editor page yet has no
@@ -195,9 +195,15 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
                 break;
             }
     }
-    if (!engine->beginVrSession(scene, cfg)) {
+    bool begun = false;
+    std::string beginWhy;
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        begun = e.beginVrSession(scene, cfg);
+        if (!begun) beginWhy = e.lastError();
+    });
+    if (!begun) {
         engine->setVrMirrorView(nullptr);
-        return fail(QString::fromStdString(engine->lastError()));
+        return fail(QString::fromStdString(beginWhy));
     }
     mEngine = engine;
     mViewport = viewport;
@@ -272,7 +278,7 @@ bool EditorVrPreview::end()
     mPlacePending = false;
     if (engine) {
         engine->setVrMirrorView(nullptr);
-        if (engine->vrStatus().active) engine->endVrSession();
+        if (engine->vrSessionLive()) engine->endVrSession();
     }
     release();
     return true;

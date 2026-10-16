@@ -64,6 +64,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
@@ -122,7 +123,7 @@ static void editorFrame(SceneMirror &editorMirror, Engine &engine, View *editorV
     editorMirror.sync(mirrorframe::sky(editorView));
     editorMirror.sync(mirrorframe::environment(editorView));
     editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
-    engine.renderOneFrame();
+    enginetest::frames(engine, 1);
 }
 
 // One frame of BOTH paths at once — what the ORIGINAL parity case needs (the
@@ -137,7 +138,7 @@ static void frame(EnginePlayerScene &player, SceneMirror &editorMirror, Engine &
     editorMirror.sync(mirrorframe::sky(editorView));
     editorMirror.sync(mirrorframe::environment(editorView));
     editorMirror.sync(mirrorframe::camera(editorView, camera, freecam::kFreeCameraFramingAspect));
-    engine.renderOneFrame();
+    enginetest::frames(engine, 1);
 }
 
 int main(int argc, char **argv)
@@ -268,7 +269,7 @@ int main(int argc, char **argv)
         player.setEditorScene(editorScene, &editorMirror);
         CHECK(player.attach(playerView), "player view bound to the editor's scene");
         CHECK(player.engineScene() == editorScene, "ONE SCENE: the player draws the editor's");
-        CHECK(!playerView->helpersVisible() && editorView->helpersVisible(),
+        CHECK(!jahshaka::engine::inspect::view(playerView)->helpersVisible() && jahshaka::engine::inspect::view(editorView)->helpersVisible(),
               "the furniture is hidden per VIEW, not per scene");
         player.setDocument(doc, camera);
         player.begin();
@@ -281,15 +282,15 @@ int main(int argc, char **argv)
         // ---- 1. the shape contract ------------------------------------------
         // COPIES: postFx() returns a reference to the view's live description,
         // which step 3 below rewrites.
-        const PostFxDesc efx = editorView->postFx();
-        const PostFxDesc pfx = playerView->postFx();
+        const PostFxDesc efx = jahshaka::engine::inspect::view(editorView)->postFx();
+        const PostFxDesc pfx = jahshaka::engine::inspect::view(playerView)->postFx();
         std::printf("    editor postFx: hdr=%d bloom=%d ssao=%d exposure=%.2f\n",
                     int(efx.hdr), int(efx.bloom), int(efx.ssao), double(efx.exposure));
         std::printf("    player postFx: hdr=%d bloom=%d ssao=%d exposure=%.2f\n",
                     int(pfx.hdr), int(pfx.bloom), int(pfx.ssao), double(pfx.exposure));
         CHECK(pfx.hdr, "the player view was told the scene is HDR (it was not, before this fix)");
         CHECK(pfx == efx, "ONE chain shape: player postFx == editor postFx");
-        CHECK(playerView->shadows() == editorView->shadows(), "shadow flag matches");
+        CHECK(jahshaka::engine::inspect::view(playerView)->shadows() == jahshaka::engine::inspect::view(editorView)->shadows(), "shadow flag matches");
 
         // ---- 2. neutral pixels: fog, ambient, shadows ------------------------
         Image e, p;
@@ -310,7 +311,7 @@ int main(int argc, char **argv)
             PostFxDesc ef = efx; ef.allowOffscreen = true; editorView->setPostFx(ef);
             PostFxDesc pf = pfx; pf.allowOffscreen = true; playerView->setPostFx(pf);
             for (int i = 0; i < 8; ++i) {
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 // The mirrors must not push the un-forced description back.
                 editorMirror.sync(mirrorframe::camera(editorView, camera));
             }
@@ -341,8 +342,8 @@ int main(int argc, char **argv)
             // to push again).
             editorMirror.invalidateEnvironment();
 
-            const GiStatus gi0 = editorScene->giStatus();
-            const ShadowStatus sh0 = engine->shadowStatus();
+            const GiStatus gi0 = editorScene->published().gi;
+            const ShadowStatus sh0 = enginetest::shadowStatus(engine);
             std::printf("    before the switch: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi0.rebuilds, sh0.atlasRebuilds);
 
@@ -353,7 +354,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
             Image eSwitch;
             CHECK(editorView->readPixels(eSwitch), "editor readback after taking the screen");
-            const int reflectorsEditor = editorScene->activePlanarReflectors();
+            const int reflectorsEditor = editorScene->published().activePlanarReflectors;
 
             // --- the PLAYER takes it ----------------------------------------
             editorView->setEnabled(false);
@@ -365,11 +366,11 @@ int main(int argc, char **argv)
             playerView->seedExposureHistory(editorView->measuredExposureScale());
             for (int i = 0; i < 24; ++i) {
                 player.step(1.0f / 60.0f, W, H);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
             }
             Image pSwitch;
             CHECK(playerView->readPixels(pSwitch), "player readback after taking the screen");
-            const int reflectorsPlayer = editorScene->activePlanarReflectors();
+            const int reflectorsPlayer = editorScene->published().activePlanarReflectors;
             std::printf("    planar reflectors rendered: editor %d, player %d\n",
                         reflectorsEditor, reflectorsPlayer);
             // WITHOUT THIS the mirror comparison below is vacuous — two frames
@@ -422,8 +423,8 @@ int main(int argc, char **argv)
             editorMirror.invalidateEnvironment();
             for (int i = 0; i < 24; ++i) editorFrame(editorMirror, *engine, editorView, camera);
 
-            const GiStatus gi1 = editorScene->giStatus();
-            const ShadowStatus sh1 = engine->shadowStatus();
+            const GiStatus gi1 = editorScene->published().gi;
+            const ShadowStatus sh1 = enginetest::shadowStatus(engine);
             std::printf("    after the round trip: gi.rebuilds=%llu atlasRebuilds=%u\n",
                         (unsigned long long)gi1.rebuilds, sh1.atlasRebuilds);
             // THE WHOLE POINT OF ONE SCENE. On the two-scene shape this was four
@@ -463,8 +464,8 @@ int main(int argc, char **argv)
             const auto force = [](View *v, PostFxDesc fx) {
                 fx.allowOffscreen = true; v->setPostFx(fx);
             };
-            force(editorView, editorView->postFx());
-            for (int i = 0; i < 24; ++i) engine->renderOneFrame();
+            force(editorView, jahshaka::engine::inspect::view(editorView)->postFx());
+            enginetest::frames(engine, 24);
             const float editorScale = editorView->measuredExposureScale();
             std::printf("    editor converged exposure = %.4f\n", double(editorScale));
             CHECK(editorScale > 0.0f, "the editor view has a converged exposure to hand over");
@@ -489,10 +490,10 @@ int main(int argc, char **argv)
                 // host's first buildEnvironment, here the same description
                 // pushed by hand (a fresh view's own PostFxDesc has no HDR in
                 // it at all) — and one frame is rendered.
-                const PostFxDesc worldFx = editorView->postFx();
+                const PostFxDesc worldFx = jahshaka::engine::inspect::view(editorView)->postFx();
                 force(seeded, worldFx);
                 force(control, worldFx);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
 
                 const float seededScale  = seeded->measuredExposureScale();
                 const float controlScale = control->measuredExposureScale();
@@ -555,7 +556,7 @@ int main(int argc, char **argv)
                     orphan.setDocument(doc2, cam2);
                     orphan.begin();
                     orphan.step(1.0f / 60.0f, W, H);
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                     CHECK(orphanView->scene() == temp, "...and is drawing it");
                     // THE TEARDOWN, in clearScene's order: mirror first, then
                     // the scene. The host is told nothing.
@@ -572,7 +573,7 @@ int main(int argc, char **argv)
                 CHECK(orphan.engineScene() == nullptr, "the player let go of the freed scene");
                 CHECK(!orphan.attach(orphanView), "...refuses to bind to nothing");
                 orphan.step(1.0f / 60.0f, W, H);
-                engine->renderOneFrame();
+                enginetest::frames(engine, 1);
                 CHECK(true, "a frame after the host scene was destroyed is survivable");
 
                 // ...and handed a LIVE scene it draws again, which is what the
@@ -594,7 +595,7 @@ int main(int argc, char **argv)
                 orphan.begin();
                 for (int i = 0; i < 4; ++i) {
                     orphan.step(1.0f / 60.0f, W, H);
-                    engine->renderOneFrame();
+                    enginetest::frames(engine, 1);
                 }
                 Image revived;
                 CHECK(orphanView->readPixels(revived), "readback after the re-adopt");

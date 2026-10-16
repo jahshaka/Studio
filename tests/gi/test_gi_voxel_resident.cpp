@@ -96,7 +96,7 @@ static MeshData grid(int N, float span)
 
 static void render(Engine *e, int frames)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static GiParams cascadeGi()
@@ -171,7 +171,7 @@ int main()
     render(e, 10);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() >= 2, ("the chain has " + std::to_string(st.cascades.size()) + " cascades").c_str());
 
     // ---- 1. ONE DISPATCH FOR BOTH INDEX WIDTHS --------------------------
@@ -217,7 +217,7 @@ int main()
     render(e, 10);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus withBare = scene->giStatus();
+    GiStatus withBare = scene->published().gi;
     const long long expectWithBare = expectTris + (long long)(bare.indices.size() / 3);
     CHECK(withBare.cascades[0].voxelTriangles == expectWithBare,
           ("it is voxelised too (" + std::to_string(withBare.cascades[0].voxelTriangles) +
@@ -244,7 +244,7 @@ int main()
 
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus again = scene->giStatus();
+    GiStatus again = scene->published().gi;
     std::printf("   cascade 0 rebuilds: %llu -> %llu\n", buildsBefore, again.cascades[0].rebuilds);
     CHECK(again.cascades[0].rebuilds > buildsBefore,
           "the teleport really did re-voxelise (a refresh alone would not have)");
@@ -299,7 +299,7 @@ int main()
     render(e, 24);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus refused = scene->giStatus();
+    GiStatus refused = scene->published().gi;
     std::printf("   refused build: triangles %lld, dispatches %lld, rebuilds %llu\n",
                 refused.cascades[0].voxelTriangles, refused.cascades[0].voxelDispatches,
                 refused.cascades[0].rebuilds);
@@ -315,8 +315,8 @@ int main()
     render(e, 16);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    CHECK(scene->giStatus().cascades[0].voxelTriangles == 0 ||
-              scene->giStatus().cascades[0].voxelTriangles == expectWithBare,
+    CHECK(scene->published().gi.cascades[0].voxelTriangles == 0 ||
+              scene->published().gi.cascades[0].voxelTriangles == expectWithBare,
           "and the refusal is not sticky beyond the hook");
 
     scene->setGlobalIllumination(GiParams());

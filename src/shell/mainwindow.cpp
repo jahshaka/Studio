@@ -311,7 +311,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // "Compiling shaders (N)" (ASYNC-SHADERS-1): the background compiler's pending count.
     toolbarDeps.pendingShaders = []() -> unsigned {
         auto eng = EngineHost::instance().engine();
-        return eng ? eng->asyncShaderStats().pending : 0u;
+        return eng ? eng->published().shaders.pending : 0u;   // the last frame's (U3 stage 2)
     };
     toolbar->build(toolbarDeps);
     toolBar = toolbar->bar();
@@ -1281,7 +1281,8 @@ void MainWindow::closeWorld(bool reopenInPlace)
     // the engine scene went with removeScene() — the one moment a SIMD-pool
     // shrink has something to give back (Engine::reclaimMemory; the GPU pools
     // free themselves a few frames after this).
-    if (auto eng = EngineHost::instance().engine()) eng->reclaimMemory();
+    if (auto eng = EngineHost::instance().engine())
+        eng->request([](jahshaka::engine::Engine &e) { e.reclaimMemory(); });   // a REQUEST (U3 stage 4a)
 
 	undoService->resetSavedCount();
 

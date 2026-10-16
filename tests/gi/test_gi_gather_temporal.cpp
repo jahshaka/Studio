@@ -52,7 +52,7 @@ static int failures = 0;
         CHECK(cond, buf_);                                                      \
     } while (0)
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 // The pixel history's measurement arm (lane TEST-1: was JAHSHAKA_GATHER_NO_TEMPORAL),
 // latched at the top of the next frame.
@@ -204,7 +204,7 @@ static StableReading stableReading(Engine *e, View *view, int frames, const char
     double sum = 0.0;
     size_t n = 0;
     for (int f = 0; f < frames; ++f) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         view->readPixels(cur);
         for (unsigned y = y0; y < y1; ++y)
             for (unsigned x = 0; x < kW; ++x) {
@@ -261,7 +261,7 @@ static int stableMain(Engine *e)
     CHECK(s->setGlobalIllumination(gatherGi()), "the chain builds over the room");
     setNoTemporal(e, false);
     render(e, 120);   // THE WARM-UP: the chain settled, the history past its floor
-    const GatherStatus st = s->giStatus().gather;
+    const GatherStatus st = s->published().gi.gather;
     CHECK_MSG(st.running && st.temporal && st.historyAge > 60u,
               "the gather runs with its pixel history (running %d, temporal %d, age %u)",
               int(st.running), int(st.temporal), st.historyAge);
@@ -270,7 +270,7 @@ static int stableMain(Engine *e)
     // THE LEVER'S PAIR: the same view, each frame's estimate alone.
     setNoTemporal(e, true);
     render(e, 8);
-    const GatherStatus st2 = s->giStatus().gather;
+    const GatherStatus st2 = s->published().gi.gather;
     CHECK_MSG(!st2.temporal, "the arm gather.temporal = 0 turns the pixel history off (temporal %d)",
               int(st2.temporal));
     const StableReading without = stableReading(e, view, 60, "alone");
@@ -326,7 +326,7 @@ static int stableMain(Engine *e)
         s->refreshGlobalIllumination();
         std::vector<Image> frames(121);
         for (int f = 0; f <= 120; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             view->readPixels(frames[size_t(f)]);
         }
         int arrived = -1;

@@ -75,7 +75,7 @@ int main()
     const auto readHdr = [&](View *v) {
         double acc = 0.0;
         for (int f = 0; f < 4; ++f) {
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             ImageF img;
             if (!v->readPixelsHdr(img)) return -1.0;
             double s2 = 0.0; int n = 0;
@@ -120,7 +120,8 @@ int main()
         sky.equirect = s->createTexture(1, 1, skyPx, true);
         CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
         float sh[27] = { 0 };
-        for (int f = 0; f < 20 && !s->skyAmbientSh(sh); ++f) e->renderOneFrame();
+        enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        for (int f = 0; f < 20 && !s->published().copySkyAmbientSh(sh); ++f) enginetest::frames(e, 1);
         s->setAmbientSh(sh);
         s->setEnvironmentLight(Colour(1, 1, 1, 1));
         const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -150,15 +151,15 @@ int main()
         else
             enginetest::testCameraLookAt(rv, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
         s->setGlobalIllumination(off);
-        for (int f = 0; f < 10; ++f) e->renderOneFrame();
+        enginetest::frames(e, 10);
         a.off = readHdr(rv);
         s->setGlobalIllumination(cones);
-        for (int f = 0; f < 20; ++f) e->renderOneFrame();
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+        enginetest::frames(e, 20);
+        for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         a.cones = readHdr(rv);
         s->setGlobalIllumination(field);
-        for (int f = 0; f < 20; ++f) e->renderOneFrame();
-        for (int f = 0; f < 4000 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+        enginetest::frames(e, 20);
+        for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
         a.field = readHdr(rv);
         s->setGlobalIllumination(off);
         rv->setScene(nullptr);

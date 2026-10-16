@@ -124,7 +124,7 @@ PbrParams baseParams() {
 
 Probe gA, gB;
 
-void render(int frames = 3) { for (int i = 0; i < frames; ++i) gEngine->renderOneFrame(); }
+void render(int frames = 3) { enginetest::frames(gEngine, frames);}
 
 /// Pixels that differ, and by how much at worst.
 struct Diff { int pixels = 0; int worst = 0; };

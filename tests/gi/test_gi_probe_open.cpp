@@ -98,7 +98,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 static void show(const char *what, const Colour &c)
 {
     std::printf("   %-34s r=%.4f g=%.4f b=%.4f\n", what, c.r, c.g, c.b);
@@ -181,7 +181,7 @@ static Verdict measureGrid(Engine *engine, Scene *s, int nx, int ny, int nz, int
     if (!s->setGlobalIllumination(gi))
         std::printf("   engine error: %s\n", engine->lastError().c_str());
     render(engine, frames);
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     Verdict v;
     v.dropped = st.probesDropped;
     v.probes = st.probeCount;
@@ -352,7 +352,7 @@ int main()
         report("4. ground + props, no walls", v);
         CHECK(v.probes > 0 && v.dropped > 0,
               "4: the candidates that can SEE a prop are kept and the rest are dropped");
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.pccBound, "4: ...so a grid IS bound here");
         CHECK(st.vctBound, "4: the voxel half is untouched — cone tracing still carries the bounce");
         CHECK(v.regionMin.x > -12.0f && v.regionMax.x < 12.0f &&
@@ -393,7 +393,7 @@ int main()
         CHECK(v.probes == 0 && v.dropped > 0,
               "4b: every candidate saw nothing but the floor and the sky, so no grid");
 
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(!st.pccBound, "4b: nothing is bound as a probe grid");
         CHECK(st.probeCaptureSize == 0, "4b: and there is no capture size to report");
         CHECK(st.vctBound, "4b: the voxel half is untouched — cone tracing still carries the bounce");
@@ -452,7 +452,7 @@ int main()
         gi.testProbeRegionMax = Vec3( 8.0f,  7.0f,  8.0f);
         CHECK(s->setGlobalIllumination(gi), "4c: the hybrid builds over the pinned room");
         render(engine.get(), 20);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::printf("-- 4c. a room with a mirror in it, and a mirror 25 m outside it\n"
                     "   probes=%d dropped=%d pccBound=%d\n",
                     st.probeCount, st.probesDropped, st.pccBound ? 1 : 0);
@@ -503,7 +503,7 @@ int main()
         // A 25 m jump re-centres the camera's cascade chain, one cascade a frame,
         // then its settle: counted until GI is at rest (bounded), not a fixed 6.
         render(engine.get(), 6);
-        for (int f = 0; f < 240 && !s->giStatus().giAtRest; ++f) engine->renderOneFrame();
+        for (int f = 0; f < 240 && !s->published().gi.giAtRest; ++f) enginetest::frames(engine, 1);
         view->readPixels(img);
         const Colour outside = img.at(56, 54);
         show("mirror OUTSIDE every probe box", outside);
@@ -798,7 +798,7 @@ int main()
         CHECK(s->setGlobalIllumination(gi), "13: the hybrid builds over the roofless room");
         render(engine.get(), 20);
         {
-            const GiStatus st = s->giStatus();
+            const GiStatus st = s->published().gi;
             std::printf("-- 13. a roofless room, a mirror cube, a sun disc overhead\n"
                         "   probes=%d dropped=%d\n", st.probeCount, st.probesDropped);
             CHECK(st.probeCount == 4,
@@ -975,7 +975,7 @@ int main()
         gi.testProbeRegionMax = Vec3( 6.0f,  5.0f,  6.0f);
         CHECK(s->setGlobalIllumination(gi), "pinned: the hybrid builds");
         render(engine.get(), 10);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         std::printf("-- pinned bounds, open geometry --\n   probes=%d dropped=%d\n",
                     st.probeCount, st.probesDropped);
         CHECK(st.probeCount == 0 && st.probesDropped == 4,
@@ -1002,7 +1002,7 @@ int main()
         gi.updateBudget = 0;
         CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid builds over the room");
         render(engine.get(), 10);
-        const GiStatus st = s->giStatus();
+        const GiStatus st = s->published().gi;
         CHECK(st.probeCount == 4, "capture size: ...with its grid");
         // READ OFF THE BIND TEXTURE (lane SKY-FALLBACK-1): giStatus reports the
         // width of the cube array the shader samples, not the local the build
@@ -1025,13 +1025,13 @@ int main()
         gi.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid rebuilds at High");
         render(engine.get(), 10);
-        CHECK(s->giStatus().probeCaptureSize == 512,
+        CHECK(s->published().gi.probeCaptureSize == 512,
               "capture size: High (and Epic, which shares the quality) captures at 512 px");
         // ...and with them back on, High is a ray tier and the grid goes.
         s->setRayTracing(RayTracingMode::Auto);
         render(engine.get(), 2);
         if (engine->rayQueryAvailable())
-            CHECK(s->giStatus().probeGridByRays && s->giStatus().probeCount == 0,
+            CHECK(s->published().gi.probeGridByRays && s->published().gi.probeCount == 0,
                   "ray tier: High with the scene's rays on builds no grid");
         engine->destroyScene(s);
     }

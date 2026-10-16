@@ -306,7 +306,7 @@ public:
     unsigned long long frames() const { return mFrameCount; }
     unsigned long long events() const { return mEventCount; }
 
-    void writeFrame(const FrameRecord &r);
+    void writeFrame(const MonitorRecord &r);
     void writeEvent(const MonitorEvent &e);
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
     /// GPU timing marks the engine's query pool could not hold over this
@@ -331,7 +331,7 @@ public:
 
 private:
     void traceMeta();
-    void traceFrame(const FrameRecord &r);
+    void traceFrame(const MonitorRecord &r);
     void traceEvent(const MonitorEvent &e);
     /// Appends to `f` unless the cap for it is already spent. Returns false
     /// when the write was refused, which is what the truncation counters count.
@@ -393,7 +393,7 @@ bool FrameMonitor::Bundle::append(QFile &f, qint64 &written, qint64 cap, const Q
     return false;
 }
 
-void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
+void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
 {
     QJsonArray stages;
     for (const FrameStage &s : r.stages)
@@ -461,6 +461,8 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
 
     QJsonObject o{
         { "frame", double(r.frame) },
+        // the hand-over's serial (ENGINE-UPGRADE-U3): the host's stages in this record rode the hand-over it names
+        { "serial", double(r.serial) },
         { "tMs", r.startMs },
         { "totalMs", double(r.totalMs) },
         { "cause", QLatin1String(causeName(r.cause)) },
@@ -556,7 +558,7 @@ void FrameMonitor::Bundle::traceMeta()
     }
 }
 
-void FrameMonitor::Bundle::traceFrame(const FrameRecord &r)
+void FrameMonitor::Bundle::traceFrame(const MonitorRecord &r)
 {
     // A RECONSTRUCTION, and it says so here: the records carry EXCLUSIVE
     // milliseconds per stage and per pass, not timestamps, so the timeline lays
@@ -1355,7 +1357,12 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
+    // THE START IS THE ENGINE'S BEFORE THE VERB RETURNS (U3 stage 4b): the host's call — its record of the level is
+    // written at the call (decision 45 D5: the engine side never writes a host record), the message rides the stream —
+    // then an empty request, which applies the pending messages first: the monitor is live and the snapshot says so
+    // for the next read.
     eng->setFrameMonitor(MonitorLevel::Review);
+    eng->request([](jahshaka::engine::Engine &) {});
     gActive = true;
     mBlockedNs = 0;
     mBlockedAt = 0;
@@ -1444,10 +1451,13 @@ void FrameMonitor::finish(bool early)
     }
     drain();
     gActive = false;
-    if (eng) eng->setFrameMonitor(MonitorLevel::Off);
+    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it
+        eng->setFrameMonitor(MonitorLevel::Off);
+        eng->request([](jahshaka::engine::Engine &) {});
+    }
     // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
     // the NEXT drain hands it back with the monitor already off (Engine.h
-    // takeFrameRecords). Drain in a LOOP until it is empty — never "render one,
+    // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
     // expect one" — or the last frames of every capture are lost.
     for (int i = 0; i < 8; ++i) {
         const unsigned moved = drainOnce();
@@ -1488,7 +1498,7 @@ unsigned FrameMonitor::drainOnce()
     // missed every dropping frame between two drains); machine.json states the
     // total: a bundle whose GPU times are incomplete has to say so rather than
     // let analysis discover that some passes have no time.
-    const MonitorStatus st = eng->monitorStatus();
+    const MonitorStatus st = eng->published().monitor;
     if (st.gpuMarksDropped > mGpuMarksDropped) {
         mGpuMarksDropped = st.gpuMarksDropped;
         mBundle->noteGpuMarksDropped(st.gpuMarksDropped);
@@ -1502,9 +1512,9 @@ unsigned FrameMonitor::drainOnce()
     }
     mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
     unsigned moved = 0;
-    std::vector<FrameRecord> frames;
-    moved += eng->takeFrameRecords(frames);
-    for (const FrameRecord &r : frames) mBundle->writeFrame(r);
+    std::vector<MonitorRecord> frames;
+    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorRecords(frames); });   // a REQUEST (U3 4a)
+    for (const MonitorRecord &r : frames) mBundle->writeFrame(r);
     // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
     // 2026-09-18). The bundle is a file a lead opens later; this is the same
     // rows, for the frame that just landed, readable NOW by the verb and the
@@ -1512,7 +1522,7 @@ unsigned FrameMonitor::drainOnce()
     // or it is not a breakdown of anything — and only while recording, which
     // is the only time the engine fills them at all.
     if (!frames.empty()) {
-        const FrameRecord &r = frames.back();
+        const MonitorRecord &r = frames.back();
         QVariantList rows;
         rows.reserve(int(r.passes.size()));
         for (const FramePass &p : r.passes) {
@@ -1529,7 +1539,7 @@ unsigned FrameMonitor::drainOnce()
         mLastPasses = rows;
     }
     std::vector<MonitorEvent> events;
-    moved += eng->takeMonitorEvents(events);
+    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorEvents(events); });   // a REQUEST (U3 4a)
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);
     return moved;
 }
@@ -1755,9 +1765,11 @@ QVariantMap FrameMonitor::status() const
     // off" assertions a suite checks rather than trusts.
     QVariantMap eng;
     if (auto e = engine()) {
-        const MonitorStatus s = e->monitorStatus();
-        eng["level"] = s.level == MonitorLevel::Review ? QStringLiteral("review")
-                                                       : QStringLiteral("off");
+        const MonitorStatus s = e->published().monitor;
+        // THE LEVEL IS THE HOST'S OWN RECORD (U3 stage 4a: setFrameMonitor is a message; the snapshot below is the last
+        // frame's): what this session asked the engine for, at the call.
+        eng["level"] = e->frameMonitor() == MonitorLevel::Review ? QStringLiteral("review")
+                                                                 : QStringLiteral("off");
         eng["attachedListeners"] = s.attachedListeners;
         eng["ringCapacity"] = s.ringCapacity;
         eng["ringFrames"] = s.ringFrames;

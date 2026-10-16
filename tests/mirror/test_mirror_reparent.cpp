@@ -58,6 +58,7 @@ iris::MeshPtr gCube;
 iris::MaterialPtr gMaterial;
 
 struct World {
+    Engine *engine = nullptr;
     Scene *target = nullptr;
     iris::ScenePtr doc;
     std::unique_ptr<SceneMirror> mirror;
@@ -80,6 +81,7 @@ iris::SceneNodePtr meshNode(float scale)
 void build(World &w, Engine *engine, int n)
 {
     w.n = n;
+    w.engine = engine;
     w.target = engine->createScene(("reparent" + std::to_string(n)).c_str());
     w.doc = iris::Scene::create();
     const int branch = 8;
@@ -136,13 +138,17 @@ template <typename Edit>
 Counts measure(World &w, Edit edit)
 {
     Counts c;
+    // The engine's change counts are read off the snapshot (U3 stage 2b): a frame closes the state before the edit,
+    // and the frame after the sync closes the edit's.
+    enginetest::frames(w.engine, 1);
     const quint64 pushes0 = w.mirror->visitPushCount();
-    const SceneChangeStats cs0 = w.target->changeStats();
+    const SceneChangeStats cs0 = w.target->published().changes;
     const unsigned long long sw0 = iris::graph::staticSwitchCount();
     const quint64 sweeps0 = w.mirror->reclaimSweepCount();
     edit();
     c.visited = w.mirror->sync();
-    const SceneChangeStats cs1 = w.target->changeStats();
+    enginetest::frames(w.engine, 1);
+    const SceneChangeStats cs1 = w.target->published().changes;
     c.staticSwitches = iris::graph::staticSwitchCount() - sw0;
     c.reclaimSweeps = w.mirror->reclaimSweepCount() - sweeps0;
     c.evicted = w.mirror->evictedNodeCount();
@@ -195,13 +201,13 @@ int main(int argc, char **argv)
         World w;
         build(w, engine.get(), scales[k]);
         view->setScene(w.target);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         // (A) hostA -> hostB, a same-scene move
         a[k] = measure(w, [&] { w.hostB->addChild(w.fragment, false); });
         // (D) ...AND IT DRAWS WHERE IT NOW IS (stage 2b's read, item a): the static fragment kept its local and changed
         // its parent, so its world moved; one frame later the pose the renderer DREW (the static pass's cached
         // derived transform) is the new world pose, for the root and for a leaf deep in the fragment.
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         for (const iris::SceneNodePtr &n : { w.fragment, w.fragmentNodes.back() }) {
             const NodeId id = w.mirror->engineNode(n.data());
             Vec3 drawn, now; Quat qd, qn;

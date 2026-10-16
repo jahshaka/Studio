@@ -300,7 +300,7 @@ int main()
     // =====================================================================
     Scene *scene = nullptr;
     View *view = buildScene(e, "hzb256", 256u, 256u, scene);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     checkPyramid(e, view, "256x256, exact halving", 256u, 256u, 9u);
 
     // =====================================================================
@@ -313,7 +313,7 @@ int main()
     // =====================================================================
     Scene *oddScene = nullptr;
     View *odd = buildScene(e, "hzb255", 255u, 135u, oddScene);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     checkPyramid(e, odd, "255x135, odd levels", 255u, 135u, 8u);
 
     // =====================================================================
@@ -323,7 +323,7 @@ int main()
     // =====================================================================
     Scene *nearScene = nullptr;
     View *nearView = buildScene(e, "hzbnear", 256u, 256u, nearScene, /*farthest=*/false);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     checkPyramid(e, nearView, "256x256, the CLOSEST-depth build", 256u, 256u, 9u);
     {
         HzbStatus nst;
@@ -338,7 +338,7 @@ int main()
     std::printf("\n== 1920x1080: levels and cost ==\n");
     Scene *bigScene = nullptr;
     View *big = buildScene(e, "hzb1080", 1920u, 1080u, bigScene);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
 
     HzbStatus bst;
     CHECK(e->hzbStatus(big, bst) && bst.built, "the 1080p view built a pyramid");
@@ -346,10 +346,10 @@ int main()
     CHECK(bst.levels == 11u, "1920x1080 gives 11 levels (1920..1)");
 
     e->setFrameMonitor(MonitorLevel::Review);
-    for (int i = 0; i < 24; ++i) e->renderOneFrame();
+    enginetest::frames(e, 24);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> records;
-    while (e->takeFrameRecords(records) > 0) {}
+    std::vector<MonitorRecord> records;
+    while (e->takeMonitorRecords(records) > 0) {}
 
     // The best (lowest) measured frame: this box runs other lanes, and the
     // question "what does the pyramid cost" is answered by the cheapest clean
@@ -361,7 +361,7 @@ int main()
     const std::string bigWorkspace = "hzb1080/Workspace";
     float bestMs = -1.0f;
     unsigned measuredFrames = 0, passCount = 0;
-    for (const FrameRecord &r : records) {
+    for (const MonitorRecord &r : records) {
         float sum = 0.0f;
         unsigned n = 0;
         bool complete = true;
@@ -402,21 +402,21 @@ int main()
     std::printf("\n== 3840x2160: levels and cost ==\n");
     Scene *uhdScene = nullptr;
     View *uhd = buildScene(e, "hzb4k", 3840u, 2160u, uhdScene);
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     HzbStatus ust;
     CHECK(e->hzbStatus(uhd, ust) && ust.built, "the 4K view built a pyramid");
     std::printf("   %ux%u, %u levels\n", ust.width, ust.height, ust.levels);
     CHECK(ust.levels == 12u, "3840x2160 gives 12 levels (3840..1)");
     {
         e->setFrameMonitor(MonitorLevel::Review);
-        for (int i = 0; i < 24; ++i) e->renderOneFrame();
+        enginetest::frames(e, 24);
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> recs;
-        while (e->takeFrameRecords(recs) > 0) {}
+        std::vector<MonitorRecord> recs;
+        while (e->takeMonitorRecords(recs) > 0) {}
         const std::string ws = "hzb4k/Workspace";
         float best = -1.0f;
         unsigned measured = 0, passes = 0;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             float sum = 0.0f; unsigned n = 0; bool complete = true;
             for (const FramePass &pp : r.passes) {
                 if (pp.workspace != ws) continue;

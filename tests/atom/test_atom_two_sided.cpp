@@ -145,7 +145,7 @@ static bool settle(Engine *e, View *view, Image &img, int &frames)
     int stable = 0;
     frames = 0;
     while (frames < 1200) {
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
         frames += 4;
         if (!view->readPixels(img)) return false;
         if (frames >= 24 && prev.rgba.size() == img.rgba.size()) {
@@ -171,7 +171,7 @@ struct Fixture {
         os->ensureGpuScene(false);
         const detail::GpuScene &gs = os->gpuScene();
         for (unsigned s = 0; s < gs.slotCount(); ++s)
-            if (gs.entry(s).ids[0] == unsigned(n)) return s;
+            if (os->nodeOfGpuKey(gs.entry(s).ids[0]) == n) return s;
         return 0xFFFFFFFFu;
     }
     /// The pixels whose id names `node` (the atom picture's own coverage).
@@ -292,7 +292,7 @@ int main()
 
     const Vec3 front(0.0f, 1.6f, 6.5f), back(0.0f, 1.6f, -6.5f), target(0.0f, 0.8f, 0.0f);
     enginetest::testCameraLookAt(F.view, front, target);
-    for (int i = 0; i < 6; ++i) F.e->renderOneFrame();
+    enginetest::frames(F.e, 6);
 
     // ---- (a) THE ROUTE -------------------------------------------------------------
     {
@@ -304,13 +304,13 @@ int main()
                   "(a) the closed sphere and the open plane (both two-sided) and the floor are Atom items, two of them "
                   "two-sided (atom %u, two-sided %u, pbs %u)", st.atomItems, st.atomTwoSided, st.pbsItems);
         F.scene->setNodeFaceCull(F.sphere, FaceCull::Front);
-        for (int i = 0; i < 3; ++i) F.e->renderOneFrame();
+        enginetest::frames(F.e, 3);
         const AtomDrawStatus fr = F.scene->atomDrawStatus();
         CHECK_MSG(fr.cullFront == 1 && fr.atomItems == 2 && fr.atomTwoSided == 1,
                   "(a) a FRONT-culled node stays on PBS under cullFront (cullFront %u, atom %u)", fr.cullFront,
                   fr.atomItems);
         F.scene->setNodeFaceCull(F.sphere, FaceCull::TwoSided);
-        for (int i = 0; i < 3; ++i) F.e->renderOneFrame();
+        enginetest::frames(F.e, 3);
     }
 
     // ---- (e) THE NODES' CULL, AT RUN TIME ----------------------------------------------
@@ -327,7 +327,7 @@ int main()
         };
         auto waitFor = [&](unsigned wantTwo, unsigned wantBuckets, int &frames) {
             for (frames = 0; frames < 60; ++frames) {
-                F.e->renderOneFrame();
+                enginetest::frames(F.e, 1);
                 const AtomDrawStatus st = F.scene->atomDrawStatus();
                 if (st.atomItems == 3 && st.atomTwoSided == wantTwo && st.buckets == wantBuckets) return true;
             }

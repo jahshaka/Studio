@@ -55,6 +55,7 @@
 //
 // Its own binary, like gi.pcc_mirror (spec §9).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -72,7 +73,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static void showBox(const char *what, const Vec3 &mn, const Vec3 &mx)
@@ -139,7 +140,7 @@ static void roomCase(Engine *engine, View *view, const char *label, float shell,
     const Colour m = img.at(64, 64);
     std::printf("   mirror pixel               r=%.3f g=%.3f b=%.3f\n", m.r, m.g, m.b);
 
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     showBox("lit volume", st.boundsMin, st.boundsMax);
     showBox("probe region", st.probeRegionMin, st.probeRegionMax);
     CHECK(st.probeCount == 4 && st.pccBound, "the 2x1x2 probe grid built and bound");
@@ -208,7 +209,7 @@ static void groundPlaneCase(Engine *engine, View *view)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds over the default-scene shape");
     render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     showBox("probe fit", st.probeFitMin, st.probeFitMax);
     // The ground is 200 across. Four items, median largest extent = 1, limit 4:
     // the ground is rejected and the primitives (x in [-2,2]) survive.
@@ -240,7 +241,7 @@ static void singleBigMeshCase(Engine *engine, View *view)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds over a single large mesh");
     render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     showBox("probe fit", st.probeFitMin, st.probeFitMax);
     CHECK(st.probeFitMax.x - st.probeFitMin.x >= 60.0f,
           "a scene that IS one big mesh keeps the whole mesh in the lit volume");
@@ -281,18 +282,18 @@ static void excludeFlagCase(Engine *engine, View *view)
     gi.quality = GiQuality::Low;
     CHECK(s->setGlobalIllumination(gi), "VCT builds with the ground included");
     render(engine, 3);   // the chain waits for a tracked camera; the fit is its build\'s
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     showBox("probe fit, ground in", st.probeFitMin, st.probeFitMax);
     CHECK(st.probeFitMax.x - st.probeFitMin.x > 18.0f,
           "the heuristic keeps this ground (it is not an outlier here)");
-    CHECK(!s->nodeProbeGridExcluded(ground), "the flag starts off");
+    CHECK(!jahshaka::engine::inspect::scene(s)->nodeProbeGridExcluded(ground), "the flag starts off");
 
     s->setNodeProbeGridExcluded(ground, true);
-    CHECK(s->nodeProbeGridExcluded(ground), "setNodeProbeGridExcluded reads back");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeProbeGridExcluded(ground), "setNodeProbeGridExcluded reads back");
     // The flag invalidates the GI caches; the flush is at frame time, like every
     // other geometry change.
     render(engine, 2);
-    st = s->giStatus();
+    st = s->published().gi;
     showBox("probe fit, ground out", st.probeFitMin, st.probeFitMax);
     CHECK(st.probeFitMax.x - st.probeFitMin.x < 15.0f,
           "excluding the ground pulls the lit volume onto the two boxes");
@@ -305,7 +306,7 @@ static void excludeFlagCase(Engine *engine, View *view)
     // with no side effect on the item set.
     s->setNodeProbeGridExcluded(ground, false);
     render(engine, 2);
-    st = s->giStatus();
+    st = s->published().gi;
     showBox("probe fit, ground back in", st.probeFitMin, st.probeFitMax);
     CHECK(st.probeFitMax.x - st.probeFitMin.x > 18.0f,
           "clearing the flag restores the ground to the bounds");
@@ -369,7 +370,7 @@ static void freeStandingPanelCase(Engine *engine, View *view)
     CHECK(s->setGlobalIllumination(gi), "the hybrid builds with a partition in the room");
     render(engine);
 
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     showBox("lit volume", st.boundsMin, st.boundsMax);
     showBox("probe region", st.probeRegionMin, st.probeRegionMax);
     showBox("probe shapes (union)", st.probeShapeMin, st.probeShapeMax);
@@ -469,7 +470,7 @@ static void occluderShapeCase(Engine *engine, View *view)
     CHECK(s->setGlobalIllumination(gi), "the hybrid builds over a room with columns");
     render(engine, 6);
 
-    const GiStatus st = s->giStatus();
+    const GiStatus st = s->published().gi;
     showBox("probe region", st.probeRegionMin, st.probeRegionMax);
     showBox("probe shapes (union)", st.probeShapeMin, st.probeShapeMax);
     // The clamp targets the region grown by 5% (see clampProbeShapesToRegion:
@@ -526,7 +527,7 @@ static void occluderShapeCase(Engine *engine, View *view)
         high.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
         render(engine, 4);
-        const GiStatus rt = s->giStatus();
+        const GiStatus rt = s->published().gi;
         CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
               "ray tier: High with rays builds no probe grid");
     }

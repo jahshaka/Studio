@@ -120,7 +120,7 @@ static const float kSphereY = 0.9f;
 static const Vec3 kCamPos(0.0f, 2.2f, 5.5f);
 static const Vec3 kCamTarget(0.0f, 0.4f, -0.5f);
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData sphereMesh(int rings = 32, int segments = 64)
 {
@@ -401,9 +401,9 @@ static int costMain(Engine *e)
     const auto step = [&](int n, bool motion, bool measure) {
         for (int i = 0; i < n; ++i) {
             enginetest::setNodePosition(s, sphere, pathAt(++frame));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (!measure || i < 10) continue;
-            const RayQueryStatus st = s->rayQueryStatus();
+            const RayQueryStatus st = s->published().rayQuery;
             if (st.reflectMs <= 0.0f) continue;
             if (motion) {
                 on += st.reflectMs; ++nOn;
@@ -493,9 +493,9 @@ static int costPosedMain(Engine *e)
                 p[1].position = Vec3(homes[k].x + 0.3f * std::sin(a), homes[k].y, homes[k].z + 0.3f * std::cos(a));
                 s->setBonePoses(movers[k], p, 2);
             }
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
             if (!measure || i < 10) continue;
-            const RayQueryStatus st = s->rayQueryStatus();
+            const RayQueryStatus st = s->published().rayQuery;
             if (st.reflectMs <= 0.0f) continue;
             const double m = st.reflectMotionMs > 0.0f ? st.reflectMotionMs : 0.0;
             if (posed) { onR += st.reflectMs; onM += m; ++nOn; }
@@ -632,7 +632,7 @@ int main(int argc, char **argv)
     render(e, kWarmFrames);
     {
         const AtomDrawStatus as = s->atomDrawStatus();
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         std::printf("    atom: on=%d atomItems=%u pbsItems=%u   rayQuery reflect=%d\n", int(as.on),
                     as.atomItems, as.pbsItems, int(rq.reflect));
     }

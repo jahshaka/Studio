@@ -90,7 +90,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -525,16 +525,16 @@ static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Ve
     enginetest::testCameraLookAt(view, eye, Vec3(eye.x, 1.6f, eye.z - 4.4f));
     s->setGlobalIllumination(gi);
     render(e, 6);
-    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    for (int f = 0; f < 600 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
     Image off; view->readPixels(off);
     s->setAmbient(kAmbientUpper, kAmbientLower);
     render(e, 30);
-    for (int f = 0; f < 600 && !s->giStatus().giAtRest; ++f) e->renderOneFrame();
+    for (int f = 0; f < 600 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
     render(e, 30);
     Image on; view->readPixels(on);
     unsigned wx = 0, wy = 0;
     const float d = maxChannelDelta(off, on, &wx, &wy) * 255.0f;
-    const GiStatus gs = s->giStatus();
+    const GiStatus gs = s->published().gi;
     std::printf("   %-44s worst pixel moves %6.2f/255 at (%u,%u) [probes %d bound %d, field %d]\n", label, d, wx, wy,
                 gs.probeCount, int(gs.pccBound), int(gs.ifdBound));
     view->setScene(nullptr);
@@ -682,8 +682,8 @@ int main(int argc, char **argv)
         {
             // THE CONVERGED FIELD: the one settle predicate, in frames.
             int n = 0;
-            for (; n < 4000 && !s->giStatus().giAtRest; ++n) render(e, 1);
-            const GiStatus st = s->giStatus();
+            for (; n < 4000 && !s->published().gi.giAtRest; ++n) render(e, 1);
+            const GiStatus st = s->published().gi;
             CHECK(st.ifdBound && st.vctBound && st.giAtRest,
                   "the field is bound and GI at rest (every refinement paid)");
             std::printf("   (at rest after %d more frames)\n", n);
@@ -720,7 +720,7 @@ int main(int argc, char **argv)
         //      83.7 %; at the old 32 (0.5625 m) the field read 85.0 % against 73.2-83.9 - the dial's
         //      measured cost (tests/gi/voxel_dial_measure): the rebuild +0.06 ms GPU, the store
         //      0.45 -> 3.6 MB, the settle's GI work 20.9 -> 46.3 ms GPU once.
-        const GiStatus fst = s->giStatus();
+        const GiStatus fst = s->published().gi;
         const float cell = fst.voxelMetres;
         const double anaAuthored = analyticCorner(0.0f);
         const double anaEnvelope = analyticCorner(cell);

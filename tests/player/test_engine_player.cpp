@@ -26,6 +26,7 @@
 #include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/core/viewport.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
@@ -60,8 +61,8 @@ static int maxAbsDiff(const Image &a, const Image &b)
 static Image render(EnginePlayerScene &player, Engine &engine, View *view, int frames, float dt)
 {
     for (int i = 0; i < frames; ++i) {
-        player.step(dt, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        player.step(dt, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);
@@ -486,8 +487,8 @@ int main(int argc, char **argv)
         CHECK(player.attach(view), "player view bound to the EDITOR's scene");
         CHECK(view->scene() == player.engineScene(), "the view renders that scene");
         CHECK(player.engineScene() == editorScene, "ONE SCENE: the player draws the editor's");
-        CHECK(!view->helpersVisible(), "the player's view hides the editor's furniture");
-        CHECK(editorView->helpersVisible(), "...and the editor's view still shows it");
+        CHECK(!jahshaka::engine::inspect::view(view)->helpersVisible(), "the player's view hides the editor's furniture");
+        CHECK(jahshaka::engine::inspect::view(editorView)->helpersVisible(), "...and the editor's view still shows it");
 
         player.setDocument(doc, camera);
         CHECK(doc->getCamera() == camera, "the document's scene camera is the play camera");

@@ -37,6 +37,7 @@
 // A world with NO alpha-tested item has no table and asks opaque by
 // construction — the pre-lane flags exactly.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "EnginePrivate.h"
 
@@ -63,7 +64,7 @@ static int failures = 0;
 static const unsigned kWidth = 640;
 static const unsigned kHeight = 360;
 static const unsigned kBars = 8;          // four solid, four clear
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// The fence: one quad in z = 0, x in [-1, 1], y in [0, 2], facing +z, UVs over it.
 static MeshData fenceMesh()
@@ -311,10 +312,10 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
     enginetest::setNodePosition(s, fence, Vec3(3.0f, 0.0f, 1.0f));
     view->resize(1920, 1080);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 8.0f), Vec3(0.0f, 0.0f, -20.0f));
-    SunContactDesc sc = s->sunContact();
+    SunContactDesc sc = jahshaka::engine::inspect::scene(s)->sunContact();
     sc.enabled = true;
     s->setSunContact(sc);
-    for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    enginetest::frames(e, 240);
     // The three GPU readings are the monitor's rows (lane TEST-1): a capture for the arms.
     enginetest::GpuTimingWindow gpuTiming(e);
     double sum[2][3] = {}, n[2][3] = {};
@@ -322,10 +323,10 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
         for (int arm = 0; arm < 2; ++arm) {
             e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (i < 10) continue;   // the timestamps come back a few frames late
-                const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
-                                     s->sunContactStatus().gpuMs };
+                const float v[3] = { s->published().rayQuery.reflectMs, s->published().gi.gather.traceMs,
+                                     s->published().sunContact.gpuMs };
                 for (int k = 0; k < 3; ++k)
                     if (v[k] > 0.0f) { sum[arm][k] += v[k]; n[arm][k] += 1.0; }
             }
@@ -342,16 +343,16 @@ static int costMainImpl(Engine *e, Scene *s, View *view, MaterialId fenceCut, No
         enginetest::setNodePosition(s, n, Vec3(0.0f, 0.0f, -10.0f));
         stack.push_back(n);
     }
-    for (int i = 0; i < 240; ++i) e->renderOneFrame();
+    enginetest::frames(e, 240);
     double ssum[2][3] = {}, sn[2][3] = {};
     for (int round = 0; round < 24; ++round)
         for (int arm = 0; arm < 2; ++arm) {
             e->setArm("reflect.alphaTested", arm ? 0.0 : 1.0);
             for (int i = 0; i < 30; ++i) {
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 if (i < 10) continue;
-                const float v[3] = { s->rayQueryStatus().reflectMs, s->giStatus().gather.traceMs,
-                                     s->sunContactStatus().gpuMs };
+                const float v[3] = { s->published().rayQuery.reflectMs, s->published().gi.gather.traceMs,
+                                     s->published().sunContact.gpuMs };
                 for (int k = 0; k < 3; ++k)
                     if (v[k] > 0.0f) { ssum[arm][k] += v[k]; sn[arm][k] += 1.0; }
             }
@@ -475,7 +476,7 @@ int main(int argc, char **argv)
     Image pic[3];
     for (int w : { 0, 2, 1 }) {
         wear(w);
-        std::printf("%s %d  ", w == 0 ? "none" : w == 1 ? "cut-out" : "opaque", s->rayQueryStatus().instances);
+        std::printf("%s %d  ", w == 0 ? "none" : w == 1 ? "cut-out" : "opaque", s->published().rayQuery.instances);
         rc[w] = rayCoverage(s, analytic, agree[w]);
         cc[w] = cardCoverage(s, cardRead[w]);
         f.view->readPixels(pic[w]);

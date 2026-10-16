@@ -106,8 +106,8 @@ static QImage previewShot(EngineMaterialPreviewScene &preview, Engine &engine,
                           View *view, const char *tag = "preview", int frames = 4)
 {
     for (int i = 0; i < frames; ++i) {
-        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        preview.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
     }
     Image img;
     if (!view->readPixels(img)) return QImage();

@@ -176,7 +176,7 @@ Probe makeProbe(Engine *e, const std::string &name)
     return p;
 }
 
-void render(Engine *e, int frames = 2) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames = 2) { enginetest::frames(e, frames);}
 
 Probe gEmitted, gReference;
 

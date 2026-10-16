@@ -150,15 +150,15 @@ int main(int argc, char **argv)
 
     // Warm up: the plume has to fill before its SHAPE means anything. 120 frames
     // at 1/60 is 2 s, comfortably past the 0.95 s +/- 0.25 particle lifetime.
-    for (int i = 0; i < 120; ++i) engine->renderOneFrame();
-    std::printf("    warmed up: %u live particles\n", target->particleCount(eng));
-    CHECK(target->particleCount(eng) > 20, "the flame is populated");
+    enginetest::frames(engine, 120);
+    std::printf("    warmed up: %u live particles\n", target->published().particlesOf(eng));
+    CHECK(target->published().particlesOf(eng) > 20, "the flame is populated");
 
     // Ten captures, averaged, to beat the RNG.
     Average avg;
     Image img;
     for (int i = 0; i < 10; ++i) {
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         view->readPixels(img);
         avg.add(img);
     }
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
     // ---- 5. it MOVES ------------------------------------------------------
     Image a, b;
     view->readPixels(a);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
     view->readPixels(b);
     int moved = 0, litEither = 0;
     for (unsigned y = 0; y < kSize; ++y)
@@ -317,11 +317,10 @@ int main(int argc, char **argv)
     CHECK(movedPct > 5, "5. the flame moves — it is a simulation, not a frozen sprite");
 
     // ---- 6. it STOPS ------------------------------------------------------
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1, jahshaka::engine::FrameInput::delta(0.0f));
     Image f1, f2;
     view->readPixels(f1);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
     view->readPixels(f2);
     int frozenDiff = 0;
     for (unsigned y = 0; y < kSize; ++y)

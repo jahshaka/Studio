@@ -2,7 +2,7 @@
 // (ENGINE-UPGRADE-2 stage 2; photon/PhotonComponent.h).
 //
 // The frame's own listing is the evidence: the monitor records every pass the compositor
-// executed, in execution order (FrameRecord.passes). On a carded scene drawn by a view
+// executed, in execution order (MonitorRecord.passes). On a carded scene drawn by a view
 // with rays (the reflection and the gather on, the hit decode in its chain):
 //   1. photon_update ("Jahshaka photon update") runs in the GI workspace right after the
 //      card capture's, before any of the view's passes;
@@ -83,25 +83,26 @@ int main()
     fx.allowOffscreen = true;
     fx.ssr = 2;
     view->setPostFx(fx);
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
 
     e->setFrameMonitor(MonitorLevel::Review);
     {
-        std::vector<FrameRecord> drop;
-        e->renderOneFrame();
-        e->takeFrameRecords(drop);
+        std::vector<MonitorRecord> drop;
+        enginetest::frames(e, 1);
+        e->takeMonitorRecords(drop);
     }
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
-    std::vector<FrameRecord> recs;
-    e->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    e->takeMonitorRecords(recs);
     CHECK(!recs.empty(), "the monitor recorded frames");
 
-    const RayQueryStatus rq = s->rayQueryStatus();
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const RayQueryStatus rq = s->published().rayQuery;
     std::printf("   rays: reflections %d, hit decode draws %d\n", rq.enabled ? 1 : 0, rq.hitDecodeDraws);
     unsigned good = 0, framesSeen = 0;
     std::string listing;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         if (r.passes.empty()) continue;
         ++framesSeen;
         int update = -1, firstView = -1, trace = -1, decode = -1, resolve = -1, shade = -1;
@@ -165,19 +166,19 @@ int main()
         g2.quality = GiQuality::Medium;
         g2.numBounces = 1;
         s2->setGlobalIllumination(g2);
-        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        enginetest::frames(e, 12);
         e->setFrameMonitor(MonitorLevel::Review);
-        { std::vector<FrameRecord> drop; e->renderOneFrame(); e->takeFrameRecords(drop); }
+        { std::vector<MonitorRecord> drop; enginetest::frames(e, 1); e->takeMonitorRecords(drop); }
         // A STILL OBJECT MOVED: its cascades re-voxelise and re-inject, frame after frame.
         for (int f = 0; f < 6; ++f) {
             enginetest::setNodePosition(s2, still, Vec3(0.2f * float(f + 1), 0.3f, 0.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
         e->setFrameMonitor(MonitorLevel::Off);
-        std::vector<FrameRecord> r2;
-        e->takeFrameRecords(r2);
+        std::vector<MonitorRecord> r2;
+        e->takeMonitorRecords(r2);
         unsigned withUpdate = 0;
-        for (const FrameRecord &r : r2)
+        for (const MonitorRecord &r : r2)
             for (const FramePass &p : r.passes)
                 if (p.pass == "Jahshaka photon update") { ++withUpdate; break; }
         const PhotonDispatchStatus p1 = photonDispatchStatus();
@@ -195,18 +196,18 @@ int main()
         const NodeId edited = s2->createNode();
         s2->attachMesh(edited, s2->createMesh(enginetest::unitCubeMesh()), editMat);
         enginetest::setNodePosition(s2, edited, Vec3(-1.0f, 0.3f, 0.5f));
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         const PhotonDispatchStatus v0 = photonDispatchStatus();
         GiParams g3 = g2;
         g3.numBounces = 2;   // a configuration change: the arm rebuilds
         s2->setGlobalIllumination(g3);
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         s2->refreshGlobalIllumination();
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         PbrParams red;
         red.albedo = Colour(0.9f, 0.1f, 0.1f);
         s2->setPbrMaterial(editMat, red);
-        for (int i = 0; i < 12; ++i) e->renderOneFrame();
+        enginetest::frames(e, 12);
         const PhotonDispatchStatus v1 = photonDispatchStatus();
         std::printf("   set GI + refreshGi + a material edit: dispatches %llu in, %llu outside\n",
                     v1.inRegion - v0.inRegion, v1.outsideRegion - v0.outsideRegion);

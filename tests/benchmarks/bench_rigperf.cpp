@@ -75,6 +75,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../skeletal/multipiecerig.h"
 #include "../support/enginetesthelpers.h"
@@ -196,7 +197,7 @@ int main(int argc, char **argv)
     // WALL-CLOCK is what the engine charges per frame, and an offscreen frame is
     // ~1 ms — every time-driven thing inside would see a clock no editor has.
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
-    { RenderStats warm; engine->renderStats(warm); }
+    { RenderStats warm; enginetest::renderStats(engine, warm); }
 
     Scene *es = engine->createScene("rigperf");
     view->setScene(es);
@@ -231,18 +232,18 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     doc->updateSceneAnimation(0.0f);
     mirror.sync();
-    for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 4);
 
     // ---- structural numbers ---------------------------------------------
     size_t rigged = 0, streamed = 0;
     for (const multipiece::Character &c : cast)
         for (const iris::MeshNodePtr &piece : c.pieces) {
             const NodeId n = mirror.engineNode(piece.data());
-            if (!n || !es->hasSkeleton(n)) continue;
+            if (!n || !jahshaka::engine::inspect::scene(es)->hasSkeleton(n)) continue;
             ++rigged;
-            streamed += es->streamedBoneCount(n);
+            streamed += es->published().streamedBonesOf(n);
         }
-    const RigStats rs = es->rigStats();
+    const RigStats rs = es->published().rigs;
     recordCounter("scene.characters", double(characters));
     recordCounter("scene.pieces", double(characters * multipiece::pieces().size()));
     recordCounter("r.rigged_nodes", double(rigged));
@@ -278,7 +279,7 @@ int main(int argc, char **argv)
         const auto tick0 = Clock::now();
         mirror.sync();
         const double sync = msSince(tick0);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const double tick = msSince(tick0);
         if (i < warmup) { pushesBefore = mirror.clipStatePushes(); continue; }
         syncMs.push_back(sync);
@@ -291,7 +292,7 @@ int main(int argc, char **argv)
     recordCounter("r.clip_pushes_frame", pushesPerFrame);
 
     RenderStats stats;
-    if (engine->renderStats(stats)) {
+    if (enginetest::renderStats(engine, stats)) {
         recordCounter("render.frame_ms", stats.frameMs);
         recordCounter("render.draws", double(stats.draws));
         recordCounter("render.triangles", double(stats.triangles));

@@ -195,7 +195,7 @@ int main() {
     fx.ssr = 2;                                                     // the traced reflection
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
-    for (int i = 0; i < 90; ++i) e->renderOneFrame();
+    enginetest::frames(e, 90);
 
     bool trace = false, tlasWrite = false, reflect = false, gather = false;
     unsigned live = 0, full = 0;

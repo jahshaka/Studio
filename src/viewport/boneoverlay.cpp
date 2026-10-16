@@ -117,7 +117,7 @@ void BoneOverlay::setColour(const QColor &colour)
 {
     mColour = colour;
     if (mMaterial)
-        mTarget->setUnlitMaterial(mMaterial, Colour(float(colour.redF()), float(colour.greenF()),
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setUnlitMaterial, mMaterial, Colour(float(colour.redF()), float(colour.greenF()),
                                                     float(colour.blueF()), 1.0f));
 }
 
@@ -125,15 +125,15 @@ bool BoneOverlay::ensureAssets()
 {
     if (!mTarget) return false;
     // The two authored unit meshes. Everything else is a transform.
-    if (!mBoneMesh) mBoneMesh = mTarget->createMesh(octahedron(0.0f, kRingAt, 1.0f, 0.5f));
-    if (!mMarkerMesh) mMarkerMesh = mTarget->createMesh(octahedron(-0.5f, 0.0f, 0.5f, 0.5f));
+    if (!mBoneMesh) mBoneMesh = scenecmd::newMesh(mTarget, octahedron(0.0f, kRingAt, 1.0f, 0.5f));
+    if (!mMarkerMesh) mMarkerMesh = scenecmd::newMesh(mTarget, octahedron(-0.5f, 0.0f, 0.5f, 0.5f));
     if (!mMaterial) {
         // X-RAY (depth test off): the skeleton's job is to be seen THROUGH
         // the mesh — with depth on, mesh+skeleton mode shows 82 stray pixels
         // of fingertips (lead call at merge, 2026-09-03). The cost is that
         // overlapping bones merge into one silhouette; a real X-ray/occluded
         // two-tone mode stays future work.
-        mMaterial = mTarget->createUnlitMaterial(
+        mMaterial = scenecmd::newUnlitMaterial(mTarget, 
             Colour(float(mColour.redF()), float(mColour.greenF()), float(mColour.blueF()), 1.0f), false);
     }
     return mBoneMesh && mMaterial;
@@ -145,8 +145,8 @@ BoneOverlay::Slot *BoneOverlay::slot(QVector<Slot> &pool, int index, MeshId mesh
     while (pool.size() <= index) pool.append(Slot());
     Slot &s = pool[index];
     if (!s.node) {
-        s.node = mTarget->createNode();
-        if (s.node) mTarget->attachMesh(s.node, mesh, material ? material : mMaterial);
+        s.node = scenecmd::newNode(mTarget);
+        if (s.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, s.node, mesh, material ? material : mMaterial);
     }
     return s.node ? &s : nullptr;
 }
@@ -176,13 +176,18 @@ void BoneOverlay::place(Slot &s, const iris::Mat4 &m)
     // skeleton standing still must cost the engine nothing at all.
     const quint64 key = transformKey(m);
     if (!s.pushed || s.key != key) {
-        SceneMirror::pushTransform(mTarget, s.node, m);
+        {
+            jahshaka::engine::Vec3 p, sc;
+            jahshaka::engine::Quat r;
+            SceneMirror::decomposeTransform(m, p, r, sc);
+            scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeTransform, s.node, p, r, sc);
+        }
         ++mTransformPushes;
         s.key = key;
         s.pushed = true;
     }
     if (!s.shown) {
-        mTarget->setNodeVisible(s.node, true);
+        scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, s.node, true);
         ++mVisibilityWrites;
         s.shown = true;
     }
@@ -193,7 +198,7 @@ void BoneOverlay::hideFrom(QVector<Slot> &pool, int first)
     for (int i = first; i < pool.size(); ++i) {
         Slot &s = pool[i];
         if (s.node && s.shown) {
-            mTarget->setNodeVisible(s.node, false);
+            scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, s.node, false);
             ++mVisibilityWrites;
             s.shown = false;
         }
@@ -295,7 +300,7 @@ void BoneOverlay::updateMarkers(const QVector<iris::Vec3> &points, float size, b
     if (!draw) { hideFrom(mMarkerNodes, 0); return; }
     if (!ensureAssets()) return;
     if (!mMarkerMaterial)
-        mMarkerMaterial = mTarget->createUnlitMaterial(
+        mMarkerMaterial = scenecmd::newUnlitMaterial(mTarget, 
             Colour(float(mMarkerColour.redF()), float(mMarkerColour.greenF()),
                    float(mMarkerColour.blueF()), 1.0f), false);
     if (!mMarkerMaterial || !mMarkerMesh) return;
@@ -323,15 +328,15 @@ void BoneOverlay::clear()
         mVisibleSegments = mVisibleStubs = mVisibleJoints = mVisibleMarkers = 0;
         return;
     }
-    for (const Slot &s : mBoneNodes) if (s.node) mTarget->removeNode(s.node);
-    for (const Slot &s : mJointNodes) if (s.node) mTarget->removeNode(s.node);
-    for (const Slot &s : mMarkerNodes) if (s.node) mTarget->removeNode(s.node);
+    for (const Slot &s : mBoneNodes) if (s.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, s.node);
+    for (const Slot &s : mJointNodes) if (s.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, s.node);
+    for (const Slot &s : mMarkerNodes) if (s.node) scenecmd::call(mTarget, &jahshaka::engine::Scene::removeNode, s.node);
     mBoneNodes.clear();
     mJointNodes.clear();
     mMarkerNodes.clear();
-    if (mBoneMesh) { mTarget->destroyMesh(mBoneMesh); mBoneMesh = 0; }
-    if (mMarkerMesh) { mTarget->destroyMesh(mMarkerMesh); mMarkerMesh = 0; }
-    if (mMaterial) { mTarget->destroyMaterial(mMaterial); mMaterial = 0; }
-    if (mMarkerMaterial) { mTarget->destroyMaterial(mMarkerMaterial); mMarkerMaterial = 0; }
+    if (mBoneMesh) { scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMesh, mBoneMesh); mBoneMesh = 0; }
+    if (mMarkerMesh) { scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMesh, mMarkerMesh); mMarkerMesh = 0; }
+    if (mMaterial) { scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMaterial, mMaterial); mMaterial = 0; }
+    if (mMarkerMaterial) { scenecmd::call(mTarget, &jahshaka::engine::Scene::destroyMaterial, mMarkerMaterial); mMarkerMaterial = 0; }
     mVisibleSegments = mVisibleStubs = mVisibleJoints = mVisibleMarkers = 0;
 }

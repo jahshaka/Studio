@@ -131,7 +131,7 @@ struct Rig
 
 static bool frame(Rig &r, Image &img)
 {
-    r.e->renderOneFrame();
+    enginetest::frames(r.e, 1);
     return r.view->readPixels(img);
 }
 
@@ -328,7 +328,7 @@ static void crackSweep(Rig &r, const clusterfix::Fixture &f, const float dirIn[3
         dist = std::sqrt(dx * dx + dy * dy + dz * dz);
     }
     enginetest::testCameraLookAt(r.view, r.eye, target);
-    for (int i = 0; i < 3; ++i) r.e->renderOneFrame();   // settle the pose, in frames
+    enginetest::frames(r.e, 3);// settle the pose, in frames
 
     Image img;
     const bool read = frame(r, img);
@@ -577,7 +577,7 @@ static void deviceCrackSweep(DeviceRig &d, const clusterfix::Fixture &f, const f
     // The body's slot, for the drawn set's readback.
     auto bodySlot = [&]() -> unsigned {
         os->ensureGpuScene(false);
-        const unsigned n = d.scene->gpuSceneStatus().slotCount;
+        const unsigned n = os->gpuSceneStatus().slotCount;   // the table just ensured, read from the engine's side
         for (unsigned i = 0; i < n; ++i) {
             GpuSceneEntry en;
             if (d.scene->gpuSceneEntry(i, en) && en.nodeId == unsigned(body)) return i;
@@ -585,7 +585,7 @@ static void deviceCrackSweep(DeviceRig &d, const clusterfix::Fixture &f, const f
         return 0xFFFFFFFFu;
     };
     auto frames = [&](int n, Image &img) {
-        for (int i = 0; i < n; ++i) d.e->renderOneFrame();
+        enginetest::frames(d.e, n);
         return d.view->readPixels(img);
     };
     d.scene->setLodBias(0.0f);
@@ -712,7 +712,7 @@ static void overflowArm(DeviceRig &d, const clusterfix::Fixture &f)
     d.scene->setLodBias(1.0f);
     auto *ov = static_cast<jahshaka::engine::detail::OgreView *>(d.view);
     // THE REFERENCE: a generous budget — which slots the id image names.
-    for (int i = 0; i < 8; ++i) d.e->renderOneFrame();
+    enginetest::frames(d.e, 8);
     const std::set<unsigned> all = slotsInIds(ov);
     GpuCullRequest r;
     d.e->fillCullView(d.view, r);
@@ -737,7 +737,7 @@ static void overflowArm(DeviceRig &d, const clusterfix::Fixture &f)
     size_t missingFrames = 0, coarseFrames = 0;
     unsigned firstBudget = 0, lastBudget = 0, lastOverflow = 1u;
     for (int frame = 0; frame < 24; ++frame) {
-        d.e->renderOneFrame();
+        enginetest::frames(d.e, 1);
         const std::set<unsigned> seen = slotsInIds(ov);
         size_t missing = 0;
         for (unsigned sl : all) missing += seen.count(sl) ? 0u : 1u;
@@ -818,7 +818,7 @@ int main(int argc, char **argv)
     q.receiveShadows = false;
     r.inside = r.scene->createPbrMaterial(q);
     enginetest::testCameraLookAt(r.view, Vec3(0, 0, 5), Vec3(0, 0, 0));
-    for (int i = 0; i < 3; ++i) r.e->renderOneFrame();
+    enginetest::frames(r.e, 3);
     GpuCullRequest vr;
     if (!r.e->fillCullView(r.view, vr)) { std::printf("FAIL: fillCullView\n"); return 1; }
     r.p11 = vr.projScaleY;
@@ -886,7 +886,7 @@ int main(int argc, char **argv)
                 Walk w;
                 enginetest::testCameraLookAt(r.view, Vec3(0, 0, kFar), Vec3(0, 0, 0));
                 body.setCut(leaves);
-                for (int i = 0; i < 30; ++i) r.e->renderOneFrame();
+                enginetest::frames(r.e, 30);
                 Image prev, img;
                 std::vector<unsigned> prevCut, cut = leaves;
                 for (float dist = kFar; dist >= kNear - 1.0e-4f; dist -= kStep) {
@@ -925,7 +925,7 @@ int main(int argc, char **argv)
                 const NodeId n = r.scene->createNode();
                 r.scene->attachMesh(n, m, r.lit);
                 enginetest::testCameraLookAt(r.view, Vec3(0, 0, kFar), Vec3(0, 0, 0));
-                for (int i = 0; i < 30; ++i) r.e->renderOneFrame();
+                enginetest::frames(r.e, 30);
                 Image prev, img;
                 unsigned prevLevel = 0xFFFFFFFFu;
                 for (float dist = kFar; dist >= kNear - 1.0e-4f; dist -= kStep) {

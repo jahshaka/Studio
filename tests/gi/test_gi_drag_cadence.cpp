@@ -60,7 +60,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// THE PROBE REGION IS PINNED TO THE ROOM: the deferral being measured is in the
@@ -163,7 +163,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(hybridGi()), "the hybrid arm builds");
     render(e, 16);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     std::printf("   %d probes, budget %d, %zu cascades, dropped %d\n",
                 st.probeCount, st.probeUpdatesPerFrame, st.cascades.size(), st.probesDropped);
     if (st.probeCount <= 0) {
@@ -171,23 +171,23 @@ int main()
         return 1;
     }
     // Let the grid catch up to a quiet state before measuring.
-    for (int i = 0; i < 200 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
-    CHECK(scene->giStatus().staleProbes == 0, "the grid starts quiet");
+    for (int i = 0; i < 200 && scene->published().gi.staleProbes > 0; ++i) render(e, 1);
+    CHECK(scene->published().gi.staleProbes == 0, "the grid starts quiet");
 
     // =====================================================================
     // CASE 1 — A DRAG SPENDS NO CAPTURES, AND STILL RECORDS THE STALENESS
     // =====================================================================
     std::printf("\n== case 1: 60 frames of drag ==\n");
-    const unsigned long long deferredBefore = scene->giStatus().probeCapturesDeferred;
+    const unsigned long long deferredBefore = scene->published().gi.probeCapturesDeferred;
     int capturesDuringDrag = 0;
     Vec3 p(2.0f, 1.0f, 2.0f);
     for (int i = 0; i < 60; ++i) {
         p.x -= 0.05f;                     // 5 cm a frame: well over the 1/64-extent quantum
         enginetest::setNodePosition(scene, prop, p);
         render(e, 1);
-        capturesDuringDrag += scene->giStatus().probeCapturesLastFrame;
+        capturesDuringDrag += scene->published().gi.probeCapturesLastFrame;
     }
-    const GiStatus mid = scene->giStatus();
+    const GiStatus mid = scene->published().gi;
     std::printf("   captures during the drag: %d; stale probes now %d of %d; deferred frames %llu\n",
                 capturesDuringDrag, mid.staleProbes, mid.probeCount,
                 mid.probeCapturesDeferred - deferredBefore);
@@ -211,16 +211,16 @@ int main()
     for (int i = 0; i < 400; ++i) {
         render(e, 1);
         ++settleFrames;
-        const int c = scene->giStatus().probeCapturesLastFrame;
+        const int c = scene->published().gi.probeCapturesLastFrame;
         settleCaptures += c;
         worstInOneFrame = std::max(worstInOneFrame, c);
-        if (scene->giStatus().staleProbes == 0 && settleCaptures > 0) break;
+        if (scene->published().gi.staleProbes == 0 && settleCaptures > 0) break;
     }
     std::printf("   %d captures over %d frames, worst frame %d; stale now %d\n",
-                settleCaptures, settleFrames, worstInOneFrame, scene->giStatus().staleProbes);
+                settleCaptures, settleFrames, worstInOneFrame, scene->published().gi.staleProbes);
     CHECK(settleCaptures >= mid.probeCount, "THE WHOLE GRID IS RE-CAPTURED AT THE SETTLE");
     CHECK(worstInOneFrame <= 1, "...one per frame, never a hitch");
-    CHECK(scene->giStatus().staleProbes == 0, "...and the grid ends quiet: the picture caught up");
+    CHECK(scene->published().gi.staleProbes == 0, "...and the grid ends quiet: the picture caught up");
 
     // =====================================================================
     // CASE 3 — A NON-MOTION INPUT IS NOT DEFERRED
@@ -236,7 +236,7 @@ int main()
             p.x += 0.05f;
             enginetest::setNodePosition(scene, prop, p);
             render(e, 1);
-            captures += scene->giStatus().probeCapturesLastFrame;
+            captures += scene->published().gi.probeCapturesLastFrame;
         }
         CHECK(captures <= 1, "at most the one frame a gesture cannot predict");
         addPointLamp(scene, Vec3(2.0f, 4.0f, -1.0f), 4.0f);
@@ -245,7 +245,7 @@ int main()
             p.x += 0.05f;                   // the drag CONTINUES
             enginetest::setNodePosition(scene, prop, p);
             render(e, 1);
-            afterLight += scene->giStatus().probeCapturesLastFrame;
+            afterLight += scene->published().gi.probeCapturesLastFrame;
         }
         std::printf("   captures in the six frames after the lamp: %d\n", afterLight);
         CHECK(afterLight > 0, "A LIGHT REACHES THE PROBES MID-DRAG");
@@ -261,7 +261,7 @@ int main()
     {
         CHECK(scene->setGlobalIllumination(hybridGi()), "the cascade chain builds");
         render(e, 16);
-        CHECK(!scene->giStatus().cascades.empty(), "the chain is up");
+        CHECK(!scene->published().gi.cascades.empty(), "the chain is up");
         engine->setFrameMonitor(MonitorLevel::Review);
         for (int i = 0; i < 40; ++i) {
             p.z -= 0.05f;
@@ -269,14 +269,15 @@ int main()
             scene->refreshGiLighting(true);            // the host's in-motion tick
             render(e, 1);
         }
-        std::vector<FrameRecord> recs;
-        engine->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        engine->takeMonitorRecords(recs);
         engine->setFrameMonitor(MonitorLevel::Off);
-        const size_t chainSize = scene->giStatus().cascades.size();
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const size_t chainSize = scene->published().gi.cascades.size();
         int bothInOneFrame = 0, movingRows = 0, cascadeRows = 0;
         int worstCascadesInAFrame = 0, overlapUnits = -1;
         std::vector<int> tickUnitsSeen;
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             bool moving = false, rebuilt = false;
             unsigned tickUnits = 0;
             int inThisFrame = 0;
@@ -337,18 +338,18 @@ int main()
         CHECK(card != 0, "the unlit card exists");
         enginetest::setNodePosition(scene, card, Vec3(0.0f, 2.0f, 0.0f));
         enginetest::setNodeScale(scene, card, Vec3(1.5f, 1.5f, 0.05f));
-        for (int i = 0; i < 400 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
-        CHECK(scene->giStatus().staleProbes == 0, "the grid is quiet before the drag");
+        for (int i = 0; i < 400 && scene->published().gi.staleProbes > 0; ++i) render(e, 1);
+        CHECK(scene->published().gi.staleProbes == 0, "the grid is quiet before the drag");
         Vec3 c(0.0f, 2.0f, 0.0f);
         int captures = 0;
-        unsigned long long staleBefore = scene->giStatus().staleSerial;
+        unsigned long long staleBefore = scene->published().gi.staleSerial;
         for (int i = 0; i < 40; ++i) {
             c.x += 0.05f;
             enginetest::setNodePosition(scene, card, c);
             render(e, 1);
-            captures += scene->giStatus().probeCapturesLastFrame;
+            captures += scene->published().gi.probeCapturesLastFrame;
         }
-        const GiStatus st6 = scene->giStatus();
+        const GiStatus st6 = scene->published().gi;
         std::printf("   40 frames of an unlit drag: %d captures; stale %d; serial moved %s\n",
                     captures, st6.staleProbes,
                     st6.staleSerial > staleBefore ? "yes" : "NO");
@@ -366,14 +367,14 @@ int main()
     // probes would hold the pre-motion room for as long as it lasts.
     std::printf("\n== case 7: the ceiling on an endless motion ==\n");
     {
-        for (int i = 0; i < 400 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
+        for (int i = 0; i < 400 && scene->published().gi.staleProbes > 0; ++i) render(e, 1);
         int captures = 0;
         const int kFrames = 200;
         for (int i = 0; i < kFrames; ++i) {
             p.y = 1.0f + 0.05f * float(i % 20);      // never stops
             enginetest::setNodePosition(scene, prop, p);
             render(e, 1);
-            captures += scene->giStatus().probeCapturesLastFrame;
+            captures += scene->published().gi.probeCapturesLastFrame;
         }
         // The engine's ceiling is one capture every N frames while deferred.
         // The suite reads N from the behaviour rather than from a copy of the
@@ -396,8 +397,8 @@ int main()
     {
         CHECK(scene->setGlobalIllumination(hybridGi()), "the probe fixture");
         render(e, 16);
-        for (int i = 0; i < 600 && scene->giStatus().staleProbes > 0; ++i) render(e, 1);
-        const GiStatus fin = scene->giStatus();
+        for (int i = 0; i < 600 && scene->published().gi.staleProbes > 0; ++i) render(e, 1);
+        const GiStatus fin = scene->published().gi;
         std::printf("   stale %d, captures last frame %d, deferred frames %llu\n",
                     fin.staleProbes, fin.probeCapturesLastFrame, fin.probeCapturesDeferred);
         CHECK(fin.staleProbes == 0, "the grid is quiet again once the scene holds still");

@@ -117,7 +117,7 @@ unsigned long long pump(Engine *e, unsigned long long want, unsigned budget) {
     const unsigned long long start = e->vrStatus().frames;
     for (unsigned i = 0; i < budget && e->vrStatus().frames < start + want; ++i) {
         e->advanceResources();
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     return e->vrStatus().frames - start;
 }
@@ -202,7 +202,7 @@ void dumpIrradiance(const GatherStatus &g, const char *tag) {
 bool readIrradiance(Engine *e, Scene *s, GatherStatus &out) {
     for (int i = 0; i < 40; ++i) {
         pump(e, 1ull, 8u);
-        out = s->giStatus().gather;
+        out = s->published().gi.gather;
         if (out.running && !out.irradiance.empty() && out.irradianceW == 2u * kEyeW &&
             out.irradianceH == kEyeH)
             return true;
@@ -227,12 +227,12 @@ bool session(Engine *e, Scene *s, float worldScale, GatherStatus &out) {
     pump(e, 150ull, 1500u);
     const bool ok = readIrradiance(e, s, out);
     {
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         std::printf("    (hit list: %llu records the last traced frame, %llu dropped)\n",
                     rq.hitRecords, rq.hitDropped);
     }
     e->endVrSession();
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    enginetest::frames(e, 4);
     dumpIrradiance(out, worldScale > 0.5f ? "worldscale1" : "worldscale0");
     return CHECK_MSG(ok, "the gather's irradiance was read back from the stereo view (%ux%u)",
                      out.irradianceW, out.irradianceH);
@@ -292,7 +292,7 @@ int main() {
     // different sets of probes.
     t.adaptiveCap = int(2u * ((kEyeW + kStride - 1u) / kStride) * ((kEyeH + kStride - 1u) / kStride));
     scene->setGatherTuning(t);
-    for (int i = 0; i < 30; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 30);
 
     // ---- THE CONTROL: worldScale 0 ------------------------------------------
     GatherStatus zero;

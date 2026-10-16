@@ -64,7 +64,7 @@ const unsigned kSize = 768u;
 const float kOrthoHalf = 6.0f;
 float kCamY = 3.0f;   // the eye height being measured
 
-void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 CameraDesc topDownCamera()
 {
@@ -171,8 +171,8 @@ int main()
         int frames = 0;
         render(e, 60);
         frames += 60;
-        while (!s->giStatus().giAtRest && frames < 2400) { render(e, 10); frames += 10; }
-        const GiStatus st = s->giStatus();
+        while (!s->published().gi.giAtRest && frames < 2400) { render(e, 10); frames += 10; }
+        const GiStatus st = s->published().gi;
         CHECK_MSG(st.giAtRest && (st.ifdBound || gi.ddgi == GiToggle::Off || gi.mode == GiMode::Off),
                   "the field is bound and at rest (%d frames)", frames);
         std::printf("   the field's stated box: (%.3f %.3f %.3f) .. (%.3f %.3f %.3f), %d probes\n",

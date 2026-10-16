@@ -183,8 +183,8 @@ int main()
         gi.numBounces = 1;
         gi.ddgi = GiToggle::Off;
         CHECK(scene->setGlobalIllumination(gi), "the anisotropic chain builds");
-        for (int i = 0; i < 10; ++i) e->renderOneFrame();
-        const GiStatus st = scene->giStatus();
+        enginetest::frames(e, 10);
+        const GiStatus st = scene->published().gi;
         CHECK(st.cascades.size() >= 2u, "...and it is a chain");
         measureChain(e, scene, "anisotropic chain", unsigned(st.cascades.size()), true);
     }
@@ -200,14 +200,14 @@ int main()
         gi.cascadeCount = 1;
         gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 64, 0.0f };
         CHECK(scene->setGlobalIllumination(gi), "the one-cascade chain builds");
-        for (int i = 0; i < 6; ++i) e->renderOneFrame();
+        enginetest::frames(e, 6);
         measureChain(e, scene, "one-cascade chain", 1u, false);
     }
 
     GiParams off;
     off.mode = GiMode::Off;
     scene->setGlobalIllumination(off);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     view->setScene(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);

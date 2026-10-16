@@ -87,9 +87,9 @@ struct FieldWork {
     std::map<std::string, unsigned> byDetail;   // frames carrying each detail
 };
 
-static FieldWork fieldWork(const std::vector<FrameRecord> &recs) {
+static FieldWork fieldWork(const std::vector<MonitorRecord> &recs) {
     FieldWork w;
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         ++w.frames;
         bool any = false;
         std::map<std::string, bool> seen;
@@ -226,17 +226,17 @@ int main(int argc, char **argv)
     int quiet = 0, settle = 0;
     unsigned settleWork = 0;
     for (; settle < 1200 && quiet < 30; ++settle) {
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         if (stopArm) captureOracle();
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         const FieldWork w = fieldWork(recs);
         settleWork += w.framesWithWork;
         quiet = (w.frames && !w.framesWithWork) ? quiet + int(w.frames) : (w.frames ? 0 : quiet);
     }
     std::printf("   converged after %d frames (quiet %d; %u frames with field work)\n", settle, quiet, settleWork);
     CHECK(quiet >= 30, "the field converges and goes quiet on a still scene");
-    const GiStatus g0 = s->giStatus();
+    const GiStatus g0 = s->published().gi;
     std::printf("   the field: bound %d, %d probes, %d a frame\n", g0.ifdBound ? 1 : 0, g0.ifdProbes,
                 g0.ifdProbesPerFrame);
     CHECK(g0.ifdBound && g0.ifdProbes > 0, "the scene's irradiance field is live (not vacuous)");
@@ -249,14 +249,14 @@ int main(int argc, char **argv)
         // S6's half: A LIGHT TICK, the common event (an at-rest re-injection: the field's RESET path, not the
         // build's), settled - the job's integrations and the frames it took.
         const auto lightTick = [&](unsigned long long &integrations, int &frames) {
-            { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }   // the frames before are not the tick's
+            { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }   // the frames before are not the tick's
             const PhotonFieldStatus t0 = photonFieldStatus(*s);
             s->refreshGiLighting(false);
             int q = 0, f = 0;
             for (; f < 1200 && q < 30; ++f) {
-                e->renderOneFrame();
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
+                enginetest::frames(e, 1);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -272,17 +272,17 @@ int main(int argc, char **argv)
         int tickOnFrames = 0;
         // THE STOP: the field rebuilt with the stop on (the arm reads at the build: the field off, then on).
         e->setArm("gi.fieldStopOff", 0.0);
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
         GiParams off = gi;
         off.ddgi = GiToggle::Off;
         s->setGlobalIllumination(off);
-        for (int i = 0; i < 4; ++i) e->renderOneFrame();
+        enginetest::frames(e, 4);
         s->setGlobalIllumination(gi);
         int sq = 0, sf = 0;
         for (; sf < 1200 && sq < 30; ++sf) {
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             sq = (w.frames && !w.framesWithWork) ? sq + int(w.frames) : (w.frames ? 0 : sq);
         }
@@ -297,11 +297,11 @@ int main(int argc, char **argv)
                   sa.probes[0] * sa.probes[1] * sa.probes[2] == oProbes && sa.irradBordered == oBordered,
               "the stop's atlas reads back, the oracle's layout");
         // S5: at rest.
-        for (int i = 0; i < 30; ++i) e->renderOneFrame();
+        enginetest::frames(e, 30);
         const PhotonFieldStatus fr = photonFieldStatus(*s);
         std::printf("   at rest: %llu integrations in 30 frames, giAtRest %d\n", fr.integrations - fs.integrations,
-                    s->giStatus().giAtRest ? 1 : 0);
-        CHECK(fr.integrations == fs.integrations && s->giStatus().giAtRest,
+                    s->published().gi.giAtRest ? 1 : 0);
+        CHECK(fr.integrations == fs.integrations && s->published().gi.giAtRest,
               "S5: AT REST after the stop: no integration in 30 frames, the scene at rest");
         // S4: the work.
         std::printf("   THE WORK: %llu integrations with the stop, %llu without (%.2fx less)\n", fs.integrations,
@@ -413,18 +413,19 @@ int main(int argc, char **argv)
         // Settled already (above). Re-integrate with nothing changed, reading the atlas after
         // every pass: a pass is done when the refinements owed move (or the field goes quiet).
         std::vector<GiFieldAtlas> passes;
-        unsigned owedSeen = s->giStatus().ifdRefinesOwed;   // 0: converged
+        enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        unsigned owedSeen = s->published().gi.ifdRefinesOwed;   // 0: converged
         s->refreshGiLighting(false);
         int quietRun = 0;
         bool started = false;
         GiFieldAtlas prev;
         for (int f = 0; f < 600 && quietRun < 20; ++f) {
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             quietRun = (w.frames && !w.framesWithWork) ? quietRun + 1 : 0;
-            const unsigned owed = s->giStatus().ifdRefinesOwed;
+            const unsigned owed = s->published().gi.ifdRefinesOwed;
             // A PASS ENDED on the frame before the refinements owed fall (this frame began the next)
             // or on the last frame with work (the field went quiet); the reset raising them
             // (0 -> K - 1) is the event's own pass beginning, not an end. The atlas of the frame
@@ -437,7 +438,7 @@ int main(int argc, char **argv)
         }
         // The quiet frame's read repeats the last pass when the refinement's own boundary already
         // captured it: one pass per sample, the target's count.
-        const unsigned target = s->giStatus().ifdTargetSamples;
+        const unsigned target = s->published().gi.ifdTargetSamples;
         if (passes.size() > target) passes.resize(target);
         const unsigned K = unsigned(passes.size());
         if (!K || !passes[0].available) { std::printf("FAIL: no atlas passes read\n"); return 1; }
@@ -446,7 +447,7 @@ int main(int argc, char **argv)
         const unsigned bordered = a0.irradBordered, res = bordered - 2u, width = a0.irradWidth;
         const unsigned bpp = a0.irradBytesPerTexel;
         std::printf("   %u passes read (the target %u samples), %u probes, %ux%u texels each, %u bytes a texel\n", K,
-                    s->giStatus().ifdTargetSamples, np, res, res, bpp);
+                    s->published().gi.ifdTargetSamples, np, res, res, bpp);
         const auto lum = [&](const GiFieldAtlas &a, unsigned p, unsigned tx, unsigned ty) {
             const unsigned x = (p * bordered) % width + 1u + tx, y = ((p * bordered) / width) * bordered + 1u + ty;
             const unsigned short *h = reinterpret_cast<const unsigned short *>(&a.irradiance[(size_t(y) * width + x) * bpp]);
@@ -507,9 +508,9 @@ int main(int argc, char **argv)
         const auto settleField = [&]() {
             int q = 0, n = 0;
             for (; n < 2000 && q < 30; ++n) {
-                e->renderOneFrame();
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
+                enginetest::frames(e, 1);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -544,7 +545,7 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
     const auto run = [&](const char *tag, int frames, bool walk, bool move, bool moveStills = false) {
-        std::vector<FrameRecord> all;
+        std::vector<MonitorRecord> all;
         for (int f = 0; f < frames; ++f) {
             if (walk) {
                 cam.z -= 1.4f / 60.0f;
@@ -558,15 +559,15 @@ int main(int argc, char **argv)
                 for (int i = 0; i < 2; ++i)
                     enginetest::setNodePosition(s, stills[i], Vec3(-2.5f + 5.0f * float(i) + 0.4f * std::sin(0.05f * float(f)),
                                                                    0.5f, -3.0f));
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         for (int f = 0; f < 6; ++f) {
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         const FieldWork w = fieldWork(all);
@@ -578,9 +579,9 @@ int main(int argc, char **argv)
     CHECK(movers2.framesWithWork == 0u,
           "MOVERS GENERATE NO FIELD: no field work on any frame (movers are not in the voxels the field reads)");
     // A: the camera walks; the field's window follows cascade 0 and scrolls.
-    const GiStatus g0w = s->giStatus();
+    const GiStatus g0w = s->published().gi;
     const FieldWork walk = run("camera walks", 120, true, false);
-    const GiStatus g1 = s->giStatus();
+    const GiStatus g1 = s->published().gi;
     const unsigned long long scrolls = g1.ifdScrolls - g0w.ifdScrolls;
     const unsigned long long bound = (unsigned long long)g1.ifdScrollProbes * g1.ifdTargetSamples * scrolls;
     std::printf("   follows %llu (scrolls %llu, replacements %llu); the last scroll entered %u probes, the "
@@ -600,23 +601,23 @@ int main(int argc, char **argv)
     // re-built under them, a real change of the field's input; today's orchestration
     // re-integrates the WHOLE field per re-injection (OgreGi.cpp, stage 4's).
     if (stillsArm) {
-        for (int i = 0; i < 300; ++i) e->renderOneFrame();
-        { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        enginetest::frames(e, 300);
+        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
         run("stills move", 120, false, false, true);
         // ONE STILL MOVED ONCE (ENGINE-UPGRADE-2B stage 4's instrument): the field's work from the
         // move until it settles — its frames, its probe integrations, its GPU ms.
-        for (int i = 0; i < 300; ++i) e->renderOneFrame();
-        { std::vector<FrameRecord> drop; e->takeFrameRecords(drop); }
+        enginetest::frames(e, 300);
+        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
         const PhotonFieldStatus i0 = photonFieldStatus(*s);
         enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
-        std::vector<FrameRecord> one;
+        std::vector<MonitorRecord> one;
         for (int f = 0; f < 240; ++f) {
-            e->renderOneFrame();
-            std::vector<FrameRecord> recs;
-            e->takeFrameRecords(recs);
+            enginetest::frames(e, 1);
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
             one.insert(one.end(), recs.begin(), recs.end());
         }
-        const GiStatus gs = s->giStatus();
+        const GiStatus gs = s->published().gi;
         print("one still moved once", fieldWork(one));
         const PhotonFieldStatus i1 = photonFieldStatus(*s);
         std::printf("   the generation job's own count: %llu probe integrations (the stop %s, %u of %u probes stopped)\n",

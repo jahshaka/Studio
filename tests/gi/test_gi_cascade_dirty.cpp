@@ -50,7 +50,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static GiParams chainGi()
@@ -70,11 +70,11 @@ struct Spend { int worstPerFrame = 0; int total = 0; int frames = 0; };
 
 static Spend spendOf(Engine *engine)
 {
-    std::vector<FrameRecord> recs;
-    engine->takeFrameRecords(recs);
+    std::vector<MonitorRecord> recs;
+    engine->takeMonitorRecords(recs);
     Spend s;
     s.frames = int(recs.size());
-    for (const FrameRecord &r : recs) {
+    for (const MonitorRecord &r : recs) {
         int inThisFrame = 0;
         for (const CacheWork &w : r.cacheWork)
             if (w.detail.rfind("vct.cascade", 0) == 0) ++inThisFrame;
@@ -113,7 +113,7 @@ int main()
 
     CHECK(scene->setGlobalIllumination(chainGi()), "the cascade chain builds");
     render(e, 8);
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(!st.cascades.empty(), "the chain is up");
     if (st.cascades.empty()) return 1;
     std::printf("   chain: %zu cascades, %llu whole-chain builds so far\n",
@@ -121,7 +121,7 @@ int main()
 
     const auto totalRebuilds = [&]() {
         unsigned long long n = 0;
-        for (const GiStatus::CascadeStatus &c : scene->giStatus().cascades) n += c.rebuilds;
+        for (const GiStatus::CascadeStatus &c : scene->published().gi.cascades) n += c.rebuilds;
         return n;
     };
 
@@ -130,7 +130,7 @@ int main()
     // =====================================================================
     std::printf("\n== case 1: a geometry edit is at most one cascade per frame ==\n");
     {
-        const unsigned long long chainBefore = scene->giStatus().rebuilds;
+        const unsigned long long chainBefore = scene->published().gi.rebuilds;
         const unsigned long long spentBefore = totalRebuilds();
         engine->setFrameMonitor(MonitorLevel::Review);
         enginetest::setNodePosition(scene, prop, Vec3(-2.0f, 1.0f, 1.5f));
@@ -138,7 +138,8 @@ int main()
         render(e, 30);
         const Spend s = spendOf(engine.get());
         engine->setFrameMonitor(MonitorLevel::Off);
-        const unsigned long long chainAfter = scene->giStatus().rebuilds;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long chainAfter = scene->published().gi.rebuilds;
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d; whole-chain builds "
                     "%llu -> %llu\n", s.frames, s.total, s.worstPerFrame, chainBefore, chainAfter);
         CHECK(s.worstPerFrame <= 1, "NO FRAME PAID FOR TWO CASCADES");
@@ -151,7 +152,8 @@ int main()
     // =====================================================================
     std::printf("\n== case 2: a material edit is at most one cascade per frame ==\n");
     {
-        const unsigned long long chainBefore = scene->giStatus().rebuilds;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long chainBefore = scene->published().gi.rebuilds;
         const unsigned long long spentBefore = totalRebuilds();
         engine->setFrameMonitor(MonitorLevel::Review);
         PbrParams p;
@@ -169,7 +171,8 @@ int main()
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d\n",
                     s.frames, s.total, s.worstPerFrame);
         CHECK(s.worstPerFrame <= 1, "NO FRAME PAID FOR TWO CASCADES");
-        CHECK(scene->giStatus().rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().gi.rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
         CHECK(totalRebuilds() > spentBefore, "...while the edit WAS answered");
     }
 
@@ -178,7 +181,8 @@ int main()
     // =====================================================================
     std::printf("\n== case 3: a spawn is at most one cascade per frame ==\n");
     {
-        const unsigned long long chainBefore = scene->giStatus().rebuilds;
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const unsigned long long chainBefore = scene->published().gi.rebuilds;
         engine->setFrameMonitor(MonitorLevel::Review);
         const NodeId spawned = enginetest::addTestCube(scene, Colour(0.9f, 0.9f, 0.1f), 0.0f, 0.4f);
         enginetest::setNodePosition(scene, spawned, Vec3(3.0f, 1.0f, -1.0f));
@@ -188,7 +192,8 @@ int main()
         std::printf("   %d frames, %d cascade rebuild rows, worst frame %d\n",
                     s.frames, s.total, s.worstPerFrame);
         CHECK(s.worstPerFrame <= 1, "NO FRAME PAID FOR TWO CASCADES");
-        CHECK(scene->giStatus().rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(scene->published().gi.rebuilds == chainBefore, "and NOT ONE whole-chain rebuild");
     }
 
     // =====================================================================
@@ -219,7 +224,7 @@ int main()
     GiParams off; off.mode = GiMode::Off;
     CHECK(scene->setGlobalIllumination(off), "the chain comes down");
     render(e, 2);
-    CHECK(scene->giStatus().cascades.empty(), "and leaves no cascades behind");
+    CHECK(scene->published().gi.cascades.empty(), "and leaves no cascades behind");
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");

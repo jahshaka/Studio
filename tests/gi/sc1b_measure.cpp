@@ -34,7 +34,7 @@
 
 using namespace jahshaka::engine;
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// THE MATERIALS THE SCENE'S CARDED ITEMS WEAR (their edit is what re-queues them).
 static std::vector<std::pair<MaterialId, PbrParams>> gMaterials;
@@ -63,7 +63,7 @@ static double measureCaptures(Engine *e, Scene *s, unsigned &cardsOut, double &w
         }
         for (int i = 0; i < 600; ++i) {
             render(e, 1);
-            const CardCacheStatus c = s->giStatus().cards;
+            const CardCacheStatus c = s->published().gi.cards;
             if (c.capturesLastFrame) {
                 sum += double(c.captureMs);
                 sumWs += double(c.captureWorkspaceMs);
@@ -197,7 +197,7 @@ static int showroomArm(bool lampShadows, bool sunShadow)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 6.0f, -18.0f), Vec3(0.0f, 1.0f, 0.0f));
     render(e, 90);   // warm: the compile storm and the first captures
 
-    const CardCacheStatus warm = s->giStatus().cards;
+    const CardCacheStatus warm = s->published().gi.cards;
     std::printf("\n== ITEM 8: the per-card capture cost, Showroom-2-shaped, the fit firing\n");
     std::printf("   scene: 45 carded instances (floor, 4 walls, 40 props), a sun and THREE"
                 " shadow-casting POINT lamps\n");
@@ -337,7 +337,7 @@ int main(int argc, char **argv)
     // storm and the capture permutation's own compile; a number taken there is
     // a number about the compiler (CLAUDE.md).
     render(e, 60);
-    const CardCacheStatus warm = s->giStatus().cards;
+    const CardCacheStatus warm = s->published().gi.cards;
     std::printf("\n== SURFACE-CACHE-1b, %d items, shadows %s\n", items, shadows ? "ON" : "OFF");
     std::printf("   atlas: %u pages of %u, %u B/texel (emissive %s), %.1f MB, %u pages used\n",
                 warm.pages, warm.pageSize, warm.bytesPerTexel, warm.emissiveFormat.c_str(),
@@ -365,7 +365,7 @@ int main(int argc, char **argv)
         s->setNodeVisible(sun2, false);
         for (int i = 0; i < 400; ++i) {
             render(e, 1);
-            const CardCacheStatus c = s->giStatus().cards;
+            const CardCacheStatus c = s->published().gi.cards;
             if (c.capturesLastFrame) {
                 const double perCard = double(c.captureMs) / double(c.capturesLastFrame);
                 best = std::min(best, perCard);

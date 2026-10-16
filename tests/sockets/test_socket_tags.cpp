@@ -44,6 +44,7 @@
 
 #include "../skeletal/armrig.h"
 #include "../support/documentgraph.h"
+#include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -103,9 +104,10 @@ int main(int argc, char **argv)
         CHECK(scene->attachToBone(rider, owner, "jointTip", Vec3(0, 0.5f, 0), Quat(),
                                   Vec3(1, 1, 1)),
               "the rider goes onto the bone");
+        enginetest::frames(dg.engine(), 1);
         {
             std::string bone;
-            CHECK(scene->boneAttachment(rider, &bone) == owner && bone == "jointTip",
+            CHECK(scene->published().boneAttachmentOf(rider, &bone) == owner && bone == "jointTip",
                   "boneAttachment reports owner and bone");
         }
         CHECK(scene->setBoneAttachmentOffset(rider, Vec3(0, 1, 0), Quat(), Vec3(1, 1, 1)),
@@ -123,7 +125,8 @@ int main(int argc, char **argv)
         }
 
         CHECK(scene->detachFromBone(rider, 0), "the rider comes off its bone");
-        CHECK(scene->boneAttachment(rider) == 0, "...and says so");
+        enginetest::frames(dg.engine(), 1);
+        CHECK(scene->published().boneAttachmentOf(rider) == 0, "...and says so");
         CHECK(!scene->detachFromBone(rider, 0), "detaching a node that is not on a bone is refused");
 
         // The owner's renderable is rebuilt (a material swap): the tag points
@@ -131,7 +134,8 @@ int main(int argc, char **argv)
         CHECK(scene->attachToBone(rider, owner, "jointTip", Vec3(), Quat(), Vec3(1, 1, 1)),
               "re-armed");
         CHECK(scene->attachSkinnedMesh(owner, mesh, mat, rig), "the owner's renderable is rebuilt");
-        CHECK(scene->boneAttachment(rider) == 0,
+        enginetest::frames(dg.engine(), 1);
+        CHECK(scene->published().boneAttachmentOf(rider) == 0,
               "...which frees every rider on its bones (the host re-arms)");
 
         // Teardown with a live tag must not fault.
@@ -176,13 +180,15 @@ int main(int argc, char **argv)
         SceneMirror mirror(scene);
         mirror.setSource(doc);
         mirror.sync();          // creates the nodes; the rider arms next sync
+        enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
         mirror.sync();
+        enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
 
         const NodeId riderId = mirror.engineNode(sword.data());
         const NodeId ownerId = mirror.engineNode(character.data());
         CHECK(riderId && ownerId, "both nodes are mirrored");
         std::string bone;
-        CHECK(scene->boneAttachment(riderId, &bone) == ownerId && bone == "jointTip",
+        CHECK(scene->published().boneAttachmentOf(riderId, &bone) == ownerId && bone == "jointTip",
               "the reconciler armed a TagPoint on the owner's bone");
         CHECK(mirror.lastSocketDangling() == 0, "nothing dangled");
 
@@ -199,10 +205,12 @@ int main(int argc, char **argv)
 
         // D. IDEMPOTENCE: nothing changes, so nothing is pushed.
         {
-            const NodeId before = scene->boneAttachment(riderId, &bone);
+            const NodeId before = scene->published().boneAttachmentOf(riderId, &bone);
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
-            CHECK(scene->boneAttachment(riderId) == before,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(riderId) == before,
                   "an unchanged socket is not re-armed every frame");
         }
 
@@ -220,15 +228,20 @@ int main(int argc, char **argv)
             CHECK(!rig.isNull(), "the character has a rig to lose");
             character->setMesh(iris::MeshPtr());        // the rig is gone
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             CHECK(!iris::graph::isSocketRider(sword->docNode()),
                   "with no rig the rider is off its tag (the fallback drives it)");
             character->setMesh(rig);                    // ...and it comes back
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             const NodeId re = mirror.engineNode(sword.data());
-            CHECK(scene->boneAttachment(re) == mirror.engineNode(character.data()),
+            CHECK(scene->published().boneAttachmentOf(re) == mirror.engineNode(character.data()),
                   "the tag is armed again after the rig returns");
             const iris::Vec3 back = sword->getLocalPos();
             std::printf("      authored offset %.3f %.3f %.3f, restored %.3f %.3f %.3f\n",
@@ -244,9 +257,11 @@ int main(int argc, char **argv)
         {
             character->setMaterial(iris::PbrMaterial::create());
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
-            CHECK(scene->boneAttachment(riderId) == ownerId ||
-                      scene->boneAttachment(mirror.engineNode(sword.data())) ==
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(riderId) == ownerId ||
+                      scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) ==
                           mirror.engineNode(character.data()),
                   "the reconciler re-arms after the owner's renderable is rebuilt");
         }
@@ -257,7 +272,8 @@ int main(int argc, char **argv)
             CHECK(live != nullptr, "the socket is editable");
             if (live) live->position = iris::Vec3(0, 0.75f, 0);
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) != 0,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) != 0,
                   "the rider is still on its bone after an offset edit");
         }
 
@@ -266,7 +282,8 @@ int main(int argc, char **argv)
         {
             doc->detachFromSocket(sword);
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) == 0,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) == 0,
                   "detaching from the socket takes the rider off its bone");
             CHECK(!iris::graph::isSocketRider(sword->docNode()),
                   "...and the shadow parent is gone");
@@ -278,8 +295,10 @@ int main(int argc, char **argv)
         {
             CHECK(doc->attachToSocket(sword, character->getGUID(), "hand", &err), "re-attached");
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) != 0,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) != 0,
                   "the reconciler arms it again");
         }
 
@@ -288,7 +307,8 @@ int main(int argc, char **argv)
             const iris::Mat4 before = sword->getGlobalTransform();
             character->removeSocket("hand");
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) == 0,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) == 0,
                   "a removed socket takes the rider off its bone");
             CHECK(mirror.lastSocketDangling() >= 1, "...and is COUNTED as stale");
             const iris::Mat4 after = sword->getGlobalTransform();
@@ -308,13 +328,17 @@ int main(int argc, char **argv)
             CHECK(doc->attachToSocket(sword, character->getGUID(), "hand", &err),
                   "and the sword rides it again");
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) != 0, "armed");
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(sword.data())) != 0, "armed");
             group->removeChild(sword);
             doc->removeNode(sword);
             sword.reset();
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             CHECK(true, "deleting a rider mid-ride does not fault");
         }
 
@@ -328,15 +352,19 @@ int main(int argc, char **argv)
             CHECK(doc->attachToSocket(prop, character->getGUID(), "hand", &err),
                   "a prop rides the character");
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             const NodeId propId = mirror.engineNode(prop.data());
-            CHECK(scene->boneAttachment(propId) != 0, "armed");
+            CHECK(scene->published().boneAttachmentOf(propId) != 0, "armed");
             doc->getRootNode()->removeChild(character);
             doc->removeNode(character);
             character.reset();
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             mirror.sync();
-            CHECK(scene->boneAttachment(mirror.engineNode(prop.data())) == 0,
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
+            CHECK(scene->published().boneAttachmentOf(mirror.engineNode(prop.data())) == 0,
                   "deleting the OWNER takes its riders off their bones");
             CHECK(!iris::graph::isSocketRider(prop->docNode()),
                   "...and the shadow parent goes with it");
@@ -376,7 +404,9 @@ int main(int argc, char **argv)
         SceneMirror mirror(scene);
         mirror.setSource(doc);
         mirror.sync();
+        enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
         mirror.sync();
+        enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
         const iris::Mat4 world = rider->getGlobalTransform();
         const iris::Vec3 p(world(0, 3), world(1, 3), world(2, 3));
         CHECK(std::fabs(p.y() - 1.0f) < 1e-3f,
@@ -407,6 +437,7 @@ int main(int argc, char **argv)
             character->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
             const unsigned long long beforeMove = iris::graph::transformWrites();
             mirror.sync();
+            enginetest::frames(dg.engine(), 1);   // the facts move at a frame's close (U3 stage 3)
             CHECK(iris::graph::transformWrites() > beforeMove,
                   "a MOVED owner writes the rider again");
             const iris::Mat4 moved = rider->getGlobalTransform();

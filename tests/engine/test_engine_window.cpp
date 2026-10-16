@@ -122,53 +122,54 @@ int main() {
     enginetest::addTestCube(s, Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
 
-    auto render = [&](int n) { for (int i = 0; i < n; ++i) engine->renderOneFrame(); };
+    auto render = [&](int n) { enginetest::frames(engine, n);};
     render(3);
 
-    CHECK_MSG(v->framesPresented() >= 3, "presenting into the window (%llu frames)",
-              v->framesPresented());
+    CHECK_MSG(v->published().presented >= 3, "presenting into the window (%llu frames)",
+              v->published().presented);
     {
         unsigned gw = 0, gh = 0; host.geometry(gw, gh);
-        CHECK_MSG(v->width() == gw && v->height() == gh,
-                  "target %ux%u matches the window %ux%u", v->width(), v->height(), gw, gh);
+        CHECK_MSG(v->published().width == gw && v->published().height == gh,
+                  "target %ux%u matches the window %ux%u", v->published().width, v->published().height, gw, gh);
     }
 
     // ---- 1: width()/height() are the TARGET, not the request -----------------
     // Asking for a size the window does not have must NOT change the answer:
     // nothing has been applied yet, and the swapchain is still the old one.
     v->resize(512, 384);
-    CHECK_MSG(v->width() == 320 && v->height() == 240,
+    render(1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK_MSG(v->published().width == 320 && v->published().height == 240,
               "a pending resize does not change the reported size (%ux%u)",
-              v->width(), v->height());
+              v->published().width, v->published().height);
 
     // ---- 2: a host resize reaches the swapchain (the F1 gate) ----------------
     host.resize(512, 384);
     render(2);
-    CHECK_MSG(v->width() == 512 && v->height() == 384,
-              "after resize the target is 512x384, got %ux%u", v->width(), v->height());
+    CHECK_MSG(v->published().width == 512 && v->published().height == 384,
+              "after resize the target is 512x384, got %ux%u", v->published().width, v->published().height);
 
     // Shrink, too: the growth direction alone would pass on a swapchain that
     // merely never shrinks.
     host.resize(256, 192);
     v->resize(256, 192);
     render(2);
-    CHECK_MSG(v->width() == 256 && v->height() == 192,
-              "after shrink the target is 256x192, got %ux%u", v->width(), v->height());
+    CHECK_MSG(v->published().width == 256 && v->published().height == 192,
+              "after shrink the target is 256x192, got %ux%u", v->published().width, v->published().height);
 
     // ---- 3: it keeps presenting across a burst of resizes --------------------
     // The recorded defect is a viewport that stops presenting after a resize,
     // so the assertion is on the frame counter moving, not on any one size.
-    const unsigned long long before = v->framesPresented();
+    const unsigned long long before = v->published().presented;
     const unsigned sizes[][2] = { {300, 220}, {480, 360}, {333, 251}, {512, 384} };
     for (const auto &sz : sizes) {
         host.resize(sz[0], sz[1]);
         v->resize(sz[0], sz[1]);
         render(2);
     }
-    CHECK_MSG(v->framesPresented() >= before + 8,
-              "still presenting after 4 resizes (%llu -> %llu)", before, v->framesPresented());
-    CHECK_MSG(v->width() == 512 && v->height() == 384,
-              "the last size of the burst won: %ux%u", v->width(), v->height());
+    CHECK_MSG(v->published().presented >= before + 8,
+              "still presenting after 4 resizes (%llu -> %llu)", before, v->published().presented);
+    CHECK_MSG(v->published().width == 512 && v->published().height == 384,
+              "the last size of the burst won: %ux%u", v->published().width, v->published().height);
 
     // ---- 3b: resized while DISABLED — the dock-open shape of the defect ------
     // A hidden viewport is a disabled view: the compositor skips its workspace,
@@ -182,13 +183,13 @@ int main() {
     render(2);
     v->setEnabled(true);
     render(2);
-    CHECK_MSG(v->width() == 288 && v->height() == 208,
-              "a resize applied while disabled took: %ux%u", v->width(), v->height());
-    const unsigned long long afterHidden = v->framesPresented();
+    CHECK_MSG(v->published().width == 288 && v->published().height == 208,
+              "a resize applied while disabled took: %ux%u", v->published().width, v->published().height);
+    const unsigned long long afterHidden = v->published().presented;
     render(3);
-    CHECK_MSG(v->framesPresented() >= afterHidden + 3,
+    CHECK_MSG(v->published().presented >= afterHidden + 3,
               "presenting again after being resized while hidden (%llu -> %llu)",
-              afterHidden, v->framesPresented());
+              afterHidden, v->published().presented);
     host.resize(512, 384);
     v->resize(512, 384);
     render(2);
@@ -197,19 +198,19 @@ int main() {
     // The only remaining path that destroys and recreates the render window.
     // Under the validation layer this is where destroying a swapchain (and its
     // acquire semaphore) with frames in flight would be reported.
-    CHECK_MSG(v->sampleCount() == 1, "on-screen views start at 1x (got %u)", v->sampleCount());
+    CHECK_MSG(v->published().sampleCount == 1, "on-screen views start at 1x (got %u)", v->published().sampleCount);
     v->setSampleCount(4);
     render(3);
-    const unsigned achieved = v->sampleCount();
+    const unsigned achieved = v->published().sampleCount;
     std::printf("      achieved sample count after a 4x request: %u\n", achieved);
     CHECK_MSG(achieved >= 1, "the view survived the MSAA change (achieved %ux)", achieved);
-    CHECK_MSG(v->width() == 512 && v->height() == 384,
-              "the MSAA recreate kept the size: %ux%u", v->width(), v->height());
-    const unsigned long long afterMsaa = v->framesPresented();
+    CHECK_MSG(v->published().width == 512 && v->published().height == 384,
+              "the MSAA recreate kept the size: %ux%u", v->published().width, v->published().height);
+    const unsigned long long afterMsaa = v->published().presented;
     render(3);
-    CHECK_MSG(v->framesPresented() >= afterMsaa + 3,
+    CHECK_MSG(v->published().presented >= afterMsaa + 3,
               "still presenting after the MSAA recreate (%llu -> %llu)",
-              afterMsaa, v->framesPresented());
+              afterMsaa, v->published().presented);
 
     // Back to 1x, and one more resize on top of it: the two pending paths
     // coalesce in applyPendingResize and must not deadlock or lose the window.
@@ -217,9 +218,9 @@ int main() {
     host.resize(400, 300);
     v->resize(400, 300);
     render(3);
-    CHECK_MSG(v->sampleCount() == 1, "back to 1x (got %u)", v->sampleCount());
-    CHECK_MSG(v->width() == 400 && v->height() == 300,
-              "coalesced MSAA+resize landed at 400x300, got %ux%u", v->width(), v->height());
+    CHECK_MSG(v->published().sampleCount == 1, "back to 1x (got %u)", v->published().sampleCount);
+    CHECK_MSG(v->published().width == 400 && v->published().height == 300,
+              "coalesced MSAA+resize landed at 400x300, got %ux%u", v->published().width, v->published().height);
 
     // ---- 5: a GRADED INSET on the swapchain (CAMERAS_SPEC §7.2 Route C) ------
     // Every other PiP assertion in the tree reads pixels back, which means every
@@ -240,26 +241,26 @@ int main() {
         pip.camera.position = Vec3(0.0f, 1.2f, 3.0f);
         v->setPip(pip);
         render(3);
-        const unsigned builtPip = v->pipGeneration();
+        const unsigned builtPip = v->published().pipGeneration;
         CHECK_MSG(builtPip > 0, "a graded inset builds on the swapchain (pipGeneration %u)",
                   builtPip);
-        const unsigned long long afterPip = v->framesPresented();
+        const unsigned long long afterPip = v->published().presented;
         render(5);
-        CHECK_MSG(v->framesPresented() >= afterPip + 5,
+        CHECK_MSG(v->published().presented >= afterPip + 5,
                   "still presenting with the inset up (%llu -> %llu)",
-                  afterPip, v->framesPresented());
-        CHECK_MSG(v->pipGeneration() == builtPip,
-                  "…and 5 steady frames rebuilt nothing (pipGeneration %u)", v->pipGeneration());
+                  afterPip, v->published().presented);
+        CHECK_MSG(v->published().pipGeneration == builtPip,
+                  "…and 5 steady frames rebuilt nothing (pipGeneration %u)", v->published().pipGeneration);
 
         // THE RESIZE. The inset's texture is a FRACTION of the target, so the
         // swapchain recreate must carry it — no rebuild, no lost frames.
         host.resize(512, 384);
         v->resize(512, 384);
         render(3);
-        CHECK_MSG(v->width() == 512 && v->height() == 384,
-                  "the window resized under the inset: %ux%u", v->width(), v->height());
-        CHECK_MSG(v->framesPresented() > afterPip + 5,
-                  "presenting after the resize with the inset up (%llu)", v->framesPresented());
+        CHECK_MSG(v->published().width == 512 && v->published().height == 384,
+                  "the window resized under the inset: %ux%u", v->published().width, v->published().height);
+        CHECK_MSG(v->published().presented > afterPip + 5,
+                  "presenting after the resize with the inset up (%llu)", v->published().presented);
         // A WINDOW RESIZE REBUILDS THE INSET, ONCE — and the reason is a
         // VALIDATION FINDING, not tidiness. Ogre re-creates a fraction-sized
         // local texture when the final target resizes, but the SECOND workspace
@@ -271,28 +272,28 @@ int main() {
         // pre-Route-C inset, which had no local texture to re-create).
         // Rebuilding the inset costs one workspace on a frame that is already
         // rebuilding a swapchain, and it stays rebuild-ON-CHANGE.
-        CHECK_MSG(v->pipGeneration() == builtPip + 1,
+        CHECK_MSG(v->published().pipGeneration == builtPip + 1,
                   "A WINDOW RESIZE REBUILDS THE INSET EXACTLY ONCE (%u -> %u): its local "
-                  "texture is sized from the target", builtPip, v->pipGeneration());
-        const unsigned afterWindowResize = v->pipGeneration();
+                  "texture is sized from the target", builtPip, v->published().pipGeneration);
+        const unsigned afterWindowResize = v->published().pipGeneration;
         render(4);
-        CHECK_MSG(v->pipGeneration() == afterWindowResize,
+        CHECK_MSG(v->published().pipGeneration == afterWindowResize,
                   "…and holding the new window size rebuilds nothing further (%u)",
-                  v->pipGeneration());
+                  v->published().pipGeneration);
 
         // ...while resizing the RECT does, exactly once — the other half of the
         // same rule, on the swapchain this time.
         pip.width = 0.20f; pip.height = 0.22f;
         v->setPip(pip);
         render(2);
-        CHECK_MSG(v->pipGeneration() == afterWindowResize + 1,
+        CHECK_MSG(v->published().pipGeneration == afterWindowResize + 1,
                   "a RECT resize rebuilds the inset once (%u -> %u)",
-                  afterWindowResize, v->pipGeneration());
+                  afterWindowResize, v->published().pipGeneration);
 
         v->setPip(ViewPipDesc());
         v->setPostFx(PostFxDesc());
         render(2);
-        CHECK_MSG(v->framesPresented() > afterPip,
+        CHECK_MSG(v->published().presented > afterPip,
                   "and the view is still alive with the inset gone");
     }
 
@@ -332,7 +333,7 @@ int main() {
                   "the frame's copy is recorded (state %d)", int(after));
         Image shown;
         const bool tookShown = v->takeFrameCapture(shown, true);
-        CHECK_MSG(tookShown && shown.width == v->width() && shown.height == v->height(),
+        CHECK_MSG(tookShown && shown.width == v->published().width && shown.height == v->published().height,
                   "the presented frame reads back at the window's size (%ux%u)", shown.width, shown.height);
         CHECK_MSG(v->frameCaptureState() == FrameCaptureState::Idle, "and the capture is spent");
         const size_t greenShown = greens(shown), blueShown = blues(shown);
@@ -383,10 +384,10 @@ int main() {
         // ...and through an MSAA window (the resolved swapchain image is what is read).
         v->setSampleCount(4);
         render(2);
-        CHECK_MSG(v->requestFrameCapture(true), "armed on a %ux window", v->sampleCount());
+        CHECK_MSG(v->requestFrameCapture(true), "armed on a %ux window", v->published().sampleCount);
         render(1);
         Image msaa;
-        CHECK_MSG(v->takeFrameCapture(msaa, true) && msaa.width == v->width() && greens(msaa) > 200 &&
+        CHECK_MSG(v->takeFrameCapture(msaa, true) && msaa.width == v->published().width && greens(msaa) > 200 &&
                       blues(msaa) > 1000,
                   "an MSAA window reads back resolved (%ux%u, helper %zu px)", msaa.width, msaa.height,
                   greens(msaa));

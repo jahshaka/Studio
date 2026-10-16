@@ -5,7 +5,7 @@
 // asserted (ATOM_BUILD_SPEC.md:65's stage 3 payoff stands on it).
 //
 // THE INSTRUMENT is the render-loop monitor at `MonitorLevel::Review`
-// (Engine.h:2557, `takeFrameRecords` :2575). Per Main-bucket pass:
+// (Engine.h:2557, `takeMonitorRecords` :2575). Per Main-bucket pass:
 // `gpuMs`/`cpuMs`/`draws`/`batches`/`instances`/`triangles`
 // (Types.h:5951 FramePass), plus the "engine.record" stage (Types.h:6051,
 // written at OgreEngine.cpp:1274) — the CPU cost of RECORDING the frame on the
@@ -128,9 +128,9 @@ static double median(std::vector<double> v)
 struct Fold {
     std::vector<double> gpu, cpu, rec, sg, draws, batches, inst, tris;
     unsigned frames = 0, withDraws = 0, withGpu = 0;
-    void add(const std::vector<FrameRecord> &recs)
+    void add(const std::vector<MonitorRecord> &recs)
     {
-        for (const FrameRecord &r : recs) {
+        for (const MonitorRecord &r : recs) {
             double g = 0, c = 0, dr = 0, ba = 0, in = 0, tr = 0;
             bool anyGpu = false;
             for (const FramePass &p : r.passes) {
@@ -180,7 +180,7 @@ int main()
     // false with zeroed counters"). Without this the monitor's per-pass
     // draws/batches/instances/triangles are all zero and a sweep measures
     // nothing it claims to: arm them here, once, before any frame that counts.
-    { RenderStats rs0; e->renderStats(rs0); e->renderOneFrame(); e->renderStats(rs0);
+    { RenderStats rs0; enginetest::renderStats(e, rs0); enginetest::frames(e, 1); enginetest::renderStats(e, rs0);
       std::printf("metrics recording armed: %d\n", int(rs0.metricsRecording)); }
 
     const unsigned kWarm = 120u, kMeasure = 300u, kRepeats = 3u;
@@ -283,8 +283,8 @@ int main()
         PostFxDesc fx; fx.allowOffscreen = true; fx.ssr = 0;
         view->setPostFx(fx);
         view->setCamera(b.cam);
-        for (unsigned i = 0; i < kWarm; ++i) e->renderOneFrame();
-        RenderStats rs; e->renderStats(rs);
+        enginetest::frames(e, kWarm);
+        RenderStats rs; enginetest::renderStats(e, rs);
         Image img; view->readPixels(img);
         double mean = 0.0; unsigned lit = 0;
         for (size_t i = 0; i + 3 < img.rgba.size(); i += 4) {
@@ -300,8 +300,8 @@ int main()
 
     // ---- THE MEASUREMENT: one frame per arm, round robin, three windows.
     for (unsigned rep = 0; rep < kRepeats; ++rep) {
-        std::vector<FrameRecord> recs;
-        e->takeFrameRecords(recs);
+        std::vector<MonitorRecord> recs;
+        e->takeMonitorRecords(recs);
         e->setFrameMonitor(MonitorLevel::Review);
         for (Built &b : built) b.reps.push_back(Fold());
         const std::string clockAt = gpuClock();
@@ -311,7 +311,7 @@ int main()
         // therefore collected first and attributed by its own FRAME NUMBER:
         // frame f belongs to arm (f - f0) % armCount. Without this every arm's
         // fold holds every arm's frames and all the arms read alike (measured).
-        std::vector<FrameRecord> all;
+        std::vector<MonitorRecord> all;
         const size_t k = built.size();
         for (unsigned i = 0; i < kMeasure + 4u; ++i) {
             for (size_t j = 0; j < k; ++j) {
@@ -319,22 +319,22 @@ int main()
                 view->setScene(b.scene);
                 view->setShadows(b.arm.shippedDefaults);
                 view->setCamera(b.cam);
-                e->renderOneFrame();
+                enginetest::frames(e, 1);
                 recs.clear();
-                e->takeFrameRecords(recs);
+                e->takeMonitorRecords(recs);
                 all.insert(all.end(), recs.begin(), recs.end());
             }
         }
-        recs.clear(); e->takeFrameRecords(recs);
+        recs.clear(); e->takeMonitorRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
         unsigned long long f0 = 0ull;
         bool haveF0 = false;
-        for (const FrameRecord &r : all) if (!haveF0 || r.frame < f0) { f0 = r.frame; haveF0 = true; }
+        for (const MonitorRecord &r : all) if (!haveF0 || r.frame < f0) { f0 = r.frame; haveF0 = true; }
         unsigned mis = 0;
-        for (const FrameRecord &r : all) {
+        for (const MonitorRecord &r : all) {
             if (r.frame < f0) { ++mis; continue; }
             const size_t idx = size_t((r.frame - f0) % k);
-            std::vector<FrameRecord> one{ r };
+            std::vector<MonitorRecord> one{ r };
             built[idx].reps.back().add(one);
         }
         std::printf("  window %u: %zu records attributed by frame number (f0 %llu, %u skipped)\n",

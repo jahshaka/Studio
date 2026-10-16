@@ -22,6 +22,7 @@
 // compile counter, which is the only thing that can see it: the picture is
 // identical either way, and the cost is a stall.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -38,7 +39,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +70,7 @@ static void shadowHygieneCase(Engine *engine, View *view)
     // SHADOWS ARE OFF BY DEFAULT ON A VIEW. Without this the suite would be
     // comparing two unshadowed frames and passing for the wrong reason.
     view->setShadows(true);
-    CHECK(view->shadows(), "the view renders shadows");
+    CHECK(jahshaka::engine::inspect::view(view)->shadows(), "the view renders shadows");
 
     // THE HELPER: an enormous flat plate far off to the side and well above the
     // camera, marked as an editor helper exactly as the mirror marks the ground
@@ -79,7 +80,7 @@ static void shadowHygieneCase(Engine *engine, View *view)
     enginetest::setNodePosition(s, helper, Vec3(0.0f, 30.0f, 0.0f));
     enginetest::setNodeScale(s, helper, Vec3(200.0f, 0.5f, 200.0f));
     s->setNodeHelper(helper, true);
-    CHECK(s->nodeHelper(helper), "the plate is marked as an editor helper");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeHelper(helper), "the plate is marked as an editor helper");
 
     render(engine, 6);
     Image withHelper; view->readPixels(withHelper);
@@ -279,7 +280,7 @@ static void forwardPlusCensusCase(Engine *engine, View *view)
     render(engine, 2);
 
     RenderStats st;
-    CHECK(engine->renderStats(st), "renderStats reports");
+    CHECK(enginetest::renderStats(engine, st), "renderStats reports");
     std::printf("   directional only: forwardPlusLights=%u budget=%u over=%u\n",
                 st.forwardPlusLights, st.forwardPlusBudget, st.forwardPlusOverBudget);
     CHECK(st.forwardPlusLights == 0,
@@ -298,7 +299,7 @@ static void forwardPlusCensusCase(Engine *engine, View *view)
         s->setLight(n, d);
     }
     render(engine, 2);
-    CHECK(engine->renderStats(st), "renderStats reports again");
+    CHECK(enginetest::renderStats(engine, st), "renderStats reports again");
     std::printf("   plus 12 point lights: forwardPlusLights=%u over=%u\n",
                 st.forwardPlusLights, st.forwardPlusOverBudget);
     CHECK(st.forwardPlusLights == 12, "point lights are counted");

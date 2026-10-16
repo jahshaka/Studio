@@ -61,7 +61,7 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// The strongest "this pixel is red and its neighbours are not" signal in the
@@ -173,13 +173,14 @@ int main()
     pr.maxDistance = 4.0f;
     CHECK(s->setPlanarReflections(pr), "setPlanarReflections(budget 2) applies");
     CHECK(s->setPlanarReflections(pr), "setPlanarReflections is idempotent");
-    CHECK(s->activePlanarReflectors() == 0, "no actors active before any node is a reflector");
+    CHECK(s->published().activePlanarReflectors == 0, "no actors active before any node is a reflector");
 
     CHECK(s->setNodePlanarReflector(floor, true), "the floor plate accepts the reflector flag");
-    CHECK(s->nodePlanarReflector(floor), "planarReflector reads back true");
+    render(engine.get(), 1);   // the facts move at a frame's close (U3 stage 3)
+    CHECK(s->published().factsBlock().isPlanarReflector(floor), "planarReflector reads back true");
 
     const float redOn = measure(engine.get(), view, "reflections on");
-    CHECK(s->activePlanarReflectors() == 1, "exactly one actor rendered");
+    CHECK(s->published().activePlanarReflectors == 1, "exactly one actor rendered");
     CHECK(redOn > redOff + 0.10f, "the emitter is REFLECTED in the floor (red appears)");
     // Same statement, said as the self-exclusion assertion it also is: the
     // reflection camera is under the plate looking up, so any red at all proves
@@ -196,9 +197,10 @@ int main()
 
     // ---- 3. turning the flag off restores the original pixels ---------------
     CHECK(s->setNodePlanarReflector(floor, false), "the reflector flag clears");
-    CHECK(!s->nodePlanarReflector(floor), "planarReflector reads back false");
+    render(engine.get(), 1);
+    CHECK(!s->published().factsBlock().isPlanarReflector(floor), "planarReflector reads back false");
     const float redCleared = measure(engine.get(), view, "reflector cleared");
-    CHECK(s->activePlanarReflectors() == 0, "no actors active once the flag is cleared");
+    CHECK(s->published().activePlanarReflectors == 0, "no actors active once the flag is cleared");
     CHECK(redCleared < redOff + 0.06f, "clearing the flag restores the original pixels");
 
     // ---- 3b. EDITOR HELPERS ARE NOT REFLECTED (2026-09-07 fix wave) ---------
@@ -272,10 +274,11 @@ int main()
     CHECK(s->setNodePlanarReflector(floor, true), "reflector A armed");
     CHECK(s->setNodePlanarReflector(plateB, true), "reflector B armed");
     CHECK(s->setNodePlanarReflector(plateC, true), "reflector C armed");
-    if (!s->nodePlanarReflector(plateB) || !s->nodePlanarReflector(plateC))
+    render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    if (!s->published().factsBlock().isPlanarReflector(plateB) || !s->published().factsBlock().isPlanarReflector(plateC))
         std::printf("   arm failure: %s\n", engine->lastError().c_str());
     render(engine.get(), 3);
-    const int active = s->activePlanarReflectors();
+    const int active = s->published().activePlanarReflectors;
     std::printf("   active actors with 3 reflectors at budget 2: %d\n", active);
     CHECK(active == 2, "the budget caps how many planes render");
 
@@ -284,11 +287,11 @@ int main()
     pr.budget = 3;
     CHECK(s->setPlanarReflections(pr), "budget raised to 3");
     render(engine.get(), 3);
-    std::printf("   active actors at budget 3: %d\n", s->activePlanarReflectors());
-    CHECK(s->activePlanarReflectors() == 3, "all three planes render at budget 3");
+    std::printf("   active actors at budget 3: %d\n", s->published().activePlanarReflectors);
+    CHECK(s->published().activePlanarReflectors == 3, "all three planes render at budget 3");
     // The reflector flags survived the arm being rebuilt from scratch.
-    CHECK(s->nodePlanarReflector(floor) && s->nodePlanarReflector(plateB) &&
-          s->nodePlanarReflector(plateC), "reflector flags survive a budget change");
+    CHECK(s->published().factsBlock().isPlanarReflector(floor) && s->published().factsBlock().isPlanarReflector(plateB) &&
+          s->published().factsBlock().isPlanarReflector(plateC), "reflector flags survive a budget change");
 
     // ---- 5. non-plate geometry is refused -----------------------------------
     const NodeId ball = enginetest::addTestCube(s, Colour(0.5f, 0.5f, 0.5f), 0.0f, 0.4f);
@@ -296,7 +299,8 @@ int main()
     CHECK(!s->setNodePlanarReflector(ball, true), "a cube is refused as a reflector");
     CHECK(!engine->lastError().empty(), "the refusal says why");
     std::printf("   refusal message: %s\n", engine->lastError().c_str());
-    CHECK(!s->nodePlanarReflector(ball), "the refused node did not become a reflector");
+    render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    CHECK(!s->published().factsBlock().isPlanarReflector(ball), "the refused node did not become a reflector");
 
     // ---- 5b. a TWO-SIDED reflector is refused -------------------------------
     // The regression pin for the one real failure the dead visibility bit was
@@ -329,7 +333,8 @@ int main()
         CHECK(engine->lastError().find("two-sided") != std::string::npos,
               "…and the refusal names two-sidedness as the reason");
         std::printf("   refusal message: %s\n", engine->lastError().c_str());
-        CHECK(!s->nodePlanarReflector(twoSided), "the refused node did not become a reflector");
+        render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(!s->published().factsBlock().isPlanarReflector(twoSided), "the refused node did not become a reflector");
 
         // Same node, same geometry, single-sided: accepted. This is what makes
         // the case above a statement about the CULL.
@@ -342,17 +347,20 @@ int main()
             PbrParams q = p;
             q.albedo = Colour(0.9f, 0.85f, 0.8f);
             const MaterialId other = s->createPbrMaterial(q);
-            const unsigned armsBefore = s->planarReflectorArms();
+            render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            const unsigned armsBefore = s->published().factsBlock().reflectorArms;
             CHECK(other && s->setNodeMaterial(twoSided, other) && s->setNodeMaterial(twoSided, mat),
                   "two material swaps under the armed plate");
-            std::printf("   reflector arms across two swaps: %u -> %u\n", armsBefore, s->planarReflectorArms());
-            CHECK(armsBefore > 0 && s->planarReflectorArms() == armsBefore && s->nodePlanarReflector(twoSided),
+            render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            std::printf("   reflector arms across two swaps: %u -> %u\n", armsBefore, s->published().factsBlock().reflectorArms);
+            render(engine.get(), 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+            CHECK(armsBefore > 0 && s->published().factsBlock().reflectorArms == armsBefore && s->published().factsBlock().isPlanarReflector(twoSided),
                   "…re-arm the mirror ZERO times and leave it armed");
             s->destroyMaterial(other);
         }
         // THE NODE TURNS TWO-SIDED UNDER THE ARMED MIRROR (CULL-TWIN-DEBTS-1): the
         // refusal is re-derived on the spot (it used to wait for the next flag change).
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         // lastError() is sticky: put an unrelated reason there first, so the check
         // below reads THIS refusal and not the one above.
         CHECK(!s->setNodePlanarReflector(NodeId(0x7FFFFFF0u), true) &&
@@ -360,9 +368,10 @@ int main()
         s->setNodeFaceCull(twoSided, FaceCull::TwoSided);
         CHECK(engine->lastError().find("two-sided") != std::string::npos,
               "…and the armed mirror is refused again, naming two-sidedness");
-        CHECK(s->nodePlanarReflector(twoSided), "…keeping its flag for when it is one-sided again");
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        CHECK(s->published().factsBlock().isPlanarReflector(twoSided), "…keeping its flag for when it is one-sided again");
         s->setNodeFaceCull(twoSided, FaceCull::Material);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         CHECK(s->setNodePlanarReflector(twoSided, false), "cleared again, leaving the scene as found");
     }
 

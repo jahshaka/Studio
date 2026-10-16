@@ -49,6 +49,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;
@@ -227,11 +228,11 @@ int main(int argc, char **argv)
     SceneMirror mirror(scene);
     mirror.setSource(doc);
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
 
     const NodeId bodyNode = mirror.engineNode(body.data());
     CHECK(bodyNode != 0, "the rigged body reached the engine scene");
-    CHECK(scene->hasSkeleton(bodyNode), "...and it is GPU-skinned (the whole premise)");
+    CHECK(jahshaka::engine::inspect::scene(scene)->hasSkeleton(bodyNode), "...and it is GPU-skinned (the whole premise)");
     if (!bodyNode) return 1;
 
     // ABOVE the character's head (its top is y=2) but inside the enlarged hull
@@ -251,7 +252,7 @@ int main(int argc, char **argv)
     // ---- 2. SELECT it: the silhouette reaches the probe --------------------
     mirror.setHighlightedNodes({ body });
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     CHECK(view->readPixels(img), "readPixels (selected, bind pose)");
     const Colour selected = img.at(px, py);
     std::printf("      selected   bind pose: %.2f %.2f %.2f\n",
@@ -266,8 +267,8 @@ int main(int argc, char **argv)
     doc->setPlaying(true);
     doc->updateSceneAnimation(1.0f);
     mirror.sync();
-    engine->renderOneFrame();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
+    enginetest::frames(engine, 1);
     CHECK(view->readPixels(img), "readPixels (selected, bent 90 degrees)");
     const Colour bent = img.at(px, py);
     std::printf("      selected   bent:      %.2f %.2f %.2f\n",
@@ -320,8 +321,8 @@ int main(int argc, char **argv)
         mirror.setHighlightedNodes({ group });            // the whole character
         doc->updateSceneAnimation(1.0f);
         mirror.sync();
-        engine->renderOneFrame();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
+        enginetest::frames(engine, 1);
         CHECK(view->readPixels(img), "readPixels (two pieces, both bent, both selected)");
         // The second piece bends to the LEFT of centre; its bind pose would have
         // stood straight up at x = -1.6.
@@ -333,7 +334,7 @@ int main(int argc, char **argv)
               "...and IS outlined where it actually bent");
         mirror.setHighlightedNodes({ body });
         mirror.sync();
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     }
 
     // ---- 5. one renderable per document node, stopped and playing ---------
@@ -342,12 +343,12 @@ int main(int argc, char **argv)
     doc->setPlaying(false);
     doc->updateSceneAnimation(0.0f);
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     CHECK(scene->itemCount(bodyNode) == 1, "...and exactly one when stopped again");
 
     mirror.setHighlightedNodes({});
     mirror.sync();
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
 
     mirror.setSource(nullptr);
     engine->destroyScene(scene);

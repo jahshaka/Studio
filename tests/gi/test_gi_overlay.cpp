@@ -140,7 +140,7 @@ int main(int argc, char **argv)
         // lands on the next frame's record, exactly as in the editor.
         for (int i = 0; i < 3; ++i) {
             mirror.sync(mirrorframe::world(view, cam));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
         Image img; view->readPixels(img);
         // A 5x5 window: a one-pixel wireframe aimed at exactly can still land a
@@ -180,15 +180,15 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::sky(view));
             mirror.sync(mirrorframe::environment(view));
             mirror.sync(mirrorframe::camera(view, cam));
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
         }
     };
     const auto maxCorner = [&] {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         return iris::Vec3(st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);
     };
     const auto midPoint = [&] {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         return iris::Vec3((st.boundsMin.x + st.boundsMax.x) * 0.5f,
                           (st.boundsMin.y + st.boundsMax.y) * 0.5f,
                           (st.boundsMin.z + st.boundsMax.z) * 0.5f);
@@ -198,7 +198,7 @@ int main(int argc, char **argv)
     cam->update(0.0f);
     settle(30);
     {
-        const GiStatus st = escene->giStatus();
+        const GiStatus st = escene->published().gi;
         std::printf("   the AUTOMATIC volume: %.2f %.2f %.2f .. %.2f %.2f %.2f\n",
                     st.boundsMin.x, st.boundsMin.y, st.boundsMin.z,
                     st.boundsMax.x, st.boundsMax.y, st.boundsMax.z);

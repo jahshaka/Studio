@@ -76,7 +76,7 @@ static bool sameFloats(const float *a, const float *b, unsigned n) {
 /// a removal swaps the tail into the freed slot, so every arm that names a node
 /// has to ask the table where it ended up.
 static unsigned slotOf(Scene *s, NodeId n) {
-    const unsigned count = s->gpuSceneStatus().slotCount;
+    const unsigned count = s->published().gpuScene.slotCount;
     GpuSceneEntry e;
     for (unsigned i = 0; i < count; ++i)
         if (s->gpuSceneEntry(i, e) && e.nodeId == unsigned(n)) return i;
@@ -102,7 +102,7 @@ int main()
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.55f), 3.14159f);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(6.0f, 6.0f, 14.0f), Vec3(0, 0, 0)));
 
-    auto render = [&](int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); };
+    auto render = [&](int frames) { enginetest::frames(e, frames);};
 
     // ONE mesh and ONE material for the filler: the subject is the table, not
     // resource churn, and a shared mesh is also the case the mesh table's
@@ -128,7 +128,7 @@ int main()
     // 0. THE TABLES ARE THERE, AND THEY HOLD THE SCENE
     // =====================================================================
     {
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         std::printf("   tables: live=%d slotCount=%u capacity=%u meshEntries=%u grows=%llu "
                     "writes=%llu copyRuns=%llu\n",
                     st.live ? 1 : 0, st.slotCount, st.capacity, st.meshEntries, st.grows, st.writes,
@@ -154,10 +154,11 @@ int main()
         scene->setNodeTransform(nodes[k * 7u % kFill],
                                 Vec3(float(k) * 0.3f, 2.0f + float(k) * 0.05f, -3.0f),
                                 Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(0.25f, 0.25f, 0.25f));
-    const GpuSceneStatus beforeMove = scene->gpuSceneStatus();
+    // (the baseline is the last frame's snapshot: a transform reaches the tables only in the frame — U3 stage 2b)
+    const GpuSceneStatus beforeMove = scene->published().gpuScene;
     render(1);
     {
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         std::printf("   one frame with %u movers: lastDirty=%u copyRuns +%llu scans +%llu "
                     "aabbReads +%llu lastCopyMs=%.3f\n",
                     kMoved, st.lastDirty, st.copyRuns - beforeMove.copyRuns,
@@ -205,8 +206,8 @@ int main()
         // THE FLAGS WORD is what every consumer reads instead of re-deriving.
         GpuSceneEntry one;
         scene->gpuSceneEntry(0u, one);
-        std::printf("   slot 0 flags = 0x%03x meshIndex=%u nodeId=%u\n", one.flags, one.meshIndex,
-                    one.nodeId);
+        std::printf("   slot 0 flags = 0x%03x meshIndex=%u nodeId=%llu\n", one.flags, one.meshIndex,
+                    (unsigned long long)one.nodeId);
         CHECK((one.flags & kFlagVisible) && (one.flags & kFlagGi) && (one.flags & kFlagRayTraced),
               "a lit, shown cube reads visible, GI-visible and TRACED in the flags word");
         CHECK(!(one.flags & (kFlagSkinned | kFlagOverlay | kFlagAlpha)),
@@ -235,9 +236,9 @@ int main()
     // =====================================================================
     {
         render(2);   // let the close above settle out of the dirty set
-        const GpuSceneStatus from = scene->gpuSceneStatus();
+        const GpuSceneStatus from = scene->published().gpuScene;
         render(20);
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         std::printf("   20 still frames: +%llu writes, +%llu copy runs, +%llu updates\n",
                     st.writes - from.writes, st.copyRuns - from.copyRuns,
                     st.updates - from.updates);
@@ -254,19 +255,20 @@ int main()
         // slot 0, so slot 0 must now hold that item's pose and node id, and the
         // table must be one slot shorter.
         GpuSceneEntry last;
-        const unsigned lastSlot = scene->gpuSceneStatus().slotCount - 1u;
+        const unsigned lastSlot = scene->published().gpuScene.slotCount - 1u;
         scene->gpuSceneEntry(lastSlot, last);
         GpuSceneEntry dying;
         scene->gpuSceneEntry(0u, dying);
-        const GpuSceneStatus from = scene->gpuSceneStatus();
+        const GpuSceneStatus from = scene->published().gpuScene;
         scene->removeNode(nodes[0]);
         render(1);
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         GpuSceneEntry now;
         scene->gpuSceneEntry(0u, now);
-        std::printf("   swap-remove: slots %u -> %u, lastDirty=%u, slot 0's node %u -> %u "
-                    "(the tail's was %u)\n",
-                    from.slotCount, st.slotCount, st.lastDirty, dying.nodeId, now.nodeId, last.nodeId);
+        std::printf("   swap-remove: slots %u -> %u, lastDirty=%u, slot 0's node %llu -> %llu "
+                    "(the tail's was %llu)\n",
+                    from.slotCount, st.slotCount, st.lastDirty, (unsigned long long)dying.nodeId,
+                    (unsigned long long)now.nodeId, (unsigned long long)last.nodeId);
         CHECK(st.slotCount == from.slotCount - 1u, "the item index is one slot shorter");
         CHECK(now.nodeId == last.nodeId,
               "THE TAIL'S ITEM IS IN THE FREED SLOT, with its own node id");
@@ -285,12 +287,15 @@ int main()
     // 5. A GROW KEEPS EVERY ENTRY
     // =====================================================================
     {
-        const GpuSceneStatus from = scene->gpuSceneStatus();
+        const GpuSceneStatus from = scene->published().gpuScene;
         // The entry that must survive the doubling, by value.
         GpuSceneEntry keep;
         scene->gpuSceneEntry(5u, keep);
         unsigned added = 0u;
-        while (scene->gpuSceneStatus().slotCount < from.capacity + 1u) {
+        // One item node per attach, one slot each: the count that crosses the capacity, from the last frame's figures
+        // (the snapshot moves only at a frame's close — U3 stage 2b).
+        const unsigned need = from.capacity + 1u - from.slotCount;
+        while (added < need) {
             const NodeId n = scene->createNode();
             scene->setNodeTransform(n, Vec3(0.0f, 40.0f + float(added) * 0.1f, 0.0f),
                                     Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(0.1f, 0.1f, 0.1f));
@@ -299,7 +304,7 @@ int main()
             ++added;
         }
         render(2);
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         std::printf("   grow: %u -> %u slots, capacity %u -> %u, grows %llu -> %llu\n",
                     from.slotCount, st.slotCount, from.capacity, st.capacity, from.grows, st.grows);
         CHECK(st.capacity > from.capacity && st.grows > from.grows,
@@ -330,7 +335,7 @@ int main()
     // world as its PREVIOUS world — a brand-new object reprojecting from where
     // something else used to be.
     {
-        const unsigned tail = scene->gpuSceneStatus().slotCount - 1u;
+        const unsigned tail = scene->published().gpuScene.slotCount - 1u;
         GpuSceneEntry dead;
         scene->gpuSceneEntry(tail, dead);
         scene->removeNode(nodes.back());
@@ -345,11 +350,11 @@ int main()
         render(1);
         GpuSceneEntry now;
         const bool got = scene->gpuSceneEntry(tail, now);
-        std::printf("   tail removal then a newborn in slot %u: node %u -> %u, "
+        std::printf("   tail removal then a newborn in slot %u: node %llu -> %llu, "
                     "prevWorld == world %d (the dead item's x was %.2f, the newborn's is %.2f)\n",
-                    tail, dead.nodeId, now.nodeId,
+                    tail, (unsigned long long)dead.nodeId, (unsigned long long)now.nodeId,
                     sameFloats(now.world, now.prevWorld, 12) ? 1 : 0, dead.world[3], now.world[3]);
-        CHECK(got && now.nodeId == unsigned(fresh),
+        CHECK(got && now.nodeId == NodeId(fresh),
               "the newborn really landed in the freed tail slot (the arm is not vacuous)");
         CHECK(got && sameFloats(now.world, now.prevWorld, 12),
               "A NEWBORN IN A FREED TAIL SLOT HAS prevWorld == world — it did not inherit the "
@@ -411,7 +416,7 @@ int main()
               "the flags-only arm found its slot");
         scene->setNodeVisible(n, false);
         render(1);
-        const GpuSceneStatus st = scene->gpuSceneStatus();
+        const GpuSceneStatus st = scene->published().gpuScene;
         GpuSceneEntry after7;
         scene->gpuSceneEntry(slot, after7);
         std::printf("   a visibility write: lastDirty=%u, slot %u flags 0x%03x -> 0x%03x\n",
@@ -450,7 +455,7 @@ int main()
             }
             v2->setCamera(enginetest::testCameraDescLookAt(Vec3(4.0f, 4.0f, 10.0f), Vec3(0, 0, 0)));
             render(3);
-            const GpuSceneStatus st = noRays->gpuSceneStatus();
+            const GpuSceneStatus st = noRays->published().gpuScene;
             std::printf("   rays off: live=%d slotCount=%u meshEntries=%u\n", st.live ? 1 : 0,
                         st.slotCount, st.meshEntries);
             CHECK(st.live && st.slotCount == 8u && st.meshEntries == 1u,
@@ -501,14 +506,14 @@ int main()
                         // transforms are last frame's until updateSceneGraph
                         // runs — so the frame is rendered and its own timing
                         // read back.
-                        e->renderOneFrame();
-                        us = scene->gpuSceneStatus().lastScanMicros;
+                        enginetest::frames(e, 1);
+                        us = scene->published().gpuScene.lastScanMicros;
                     } else {
                         // The pre-frame form, READ BEFORE the frame runs its own
                         // pass and overwrites the number.
                         scene->measureGpuSceneScan(false);
-                        us = scene->gpuSceneStatus().lastScanMicros;
-                        e->renderOneFrame();
+                        us = scene->published().gpuScene.lastScanMicros;
+                        enginetest::frames(e, 1);
                     }
                     if (us > 0.0 && (best == 0.0 || us < best)) best = us;
                 }
@@ -523,7 +528,7 @@ int main()
             // of re-derived per item (`world.rayQueryStatus().gatherMs`). The
             // walk it replaces measured 3.4-4.0 ms at 8,001 instances in Debug
             // (inventory LAT-L8 / F11-WALKS).
-            const RayQueryStatus rq = scene->rayQueryStatus();
+            const RayQueryStatus rq = scene->published().rayQuery;
             std::printf("   MEASURED: the ray tier at %d instances (%d structures): "
                         "instance write %.3f ms CPU\n",
                         rq.instances, rq.blasCount, double(rq.gatherMs));
@@ -564,17 +569,17 @@ int main()
                 // where the scan reports it, while `renderOneFrame`'s cost is
                 // the same measurement in every build of this engine.
                 const auto t0 = std::chrono::steady_clock::now();
-                e->renderOneFrame();          // the frame's own pass does the work
+                enginetest::frames(e, 1);          // the frame's own pass does the work
                 const double frameMs =
                     std::chrono::duration<double, std::milli>(
                         std::chrono::steady_clock::now() - t0).count();
                 frameTotal += frameMs;
                 if (frameMs > frameWorst) frameWorst = frameMs;
-                const double us = scene->gpuSceneStatus().lastScanMicros;
+                const double us = scene->published().gpuScene.lastScanMicros;
                 total += us;
                 if (us > worst) worst = us;
             }
-            const GpuSceneStatus st = scene->gpuSceneStatus();
+            const GpuSceneStatus st = scene->published().gpuScene;
             std::printf("   MEASURED (GROUP DRAG): one parent moving %u children, %u frames, "
                         "%u slots: the GPU scene's pass mean %.2f ms / worst %.2f ms; the whole "
                         "frame mean %.2f ms / worst %.2f ms; lastDirty=%u\n",

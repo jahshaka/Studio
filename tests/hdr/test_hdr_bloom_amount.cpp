@@ -59,6 +59,7 @@
 //      This is the difference between a dial a person can drag and a dial that
 //      destroys the compositor under the cursor.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
@@ -110,7 +111,7 @@ MeshData planeMesh(float half)
 /// description edit and a re-read; nothing else about the fixture moves.
 void setBloom(bool on, float amount)
 {
-    PostFxDesc fx = gView->postFx();
+    PostFxDesc fx = jahshaka::engine::inspect::view(gView)->postFx();
     fx.bloom = on;
     fx.bloomAmount = amount;
     gView->setPostFx(fx);
@@ -118,7 +119,7 @@ void setBloom(bool on, float amount)
 
 bool shoot(Image &out, int frames = 4)
 {
-    for (int i = 0; i < frames; ++i) gEngine->renderOneFrame();
+    enginetest::frames(gEngine, frames);
     return gView->readPixels(out);
 }
 
@@ -275,11 +276,11 @@ int main()
     // one arm whose chain has a different SHAPE (no ladder at all).
     Image offImg, zeroImg, oneImg, twoImg, oneAgain;
     if (!shoot(offImg, 8)) { std::printf("FAIL: readPixels (bloom off)\n"); return 1; }
-    const unsigned genAfterOff = gView->workspaceGeneration();
+    const unsigned genAfterOff = gView->published().workspaceGeneration;
 
     setBloom(true, 1.0f);
     if (!shoot(oneImg, 6)) { std::printf("FAIL: readPixels (amount 1)\n"); return 1; }
-    const unsigned genAtOne = gView->workspaceGeneration();
+    const unsigned genAtOne = gView->published().workspaceGeneration;
 
     setBloom(true, 0.0f);
     if (!shoot(zeroImg, 4)) { std::printf("FAIL: readPixels (amount 0)\n"); return 1; }
@@ -289,7 +290,7 @@ int main()
 
     setBloom(true, 1.0f);
     if (!shoot(oneAgain, 4)) { std::printf("FAIL: readPixels (back to 1)\n"); return 1; }
-    const unsigned genAfterWalk = gView->workspaceGeneration();
+    const unsigned genAfterWalk = gView->published().workspaceGeneration;
 
     const std::vector<int> off = green(offImg), zero = green(zeroImg),
                            one = green(oneImg), two = green(twoImg),

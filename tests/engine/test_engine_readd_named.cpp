@@ -74,13 +74,13 @@ static void runScale(Engine *e, unsigned items)
     gi.numBounces = 1;
     gi.ddgi = GiToggle::Off;
     s->setGlobalIllumination(gi);
-    for (int i = 0; i < 60; ++i) e->renderOneFrame();
+    enginetest::frames(e, 60);
     const GpuSubstrateStatus a = gpuSubstrateStatus(*s);
     // THE FRAGMENT: remove, add (the items re-created), ONE frame.
     s->setNodeParent(sub, hostB);
     for (NodeId n : subNodes) s->detachMesh(n);
     for (NodeId n : subNodes) s->attachMesh(n, cube, mat);
-    e->renderOneFrame();
+    enginetest::frames(e, 1);
     const GpuSubstrateStatus b = gpuSubstrateStatus(*s);
     const unsigned long long named = b.slotsNamed - a.slotsNamed, compared = b.slotsCompared - a.slotsCompared,
                              flags = b.flagsRecomputed - a.flagsRecomputed,

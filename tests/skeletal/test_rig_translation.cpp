@@ -27,6 +27,7 @@
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "armrig.h"
@@ -147,8 +148,8 @@ int main(int argc, char **argv)
     NodeId node = s->createNode();
 
     CHECK(s->attachSkinnedMesh(node, meshId, matId, desc), "attachSkinnedMesh succeeded");
-    CHECK(s->hasSkeleton(node), "the node reports a rig");
-    const std::vector<std::string> names = s->boneNames(node);
+    CHECK(jahshaka::engine::inspect::scene(s)->hasSkeleton(node), "the node reports a rig");
+    const std::vector<std::string> names = jahshaka::engine::inspect::scene(s)->boneNames(node);
     CHECK(names.size() == 2 && names[0] == "jointRoot" && names[1] == "jointTip",
           "boneNames comes back in rig order");
 
@@ -169,7 +170,7 @@ int main(int argc, char **argv)
     std::vector<BonePose> poses = armPoses(0.0f);
     CHECK(poses.size() == 2, "one pose per bone");
     CHECK(s->setBonePoses(node, poses.data(), poses.size()), "setBonePoses accepted the bind pose");
-    engine->renderOneFrame();   // runs the engine's bone FK; no pixel is read
+    enginetest::frames(engine, 1);   // runs the engine's bone FK; no pixel is read
 
     double worst = 0.0;
     for (size_t b = 0; b < 2; ++b) {
@@ -188,7 +189,7 @@ int main(int argc, char **argv)
     for (float t : { 0.25f, 0.5f, 0.9f }) {
         poses = armPoses(t);
         s->setBonePoses(node, poses.data(), poses.size());
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const QVector<iris::Mat4> want = armrig::swingSkinMatrices(-90.0f, t);
         double w = 0.0;
         for (size_t b = 0; b < 2; ++b) {
@@ -213,7 +214,7 @@ int main(int argc, char **argv)
         std::vector<BonePose> poseB = armPoses(0.0f);
         s->setBonePoses(node, poseA.data(), poseA.size());
         s->setBonePoses(n2, poseB.data(), poseB.size());
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         const iris::Mat4 m1 = engineBone(s, node, 1, 2);
         const iris::Mat4 m2 = engineBone(s, n2, 1, 2);
         CHECK(m1 != m2, "two nodes on ONE mesh hold two DIFFERENT bone matrices");
@@ -232,7 +233,7 @@ int main(int argc, char **argv)
         NodeId n = s->createNode();
         CHECK(!s->attachSkinnedMesh(n, plainId, matId, desc),
               "T7: a mesh with no blend data is refused");
-        CHECK(!s->hasSkeleton(n), "T7: ... and gets no rig");
+        CHECK(!jahshaka::engine::inspect::scene(s)->hasSkeleton(n), "T7: ... and gets no rig");
 
         // Empty rig, and a rig that does not cover the mesh's blend indices.
         SkeletonDesc empty; empty.id = "empty";
@@ -258,8 +259,8 @@ int main(int argc, char **argv)
             huge.bones[i].parent = i ? int(i) - 1 : -1;
         }
         CHECK(!s->attachSkinnedMesh(big, freshId, matId, huge), "T7: a 300-bone rig is refused");
-        CHECK(!s->hasSkeleton(big), "T7: ... and rides unskinned instead of crashing");
-        engine->renderOneFrame();
+        CHECK(!jahshaka::engine::inspect::scene(s)->hasSkeleton(big), "T7: ... and rides unskinned instead of crashing");
+        enginetest::frames(engine, 1);
         CHECK(true, "T7: the frame after an over-limit attach still renders");
         s->removeNode(big);
 

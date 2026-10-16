@@ -163,6 +163,31 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         TIMEOUT 120 LABELS "ui")
 endif()
 
+# view.window_on_render_thread — THE WINDOW SPIKE (ENGINE-UPGRADE-U3 stage 4's premise): every engine call on a
+# second thread — create on Qt's Display + a view on a winId, three resizes, a float + re-dock (the native window
+# replaced), an MSAA change, ~Engine on that thread — under the validation layer; 0 X errors, 0 validation errors.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test_window_render_thread test_window_render_thread.cpp xerrorcounter.cpp)
+    set_target_properties(test_window_render_thread PROPERTIES
+        CXX_STANDARD 17
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_window_render_thread PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_include_directories(test_window_render_thread PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+    target_link_libraries(test_window_render_thread PRIVATE JahshakaEngine Qt6::Widgets X11)
+    add_dependencies(test_window_render_thread JahshakaEngineMedia)
+    jah_gpu_row(view.window_on_render_thread CLASS engine FRAMES 120 COMMAND test_window_render_thread
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(view.window_on_render_thread PROPERTIES
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+        FAIL_REGULAR_EXPRESSION "Validation Error;X ERROR"
+        TIMEOUT 180 LABELS "ui")
+    jah_tsan_render(view.window_on_render_thread)   # the render thread's TSan arm (U3 decision 47)
+endif()
+
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
 # and dialog ownership (a missing parent is the classic Qt leak). The on-screen
 # ui.engine_view_winid suite links the engine and stays out.
@@ -1488,6 +1513,23 @@ jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeL
 # LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.column_law)   # spawns the app
+
+# ui.harness_child_log — ENGINE-UPGRADE-U3 decision 26: a child that dies of a device loss keeps its WHOLE log
+# (tests/support/mcpharness.h keepDeviceLostLog, through childReport). A real child process (a shell) writes a
+# 200-line log whose cause precedes 80 VK_ERROR_DEVICE_LOST lines and exits; the row reads the kept file back. CPU
+# only: no display, no GPU.
+add_executable(test_harness_child_log test_harness_child_log.cpp)
+set_target_properties(test_harness_child_log PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_harness_child_log PRIVATE Qt6::Core Qt6::Network)
+# The harness header names the app's binary for its spawn(), which this row never calls: no app, so not the app's
+# path (source.gpu_rows_closure reads JAHSHAKA_BINARY = the app as "spawns the app").
+target_compile_definitions(test_harness_child_log PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="/bin/false")
+add_test(NAME ui.harness_child_log COMMAND test_harness_child_log
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.harness_child_log PROPERTIES TIMEOUT 60 LABELS "ui")
 
 # ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
 # report 2026-09-14). Same harness as ui.column_law, and for the same reason —

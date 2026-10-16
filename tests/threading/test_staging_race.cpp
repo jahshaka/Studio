@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 
     // ---- PART 1: the gate ---------------------------------------------------
     ObjectCounts counts;
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     CHECK(engine->objectCounts(counts), "objectCounts read");
     std::printf("    scenes=%u updatedScenes=%u views=%u enabledViews=%u\n",
                 counts.scenes, counts.updatedScenes, counts.views, counts.enabledViews);
@@ -124,21 +124,21 @@ int main(int argc, char **argv)
     if (second) {
         second->setScene(hidden);
         enginetest::testCameraLookAt(second, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         engine->objectCounts(counts);
         CHECK(counts.updatedScenes == 2,
               "a scene gains its update the moment an enabled view draws it (no over-gating)");
         second->setEnabled(false);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         engine->objectCounts(counts);
         CHECK(counts.updatedScenes == 1, "disabling the view takes the scene back out");
         second->setEnabled(true);
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
         engine->objectCounts(counts);
         CHECK(counts.updatedScenes == 2, "and re-enabling puts it back");
         engine->destroyView(second);
     }
-    engine->renderOneFrame();
+    enginetest::frames(engine, 1);
     engine->objectCounts(counts);
     CHECK(counts.updatedScenes == 1, "destroying the view takes the scene back out");
 
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
     });
 
     const int kFrames = 250;
-    for (int i = 0; i < kFrames; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, kFrames);
     stop.store(true, std::memory_order_relaxed);
     worker.join();
 

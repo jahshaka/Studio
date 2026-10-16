@@ -38,7 +38,7 @@ static int failures = 0;
     } while (0)
 
 static const unsigned kWidth = 640, kHeight = 360;
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 static MeshData permutedSphere(int levels, int rings = 24, int segments = 48)
 {
@@ -131,7 +131,7 @@ int main()
     Image picDeep, picControl;
     render(e, 120);
     view->readPixels(picDeep);
-    const RayQueryStatus rqDeep = s->rayQueryStatus();
+    const RayQueryStatus rqDeep = s->published().rayQuery;
     s->attachMesh(ball, control, sm);
     render(e, 120);
     view->readPixels(picControl);

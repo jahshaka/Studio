@@ -39,6 +39,7 @@
 // the centre pixel is read. No projection arithmetic, no dependence on where
 // anything lands on screen.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
@@ -66,7 +67,7 @@ struct Rgb { float r = 0, g = 0, b = 0; };
 Rgb probeCube(Engine *engine, View *view, float x)
 {
     enginetest::testCameraLookAt(view, Vec3(x, 0.0f, 3.0f), Vec3(x, 0.0f, 0.0f));
-    for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+    enginetest::frames(engine, 3);
     Image img;
     if (!view->readPixels(img)) return Rgb{};
     const Colour c = img.at(img.width / 2, img.height / 2);
@@ -159,7 +160,7 @@ void maskingCase(Engine *engine, View *view, LightType type)
     // --- 3. THE REAL CASE --------------------------------------------------
     t.scene->setNodeLightMask(t.a, kChannel1);
     t.scene->setNodeLightMask(t.b, kChannel2);
-    CHECK(t.scene->nodeLightMask(t.a) == kChannel1 && t.scene->nodeLightMask(t.b) == kChannel2,
+    CHECK(jahshaka::engine::inspect::scene(t.scene)->nodeLightMask(t.a) == kChannel1 && jahshaka::engine::inspect::scene(t.scene)->nodeLightMask(t.b) == kChannel2,
           "the engine reports back the masks it was given");
     a = probeCube(engine, view, -1.5f);
     b = probeCube(engine, view, 1.5f);
@@ -216,7 +217,7 @@ void maskSurvivesItemRebuild(Engine *engine, View *view)
     b = probeCube(engine, view, 1.5f);
     std::printf("   after re-attach: B r=%.3f\n", b.r);
     CHECK(b.r < 0.01f, "...and cube B is STILL masked off the light");
-    CHECK(t.scene->nodeLightMask(t.b) == kChannel2, "the engine still reports the mask");
+    CHECK(jahshaka::engine::inspect::scene(t.scene)->nodeLightMask(t.b) == kChannel2, "the engine still reports the mask");
 
     view->setScene(nullptr);
     engine->destroyScene(t.scene);
@@ -289,7 +290,7 @@ void shadowsIgnoreMasks(Engine *engine, View *view)
     // "the shadow survives" even where it does not.
     const unsigned shadowLo = 74, shadowHi = 112;
     auto groundContrast = [&](int *darkestOut) {
-        for (int i = 0; i < 10; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 10);
         Image img;
         if (!view->readPixels(img)) return -1;
         int darkest = 255, brightest = 0;
@@ -386,7 +387,7 @@ void perObjectCastShadow(Engine *engine, View *view)
 
     const unsigned shadowLo = 74, shadowHi = 112;
     auto shadowStrip = [&]() {
-        for (int i = 0; i < 4; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 4);
         Image img;
         if (!view->readPixels(img)) return -1;
         int darkest = 255;
@@ -397,7 +398,7 @@ void perObjectCastShadow(Engine *engine, View *view)
         return darkest;
     };
 
-    CHECK(s->nodeCastShadow(blocker), "a node is born casting (Ogre's own default)");
+    CHECK(jahshaka::engine::inspect::scene(s)->nodeCastShadow(blocker), "a node is born casting (Ogre's own default)");
     const int withShadow = shadowStrip();
     std::printf("   casting:            darkest %d\n", withShadow);
     CHECK(withShadow < 40, "the blocker's shadow is on the ground to begin with");
@@ -405,7 +406,7 @@ void perObjectCastShadow(Engine *engine, View *view)
     s->setNodeCastShadow(blocker, false);
     const int withoutShadow = shadowStrip();
     std::printf("   Cast Shadow = off:  darkest %d\n", withoutShadow);
-    CHECK(!s->nodeCastShadow(blocker), "the engine reports the flag back");
+    CHECK(!jahshaka::engine::inspect::scene(s)->nodeCastShadow(blocker), "the engine reports the flag back");
     CHECK(withoutShadow > 200,
           "PER-OBJECT CAST SHADOW WORKS: the ground is clear where the shadow was");
 

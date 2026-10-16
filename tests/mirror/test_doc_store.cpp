@@ -183,7 +183,7 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     gMirror = &mirror;
     gScene = static_cast<const jahshaka::engine::detail::OgreScene *>(target);
-    auto frames = [&] { mirror.sync(); engine->renderOneFrame(); engine->renderOneFrame(); };
+    auto frames = [&] { mirror.sync(); enginetest::frames(engine, 1); enginetest::frames(engine, 1); };
     auto verdict = [&](const char *tag) {
         const Diff d = compare(nodes);
         const int h = hierarchyMismatches(nodes);
@@ -320,11 +320,11 @@ int main(int argc, char **argv)
     {
         frames();                                                   // anything owed from H lands first
         frames();
-        const unsigned still = engine->frameInputStatus().nodeRecords;
+        const unsigned still = engine->published().input.nodeRecords;
         CHECK(still == 0, "I a still frame sends 0 node records (got %u)", still);
         nodes[17]->setLocalPos(nodes[17]->getLocalPos() + iris::Vec3(0.1f, 0, 0));
-        mirror.sync(); engine->renderOneFrame();
-        const unsigned one = engine->frameInputStatus().nodeRecords;
+        mirror.sync(); enginetest::frames(engine, 1);
+        const unsigned one = engine->published().input.nodeRecords;
         CHECK(one == 1, "I one mover sends 1 node record (got %u)", one);
         auto big = iris::SceneNode::create();
         doc->getRootNode()->addChild(big, false);
@@ -339,9 +339,9 @@ int main(int argc, char **argv)
         frames();                                                   // mirrored: 10,001 records, once
         big->setLocalPos(iris::Vec3(5, 0, 0));
         big->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 20.0f));
-        mirror.sync(); engine->renderOneFrame();
-        const unsigned rootMove = engine->frameInputStatus().nodeRecords;
-        engine->renderOneFrame();
+        mirror.sync(); enginetest::frames(engine, 1);
+        const unsigned rootMove = engine->published().input.nodeRecords;
+        enginetest::frames(engine, 1);
         CHECK(rootMove == 1, "I the root of a 10,000-node subtree written sends 1 node record (got %u)", rootMove);
         double worst = 0;
         for (const auto &c : bigKids) {
@@ -389,7 +389,7 @@ int main(int argc, char **argv)
         mover->applyStaticDefaults();
         for (int k = 0; k < 4000; ++k) {
             mirror.sync();
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             if (k > 2 && !mirror.staticSettleInProgress()) break;
         }
         // The engine's class of a node and of its attachments, against the document's.

@@ -91,7 +91,7 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #
 #   jah_tsan_lane(<test>...)   ThreadSanitizer, in its OWN build directory
 #       (TSan cannot combine with ASan and instruments every TU):
-#       cmake -B build-tsan -DJAHSHAKA_TSAN=ON. MEMBERSHIP RULE: the suites
+#       scripts/sanitize.sh tsan (build-tsan-clang, clang required). MEMBERSHIP RULE: the suites
 #       whose subject is an async contract — a runner, a heartbeat, a watchdog,
 #       a shutdown order.
 #
@@ -106,7 +106,7 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #       and nothing is hidden — a quarantined suite is a defect with a name.
 #
 #       Every lsan-blocked row was run once more 2026-10-11 (RUNNER-A7A): all red for these blockers, now
-#       registered (LSAN-L1..L4 in testing/defects.json; each call names its ids). The app-spawning rows' harnesses
+#       registered (LSAN-L1..L4 — the registry file testing/defects.json went with TESTING-SIMPLE; each call names its ids). The app-spawning rows' harnesses
 #       ignore the app's exit code and its report, so a green there proves nothing about the app.
 #       The leak blockers as of 2026-09-04, all found by this lane's first run:
 #         L1  iris::Material never frees its QList<Property*> — every material
@@ -146,6 +146,13 @@ function(jah_tsan_lane)
         set_property(TEST ${_t} APPEND PROPERTY LABELS tsan)
     endforeach()
 endfunction()
+#   jah_tsan_render(<test>...)   THE RENDER THREAD'S TSan ARM (ENGINE-UPGRADE-U3 decision 47): label tsan-render, run by
+#   hand (JAH_TSAN_LABEL=tsan-render scripts/sanitize.sh tsan) — green = zero reports. Never the shipped lane.
+function(jah_tsan_render)   # called in the directory that registers the row (a TEST property is per directory)
+    foreach(_t IN LISTS ARGV)
+        set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-render)
+    endforeach()
+endfunction()
 
 #   jah_tsan_blocked(<test>...)   the race lane's quarantine, same idea as
 #       jah_lsan_blocked. As of 2026-09-04 it holds every suite that drives the
@@ -158,12 +165,19 @@ endfunction()
 #       a pixmap (src/ui/pages/projectmanager.cpp:71). It is TSan's own thread
 #       registry rejecting a recycled pthread_t, it happens before the app ever
 #       reaches its event loop, and nothing in our code can work around it.
-#       Clang's TSan is the untried alternative (no clang on this box).
+#       MEASURED WITH CLANG 2026-10-16 (ENGINE-UPGRADE-U3 decision 49: clang 21's own libtsan, build-tsan with
+#       CMAKE_CXX_COMPILER=clang++, lavapipe): the app BOOTS — and after ~14 minutes of its first boot the same
+#       registry CHECK fires from the same interceptor (QThreadPool::start under QPixmap::scaled for a QLabel icon):
+#       the recycled pthread_t is Qt's, uninstrumented, and both runtimes reject it. host.sync_getters and
+#       host.error_door stay quarantined; the render thread's proofs run as ENGINE FIXTURES under TSan (label
+#       tsan-render: frame.record_determinism, engine.message_order, frame.drag_latency, frame.interpolation,
+#       view.window_on_render_thread, engine.error_door).
 #       MEASURED AGAIN 2026-10-11 (RUNNER-A7A, every row run once in build-tsan with lavapipe): the registry CHECK
 #       now fires in 4 of the 27 rows only; the app boots in the rest, and every boot reports a race in OUR
 #       engine's LOD update (irisgl/engine/src/OgreMesh.cpp lodUpdateImpl on the updateAllLodsThread workers), and
 #       none finishes inside its harness's boot wait or its TIMEOUT under TSan. Registered: TSAN-LOD-UPDATE-RACE,
-#       TSAN-GCC15-THREAD-REGISTRY, TSAN-BOOT-TOO-SLOW (testing/defects.json); each call below names its ids.
+#       TSAN-GCC15-THREAD-REGISTRY, TSAN-BOOT-TOO-SLOW (the registry file testing/defects.json went with TESTING-SIMPLE;
+#       the ids are the ledger's); each call below names its ids.
 #       TSAN-LOD-UPDATE-RACE FIXED 2026-10-12 (LOD-RACE-1): the race was lodSet writing the object memory
 #       manager's shared padding dummy from two workers; the fork's lodSet skips padding slots (row
 #       lod.padding_untouched), the race line is gone from open.frames under TSan, and the calls below name
@@ -292,6 +306,8 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # the timing suites of the push tier
     app.input_keys app.play_select shadergraph.bake_output gi.budget
     app.watchdog_stall
+    # ENGINE-UPGRADE-U3: a 7 ms UI stall's dropped headset refreshes (a GUARD since stage 5) and the extract at K = 100
+    vr.ui_stall gi.extract_cost vr.session_pace vr.xr_thread
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
@@ -1234,4 +1250,5 @@ foreach(_t IN LISTS JAH_MEASURE_ROWS)
         message(WARNING "JAH_MEASURE_ROWS names ${_t}, which this build does not register")
     endif()
 endforeach()
+
 

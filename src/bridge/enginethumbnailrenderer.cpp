@@ -279,7 +279,10 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
                    .arg(QString::fromStdString(engine->lastError())));
         return false;
     }
-    if (view()->width() != unsigned(size.width()) || view()->height() != unsigned(size.height()))
+    // The size the last frame drew (ENGINE-UPGRADE-U3 stage 2: the snapshot); a view no frame has drawn yet is
+    // resized to the ask (a deferred no-op when it already is).
+    const auto *pv = engine->published().view(view()->id());
+    if (!pv || pv->width != unsigned(size.width()) || pv->height != unsigned(size.height()))
         view()->resize(unsigned(size.width()), unsigned(size.height()));
     return true;
 }
@@ -444,7 +447,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     fv.camera = camera;
     const float exposure = iris::lens::exposureStopsToChain(document->exposure);
     fv.finish = [exposure](jahshaka::engine::FrameInputView &part, jahshaka::engine::View *v) {
-        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+        jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
         secondaryfx::apply(fx, true, exposure);
         part.postFx = fx;
     };
@@ -489,10 +492,13 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // are streamed since P2, so "two frames" alone is no longer a guarantee that
     // everything the thumbnail draws is resident — see bridge/
     // stableoffscreenrender.h for upstream's recipe and why the minimum stays 2.
-    settleStillPicture(engine.get(), view()->scene());
-    renderStableFrames(engine.get());
+    // THE PICTURE SERVICE (U3 stage 3): the still picture's settle, the stable frames, the readback — one request.
     Image img;
-    const bool ok = view()->readPixels(img);
+    bool ok = false;
+    takePicture(engine.get(), PictureRequest::stillPicture(view()->scene(), view()), [&](Picture &&p) {
+        ok = p.ok;
+        img = std::move(p.rgba);
+    });
     view()->setEnabled(false);
 
     // Nothing leaks across requests: the SUBJECT comes off the studio document

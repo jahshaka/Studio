@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     auto render = [&](Image &img) {
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
-        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 3);
         view->readPixels(img);
     };
 
@@ -298,9 +298,9 @@ int main(int argc, char **argv)
     auto sunCastPasses = [&](float elevationDeg) {
         sun->setLocalRot(iris::Quat::fromEulerAngles(pitchFor(elevationDeg), 0.0f, 0.0f));
         Image img;
-        engine->shadowStatus();          // arm
+        enginetest::shadowStatus(engine);          // arm
         render(img);                     // ...and render a frame under the listeners
-        const ShadowStatus st = engine->shadowStatus();
+        const ShadowStatus st = enginetest::shadowStatus(engine);
         if (!st.countersMeasured) { std::printf("FAIL: counters not armed\n"); ++failures; }
         std::printf("      elev %+6.2f: %u shadow passes\n",
                     double(elevationDeg), st.shadowPassesLastFrame);

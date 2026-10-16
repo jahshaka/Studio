@@ -59,7 +59,7 @@ using namespace jahshaka::engine;
 static const unsigned kW = 640u, kH = 360u;   // 16:9, the framing hold's own aspect
 static const float PI = 3.14159265358979323846f;
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 // ---------------------------------------------------------------------------
 // THE SHADER'S OWN ARITHMETIC (jah_probe_params.glsl:124-170), in C++.
@@ -469,7 +469,7 @@ static int sweepMain(Engine *e, View *view)
             tune(s, 0.0f);
             render(e, 90);
 
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             std::vector<Box> boxes;
             for (const auto &c : gs.cascades) {
                 Box b;
@@ -531,9 +531,9 @@ static int sweepMain(Engine *e, View *view)
                 for (int a = 0; a < 3; ++a) {
                     tune(s, len[a]);
                     for (int fr = 0; fr < 36; ++fr) {
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                         if (fr < 6) continue;
-                        const GatherStatus q = s->giStatus().gather;
+                        const GatherStatus q = s->published().gi.gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
                             ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
                     }
@@ -627,7 +627,7 @@ int main()
 
             Row r;
             r.scene = f.name; r.tier = tier.name;
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             std::vector<Box> boxes;
             for (const auto &c : gs.cascades) {
                 Box b;
@@ -754,7 +754,7 @@ static int farBlasMain(Engine *e, View *view)
             s->setGlobalIllumination(giAt(tier));
             tuneFar(s, 0.0f, false);
             render(e, 90);
-            const GiStatus gs = s->giStatus();
+            const GiStatus gs = s->published().gi;
             const float outerHalf = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
             const float diag = std::sqrt(3.0f) * 2.0f * outerHalf;
             std::printf("\n-- %s %s: outer half %.2f m, reference length %.2f m, far plane %.1f\n",
@@ -791,9 +791,9 @@ static int farBlasMain(Engine *e, View *view)
                     else if (a == 1) tuneFar(s, 0.0f, true);
                     else tuneFar(s, diag, true);
                     for (int fr = 0; fr < 36; ++fr) {
-                        e->renderOneFrame();
+                        enginetest::frames(e, 1);
                         if (fr < 6) continue;
-                        const GatherStatus q = s->giStatus().gather;
+                        const GatherStatus q = s->published().gi.gather;
                         if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
                             ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
                     }

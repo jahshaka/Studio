@@ -312,6 +312,12 @@ bool EngineHost::start(QString &error)
     // hold no View at all.
     const bool offscreen = QGuiApplication::platformName() == QLatin1String("offscreen");
     cfg.headless = offscreen;
+    // THE APP'S CALLS ARE RECORDS (ENGINE-UPGRADE-U3 stage 4a, decision 39): every View setter, engine verb and scene
+    // command this process makes reaches the engine as a field of the record or a message of its stream.
+    cfg.hostRecords = true;
+    // ...AND THE ENGINE RUNS ON ITS OWN THREAD (stage 4b): Root, the device, the windows, every frame.
+    // JAH_ENGINE_ONE_THREAD=1: the same records on ONE thread (stage 4a's shape) — the A arm of a measurement.
+    cfg.renderThread = qEnvironmentVariableIntValue("JAH_ENGINE_ONE_THREAD") != 1;
 #ifdef Q_OS_MACOS
     // The MoltenVK ICD probe is pointless without Vulkan — and a headless run
     // must not depend on a driver being installed at all.

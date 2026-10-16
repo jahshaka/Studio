@@ -178,7 +178,7 @@ struct Rig {
     bool    haveApplied = false;
 };
 
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 /// The camera: orthographic, at `elev` degrees above the floor, aimed at the
 /// origin. Built by hand — the lookAt helper's +Y up is degenerate at 90.

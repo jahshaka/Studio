@@ -35,6 +35,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 
@@ -117,7 +118,7 @@ int main(int argc, char **argv)
         mirror.sync();
         mirror.sync(mirrorframe::sky(view));
         mirror.sync(mirrorframe::environment(view));
-        engine->renderOneFrame();
+        enginetest::frames(engine, 1);
     };
     // Rows 108 and 148 are up the sphere's dome and down its underside, both on
     // the centre column and both safely inside its ~32 px silhouette.
@@ -248,7 +249,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         for (int f = 0; f < 4; ++f) frame();
         float sh[27] = { 0.0f };
-        CHECK(escene->skyAmbientSh(sh), "5a. the engine integrated the sky it drew");
+        CHECK(escene->published().copySkyAmbientSh(sh), "5a. the engine integrated the sky it drew");
         const iris::LinearColor want = iris::linearOf(QColor(150, 90, 45));
         std::printf("   band0 r=%.4f g=%.4f b=%.4f   linearOf r=%.4f g=%.4f b=%.4f\n",
                     sh[0], sh[1], sh[2], want.r, want.g, want.b);
@@ -459,10 +460,10 @@ int main(int argc, char **argv)
             const float sizeWas = doc->sunDiscSize;
             doc->sunDiscSize = iris::kDefaultSunDiscSize;
             for (int f = 0; f < 2; ++f) frame();
-            const SunDisc atDefault = escene->sky().sun;
+            const SunDisc atDefault = jahshaka::engine::inspect::scene(escene)->sky().sun;
             doc->sunDiscSize = 2.0f * iris::kDefaultSunDiscSize;
             for (int f = 0; f < 2; ++f) frame();
-            const SunDisc atDouble = escene->sky().sun;
+            const SunDisc atDouble = jahshaka::engine::inspect::scene(escene)->sky().sun;
             std::printf("   pushed: %.3f deg at radiance %.4f -> %.3f deg at %.4f\n",
                         atDefault.angularDiameterDeg, atDefault.colour.r,
                         atDouble.angularDiameterDeg, atDouble.colour.r);
@@ -503,7 +504,7 @@ int main(int argc, char **argv)
             int still = 0;
             for (int f = 0; f < 240 && still < 3; ++f) {
                 frame();
-                const bool have = escene->skyAmbientSh(cur);
+                const bool have = escene->published().copySkyAmbientSh(cur);
                 still = (have && std::memcmp(cur, prev, sizeof cur) == 0) ? still + 1 : 0;
                 std::memcpy(prev, cur, sizeof cur);
             }
@@ -584,7 +585,7 @@ int main(int argc, char **argv)
                     for (int y = 0; y < 256; ++y)
                         for (int x = 0; x < 256; ++x) sum += double(lum(img.at(x, y)));
                     const iris::Vec3 toSun = -sun->getLightDir().normalized();
-                    const Colour tint = escene->atmosphereSunTint(
+                    const Colour tint = jahshaka::engine::atmosphereSunTint(escene->published().atmosphere, 
                         Vec3(toSun.x(), toSun.y(), toSun.z()));
                     Step st;
                     st.pitch = float(p);
@@ -592,7 +593,7 @@ int main(int argc, char **argv)
                                        * 180.0 / M_PI);
                     st.tintMax = std::max(tint.r, std::max(tint.g, tint.b));
                     st.mean = float(sum / (256.0 * 256.0));
-                    st.disc = escene->sky().sun.enabled;
+                    st.disc = jahshaka::engine::inspect::scene(escene)->sky().sun.enabled;
                     out.push_back(st);
                 }
                 return out;
@@ -680,14 +681,14 @@ int main(int argc, char **argv)
                 sun->setLocalRot(iris::Quat::fromEulerAngles(-120.0f, 0.0f, 0.0f));  // 30 deg under
                 settle();
                 const iris::Vec3 toSun = -sun->getLightDir().normalized();
-                const Colour tint = escene->atmosphereSunTint(
+                const Colour tint = jahshaka::engine::atmosphereSunTint(escene->published().atmosphere, 
                     Vec3(toSun.x(), toSun.y(), toSun.z()));
                 std::printf("   thin sky (haze 0), sun 30 deg BELOW: tint %.4f %.4f %.4f, "
                             "disc %s\n", tint.r, tint.g, tint.b,
-                            escene->sky().sun.enabled ? "on" : "off");
+                            jahshaka::engine::inspect::scene(escene)->sky().sun.enabled ? "on" : "off");
                 CHECK(tint.r == 0.0f && tint.g == 0.0f && tint.b == 0.0f,
                       "7b5. a set sun lights nothing, at any sky density");
-                CHECK(!escene->sky().sun.enabled,
+                CHECK(!jahshaka::engine::inspect::scene(escene)->sky().sun.enabled,
                       "7b6. ...and draws no disc under the ground");
                 doc->setSkyRealistic(was);
             }
@@ -790,8 +791,8 @@ int main(int argc, char **argv)
     // already applied. It is never an Ogre::Light at all.
     {
         for (int f = 0; f < 20; ++f) frame();      // let anything already owed settle
-        const quint64 refreshes = mirror.target()->giStatus().schedulerResolves;
-        const unsigned long long rebuilds = escene->giStatus().rebuilds;
+        const quint64 refreshes = mirror.target()->published().gi.schedulerResolves;
+        const unsigned long long rebuilds = escene->published().gi.rebuilds;
         const Colour before = shade(108);
         skyLight->intensity = 0.3f;
         // WELL PAST THE SETTLE WINDOW (15 stable frames / 250 ms): before the
@@ -800,16 +801,16 @@ int main(int argc, char **argv)
         const Colour dim = shade(108);
         std::printf("   sky light 1.0 -> 0.3: %.3f -> %.3f, re-solves %llu, rebuilds %llu\n",
                     lum(before), lum(dim),
-                    (unsigned long long)(mirror.target()->giStatus().schedulerResolves - refreshes),
-                    escene->giStatus().rebuilds - rebuilds);
+                    (unsigned long long)(mirror.target()->published().gi.schedulerResolves - refreshes),
+                    escene->published().gi.rebuilds - rebuilds);
         CHECK(lum(dim) < lum(before) * 0.6f, "11a. the intensity edit reaches the picture");
-        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refreshes,
               "11b. ...and costs NO full GI re-solve (it is not a voxel light)");
-        CHECK(escene->giStatus().rebuilds == rebuilds,
+        CHECK(escene->published().gi.rebuilds == rebuilds,
               "11c. ...and no from-scratch rebuild of the arm");
         skyLight->intensity = 1.0f;
         for (int f = 0; f < 25; ++f) frame();
-        CHECK(mirror.target()->giStatus().schedulerResolves == refreshes && escene->giStatus().rebuilds == rebuilds,
+        CHECK(mirror.target()->published().gi.schedulerResolves == refreshes && escene->published().gi.rebuilds == rebuilds,
               "11d. and neither does putting it back");
     }
 

@@ -136,7 +136,7 @@ void setEmissive(Rig &r, float e, const Colour &albedo = Colour(0, 0, 0))
 
 bool shoot(Rig &r, ImageF &out)
 {
-    for (int i = 0; i < 3; ++i) r.e->renderOneFrame();
+    enginetest::frames(r.e, 3);
     return r.v->readPixelsHdr(out);
 }
 

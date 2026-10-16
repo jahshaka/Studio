@@ -221,8 +221,116 @@ set_tests_properties(engine.frame_input_drain PROPERTIES TIMEOUT 60 LABELS "engi
 jah_gpu_row(engine.frame_input_settle CLASS engine FRAMES 8 COMMAND test_engine_frame_input --settle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
+
+# frame.record_determinism — THE RECORD AND ITS SERIAL ARE DETERMINISTIC (ENGINE-UPGRADE-U3 stage 1, the one-thread
+# arm; stage 4 adds the two-thread arm on the same script). The render loop's hand-over stamps one serial per frame that
+# applied a record (F1: the merge stays — two submits are one hand-over) and an empty frame carries the last (F2); a
+# document node moved by its record over 60 frames in TWO processes reads the identical serial sequence and the
+# byte-identical picture. Laws in frames and bytes (the closed-form serial, the readback's bytes).
+add_executable(test_engine_record_determinism test_engine_record_determinism.cpp)
+set_target_properties(test_engine_record_determinism PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_record_determinism PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_record_determinism PRIVATE JahshakaEngine)
+add_dependencies(test_engine_record_determinism JahshakaEngineMedia)
+# Two engines in sequence (one per child process: Root is a singleton), never at once: the engine class's slots cover it.
+jah_gpu_row(frame.record_determinism CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
+set_tests_properties(frame.record_determinism PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(engine.frame_input_settle PROPERTIES TIMEOUT 60 LABELS "engine"
                      RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+
+# engine.message_order — ONE ORDER ACROSS STREAMS (ENGINE-UPGRADE-U3 decision 46 (1)): a scene message and an engine
+# message of one record land in the order they were posted (the shadow resolution's last word). A law in values.
+add_executable(test_engine_message_order test_engine_message_order.cpp)
+set_target_properties(test_engine_message_order PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_message_order PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_message_order PRIVATE JahshakaEngine)
+add_dependencies(test_engine_message_order JahshakaEngineMedia)
+jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_message_order
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_tsan_render(frame.record_determinism engine.message_order)   # the render thread's TSan arm (U3 decision 47)
+
+# frame.interpolation — THE OWNER'S MODE DRAWS BETWEEN THE GRID STATES (ENGINE-UPGRADE-U3 stage 5): a 60 Hz mover at
+# a 90 Hz display period, three poses per two steps, x = (2/3) j a closed form; lockstep frames draw the newest
+# state exactly. frame.interpolation_apply (`--apply`, measure): 10,000 nodes' apply on the pool vs the frame's thread.
+add_executable(test_engine_interpolation test_engine_interpolation.cpp)
+set_target_properties(test_engine_interpolation PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_interpolation PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
+add_dependencies(test_engine_interpolation JahshakaEngineMedia)
+jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_gpu_row(frame.interpolation_apply CLASS engine FRAMES 64 COMMAND test_engine_interpolation --apply
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.interpolation_apply PROPERTIES TIMEOUT 120 LABELS "engine;measure")
+
+# frame.drag_latency — A RECORD IS ON SCREEN THE NEXT FRAME (ENGINE-UPGRADE-U3 stage 5): free-running, 120 records,
+# each applied by the frame of the hand-over after its submit. A law in frames (hand-overs).
+add_executable(test_engine_drag_latency test_engine_drag_latency.cpp)
+set_target_properties(test_engine_drag_latency PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_drag_latency PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_drag_latency PRIVATE JahshakaEngine)
+add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
+jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.runtime_pace — A HEADSET FASTER THAN THE PANEL IS PACED BY ITS RUNTIME (ENGINE-UPGRADE-U3 decision 53): free frames
+# under a fake runtime at 11 ms (vr.fakeRuntimePace) are never padded to the panel's 16.7 ms; with the session's period
+# sent the interpolation draws in-between weights. Its bars are the decision's (mean interval <= 11.5 ms, 90 frames).
+add_executable(test_engine_runtime_pace test_engine_runtime_pace.cpp)
+set_target_properties(test_engine_runtime_pace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_runtime_pace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_runtime_pace PRIVATE JahshakaEngine)
+add_dependencies(test_engine_runtime_pace JahshakaEngineMedia)
+jah_gpu_row(frame.runtime_pace CLASS engine FRAMES 300 COMMAND test_engine_runtime_pace
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.runtime_pace PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
+# proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
+# read every frame — and in the TSan arm, zero reports.
+add_executable(test_engine_error_door test_engine_error_door.cpp)
+set_target_properties(test_engine_error_door PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_error_door PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_error_door PRIVATE JahshakaEngine)
+add_dependencies(test_engine_error_door JahshakaEngineMedia)
+jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_door
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_tsan_render(engine.error_door)
+jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fixtures: the host reads published() against a publishing render thread (decision 54)
 
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
 set_target_properties(test_engine_gi_scan PROPERTIES
@@ -361,6 +469,12 @@ jah_gpu_row(engine.gpu_walk_parity CLASS engine COMMAND test_engine_gpu_walk_par
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine"
     JAHSHAKA_TEST_FRAMES 103)   # counted from the source (4 + 8 + 2 + 4 + 21 steps x 4 + the drag's own one)
+# engine.gpu_walk_parity_free — THE INTERPOLATED POSE IS THE TABLE'S (ENGINE-UPGRADE-U3 decision 56): FREE-RUNNING on the
+# render thread, a mover drawn between its grid states at 90 over 60 and then stopped: 0 misses moving and stopped.
+jah_gpu_row(engine.gpu_walk_parity_free CLASS engine COMMAND test_engine_gpu_walk_parity --free-running
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpu_walk_parity_free PROPERTIES TIMEOUT 60 LABELS "engine"
+    JAHSHAKA_TEST_FRAMES 39)   # 6 + 2 + 24 free + 6 free + 1
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)

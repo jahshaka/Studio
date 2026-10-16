@@ -131,7 +131,7 @@ static bool boot(Rig &r, const char *log) {
 
 static bool gUniform = true;   // the last read picture was one colour (the fixture unseen)
 static bool frames(Rig &r, int n, uint64_t *hash) {
-    for (int i = 0; i < n; ++i) r.engine->renderOneFrame();
+    enginetest::frames(r.engine, n);
     if (!hash) return true;
     Image img;
     if (!r.view->readPixels(img) || img.rgba.empty()) { std::printf("FAIL: readPixels\n"); return false; }
@@ -410,7 +410,7 @@ static unsigned runArm(Rig &r, Jobs &j, Recorder &rec, int K, int toggleEvery, c
     rec.opened = rec.consumed = 0;
     rec.toggleEvery = toggleEvery;
     rec.frames = rec.toggles = 0;
-    for (int f = 0; f < K + 2; ++f) r.engine->renderOneFrame();
+    enginetest::frames(r.engine, K + 2);
     rec.toggleEvery = 0;
     std::vector<Ogre::uint32> acc;
     readAcc(j, acc);
@@ -431,7 +431,7 @@ static unsigned runArm(Rig &r, Jobs &j, Recorder &rec, int K, int toggleEvery, c
 static int mainRecord() {
     Rig r;
     if (!boot(r, "test-async-record-ogre.log")) return 1;
-    for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+    enginetest::frames(r.engine, 10);
     Jobs j;
     CHECK(makeJobs(j), "the two fixture compute jobs and their buffers exist");
     CHECK(r.device->mJahShareFamilyCount == 2u,
@@ -490,7 +490,7 @@ static bool expectThrow(const char *what, const char *needle, const std::functio
 static int mainGraphicsCheck() {
     Rig r;
     if (!boot(r, "test-async-graphics-check-ogre.log")) return 1;
-    for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+    enginetest::frames(r.engine, 10);
     Jobs j;
     if (!makeJobs(j)) { std::printf("FAIL: jobs\n"); return 1; }
     Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
@@ -521,7 +521,7 @@ static int mainGraphicsCheck() {
                     [&] { r.acq->waitAtFrameEnd(c + 5u); });
         expectThrow("end without begin", "end without begin", [&] { r.acq->end(); });
         r.acq->waitAt(c, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-        for (int i = 0; i < 5; ++i) r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 5);
         j.acc->upload(zeros.data(), 0u, kN);                         // outside: fine
     }
     // A BRACKET A THROW LEAVES OPEN (the read's W3): the engine catches and goes on, so the next
@@ -536,7 +536,7 @@ static int mainGraphicsCheck() {
         } catch (const Ogre::Exception &) {}
         const bool leaked = r.acq->isOpen();
         const std::string errBefore = r.engine->lastError();   // a frame that throws replaces it
-        r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 1);
         const std::string err = r.engine->lastError() == errBefore ? std::string() : r.engine->lastError();
         char msg[300];
         std::snprintf(msg, sizeof msg, "%s arm: a bracket left open by a throw is closed at the next frame's top "
@@ -544,7 +544,7 @@ static int mainGraphicsCheck() {
                       int(leaked), int(r.acq->isOpen()),
                       (unsigned long long)(r.acq->getLastComputeValue() - before), err.substr(0, 120).c_str());
         CHECK(leaked && !r.acq->isOpen() && r.acq->getLastComputeValue() == before + 1u && err.empty(), msg);
-        for (int i = 0; i < 3; ++i) r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 3);
         // ...and THE SCOPE GUARD closes it where the throw leaves the scope.
         try {
             Ogre::VulkanAsyncComputeBracket bracket(r.acq, r.acq->signalPoint("jah.test.scope"), "jah.test.scoped");
@@ -563,7 +563,7 @@ static int mainGraphicsCheck() {
             r.acq->waitAt(c, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
             expectThrow("a second end of a scoped bracket", "already ended", [&] { bracket.end(); });
         }
-        for (int i = 0; i < 3; ++i) r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 3);
         CHECK(r.engine->lastError() == errBefore, "the frames after the leaks rendered without an error");
     }
     r.acq->setEnabled(true);
@@ -695,7 +695,7 @@ static bool bracketTextureBarriers(Rig &r) {
         go(Ogre::ResourceLayout::Texture, Ogre::ResourceAccess::Read, Ogre::uint8(1u << Ogre::PixelShader));
         const Ogre::uint64 c = r.acq->end();
         r.acq->waitAt(c, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-        r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 1);
         ++handed;
     }
     r.device->stall();
@@ -712,7 +712,7 @@ static int mainValidation(const char *logPath) {
         CHECK(r.acq->isAsync(), "the async arm runs under the layer");
         // THE REAL PATH: the fixture dispatch one frame behind, in order, async, and switched
         // on -> off -> on (C migrating between the queues, G jumping at each enable).
-        for (int i = 0; i < 10; ++i) r.engine->renderOneFrame();
+        enginetest::frames(r.engine, 10);
         Jobs j;
         CHECK(makeJobs(j), "the fixture jobs exist");
         Recorder rec;

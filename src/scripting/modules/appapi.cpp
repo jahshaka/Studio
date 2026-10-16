@@ -32,6 +32,8 @@ For more information see the LICENSE file
 #include "irisgl/import/parsecensus.h"
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
+#include <QElapsedTimer>
+#include <QThread>
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -217,6 +219,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "sleep. Development builds only: returns false and does nothing in a release build. The verb itself "
           "does not return until the freeze is over, which is the point.",
           Needs::Window },
+        { "tickStall", "app.tickStall(ms, everyMs) -> {armed, ms, everyMs, stalls}",
+          "Arms a deliberate UI-THREAD STALL inside the render driver's tick: a `ms`-millisecond sleep in a "
+          "beforeFrame slot, at most once every `everyMs` milliseconds of the wall clock (the stimulus of "
+          "vr.ui_stall: an event-loop stall of the size the 2026-10-03 perf audit measured, landing inside the tick "
+          "that also waits for the headset). `app.tickStall(0)` disarms. Returns what is armed now and how many "
+          "stalls were slept since it was armed. Development builds only: compiled into every build and REFUSED AT "
+          "RUN TIME in a release build (false, app.lastError), like app.blockUiThread.",
+          Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
                          "microcodeEntries, hlmsCachesLoaded, "
@@ -308,8 +318,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
           Needs::Document },
-        { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews}",
+        { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, submitted, handOvers, presentAlpha, presentFree}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -330,7 +340,16 @@ QVector<VerbInfo> AppApi::verbs() const
           "is how long the frame's work actually took, averaged over the last ~60 rendered ticks; "
           "`worstMs` is the worst single tick since startup and `slowFrames` counts the ticks that "
           "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
-          "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule.",
+          "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule. `submit` is the hand-over, running totals "
+          "(ENGINE-UPGRADE-U3): `submitted` records and `handOvers`, the frames the render loop began (free-running: "
+          "every display frame; lockstep: every frame); THE LAW, off the snapshot: `checked` free-running ticks judged "
+          "and `carried` those whose latched frame had not yet applied the record the previous tick submitted, AMONG THE "
+          "TICKS WITH NO OVERRUN (0 = the law; the editor's tick is paced by the present); `uiOverruns` / `frameOverruns` "
+          "— judged ticks whose own work overran a display period from post to submit, or that submitted while a frame "
+          "had been in flight longer than one (the owner's hitch budget) — and `carriedExcused`, the misses among them; "
+          "`presentAlpha` / "
+          "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
+          "free-running frame.",
           Needs::Document },
         { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
           "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
@@ -397,9 +416,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "the loop's timer (and vsync), not the renderer's headroom — frameStats().workMs is the number that "
           "diagnoses anything. The geometry counters are the FRAME's totals, not one view's (Ogre "
           "snapshots them per camera at the end of that camera's pass, so with two on-screen views the "
-          "second includes the first). They are LAZY: recording costs integer adds per draw call and is "
-          "off until something asks, so the very first call reports metricsRecording=false with zeroed "
-          "counters and every call after a rendered frame reports real ones. "
+          "second includes the first). A CALL SUBSCRIBES THEM: recording costs integer adds per draw call "
+          "and runs only for the 120 rendered frames after a call (and while the F3 overlay shows or a "
+          "capture records), so the first call after a lapse reports metricsRecording=false with zeroed "
+          "counters. A caller that wants a span counted calls once BEFORE the span and checks "
+          "metricsRecording on the read after it. "
           "`incompletePsoRequests` is how many pipeline objects the last frame GAVE UP on for "
           "running out of its compile budget — objects using one do not appear that frame. It "
           "is ALWAYS 0 here and that is deliberate (THREADING_ADOPTION_SPEC.md P4, decision "
@@ -863,12 +884,56 @@ bool AppApi::blockUiThread(int ms)
     return MainThreadWatchdog::blockCallingThread(ms);
 }
 
+namespace {
+/// app.tickStall's one armed stall (a dev-build test door, ENGINE-UPGRADE-U3 vr.ui_stall).
+struct TickStall {
+    QMetaObject::Connection connection;
+    int ms = 0, everyMs = 0;
+    qulonglong stalls = 0;
+    QElapsedTimer sinceLast;
+};
+TickStall &tickStallState() { static TickStall s; return s; }
+}   // namespace
+
+QVariantMap AppApi::tickStall(int ms, int everyMs)
+{
+    TickStall &st = tickStallState();
+    const auto report = [&st] {
+        return QVariantMap{ { QStringLiteral("armed"), bool(st.connection) },
+                            { QStringLiteral("ms"), st.ms },
+                            { QStringLiteral("everyMs"), st.everyMs },
+                            { QStringLiteral("stalls"), st.stalls } };
+    };
+    if (!MainThreadWatchdog::isSupported()) {
+        fail("app.tickStall: development builds only");
+        return report();
+    }
+    if (st.connection) QObject::disconnect(st.connection);
+    st.connection = QMetaObject::Connection();
+    if (ms <= 0) { st.ms = st.everyMs = 0; return report(); }
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) { fail("app.tickStall: no render driver"); return report(); }
+    st.ms = ms;
+    st.everyMs = qMax(0, everyMs);
+    st.stalls = 0;
+    st.sinceLast.invalidate();
+    st.connection = QObject::connect(driver, &EngineRenderDriver::beforeFrame, driver, [] {
+        TickStall &s = tickStallState();
+        if (s.sinceLast.isValid() && s.sinceLast.elapsed() < s.everyMs) return;
+        s.sinceLast.start();
+        QThread::msleep(ulong(s.ms));
+        ++s.stalls;
+    });
+    return report();
+}
+
 QVariantMap AppApi::shaderCache()
 {
     QVariantMap m;
     auto engine = EngineHost::instance().engine();
     if (!engine) { m["enabled"] = false; return m; }
-    const jahshaka::engine::ShaderCacheStats s = engine->shaderCacheStats();
+    jahshaka::engine::ShaderCacheStats s;
+    engine->request([&](jahshaka::engine::Engine &e) { s = e.shaderCacheStats(); });   // a REQUEST (U3 stage 3): a directory scan
     m["enabled"]             = s.enabled;
     m["dir"]                 = QString::fromStdString(s.dir);
     m["fingerprint"]         = QString::fromStdString(s.fingerprint);
@@ -898,7 +963,7 @@ QVariantMap AppApi::asyncShaders()
     m["active"] = livecompiles::asyncNow();
     auto engine = EngineHost::instance().engine();
     if (!engine) { m["running"] = false; return m; }
-    const jahshaka::engine::AsyncShaderStats s = engine->asyncShaderStats();
+    const jahshaka::engine::AsyncShaderStats s = engine->published().shaders;
     m["running"]              = s.running;
     m["threads"]              = s.threads;
     m["pending"]              = s.pending;
@@ -921,7 +986,8 @@ QVariantMap AppApi::setAsyncShaders(bool on)
 
 QVariantMap AppApi::waitForAsyncShaders()
 {
-    if (auto engine = EngineHost::instance().engine()) engine->waitForAsyncShaders();
+    if (auto engine = EngineHost::instance().engine())
+        engine->request([](jahshaka::engine::Engine &e) { e.waitForAsyncShaders(); });   // a REQUEST (U3 stage 4a)
     return asyncShaders();
 }
 
@@ -1491,6 +1557,8 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     const EngineRenderDriver::Stats s = driver ? driver->stats() : EngineRenderDriver::Stats{};
     out.insert("running", driver ? driver->isRunning() : false);
     out.insert("intervalMs", driver ? driver->intervalMs() : 0);
+    // THE PERIOD THE RENDER LOOP PACES TO (U3 decision 53): the session's while one pumps, 0 under Unlimited, the panel's.
+    out.insert("displayPeriodMs", driver ? double(driver->displayPeriodSeconds()) * 1000.0 : 0.0);
     out.insert("ticks", QVariant::fromValue(s.ticks));
     out.insert("rendered", QVariant::fromValue(s.rendered));
     // The live state and the two ROLLING numbers that replaced the lifetime
@@ -1503,6 +1571,24 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
     auto engine = EngineHost::instance().engine();
     out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
+    // THE HAND-OVER (ENGINE-UPGRADE-U3 decision 50, editor.drag_latency): running totals. `carried` — the driver's free-
+    // running ticks that found the last tick's record still waiting for a frame; `submitted` / `handOvers` — the
+    // records submitted and the frames the render loop began (a host-side read under the slot's lock, never a
+    // synchronous read of the engine).
+    QVariantMap submit;
+    submit.insert("checked", double(s.checked));
+    submit.insert("carried", double(s.carried));
+    submit.insert("uiOverruns", double(s.uiOverruns));
+    submit.insert("frameOverruns", double(s.frameOverruns));
+    submit.insert("carriedExcused", double(s.carriedExcused));
+    if (engine) {
+        const jahshaka::engine::FrameSubmitStatus st = engine->frameSubmitStatus();
+        submit.insert("submitted", double(st.submitted));
+        submit.insert("handOvers", double(st.handOvers));
+        submit.insert("presentAlpha", double(engine->published().presentAlpha));
+        submit.insert("presentFree", engine->published().presentFree);
+    }
+    out.insert("submit", submit);
     if (reset && driver) driver->resetWorst();
     return out;
 }
@@ -1593,11 +1679,10 @@ QVariantMap AppApi::renderStats()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.renderStats: no engine in this session"); return out; }
-    jahshaka::engine::RenderStats s;
-    if (!engine->renderStats(s)) {
-        fail("app.renderStats: the engine could not report its counters");
-        return out;
-    }
+    // THE SUBSCRIPTION, RENEWED BY THE CALL (U3 stage 3, decision 17): the counters run for the window after it, and
+    // the answer is the last frame's snapshot — metricsRecording false (zero geometry) before the span's first frame.
+    engine->publishRenderStats(120u);
+    const jahshaka::engine::RenderStats s = engine->published().render;
     out.insert("metricsRecording", s.metricsRecording);
     out.insert("fps", s.fps);
     out.insert("frameMs", s.frameMs);
@@ -1633,7 +1718,8 @@ QVariantMap AppApi::renderStats()
         QVariantList rows;
         if (jahshaka::engine::Scene *es = host.viewport ? host.viewport->engineScene() : nullptr) {
             std::vector<jahshaka::engine::ObjectLodDesc> lods;
-            es->objectLods(lods);
+            if (auto engine = EngineHost::instance().engine())   // a REQUEST (U3 stage 3): it walks the Items
+                engine->request([&](jahshaka::engine::Engine &) { es->objectLods(lods); });
             rows.reserve(int(lods.size()));
             // THE NAME IS THE DOCUMENT'S. The engine's Items are created
             // unnamed, so `ObjectLodDesc::name` is empty for every row; the
@@ -1691,7 +1777,9 @@ QVariantMap AppApi::engineObjects()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.engineObjects: no engine in this session"); return out; }
     jahshaka::engine::ObjectCounts c;
-    if (!engine->objectCounts(c)) {
+    bool counted = false;
+    engine->request([&](jahshaka::engine::Engine &e) { counted = e.objectCounts(c); });   // a REQUEST (U3 stage 3)
+    if (!counted) {
         fail("app.engineObjects: the engine could not report its object counts");
         return out;
     }
@@ -1730,7 +1818,9 @@ QVariantMap AppApi::memoryStats()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.memoryStats: no engine in this session"); return out; }
     jahshaka::engine::MemoryStats m;
-    if (!engine->memoryStats(m)) {
+    bool read = false;
+    engine->request([&](jahshaka::engine::Engine &e) { read = e.memoryStats(m); });   // a REQUEST (U3 stage 3)
+    if (!read) {
         fail("app.memoryStats: the engine could not report its pools");
         return out;
     }
@@ -1743,7 +1833,9 @@ QVariantMap AppApi::textureMemory(const QVariantMap &options)
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.textureMemory: no engine in this session"); return out; }
     std::vector<jahshaka::engine::TextureMemoryEntry> entries;
-    if (!engine->textureMemory(entries)) {
+    bool walked = false;
+    engine->request([&](jahshaka::engine::Engine &e) { walked = e.textureMemory(entries); });   // a REQUEST (U3 stage 3)
+    if (!walked) {
         fail("app.textureMemory: the engine could not walk its textures");
         return out;
     }
@@ -1809,7 +1901,9 @@ QVariantMap AppApi::reclaimMemory()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.reclaimMemory: no engine in this session"); return out; }
     jahshaka::engine::MemoryStats before, after;
-    if (!engine->reclaimMemory(&before, &after)) {
+    bool reclaimed = false;
+    engine->request([&](jahshaka::engine::Engine &e) { reclaimed = e.reclaimMemory(&before, &after); });   // a REQUEST (U3 4b)
+    if (!reclaimed) {
         fail("app.reclaimMemory: the engine refused: " +
              QString::fromStdString(engine->lastError()));
         return out;
@@ -1829,7 +1923,9 @@ QVariantMap AppApi::threading()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.threading: no engine in this session"); return out; }
     jahshaka::engine::EngineThreading t;
-    if (!engine->threading(t)) {
+    bool read = false;
+    engine->request([&](jahshaka::engine::Engine &e) { read = e.threading(t); });   // a REQUEST (U3 stage 3)
+    if (!read) {
         fail("app.threading: the engine could not report its threading state");
         return out;
     }
@@ -1851,15 +1947,17 @@ QVariantMap AppApi::textureStreaming()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.textureStreaming: no engine in this session"); return out; }
-    out.insert("multiLoadThreads", engine->textureMultiLoadThreads());
-    out.insert("doneStreaming", engine->texturesDoneStreaming());
-    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
-    out.insert("metadataCacheEntries", engine->textureMetadataCacheEntries());
-    out.insert("channelCacheEntries", engine->textureChannelCacheEntries());
-    out.insert("waitTimeouts", engine->textureWaitTimeouts());
-    out.insert("waitWorstMs", engine->textureWaitWorstMs());
-    out.insert("waitBudgetMs", engine->textureWaitBudgetMs());
-    out.insert("waitAdvances", QVariant::fromValue(qulonglong(engine->textureWaitAdvances())));
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 3): the streaming worker's own counters
+        out.insert("multiLoadThreads", e.textureMultiLoadThreads());
+        out.insert("doneStreaming", e.texturesDoneStreaming());
+        out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
+        out.insert("metadataCacheEntries", e.textureMetadataCacheEntries());
+        out.insert("channelCacheEntries", e.textureChannelCacheEntries());
+        out.insert("waitTimeouts", e.textureWaitTimeouts());
+        out.insert("waitWorstMs", e.textureWaitWorstMs());
+        out.insert("waitBudgetMs", e.textureWaitBudgetMs());
+        out.insert("waitAdvances", QVariant::fromValue(qulonglong(e.textureWaitAdvances())));
+    });
     return out;
 }
 
@@ -1868,9 +1966,11 @@ QVariantMap AppApi::waitForTextures()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.waitForTextures: no engine in this session"); return out; }
-    out.insert("waitedMs", engine->waitForTextureLoads());
-    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
-    out.insert("doneStreaming", engine->texturesDoneStreaming());
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 3): the wait, then the counters it moved
+        out.insert("waitedMs", e.waitForTextureLoads());
+        out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
+        out.insert("doneStreaming", e.texturesDoneStreaming());
+    });
     return out;
 }
 

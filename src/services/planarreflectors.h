@@ -26,19 +26,25 @@ For more information see the LICENSE file
 
 #include <QString>
 
+#include <functional>
+
 #include "irisgl/irisglfwd.h"
 
 class IEditorViewport;
+class QObject;
 
 namespace planarreflectors {
 
-/// Sets (or clears) the node's reflector flag. Turning it ON is validated
-/// against the live renderer: on refusal the flag is put back, `error` is
-/// filled with a message meant for a user, and false is returned. With no
-/// engine viewport the flag is simply set — a caller must not report a failure
-/// it cannot actually see (headless runs, document-only stand-in viewports).
-bool set(const iris::SceneNodePtr &node, bool enabled, IEditorViewport *viewport,
-         QString *error = nullptr);
+/// What the renderer said: accepted, or refused with a message meant for a user (the flag already put back).
+using Done = std::function<void(bool accepted, const QString &error)>;
+
+/// Sets (or clears) the node's reflector flag. Turning it ON is validated against the live renderer ON ITS COMPLETION
+/// (ENGINE-UPGRADE-U3 decision 50 — never a frame waited inside the editor): the flag is set now, the renderer's answer
+/// read once the frame after the one that applied it has closed (IEditorViewport::afterApplied); on refusal the flag is
+/// put back and `done(false, message)` runs. Clearing, an unchanged flag and no engine viewport answer `done(true)` at
+/// once — a caller must not report a failure it cannot see (headless runs, document-only stand-ins). `owner` scopes
+/// the wait (gone first = `done` never runs; nullptr = the viewport's).
+void set(const iris::SceneNodePtr &node, bool enabled, IEditorViewport *viewport, QObject *owner, Done done = {});
 
 }   // namespace planarreflectors
 

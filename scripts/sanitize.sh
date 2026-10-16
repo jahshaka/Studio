@@ -28,7 +28,7 @@
 #
 # ---------------------------------------------------------------- tsan --------
 # ThreadSanitizer cannot coexist with AddressSanitizer and instruments every
-# translation unit, so it gets its OWN build directory (default build-tsan/),
+# translation unit, so it gets its OWN build directory (default build-tsan-clang/, built with clang),
 # configured with -DJAHSHAKA_TSAN=ON. Ogre-Next and Qt stay uninstrumented (we
 # link their installed shared libraries); scripts/tsan.supp covers what that
 # costs. Membership is the ctest label `tsan`: the async-contract suites
@@ -61,11 +61,11 @@ usage() {
 usage: scripts/sanitize.sh <lsan|tsan> [extra ctest arguments...]
 
   lsan   run the leak lane over the ordinary build dir  (env JAH_BUILD_DIR, default build-linux)
-  tsan   configure/build/run the race lane              (env JAH_TSAN_BUILD_DIR, default build-tsan)
+  tsan   configure/build/run the race lane              (env JAH_TSAN_BUILD_DIR, default build-tsan-clang)
 
 Environment:
   JAH_BUILD_DIR       build dir the lsan lane uses            (default build-linux)
-  JAH_TSAN_BUILD_DIR  build dir the tsan lane configures      (default build-tsan)
+  JAH_TSAN_BUILD_DIR  build dir the tsan lane configures      (default build-tsan-clang; clang required)
   JAH_SAN_NO_BUILD=1  skip the build step (run what is there)
   JAH_SAN_BUILD_ONLY=1  configure/build only, run nothing (the ship builds the tsan
                       lane under ionice, then runs it without: IONICE-1)
@@ -80,7 +80,7 @@ EOF
 }
 
 BUILD_DIR="${JAH_BUILD_DIR:-build-linux}"
-TSAN_BUILD_DIR="${JAH_TSAN_BUILD_DIR:-build-tsan}"
+TSAN_BUILD_DIR="${JAH_TSAN_BUILD_DIR:-build-tsan-clang}"
 
 # The flags every configure in this tree needs (CLAUDE.md "Build").
 COMMON_CMAKE_ARGS=(
@@ -176,13 +176,27 @@ run_tsan() {
     if [ ! -f "$TSAN_BUILD_DIR/CMakeCache.txt" ]; then
         echo "sanitize: configuring $TSAN_BUILD_DIR (-DJAHSHAKA_TSAN=ON)"
         mkdir -p "$TSAN_BUILD_DIR"
-        cmake -S . -B "$TSAN_BUILD_DIR" "${COMMON_CMAKE_ARGS[@]}" -DJAHSHAKA_TSAN=ON \
+        # THE ARM BUILDS WITH CLANG (ENGINE-UPGRADE-U3 decision 49): clang's own libtsan, against the libstdc++ of the
+        # GCC the rest of the tree (and the Ogre install) was built with — clang picks the NEWEST GCC directory it finds,
+        # which on this box (GCC 16's runtime libs without its libstdc++) does not link.
+        # CLANG IS REQUIRED (decision 62): no silent fall back to GCC's libtsan, whose registry CHECK aborts the app.
+        command -v clang++ > /dev/null 2>&1 || die "the race lane builds with clang: clang++ is not installed"
+        local gccdir="/usr/lib/gcc/$(gcc -dumpmachine)/$(gcc -dumpversion | cut -d. -f1)"
+        local pin=""
+        [ -d "$gccdir" ] && pin="--gcc-install-dir=$gccdir"
+        local tsan_cc=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+                       "-DCMAKE_C_FLAGS=$pin" "-DCMAKE_CXX_FLAGS=$pin" "-DCMAKE_EXE_LINKER_FLAGS=$pin"
+                       "-DCMAKE_SHARED_LINKER_FLAGS=$pin")
+        echo "sanitize: the race lane builds with clang ($pin)"
+        cmake -S . -B "$TSAN_BUILD_DIR" "${COMMON_CMAKE_ARGS[@]}" "${tsan_cc[@]}" -DJAHSHAKA_TSAN=ON \
             ${JAH_TEST_DISPLAY:+-DJAH_TEST_DISPLAY="$JAH_TEST_DISPLAY"} \
             > "$TSAN_BUILD_DIR/configure.log" 2>&1 \
             || { tail -30 "$TSAN_BUILD_DIR/configure.log"; die "configure failed"; }
     fi
     grep -q "JAHSHAKA_TSAN:BOOL=ON" "$TSAN_BUILD_DIR/CMakeCache.txt" \
         || die "$TSAN_BUILD_DIR was not configured with -DJAHSHAKA_TSAN=ON"
+    grep -q "CMAKE_CXX_COMPILER:.*clang" "$TSAN_BUILD_DIR/CMakeCache.txt" \
+        || die "$TSAN_BUILD_DIR was configured with another compiler: the race lane is clang's (remove the directory)"
 
     # Only what the lane runs: the app (five of the suites drive the real
     # binary) plus the in-process suites. Building the engine's pixel suites
@@ -190,6 +204,13 @@ run_tsan() {
     local targets=(Jahshaka test_import_async test_import_shutdown test_open_responsive
                    test_archive_responsive test_shutdown_order test_watchdog_stall
                    test_memory_ownership test_staging_race)
+    # THE RENDER THREAD'S ARM (ENGINE-UPGRADE-U3 decision 47): JAH_TSAN_LABEL=tsan-render runs the rows labelled so —
+    # measured by price, run by hand, never part of the shipped lane — and builds their targets.
+    local label="${JAH_TSAN_LABEL:-tsan}"
+    if [ "$label" = "tsan-render" ]; then
+        targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order
+                 test_engine_drag_latency test_engine_interpolation test_engine_error_door)
+    fi
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]} at -j$(build_jobs)"
         cmake --build "$TSAN_BUILD_DIR" -j"$(build_jobs)" --target "${targets[@]}" \
@@ -226,7 +247,7 @@ run_tsan() {
     echo "sanitize: TSAN_OPTIONS=$TSAN_OPTIONS"
     [ -n "${DISPLAY:-}" ] || echo "sanitize: WARNING - no DISPLAY; the suites that spawn Jahshaka will fail"
 
-    ( cd "$TSAN_BUILD_DIR" && ctest -L '^tsan$' --output-on-failure "$@" )
+    ( cd "$TSAN_BUILD_DIR" && ctest -L "^${label}\$" --output-on-failure "$@" )
     local rc=$?
 
     local tblocked

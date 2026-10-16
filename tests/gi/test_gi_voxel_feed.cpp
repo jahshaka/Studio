@@ -267,14 +267,14 @@ int main()
 
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 12.0f), Vec3(0.0f, 0.5f, 0.0f));
-    for (int i = 0; i < 2; ++i) e->renderOneFrame();
+    enginetest::frames(e, 2);
 
     // ---- 1 + 2. THE CHAIN, AND THE REFERENCE ------------------------------------
     CHECK(scene->setGlobalIllumination(chainGi(GiQuality::High)), "the High chain built");
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.cascades.size() == 4, "the chain has four cascades");
     if (st.cascades.size() != 4) { std::printf("FAIL: no chain\n"); return 1; }
     judge("high", st, fixture);
@@ -305,10 +305,10 @@ int main()
     // ---- 3. A HIDE LEAVES THE NEXT GATHER BY ITSELF -----------------------------
     scene->setNodeVisible(nearSmall, false);
     for (Inst &in : fixture) if (in.node == nearSmall) in.visible = false;
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    GiStatus hidden = scene->giStatus();
+    GiStatus hidden = scene->published().gi;
     CHECK(hidden.cascades.size() == 4, "the chain survived the hide");
     if (hidden.cascades.size() == 4) {
         CHECK(hidden.cascades[0].rebuilds > st.cascades[0].rebuilds,
@@ -317,20 +317,20 @@ int main()
     }
     scene->setNodeVisible(nearSmall, true);
     for (Inst &in : fixture) in.visible = true;
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    enginetest::frames(e, 8);
 
     // ---- 4. NO UPLOAD IN THE REBUILD --------------------------------------------
-    for (int i = 0; i < 4; ++i) e->renderOneFrame();        // settle: nothing owed
-    const GpuSceneStatus before = scene->gpuSceneStatus();
-    const unsigned long long rebuildsBefore = scene->giStatus().rebuilds;
+    enginetest::frames(e, 4);// settle: nothing owed
+    const GpuSceneStatus before = scene->published().gpuScene;
+    const unsigned long long rebuildsBefore = scene->published().gi.rebuilds;
     CHECK(before.live, "the GPU scene is live");
     CHECK(scene->setGlobalIllumination(chainGi(GiQuality::Medium)),
           "a from-scratch rebuild of the chain (the Medium tier) over the still scene");
-    for (int i = 0; i < 8; ++i) e->renderOneFrame();
-    const GpuSceneStatus after = scene->gpuSceneStatus();
+    enginetest::frames(e, 8);
+    const GpuSceneStatus after = scene->published().gpuScene;
     CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
           "the voxel read-back landed: every cascade's reading is its newest gather's");
-    const GiStatus med = scene->giStatus();
+    const GiStatus med = scene->published().gi;
     std::printf("   gpu scene copy runs %llu -> %llu, writes %llu -> %llu, rebuilds %llu -> %llu\n",
                 before.copyRuns, after.copyRuns, before.writes, after.writes,
                 rebuildsBefore, med.rebuilds);

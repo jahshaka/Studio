@@ -78,7 +78,7 @@ static void sunAt(Scene *s, NodeId sun, int tick) {
 
 static unsigned long long cascadeRebuilds(Scene *s) {
     unsigned long long n = 0;
-    for (const GiStatus::CascadeStatus &c : s->giStatus().cascades) n += c.rebuilds;
+    for (const GiStatus::CascadeStatus &c : s->published().gi.cascades) n += c.rebuilds;
     return n;
 }
 
@@ -90,13 +90,13 @@ static void drive(Engine *e, Scene *s, NodeId mover, NodeId sun, NodeId still) {
         enginetest::setNodePosition(s, mover, Vec3(-2.0f + 4.0f * float(f) / float(kFrames), 0.3f, 1.0f));
         if (f % 30 == 0) sunAt(s, sun, f / 30);
         if (f % 50 == 25) enginetest::setNodePosition(s, still, Vec3(-1.0f + 0.1f * float(f / 50), 0.3f, -0.5f));
-        e->renderOneFrame();
+        enginetest::frames(e, 1);
     }
     // THE POOL: the refresh re-voxelises every cascade and pools no new mip job (a job per format,
     // volume size and level, shared by every volume and rebuild of that kind).
     const unsigned long long jobs0 = photonDispatchStatus().mipJobs;
     s->refreshGlobalIllumination();
-    for (int i = 0; i < 12; ++i) e->renderOneFrame();
+    enginetest::frames(e, 12);
     const unsigned long long jobs1 = photonDispatchStatus().mipJobs;
     std::printf("   mip jobs pooled %llu (the refresh added %llu)\n", jobs1, jobs1 - jobs0);
     CHECK(jobs1 == jobs0, "the refresh's re-voxelisation pooled NO new mip job (one per kind, not per volume)");
@@ -243,7 +243,7 @@ int main()
                     "%llu outside\n", refused, d1.regionBrackets - d0.regionBrackets, d1.inRegion - d0.inRegion,
                     d1.mipDispatches - d0.mipDispatches, d1.outsideRegion - d0.outsideRegion);
         if (refused) std::printf("   the first: %s\n", gFirstRefusal.c_str());
-        CHECK(s->rayQueryStatus().enabled, "cards: the view traces (rays on)");
+        CHECK(s->published().rayQuery.enabled, "cards: the view traces (rays on)");
         std::printf("   cards: %llu cascade re-voxelisations\n", rb);
         CHECK(rb > 0, "cards: the moved still re-voxelised its cascades (inside the bracket)");
         CHECK(refused == 0u, "cards: NO graphics-only command inside the GI region (300 frames, a mover, a light tick, a rebuild)");

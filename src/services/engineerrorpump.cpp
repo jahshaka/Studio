@@ -34,8 +34,31 @@ void EngineErrorPump::drain(jahshaka::engine::Engine *engine)
     // Returns AND clears (Engine::takeLastError): the reason is consumed here
     // or nowhere. In the overwhelmingly common case this is an empty string.
     const std::string taken = engine->takeLastError();
-    if (taken.empty()) return;
-    record(QString::fromStdString(taken));
+    if (!taken.empty()) record(QString::fromStdString(taken));
+    // THE FRAME'S ERROR (ENGINE-UPGRADE-U3 F3): published, never in the sink.
+    const jahshaka::engine::PublishedEngineFrame &pub = engine->published();
+    if (mFrameErrorsEngine != engine) { mFrameErrorsEngine = engine; mFrameErrorsTaken = 0; }
+    if (pub.framesWithError != mFrameErrorsTaken) {
+        // Every entry the count says this drain has not taken (the list holds the newest kFrameErrorsKept): the k-th
+        // entry from the end is the frame error numbered framesWithError - k.
+        const unsigned long long unseen = pub.framesWithError > mFrameErrorsTaken
+                                              ? pub.framesWithError - mFrameErrorsTaken : pub.framesWithError;
+        const size_t n = pub.frameErrors.size();
+        for (size_t i = n > unseen ? size_t(n - unseen) : 0u; i < n; ++i)
+            record(QString::fromStdString(pub.frameErrors[i].text));
+        mFrameErrorsTaken = pub.framesWithError;
+    }
+    // ...AND THE COMMANDS' REFUSALS (decision 34: a refusal is its message's, published beside the frame's errors):
+    // the newest `messagesRefused - taken` of the list.
+    if (mRefusalsEngine != engine) { mRefusalsEngine = engine; mRefusalsTaken = 0; }
+    const unsigned long long refused = pub.input.messagesRefused;
+    if (refused != mRefusalsTaken) {
+        const unsigned long long unseen = refused > mRefusalsTaken ? refused - mRefusalsTaken : refused;
+        const size_t n = pub.refusals.size();
+        for (size_t i = n > unseen ? size_t(n - unseen) : 0u; i < n; ++i)
+            record(QString::fromStdString(pub.refusals[i].text));
+        mRefusalsTaken = refused;
+    }
 }
 
 std::vector<EngineErrorPump::Entry>::iterator EngineErrorPump::find(const QString &message)

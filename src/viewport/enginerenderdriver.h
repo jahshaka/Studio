@@ -18,7 +18,10 @@
 //
 // Runs on the thread that owns the Engine (its thread-affinity rule).
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QObject>
+
+#include <atomic>
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
 #include "viewport/framewindows.h"
@@ -29,11 +32,25 @@ class EngineRenderDriver : public QObject
 {
     Q_OBJECT
 public:
+    /// THE OWNER'S MODE (ENGINE-UPGRADE-U3 stage 5): the tick only submits; the render thread draws on its own
+    /// (Engine::setFreeRunning) while there is something to draw. Off = LOCKSTEP, the tick's frame finished before it
+    /// returns (scripts, MCP, the selftest).
+    void setFreeRunning(bool on) { mFreeRunning = on; if (!on && mEngine) mEngine->setFreeRunning(false); }
+    bool freeRunning() const { return mFreeRunning; }
     /// What the loop has actually been doing — the numbers behind `app.frameStats()`
     /// and the frame-pacing gate. Cumulative for the life of the driver.
     struct Stats {
         qulonglong ticks    = 0;   ///< timer fires
         qulonglong rendered = 0;   ///< ticks that called Engine::renderOneFrame
+        /// THE LAW, OFF THE SNAPSHOT (ENGINE-UPGRADE-U3 decision 60, editor.drag_latency): FREE-RUNNING ticks judged
+        /// (`checked`) and those whose latched frame had NOT applied the serial the last tick's record was submitted as
+        /// (`carried`): 0 = every tick's record on screen by the next tick.
+        qulonglong checked  = 0;
+        qulonglong carried  = 0;   ///< misses of ticks with neither overrun: a DEFECT (decision 63)
+        /// THE OWNER'S HITCH BUDGET, counted (decision 63): judged ticks whose own work overran a display period from
+        /// its post to its submit (`uiOverruns`), whose record was submitted while a frame had been in flight longer
+        /// than a display period (`frameOverruns`), and the misses among them (`carriedExcused`).
+        qulonglong uiOverruns = 0, frameOverruns = 0, carriedExcused = 0;
 
         // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
         // It counted ticks with no enabled View — the app sitting on the
@@ -96,6 +113,9 @@ public:
     /// swapchains — a user action, never a per-frame one).
     void setPacingMode(framepacing::Mode m);
     framepacing::Mode pacingMode() const { return mMode; }
+    /// The display period sent to the render loop (U3 decision 53): the session's while one pumps, 0 under Unlimited,
+    /// the panel's otherwise.
+    float displayPeriodSeconds() const;
     /// The refresh rate of the screen the viewport lives on, in Hz. The host
     /// pushes it at startup and again whenever the window changes screen or the
     /// screen changes mode; 0 means "unknown" and the loop falls back to 16 ms.
@@ -122,6 +142,20 @@ public:
     bool vrSessionActive() const { return mVrSession; }
 
 private:
+    bool mFreeRunning = false;
+    /// The tick, from the timer or posted by a published frame (fromPresent: the present paced it).
+    void tick(bool fromPresent);
+    bool event(QEvent *e) override;
+    static QEvent::Type tickEventType();
+    static long long steadyNs();
+    std::atomic<long long> mPostedAtNs{ 0 };   ///< when the render thread posted the pending tick (steady ns)
+    bool mLastTickUiOverrun = false, mLastTickFrameOverrun = false;   ///< the last free tick's attribution
+    bool mStarted = false;                    ///< start() .. stop()
+    bool mPresentPaced = false;               ///< free-running with views: the published frames post the ticks
+    std::atomic<bool> mTickPosted{ false };   ///< one posted tick at a time (set on the render thread)
+    unsigned long long mLastTickSerial = 0;   ///< the serial the last free tick's record is drawn as (0: none)
+    static constexpr int kPresentFallbackMs = 100;   ///< the timer while the present paces: a stalled loop's fallback
+    unsigned long long mFreeFrameSeen = 0;   ///< the snapshot's frame at the last free-running tick
     /// Reconciles this loop with the engine's session, once per tick (F5).
     /// TWO things can make the driver's pacing a lie, and neither of them goes
     /// through the host: the engine ENDS a session by itself when the runtime
@@ -252,6 +286,8 @@ private:
     framepacing::Mode mMode = framepacing::Mode::Display;
     /// 0 until a host tells us (see setRefreshHz) — the fallback interval then.
     double  mRefreshHz = 0.0;
+    /// The display period last told to the engine (Engine::setDisplayPeriod; told on change only).
+    float   mDisplayPeriodSent = -1.0f;
     /// What the script run in flight (if any) is doing to this loop.
     ScriptRun mScriptRun = ScriptRun::None;
     /// holdThisTick's flag: set inside beforeFrame, consumed by the same tick.

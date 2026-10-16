@@ -168,7 +168,10 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // — one un-streamed frame per cover rise, which is exactly the
             // frame the whole arm used to land in.
             if (mEngine) {
-                mEngine->submitFrame(jahshaka::engine::FrameInput::withPace(driverFramePace()));
+                // THE PACE IS THE DRIVER FRAME'S, SET ON CHANGE (U3 stage 2 read F3: no record of its own, so a tick
+                // with nothing from the document is a real empty hand-over); lowered after the frame (afterFrame).
+                const jahshaka::engine::FramePace pace = driverFramePace();
+                if (pace != mPaceSet) { mEngine->setFramePace(pace); mPaceSet = pace; }
                 // The window is spent by DRIVER frames of a REVEALED world —
                 // never by the load's own, which is what stops a slow load from
                 // consuming it before the user sees anything. `mWorldArriving`
@@ -193,6 +196,12 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // a 1080p render is never paid for a frame nobody records.
         connect(mDriver, &EngineRenderDriver::afterFrame, this, [this]() {
             if (mRecordView) mRecordView->setEnabled(false);
+            // The driver frame's pace ends with it: every frame until the next tick renders Complete.
+            if (mEngine && mPaceSet != jahshaka::engine::FramePace::Complete) {
+                mEngine->setFramePace(jahshaka::engine::FramePace::Complete);
+                mPaceSet = jahshaka::engine::FramePace::Complete;
+            }
+            emit mEvents.framesDrawn();
         });
 }
 
@@ -885,6 +894,9 @@ bool EngineSceneViewport::ensureEngineScene()
                                         std::to_string(reinterpret_cast<uintptr_t>(this)),
                                         sceneworkers::count(sceneworkers::Tier::Primary));
     if (!mEngineScene) return false;
+    mEngineLodBias = 1.0f;   // a new engine scene starts at the engine's own bias and with no debug view
+    mEngineAtomView = mEnginePhotonView = 0;
+    mEnginePhotonCascade = -1;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     // The mirror before the bind: bindViewToScene drops its environment latches
     // (see there), and on this path there is nothing to drop — but the order has
@@ -1830,7 +1842,7 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     if (mMirror) mMirror->setSource(scene);
     // A new document scene means no frame of IT has presented yet, even when
     // the engine scene underneath is the same object (close/open reuses it).
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     refreshOverlay();
     // AND THE TEARDOWN REACHES THE SCREEN (lane STALE-VIEW-1). This is the one
     // moment the world a user is looking at stops existing; without a frame
@@ -2401,13 +2413,14 @@ void EngineSceneViewport::setPipSize(double fraction)
 bool EngineSceneViewport::pipOnView() const
 {
     const jahshaka::engine::View *v = view();
-    return v && v->pip().enabled;
+    return v && v->pushedPip().enabled;   // what the host last pushed (U3 stage 2)
 }
 
 unsigned EngineSceneViewport::pipBuilds() const
 {
     const jahshaka::engine::View *v = view();
-    return v ? v->pipGeneration() : 0u;
+    const auto pv = v ? publishedView() : std::nullopt;   // the last frame's (U3 stage 2)
+    return pv ? pv->pipGeneration : 0u;
 }
 
 // THE SELECTION PREVIEW (D3), pushed once a frame from syncFrame. It exists
@@ -2678,6 +2691,12 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         // the selected node under one would promote it if physics or a script moved it meanwhile (the 3c read, C).
         // Every frame, so the release lands on the frame it happens.
         jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
+        // THE GRID STATE THIS RECORD IS (ENGINE-UPGRADE-U3): the document clock's step count, stamped on every node
+        // record the frame applies (stage 5 interpolates between the last two).
+        if (mScene) frame.stepSerial = mScene->simulationClock().steps();
+        // ...AND THE GRID'S STEP (decision 55): the interpolation's period is the clock's 1/60, never this record's
+        // frameDelta (the particles' — simulated x particleTimeScale).
+        frame.stepPeriod = float(iris::SimulationClock::kStepSeconds);
         if (mEngineScene) {
             jahshaka::engine::FrameInputGesture gesture;
             gesture.active = mGizmo && mGizmo->isDragging();
@@ -2715,7 +2734,11 @@ bool EngineSceneViewport::requestPresentedFrame(PresentedFrameDone done, bool ke
     // the pending one finished first.
     if (!mPresentedDone.empty() && keepHelpers != mPresentedKeepHelpers) settlePresentedFrame();
     if (mPresentedDone.empty()) {
-        if (!v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers)) {
+        bool armed = false;
+        mEngine->request([&](jahshaka::engine::Engine &) {   // a REQUEST (U3 stage 4a): the capture's arming
+            armed = v->requestFrameCapture(keepHelpers, mPresentedCompanionWanted && !keepHelpers);
+        });
+        if (!armed) {
             if (done) done(QImage());
             return false;
         }
@@ -2731,7 +2754,8 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
     jahshaka::engine::View *v = view();
     QImage frame;
     if (v) {
-        const jahshaka::engine::FrameCaptureState st = v->frameCaptureState();
+        jahshaka::engine::FrameCaptureState st = jahshaka::engine::FrameCaptureState::Idle;
+        mEngine->request([&](jahshaka::engine::Engine &) { st = v->frameCaptureState(); });   // a REQUEST (U3 4a)
         if (st == jahshaka::engine::FrameCaptureState::Armed) return;   // not drawn yet
         if (st == jahshaka::engine::FrameCaptureState::InFlight && !wait) return;
         // Idle = dropped (the world closed, the view was rebuilt, the readback was
@@ -2745,7 +2769,10 @@ void EngineSceneViewport::pollPresentedFrame(bool wait)
             return q;
         };
         Image img, presented;
-        if (st != jahshaka::engine::FrameCaptureState::Idle && v->takeFrameCapture(img, true, &presented)) {
+        bool taken = false;
+        if (st != jahshaka::engine::FrameCaptureState::Idle)
+            mEngine->request([&](jahshaka::engine::Engine &) { taken = v->takeFrameCapture(img, true, &presented); });
+        if (taken) {
             frame = toQImage(img);
             mPresentedCompanion = toQImage(presented);
         }
@@ -2766,8 +2793,13 @@ void EngineSceneViewport::settlePresentedFrame()
 {
     if (mPresentedDone.empty()) return;
     jahshaka::engine::View *v = view();
-    if (mEngine && v && v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed) {
-        if (!v->isEnabled()) {
+    const auto captureState = [&] {   // a REQUEST (U3 stage 4a): the capture's state, read on the engine's side
+        jahshaka::engine::FrameCaptureState st = jahshaka::engine::FrameCaptureState::Idle;
+        if (mEngine && v) mEngine->request([&](jahshaka::engine::Engine &) { st = v->frameCaptureState(); });
+        return st;
+    };
+    if (mEngine && v && captureState() == jahshaka::engine::FrameCaptureState::Armed) {
+        if (!v->pushedEnabled()) {
             // A HIDDEN VIEW PRESENTS NOTHING, so there is no presented frame to
             // read: its window is not on screen and may have been resized under
             // it while hidden (forcing a frame into it there lost the device —
@@ -2776,7 +2808,7 @@ void EngineSceneViewport::settlePresentedFrame()
             // the stored tile keeps the last one — the last editor frame, which
             // is what the user last saw of the world (the lead's ruling: a close
             // from a non-editor page keeps it).
-            v->cancelFrameCapture();
+            mEngine->request([&](jahshaka::engine::Engine &) { v->cancelFrameCapture(); });   // a REQUEST (U3 4a)
             cancelPresentedFrame();
             return;
         }
@@ -2789,7 +2821,7 @@ void EngineSceneViewport::settlePresentedFrame()
         // it lands (bounded — a permutation that never builds leaves the request armed and
         // the poll below answers what it can).
         for (int i = 0; i < kCaptureSettleFrames &&
-                        v->frameCaptureState() == jahshaka::engine::FrameCaptureState::Armed; ++i) {
+                        captureState() == jahshaka::engine::FrameCaptureState::Armed; ++i) {
             renderFrames(1, 0.0f);
             if (mDriver) mDriver->noteExternalFrame();
         }
@@ -2834,7 +2866,35 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     if (!mMirror || node.isNull() || !view() || !view()->scene()) return true;
     const jahshaka::engine::NodeId id = mMirror->engineNode(node.data());
     if (!id) return true;   // not mirrored yet — the next sync decides
-    return view()->scene()->nodePlanarReflector(id);
+    return view()->scene()->published().factsBlock().isPlanarReflector(id);   // the facts (U3 stage 3)
+}
+
+void EngineSceneViewport::afterApplied(QObject *owner, std::function<void()> done)
+{
+    if (!mEngine || !view()) { if (done) done(); return; }
+    // IN FRAMES, OFF THE SNAPSHOT (never a wait, never a clock): the first frame to close after this call is the tick
+    // whose sync submitted the document's state — its record's serial is noted; the snapshot then says when a frame
+    // applied it, and the frame after that one is the completion.
+    struct Wait {
+        bool submitted = false, applied = false;
+        unsigned long long serial = 0, frame = 0;
+        QMetaObject::Connection conn;
+    };
+    auto w = std::make_shared<Wait>();
+    w->conn = connect(&mEvents, &EditorViewportEvents::framesDrawn, owner ? owner : &mEvents, [this, w, done]() {
+        if (!mEngine) return;
+        if (!w->submitted) { w->serial = mEngine->frameSubmitStatus().nextSerial; w->submitted = true; }
+        const jahshaka::engine::PublishedEngineFrame &pub = mEngine->published();
+        if (!w->applied) {
+            if (pub.serial < w->serial) return;
+            w->applied = true;
+            w->frame = pub.frame;
+            return;
+        }
+        if (pub.frame <= w->frame) return;
+        disconnect(w->conn);
+        if (done) done();
+    });
 }
 
 IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
@@ -2869,7 +2929,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
 {
     GiStatusInfo out;
     if (!view() || !view()->scene()) return out;   // available stays false
-    const jahshaka::engine::GiStatus st = view()->scene()->giStatus();
+    // THE LAST FRAME'S GI MACHINE (ENGINE-UPGRADE-U3 stage 2: the snapshot, never a read of the engine).
+    const jahshaka::engine::GiStatus &st = view()->scene()->published().gi;
     out.available = true;
     switch (st.mode) {
     case jahshaka::engine::GiMode::Off:              out.mode = QStringLiteral("off"); break;
@@ -2933,7 +2994,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     // it), reported here because this is where a reader is already looking at
     // what the room's lighting is made of.
     {
-        const jahshaka::engine::MobilityStatus m = view()->scene()->mobilityStatus();
+        const jahshaka::engine::MobilityStatus m = view()->scene()->published().mobility;   // the snapshot (U3 F5)
         out.movableItems     = int(m.movableItems);
         out.movableLights    = int(m.movableLights);
         out.mobilityRebuilds = quint64(m.mobilityRebuilds);
@@ -3029,7 +3090,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     // member of GiStatus: the tier is a geometry service, and GI is only its
     // first consumer.
     {
-        const jahshaka::engine::RayQueryStatus rq = view()->scene()->rayQueryStatus();
+        const jahshaka::engine::RayQueryStatus &rq = view()->scene()->published().rayQuery;
         out.rayQuery.available    = rq.available;
         out.rayQuery.enabled      = rq.enabled;
         out.rayQuery.blasCount    = rq.blasCount;
@@ -3147,8 +3208,15 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         if (framemonitor::active())
             mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Scripted));
         armRecordingFrame(recordable);
+        // THE LOCKSTEP VERB (ENGINE-UPGRADE-U3, the two modes): editor.frame's frame is the record just built, handed
+        // over and presented before the verb goes on — the ONE synchronous verb, by contract. One thread today, so the
+        // frame below is the wait; from stage 4 it is a wait on "serial >= want presented". Every test and every hash
+        // runs through here.
+        const unsigned long long want = mEngine->frameSubmitStatus().nextSerial;
         mEngine->renderOneFrame();
+        Q_ASSERT(mEngine->published().serial >= want || mEngine->published().gpuFault != jahshaka::engine::GpuFault::None);
         if (mRecordView) mRecordView->setEnabled(false);
+        emit mEvents.framesDrawn();
         // ...and a compile it caused is said like a driver frame's (SHADER-WARM-2).
         livecompiles::check("a scripted frame");
         // ...and the device-loss end for the same reason (lane XID-2): a
@@ -3197,7 +3265,7 @@ IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo() const
     if (!es || !mEngine) return out;          // available stays false
     out.available = true;
     out.rays = sceneTracesRays();
-    const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+    const jahshaka::engine::SunContactStatus &st = es->published().sunContact;   // the last frame's (U3 stage 2)
     out.on = st.on;
     out.running = st.running;
     out.width = int(st.width);
@@ -3212,7 +3280,11 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
 {
     ShadowStatusInfo out;
     if (!mEngine) return out;                 // available stays false
-    const jahshaka::engine::ShadowStatus st = mEngine->shadowStatus();
+    // THE SUBSCRIPTION, RENEWED BY THE READ (U3 stage 3, decision 17): the World panel refreshes while it is open
+    // and world.shadowStatus reads at each call, so a reader keeps the counters on for the window after its read —
+    // and the read is the last frame's snapshot (its counters unmeasured before the first frame of a span).
+    mEngine->publishShadowStatus(kStatusWindowFrames);
+    const jahshaka::engine::ShadowStatus st = mEngine->published().shadow;
     out.available = st.live;
     out.resolution = int(st.resolution);
     out.maps = int(st.maps);
@@ -3298,11 +3370,19 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     return s;
 }
 
+float EngineSceneViewport::measuredExposureScale() const
+{
+    float measured = 0.0f;
+    if (mEngine && view())
+        mEngine->request([&](jahshaka::engine::Engine &) { measured = view()->measuredExposureScale(); });
+    return measured;
+}
+
 IEditorViewport::RigStatsInfo EngineSceneViewport::rigStats() const
 {
     RigStatsInfo s;
     if (!mEngineScene) return s;   // available stays false: no engine, no counts
-    const jahshaka::engine::RigStats r = mEngineScene->rigStats();
+    const jahshaka::engine::RigStats r = mEngineScene->published().rigs;   // the snapshot (U3 F5)
     s.available = true;
     s.rigged = int(r.rigged);
     s.instances = int(r.instances);
@@ -3321,7 +3401,9 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
     if (!node) return QString();
     const auto material = mMirror->engineMaterial(node.data());
     if (!material) return QString();
-    return QString::fromStdString(mEngineScene->dumpMaterial(material));
+    std::string dump;
+    if (mEngine) mEngine->request([&](jahshaka::engine::Engine &) { dump = mEngineScene->dumpMaterial(material); });   // a REQUEST (U3 stage 3)
+    return QString::fromStdString(dump);
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
@@ -3492,7 +3574,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                 // THE GRADE, ON THE SHOT'S PART OF THE RECORD (U0 3a): the description the mirror built for the shot
                 // (the world's chain and the camera's), opted in here — never on the view on the spot, which the
                 // drain would overwrite with the record's chain.
-                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->postFx();
+                jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
                 // The mirror built the scene's
                 // post-fx description — the VIEWPORT's description — which an offscreen
                 // view ignores unless it is told otherwise (POST_CHAIN_SPEC §7.3).
@@ -3513,7 +3595,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                     // never measure (two frames), the viewport has been measuring this
                     // same scene for as long as it has been open. 0 (no on-screen view,
                     // no HDR, nothing presented yet) falls back inside applyScene.
-                    secondaryfx::applyScene(fx, view() ? view()->measuredExposureScale() : 0.0f);
+                    secondaryfx::applyScene(fx, measuredExposureScale());
                 } else if (grade == ScreenshotGrade::Viewport) {
                     fx.allowOffscreen = true;
                     // A ONE-SHOT RENDER CANNOT ADAPT (CAMERA_LENS_SPEC §4). The HDR
@@ -3566,55 +3648,40 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // — at the verb's cap — rather than photographing the raw estimate.
     {
         jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
-        if (mShotSettleFrames <= 0 && sc0 && (sc0->giStatus().gather.on || shotGiChanged)) mShotSettleFrames = 2000;
+        if (mShotSettleFrames <= 0 && sc0 && (sc0->published().gi.gather.on || shotGiChanged)) mShotSettleFrames = 2000;
     }
+    // THE PICTURE SERVICE (U3 stage 3): one settle, one readback — the photo's own copy of the settle is gone. A
+    // gathering scene (or a GI configuration this shot's record changes) draws the shot's first frame unconditionally,
+    // then waits for the ONE predicate; a scene that does not gather but is not at rest waits for rest; the cap is the
+    // verb's; the clock is handed back as the viewport's own.
+    PictureRequest req;
+    req.view = shot;
+    req.hdr = wantRadiance;
+    req.restoreDelta = mLastFrameDelta;
     if (mShotSettleFrames > 0) {
-        const int cap = mShotSettleFrames;
+        req.settleCap = unsigned(mShotSettleFrames);
         mShotSettleFrames = 0;
-        // ...AND THE SHOT'S OWN GATHER HISTORY (PHOTON-GATHER-1d). Where the
-        // screen-probe gather runs, the shot view has a pixel history of its own
-        // that starts young, and giAtRest cannot see it until the view has drawn
-        // once (its settled term reads the views that drew the latest frame). So
-        // a gathering scene draws the shot's first frame unconditionally and then
-        // waits for the ONE predicate as always; a scene that does not gather
-        // takes exactly the path it always took.
         jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
-        const bool gathering = sc && (sc->giStatus().gather.on || shotGiChanged);
-        if (sc && (gathering || !sc->giStatus().giAtRest)) {
-            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
-            // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
-            // settle renders through the shot view, outside the driver's tick,
-            // and the frame monitor must not read them as driven frames.
-            const auto frame = [this] {
-                if (framemonitor::active())
-                    mEngine->submitFrame(jahshaka::engine::FrameInput::withCause(jahshaka::engine::FrameCause::Offscreen));
-                mEngine->renderOneFrame();
-            };
-            int i = 0;
-            if (gathering) { frame(); ++i; }
-            for (; i < cap && !sc->giStatus().giAtRest; ++i)
-                frame();
-            mEngine->submitFrame(jahshaka::engine::FrameInput::delta(mLastFrameDelta));
-        }
+        // The GI machine as the last frame closed it (ENGINE-UPGRADE-U3 stage 2: the snapshot).
+        const bool gathering = sc && (sc->published().gi.gather.on || shotGiChanged);
+        req.scene = sc;
+        req.firstFrame = gathering;
+        req.untilRest = sc && (gathering || !sc->published().gi.giAtRest);
+        if (!req.untilRest) req.firstFrame = false;
     }
-    // Plus whatever the texture load-request counter still owes
-    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
-    renderStableFrames(mEngine.get());
-    Image img;
     QImage result;
-    if (shot->readPixels(img) && img.width && img.height) {
-        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
-        for (unsigned y = 0; y < img.height; ++y)
-            memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
-    }
-    if (wantRadiance) {
-        jahshaka::engine::ImageF hdr;
-        if (shot->readPixelsHdr(hdr) && hdr.width && hdr.height) {
-            mShotRadiance = QVector<float>(hdr.rgba.begin(), hdr.rgba.end());
-            mShotRadianceW = int(hdr.width);
-            mShotRadianceH = int(hdr.height);
+    takePicture(mEngine.get(), req, [&](Picture &&p) {
+        if (p.ok && p.rgba.width && p.rgba.height) {
+            result = QImage(int(p.rgba.width), int(p.rgba.height), QImage::Format_RGBA8888);
+            for (unsigned y = 0; y < p.rgba.height; ++y)
+                memcpy(result.scanLine(int(y)), &p.rgba.rgba[size_t(y) * p.rgba.width * 4u], p.rgba.width * 4u);
         }
-    }
+        if (wantRadiance && p.hdr.width && p.hdr.height) {
+            mShotRadiance = QVector<float>(p.hdr.rgba.begin(), p.hdr.rgba.end());
+            mShotRadianceW = int(p.hdr.width);
+            mShotRadianceH = int(p.hdr.height);
+        }
+    });
     mEngine->destroyView(shot);
     // ...and the viewport gets its own sizing back, before anything presents
     // another on-screen frame.
@@ -3691,7 +3758,7 @@ jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, 
     mRecordHooks = std::move(hooks);
     // ITS FIRST RECORD SEEDS IT (the next synced frame): the seed is derived from the view's chain, so it lands after
     // the chain in the same drain (FrameInputView::seedExposure); 0 = no measure yet = a plain reset.
-    const float measured = view()->measuredExposureScale();
+    const float measured = measuredExposureScale();
     mRecordViewSeed = measured > 0.0f ? measured : 0.0f;
     return rv;
 }
@@ -3722,6 +3789,11 @@ bool EngineSceneViewport::waitRecorderReady()
     // recording): the driver's ticks are held instead, but a script's frame is
     // one the script asked for, so it WAITS — the event loop runs (the encoder
     // drains, a video texture's frame lands), bounded at 10 s.
+    // THE LAW (ENGINE-UPGRADE-U3 decision 57): this waits on HOST work — the
+    // encoder's queue and a stepped video texture's decode, both workers of this
+    // process — NEVER on an engine frame. The recorder's frames come off the
+    // render thread by queue (OgreView::harvestVideoFrames); nothing here may
+    // wait for one.
     const std::function<bool()> hold = mRecordHooks.hold;
     if (!hold || !hold()) return true;
     QEventLoop loop;
@@ -3826,7 +3898,9 @@ void EngineSceneViewport::end()
 qulonglong EngineSceneViewport::presentsSinceBind() const
 {
     if (!view()) return 0;
-    const qulonglong now = qulonglong(view()->framesPresented());
+    // THE LAST FRAME'S COUNT (ENGINE-UPGRADE-U3 stage 2: the snapshot), as every baseline below is taken.
+    const auto pv = publishedView();
+    const qulonglong now = pv ? qulonglong(pv->presented) : 0;
     // The engine resets its own counter when a scene is (re)bound; then `now`
     // is below the baseline and IS the answer.
     return now >= mPresentBaseline ? now - mPresentBaseline : now;
@@ -3853,7 +3927,8 @@ qulonglong EngineSceneViewport::blankFramesPresented() const
     // Straight off the engine, with NO rebase: unlike framesPresented — which
     // is "frames of the world bound right now", and therefore restarts at every
     // bind — this one is a running total a caller differences across a load.
-    return view() ? qulonglong(view()->blankFramesPresented()) : 0;
+    const auto pv = publishedView();   // the last frame's (U3 stage 2)
+    return pv ? qulonglong(pv->blank) : 0;
 }
 
 void EngineSceneViewport::setShowFps(bool value)
@@ -3898,8 +3973,10 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
         if (!mStatsClock.isValid() || mStatsClock.elapsed() >= kStatsRefreshMs) {
             mStatsClock.restart();
             mStatsLines.clear();
-            jahshaka::engine::RenderStats rs;
-            const bool haveRs = mEngine && mEngine->renderStats(rs);
+            // The overlay subscribes while it is on (U3 stage 3): renewed at each refresh, read off the snapshot.
+            if (mEngine) mEngine->publishRenderStats(kStatusWindowFrames);
+            const jahshaka::engine::RenderStats rs = mEngine ? mEngine->published().render : jahshaka::engine::RenderStats();
+            const bool haveRs = mEngine != nullptr;
             const EngineRenderDriver::Stats ds =
                 mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
             // THE ROWS ARE COMPOSED BY A PURE FUNCTION (viewport/statsrows.h),
@@ -3915,8 +3992,9 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             in.fpsDrawn = ds.fpsDrawn;
             in.workMs = ds.workMs;
             in.sceneTriangles = scenestats::sceneGeometry(mScene).triangles;
-            in.submittedTriangles = haveRs ? quint64(rs.triangles) : 0;
-            in.draws = haveRs ? quint64(rs.draws) : 0;
+            in.counted = haveRs && rs.metricsRecording;   // decision 29: never a silent zero
+            in.submittedTriangles = in.counted ? quint64(rs.triangles) : 0;
+            in.draws = in.counted ? quint64(rs.draws) : 0;
             in.slowFramesLastMinute = ds.slowFramesLastMinute;
             // ATOM's per-object levels, summarised for one overlay line. Read off
             // the Items (the byte the render queue indexes with), same source the
@@ -3924,7 +4002,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             if (jahshaka::engine::Scene *es =
                     const_cast<EngineSceneViewport *>(this)->engineScene()) {
                 std::vector<jahshaka::engine::ObjectLodDesc> lods;
-                es->objectLods(lods);
+                if (mEngine) mEngine->request([&](jahshaka::engine::Engine &) { es->objectLods(lods); });   // a REQUEST (U3 stage 3)
                 for (const jahshaka::engine::ObjectLodDesc &d : lods) {
                     if (d.levels <= 1) continue;      // no chain: nothing to report
                     if (d.cut) continue;              // the cluster cut draws it: no per-object level
@@ -4038,7 +4116,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
 void EngineSceneViewport::sampleStreamingWork(bool driverFrame)
 {
     if (!mEngine) return;
-    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
     // The frame that has just been drawn either built shaders or it did not.
     mStream.shadersLastFrame = w.shadersCompiled >= mStream.shadersAtSample
                                    ? w.shadersCompiled - mStream.shadersAtSample
@@ -4073,7 +4151,7 @@ IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
 {
     StreamingPending out;
     if (!mEngine) return out;
-    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
     out.gi = w.giStagesLeft;
     out.textures = w.materialsAwaitingTexture;
     out.shaders = mStream.shadersLastFrame;
@@ -4092,7 +4170,7 @@ QString EngineSceneViewport::coverState() const
     // question a caller asks is "what is the user looking at", and the overlay
     // the view holds is the answer. With no view there is nothing to cover.
     if (!view()) return QStringLiteral("none");
-    switch (view()->overlay().cover) {
+    switch (view()->pushedOverlay().cover) {
     case Cover::Loading: return QStringLiteral("loading");
     case Cover::NoScene: return QStringLiteral("noscene");
     case Cover::None:    break;
@@ -4221,6 +4299,9 @@ void EngineSceneViewport::presentCovered(int frames)
     // Nothing to present into: an offscreen fallback view owns no pixels of
     // this widget, and no view at all owns nothing.
     if (!view() || view()->isOffscreen() || !mEngine) return;
+    // ...NOR WHILE THE VR SESSION PAINTS THE HEADSET'S EYE ON IT (U3 stage 2 read F2: the snapshot's fact, never the
+    // enable): the desktop shows the eye, not this widget's picture.
+    if (sessionPaintsThisView()) return;
     // AND NOTHING TO PRESENT FOR: a hidden page has no pixels on screen, so a
     // frame drawn for it is pure UI-THREAD COST — the whole scene is still
     // rendered under the cover (the overlay pass composites onto a finished
@@ -4255,20 +4336,20 @@ void EngineSceneViewport::presentCovered(int frames)
     // to be OURS — View::framesPresented resets to 0 on every scene bind, so it
     // collides across exactly the close/reopen this key exists to distinguish.
     const jahshaka::engine::ViewOverlayDesc wanted = overlayDesc();
-    if (wanted == mLastPresentedCover && view()->width() == mLastPresentedW &&
-        view()->height() == mLastPresentedH &&
+    if (wanted == mLastPresentedCover && view()->published().width == mLastPresentedW &&
+        view()->published().height == mLastPresentedH &&
         mFrameEpoch == mLastPresentedEpoch)
         return;
     if (mPresentingCover) return;          // refreshOverlay's rising edge, already in hand
     mPresentingCover = true;
     refreshOverlay();
-    const bool covered = view()->overlay().cover !=
+    const bool covered = view()->pushedOverlay().cover !=
                          jahshaka::engine::ViewOverlayDesc::Cover::None;
     // The View is enabled by widget VISIBILITY (EngineViewWidget::show/hideEvent)
     // and the driver skips a tick with nothing enabled — so on the path this
     // exists for (a page switch, a synchronous open) the view may still be
     // disabled. Enable it for exactly these frames and put it back.
-    const bool wasEnabled = view()->isEnabled();
+    const bool wasEnabled = view()->pushedEnabled();
     view()->setEnabled(true);
     for (int i = 0; i < frames; ++i) {
         sampleStreamingWork(false);
@@ -4291,17 +4372,17 @@ void EngineSceneViewport::presentCovered(int frames)
     // and take it straight back down over a world that has not drawn yet. (The
     // driver's own ticks while the cover is up DO count, exactly as they always
     // did — that is what eventually reveals the viewport.)
-    if (covered) mPresentBaseline = qulonglong(view()->framesPresented());
+    if (covered) mPresentBaseline = presentedNow();
     // THE COUNT A CALLER DIFFERENCES ACROSS A LOAD to ask "was this one
     // covered" after the fact (IEditorViewport::coversPresented) — the LOADING
     // cover only. `Cover::NoScene` is not a load and is presented by every
     // close, so counting it would answer a different question with the same
     // number.
-    if (view()->overlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
+    if (view()->pushedOverlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
         ++mCoversPresented;
     mLastPresentedCover = wanted;
-    mLastPresentedW = view()->width();
-    mLastPresentedH = view()->height();
+    mLastPresentedW = view()->published().width;
+    mLastPresentedH = view()->published().height;
     mLastPresentedEpoch = mFrameEpoch;
     mPresentingCover = false;
 }
@@ -4312,6 +4393,7 @@ void EngineSceneViewport::presentBackground()
     // reason there is nothing to do, in the order it is cheapest to find out.
     if (!mActive || !mEngine) return;
     if (!view() || view()->isOffscreen()) return;
+    if (sessionPaintsThisView()) return;   // the desktop shows the headset's eye (U3 read F2)
     if (mEngineScene) return;              // a world is bound: ordinary frames own the picture
     if (!isVisible()) return;              // no pixels of ours on screen to replace
     // THE COVER ON PATH IS presentCovered's, BYTE FOR BYTE. With the preference
@@ -4324,7 +4406,7 @@ void EngineSceneViewport::presentBackground()
     // — but a load begun before the page was shown can reach here with the view
     // still disabled. Enable it for this one frame and put it back, exactly as
     // presentCovered does.
-    const bool wasEnabled = view()->isEnabled();
+    const bool wasEnabled = view()->pushedEnabled();
     view()->setEnabled(true);
     sampleStreamingWork(false);
     ++mFrameEpoch;
@@ -4340,7 +4422,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
 {
     // The world on screen (if any) is about to be replaced: nothing presented
     // from here on belongs to the old one.
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     mSceneLoadPending = true;
     mLoadingTitle = title;
     // THE COVER IS A PREFERENCE, LATCHED HERE (services/loadingcover.h,
@@ -4405,7 +4487,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
         mStream = StreamSample();
         mStream.arrived = false;   // this load has not arrived until it settles
         if (mEngine) {
-            const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+            const jahshaka::engine::StreamingWork &w = mEngine->published().streaming;   // the last frame's (U3 stage 2)
             mStream.shadersAtLoad = mStream.shadersAtSample = w.shadersCompiled;
         }
     }
@@ -4456,7 +4538,8 @@ jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
     // Revealed, and something is still owed. The window is bounded so a scene
     // whose textures never arrive cannot leave the frame-edge drain switched
     // off for the rest of the session.
-    if (mStreamFramesLeft > 0 || mEngine->framePaceOwesWork()) return FramePace::Streaming;
+    // (the owed work as the last frame closed it — ENGINE-UPGRADE-U3 stage 2: the snapshot)
+    if (mStreamFramesLeft > 0 || mEngine->published().paceOwesWork) return FramePace::Streaming;
     return FramePace::Complete;
 }
 
@@ -4571,7 +4654,8 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
             mEngine->setCompileObserver([&]() { onCompile(++seen); });
             clear.engine = mEngine.get();
         }
-        view()->warmUpShaders();
+        if (jahshaka::engine::View *wv = view())
+            mEngine->request([wv](jahshaka::engine::Engine &) { wv->warmUpShaders(); });   // a REQUEST (U3 stage 4a)
     }
     unsigned after = 0;
     mEngine->shaderBuildProgress(after, cached, expected);
@@ -4596,7 +4680,8 @@ void EngineSceneViewport::rememberPassShape()
     // machine cannot render. Two settings values, written only on change.
     if (!mEngine || !mEngineScene) return;
     if (View *v = view())
-        EngineHost::rememberWarmUpShape({ v->sampleCount(), v->shadows() });
+        if (const auto pv = publishedView())   // the achieved MSAA as the last frame drew it (U3 stage 2)
+            EngineHost::rememberWarmUpShape({ pv->sampleCount, v->pushedShadows() });
 }
 
 void EngineSceneViewport::coverIfNotPresenting()
@@ -4693,7 +4778,7 @@ void EngineSceneViewport::clearScene()
     // calls this to tear the OLD world down, so clearing it here would hand the
     // world being installed a scene that builds its whole GI arm behind the
     // cover (OPEN_COVER_SPEC §2 A). A plain close never raised it.
-    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    mPresentBaseline = presentedNow();
     refreshOverlay();
 }
 
@@ -4790,4 +4875,41 @@ bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
                                                             newLocalPos, rot, scale));
     }
     return true;
+}
+
+void EngineSceneViewport::setEngineLodBias(float bias)
+{
+    if (!mEngineScene) return;
+    if (!(bias >= 0.0f)) bias = 0.0f;   // the engine's own clamp (OgreScene::setLodBias)
+    mEngineScene->setLodBias(bias);
+    mEngineLodBias = bias;
+}
+
+void EngineSceneViewport::setEngineAtomView(int mode)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
+    mEngineAtomView = mode;
+}
+
+void EngineSceneViewport::setEnginePhotonView(int mode)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setPhotonView(static_cast<jahshaka::engine::PhotonView>(mode));
+    mEnginePhotonView = mode;
+}
+
+void EngineSceneViewport::setEnginePhotonVoxelCascade(int cascade)
+{
+    if (!mEngineScene) return;
+    mEngineScene->setPhotonVoxelCascade(cascade);
+    mEnginePhotonCascade = cascade < 0 ? -1 : cascade;   // the engine's own clamp
+}
+
+bool EngineSceneViewport::sessionPaintsThisView() const
+{
+    // THE FACT IS THE SNAPSHOT'S (ENGINE-UPGRADE-U3 stage 2 read F2): the session's mirror paints the eye over the
+    // desktop view (VrStatus::mirrorShowing), and this viewport's view is the one it was named.
+    return mEngine && view() && view() == mEngine->vrMirrorView() &&
+           mEngine->published().vr.mirrorShowing == jahshaka::engine::VrDesktopPicture::Eye;
 }

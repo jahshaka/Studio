@@ -111,7 +111,7 @@ struct Rig {
 
 bool shoot(Rig &r, ImageF &out, int frames = 3)
 {
-    for (int i = 0; i < frames; ++i) r.e->renderOneFrame();
+    enginetest::frames(r.e, frames);
     return r.v->readPixelsHdr(out);
 }
 
@@ -215,9 +215,9 @@ int main()
 
     // ---- c. THE SUN'S COLOUR -----------------------------------------------
     {
-        const Colour low = r.s->atmosphereSunTint(towardsSun(5.0f, 0.0f));
-        const Colour high = r.s->atmosphereSunTint(towardsSun(60.0f, 0.0f));
-        const Colour noon = r.s->atmosphereSunTint(towardsSun(90.0f, 0.0f));
+        const Colour low = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(5.0f, 0.0f));
+        const Colour high = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(60.0f, 0.0f));
+        const Colour noon = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(90.0f, 0.0f));
         const double rbLow = low.r / std::max(low.b, 1e-6f), rbHigh = high.r / std::max(high.b, 1e-6f);
         std::printf("    sun tint: 90 deg %.4f %.4f %.4f | 60 deg %.4f %.4f %.4f | 5 deg %.4f %.4f %.4f\n",
                     noon.r, noon.g, noon.b, high.r, high.g, high.b, low.r, low.g, low.b);
@@ -287,10 +287,10 @@ int main()
     // ---- e. THE TABLES REBUILD ONLY ON A CHANGE -----------------------------
     {
         r.s->setSky(atmosphere(45.0f, 180.0f));
-        for (int i = 0; i < 4; ++i) r.e->renderOneFrame();
-        const AtmosphereStatus a = r.s->atmosphereStatus();
-        for (int i = 0; i < 120; ++i) r.e->renderOneFrame();
-        const AtmosphereStatus b = r.s->atmosphereStatus();
+        enginetest::frames(r.e, 4);
+        const AtmosphereStatus a = r.s->published().atmosphereStatus;
+        enginetest::frames(r.e, 120);
+        const AtmosphereStatus b = r.s->published().atmosphereStatus;
         std::printf("    tables: transmittance %u multi-scatter %u sky view %u aerial %u -> %u %u %u %u "
                     "over 120 still frames\n", a.transmittanceBuilds, a.multiScatterBuilds,
                     a.skyViewBuilds, a.aerialBuilds, b.transmittanceBuilds, b.multiScatterBuilds,
@@ -300,23 +300,23 @@ int main()
                   b.aerialBuilds == a.aerialBuilds,
                   "(e) 120 STILL FRAMES REBUILD NO TABLE");
         r.s->setSky(atmosphere(30.0f, 180.0f));
-        r.e->renderOneFrame();
-        const AtmosphereStatus c = r.s->atmosphereStatus();
+        enginetest::frames(r.e, 1);
+        const AtmosphereStatus c = r.s->published().atmosphereStatus;
         CHECK_MSG(c.transmittanceBuilds == b.transmittanceBuilds && c.multiScatterBuilds == b.multiScatterBuilds &&
                   c.skyViewBuilds == b.skyViewBuilds + 1 && c.aerialBuilds == b.aerialBuilds + 1,
                   "(e) a SUN move rebuilds the sky view and the aerial volume once, and not the dial "
                   "tables (%u %u %u %u)", c.transmittanceBuilds, c.multiScatterBuilds, c.skyViewBuilds,
                   c.aerialBuilds);
         r.s->setSky(atmosphere(30.0f, 180.0f, 1.0f, 3.0f));
-        r.e->renderOneFrame();
-        const AtmosphereStatus h = r.s->atmosphereStatus();
+        enginetest::frames(r.e, 1);
+        const AtmosphereStatus h = r.s->published().atmosphereStatus;
         CHECK_MSG(h.transmittanceBuilds == c.transmittanceBuilds + 1 &&
                   h.multiScatterBuilds == c.multiScatterBuilds + 1 && h.skyViewBuilds == c.skyViewBuilds + 1 &&
                   h.aerialBuilds == c.aerialBuilds + 1,
                   "(e) a DIAL move (the haze) rebuilds all four once");
         r.s->setSky(atmosphere(30.0f, 180.0f, 0.5f, 3.0f));
-        r.e->renderOneFrame();
-        const AtmosphereStatus q = r.s->atmosphereStatus();
+        enginetest::frames(r.e, 1);
+        const AtmosphereStatus q = r.s->published().atmosphereStatus;
         CHECK_MSG(q.transmittanceBuilds == h.transmittanceBuilds && q.skyViewBuilds == h.skyViewBuilds &&
                   q.aerialBuilds == h.aerialBuilds,
                   "(e) the aerial scale is a constant: it rebuilds nothing");
@@ -343,7 +343,7 @@ int main()
         CHECK_MSG(r.s->setSky(no), "NoSky applies");
         shoot(r, none, 6);
         float sh[27];
-        const bool haveSh = r.s->skyAmbientSh(sh);
+        const bool haveSh = r.s->published().copySkyAmbientSh(sh);
         double shSum = 0.0;
         if (haveSh) for (float v : sh) shSum += std::fabs(v);
         const Colour boxLit = centreOf(lit), boxNone = centreOf(none);
@@ -427,10 +427,12 @@ int main()
                   "(b/r %.3f to %.3f)", clean.g, hazy.g, clean.b / clean.r, hazy.b / hazy.r);
         SkyDesc hz = atmosphere(20.0f, 180.0f, 1.0f, 1.0f);
         r.s->setSky(hz);
-        const Colour tClean = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        enginetest::frames(r.e, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        const Colour tClean = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(20.0f, 180.0f));
         hz.atmosphere.sunHaze = 50.0f;
         r.s->setSky(hz);
-        const Colour tHazy = r.s->atmosphereSunTint(towardsSun(20.0f, 180.0f));
+        enginetest::frames(r.e, 1);   // the frame publishes the air the stateless tint reads (U3 stage 2)
+        const Colour tHazy = jahshaka::engine::atmosphereSunTint(r.s->published().atmosphere, towardsSun(20.0f, 180.0f));
         CHECK_MSG(tHazy.g < tClean.g * 0.9f,
                   "(g) ...and the sun's tint: green at a 20-degree sun %.4f at haze 1, %.4f at haze 50",
                   tClean.g, tHazy.g);
@@ -469,7 +471,7 @@ int main()
             a.sky = luma(img.at(kSize / 2, 8));                 // the sky, 30 degrees up
             a.lit = luma(img.at(kSize / 2, kSize - 8));         // the floor, sun + sky
             float sh[27];
-            if (r.s->skyAmbientSh(sh)) a.sh0 = sh[1];           // band 0, green
+            if (r.s->published().copySkyAmbientSh(sh)) a.sh0 = sh[1];           // band 0, green
             sunL.intensity = 0.0f; r.s->setLight(lightNode, sunL);
             shoot(r, img, 6);
             a.dark = luma(img.at(kSize / 2, kSize - 8));        // the floor, sky alone
@@ -515,7 +517,7 @@ int main()
         }
         const double t = std::tan(0.5 * kFovDeg * kPi / 180.0);
         const double edge = std::atan((1.0 - 2.0 * (best + 1.0) / kSize) * t) * 180.0 / kPi;
-        const AtmosphereStatus st = r.s->atmosphereStatus();
+        const AtmosphereStatus st = r.s->published().atmosphereStatus;
         std::printf("    %5.0f m: the horizon between rows %u|%u at %+.3f deg against the dip %.3f deg; "
                     "observer %.0f m (%u band rebuilds)\n", double(h), best, best + 1, edge, -dip,
                     double(st.observerAltitudeM), st.observerRebuilds);
@@ -588,15 +590,15 @@ int main()
         const auto collect = [&](int frames, const std::function<void(int)> &perFrame,
                                  double &frameMs, int &frameN, double jobMs[4], int jobN[4]) {
             r.e->setFrameMonitor(MonitorLevel::Review);
-            std::vector<FrameRecord> drop;
-            r.e->takeFrameRecords(drop);
-            for (int i = 0; i < frames; ++i) { perFrame(i); r.e->renderOneFrame(); }
+            std::vector<MonitorRecord> drop;
+            r.e->takeMonitorRecords(drop);
+            for (int i = 0; i < frames; ++i) { perFrame(i); enginetest::frames(r.e, 1); }
             r.e->setFrameMonitor(MonitorLevel::Off);
-            std::vector<FrameRecord> recs;
-            r.e->takeFrameRecords(recs);
+            std::vector<MonitorRecord> recs;
+            r.e->takeMonitorRecords(recs);
             static const char *kJobs[4] = { "Jahshaka/AtmoTransmittance", "Jahshaka/AtmoMultiScatter",
                                             "Jahshaka/AtmoSkyView", "Jahshaka/AtmoAerial" };
-            for (const FrameRecord &f : recs) {
+            for (const MonitorRecord &f : recs) {
                 if (f.gpuMs > 0.0f) { frameMs += f.gpuMs; ++frameN; }
                 for (const CacheWork &w : f.cacheWork)
                     if (w.cache == CacheKind::Atmosphere && w.gpuMs >= 0.0f)
@@ -618,7 +620,7 @@ int main()
         for (int round = 0; round < 6; ++round)
             for (int arm = 0; arm < 2; ++arm) {
                 cs->setSky(arm ? atmosphere(45.0f, 150.0f) : image);
-                for (int i = 0; i < 20; ++i) r.e->renderOneFrame();
+                enginetest::frames(r.e, 20);
                 double jm[4] = { 0, 0, 0, 0 };
                 int jn[4] = { 0, 0, 0, 0 };
                 collect(60, [](int) {}, arm ? sumAtmo : sumImg, arm ? nAtmo : nImg, jm, jn);
@@ -631,7 +633,7 @@ int main()
             double fm2 = 0.0, jm[4] = { 0, 0, 0, 0 };
             int fn = 0, jn[4] = { 0, 0, 0, 0 };
             cs->setSky(atmosphere(45.0f, 150.0f));
-            for (int i = 0; i < 10; ++i) r.e->renderOneFrame();
+            enginetest::frames(r.e, 10);
             collect(60, [&](int i) {
                 if (regime == 0) cs->setSky(atmosphere(30.0f + 0.25f * float(i), 150.0f));      // the sun
                 else cs->setSky(atmosphere(45.0f, 150.0f, 0.0f, 5.0f + 0.25f * float(i)));     // a dial

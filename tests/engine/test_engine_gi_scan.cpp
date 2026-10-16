@@ -122,16 +122,16 @@ int main()
         }
     }
 
-    auto render = [&](int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); };
+    auto render = [&](int frames) { enginetest::frames(e, frames);};
     render(30);                                   // settle: the chain builds, once
 
     // =====================================================================
     // 1. A STILL SCENE SCANS NOTHING
     // =====================================================================
     {
-        const GiStatus from = scene->giStatus();
+        const GiStatus from = scene->published().gi;
         render(20);
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         std::printf("   still: %llu scans, %llu world-AABB reads over 20 frames\n",
                     st.giScans - from.giScans, st.giAabbReads - from.giAabbReads);
         CHECK(st.giScans == from.giScans && st.giAabbReads == from.giAabbReads,
@@ -143,7 +143,7 @@ int main()
     // =====================================================================
     const unsigned kFrames = 30;
     {
-        const GiStatus from = scene->giStatus();
+        const GiStatus from = scene->published().gi;
         for (unsigned f = 0; f < kFrames; ++f) {
             const float t = 0.02f * float(f);
             for (int i = 0; i < 2; ++i) {
@@ -165,9 +165,9 @@ int main()
                 scene->setNodeVisible(proxy[i], true);
                 scene->setNodeVisible(ray[i], true);
             }
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         std::printf("   session furniture: %llu scans, %llu world-AABB reads over %u frames "
                     "that each wrote four poses and four visibilities\n",
                     st.giScans - from.giScans, st.giAabbReads - from.giAabbReads, kFrames);
@@ -183,15 +183,15 @@ int main()
     // =====================================================================
     double moverScanMicros = 0.0;
     {
-        const GiStatus from = scene->giStatus();
+        const GiStatus from = scene->published().gi;
         for (unsigned f = 0; f < kFrames; ++f) {
             scene->setNodeTransform(mover, Vec3(0.0f, 0.5f + 0.01f * float(f), 0.0f),
                                     Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-            e->renderOneFrame();
-            const double us = scene->giStatus().giScanMicros;
+            enginetest::frames(e, 1);
+            const double us = scene->published().gi.giScanMicros;
             if (us > 0.0 && (moverScanMicros == 0.0 || us < moverScanMicros)) moverScanMicros = us;
         }
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         std::printf("   a lit mover: %llu scans over %u frames (cheapest scan %.1f us at %d items)\n",
                     st.giScans - from.giScans, kFrames, moverScanMicros, 6);
         CHECK(st.giScans - from.giScans == (unsigned long long)kFrames,
@@ -211,14 +211,14 @@ int main()
     {
         scene->setNodeVisible(proxy[0], false);
         render(2);
-        const GiStatus from = scene->giStatus();
+        const GiStatus from = scene->published().gi;
         const unsigned long long serial = from.staleSerial, rebuilds = from.rebuilds;
         for (unsigned f = 0; f < kFrames; ++f) {
             scene->setNodeVisible(proxy[0], false);       // already hidden
             scene->setNodeVisible(ray[0], true);          // already shown
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
-        const GiStatus st = scene->giStatus();
+        const GiStatus st = scene->published().gi;
         CHECK(st.giScans == from.giScans && st.staleSerial == serial && st.rebuilds == rebuilds,
               "a visibility write that changes nothing stales nothing and scans nothing");
         scene->setNodeVisible(proxy[0], true);
@@ -256,8 +256,8 @@ int main()
             for (int i = 0; i < 5; ++i) {
                 scene->setNodeTransform(mover, Vec3(0.0f, 0.5f + 0.01f * float(i), 0.0f),
                                         Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-                e->renderOneFrame();
-                const double us = scene->giStatus().giScanMicros;
+                enginetest::frames(e, 1);
+                const double us = scene->published().gi.giScanMicros;
                 if (us > 0.0 && (best == 0.0 || us < best)) best = us;
             }
             std::printf("   MEASURED: %u items -> one movement scan costs %.0f us "
@@ -268,14 +268,14 @@ int main()
             std::printf("   (5k / 10k arms skipped — set JAH_VR_SCAN_BENCH=1 to measure them)\n");
         // ...and the furniture is STILL free at that size: the arm the gate
         // cares about, re-run with a real scene under it.
-        const GiStatus from = scene->giStatus();
+        const GiStatus from = scene->published().gi;
         for (unsigned f = 0; f < 10u; ++f) {
             for (int i = 0; i < 2; ++i)
                 scene->setNodeTransform(proxy[i], Vec3(0.3f, 1.2f + 0.01f * float(f), -0.6f),
                                         Quat(0.0f, 0.0f, 0.0f, 1.0f), Vec3(1.0f, 1.0f, 1.0f));
-            e->renderOneFrame();
+            enginetest::frames(e, 1);
         }
-        CHECK(scene->giStatus().giScans == from.giScans,
+        CHECK(scene->published().gi.giScans == from.giScans,
               "...and the furniture is free at that scale too (10 frames, zero scans)");
     }
 

@@ -96,7 +96,7 @@ static bool gTarget = false;
 
 static void render(Engine *e, int frames = 6)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -204,7 +204,7 @@ static void measure(Engine *e, Slab &o, const char *what, float &inside, float &
     Image img;
     render(e, 8);
     o.view->readPixels(img);
-    const GiStatus st = o.scene->giStatus();
+    const GiStatus st = o.scene->published().gi;
     // The edge the engine actually fitted, read back rather than assumed.
     const float edge = st.boundsMin.x;
     const unsigned edgeCol = columnForX(edge);
@@ -253,7 +253,8 @@ int main(int argc, char **argv)
         CHECK(o.scene->setGlobalIllumination(hybridDdgi()), "hybrid + DDGI arms");
         float inside = 0.0f, outside = 0.0f;
         measure(e, o, "flat ambient, GI on", inside, outside);
-        const GiStatus st = o.scene->giStatus();
+        render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+        const GiStatus st = o.scene->published().gi;
         CHECK(st.vctBound, "the voxel arm is bound");
         CHECK(st.boundsMax.x - st.boundsMin.x < 48.0f,
               "the lit volume really is smaller than the slab (there IS an edge to cross)");

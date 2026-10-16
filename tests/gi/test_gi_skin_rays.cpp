@@ -75,7 +75,7 @@ static int failures = 0;
 
 static const float kPi = 3.14159265358979f;
 int mirrorMain(Engine *e);
-static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int n) { enginetest::frames(e, n);}
 
 // ---------------------------------------------------------------------------
 // THE COLUMN: two boxes, each its own 24 vertices (flat normals), the lower on
@@ -213,7 +213,7 @@ static std::array<float, 8> down(float x, float z, unsigned mask = kRayMaskNearF
 
 static int slotOfNode(Scene *s, NodeId n)
 {
-    const GpuSceneStatus st = s->gpuSceneStatus();
+    const GpuSceneStatus st = s->published().gpuScene;
     for (unsigned i = 0; i < st.slotCount; ++i) {
         GpuSceneEntry e;
         if (s->gpuSceneEntry(i, e) && e.nodeId == n) return int(i);
@@ -259,23 +259,24 @@ static int costMain(Engine *e, int characters, unsigned rings)
     e->setFrameMonitor(MonitorLevel::Review);
     double skinMs = 0.0, refitMs = 0.0, frameAnim = 0.0, frameStill = 0.0, cpuMs = 0.0;
     int skinN = 0, animN = 0, stillN = 0;
-    const unsigned long long p0 = s->rayQueryStatus().skinPasses;
+    render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const unsigned long long p0 = s->published().rayQuery.skinPasses;
     int frame = 0;
     for (int round = 0; round < 4; ++round) {
         for (int arm = 0; arm < 2; ++arm) {
             for (int f = 0; f < 60; ++f, ++frame) {
                 if (arm == 0)
                     for (NodeId n : nodes) pose(s, n, 0.5f + 0.5f * std::sin(0.05f * float(frame) + float(n)));
-                e->renderOneFrame();
-                std::vector<FrameRecord> recs;
-                e->takeFrameRecords(recs);
+                enginetest::frames(e, 1);
+                std::vector<MonitorRecord> recs;
+                e->takeMonitorRecords(recs);
                 if (f < 20) continue;                  // settle: the queries come back 3 frames late
-                for (const FrameRecord &r : recs) {
+                for (const MonitorRecord &r : recs) {
                     if (r.gpuMs <= 0.0f) continue;
                     if (arm == 0) { frameAnim += r.gpuMs; ++animN; }
                     else { frameStill += r.gpuMs; ++stillN; }
                 }
-                const RayQueryStatus rq = s->rayQueryStatus();
+                const RayQueryStatus rq = s->published().rayQuery;
                 if (arm == 0 && rq.skinMs >= 0.0f) {
                     skinMs += rq.skinMs;
                     refitMs += rq.skinRefitMs;
@@ -286,7 +287,8 @@ static int costMain(Engine *e, int characters, unsigned rings)
         }
     }
     e->setFrameMonitor(MonitorLevel::Off);
-    const RayQueryStatus rq = s->rayQueryStatus();
+    enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
+    const RayQueryStatus rq = s->published().rayQuery;
     const double items = double(characters);
     const double verts = double(md.positions.size() / 3u);
     std::printf("cost: %d characters x %.0f vertices (%zu triangles each), re-posed every frame in the "
@@ -399,7 +401,7 @@ int main(int argc, char **argv)
 
     if (!raysWanted) {
         // THE NO-RAYS ARM: nothing of the tier exists, and a rigged scene draws.
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         CHECK(!rq.enabled && rq.skinCaches == 0, "no rays: no skin cache, no structure");
         const int slot = slotOfNode(s, ch);
         GpuSceneEntry en;
@@ -418,7 +420,7 @@ int main(int argc, char **argv)
     CHECK_MSG(chSlot >= 0 && floorSlot >= 0, "the character (slot %d) and the floor (slot %d) are in the GPU scene",
               chSlot, floorSlot);
     {
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         std::printf("    status: instances %d skinned %d caches %d passes %llu dispatches %llu builds %llu "
                     "refits %llu reason '%s'\n",
                     rq.instances, rq.skinnedInstances, rq.skinCaches, rq.skinPasses, rq.skinDispatches,
@@ -447,8 +449,8 @@ int main(int argc, char **argv)
                   h[1].t, h[1].slot);
     }
     // ---- 2: bend, ONE frame -------------------------------------------------
-    const unsigned long long passesBefore = s->rayQueryStatus().skinPasses;
-    const unsigned long long refitsBefore = s->rayQueryStatus().skinRefits;
+    const unsigned long long passesBefore = s->published().rayQuery.skinPasses;
+    const unsigned long long refitsBefore = s->published().rayQuery.skinRefits;
     CHECK(pose(s, ch, 1.0f), "the clip bends the column (t = 1)");
     render(e, 1);
     {
@@ -501,7 +503,7 @@ int main(int argc, char **argv)
                       "(front faces z = 0.2 / 0.7), %d rays through the bent arm missed it",
                       onChar, outside, armMissed);
         }
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         CHECK_MSG(rq.skinPasses == passesBefore + 2 && rq.skinRefits == refitsBefore + 2,
                   "2b. the pose change cost ONE skin pass and ONE refit per piece, master and "
                   "follower (%llu, %llu)",
@@ -509,25 +511,25 @@ int main(int argc, char **argv)
     }
     // ---- 3: still frames and a walk ----------------------------------------
     {
-        const unsigned long long p0 = s->rayQueryStatus().skinPasses;
-        const unsigned long long d0 = s->rayQueryStatus().skinDispatches;
+        const unsigned long long p0 = s->published().rayQuery.skinPasses;
+        const unsigned long long d0 = s->published().rayQuery.skinDispatches;
         // THE FIRST STILL FRAME OWES ONE SETTLE (REFLECT-MOVERS-2's copy-only record:
         // the previous-pose slice made level with the pose) — one dispatch, no skinning;
         // it never ran before REFLECT-EDGE-2 (the still frame returned before the skin
         // pass), which left a parked character's hits reading as moving for ever.
         render(e, 1);
-        const unsigned long long d1 = s->rayQueryStatus().skinDispatches;
+        const unsigned long long d1 = s->published().rayQuery.skinDispatches;
         render(e, 4);
-        CHECK_MSG(s->rayQueryStatus().skinPasses == p0 && d1 == d0 + 1 &&
-                      s->rayQueryStatus().skinDispatches == d1,
+        CHECK_MSG(s->published().rayQuery.skinPasses == p0 && d1 == d0 + 1 &&
+                      s->published().rayQuery.skinDispatches == d1,
                   "3a. five still frames re-skin nothing (%llu passes); the first settles the slice in ONE "
                   "dispatch (%llu), the next four dispatch nothing (%llu)",
-                  s->rayQueryStatus().skinPasses - p0, d1 - d0, s->rayQueryStatus().skinDispatches - d1);
+                  s->published().rayQuery.skinPasses - p0, d1 - d0, s->published().rayQuery.skinDispatches - d1);
         enginetest::setNodePosition(s, ch, Vec3(2.0f, 0.0f, 0.0f));
         render(e, 1);
-        CHECK_MSG(s->rayQueryStatus().skinPasses == p0,
+        CHECK_MSG(s->published().rayQuery.skinPasses == p0,
                   "3b. a WALK (the node moved, the pose did not) re-skins nothing (%llu passes)",
-                  s->rayQueryStatus().skinPasses - p0);
+                  s->published().rayQuery.skinPasses - p0);
         const auto h = trace(s, { down(2.6f, 0.0f), down(0.6f, 0.0f) });
         CHECK_MSG(h[0].slot == chSlot && near(h[0].t, 1.8f, 2e-3f),
                   "3c. the walked character's bent arm is hit where it walked to (x = 2.6: t %.4f)", h[0].t);
@@ -537,7 +539,7 @@ int main(int argc, char **argv)
     }
     // ---- 4: the contact ray -------------------------------------------------
     {
-        const SunContactStatus sst = s->sunContactStatus();
+        const SunContactStatus sst = s->published().sunContact;
         std::printf("    sun contact: on %d running %d range %.2f toSun (%.3f %.3f %.3f) reason '%s'\n",
                     int(sst.on), int(sst.running), sst.range, sst.toSun[0], sst.toSun[1], sst.toSun[2],
                     sst.reason.c_str());
@@ -577,7 +579,7 @@ int main(int argc, char **argv)
                               "vertex count (%s)", reattached ? "" : e->lastError().c_str());
         render(e, 1);
         const auto h = trace(s, { down(0.0f, 0.0f) });
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         CHECK_MSG(h[0].slot == slotOfNode(s, ch) && near(h[0].t, 0.5f, 2e-3f) && rq.skinCaches == 1,
                   "the next frame's ray meets the NEW shape's top at y = 2.5 (t %.4f) and the "
                   "character still holds ONE cache (%d)", h[0].t, rq.skinCaches);
@@ -586,7 +588,7 @@ int main(int argc, char **argv)
     {
         s->removeNode(ch);
         render(e, 2);
-        const RayQueryStatus rq = s->rayQueryStatus();
+        const RayQueryStatus rq = s->published().rayQuery;
         CHECK_MSG(rq.skinCaches == 0 && rq.skinnedInstances == 0,
                   "a removed character's cache and structure are released (%d caches)", rq.skinCaches);
     }

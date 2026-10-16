@@ -112,6 +112,9 @@ public:
     /// widget. `action` is 'press', 'release' or 'tap'. An unclaimed key that is an
     /// editor shortcut is refused (it would never reach the viewport).
     Q_INVOKABLE bool key(const QString &name, const QString &action = QStringLiteral("tap"));
+    /// THE MOUSE ON THE EDITOR VIEWPORT, as delivered (ENGINE-UPGRADE-U3 decision 50): a MouseButtonPress, MouseMove
+    /// or MouseButtonRelease at viewport pixel (x, y), sent to the viewport widget — the route a gizmo drag takes.
+    Q_INVOKABLE bool pointer(const QString &action, double x, double y, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariant dropTargetAt(double x, double y);
@@ -155,6 +158,8 @@ public:
     Q_INVOKABLE QVariantMap waitForImported(int count, int maxTurns = 200000);
 
 private:
+    /// The buttons editor.pointer's presses hold (a move carries them, a release drops its own).
+    Qt::MouseButtons mPointerHeld = Qt::NoButton;
     /// What `cameraSpeed` answers with, read or written: the dial, its factor,
     /// and the three surfaces' effective speeds.
     QVariantMap cameraSpeedState() const;

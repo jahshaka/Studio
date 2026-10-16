@@ -66,8 +66,8 @@ static int maxAbsDiff(const Image &a, const Image &b)
 static Image render(EngineAssetScene &assets, Engine &engine, View *view, int frames)
 {
     for (int i = 0; i < frames; ++i) {
-        assets.step(1.0f / 60.0f, int(view->width()), int(view->height()));
-        engine.renderOneFrame();
+        assets.step(1.0f / 60.0f, int(view->published().width), int(view->published().height));
+        enginetest::frames(engine, 1);
     }
     Image img;
     view->readPixels(img);

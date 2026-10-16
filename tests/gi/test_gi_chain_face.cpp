@@ -161,7 +161,7 @@ static void placeCamera(Rig &r)
     r.view->setCamera(cam);
 }
 
-static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 /// The column profile: the mean luminance of each column over the middle rows.
 static std::vector<float> profile(const Image &img)
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
         if (!r.scene->setSky(sky)) { std::printf("FAIL: setSky refused\n"); return false; }
         render(e, 8);                                    // the capture runs inside a frame
         float sh[27] = { 0.0f };
-        if (!r.scene->skyAmbientSh(sh)) { std::printf("FAIL: skyAmbientSh not ready\n"); return false; }
+        if (!r.scene->published().copySkyAmbientSh(sh)) { std::printf("FAIL: skyAmbientSh not ready\n"); return false; }
         std::printf("   sky SH band0 %.4f %.4f %.4f  band1y %.4f  band6 %.4f\n",
                     sh[0], sh[1], sh[2], sh[3], sh[18]);
         r.scene->setAmbientSh(sh);
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
         Image img;
         r.view->readPixels(img);
         const std::vector<float> p = profile(img);
-        const GiStatus st = r.scene->giStatus();
+        const GiStatus st = r.scene->published().gi;
         std::printf("== %-34s cascades=%zu\n", what, st.cascades.size());
         {
             for (size_t i = 0; i < st.cascades.size(); ++i) {
@@ -383,7 +383,7 @@ int main(int argc, char **argv)
             // the profile is a shift for the inner faces and not for the outer one,
             // which is itself the reading (the world profile is not a function of
             // the world — it is a function of where the eye is).
-            const GiStatus st = r.scene->giStatus();
+            const GiStatus st = r.scene->published().gi;
             bool followed = !st.cascades.empty();
             for (size_t i = 0; i < st.cascades.size(); ++i) {
                 const float slack = st.cascades[i].step + 0.001f;

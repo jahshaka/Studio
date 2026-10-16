@@ -79,6 +79,12 @@ public:
     /// (rate limited). Null engine and an empty sink are both no-ops. Cheap
     /// enough to call every frame: one virtual call and, in the common case, a
     /// std::string move of an empty string.
+    ///
+    /// TWO SOURCES (ENGINE-UPGRADE-U3 F3): the failing CALLS' sink
+    /// (Engine::takeLastError) and the FRAMES' error, read from the engine's
+    /// published snapshot — the frames' errors keyed by serial, each taken once
+    /// (a drain that did not see every frame still takes every one the list
+    /// holds, never only the newest).
     void drain(jahshaka::engine::Engine *engine);
 
     /// The same path drain() uses once it has a message — the seam the gates
@@ -127,6 +133,14 @@ private:
     QElapsedTimer      mClock;
     qint64             mWindowMs  = 5000;
     quint64            mDrains    = 0;
+    /// THE FRAMES' ERRORS ALREADY TAKEN (PublishedEngineFrame::framesWithError)
+    /// and from which engine: a cursor into the engine's stream, which reset()
+    /// leaves alone (forgetting it would re-log a frame's error from before).
+    unsigned long long mFrameErrorsTaken = 0;
+    const void        *mFrameErrorsEngine = nullptr;
+    /// The commands' refusals taken so far (PublishedEngineFrame::refusals, numbered by input.messagesRefused).
+    unsigned long long mRefusalsTaken = 0;
+    const void        *mRefusalsEngine = nullptr;
     quint64            mRecorded  = 0;
     quint64            mSuppressed = 0;
     qint64             mBudgetWindowMs = 0;   ///< start of the current global window

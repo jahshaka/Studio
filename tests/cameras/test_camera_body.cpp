@@ -122,7 +122,7 @@ int main(int argc, char **argv)
     auto frame = [&](Image &out) {
         mirror.sync();
         mirror.sync(mirrorframe::camera(view, editorCam));
-        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        enginetest::frames(engine, 2);
         view->readPixels(out);
     };
 
@@ -248,7 +248,7 @@ int main(int argc, char **argv)
         auto frameThrough = [&](Image &out) {
             mirror.sync();
             mirror.sync(mirrorframe::camera(view, cam));
-            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            enginetest::frames(engine, 2);
             view->readPixels(out);
         };
         // The x centroid of everything that is not the clear colour, in

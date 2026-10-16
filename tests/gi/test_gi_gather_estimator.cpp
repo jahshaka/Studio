@@ -90,7 +90,7 @@ static const int kLeakReadFrames = 10;   // the leak arm's frames after the turn
 /// THE SHOWROOM'S POSE: the flythrough's fourth capture (its kKeys[4]); away = the same eye turned 40 degrees left.
 static const Vec3 kPos(10.5f, 1.7f, 4.0f), kTarget(-5.0f, 0.5f, -4.0f), kAway(-1.0f, 0.5f, 12.0f);
 
-static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+static void render(Engine *e, int frames) { enginetest::frames(e, frames);}
 
 static PbrParams matte(const Colour &albedo)
 {
@@ -204,11 +204,11 @@ static std::vector<std::vector<double>> turnWindow(Engine *e, View *view, Scene 
         enginetest::testCameraLookAt(view, pos, lerp3(away, target, float(i) / float(kTurnFrames)));
         render(e, 1);
     }
-    const unsigned first = s->giStatus().gather.frame - 1u;   // the turn's last frame
+    const unsigned first = s->published().gi.gather.frame - 1u;   // the turn's last frame
     std::vector<std::vector<double>> got(static_cast<size_t>(kWindowFrames));
     size_t n = 0;
     const auto harvest = [&]() {
-        const GatherStatus g = s->giStatus().gather;
+        const GatherStatus g = s->published().gi.gather;
         if (g.irradiance.empty() || g.irradianceW != kSize || g.irradianceH != kSize) return;
         if (g.irradianceFrame >= first && g.irradianceFrame < first + unsigned(kWindowFrames) &&
             got[g.irradianceFrame - first].empty()) {
@@ -239,13 +239,13 @@ static std::vector<double> reference(Engine *e, View *view, Scene *s, const Gath
         render(e, 2);
         enginetest::testCameraLookAt(view, kPos, kTarget);
         render(e, 64 + 4);   // the rest mean completes at its 64th rest frame and HOLDS
-        const unsigned since = s->giStatus().gather.frame;
+        const unsigned since = s->published().gi.gather.frame;
         t.readback = true;
         s->setGatherTuning(t);
         std::vector<double> b;
         for (int k = 0; k < kTailFrames + 4 && b.empty(); ++k) {
             render(e, 1);
-            const GatherStatus g = s->giStatus().gather;
+            const GatherStatus g = s->published().gi.gather;
             if (!g.irradiance.empty() && g.irradianceW == kSize && g.irradianceH == kSize && g.irradianceFrame >= since)
                 b = floorBlocks(g.irradiance);
         }
@@ -303,7 +303,7 @@ static unsigned leakRun(Engine *e, View *view, Scene *s, const GatherTuning &t,
     for (int i = 1; i <= kTurnFrames + kLeakReadFrames; ++i) {
         enginetest::testCameraLookAt(view, pos, lerp3(away, target, std::min(1.0f, float(i) / float(kTurnFrames))));
         render(e, 1);
-        const GatherStatus g = s->giStatus().gather;
+        const GatherStatus g = s->published().gi.gather;
         // the readback lags a few frames: from the turn's end on, the view's first young frames
         if (i < 6 || g.irradiance.empty() || g.irradianceW != kSize || g.irradianceH != kSize) continue;
         double d = 0.0, l = 0.0;

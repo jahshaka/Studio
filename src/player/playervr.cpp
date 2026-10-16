@@ -44,7 +44,7 @@ PlayerVr::~PlayerVr() { end(); }
 bool PlayerVr::isActive() const
 {
     auto engine = mEngine.lock();
-    return mOwnsSession && engine && engine->vrStatus().active;
+    return mOwnsSession && engine && engine->vrSessionLive();
 }
 
 bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &camera,
@@ -59,7 +59,7 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     if (!engine->vrAvailable())
         return fail(QStringLiteral("VR is not available (%1)")
                         .arg(QString::fromStdString(engine->vrInfo().reason)));
-    if (engine->vrStatus().active)
+    if (engine->vrSessionLive())
         return fail(QStringLiteral("a VR session is already running"));
     if (!scene) return fail(QStringLiteral("the player has no scene to show yet"));
 
@@ -94,9 +94,15 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     // keeps the wish and applies it on begin), so the very first frame the
     // runtime accepts already reaches the desktop.
     engine->setVrMirrorView(mirrorView);
-    if (!engine->beginVrSession(scene, cfg)) {
+    bool begun = false;
+    std::string beginWhy;
+    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+        begun = e.beginVrSession(scene, cfg);
+        if (!begun) beginWhy = e.lastError();
+    });
+    if (!begun) {
         engine->setVrMirrorView(nullptr);
-        return fail(QString::fromStdString(engine->lastError()));
+        return fail(QString::fromStdString(beginWhy));
     }
     mOwnsSession = true;
     mMirrorView = mirrorView;
@@ -151,7 +157,7 @@ void PlayerVr::end()
     auto engine = mEngine.lock();
     if (engine && owned) {
         engine->setVrMirrorView(nullptr);
-        if (engine->vrStatus().active) engine->endVrSession();
+        if (engine->vrSessionLive()) engine->endVrSession();
     }
     mOwnsSession = false;
     mPlacePending = false;

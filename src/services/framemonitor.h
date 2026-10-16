@@ -16,7 +16,7 @@ For more information see the LICENSE file
 // (SPECS/RENDER_LOOP_MONITOR_SPEC.md §4.8, lane MON-P1b).
 //
 // The engine records what each frame DID and why (Engine::setFrameMonitor,
-// takeFrameRecords, takeMonitorEvents, captureSnapshot — lane MON-P1a). This
+// takeMonitorRecords, takeMonitorEvents, captureSnapshot — lane MON-P1a). This
 // object is everything around that:
 //
 //   * the CAPTURE STATE MACHINE — idle -> recording -> writing -> idle, with a
@@ -273,7 +273,7 @@ private:
     /// Moves everything the engine has published into the bundle. Called on
     /// every tick end, on a slow timer (so a capture with no ticks still
     /// drains) and in a LOOP at stop — the engine's holding queue hands back
-    /// its tail AFTER the monitor goes off (Engine.h takeFrameRecords).
+    /// its tail AFTER the monitor goes off (Engine.h takeMonitorRecords).
     void drain();
     /// drain(), timed, published as the `host.monitor` stage — the monitor's
     /// own cost on the UI thread, which nothing could see before (item 6).

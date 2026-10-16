@@ -52,7 +52,7 @@ static const unsigned kSize = 128;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -137,7 +137,7 @@ int main()
     CHECK(scene->setGlobalIllumination(hybridGi()), "case 1: the hybrid is accepted");
     render(e, 6);
     checkNoEngineError(e, "case 1 build");
-    GiStatus st = scene->giStatus();
+    GiStatus st = scene->published().gi;
     CHECK(st.vctBound, "case 1: the cascade chain is bound");
     CHECK_MSG(st.cascades.size() >= 2u, "case 1: the chain has cascades (%zu)",
               st.cascades.size());
@@ -148,7 +148,7 @@ int main()
     CHECK(scene->setGlobalIllumination(offGi()), "case 1: GI off is accepted");
     render(e, 4);
     checkNoEngineError(e, "case 1 off");
-    st = scene->giStatus();
+    st = scene->published().gi;
     CHECK(!st.vctBound, "case 1: nothing is bound with GI off");
     Image dark;
     if (!view->readPixels(dark)) { std::printf("FAIL: readPixels (off)\n"); return 1; }
@@ -160,7 +160,7 @@ int main()
     CHECK(scene->setGlobalIllumination(hybridGi()), "case 1: the hybrid is accepted again");
     render(e, 6);
     checkNoEngineError(e, "case 1 re-enable");
-    st = scene->giStatus();
+    st = scene->published().gi;
     CHECK(st.vctBound, "case 1: the voxel arm is bound again");
     Image relit;
     if (!view->readPixels(relit)) { std::printf("FAIL: readPixels (relit)\n"); return 1; }
@@ -186,7 +186,7 @@ int main()
         render(e, 5);
         checkNoEngineError(e, seqName[i]);
     }
-    st = scene->giStatus();
+    st = scene->published().gi;
     CHECK(st.vctBound, "case 3: the arm ends up bound");
 
     scene->setGlobalIllumination(offGi());

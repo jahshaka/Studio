@@ -99,10 +99,10 @@ int main(int argc, char **argv)
             const float sc = 1.2f / std::max(0.01f, f.extent);
             scene->setNodeTransform(node, Vec3(0, 0.6f, 0), Quat(), Vec3(sc, sc, sc));
             CHECK(scene->attachMesh(node, bare, mat), "%s: ...and attaches", n.name.c_str());
-            for (int i = 0; i < 30; ++i) engine->renderOneFrame();   // the shadow node's casters, the split
+            enginetest::frames(engine, 30);// the shadow node's casters, the split
             ++drawn;
             scene->removeNode(node);
-            engine->renderOneFrame();
+            enginetest::frames(engine, 1);
             scene->destroyMesh(bare);
         }
         // C. ...WITH THE BAKE'S CARDS KEPT: a card names a level the chain no longer has.

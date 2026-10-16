@@ -73,7 +73,7 @@ static const unsigned kSize = 256;
 
 static void render(Engine *e, int frames = 1)
 {
-    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+    enginetest::frames(e, frames);
 }
 
 /// THE CHAIN, because this is a cascade rule: the single-volume arm
@@ -143,7 +143,7 @@ int main()
 
     CHECK(s->setGlobalIllumination(chainGi(false)), "the cascade chain builds");
     render(e, 20);
-    GiStatus st = s->giStatus();
+    GiStatus st = s->published().gi;
     std::printf("   %zu cascades, budget %d\n", st.cascades.size(), st.probeUpdatesPerFrame);
     if (st.cascades.size() < 2u) {
         std::printf("FAIL: this suite needs a cascade chain\n");
@@ -156,9 +156,9 @@ int main()
     // CASE 1 — WITH THE RULE OFF, A DRAG PROMOTES NOTHING
     // =====================================================================
     std::printf("\n== case 1: the rule OFF (the shipped behaviour) ==\n");
-    const unsigned long long rebuildsBeforeOff = cascadeRebuilds(s->giStatus());
+    const unsigned long long rebuildsBeforeOff = cascadeRebuilds(s->published().gi);
     drag(e, s, prop, propPos, 0.08f, 40);
-    const GiStatus offMid = s->giStatus();
+    const GiStatus offMid = s->published().gi;
     const unsigned long long offDrag = cascadeRebuilds(offMid) - rebuildsBeforeOff;
     std::printf("   40 dragged frames: %llu cascade re-voxelisations, dragMovers %d\n",
                 offDrag, offMid.dragMovers);
@@ -168,7 +168,7 @@ int main()
               "and the cascades paid for the drag frame by frame (%llu re-voxelisations over 40 "
               "frames)", offDrag);
     render(e, 40);                       // settle
-    const unsigned long long offTotal = cascadeRebuilds(s->giStatus()) - rebuildsBeforeOff;
+    const unsigned long long offTotal = cascadeRebuilds(s->published().gi) - rebuildsBeforeOff;
 
     // =====================================================================
     // CASE 2 — ONE MOVE IS NOT A GESTURE
@@ -179,17 +179,17 @@ int main()
     propPos.x += 0.5f;                   // ONE scripted move, then stillness
     enginetest::setNodePosition(s, prop, propPos);
     render(e, 1);
-    CHECK(s->giStatus().dragMovers == 0,
+    CHECK(s->published().gi.dragMovers == 0,
           "A SINGLE MOVE IS NOT A GESTURE: a nudge, a paste or a scripted setPosition is "
           "answered where it happens");
     render(e, 40);
-    CHECK(s->giStatus().dragMoverGestures == 0, "...and it never became one");
+    CHECK(s->published().gi.dragMoverGestures == 0, "...and it never became one");
 
     // =====================================================================
     // CASE 3 — A GESTURE PROMOTES, AND COSTS A CONSTANT
     // =====================================================================
     std::printf("\n== case 3: the rule ON, the same gesture ==\n");
-    const unsigned long long rebuildsBeforeOn = cascadeRebuilds(s->giStatus());
+    const unsigned long long rebuildsBeforeOn = cascadeRebuilds(s->published().gi);
     // WHERE THE GESTURE STARTS, kept: case 5 replays exactly this gesture with
     // the rule off, and "the same pose reached both ways" means the same START
     // and the same steps, not merely the same number of them.
@@ -200,18 +200,18 @@ int main()
     enginetest::gesture(e, s, { prop });
     enginetest::setNodePosition(s, prop, propPos);
     render(e, 1);
-    CHECK_MSG(s->giStatus().dragMovers == 1 && s->giStatus().gestureActive,
+    CHECK_MSG(s->published().gi.dragMovers == 1 && s->published().gi.gestureActive,
               "the gesture's FIRST moved frame puts the object on the mover channel (dragMovers %d)",
-              s->giStatus().dragMovers);
+              s->published().gi.dragMovers);
     drag(e, s, prop, propPos, 0.08f, 39);
-    const GiStatus onMid = s->giStatus();
+    const GiStatus onMid = s->published().gi;
     const unsigned long long onDrag = cascadeRebuilds(onMid) - rebuildsBeforeOn;
     std::printf("   40 dragged frames: %llu cascade re-voxelisations, dragMovers %d\n",
                 onDrag, onMid.dragMovers);
     CHECK(onMid.dragMovers == 1, "THE DRAGGED OBJECT IS ON THE MOVER CHANNEL while it moves");
     // ...and the renderer has NOT rewritten the document's answer: the host
     // never said this object moves, and `mobilityStatus` is that answer.
-    CHECK(s->mobilityStatus().movableItems == 0,
+    CHECK(s->published().mobility.movableItems == 0,
           "...without the DOCUMENT's mobility being touched (movableItems still 0)");
     CHECK_MSG(onDrag * 2u <= offDrag,
               "A GESTURE COSTS A CONSTANT, NOT A FRAME'S WORK PER FRAME: %llu re-voxelisations "
@@ -224,11 +224,11 @@ int main()
     // THE RELEASE DEMOTES ON ITS OWN FRAME (U0 3c): the record that ends the gesture is drained by the next frame,
     // and that frame puts the object back — no quiet window inferred from motion.
     render(e, 1);
-    CHECK_MSG(s->giStatus().dragMovers == 0 && !s->giStatus().gestureActive,
+    CHECK_MSG(s->published().gi.dragMovers == 0 && !s->published().gi.gestureActive,
               "the frame after the release, the object is still world again (dragMovers %d)",
-              s->giStatus().dragMovers);
+              s->published().gi.dragMovers);
     render(e, 59);
-    const GiStatus rest = s->giStatus();
+    const GiStatus rest = s->published().gi;
     const unsigned long long onTotal = cascadeRebuilds(rest) - rebuildsBeforeOn;
     std::printf("   at rest: dragMovers %d, gestures %llu, re-voxelisations over the whole "
                 "gesture %llu (rule off: %llu)\n",
@@ -301,11 +301,11 @@ int main()
     s->attachMesh(slabNode, s->createMesh(enginetest::unitCubeMesh()), slabMat);
     enginetest::setNodePosition(s, slabNode, Vec3(2.0f, 0.5f, -1.5f));
     render(e, 40);
-    const unsigned long long beforePlain = cascadeRebuilds(s->giStatus());
+    const unsigned long long beforePlain = cascadeRebuilds(s->published().gi);
     drag(e, s, prop, again, -0.08f, 30);
-    const unsigned long long plainDrag = cascadeRebuilds(s->giStatus()) - beforePlain;
+    const unsigned long long plainDrag = cascadeRebuilds(s->published().gi) - beforePlain;
     render(e, 40);
-    const unsigned long long beforeEdit = cascadeRebuilds(s->giStatus());
+    const unsigned long long beforeEdit = cascadeRebuilds(s->published().gi);
     for (int i = 0; i < 30; ++i) {
         slab.albedo = Colour(0.3f + 0.02f * float(i), 0.3f, 0.8f - 0.02f * float(i));
         s->setPbrMaterial(slabMat, slab);              // the slider: a voxel input every frame
@@ -315,7 +315,7 @@ int main()
         render(e, 1);
     }
     enginetest::gesture(e, s, {});
-    const unsigned long long editDrag = cascadeRebuilds(s->giStatus()) - beforeEdit;
+    const unsigned long long editDrag = cascadeRebuilds(s->published().gi) - beforeEdit;
     std::printf("   30 dragged frames: %llu re-voxelisations without the edit, %llu with the material "
                 "pushed every frame\n", plainDrag, editDrag);
     CHECK_MSG(plainDrag >= 25u && editDrag >= plainDrag,
