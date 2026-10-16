@@ -185,6 +185,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
         FAIL_REGULAR_EXPRESSION "Validation Error;X ERROR"
         TIMEOUT 180 LABELS "ui")
+    jah_tsan_render(view.window_on_render_thread)   # the render thread's TSan arm (U3 decision 47)
 endif()
 
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel

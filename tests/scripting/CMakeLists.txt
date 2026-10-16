@@ -124,6 +124,7 @@ set_tests_properties(host.error_door PROPERTIES
     ENVIRONMENT "HOME=${_hedHome};JAHSHAKA_DATA_ROOT=${_hedHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
     LABELS "scripting"
     TIMEOUT 120)
+jah_tsan_render(host.sync_getters host.error_door)   # the render thread's TSan arm (U3 decision 47)
 
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl

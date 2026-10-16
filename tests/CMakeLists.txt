@@ -148,11 +148,9 @@ function(jah_tsan_lane)
 endfunction()
 #   jah_tsan_render(<test>...)   THE RENDER THREAD'S TSan ARM (ENGINE-UPGRADE-U3 decision 47): label tsan-render, run by
 #   hand (JAH_TSAN_LABEL=tsan-render scripts/sanitize.sh tsan) — green = zero reports. Never the shipped lane.
-function(jah_tsan_render)
+function(jah_tsan_render)   # called in the directory that registers the row (a TEST property is per directory)
     foreach(_t IN LISTS ARGV)
-        if(TEST ${_t})
-            set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-render)
-        endif()
+        set_property(TEST ${_t} APPEND PROPERTY LABELS tsan-render)
     endforeach()
 endfunction()
 
@@ -301,8 +299,8 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # the timing suites of the push tier
     app.input_keys app.play_select shadergraph.bake_output gi.budget
     app.watchdog_stall
-    # ENGINE-UPGRADE-U3: a 7 ms UI stall's dropped headset refreshes (measure until stage 5 makes it a guard)
-    vr.ui_stall
+    # ENGINE-UPGRADE-U3: a 7 ms UI stall's dropped headset refreshes (a GUARD since stage 5) and the extract at K = 100
+    vr.ui_stall gi.extract_cost
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
@@ -1247,7 +1245,3 @@ foreach(_t IN LISTS JAH_MEASURE_ROWS)
 endforeach()
 
 
-# THE RENDER THREAD'S TSan ARM (ENGINE-UPGRADE-U3 decision 47): the two-thread determinism arm, the window on the
-# render thread, the one order across streams, the host's door counted and the host's error door free-running.
-jah_tsan_render(frame.record_determinism view.window_on_render_thread engine.message_order host.sync_getters
-                host.error_door)

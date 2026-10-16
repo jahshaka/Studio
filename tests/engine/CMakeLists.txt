@@ -260,6 +260,43 @@ add_dependencies(test_engine_message_order JahshakaEngineMedia)
 jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_message_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_tsan_render(frame.record_determinism engine.message_order)   # the render thread's TSan arm (U3 decision 47)
+
+# frame.interpolation — THE OWNER'S MODE DRAWS BETWEEN THE GRID STATES (ENGINE-UPGRADE-U3 stage 5): a 60 Hz mover at
+# a 90 Hz display period, three poses per two steps, x = (2/3) j a closed form; lockstep frames draw the newest
+# state exactly. frame.interpolation_apply (`--apply`, measure): 10,000 nodes' apply on the pool vs the frame's thread.
+add_executable(test_engine_interpolation test_engine_interpolation.cpp)
+set_target_properties(test_engine_interpolation PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_interpolation PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
+add_dependencies(test_engine_interpolation JahshakaEngineMedia)
+jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_gpu_row(frame.interpolation_apply CLASS engine FRAMES 64 COMMAND test_engine_interpolation --apply
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.interpolation_apply PROPERTIES TIMEOUT 120 LABELS "engine;measure")
+
+# frame.drag_latency — A RECORD IS ON SCREEN THE NEXT FRAME (ENGINE-UPGRADE-U3 stage 5): free-running, 120 records,
+# each applied by the frame of the hand-over after its submit. A law in frames (hand-overs).
+add_executable(test_engine_drag_latency test_engine_drag_latency.cpp)
+set_target_properties(test_engine_drag_latency PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_drag_latency PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_drag_latency PRIVATE JahshakaEngine)
+add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
+jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
 
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)
 set_target_properties(test_engine_gi_scan PROPERTIES
