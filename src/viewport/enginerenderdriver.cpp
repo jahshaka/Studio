@@ -270,11 +270,10 @@ void EngineRenderDriver::tick(bool fromPresent)
         const long long now = steadyNs();
         const long long inFlight = mEngine->frameInFlightSinceNs();
         mLastTickUiOverrun = tickBeganNs > 0 && double(now - tickBeganNs) > periodNs;
-        // (b) A FRAME OVERRAN: the frame in flight at the submit has run longer than a display period — or the frame
-        // whose publish posted this tick ran a whole display period itself, so the next one began at its publish and
-        // left this tick no slack to land in (measured: the misses of a period-bound loop are these).
-        mLastTickFrameOverrun = (inFlight > 0 && double(now - inFlight) > periodNs) ||
-                                (fromPresent && double(mEngine->lastFrameSpentNs()) >= periodNs);
+        // (b) A FRAME OVERRAN: the frame in flight at the submit has run longer than a display period. (The loop's
+        // order — decision 65 — gives the tick the block that follows the publish, so a frame that uses its period
+        // leaves the tick its window; no other excuse exists.)
+        mLastTickFrameOverrun = inFlight > 0 && double(now - inFlight) > periodNs;
     }
 
     // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).

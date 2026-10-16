@@ -132,7 +132,7 @@ jah_tsan_blocked(host.sync_getters host.error_door)   # TSAN-GCC15-THREAD-REGIST
 # drawn by the next frame the render thread began (none merged into the next tick's), zero synchronous engine reads.
 set(_edlHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_drag_latency)
 file(MAKE_DIRECTORY ${_edlHome}/run)
-jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 120
+jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 260
          COMMAND ${JAH_FRESH_HOME} --warm ${_edlHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/editor_drag_latency.js --script-live

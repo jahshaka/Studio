@@ -39,43 +39,62 @@ for (var y = cy - 160; y <= cy + 160; y += 4)
 assert(hits.length > 0, "the X arrow is under " + hits.length + " sampled pixels");
 var grab = hits[Math.floor(hits.length / 2)];
 
-var x0 = node.transform(cube).position.x;
-var sync0 = engine.syncGetters().total, fs0 = app.frameStats();
-assert(editor.pointer("press", grab[0], grab[1]), "pressed on the X arrow at " + grab[0] + "," + grab[1]);
-var moves = 0, wrote = 0, ticked = 0, last = x0;
-for (var i = 0; i < 60; ++i) {
-    editor.pointer("move", grab[0] + 3 * (i + 1), grab[1]);
-    ++moves;
-    var nx = node.transform(cube).position.x;
-    if (nx !== last) ++wrote;
-    last = nx;
-    if (waitTick()) ++ticked;
+// THE THREE SHAPES OF THE LOOP'S BLOCK (decision 65): the hand-over is the last thing before the drain, the publish the
+// first after the frame's work, so the tick posted at the publish lands in whichever block follows — THE PAD (this
+// rig's present does not block), A START-BLOCK (the runtime's xrWaitFrame: the test door vr.fakeRuntimePace at one
+// display period) and AN END-BLOCK (a FIFO present: the test door view.fakePresentBlock at one display period).
+var period = app.frameStats().displayPeriodMs;
+var home = node.transform(cube).position;
+function dragShape(shape, armName) {
+    if (armName) assert(engine.arm(armName, period) !== null, shape + ": the arm " + armName + " = " + period.toFixed(2) + " ms");
+    node.transform(cube, { position: { x: home.x, y: home.y, z: home.z } });
+    editor.frame(4);
+    for (var w = 0; w < 10; ++w) waitTick();   // the shape's own frames run before the window opens
+    var x0 = node.transform(cube).position.x;
+    var sync0 = engine.syncGetters().total, fs0 = app.frameStats();
+    assert(editor.pointer("press", grab[0], grab[1]), shape + ": pressed on the X arrow at " + grab[0] + "," + grab[1]);
+    var moves = 0, wrote = 0, ticked = 0, last = x0;
+    for (var i = 0; i < 60; ++i) {
+        editor.pointer("move", grab[0] + 3 * (i + 1), grab[1]);
+        ++moves;
+        var nx = node.transform(cube).position.x;
+        if (nx !== last) ++wrote;
+        last = nx;
+        if (waitTick()) ++ticked;
+    }
+    editor.pointer("release", grab[0] + 180, grab[1]);
+    var fs1 = app.frameStats(), sync1 = engine.syncGetters().total;
+    if (armName) engine.arm(armName, 0);
+    var carried = fs1.submit.carried - fs0.submit.carried, checked = fs1.submit.checked - fs0.submit.checked;
+    var uiOver = fs1.submit.uiOverruns - fs0.submit.uiOverruns, frameOver = fs1.submit.frameOverruns - fs0.submit.frameOverruns;
+    var excused = fs1.submit.carriedExcused - fs0.submit.carriedExcused, lawTicks = checked - uiOver - frameOver;
+    var handOvers = fs1.submit.handOvers - fs0.submit.handOvers;
+    var submitted = fs1.submit.submitted - fs0.submit.submitted, tickCount = fs1.ticks - fs0.ticks;
+    console.log("EDITOR_DRAG_LATENCY shape=" + shape + " moves=" + moves + " wrote=" + wrote + " ticked=" + ticked +
+                " ticks=" + tickCount + " submitted=" + submitted + " checked=" + checked + " law_ticks=" + lawTicks +
+                " carried=" + carried + " ui_overruns=" + uiOver + " frame_overruns=" + frameOver +
+                " carried_in_overruns=" + excused + " handOvers=" + handOvers + " syncReads=" + (sync1 - sync0) +
+                " x " + x0.toFixed(3) + " -> " + last.toFixed(3));
+    assert(wrote === moves, shape + ": every move wrote the node through the gizmo (" + wrote + " of " + moves + ")");
+    assert(last > x0 + 0.1, shape + ": the drag moved the cube along +X (" + x0.toFixed(3) + " -> " + last.toFixed(3) + ")");
+    assert(ticked === moves, shape + ": the driver ticked after every move (" + ticked + " of " + moves + ")");
+    assert(submitted >= moves, shape + ": every tick submitted its record (" + submitted + ")");
+    assert(checked >= moves, shape + ": the law was judged at every tick of the drag (" + checked + " ticks)");
+    // THE LAW, ATTRIBUTED (decisions 63, 65): a tick that overran a display period itself (a: post to submit) or
+    // submitted while a frame had been in flight longer than one (b) is the owner's hitch budget — PRINTED above;
+    // every other tick's record is on screen by the next tick: 60 OF 60, carried 0.
+    // ...and with the loop's order the overrun ticks land too: 60 OF 60, no miss at all.
+    assert(carried === 0 && excused === 0,
+           shape + ": EVERY tick's record was on screen by the next tick: " + (checked - carried - excused) + " of " +
+           checked + " (" + carried + " carried among the " + lawTicks + " law ticks; " + uiOver + " UI overruns and " +
+           frameOver + " frame overruns, " + excused + " of them carried)");
+    // Paced by the present each tick is posted by a frame's publish: the frame that posted the window's FIRST tick
+    // began before the window opened, so the window holds a frame begun for every tick after it (ticks - 1 at least).
+    assert(handOvers >= tickCount - 1, shape + ": the render thread began a frame for every tick (" + handOvers +
+           " frames for " + tickCount + " ticks)");
+    assert(sync1 - sync0 === 0, shape + ": the drag read the engine synchronously " + (sync1 - sync0) + " time(s)");
 }
-editor.pointer("release", grab[0] + 180, grab[1]);
-var fs1 = app.frameStats(), sync1 = engine.syncGetters().total;
-var carried = fs1.submit.carried - fs0.submit.carried, checked = fs1.submit.checked - fs0.submit.checked;
-var uiOver = fs1.submit.uiOverruns - fs0.submit.uiOverruns, frameOver = fs1.submit.frameOverruns - fs0.submit.frameOverruns;
-var excused = fs1.submit.carriedExcused - fs0.submit.carriedExcused, lawTicks = checked - uiOver - frameOver;
-var handOvers = fs1.submit.handOvers - fs0.submit.handOvers;
-var submitted = fs1.submit.submitted - fs0.submit.submitted, tickCount = fs1.ticks - fs0.ticks;
-console.log("EDITOR_DRAG_LATENCY moves=" + moves + " wrote=" + wrote + " ticked=" + ticked + " ticks=" + tickCount +
-            " submitted=" + submitted + " checked=" + checked + " law_ticks=" + lawTicks + " carried=" + carried + " ui_overruns=" + uiOver +
-            " frame_overruns=" + frameOver + " carried_in_overruns=" + excused + " handOvers=" + handOvers + " syncReads=" +
-            (sync1 - sync0) + " x " + x0.toFixed(3) + " -> " + last.toFixed(3));
-assert(wrote === moves, "every move wrote the node through the gizmo (" + wrote + " of " + moves + ")");
-assert(last > x0 + 0.1, "the drag moved the cube along +X (" + x0.toFixed(3) + " -> " + last.toFixed(3) + ")");
-assert(ticked === moves, "the driver ticked after every move (" + ticked + " of " + moves + ")");
-assert(submitted >= moves, "every tick submitted its record (" + submitted + ")");
-assert(checked >= moves, "the law was judged at every tick of the drag (" + checked + " ticks)");
-// THE LAW, ATTRIBUTED (decision 63): every tick with no overrun of its own (a: its work from post to submit over a
-// display period) and none in flight (b: submitted while a frame had run longer than one) has its record on screen by
-// the next tick — those are the bar; the overruns are the owner's hitch budget, PRINTED above, never hidden.
-assert(carried === 0, "EVERY tick's record was on screen by the next tick, of the ticks with no overrun: " +
-       (lawTicks - carried) + " of " + lawTicks + " (" + carried + " carried; " + uiOver + " UI overruns and " +
-       frameOver + " frame overruns, " + excused + " of them carried)");
-// PACED BY THE PRESENT each tick is posted by a frame's publish: the frame that posted the window's FIRST tick began
-// before the window opened, so the window holds a frame begun for every tick after it (ticks - 1 at least).
-assert(handOvers >= tickCount - 1, "the render thread began a frame for every tick (" + handOvers + " frames for " +
-       tickCount + " ticks)");
-assert(sync1 - sync0 === 0, "the drag read the engine synchronously " + (sync1 - sync0) + " time(s)");
+dragShape("pad", null);
+dragShape("start-block", "vr.fakeRuntimePace");
+dragShape("end-block", "view.fakePresentBlock");
 console.log("editor_drag_latency: PASS");
