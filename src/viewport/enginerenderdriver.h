@@ -18,6 +18,7 @@
 //
 // Runs on the thread that owns the Engine (its thread-affinity rule).
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QObject>
 
 #include <atomic>
@@ -45,7 +46,11 @@ public:
         /// (`checked`) and those whose latched frame had NOT applied the serial the last tick's record was submitted as
         /// (`carried`): 0 = every tick's record on screen by the next tick.
         qulonglong checked  = 0;
-        qulonglong carried  = 0;
+        qulonglong carried  = 0;   ///< misses of ticks with neither overrun: a DEFECT (decision 63)
+        /// THE OWNER'S HITCH BUDGET, counted (decision 63): judged ticks whose own work overran a display period from
+        /// its post to its submit (`uiOverruns`), whose record was submitted while a frame had been in flight longer
+        /// than a display period (`frameOverruns`), and the misses among them (`carriedExcused`).
+        qulonglong uiOverruns = 0, frameOverruns = 0, carriedExcused = 0;
 
         // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
         // It counted ticks with no enabled View — the app sitting on the
@@ -140,6 +145,11 @@ private:
     bool mFreeRunning = false;
     /// The tick, from the timer or posted by a published frame (fromPresent: the present paced it).
     void tick(bool fromPresent);
+    bool event(QEvent *e) override;
+    static QEvent::Type tickEventType();
+    static long long steadyNs();
+    std::atomic<long long> mPostedAtNs{ 0 };   ///< when the render thread posted the pending tick (steady ns)
+    bool mLastTickUiOverrun = false, mLastTickFrameOverrun = false;   ///< the last free tick's attribution
     bool mStarted = false;                    ///< start() .. stop()
     bool mPresentPaced = false;               ///< free-running with views: the published frames post the ticks
     std::atomic<bool> mTickPosted{ false };   ///< one posted tick at a time (set on the render thread)

@@ -1,5 +1,9 @@
 #include "viewport/enginerenderdriver.h"
 
+#include <QCoreApplication>
+#include <QEvent>
+#include <chrono>
+
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QTimer>
@@ -47,8 +51,33 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
     connect(mTimer, &QTimer::timeout, this, [this] { tick(false); });
 }
 
+QEvent::Type EngineRenderDriver::tickEventType()
+{
+    static const QEvent::Type type = QEvent::Type(QEvent::registerEventType());
+    return type;
+}
+
+long long EngineRenderDriver::steadyNs()
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+bool EngineRenderDriver::event(QEvent *e)
+{
+    if (e->type() == tickEventType()) {   // the present's beat (decision 60): one posted tick at a time
+        mTickPosted.store(false);
+        if (mStarted && mPresentPaced) tick(true);
+        return true;
+    }
+    return QObject::event(e);
+}
+
 void EngineRenderDriver::tick(bool fromPresent)
 {
+    // THE TICK'S OWN START, for the attribution of a late record (decision 63): a posted tick began at its post (the
+    // queue's wait is the UI's), a timer tick at its fire.
+    const long long tickBeganNs = fromPresent ? mPostedAtNs.load(std::memory_order_acquire) : steadyNs();
     // A frame is UI-THREAD work: whatever it costs, the window is not
     // answering while it runs. The first frame of a freshly opened world is
     // still the expensive one — the Hlms compiles a shader variant per new
@@ -99,9 +128,15 @@ void EngineRenderDriver::tick(bool fromPresent)
     // THE LAW, OFF THE SNAPSHOT (decision 60): the record the last tick submitted is on screen by this tick — the frame
     // this tick latched applied a serial at least the one noted at the last tick's close. A miss is a record a tick old
     // that no published frame carried (`carried`); `checked` counts the ticks judged.
+    // THE LAW IS PER TICK, ATTRIBUTED (decision 63): a tick whose own work overran a display period from its post to its
+    // submit (a), or whose record was submitted while a frame had been in flight longer than a display period (b),
+    // is the owner's hitch budget — counted and printed, never this law's; a miss of any other tick is a defect.
     if (mFreeRunning && mEngine && mLastTickSerial) {
         ++mStats.checked;
-        if (mEngine->published().serial < mLastTickSerial) ++mStats.carried;
+        const bool missed = mEngine->published().serial < mLastTickSerial;
+        if (mLastTickUiOverrun) { ++mStats.uiOverruns; if (missed) ++mStats.carriedExcused; }
+        else if (mLastTickFrameOverrun) { ++mStats.frameOverruns; if (missed) ++mStats.carriedExcused; }
+        else if (missed) ++mStats.carried;
     }
     mLastTickSerial = 0;
     // THE SESSION'S PACING, RECONCILED (F5). One branch when no session has
@@ -227,7 +262,20 @@ void EngineRenderDriver::tick(bool fromPresent)
     }
     emit afterFrame();
     // ...and the serial this tick's record will be drawn as, for the next tick's law.
-    if (mFreeRunning && rendering && mEngine) mLastTickSerial = mEngine->frameSubmitStatus().nextSerial;
+    if (mFreeRunning && rendering && mEngine) {
+        mLastTickSerial = mEngine->frameSubmitStatus().nextSerial;
+        // ...attributed at its submit: the display period the loop paces to (the panel's when none is sent).
+        double periodNs = double(mDisplayPeriodSent) * 1e9;
+        if (!(periodNs > 0.0)) periodNs = scriptPacePeriodMs() * 1e6;
+        const long long now = steadyNs();
+        const long long inFlight = mEngine->frameInFlightSinceNs();
+        mLastTickUiOverrun = tickBeganNs > 0 && double(now - tickBeganNs) > periodNs;
+        // (b) A FRAME OVERRAN: the frame in flight at the submit has run longer than a display period — or the frame
+        // whose publish posted this tick ran a whole display period itself, so the next one began at its publish and
+        // left this tick no slack to land in (measured: the misses of a period-bound loop are these).
+        mLastTickFrameOverrun = (inFlight > 0 && double(now - inFlight) > periodNs) ||
+                                (fromPresent && double(mEngine->lastFrameSpentNs()) >= periodNs);
+    }
 
     // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
     // The one render loop is the one place that can notice. After a device
@@ -372,12 +420,11 @@ void EngineRenderDriver::start()
     mStarted = true;
     // THE PRESENT'S BEAT (decision 60): the render thread calls this after every frame it publishes on its own; it
     // posts one tick (never two pending) and does nothing else on the render thread.
+    // AT HIGH PRIORITY (decision 63): a repaint queued meanwhile never runs before the tick the frame asked for.
     mEngine->setFramePublishedHook([this]() {
         if (mTickPosted.exchange(true)) return;
-        QMetaObject::invokeMethod(this, [this]() {
-            mTickPosted.store(false);
-            if (mStarted && mPresentPaced) tick(true);
-        }, Qt::QueuedConnection);
+        mPostedAtNs.store(steadyNs(), std::memory_order_release);
+        QCoreApplication::postEvent(this, new QEvent(tickEventType()), Qt::HighEventPriority);
     });
     mTimer->start(mPresentPaced ? kPresentFallbackMs : pacedIntervalMs());
 }
