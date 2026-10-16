@@ -316,7 +316,8 @@ bool EngineHost::start(QString &error)
     // command this process makes reaches the engine as a field of the record or a message of its stream.
     cfg.hostRecords = true;
     // ...AND THE ENGINE RUNS ON ITS OWN THREAD (stage 4b): Root, the device, the windows, every frame.
-    cfg.renderThread = true;
+    // JAH_ENGINE_ONE_THREAD=1: the same records on ONE thread (stage 4a's shape) — the A arm of a measurement.
+    cfg.renderThread = qEnvironmentVariableIntValue("JAH_ENGINE_ONE_THREAD") != 1;
 #ifdef Q_OS_MACOS
     // The MoltenVK ICD probe is pointless without Vulkan — and a headless run
     // must not depend on a driver being installed at all.
