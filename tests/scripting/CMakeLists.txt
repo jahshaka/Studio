@@ -99,6 +99,7 @@ endforeach()
 set(_hsgHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_sync_getters)
 file(MAKE_DIRECTORY ${_hsgHome}/run)
 jah_gpu_row(host.sync_getters CLASS app TIER low NEEDS NONE FRAMES 630
+         NEEDS_WHY "a count of the host's synchronous engine entries, the capture inside the window is a subject, its picture no claim"
          COMMAND ${JAH_FRESH_HOME} --warm ${_hsgHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/host_sync_getters.js --script-live
