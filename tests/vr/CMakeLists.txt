@@ -402,23 +402,22 @@ set_property(TEST vr.warmup.timing APPEND PROPERTY RESOURCE_LOCK monado)
 # between the script's verbs — JAH_VR_RUNNER_EVENTS=1 is what run_vr_app.sh launches that way); vr_ui_stall.js sleeps
 # 0.63 of the RUNTIME's predicted display period (7 ms at 90 Hz, the perf audit's figure, as a share) in a beforeFrame
 # slot every 350 ms (app.tickStall) over 600 accepted headset frames and counts the runtime's missed display periods
-# (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 per stall, is the design's law; RED ON MAIN,
-# so the row is `measure` until stage 5 makes it a guard.
+# (VrStatus::missedDisplayPeriods) against a 600-frame control. THE BAR, 0 per stall, is the design's law: a GUARD
+# since stage 5 (FREE-RUNNING, JAH_FREE_RUNNING=1: the render thread draws on its own, the UI thread only submits).
 # THE BASE (stage 1's one-thread frame = main's, Debug, Xvfb 1920x1080, 2026-10-15; Monado's null compositor paces at
 # 20 Hz, a 50 ms period, and XRT_COMPOSITOR_DEFAULT_FRAMERATE does not move it): at 0.63 of the period (32 ms)
 # 1.00 missed per stall (31 of 31); 45 ms 1.00 (30/30); 120 ms 3.00 (135/45); 7 ms — under 0.15 of this period —
 # 0.00 (0/80). The control: 0-2 over 200-600 frames. As ruled (32 ms at 20 Hz): 93 missed over 93 stalls = 1.00, RED.
 set(_vr_ui_stall_home "${CMAKE_CURRENT_BINARY_DIR}/vr-ui-stall-home")
-jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "vr;measure")
+jah_fresh_home_fixture(vr.ui_stall.fresh_home vruistallFreshHome "${_vr_ui_stall_home}" WARM LABELS "vr")
 jah_gpu_exclusive_test(NAME vr.ui_stall CLASS vr TIER low NEEDS NONE RUN_TIMEOUT 300
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
             "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
             "${CMAKE_CURRENT_SOURCE_DIR}/vr_ui_stall.js"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# LABELS vr + measure: the vr subsystem's row (gate-scope's NEVER_SELECTED keeps a `measure` row out of every scoped
-# selection — the ship runs it; the U3 builder runs it by hand at each stage and keeps its log).
+# LABELS vr: the vr subsystem's GUARD (stage 5 flipped it from `measure`).
 set_tests_properties(vr.ui_stall PROPERTIES
-    LABELS "vr;measure"
+    LABELS "vr"
     SKIP_RETURN_CODE 77
     JAHSHAKA_TEST_FRAMES 1300
     FIXTURES_REQUIRED vruistallFreshHome

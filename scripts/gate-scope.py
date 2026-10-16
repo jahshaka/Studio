@@ -171,6 +171,8 @@ OGRE_SCENE_FUNCTIONS = {
     "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
     # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
     **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage", "requestOnEngine")},
+    # U3 stage 5: the two grid states drawn between (the free frames' interpolation)
+    **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,

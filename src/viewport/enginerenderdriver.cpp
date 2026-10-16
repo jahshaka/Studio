@@ -87,6 +87,9 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
+        // ONE SNAPSHOT PER TICK (U3 stage 5): in the owner's mode the render thread publishes every display frame; the
+        // tick's reads (its subscribers', its status) see the one it latches here.
+        if (mFreeRunning && mEngine) mEngine->latchSnapshot();
         // THE SESSION'S PACING, RECONCILED (F5). One branch when no session has
         // ever run; see syncVrPacing.
         if (mVrSession) syncVrPacing();
@@ -170,6 +173,8 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // simply says so, and `ticks - rendered` is still there for a caller
         // who wants the total.
         mStats.drawing = anythingToDraw;
+        // THE OWNER'S MODE draws only while there is something to draw and no subscriber holds the tick (stage 5).
+        if (mFreeRunning) mEngine->setFreeRunning(rendering);
         if (rendering) {
             // THE DISPLAY'S PERIOD is a display property, not a record (ENGINE-UPGRADE-U3): told to the render loop
             // when it CHANGES — the driver submits no record of its own, so a tick nothing was submitted for is a real
@@ -180,7 +185,17 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             // the frame runs on the render thread while this tick returns to the event loop; a tick that finds the last
             // frame still running draws nothing (the render thread is the pacer). LOCKSTEP (every test): the frame is
             // this tick's and done before it returns.
-            if (mFreeRunning ? mEngine->kickFrame() : (mEngine->renderOneFrame(), true)) {
+            if (mFreeRunning) {
+                // THE RENDER THREAD DRAWS ON ITS OWN (stage 5): this tick submitted its record; the frames it drew
+                // since the last tick are counted from the snapshot.
+                const unsigned long long frame = mEngine->published().frame;
+                if (frame != mFreeFrameSeen) {
+                    mStats.rendered += quint64(frame > mFreeFrameSeen ? frame - mFreeFrameSeen : 1u);
+                    mFreeFrameSeen = frame;
+                    mDrawn.add(nowMs());
+                }
+            } else {
+                mEngine->renderOneFrame();
                 ++mStats.rendered;
                 mDrawn.add(nowMs());
             }
