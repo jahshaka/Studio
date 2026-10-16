@@ -62,7 +62,9 @@ assert(wrote === moves, "every move wrote the node through the gizmo (" + wrote 
 assert(last > x0 + 0.1, "the drag moved the cube along +X (" + x0.toFixed(3) + " -> " + last.toFixed(3) + ")");
 assert(ticked === moves, "the driver ticked after every move (" + ticked + " of " + moves + ")");
 assert(submitted >= moves, "every tick submitted its record (" + submitted + ")");
-assert(handed >= moves, "the frames took the drag's records (" + handed + ")");
+// (Two ticks inside one frame merge their records into one hand-over — still the next frame begun after the first
+// submit: the lateness below is the law, `handed` only says the frames took them.)
+assert(handed > 0, "the frames took the drag's records (" + handed + " hand-overs carried them)");
 assert(late === 0 && fs1.submit.worstLatency <= 1,
        "every record was drawn by the next frame begun after its submit (" + late + " late, worst " +
        fs1.submit.worstLatency + " frame)");
