@@ -1872,7 +1872,9 @@ QVariantMap AppApi::reclaimMemory()
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.reclaimMemory: no engine in this session"); return out; }
     jahshaka::engine::MemoryStats before, after;
-    if (!engine->reclaimMemory(&before, &after)) {
+    bool reclaimed = false;
+    engine->request([&](jahshaka::engine::Engine &e) { reclaimed = e.reclaimMemory(&before, &after); });   // a REQUEST (U3 4b)
+    if (!reclaimed) {
         fail("app.reclaimMemory: the engine refused: " +
              QString::fromStdString(engine->lastError()));
         return out;
