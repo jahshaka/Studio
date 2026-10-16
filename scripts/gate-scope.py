@@ -173,7 +173,8 @@ OGRE_SCENE_FUNCTIONS = {
     # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
     **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage", "requestOnEngine")},
     # U3 stage 5: the two grid states drawn between (the free frames' interpolation)
-    **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask")},
+    **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask",
+                          "forgetInterpolationPointers")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
@@ -217,7 +218,8 @@ OGRE_VIEW_FUNCTIONS = {
                           "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
                           "readPixels", "readPixelsHdr",
                           # U3 stage 4a: the host's setters as record fields, the readbacks as requests, the create's halves
-                          "postRecord", "hostPosts", "requestOnEngine", "adoptTarget", "buildChain")},
+                          "postRecord", "hostPosts", "callIsTheHosts", "requestOnEngine", "adoptTarget",
+                          "buildChain")},
     **{f: ["engine"] for f in ("name", "scene", "published", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
                                "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
                                "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",
