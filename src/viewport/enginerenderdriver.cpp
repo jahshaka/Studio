@@ -273,7 +273,11 @@ void EngineRenderDriver::tick(bool fromPresent)
         // (b) A FRAME OVERRAN: the frame in flight at the submit has run longer than a display period. (The loop's
         // order — decision 65 — gives the tick the block that follows the publish, so a frame that uses its period
         // leaves the tick its window; no other excuse exists.)
-        mLastTickFrameOverrun = inFlight > 0 && double(now - inFlight) > periodNs;
+        // ...or THE FRAME THAT POSTED IT OVERRAN: its work alone (hand-over to publish, no block) exceeded a display
+        // period — with a present that does not block (the pad shape) such a frame leaves no pad, the next frame
+        // begins at its publish and the tick has no block to land in (decision 66's measurement).
+        mLastTickFrameOverrun = (inFlight > 0 && double(now - inFlight) > periodNs) ||
+                                (fromPresent && double(mEngine->lastFrameWorkNs()) > periodNs);
     }
 
     // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).

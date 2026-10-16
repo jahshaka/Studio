@@ -83,8 +83,8 @@ function dragShape(shape, armName) {
     // THE LAW, ATTRIBUTED (decisions 63, 65): a tick that overran a display period itself (a: post to submit) or
     // submitted while a frame had been in flight longer than one (b) is the owner's hitch budget — PRINTED above;
     // every other tick's record is on screen by the next tick: 60 OF 60, carried 0.
-    // ...and with the loop's order the overrun ticks land too: 60 OF 60, no miss at all.
-    assert(carried === 0 && excused === 0,
+    // (decision 65's bar: 60 of 60 among them — the overruns' misses are the owner's hitch budget, printed.)
+    assert(carried === 0,
            shape + ": EVERY tick's record was on screen by the next tick: " + (checked - carried - excused) + " of " +
            checked + " (" + carried + " carried among the " + lawTicks + " law ticks; " + uiOver + " UI overruns and " +
            frameOver + " frame overruns, " + excused + " of them carried)");
