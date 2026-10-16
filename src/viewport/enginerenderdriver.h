@@ -39,6 +39,10 @@ public:
     struct Stats {
         qulonglong ticks    = 0;   ///< timer fires
         qulonglong rendered = 0;   ///< ticks that called Engine::renderOneFrame
+        /// FREE-RUNNING ticks that found the LAST tick's record still waiting for a frame (FrameSubmitStatus::pending at
+        /// the tick's head, before its own sync) — a record a whole tick old that no frame had begun for
+        /// (ENGINE-UPGRADE-U3 decision 50, editor.drag_latency: 0 = every record drawn by the next frame).
+        qulonglong carried  = 0;
 
         // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
         // It counted ticks with no enabled View — the app sitting on the

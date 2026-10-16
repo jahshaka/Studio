@@ -268,6 +268,7 @@ public:
     SunContactInfo sunContactInfo() const override;
     bool sceneTracesRays() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
+    void afterApplied(QObject *owner, std::function<void()> done) override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
     void stepFrames(int n, float dt) override;

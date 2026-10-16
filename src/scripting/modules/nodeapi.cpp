@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/extentmeasure.h"
 #include "services/planarreflectors.h"
+
+#include <memory>
 #include "commands/nodeeditcommand.h"
 #include "services/physicsconstraints.h"
 #include "commands/reparentscenenodecommand.h"
@@ -481,11 +483,23 @@ bool NodeApi::setPlanarReflector(const QString &id, bool enabled)
     // The Properties row and the "Make Reflective" context action come through
     // the same service call — including the part that reverts the flag when the
     // renderer refuses the geometry, which is the half a second copy forgets.
-    QString error;
     IEditorViewport *vp = host.isEngineReady() ? host.viewport : nullptr;
     const bool was = node->getPlanarReflector();
-    if (!planarreflectors::set(node, enabled, vp, &error))
-        return fail(QStringLiteral("node.setPlanarReflector: %1").arg(error));
+    // A VERB IS LOCKSTEP BY MODE (ENGINE-UPGRADE-U3 decision 50): the service answers on its completion, and the verb
+    // steps the frames it needs — the frame that applies the flag and the one after it — before it returns.
+    struct Answer { bool answered = false, accepted = true; QString error; };
+    auto answer = std::make_shared<Answer>();   // shared: the completion may outlive this frame of the stack
+    planarreflectors::set(node, enabled, vp, nullptr, [answer](bool ok, const QString &why) {
+        answer->answered = true;
+        answer->accepted = ok;
+        answer->error = why;
+    });
+    for (int frames = 0; !answer->answered && vp && frames < 8; ++frames) vp->renderFrames(1);
+    if (!answer->answered) return fail(QStringLiteral("node.setPlanarReflector: the renderer did not answer in 8 frames"));
+    if (!answer->accepted) {
+        vp->renderFrames(1);   // the put-back flag reaches the renderer before the verb returns
+        return fail(QStringLiteral("node.setPlanarReflector: %1").arg(answer->error));
+    }
     recordNodeEdit(QStringLiteral("planar reflector"),
                    [node, vp, enabled]() { planarreflectors::set(node, enabled, vp, nullptr); },
                    [node, vp, was]() { planarreflectors::set(node, was, vp, nullptr); });

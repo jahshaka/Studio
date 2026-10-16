@@ -1111,6 +1111,14 @@ public:
     virtual bool planarReflectorAccepted(iris::SceneNodePtr node) const
     { Q_UNUSED(node); return true; }
 
+    /// THE DOCUMENT'S CURRENT STATE ON SCREEN, AS A COMPLETION (ENGINE-UPGRADE-U3 decision 50): `done` runs on this
+    /// thread once the record the next sync submits has been applied by the engine AND one more frame has been drawn
+    /// after it (what a renderer-side derivation — a planar reflector's arm — needs to be readable). Never a wait: in
+    /// the owner's free-running editor it rides the frames as they close; in lockstep (a script's editor.frame, a
+    /// test) it is the two frames the caller steps. `owner` scopes the wait (gone first = `done` never runs). Hosts with
+    /// no engine run `done` at once.
+    virtual void afterApplied(QObject *owner, std::function<void()> done) { Q_UNUSED(owner); if (done) done(); }
+
     /// The viewport's document→engine mirror, as counters (see mirrorStats).
     /// `available` false means this viewport has no mirror to ask — the
     /// document-only stand-ins — and the counts are then meaningless rather

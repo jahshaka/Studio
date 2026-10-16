@@ -90,6 +90,8 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // ONE SNAPSHOT PER TICK (U3 stage 5): in the owner's mode the render thread publishes every display frame; the
         // tick's reads (its subscribers', its status) see the one it latches here.
         if (mFreeRunning && mEngine) mEngine->latchSnapshot();
+        // THE LAST TICK'S RECORD, A TICK LATER (decision 50): still in the slot = no frame began for it in a whole tick.
+        if (mFreeRunning && mEngine && mStats.drawing && mEngine->frameSubmitStatus().pending) ++mStats.carried;
         // THE SESSION'S PACING, RECONCILED (F5). One branch when no session has
         // ever run; see syncVrPacing.
         if (mVrSession) syncVrPacing();

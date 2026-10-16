@@ -126,6 +126,22 @@ set_tests_properties(host.error_door PROPERTIES
     TIMEOUT 120)
 jah_tsan_render(host.sync_getters host.error_door)   # the render thread's TSan arm (U3 decision 47)
 
+# editor.drag_latency — A DRAG IN THE EDITOR IS ON SCREEN THE NEXT FRAME (ENGINE-UPGRADE-U3 stage 5's acceptance,
+# decision 50): FREE-RUNNING (JAH_FREE_RUNNING=1), a translate drag through the real viewport path (editor.pointer on
+# the gizmo's X arrow, 60 moves, the driver ticking between them): every move written by the gizmo, every tick's record
+# drawn by the next frame the render thread began (none merged into the next tick's), zero synchronous engine reads.
+set(_edlHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_drag_latency)
+file(MAKE_DIRECTORY ${_edlHome}/run)
+jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 120
+         COMMAND ${JAH_FRESH_HOME} --warm ${_edlHome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/editor_drag_latency.js --script-live
+         WORKING_DIRECTORY ${_edlHome}/run)
+set_tests_properties(editor.drag_latency PROPERTIES
+    ENVIRONMENT "HOME=${_edlHome};JAHSHAKA_DATA_ROOT=${_edlHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
 # toggle with topmost promotion, the owner's Shift range, the World root rule)

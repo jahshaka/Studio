@@ -1171,10 +1171,14 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		const bool isReflector = node->getPlanarReflector();
 		action = new QAction(QIcon(), isReflector ? "Stop Reflecting" : "Make Reflective", this);
 		connect(action, &QAction::triggered, this, [this, node, isReflector]() {
-			QString error;
 			IEditorViewport *vp = shell ? shell->editorViewport() : nullptr;
-			if (!planarreflectors::set(node, !isReflector, vp, &error))
-				QMessageBox::warning(this, tr("Not a reflection plane"), error);
+			// The renderer's answer on its completion (ENGINE-UPGRADE-U3 decision 50); the dialog its own turn.
+			planarreflectors::set(node, !isReflector, vp, this, [this](bool accepted, const QString &error) {
+				if (accepted) return;
+				QMetaObject::invokeMethod(this, [this, error]() {
+					QMessageBox::warning(this, tr("Not a reflection plane"), error);
+				}, Qt::QueuedConnection);
+			});
 		});
 		menu.addAction(action);
 	}

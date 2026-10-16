@@ -2866,6 +2866,34 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     return view()->scene()->published().factsBlock().isPlanarReflector(id);   // the facts (U3 stage 3)
 }
 
+void EngineSceneViewport::afterApplied(QObject *owner, std::function<void()> done)
+{
+    if (!mEngine || !view()) { if (done) done(); return; }
+    // IN FRAMES, OFF THE SNAPSHOT (never a wait, never a clock): the first frame to close after this call is the tick
+    // whose sync submitted the document's state — its record's serial is noted; the snapshot then says when a frame
+    // applied it, and the frame after that one is the completion.
+    struct Wait {
+        bool submitted = false, applied = false;
+        unsigned long long serial = 0, frame = 0;
+        QMetaObject::Connection conn;
+    };
+    auto w = std::make_shared<Wait>();
+    w->conn = connect(&mEvents, &EditorViewportEvents::framesDrawn, owner ? owner : &mEvents, [this, w, done]() {
+        if (!mEngine) return;
+        if (!w->submitted) { w->serial = mEngine->frameSubmitStatus().nextSerial; w->submitted = true; }
+        const jahshaka::engine::PublishedEngineFrame &pub = mEngine->published();
+        if (!w->applied) {
+            if (pub.serial < w->serial) return;
+            w->applied = true;
+            w->frame = pub.frame;
+            return;
+        }
+        if (pub.frame <= w->frame) return;
+        disconnect(w->conn);
+        if (done) done();
+    });
+}
+
 IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
 {
     GiVoxelStatsInfo out;

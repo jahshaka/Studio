@@ -16,6 +16,7 @@ For more information see the LICENSE file
 
 #include <QKeySequence>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QDockWidget>
 #include <QDir>
 #include <QFileInfo>
@@ -887,6 +888,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "NOT pass through the window system or Qt's shortcut map — whether a REAL key arrives is "
           "app.input_keys' question (xdotool on a private display). Refused with no viewport or "
           "an unknown key name.",
+          Needs::Window },
+        { "pointer", "editor.pointer(action, x, y, {button}) -> bool",
+          "THE MOUSE ON THE EDITOR VIEWPORT, the way the viewport receives it once the window system has "
+          "delivered it: a MouseButtonPress ('press'), MouseMove ('move', the pressed buttons held) or "
+          "MouseButtonRelease ('release') at viewport pixel (x, y), origin top-left — sent to the viewport widget "
+          "itself, so a press on a gizmo handle (editor.gizmoHitTest) starts the drag a person's press starts and "
+          "every move writes the node through the gizmo, exactly as by hand (editor.drag_latency, ENGINE-UPGRADE-U3). "
+          "`button` is 'left' (the default), 'right' or 'middle'. Inside the verb the script owns the write (the "
+          "edit gate's verb scope). It does NOT pass through the window system. Refused with no viewport, an "
+          "unknown action or an unknown button.",
           Needs::Window },
         { "dragAssetToTray", "editor.dragAssetToTray(guidOrGuids, folderGuid, {action}) -> bool",
           "DROPS TILES ON A FOLDER TILE IN THE EDITOR'S ASSET TRAY, for real (DRAWERS-1): it "
@@ -2608,6 +2619,34 @@ bool EditorApi::key(const QString &name, const QString &action)
         QKeyEvent release(QEvent::KeyRelease, k, mods);
         QApplication::sendEvent(target, &release);
     }
+    return true;
+}
+
+bool EditorApi::pointer(const QString &action, double x, double y, const QVariantMap &options)
+{
+    QWidget *target = host.viewport ? host.viewport->asWidget() : nullptr;
+    if (!target) return fail("editor.pointer: no editor viewport in this session");
+    const QString act = action.toLower();
+    QEvent::Type type = QEvent::None;
+    if (act == QLatin1String("press")) type = QEvent::MouseButtonPress;
+    else if (act == QLatin1String("move")) type = QEvent::MouseMove;
+    else if (act == QLatin1String("release")) type = QEvent::MouseButtonRelease;
+    else return fail(QStringLiteral("editor.pointer: action must be 'press', 'move' or 'release' (got '%1')").arg(action));
+    const QString name = options.value(QStringLiteral("button"), QStringLiteral("left")).toString().toLower();
+    Qt::MouseButton button = Qt::NoButton;
+    if (name == QLatin1String("left")) button = Qt::LeftButton;
+    else if (name == QLatin1String("right")) button = Qt::RightButton;
+    else if (name == QLatin1String("middle")) button = Qt::MiddleButton;
+    else return fail(QStringLiteral("editor.pointer: button must be 'left', 'right' or 'middle' (got '%1')").arg(name));
+    // THE BUTTONS HELD, as Qt reports them: a press holds its button, a move carries the held set (and no button of
+    // its own), a release carries the button released and no longer holds it.
+    if (type == QEvent::MouseButtonPress) mPointerHeld |= button;
+    if (type == QEvent::MouseButtonRelease) mPointerHeld &= ~button;
+    const QPointF local(x, y);
+    const QPointF global = target->mapToGlobal(local);
+    QMouseEvent ev(type, local, global, type == QEvent::MouseMove ? Qt::NoButton : button, mPointerHeld,
+                   Qt::NoModifier);
+    QApplication::sendEvent(target, &ev);
     return true;
 }
 

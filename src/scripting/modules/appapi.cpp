@@ -1560,6 +1560,23 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
     auto engine = EngineHost::instance().engine();
     out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
+    // THE HAND-OVER (ENGINE-UPGRADE-U3 decision 50, editor.drag_latency): running totals. `carried` — the driver's free-
+    // running ticks that found the last tick's record still waiting for a frame; `submitted` / `handOvers` — the
+    // records submitted and the frames the render loop began (a host-side read under the slot's lock, never a
+    // synchronous read of the engine).
+    QVariantMap submit;
+    submit.insert("carried", double(s.carried));
+    if (engine) {
+        const jahshaka::engine::FrameSubmitStatus st = engine->frameSubmitStatus();
+        submit.insert("submitted", double(st.submitted));
+        submit.insert("handOvers", double(st.handOvers));
+        submit.insert("recordsHanded", double(st.recordsHanded));
+        submit.insert("recordsLate", double(st.recordsLate));
+        submit.insert("worstLatency", double(st.worstLatency));
+        submit.insert("presentAlpha", double(engine->published().presentAlpha));
+        submit.insert("presentFree", engine->published().presentFree);
+    }
+    out.insert("submit", submit);
     if (reset && driver) driver->resetWorst();
     return out;
 }
