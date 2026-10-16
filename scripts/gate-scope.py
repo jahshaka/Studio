@@ -170,7 +170,7 @@ OGRE_SCENE_FUNCTIONS = {
     # fixtures' door onto the engine's record (EngineInspect.h)
     "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
     # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
-    **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage")},
+    **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage", "requestOnEngine")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
