@@ -171,7 +171,7 @@ endfunction()
 #       the recycled pthread_t is Qt's, uninstrumented, and both runtimes reject it. host.sync_getters and
 #       host.error_door stay quarantined; the render thread's proofs run as ENGINE FIXTURES under TSan (label
 #       tsan-render: frame.record_determinism, engine.message_order, frame.drag_latency, frame.interpolation,
-#       view.window_on_render_thread, engine.error_door).
+#       view.window_on_render_thread, engine.error_door, frame.monitor_pop).
 #       MEASURED AGAIN 2026-10-11 (RUNNER-A7A, every row run once in build-tsan with lavapipe): the registry CHECK
 #       now fires in 4 of the 27 rows only; the app boots in the rest, and every boot reports a race in OUR
 #       engine's LOD update (irisgl/engine/src/OgreMesh.cpp lodUpdateImpl on the updateAllLodsThread workers), and

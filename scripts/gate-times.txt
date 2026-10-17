@@ -6,6 +6,7 @@
 # runs at the sprint's ship only; source.testing_rules R2 fails a guard with no line. A spec that adds or rewrites a row
 # writes its line from its own solo run.
 api.contract 3.40  ship 3a0422b4e (2026-10-13)
+app.capture_free_tick 22.67  solo, the card lock held, :81 (FRAME-MONITOR-DOOR-1, 2026-10-17)
 app.cli_options 0.00  ship 3a0422b4e (2026-10-13)
 app.data_root 17.20  ship 3a0422b4e (2026-10-13)
 app.data_root.fresh_home 0.01  quiet n=3
@@ -15,6 +16,7 @@ app.first_launch 0.00  ship 3a0422b4e (2026-10-13)
 app.help_exits 0.30  quiet n=46
 app.input_keys 49.40  quiet n=57
 app.input_keys.fresh_home 0.01  quiet n=15
+app.knob_refusals 3.48  solo, the card lock held, :81 (FRAME-MONITOR-DOOR-1, 2026-10-17)
 app.library_generation 9.80  ship 3a0422b4e (2026-10-13)
 app.library_generation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 app.library_keep 27.70  ship 3a0422b4e (2026-10-13)
@@ -161,6 +163,7 @@ export.raw 0.00  ship 3a0422b4e (2026-10-13)
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.monitor_pop 3.09  solo, the card lock held, :81 (FRAME-MONITOR-DOOR-1, 2026-10-17)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 frame.runtime_pace 5.09  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
