@@ -242,26 +242,14 @@ static void warmUpUntilSettled(McpClient &mcp)
 }
 
 /// Was this run's worst gap inside this run's budget? Measures the control
-/// right after the operation it judges (same second, same weather), and on the
-/// way to a red re-rolls THE CONTROL once.
-///
-/// The repeat re-rolls the control and not the operation, which is the one
-/// place this differs from open.responsive: an archive run here is tens of
-/// seconds and re-importing would leave a project the later sections count,
-/// while a warm open is 220 ms and free to repeat. The control is the half
-/// that is a single roll of a shared box's scheduler (HARNESS-1 measured
-/// 486/375, 673/527 and 764/319 in three consecutive runs of the same build),
-/// and the ceiling means a second roll can never rescue a real regression:
-/// work back on the UI thread is a multi-second block at any control value.
+/// ONCE, right after the operation it judges (same second, same weather). The
+/// re-roll of the control on the way to a red is DELETED (MAIN-REDS-1's fix
+/// round): a second roll that can turn a red green is a retry that hides it.
 static bool withinControlBudget(McpClient &mcp, double maxGap, const char *label,
                                 int logMark = 0)
 {
     const double control = measureControlGap(mcp, label);
-    if (maxGap > 0.0 && maxGap < budgetFor(control, label)) return true;
-    std::printf("info: [%s] the worst gap (%.1f ms) exceeded this run's budget — "
-                "re-rolling the control once\n", label, maxGap);
-    const double control2 = measureControlGap(mcp, label);
-    const bool ok = maxGap > 0.0 && maxGap < budgetFor(qMax(control, control2), label);
+    const bool ok = maxGap > 0.0 && maxGap < budgetFor(control, label);
     if (!ok) {
         drainApp();
         printUiThreadEvidence(gAppLog, label, logMark);
