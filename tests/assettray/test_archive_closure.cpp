@@ -40,6 +40,8 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "io/clipboardformat.h"
 #include "services/assetclosure.h"
+#include "services/assetshare.h"
+#include "services/assetstorepaths.h"
 
 static int failures = 0;
 #define CHECK(cond, ...)                                                                   \
@@ -156,6 +158,37 @@ int main(int argc, char **argv)
           "statements per asset <= 1 + the BLOB reads: %d non-BLOB statements for %d assets",
           perAssetStatements, assets);
     Database::setQueryLog(false);
+
+    // ---- THE SHIPPING PATH (MAIN-REDS-1's fix round): the share file's stage, stageBundle — the closure's walk,
+    // then the same payload law, its catalog reads sliced between event-loop turns (a counting yield stands for the
+    // UI thread's turn: slicing must add no statement) -------------------------------------------------------------
+    {
+        AssetStorePaths::setRootOverride(store.path());
+        int turns = 0;
+        Database::setQueryLog(true);
+        const int sf0 = CasContentSource::statements();
+        const assetshare::BundleStage staged = assetshare::stageBundle(&db, nullptr, models, [&turns] { ++turns; });
+        const int sDb = Database::queryLogStatements();
+        const int sFiles = CasContentSource::statements() - sf0;
+        const int sBlobs = statementsNamed(QStringLiteral("fetchAssetRowBlobs"));
+        std::printf("   stageBundle: %d entries, %d assets, %d catalog statements (%d BLOB reads), %d files statements, "
+                    "%d event-loop turns\n", int(models.size()), int(staged.envelope.assets.size()), sDb, sBlobs, sFiles,
+                    turns);
+        CHECK(staged.ok() && staged.envelope.assets.size() == assets && staged.envelope.items.size() == models.size(),
+              "stageBundle stages the %d entries and their whole closure (%d assets)", int(models.size()), assets);
+        CHECK(statementsNamed(QStringLiteral("fetchAssetHeaders")) == 1,
+              "stageBundle: ONE header statement for the whole set — the entries' rows come from it");
+        CHECK(statementsNamed(QStringLiteral("fetchDependencyEdges")) == 3 + 1,
+              "stageBundle: the walk's statement per level (3) and ONE edge statement for the set");
+        CHECK(sBlobs == assets && sFiles == assets, "stageBundle: one BLOB read and one files statement an asset");
+        CHECK(statementsNamed(QStringLiteral("fetchAsset")) == 0, "stageBundle: no full-row read of any asset");
+        CHECK(sDb + sFiles - sBlobs <= assets + 2 + 3,
+              "stageBundle: non-BLOB statements <= the assets + the set's two + the walk's three: %d for %d assets",
+              sDb + sFiles - sBlobs, assets);
+        CHECK(turns >= 1, "stageBundle turned the loop between its steps (%d turns)", turns);
+        Database::setQueryLog(false);
+        AssetStorePaths::setRootOverride(QString());
+    }
 
     // ---- THE SAME ANSWER as the per-row reads -----------------------------
     bool same = true;

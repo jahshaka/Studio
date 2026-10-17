@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QSet>
 
+#include <utility>
+
 #include "data/database/database.h"
 #include "export/exportcontentsource.h"
 #include "io/assetrefs.h"
@@ -79,96 +81,140 @@ QStringList expand(const QStringList &seeds, Database *db)
     return expandThroughCatalog(seeds, db);
 }
 
+struct Describer::State
+{
+    Database *db = nullptr;
+    Options options;
+    QVector<DeferredRead> *deferredOut = nullptr;
+    CasContentSource content;
+    qint64 budget = 0;
+    QStringList wanted, known;
+    QHash<QString, AssetRecord> headers;
+    QHash<QString, QStringList> edges;
+    QMap<QString, clipboardformat::ClipAsset> out;
+    int inlined = 0, referenced = 0;
+    State(Database *d, const Options &o, QVector<DeferredRead> *def)
+        : db(d), options(o), deferredOut(def), content(o.storeRoot, o.projectGuid), budget(o.inlineLimitBytes) {}
+};
+
+Describer::Describer(const QStringList &guids, Database *db, const Options &options,
+                     QVector<DeferredRead> *deferredOut)
+    : d(new State(db, options, deferredOut))
+{
+    for (const QString &guid : guids)
+        if (!guid.isEmpty() && !assetrefs::isReservedGuid(guid)) d->wanted.append(guid);
+}
+
+Describer::~Describer() = default;
+
+// THE CLOSURE'S ROWS IN TWO STATEMENTS (D11-LIBRARY-SCALE §3.6): every header without a BLOB, and every asset's
+// direct edges, for the whole guid set at once. A row's JSON BLOBs are read when that asset is described (and
+// only when the item carries them) — never a thumbnail.
+void Describer::readHeaders()
+{
+    d->headers.clear();
+    d->known.clear();
+    if (!d->db) return;
+    for (const AssetRecord &row : d->db->fetchAssetHeaders(d->wanted)) d->headers.insert(row.guid, row);
+    for (const QString &guid : d->wanted)
+        if (d->headers.contains(guid)) d->known.append(guid);   // a guid this catalog does not know is no step
+}
+
+void Describer::readEdges()
+{
+    if (d->db) d->edges = d->db->fetchDependencyEdges(d->wanted);
+}
+
+int Describer::steps() const { return int(d->known.size()); }
+
+const AssetRecord *Describer::header(const QString &guid) const
+{
+    const auto found = d->headers.constFind(guid);
+    return found == d->headers.constEnd() ? nullptr : &*found;
+}
+
+// ONE ASSET, in walk order. THE ROW'S BLOB IS THE ROW (round 8, the lead's rule): never budgeted, it always
+// travels — a model of tens of thousands of parts copies like any other. The budget bounds the FILE payloads
+// only; a file that does not fit goes by reference (its oid).
+void Describer::step(int i)
+{
+    if (i < 0 || i >= int(d->known.size())) return;
+    const QString &guid = d->known.at(i);
+    const AssetRecord &record = d->headers[guid];
+
+    clipboardformat::ClipAsset asset;
+    asset.guid = guid;
+    asset.name = record.name;
+    asset.typeId = record.type;
+    asset.type = scriptmod::assetTypeName(record.type);
+    asset.parent = record.parent;
+    asset.dependencies = d->edges.value(guid);
+    bool anyInlined = false, anyReferenced = false;
+    if (d->options.includeRowBlobs) d->db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
+
+    for (const auto &entry : d->content.filesForAsset(guid, record.name)) {
+        clipboardformat::ClipFile file;
+        file.role = entry.role;
+        file.name = entry.name;
+        file.oid = entry.oid;
+        file.size = entry.size;
+        // The store object's file name IS `<oid>.<ext>`, so its suffix is
+        // exactly the extension the catalog recorded — no second lookup.
+        file.ext = QFileInfo(entry.path).suffix().toLower();
+
+        const qint64 size = entry.size >= 0 ? entry.size : QFileInfo(entry.path).size();
+        // IN WALK ORDER while the budget lasts (§2.3): a payload's total
+        // inline size is what clipboard managers have to survive, so the
+        // budget is spent, not applied per file. An asset that misses out
+        // still travels — by oid, which finds the same content in any
+        // store that has it.
+        bool owed = false;
+        if (size >= 0 && size <= d->budget) {
+            if (d->deferredOut) {
+                // DEFERRED (EXPORT-THREAD-1): the budget is spent now, the
+                // bytes are read by whoever writes the file — a worker.
+                d->deferredOut->append(DeferredRead{ guid, int(asset.files.size()), entry.path });
+                d->budget -= size;
+                anyInlined = owed = true;
+            } else {
+                QFile source(entry.path);
+                if (source.open(QIODevice::ReadOnly)) {
+                    file.inlineData = source.readAll();
+                    d->budget -= file.inlineData.size();
+                    anyInlined = true;
+                }
+            }
+        }
+        if (file.inlineData.isEmpty() && !owed) anyReferenced = true;
+        asset.files.append(file);
+    }
+
+    if (anyInlined) ++d->inlined;
+    else if (anyReferenced) ++d->referenced;
+    d->out.insert(guid, asset);
+}
+
+QMap<QString, clipboardformat::ClipAsset> Describer::takeDescribed() { return std::exchange(d->out, {}); }
+int Describer::inlined() const { return d->inlined; }
+int Describer::referenced() const { return d->referenced; }
+
 QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Database *db,
                                                     const Options &options,
                                                     int *inlinedOut, int *referencedOut,
                                                     QVector<DeferredRead> *deferredOut)
 {
-    QMap<QString, clipboardformat::ClipAsset> out;
-    int inlined = 0, referenced = 0;
     if (!db) {
         if (inlinedOut) *inlinedOut = 0;
         if (referencedOut) *referencedOut = 0;
-        return out;
+        return {};
     }
-
-    CasContentSource content(options.storeRoot, options.projectGuid);
-    qint64 budget = options.inlineLimitBytes;
-
-    // THE CLOSURE'S ROWS IN TWO STATEMENTS (D11-LIBRARY-SCALE §3.6): every
-    // header without a BLOB, and every asset's direct edges, for the whole guid
-    // set at once. A row's JSON BLOBs are read when that asset is written below
-    // (and only when the item carries them) — never a thumbnail.
-    QStringList wanted;
-    for (const QString &guid : guids)
-        if (!guid.isEmpty() && !assetrefs::isReservedGuid(guid)) wanted.append(guid);
-    QHash<QString, AssetRecord> headers;
-    for (const AssetRecord &row : db->fetchAssetHeaders(wanted)) headers.insert(row.guid, row);
-    const QHash<QString, QStringList> edges = db->fetchDependencyEdges(wanted);
-
-    // ---- ONE PASS, in walk order. THE ROW'S BLOB IS THE ROW (round 8, the lead's rule): never budgeted,
-    // it always travels — a model of tens of thousands of parts copies like any other. The budget bounds
-    // the FILE payloads only; a file that does not fit goes by reference (its oid).
-    for (const QString &guid : wanted) {
-        const auto found = headers.constFind(guid);
-        if (found == headers.constEnd()) continue;      // a guid this catalog does not know
-        const AssetRecord &record = *found;
-
-        clipboardformat::ClipAsset asset;
-        asset.guid = guid;
-        asset.name = record.name;
-        asset.typeId = record.type;
-        asset.type = scriptmod::assetTypeName(record.type);
-        asset.parent = record.parent;
-        asset.dependencies = edges.value(guid);
-        bool anyInlined = false, anyReferenced = false;
-        if (options.includeRowBlobs) db->fetchAssetRowBlobs(guid, &asset.blob, &asset.properties);
-
-        for (const auto &entry : content.filesForAsset(guid, record.name)) {
-            clipboardformat::ClipFile file;
-            file.role = entry.role;
-            file.name = entry.name;
-            file.oid = entry.oid;
-            file.size = entry.size;
-            // The store object's file name IS `<oid>.<ext>`, so its suffix is
-            // exactly the extension the catalog recorded — no second lookup.
-            file.ext = QFileInfo(entry.path).suffix().toLower();
-
-            const qint64 size = entry.size >= 0 ? entry.size : QFileInfo(entry.path).size();
-            // IN WALK ORDER while the budget lasts (§2.3): a payload's total
-            // inline size is what clipboard managers have to survive, so the
-            // budget is spent, not applied per file. An asset that misses out
-            // still travels — by oid, which finds the same content in any
-            // store that has it.
-            bool owed = false;
-            if (size >= 0 && size <= budget) {
-                if (deferredOut) {
-                    // DEFERRED (EXPORT-THREAD-1): the budget is spent now, the
-                    // bytes are read by whoever writes the file — a worker.
-                    deferredOut->append(DeferredRead{ guid, int(asset.files.size()), entry.path });
-                    budget -= size;
-                    anyInlined = owed = true;
-                } else {
-                    QFile source(entry.path);
-                    if (source.open(QIODevice::ReadOnly)) {
-                        file.inlineData = source.readAll();
-                        budget -= file.inlineData.size();
-                        anyInlined = true;
-                    }
-                }
-            }
-            if (file.inlineData.isEmpty() && !owed) anyReferenced = true;
-            asset.files.append(file);
-        }
-
-        if (anyInlined) ++inlined;
-        else if (anyReferenced) ++referenced;
-        out.insert(guid, asset);
-    }
-
-    if (inlinedOut) *inlinedOut = inlined;
-    if (referencedOut) *referencedOut = referenced;
-    return out;
+    Describer describer(guids, db, options, deferredOut);
+    describer.readHeaders();
+    describer.readEdges();
+    for (int i = 0; i < describer.steps(); ++i) describer.step(i);
+    if (inlinedOut) *inlinedOut = describer.inlined();
+    if (referencedOut) *referencedOut = describer.referenced();
+    return describer.takeDescribed();
 }
 
 } // namespace assetclosure

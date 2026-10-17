@@ -42,10 +42,13 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+#include <memory>
+
 
 #include "io/clipboardformat.h"
 
 class Database;
+struct AssetRecord;
 
 namespace assetclosure {
 
@@ -106,6 +109,35 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
                                                    int *inlinedOut = nullptr,
                                                    int *referencedOut = nullptr,
                                                    QVector<DeferredRead> *deferredOut = nullptr);
+
+/// describe(), STEP BY STEP (MAIN-REDS-1's fix round) — the form a caller on the UI thread slices. The SET
+/// half reads the whole set's catalog rows ONCE (D11-LIBRARY-SCALE §3.6): `readHeaders` one statement for every
+/// header (no BLOB), `readEdges` one for every direct edge; then `step(i)` describes the i-th asset of the set
+/// (walk order) — its BLOB read and its files statement, the two per-asset reads the law allows. The caller may
+/// turn its event loop between any two calls; describe() is the same calls back to back.
+class Describer
+{
+public:
+    Describer(const QStringList &guids, Database *db, const Options &options,
+              QVector<DeferredRead> *deferredOut = nullptr);
+    ~Describer();
+    Describer(const Describer &) = delete;
+    Describer &operator=(const Describer &) = delete;
+    void readHeaders();
+    void readEdges();
+    /// The steps: the set's guids the catalog knows, in walk order (after readHeaders).
+    int steps() const;
+    void step(int i);
+    /// A prefetched row (after readHeaders), null for a guid the catalog does not know.
+    const AssetRecord *header(const QString &guid) const;
+    QMap<QString, clipboardformat::ClipAsset> takeDescribed();
+    int inlined() const;
+    int referenced() const;
+
+private:
+    struct State;
+    std::unique_ptr<State> d;
+};
 
 } // namespace assetclosure
 
