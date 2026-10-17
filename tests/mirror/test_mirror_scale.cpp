@@ -516,18 +516,28 @@ int main(int argc, char **argv)
             b.mirror->sync();
             return std::chrono::duration<double, std::milli>(clock::now() - t0).count();
         };
-        std::vector<double> fullMs, allMs, someMs, stillMs;
+        // TWO WALK ARMS (MAIN-REDS-1 stage 4a). The walk over a STILL scene is what a still
+        // frame and the verifier are measured against (the walk they replaced). The 100 %
+        // movers law compares the dirty path with the walk AT EQUAL WORK: every node moved,
+        // then the full walk — both arms pay each written node's extract (the record and the
+        // journal, U2 b15a11513), so the ratio reads the list's own overhead. The old premise —
+        // a still walk against a full extract — measured the extract, not the list
+        // (spikes/main-reds/diagnosis.md 1: walk+0 movers 1.568, walk+100 % 5.232 ms).
+        std::vector<double> fullMs, fullMovedMs, allMs, someMs, stillMs;
         const int meshCount = int(b.keep.size()) - 20;
         for (int i = 0; i < 9; ++i) {
             b.mirror->requestFullWalk();  fullMs.push_back(timedSync());
+            moveSome(meshCount);
+            b.mirror->requestFullWalk();  fullMovedMs.push_back(timedSync());
             moveSome(meshCount);          allMs.push_back(timedSync());
             moveSome(meshCount / 8);      someMs.push_back(timedSync());
             stillMs.push_back(timedSync());
         }
         auto med = [](std::vector<double> v) { std::sort(v.begin(), v.end()); return v[v.size()/2]; };
-        const double full = med(fullMs), all = med(allMs), some = med(someMs), still = med(stillMs);
-        std::printf("    full walk %7.3f ms | 100%% movers %7.3f | 12%% movers %7.3f | still %7.3f\n",
-                    full, all, some, still);
+        const double full = med(fullMs), fullMoved = med(fullMovedMs), all = med(allMs), some = med(someMs),
+                     still = med(stillMs);
+        std::printf("    full walk %7.3f ms (every node moved %7.3f) | 100%% movers %7.3f | 12%% movers %7.3f | "
+                    "still %7.3f\n", full, fullMoved, all, some, still);
         // MEASURED 1.38x (Debug + ASan, 2020 nodes, 2026-09-13). The dirty path
         // pays two things the recursion gets for free: a list entry per node,
         // and a memo probe for the parent's answers (it reads them from the
@@ -535,8 +545,9 @@ int main(int argc, char **argv)
         // the walk threads them down). That is the honest price of the worst
         // case — literally everything moving — and the gate is that it stays a
         // CONSTANT FACTOR rather than becoming a different shape.
-        CHECK(all < full * 1.5,
-              "100% movers cost about what the full walk cost — the list degrades to it, never past");
+        CHECK(all < fullMoved * 1.5,
+              "100% movers cost about what the full walk of the same moves cost — the list degrades to it, "
+              "never past");
         CHECK(some < all * 0.45, "12% movers cost a fraction of that");
         CHECK(still < full * 0.08,
               "a STILL frame costs under a tenth of the walk it replaced");
