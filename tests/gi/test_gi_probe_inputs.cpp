@@ -331,15 +331,23 @@ int main(int argc, char **argv)
     CHECK(mirror.target()->published().gi.schedulerResolves - solvesBeforeAlbedo == 1,
           "albedo: the voxel half re-solves exactly once (coalesced, like a moved object)");
 
-    // A ROUGHNESS edit is seen by the probes but not by the voxelizer (which
-    // reads albedo/emissive/alpha only): it re-captures and costs no re-solve.
+    // A ROUGHNESS edit is a VOXEL INPUT TOO, by law since PHOTON-MARCH-1 stage 2
+    // (irisgl 64e85bb: the injection's and the bounce's diffuse albedo read the
+    // roughness, so a roughness edit moves the material generation). The premise
+    // before it — "seen by the probes but not by the voxelizer, no re-solve" — is
+    // dead; the arm takes the albedo arm's shape: the settle wait with no light
+    // re-inject, then EXACTLY ONE re-solve.
     frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const quint64 solvesBeforeRough = mirror.target()->published().gi.schedulerResolves;
+    const quint64 injectsBeforeRough = mirror.target()->published().gi.schedulerLightTicks;
     input("roughness", GiStaleReason::Material,
-          [&]() { wallMat->setRoughnessFactor(0.5f); }, 12);
+          [&]() { wallMat->setRoughnessFactor(0.5f); }, 40);
     frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
-    CHECK(mirror.target()->published().gi.schedulerResolves == solvesBeforeRough,
-          "roughness: probes re-capture, the voxels do not re-solve");
+    CHECK(mirror.target()->published().gi.schedulerLightTicks == injectsBeforeRough,
+          "roughness: the settle wait runs NO light re-inject (the material term is its own)");
+    CHECK(mirror.target()->published().gi.schedulerResolves - solvesBeforeRough == 1,
+          "roughness: the probes re-capture and the voxel half re-solves exactly once (a voxel input since "
+          "PHOTON-MARCH-1)");
 
     // An edit that changes NOTHING stales nothing (the mirror pushes materials
     // on change, and the engine compares the parameters itself as well).
