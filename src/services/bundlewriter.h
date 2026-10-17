@@ -31,6 +31,7 @@ For more information see the LICENSE file
 // UI hands the same job to a progress dialog (ui/dialogs/bundleexportdialog.h)
 // that can cancel it.
 
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFuture>
 #include <QString>
@@ -45,6 +46,28 @@ For more information see the LICENSE file
 
 namespace assetshare {
 
+/// THE UI THREAD'S OWN BLOCKS OF ONE EXPORT (MAIN-REDS-1 stage 5). The export holds the calling thread in
+/// stretches between event-loop turns — the catalog's describe slices, the hand-over to the worker, the resume
+/// after it — and every frame, timer and repaint runs inside the turns. The clock measures the stretches only (a
+/// turn is not the export's work: it is the frames the export lets through), and keeps the longest: "the export
+/// adds at most one frame's budget to the UI thread" is a bar on that number.
+class UiStepClock
+{
+public:
+    UiStepClock() { mStep.start(); }
+    /// The stretch so far ends here (a turn or the export's end follows).
+    void close() { mWorstMs = qMax(mWorstMs, double(mStep.nsecsElapsed()) / 1.0e6); }
+    /// ...and the export's next stretch starts here (the turn is over).
+    void open() { mStep.restart(); }
+    /// One event-loop turn, not counted.
+    template <typename Turn> void turn(Turn &&t) { close(); t(); open(); }
+    double worstMs() const { return mWorstMs; }
+
+private:
+    QElapsedTimer mStep;
+    double mWorstMs = 0.0;
+};
+
 struct ExportResult
 {
     QString path;      ///< the archive written
@@ -54,6 +77,8 @@ struct ExportResult
     /// The write ran on a thread other than the application's (the UI) thread
     /// — what the verbs report as `worker`, so a test can count it.
     bool offUiThread = false;
+    /// THE EXPORT'S OWN LONGEST BLOCK OF THE CALLING (UI) THREAD, ms (UiStepClock): -1 when it was not measured.
+    double worstUiStepMs = -1.0;
     bool canceled = false;
     QString error;
     bool ok() const { return error.isEmpty() && !path.isEmpty(); }
@@ -107,7 +132,9 @@ public:
     /// writes — and returns its result. The verbs pass ExcludeUserInputEvents
     /// (nothing a click could start re-enters them); the progress dialog runs
     /// its own modal loop instead.
-    ExportResult wait(QEventLoop::ProcessEventsFlags flags = QEventLoop::ExcludeUserInputEvents);
+    /// `clock` (the verbs'): the loop's turns are not counted as the export's block, the resume after it is.
+    ExportResult wait(QEventLoop::ProcessEventsFlags flags = QEventLoop::ExcludeUserInputEvents,
+                      UiStepClock *clock = nullptr);
 
 private:
     struct Shared
@@ -137,8 +164,8 @@ UnpackedBundle unpackBundle(const QString &path);
 
 /// The verbs' export: the stage written on a worker, waited for with the
 /// event loop turning (user input held back). Returns when the file is
-/// complete.
-ExportResult exportAndWait(BundleStage stage, const QString &destPath);
+/// complete. `clock`: the export's own UI-thread stretches, measured (the result's worstUiStepMs).
+ExportResult exportAndWait(BundleStage stage, const QString &destPath, UiStepClock *clock = nullptr);
 
 }   // namespace assetshare
 

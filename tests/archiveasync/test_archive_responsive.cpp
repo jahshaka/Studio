@@ -169,9 +169,9 @@ static int shadersCompiled(McpClient &mcp)
 
 /// THE CONTROL (see kControlFactor): the worst heartbeat gap over ~2 s of the
 /// app rendering on its UI thread with no archive in flight.
-static double measureControlGap(McpClient &mcp, const char *label,
-                                double probeMs = kHeartbeatMs)
+static double measureControlGap(McpClient &mcp, const char *label)
 {
+    const double probeMs = kHeartbeatMs;
     mcp.runScript(QStringLiteral("app.heartbeat(0)"));
     mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(probeMs)));
     QElapsedTimer timer;
@@ -571,14 +571,18 @@ int main(int argc, char **argv)
     // ---- 3b. THE SHARE FILE IS WRITTEN OFF THE UI THREAD (EXPORT-THREAD-1) ----
     // assets.exportBundle of a 200-entry pack: the catalog is read on the UI
     // thread, the bytes / payload / zip are a worker's, and the verb waits with
-    // the event loop turning. A 10 ms probe (the heartbeat's floor) watches it.
-    // PUSH asserts COUNTS — the write ran on a worker, the UI thread ticked
-    // during it; the stage-close row asserts the gap: the export may add at most ONE FRAME's
-    // budget (16.7 ms at 60 fps) to the worst gap the same app has rendering
-    // with nothing in flight (the control, same probe, same second).
+    // the event loop turning. PUSH asserts COUNTS — the write ran on a worker,
+    // the render loop ticked and drew during it; the stage-close row asserts the
+    // LAW: the export adds at most ONE FRAME's budget (16.7 ms at 60 fps) to the
+    // UI thread. THE VERB MEASURES THE ONE THING IT OWNS (MAIN-REDS-1 stage 5):
+    // `worstUiStepMs`, the longest stretch its own work held the UI thread
+    // between two event-loop turns, and the loop's `ticks` / `framesRendered`
+    // over its span (frames, the driver's count). The old reading — the worst
+    // heartbeat gap over the export minus the worst gap of a 2 s control window
+    // of MCP-driven frames, two maxima of two different stretches of wall clock,
+    // each a Debug frame plus a round trip — measured the frames, not the export.
     {
         const double kFrameBudgetMs = 1000.0 / 60.0;
-        const double kFineProbeMs = 10.0;
         const int kPackEntries = 200;
         QTemporaryDir pics;
         CHECK(pics.isValid(), "a directory for the pack's 200 pictures");
@@ -617,40 +621,29 @@ int main(int argc, char **argv)
 
         const QString packPath = QDir::current().filePath(QStringLiteral("pack-200.jbundle"));
         QFile::remove(packPath);
-        const double control = measureControlGap(mcp, "pack", kFineProbeMs);
-        mcp.runScript(QStringLiteral("app.frameStats({reset:true})"));
-        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-        mcp.runScript(QStringLiteral("app.heartbeat(%1)").arg(int(kFineProbeMs)));
-        QElapsedTimer t;
-        t.start();
         const QJsonObject written = QJsonDocument::fromJson(
             mcp.runScript(QStringLiteral("JSON.stringify(assets.exportBundle([%1], '%2'))")
                               .arg(guids.join(','), packPath))
                 .value("result").toString().toUtf8()).object();
-        const double elapsedMs = double(t.elapsed());
-        const QJsonObject beat = mcp.runScript(QStringLiteral("app.heartbeatStats()"))
-                                     .value("result").toObject();
-        const QJsonObject frames = mcp.runScript(QStringLiteral("app.frameStats()"))
-                                       .value("result").toObject();
-        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-        const double gap = beat.value("maxGapMs").toDouble();
-        const int ticks = beat.value("ticks").toInt();
-        std::printf("info: [pack] exportBundle of %d entries: %lld bytes in %.0f ms, worker=%d | "
-                    "UI ticks %d (probe %.0f ms) | worst UI gap %.1f ms, control %.1f ms, "
-                    "export adds %.1f ms (bar %.1f) | worst frame %.1f ms\n",
+        const double worstStep = written.value("worstUiStepMs").toDouble(-1.0);
+        const qlonglong ticks = qlonglong(written.value("ticks").toDouble());
+        const qlonglong drawn = qlonglong(written.value("framesRendered").toDouble());
+        std::printf("info: [pack] exportBundle of %d entries: %lld bytes, worker=%d | the export's worst UI step "
+                    "%.2f ms (bar %.1f) | render loop over its span: %lld ticks, %lld frames drawn\n",
                     written.value("assets").toInt(),
-                    static_cast<long long>(written.value("bytes").toDouble()), elapsedMs,
-                    int(written.value("worker").toBool()), ticks, kFineProbeMs, gap, control,
-                    gap - control, kFrameBudgetMs, frames.value("worstMs").toDouble());
+                    static_cast<long long>(written.value("bytes").toDouble()),
+                    int(written.value("worker").toBool()), worstStep, kFrameBudgetMs, ticks, drawn);
         CHECK(written.value("path").toString() == packPath && QFileInfo(packPath).size() > 1024 * 1024,
               "assets.exportBundle wrote the 200-entry pack");
         CHECK(written.value("kind").toString() == QLatin1String("pack")
                   && written.value("assets").toInt() >= kPackEntries,
               "...as a pack carrying every entry");
         CHECK(written.value("worker").toBool(), "...and the write ran on a worker, not the UI thread");
-        CHECK(ticks > 0, "the UI thread's event loop turned while the pack was written");
-        TIMING_CHECK(gap > 0.0 && gap - control <= kFrameBudgetMs,
-                     "the export adds at most one frame's budget to the UI thread's worst gap");
+        CHECK(ticks > 0 && drawn >= ticks - 1,
+              "the render loop kept drawing while the pack was written (every tick of the span drew, but the one "
+              "in flight at its end)");
+        TIMING_CHECK(worstStep >= 0.0 && worstStep <= kFrameBudgetMs,
+                     "the export adds at most one frame's budget to the UI thread: its longest own block is under 16.7 ms");
         QFile::remove(packPath);
     }
 

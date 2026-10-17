@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -82,24 +83,50 @@ assetclosure::Options shareOptions(Project *project)
     return options;
 }
 
-/// THE CATALOG HALF IN SLICES (EXPORT-THREAD-1): describe is a few statements
-/// per asset, and a 200-entry pack is ~50 ms of them in a Debug build — one
-/// block the length of three frames. Sliced, `yield` (the caller's event-loop
-/// turn) runs between every kDescribeSlice assets, so no slice is longer than
-/// a frame. The budget is unbounded here, so slicing changes nothing it spends.
-constexpr int kDescribeSlice = 16;
+/// THE CATALOG HALF IN SLICES, CUT BY WHAT IT COSTS (EXPORT-THREAD-1; MAIN-REDS-1 stage 5). The catalog reads
+/// run on this (the UI) thread, a statement or a few per asset, and their cost is not a constant: in one Debug
+/// run 16 pictures' describe cost 5.6 to 17 ms (0.35 to 1.07 ms an asset) and the 200 entries' rows in one
+/// statement 11.9 ms — the fixed 16-asset slice and the one-statement fetch it replaces overran a frame's budget
+/// (worst stretch 15.6 / 22.8 / 24.8 ms against 16.7). So every step is small (one asset), and the caller's
+/// event loop turns (`yield`) before a step that, at the LAST step's measured cost, would carry the stretch past
+/// HALF a frame's budget — the margin for a step that costs twice the last. A slicer without a `yield` (a caller
+/// that does not turn its loop) slices nothing. The budget is unbounded here, so slicing changes nothing it
+/// spends.
+class StretchSlicer
+{
+public:
+    static constexpr double kStretchMs = 1000.0 / 60.0 / 2.0;
+    explicit StretchSlicer(const std::function<void()> &yield) : mYield(yield) {}
+    /// Before a step: the loop turns if the step would end the stretch past the half frame.
+    void before()
+    {
+        if (mYield && (!mStretch.isValid() || double(mStretch.nsecsElapsed()) / 1.0e6 + mLastMs > kStretchMs)) {
+            mYield();
+            mStretch.start();
+        }
+        mStep.start();
+    }
+    /// After it: its cost, the estimate of the next.
+    void after() { mLastMs = double(mStep.nsecsElapsed()) / 1.0e6; }
+
+private:
+    const std::function<void()> &mYield;
+    QElapsedTimer mStretch, mStep;
+    double mLastMs = 0.0;
+};
+
 QMap<QString, clipboardformat::ClipAsset> describeInSlices(const QStringList &closure, Database *db,
                                                            Project *project,
                                                            QVector<assetclosure::DeferredRead> *reads,
-                                                           const std::function<void()> &yield)
+                                                           StretchSlicer &slicer)
 {
     QMap<QString, clipboardformat::ClipAsset> out;
     const assetclosure::Options options = shareOptions(project);
-    for (int start = 0; start < closure.size(); start += kDescribeSlice) {
-        if (start > 0 && yield) yield();
-        const auto slice = assetclosure::describe(closure.mid(start, kDescribeSlice), db, options,
-                                                  nullptr, nullptr, reads);
-        for (auto it = slice.constBegin(); it != slice.constEnd(); ++it) out.insert(it.key(), it.value());
+    for (const QString &guid : closure) {
+        slicer.before();
+        const auto described = assetclosure::describe({ guid }, db, options, nullptr, nullptr, reads);
+        for (auto it = described.constBegin(); it != described.constEnd(); ++it) out.insert(it.key(), it.value());
+        slicer.after();
     }
     return out;
 }
@@ -121,11 +148,13 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
 
     clipboardformat::Envelope envelope = newEnvelope(project);
     QString singleKind;
-    // The entries' own rows in ONE statement (no BLOB), then in the caller's order.
-    QHash<QString, AssetRecord> rows;
-    for (const AssetRecord &row : db->fetchAssetHeaders(entries)) rows.insert(row.guid, row);
+    // The entries' own rows (no BLOB), one a step, sliced by their cost; in the caller's order.
+    StretchSlicer slicer(yield);
     for (const QString &guid : entries) {
-        const AssetRecord row = rows.value(guid);
+        slicer.before();
+        const QVector<AssetRecord> fetched = db->fetchAssetHeaders({ guid });
+        slicer.after();
+        const AssetRecord row = fetched.isEmpty() ? AssetRecord() : fetched.first();
         if (row.guid.isEmpty()) return fail(QStringLiteral("no asset '%1'").arg(guid));
         // ONE item per entry: the assets the file is ABOUT. The rest of the
         // map is what they are made of; the resolver reads the items to know
@@ -140,9 +169,12 @@ BundleStage stageBundle(Database *db, Project *project, const QStringList &guids
     }
 
     // The rows, the edges and the store paths — queries, on this thread. The
-    // BYTES are owed (`reads`) and read by the writer, on a worker.
+    // BYTES are owed (`reads`) and read by the writer, on a worker. The closure's walk is a
+    // step of its own (a statement per level of the dependency graph).
+    slicer.before();
     const QStringList closure = assetclosure::expand(entries, db);
-    envelope.assets = describeInSlices(closure, db, project, &stage.reads, yield);
+    slicer.after();
+    envelope.assets = describeInSlices(closure, db, project, &stage.reads, slicer);
     if (envelope.assets.isEmpty()) return fail(QStringLiteral("nothing to carry"));
 
     stage.envelope = envelope;
@@ -162,9 +194,12 @@ BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObj
 
     // What the node is made of: the key-aware walk of its references (the
     // clipboard's own table, io/assetrefs.h) and everything THOSE depend on.
+    StretchSlicer slicer(yield);
+    slicer.before();
     const QStringList closure = assetclosure::forNodes({ nodeObject }, db);
+    slicer.after();
     QMap<QString, clipboardformat::ClipAsset> assets =
-        describeInSlices(closure, db, project, &stage.reads, yield);
+        describeInSlices(closure, db, project, &stage.reads, slicer);
 
     // THE NODE BECOMES THE ROW THE FILE IS ABOUT: an Object (or ParticleSystem)
     // row whose `asset` blob is the node — the shape every Object row has and
@@ -208,17 +243,22 @@ void yieldToEventLoop()
     QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
+// THE VERBS MEASURE THEIR OWN BLOCKS (MAIN-REDS-1 stage 5): every stretch of the export's own work on this
+// thread between two event-loop turns, from the verb's entry to its return (UiStepClock, bundlewriter.h).
 ExportResult exportBundle(Database *db, Project *project, const QStringList &guids,
                           const QString &destPath)
 {
-    return exportAndWait(stageBundle(db, project, guids, yieldToEventLoop), destPath);
+    UiStepClock clock;
+    BundleStage stage = stageBundle(db, project, guids, [&clock] { clock.turn(yieldToEventLoop); });
+    return exportAndWait(std::move(stage), destPath, &clock);
 }
 
 ExportResult exportNode(Database *db, Project *project, const QJsonObject &nodeObject,
                         const QString &name, int typeId, const QString &destPath)
 {
-    return exportAndWait(stageNode(db, project, nodeObject, name, typeId, yieldToEventLoop),
-                         destPath);
+    UiStepClock clock;
+    BundleStage stage = stageNode(db, project, nodeObject, name, typeId, [&clock] { clock.turn(yieldToEventLoop); });
+    return exportAndWait(std::move(stage), destPath, &clock);
 }
 
 bool looksLikeBundle(const QString &path)
