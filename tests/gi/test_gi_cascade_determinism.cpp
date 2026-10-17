@@ -54,10 +54,12 @@
 // (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/timingbars.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -130,8 +132,325 @@ static const float kOneOf255 = 1.0f / 255.0f;
 /// 1/255 after.
 static const float kOneVoxelStep = 1.6f / 255.0f;
 
-int main()
+// =========================================================================================
+// gi.scroll_slab (--scroll-slab) — A SCROLLED CASCADE IS, BIT FOR BIT, THE CASCADE BUILT WHERE IT
+// IS NOW, AND IT COST A SLAB (ENGINE-UPGRADE-U5 stage 1).
+//
+// A camera scroll keeps the voxels the new box shares with the old one (copied, shifted; the surface
+// position re-resolved at its new cell from the merge's own sums) and voxelises only the entering
+// slab, spread over frames by the per-frame budget, committed when the slab is complete. So:
+//   A. THE STORE: a scroll by (k, j, -i) cells - three slabs, none a multiple of the dispatch's 4
+//      (the bounds guard) - leaves cascade 0's voxeliser store (albedo, normal, the coverage and the
+//      surface position per half: Scene::giVoxelVolume) EQUAL, float for float, to a whole build at
+//      the same placement. The light is not compared: a scroll injects over the light the cascade
+//      held (LAMPREST-3's rule, unchanged), a from-scratch build over none.
+//   B. THE SPREAD: the same with the budget tiny (gi.scrollBudgetMs) - the slab cut into many chunks
+//      over many frames, the cascade's placement and its readers' box UNCHANGED until the commit,
+//      GI not at rest meanwhile, and the committed store again a whole build's.
+//   C. AN EDIT DURING THE SPREAD that reaches only the box being built (outside the live one, which
+//      the dirty path tests) drops the scroll and the next one builds the edited scene: the store is
+//      again a whole build's of the scene as it now stands.
+//   D. THE COST, on a lattice at 128 cells (the High tier): the voxelisation of a scroll by the
+//      shipped step (its rows vct.voxel0 + vct.scroll0) <= 0.35 of a whole build of cascade 0
+//      (vct.voxel0 of an edit's rebuild) - decision 1's bar for a slab of 26 % of the volume; GPU
+//      time, paired in this process, a millisecond bar (gi.scroll_slab.timing asserts it).
+// A, B and C run a two-cascade table at 64 cells (a dyadic cell, 10 m / 64: the arithmetic every
+// shipped table has), so a store read is 0.26 M voxels.
+static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char *what)
 {
+    if (!a.available || !b.available || a.width != b.width || a.height != b.height || a.depth != b.depth) {
+        std::printf("   %s: a store is missing or the sizes differ\n", what);
+        return false;
+    }
+    for (int i = 0; i < 3; ++i)
+        if (a.origin[i] != b.origin[i] || a.cell[i] != b.cell[i]) {
+            std::printf("   %s: the placement differs (axis %d: origin %.6f vs %.6f)\n", what, i,
+                        double(a.origin[i]), double(b.origin[i]));
+            return false;
+        }
+    struct Arr { const char *name; const std::vector<float> *x, *y; };
+    const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo }, { "normal", &a.normal, &b.normal },
+                         { "coverageP", &a.coverageP, &b.coverageP }, { "coverageN", &a.coverageN, &b.coverageN },
+                         { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN } };
+    bool same = true;
+    for (const Arr &r : arrs) {
+        if (r.x->size() != r.y->size() || r.x->empty()) {
+            std::printf("   %s: %s sizes %zu vs %zu\n", what, r.name, r.x->size(), r.y->size());
+            same = false;
+            continue;
+        }
+        size_t diff = 0, first = size_t(-1);
+        for (size_t i = 0; i < r.x->size(); ++i)
+            if (std::memcmp(&(*r.x)[i], &(*r.y)[i], sizeof(float)) != 0) {
+                if (first == size_t(-1)) first = i;
+                ++diff;
+            }
+        if (diff) {
+            const size_t v = first / 4u;
+            std::printf("   %s: %s differs in %zu of %zu floats (first at voxel %zu,%zu,%zu: %.7f vs %.7f)\n",
+                        what, r.name, diff, r.x->size(), v % size_t(a.width), (v / size_t(a.width)) % size_t(a.height),
+                        v / size_t(a.width * a.height), double((*r.x)[first]), double((*r.y)[first]));
+            same = false;
+        }
+    }
+    size_t lit = 0;
+    for (size_t i = 3; i < a.albedo.size(); i += 4) lit += a.albedo[i] > 0.0f ? 1u : 0u;
+    std::printf("   %s: %s (%zu occupied voxels)\n", what, same ? "the stores are equal" : "THE STORES DIFFER", lit);
+    return same;
+}
+
+/// THE SPREAD ARMS' BUDGET: small enough that the fixture's slab is cut into many chunks over many
+/// frames (B asserts >= 8), large enough that the cut stops at layers rather than single groups, so a
+/// spread is tens of frames, not hundreds (measured on this fixture: B's scroll takes ~20 frames).
+static const double kSpreadBudgetMs = 0.01;
+
+static int scrollSlabMain()
+{
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig("test-gi-scroll-slab-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
+    Engine *e = engine.get();
+    int frames = 1;
+    const auto run = [&](int n) { render(e, n); frames += n; };
+
+    View *view = e->createOffscreenView("scroll", kSize, kSize, Colour(0, 0, 0));
+    Scene *scene = e->createScene("scroll");
+    if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+    // The room of the suite's other cases, plus objects in and around the box the walk enters:
+    // a junction (two walls on a floor), two-sided plates, and props on both sides of the step.
+    const NodeId ground = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.9f);
+    enginetest::setNodePosition(scene, ground, Vec3(0.0f, -0.05f, 0.0f));
+    enginetest::setNodeScale(scene, ground, Vec3(60.0f, 0.1f, 60.0f));
+    const NodeId wallB = enginetest::addTestCube(scene, Colour(0.1f, 0.9f, 0.2f), 0.0f, 0.8f);
+    enginetest::setNodePosition(scene, wallB, Vec3(-4.0f, 2.5f, 0.0f));
+    enginetest::setNodeScale(scene, wallB, Vec3(0.3f, 5.0f, 12.0f));
+    struct Prop { Vec3 pos, scale; Colour albedo; };
+    const Prop props[] = {
+        { Vec3(1.2f, 0.7f, 1.0f),  Vec3(1.0f, 1.0f, 1.0f),   Colour(0.2f, 0.3f, 0.95f) },
+        { Vec3(5.6f, 0.5f, 0.3f),  Vec3(0.9f, 1.0f, 0.7f),   Colour(0.9f, 0.6f, 0.1f) },
+        { Vec3(7.3f, 1.4f, -1.7f), Vec3(0.4f, 2.8f, 0.4f),   Colour(0.7f, 0.2f, 0.7f) },
+        { Vec3(6.1f, 2.0f, 2.6f),  Vec3(1.7f, 0.05f, 1.3f),  Colour(0.3f, 0.8f, 0.8f) },   // a plate
+        { Vec3(6.1f, 2.3f, 2.6f),  Vec3(1.7f, 0.05f, 1.3f),  Colour(0.8f, 0.8f, 0.3f) },   // its twin
+        { Vec3(3.4f, 4.6f, -0.9f), Vec3(2.2f, 0.3f, 0.6f),   Colour(0.6f, 0.6f, 0.6f) },
+        { Vec3(-1.8f, 1.1f, -2.4f),Vec3(0.6f, 2.2f, 0.6f),   Colour(0.9f, 0.1f, 0.1f) },
+    };
+    std::vector<NodeId> propNodes;
+    for (const Prop &p : props) {
+        const NodeId n = enginetest::addTestCube(scene, p.albedo, 0.0f, 0.6f);
+        enginetest::setNodePosition(scene, n, p.pos);
+        enginetest::setNodeScale(scene, n, p.scale);
+        propNodes.push_back(n);
+    }
+    enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
+
+    GiParams small = chainGi();
+    small.cascadeCount = 2;
+    small.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 64, 0.0f };
+    small.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f, 64, 0.0f };
+    const Vec3 home(0.0f, 2.0f, 2.0f);
+    Vec3 cam = home;
+    const auto look = [&](const Vec3 &p) {
+        cam = p;
+        enginetest::testCameraLookAt(view, p, Vec3(p.x + 1.0f, 1.0f, p.z - 4.0f));
+    };
+    look(home);
+    CHECK(scene->setGlobalIllumination(small), "a two-cascade chain at 64 cells builds");
+    run(8);
+    GiStatus st = scene->published().gi;
+    if (st.cascades.size() != 2u) { std::printf("FAIL: the chain has %zu cascades\n", st.cascades.size()); return 1; }
+    const float cell = st.cascades[0].cell, step = st.cascades[0].step;
+    std::printf("   cascade 0: %d^3, cell %.5f m, step %.3f m\n", st.cascades[0].resolution, double(cell),
+                double(step));
+
+    const auto rebuildWhole = [&]() {
+        GiParams off; off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+        scene->setGlobalIllumination(small);
+        run(8);
+    };
+    // Frames until cascade 0 has committed `want` scrolls (or `cap` frames).
+    const auto untilScrolls = [&](unsigned long long want, int cap) {
+        int n = 0;
+        for (; n < cap && scene->published().gi.cascades[0].scrolls < want; ++n) run(1);
+        return n;
+    };
+    GiVoxelVolume scrolled, built;
+
+    // ---- A. one frame, three slabs -----------------------------------------------------------
+    std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        const Vec3 to(home.x + 1.5f * step, home.y + 9.4f * cell, home.z - 13.3f * cell);
+        look(to);
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        const GiStatus post = scene->published().gi;
+        const int sx = int(std::lround((post.cascades[0].centre.x - pre.cascades[0].centre.x) / cell));
+        const int sy = int(std::lround((post.cascades[0].centre.y - pre.cascades[0].centre.y) / cell));
+        const int sz = int(std::lround((post.cascades[0].centre.z - pre.cascades[0].centre.z) / cell));
+        std::printf("   committed after %d frame(s); shift (%d, %d, %d) cells; scroll frames %llu; rebuilds %llu -> %llu\n",
+                    n, sx, sy, sz, post.cascades[0].scrollFrames, pre.cascades[0].rebuilds, post.cascades[0].rebuilds);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "THE CAMERA'S STEP TOOK THE SLAB PATH");
+        CHECK(post.cascades[0].rebuilds == pre.cascades[0].rebuilds + 1u, "...as one rebuild of cascade 0");
+        CHECK(sx != 0 && sy != 0 && sz != 0, "...on all three axes (three slabs)");
+        CHECK(sx % 4 != 0 && sy % 4 != 0 && sz % 4 != 0, "...none a multiple of the dispatch's four (the bounds guard)");
+        CHECK(n == 1, "...in the frame the step was seen (the default budget holds a fixture's slab)");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the scrolled store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "A"), "A SCROLLED STORE IS THE WHOLE BUILD'S, FLOAT FOR FLOAT");
+    }
+
+    // ---- B. the spread ---------------------------------------------------------------------------
+    std::printf("\n== B: the slab spread over frames commits the same store ==\n");
+    {
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        const Vec3 from = cam;
+        const Vec3 to(from.x - 1.5f * step, from.y - 5.2f * cell, from.z + 6.6f * cell);
+        look(to);
+        int flight = 0;
+        bool placedStill = true, notAtRest = true, sawFlight = false;
+        for (; flight < 400 && scene->published().gi.cascades[0].scrolls == pre.cascades[0].scrolls; ++flight) {
+            run(1);
+            const GiStatus mid = scene->published().gi;
+            if (mid.cascades[0].scrolls != pre.cascades[0].scrolls) break;
+            sawFlight = sawFlight || mid.cascades[0].scrolling;
+            placedStill = placedStill && mid.cascades[0].centre.x == pre.cascades[0].centre.x &&
+                          mid.cascades[0].centre.y == pre.cascades[0].centre.y &&
+                          mid.cascades[0].centre.z == pre.cascades[0].centre.z;
+            notAtRest = notAtRest && !mid.giAtRest;
+        }
+        const GiStatus post = scene->published().gi;
+        const unsigned long long spent = post.cascades[0].scrollFrames - pre.cascades[0].scrollFrames;
+        std::printf("   committed after %d frame(s), %llu of them building chunks\n", flight + 1, spent);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "the spread scroll commits");
+        CHECK(sawFlight && spent >= 8u, "...SPREAD over many frames by the budget (>= 8)");
+        CHECK(placedStill, "...the cascade's placement - its readers' box - unchanged until the commit");
+        CHECK(notAtRest, "...and GI not at rest while the scroll is owed");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the spread store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "B"), "A SPREAD SCROLL'S STORE IS THE WHOLE BUILD'S, FLOAT FOR FLOAT");
+    }
+
+    // ---- C. an edit in the box being built -------------------------------------------------------
+    std::printf("\n== C: an edit reaching only the box being built drops the scroll ==\n");
+    {
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        const Vec3 from = cam;
+        const Vec3 to(from.x + 1.5f * step, from.y, from.z);
+        look(to);
+        run(3);   // in flight: a few chunks built
+        const bool flying = scene->published().gi.cascades[0].scrolling;
+        // The prop beyond the live box's +x face, inside the target's: the dirty path's box test
+        // (the live box) does not reach it.
+        const float liveMaxX = pre.cascades[0].centre.x + pre.cascades[0].halfSize;
+        enginetest::setNodePosition(scene, propNodes[2], Vec3(liveMaxX + 0.6f * step, 1.0f, from.z - 1.0f));
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 400);
+        const GiStatus post = scene->published().gi;
+        std::printf("   in flight when edited: %d; committed %d frame(s) later; aborts %llu -> %llu\n",
+                    int(flying), n, pre.cascadeScrollAborts, post.cascadeScrollAborts);
+        CHECK(flying, "the scroll was in flight when the edit landed");
+        CHECK(post.cascadeScrollAborts > pre.cascadeScrollAborts, "THE EDIT DROPPED THE SCROLL");
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "...and a scroll committed after it");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        run(2);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "C"), "THE COMMITTED STORE HOLDS THE EDITED SCENE, AS A WHOLE BUILD DOES");
+    }
+    scene->removeNode(ground);
+    scene->removeNode(wallB);
+    for (NodeId n : propNodes) scene->removeNode(n);
+    run(2);
+
+    // ---- D. the cost at 128 cells ----------------------------------------------------------------
+    std::printf("\n== D: a scroll's voxelisation against a whole build's, 128 cells (High) ==\n");
+    {
+        // A LATTICE that fills cascade 0's box along the whole walk (x from -4.8 to 13.2 m, the
+        // camera's three steps reaching x = 7.9 and its box 5 m past that): 16 x 5 x 9 cubes, 1.2 m
+        // apart - every slab enters geometry, and voxelising is what a build costs, not the clears.
+        std::vector<NodeId> lattice;
+        for (int x = 0; x < 16; ++x)
+            for (int y = 0; y < 5; ++y)
+                for (int z = 0; z < 9; ++z) {
+                    const NodeId n = enginetest::addTestCube(scene, Colour(0.3f + 0.07f * float(x), 0.5f,
+                                                                           0.3f + 0.07f * float(z)), 0.0f, 0.7f);
+                    enginetest::setNodePosition(scene, n, Vec3(-4.8f + 1.2f * float(x), 0.3f + 1.2f * float(y),
+                                                              -4.8f + 1.2f * float(z)));
+                    enginetest::setNodeScale(scene, n, Vec3(0.5f, 0.5f, 0.5f));
+                    lattice.push_back(n);
+                }
+        look(Vec3(0.0f, 2.0f, 0.0f));
+        CHECK(scene->setGlobalIllumination(chainGi()), "the High chain over the lattice");
+        run(12);
+        const GiStatus hi = scene->published().gi;
+        const float hStep = hi.cascades[0].step;
+        std::printf("   cascade 0: %d^3, cell %.4f m, step %.3f m (%.0f cells)\n", hi.cascades[0].resolution,
+                    double(hi.cascades[0].cell), double(hStep), double(hStep / hi.cascades[0].cell));
+        e->setFrameMonitor(MonitorLevel::Review);
+        std::vector<double> scrollGpu, wholeGpu;
+        float x = 0.0f;
+        for (int rep = 0; rep < 3; ++rep) {
+            // A SCROLL by the shipped step, then a WHOLE rebuild of cascade 0 at the same place (an
+            // edit inside its box: one lattice cube nudged and put back).
+            std::vector<MonitorRecord> recs;
+            e->takeMonitorRecords(recs);
+            x += hStep * 1.02f;
+            look(Vec3(x, 2.0f, 0.0f));
+            run(12);
+            e->takeMonitorRecords(recs);
+            double s = 0.0; bool timed = false;
+            for (const MonitorRecord &r : recs)
+                for (const CacheWork &w : r.cacheWork)
+                    if ((w.detail == "vct.voxel0" || w.detail == "vct.scroll0") && w.gpuMs >= 0.0f) { s += w.gpuMs; timed = true; }
+            if (timed) scrollGpu.push_back(s);
+            const NodeId nudge = lattice[size_t(4 * 45 + 2 * 9 + 4)];   // the cube at (0, 2.7, 0)
+            enginetest::setNodePosition(scene, nudge, Vec3(x + 0.05f, 2.7f, 0.0f));
+            run(12);
+            e->takeMonitorRecords(recs);
+            double w0 = -1.0;
+            for (const MonitorRecord &r : recs)
+                for (const CacheWork &w : r.cacheWork)
+                    if (w.detail == "vct.voxel0" && w.gpuMs >= 0.0f) w0 = std::max(w0, double(w.gpuMs));
+            if (w0 >= 0.0) wholeGpu.push_back(w0);
+        }
+        e->setFrameMonitor(MonitorLevel::Off);
+        const GiStatus end = scene->published().gi;
+        std::sort(scrollGpu.begin(), scrollGpu.end());
+        std::sort(wholeGpu.begin(), wholeGpu.end());
+        const double ms = scrollGpu.empty() ? -1.0 : scrollGpu[scrollGpu.size() / 2];
+        const double mw = wholeGpu.empty() ? -1.0 : wholeGpu[wholeGpu.size() / 2];
+        std::printf("   cascade 0 scrolls %llu; GPU ms per scroll (median of %zu) %.3f, per whole build (median of %zu) %.3f"
+                    " -> %.3f of a whole build\n", end.cascades[0].scrolls, scrollGpu.size(), ms, wholeGpu.size(), mw,
+                    mw > 0.0 ? ms / mw : -1.0);
+        CHECK(end.cascades[0].scrolls >= hi.cascades[0].scrolls + 3u, "every step took the slab path");
+        CHECK(!scrollGpu.empty() && !wholeGpu.empty(), "the monitor timed both on the GPU");
+        JAH_TIMING_CHECK("gi.scroll_slab", ms >= 0.0 && mw > 0.0 && ms <= 0.35 * mw,
+                         "A SCROLL BY THE SHIPPED STEP VOXELISES IN <= 0.35 OF A WHOLE BUILD AT 128 CELLS");
+        for (NodeId n : lattice) scene->removeNode(n);
+    }
+    GiParams off; off.mode = GiMode::Off;
+    scene->setGlobalIllumination(off);
+    run(2);
+    std::printf("\n   frames rendered: %d\n", frames);
+    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
+    return failures ? 1 : 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1 && std::string(argv[1]) == "--scroll-slab") return scrollSlabMain();
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-cascade-determinism-ogre.log");
     auto engine = Engine::create(cfg, err);

@@ -844,6 +844,19 @@ jah_gpu_row(gi.cascade_determinism CLASS engine COMMAND test_gi_cascade_determin
 set_tests_properties(gi.cascade_determinism PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.cascade_determinism PROPERTIES JAHSHAKA_TEST_FRAMES 160)
+# gi.scroll_slab — A SCROLLED CASCADE IS THE CASCADE BUILT WHERE IT IS, AND IT COST A SLAB
+# (ENGINE-UPGRADE-U5 stage 1): the same binary in its --scroll-slab mode. A scroll by three slabs (none
+# a multiple of the dispatch's four), the same spread over many frames by a tiny budget, and one an
+# edit reaches mid-flight each leave cascade 0's voxeliser store equal, float for float, to a whole
+# build at the same placement; the spread keeps the readers' box until its commit. The GPU bar (a
+# scroll by the shipped step <= 0.35 of a whole build at 128 cells) is a millisecond bar: printed
+# here, armed by JAHSHAKA_TIMING_BARS=1 when the binary is run by hand under the card's lock (a
+# `.timing` row joins JAH_GPU_EXCLUSIVE_SUITES by the lead's verdict only).
+jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --scroll-slab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scroll_slab PROPERTIES
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 152)   # counted by the suite (frames rendered)
 
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
