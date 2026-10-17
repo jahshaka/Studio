@@ -282,7 +282,8 @@ private:
     /// own cost on the UI thread, which nothing could see before (item 6).
     void drainAndCharge();
     /// THE FRAME-COUNTED WINDOW'S END, counted at `noteTickEnd` — i.e. at
-    /// FRAMES DRAWN, whoever drew them, and NOT at records already drained.
+    /// the ENGINE'S FRAMES (its published counter since the start), whoever
+    /// drew them — never the ticks, and NOT at records already drained.
     /// The two differ: the engine publishes through a ring and a holding queue,
     /// so the drain that runs at the end of frame N typically carries frame
     /// N-3 (measured: 60 stepped frames leave 57 in the bundle and three in the
@@ -310,8 +311,9 @@ private:
     double  mLastFrames = 0.0, mLastEvents = 0.0;
     double  mPlannedSeconds = 0.0;
     /// The frame-counted window's budget, 0 when the capture is timed, and how
-    /// many frames have been DRAWN inside it so far (one per rendered tick end).
-    unsigned long long mPlannedFrames = 0, mFramesDrawn = 0;
+    /// many frames the ENGINE has drawn inside it so far (its published frame
+    /// counter since `mStartFrame`, read at each tick end — one record each).
+    unsigned long long mPlannedFrames = 0, mFramesDrawn = 0, mStartFrame = 0;
     /// The GPU timing marks the engine dropped during this capture (cumulative),
     /// and what the ENGINE dropped on its own side (ring records nobody drained
     /// in time, events past its queue's cap) — all three go into the bundle's

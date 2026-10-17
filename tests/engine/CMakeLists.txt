@@ -330,7 +330,7 @@ jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.monitor_pop — THE MONITOR'S RECORDS ARE POPPED, NEVER REQUESTED (FRAME-MONITOR-DOOR-1): the hand-back door as an
-# engine fixture (the form the TSan arm runs; app.capture_free_tick is the owner's path and cannot boot under TSan):
+# engine fixture (the form the TSan arm runs; perf.capture_free_tick is the owner's path and cannot boot under TSan):
 # free-running, a capture on, the host popping after every frame while the render thread pushes; then lockstep. Laws in
 # counts and frames: every recorded record popped once, in frame order, the stop's tail in one pop, nothing dropped.
 add_executable(test_engine_monitor_pop test_engine_monitor_pop.cpp)

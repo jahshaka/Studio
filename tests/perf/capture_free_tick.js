@@ -1,4 +1,4 @@
-// app.capture_free_tick — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1).
+// perf.capture_free_tick — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1).
 // THE OWNER'S PATH (JAH_FREE_RUNNING=1, --script-live: the render thread draws on its own, the driver's tick is posted
 // by each frame's publish — Ctrl+F4's 60-frame capture, perf.capture({frames:60})), the method of the diagnosis
 // (spikes/free-running-hang/scratch/frh.js.in): 200 cubes, the script polling app.frameStats() from its worker.
@@ -15,7 +15,11 @@
 //  * every UI tick during the capture lasts at most ONE FRAME BUDGET: the render thread drew at most 2 frames per tick
 //    (the frame in flight + one) — a tick that blocks for k frames shows k frames drawn beside it;
 //  * the capture's 60 frames end within 120 ticks and within 120 render-thread frames;
-//  * the bundle holds the 60 frames, and the engine dropped no record and no event.
+//  * the bundle holds EXACTLY the 60 records (the window counts the engine's frames, never the ticks), and the engine
+//    dropped no record and no event;
+//  * NO REQUEST ON THE TICK PATH: the host's engine requests (app.frameStats().submit.requests) do not move across the
+//    capture's ticks — the capture's whole delta is its start's two (the start snapshot, the start applied) and its
+//    close's two (the end snapshot, the stop applied), nothing else. A request back in the drain would add one a tick.
 // The tick that ENDS the capture runs finish() (the end snapshot, the stop, the bundle written) — the capture's own
 // writing, reported on its own line, outside "during".
 function assert(cond, msg) {
@@ -48,9 +52,11 @@ assert(w1.ticks - w0.ticks >= 60, "the driver ticks free-running before the capt
 console.log("before the capture: " + (w1.rendered - w0.rendered) + " render-thread frames over " + (w1.ticks - w0.ticks) +
             " ticks");
 
+var q0 = app.frameStats().submit.requests;
 var r = perf.capture({ frames: 60, label: "capture-free-tick" });
 assert(r.started === true, "a 60-frame capture starts (" + J(r) + ")");
 var s0 = app.frameStats(), t0 = Date.now();
+var qStart = s0.submit.requests - q0, qDuring = 0, qLast = s0.submit.requests;
 var last = s0, lastAt = t0, worstPerTick = 0, worstTickMs = 0, worstPollMs = 0, endLine = "", over = false;
 var obs = 0;
 polls = 0;
@@ -73,17 +79,20 @@ for (;;) {
         }
         last = s; lastAt = now;
     }
+    if (recording) { qDuring += s.submit.requests - qLast; qLast = s.submit.requests; }
     if (!recording) break;
     // THE BOUND IS THE BAR, IN FRAMES: past it the capture failed — stop it and say so.
     if (s.ticks - s0.ticks > 120 || s.rendered - s0.rendered > 120 || ++polls > POLL_GUARD) { over = true; break; }
 }
 var t1 = Date.now(), s1 = app.frameStats();
+var qClose = s1.submit.requests - qLast;
 if (perf.status().recording) perf.stop();
 var st = perf.status();
 console.log("during the capture: " + obs + " tick observations; worst " + worstPerTick.toFixed(2) +
             " render-thread frames per UI tick; worst tick " + worstTickMs.toFixed(1) + " ms; worst poll " +
             worstPollMs + " ms (printed, never asserted)");
 if (endLine) console.log(endLine);
+console.log("the host's engine requests: the start " + qStart + ", the capture's ticks " + qDuring + ", the close " + qClose);
 console.log("the capture: +" + (s1.ticks - s0.ticks) + " ticks, +" + (s1.rendered - s0.rendered) + " render-thread frames, " +
             (t1 - t0) + " ms; status " + J({ frames: st.frames, engineFramesDropped: st.engineFramesDropped,
                                              engineEventsDropped: st.engineEventsDropped, bundle: st.lastBundle }));
@@ -92,7 +101,10 @@ assert(worstPerTick <= 2, "every UI tick during the capture lasts at most one fr
 assert(!over && s1.ticks - s0.ticks <= 120, "the capture's 60 frames end within 120 ticks (+" + (s1.ticks - s0.ticks) + ")");
 assert(s1.rendered - s0.rendered <= 120,
        "...and within 120 render-thread frames (+" + (s1.rendered - s0.rendered) + ")");
-assert(st.frames === 60, "the bundle holds the capture's 60 frames (" + st.frames + ")");
+assert(st.frames === 60, "the bundle holds EXACTLY the capture's 60 records (" + st.frames + ")");
+assert(qDuring === 0, "no request on the tick path: the capture's ticks made " + qDuring + " engine request(s)");
+assert(qStart === 2 && qClose === 2, "the capture's requests are its start's two and its close's two (" + qStart + ", " +
+       qClose + ")");
 assert(st.engineFramesDropped === 0 && st.engineEventsDropped === 0,
        "the engine dropped no record and no event (" + st.engineFramesDropped + ", " + st.engineEventsDropped + ")");
 console.log("capture_free_tick: PASS");
