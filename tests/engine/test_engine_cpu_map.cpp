@@ -4,7 +4,7 @@
 //
 // THE WORLD (the deep read's own, spikes/engine-upgrade/u4/raw/deep-reader-drain10k.js): N carded cubes (0.5 m, six
 // box cards each) on a 100-wide grid at a 1.2 m pitch, every one a DOCUMENT node under ONE group node, on a carded
-// 150 m floor; one shadow-casting sun; the camera at (0, 40, 90) looking at the origin (the card residency's viewer);
+// 150 m floor; one shadow-casting sun, low enough that a cube shades its neighbours' cards; the camera at (0, 40, 90) looking at the origin (the card residency's viewer);
 // GI at Epic with the card row on; the editor's eight scene workers. The writes are the HOST'S RECORDS — NodeRecords
 // and the change set's `moved`, exactly what the mirror emits: the GROUP ARM writes the group alone (one record, an
 // N-node subtree named), a K ARM writes K cubes (K records, K moved). One shared material (the phases measured here
@@ -82,6 +82,17 @@ Vec3 cubeAt(int i, float lift)
     return Vec3(float(i % kSide) * kPitch - half, kCube * 0.5f + lift, float(i / kSide) * kPitch - half);
 }
 
+/// The scene's GI, every record (the editor's: Epic, the card row on; the scheduler plans on every record that carries it).
+GiParams epicGi()
+{
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::Epic;
+    gi.numBounces = 3;
+    gi.cards = true;
+    return gi;
+}
+
 FrameInput stepRecord(World &w)
 {
     FrameInput in;
@@ -104,7 +115,9 @@ bool build(World &w, int n, bool cards)
     w.view->setScene(w.scene);
     if (!e->rayQueryAvailable() || !e->rayTracing()) return true;   // main() says so and skips
     Scene *s = w.scene;
-    enginetest::addDirectionalLight(s, Vec3(-0.35f, -1.0f, -0.45f), 3.0f);
+    // A LOW SUN (14 degrees): a cube's shadow reaches its neighbours' cards across the 0.7 m gap, so the still casters'
+    // hit set is not empty — the identity a faster search is held to has something to hold.
+    enginetest::addDirectionalLight(s, Vec3(-1.0f, -0.25f, -0.3f), 3.0f);
     w.view->setShadows(true);
     // THE VIEWPORT'S POST CHAIN on the offscreen view (the editor screenshot's door): the ray tier runs, and with it the
     // card cache (the cards run only where rays run).
@@ -151,11 +164,7 @@ bool build(World &w, int n, bool cards)
         part.nodes.push_back(r);
     }
     part.changes.complete = false;   // the first record: everything is new
-    GiParams gi;
-    gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::Epic;
-    gi.numBounces = 3;
-    gi.cards = true;
+    const GiParams gi = epicGi();
     part.gi = gi;
     in.scenes.push_back(std::move(part));
     enginetest::testCameraLookAt(w.view, Vec3(0.0f, 40.0f, 90.0f), Vec3(0.0f, 0.0f, 0.0f));
@@ -178,20 +187,44 @@ bool build(World &w, int n, bool cards)
     return true;
 }
 
-/// One frame of an arm's writes: the group alone (k < 0) or the first k cubes, alternating by 1 cm in y.
+/// THE CHECKERBOARD ARM's key: every cube whose grid cell is "black" moves; its white neighbours stand, their cards
+/// landed, so the moved casters' shadows fall on cards the sun trace must re-trace (a non-empty hit set).
+constexpr int kChecker = -2;
+bool black(int i) { return ((i % kSide) + (i / kSide)) % 2 == 0; }
+/// THE MOVERS' ARM: the black cubes of the 24 rows nearest the viewer (1,200) declared MOVABLE (the movers' channel:
+/// steps 3 and 3b of the sun trace, their footprints against the landed cards of their white neighbours) and written
+/// every frame.
+constexpr int kMovers = -3;
+constexpr int kMoverCount = 1200;
+bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
+
+/// Still frames until the cards are resident and the card queue is empty (every card a moved instance threw back is
+/// captured again; a mobility edge's GI rebuild re-made the cache): each arm starts from a landed state.
+void settleCards(World &w)
+{
+    for (int f = 0; f < 900; ++f) {
+        const CardCacheStatus &c = w.scene->published().gi.cards;
+        if (f >= 2 && c.cardsResident > 0u && c.queueLength == 0u) return;
+        FrameInput still = stepRecord(w);
+        FrameInputScene sp;
+        sp.scene = w.scene;
+        sp.gi = epicGi();
+        still.scenes.push_back(std::move(sp));
+        enginetest::frames(w.e, 1, still);
+    }
+}
+
+/// One frame of an arm's writes: the group alone (k = -1), the black cubes (kChecker) or the first k cubes,
+/// alternating by 1 cm in y.
 void writeFrame(World &w, int k)
 {
     FrameInput in = stepRecord(w);
     FrameInputScene part;
     part.scene = w.scene;
     const float lift = (w.frame++ % 2) ? 0.01f : 0.0f;
-    GiParams gi;
-    gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::Epic;
-    gi.numBounces = 3;
-    gi.cards = true;
+    const GiParams gi = epicGi();
     part.gi = gi;
-    if (k < 0) {
+    if (k == -1) {
         NodeRecord r;
         r.id = w.group;
         r.fields = NodeRecord::Trs;
@@ -200,7 +233,9 @@ void writeFrame(World &w, int k)
         part.nodes.push_back(r);
         part.changes.moved.push_back(w.group);
     } else {
-        for (int i = 0; i < k && i < int(w.cubes.size()); ++i) {
+        for (int i = 0; i < int(w.cubes.size()); ++i) {
+            // (the grid's last rows face the viewer)
+            if (k == kChecker ? !black(i) : k == kMovers ? !moverCube(i, int(w.cubes.size())) : i >= k) continue;
             NodeRecord r;
             r.id = w.cubes[size_t(i)];
             r.fields = NodeRecord::Trs;
@@ -217,7 +252,9 @@ void writeFrame(World &w, int k)
 
 const char *armName(int k, char *buf, size_t n)
 {
-    if (k < 0) std::snprintf(buf, n, "group");
+    if (k == kChecker) std::snprintf(buf, n, "checker");
+    else if (k == kMovers) std::snprintf(buf, n, "movers%d", kMoverCount);
+    else if (k < 0) std::snprintf(buf, n, "group");
     else std::snprintf(buf, n, "k%d", k);
     return buf;
 }
@@ -268,7 +305,15 @@ int traceSunRow(World &w, int n)
     const inspect::SceneEcho *echo = inspect::scene(w.scene);
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     const int warm = 3, measured = 15;
-    for (int k : { -1, n * 12 / 100 }) {
+    // checker: the hit set's arm (the still casters' shadows on their standing neighbours' cards); 12 %: the deep
+    // read's movers12 shape (1,200 still casters written, far from the landed cards); the movers' channel (steps 3 and
+    // 3b); the group move last (every card's instance moves: all of them thrown back on the queue).
+    for (int k : { kChecker, n * 12 / 100, kMovers, -1 }) {
+        if (k == kMovers) {
+            for (int i = 0; i < int(w.cubes.size()); ++i)
+                if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], true);
+        }
+        settleCards(w);
         std::vector<double> us;
         unsigned moves = 0, cards = 0, hits = 0;
         unsigned long long digest = 1469598103934665603ull;   // FNV-1a over every measured frame's hit-set digest
@@ -285,15 +330,26 @@ int traceSunRow(World &w, int n)
             hits = std::max(hits, t.casterHits);
             for (int b = 0; b < 8; ++b) { digest ^= (t.casterHitDigest >> (8 * b)) & 0xFFu; digest *= 1099511628211ull; }
         }
+        if (k == kMovers) {
+            for (int i = 0; i < int(w.cubes.size()); ++i)
+                if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], false);
+        }
         char b[32];
         const Stats a = stats(us);
+        const GiStatus &g = w.scene->published().gi;
         std::printf("CPU_MAP gi.trace_sun_cost arm=%s world=%d frames=%d trace_sun_ms=%.3f (min %.3f max %.3f) "
-                    "caster_moves=%u cards=%u hits=%u hit_digest=%016llx\n", armName(k, b, sizeof b), n, measured,
-                    a.median / 1000.0, a.min / 1000.0, a.max / 1000.0, moves, cards, hits, digest);
+                    "caster_moves=%u cards=%u hits=%u hit_digest=%016llx mover_casters=%u mover_traced_last=%u\n",
+                    armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0, moves,
+                    cards, hits, digest, g.cards.moverCasters, g.cards.moverTracedLastFrame);
         CHECK(ran, "gi.trace_sun_cost arm %s: the sun trace ran on every measured frame", armName(k, b, sizeof b));
-        const unsigned want = k < 0 ? unsigned(n) : unsigned(k);
-        CHECK(moves >= want && cards > 0u, "gi.trace_sun_cost arm %s: %u still casters moved a frame against %u cards "
-              "(want %u moves)", armName(k, b, sizeof b), moves, cards, want);
+        if (k == kMovers) {
+            CHECK(g.cards.moverCasters >= unsigned(kMoverCount) && cards > 0u, "gi.trace_sun_cost arm %s: %u movers "
+                  "on the movers' channel against %u cards", armName(k, b, sizeof b), g.cards.moverCasters, cards);
+        } else {
+            const unsigned want = k == kChecker ? unsigned(n / 2) : k < 0 ? unsigned(n) : unsigned(k);
+            CHECK(moves >= want && cards > 0u, "gi.trace_sun_cost arm %s: %u still casters moved a frame against %u "
+                  "cards (want %u moves)", armName(k, b, sizeof b), moves, cards, want);
+        }
     }
     return 0;
 }

@@ -327,7 +327,7 @@ target_compile_definitions(test_engine_cpu_map PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_cpu_map PRIVATE JahshakaEngine)
 add_dependencies(test_engine_cpu_map JahshakaEngineMedia)
-jah_gpu_row(frame.drain_cost CLASS engine COMMAND test_engine_cpu_map --drain 2000
+jah_gpu_row(frame.drain_cost CLASS engine FRAMES 79 COMMAND test_engine_cpu_map --drain 2000
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drain_cost PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_exclusive_test(NAME frame.drain_cost_10k CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --drain 10000
