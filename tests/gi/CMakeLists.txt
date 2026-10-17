@@ -1266,6 +1266,13 @@ target_compile_definitions(test_gi_card_walk PRIVATE
 target_link_libraries(test_gi_card_walk PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_walk JahshakaEngineMedia)
 
+# gi.trace_sun_cost — THE SUN TRACE'S CPU AT 10k MOVES (ENGINE-UPGRADE-U4 stage 1, P1): SurfaceCache::traceSun per frame
+# on the 10k group move and at 12 % movers, against the resident cards — the CPU map's fixture (tests/engine,
+# test_engine_cpu_map --trace-sun). A `measure` row, by hand.
+jah_gpu_exclusive_test(NAME gi.trace_sun_cost CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --trace-sun 10000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.trace_sun_cost PROPERTIES LABELS "gi")
+
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
