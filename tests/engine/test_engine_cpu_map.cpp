@@ -20,7 +20,8 @@
 //   gi.trace_sun_cost     (--trace-sun, `measure`, by hand): SurfaceCache::traceSun's whole CPU per frame at the 10k
 //                         group move and at 12 % movers (P1: every moved still caster against every card). The deep
 //                         read's app figures: 64.5 ms (group) / 18.4 ms (12 %) / 64.6 ms (100 %). Stage 2's bar: <= 5 ms
-//                         on the group move, <= 2 ms at 12 %.
+//                         on the group move, <= 2 ms at 12 %; and the arm cards.sunGridParity's 0 misses on every arm
+//                         (the grid's searches equal the exhaustive search card for card).
 //   engine.gpuscene_compose (--compose, `measure`, by hand): the GPU scene's walk by phase (the named slots, the pool's
 //                         compare, the frame thread's compose) at the 10k group move and at 100 % movers (P2: the
 //                         compose's serial share). The deep read's app figures: 30.7 ms (group) / 90.4 ms (100 %), 83-88 %
@@ -314,7 +315,7 @@ int traceSunRow(World &w, int n)
                 if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], true);
         }
         settleCards(w);
-        std::vector<double> us;
+        std::vector<double> us, hook, stepOne;
         unsigned moves = 0, cards = 0, hits = 0;
         unsigned long long digest = 1469598103934665603ull;   // FNV-1a over every measured frame's hit-set digest
         bool ran = true;
@@ -325,11 +326,21 @@ int traceSunRow(World &w, int n)
             if (f < warm) continue;
             if (t.calls == calls0) ran = false;
             us.push_back(t.micros);
+            hook.push_back(t.hookMicros);
+            stepOne.push_back(t.stepOneMicros);
             moves = std::max(moves, t.casterMoves);
             cards = t.cards;
             hits = std::max(hits, t.casterHits);
             for (int b = 0; b < 8; ++b) { digest ^= (t.casterHitDigest >> (8 * b)) & 0xFFu; digest *= 1099511628211ull; }
         }
+        // THE GRID'S GUARD (stage 2): three more frames of the arm with `cards.sunGridParity` on — every search of
+        // the frame repeated exhaustively, every card whose answer differs a miss. 0 misses is the law.
+        const inspect::SceneEcho::TraceSun p0 = echo->traceSun();
+        w.e->setArm("cards.sunGridParity", 1.0);
+        for (int f = 0; f < 3; ++f) writeFrame(w, k);
+        w.e->setArm("cards.sunGridParity", 0.0);
+        writeFrame(w, k);
+        const inspect::SceneEcho::TraceSun p1 = echo->traceSun();
         if (k == kMovers) {
             for (int i = 0; i < int(w.cubes.size()); ++i)
                 if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], false);
@@ -338,10 +349,24 @@ int traceSunRow(World &w, int n)
         const Stats a = stats(us);
         const GiStatus &g = w.scene->published().gi;
         std::printf("CPU_MAP gi.trace_sun_cost arm=%s world=%d frames=%d trace_sun_ms=%.3f (min %.3f max %.3f) "
-                    "caster_moves=%u cards=%u hits=%u hit_digest=%016llx mover_casters=%u mover_traced_last=%u\n",
-                    armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0, moves,
-                    cards, hits, digest, g.cards.moverCasters, g.cards.moverTracedLastFrame);
+                    "(the moves' producer %.3f, step 1 %.3f) caster_moves=%u cards=%u hits=%u hit_digest=%016llx "
+                    "mover_casters=%u mover_traced_last=%u\n",
+                    armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0,
+                    stats(hook).median / 1000.0, stats(stepOne).median / 1000.0, moves, cards, hits, digest,
+                    g.cards.moverCasters, g.cards.moverTracedLastFrame);
         CHECK(ran, "gi.trace_sun_cost arm %s: the sun trace ran on every measured frame", armName(k, b, sizeof b));
+        // STAGE 2's BARS (the sun-space grid): the group move <= 5 ms and 12 % <= 2 ms (stage 1's base on this
+        // fixture: 166.8 / 84.9 ms; the floor the grid cannot remove — the moves' producer and the exact footprints of
+        // the moves near a landed card — measured 1.2 + 2.3 ms on the group move).
+        if (k == -1 || k == n * 12 / 100) {
+            const double bar = k == -1 ? 5.0 : 2.0;
+            CHECK(a.median / 1000.0 <= bar, "gi.trace_sun_cost arm %s: the sun trace's CPU %.3f ms <= %.1f ms",
+                  armName(k, b, sizeof b), a.median / 1000.0, bar);
+        }
+        CHECK(p1.parityChecks >= p0.parityChecks + 3u && p1.parityMisses == p0.parityMisses,
+              "gi.trace_sun_cost arm %s: the sun-space grid's searches equal the exhaustive search card for card "
+              "(%llu calls checked, %llu misses)", armName(k, b, sizeof b), p1.parityChecks - p0.parityChecks,
+              p1.parityMisses - p0.parityMisses);
         if (k == kMovers) {
             CHECK(g.cards.moverCasters >= unsigned(kMoverCount) && cards > 0u, "gi.trace_sun_cost arm %s: %u movers "
                   "on the movers' channel against %u cards", armName(k, b, sizeof b), g.cards.moverCasters, cards);
