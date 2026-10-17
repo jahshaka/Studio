@@ -472,7 +472,7 @@ int main()
         render(f.e, 300);
         f.e->setFrameMonitor(MonitorLevel::Review);
         render(f.e, 10);
-        std::vector<MonitorRecord> sink; f.e->takeMonitorRecords(sink);
+        std::vector<MonitorRecord> sink; f.e->popMonitorRecords(sink);
         double sum[2] = { 0, 0 }; int n[2] = { 0, 0 };
         double relight[2] = { 0, 0 }; int nr[2] = { 0, 0 };
         int frame = 0;
@@ -484,8 +484,8 @@ int main()
                 const float a = 0.05f * float(frame);
                 f.s->setNodeTransform(lamp, Vec3(-1.5f + std::cos(a), 1.2f, std::sin(a)), Quat(), Vec3(1, 1, 1));
                 enginetest::frames(f.e, 1);
-                if (k < 30) { std::vector<MonitorRecord> d; f.e->takeMonitorRecords(d); continue; }
-                f.e->takeMonitorRecords(recs);
+                if (k < 30) { std::vector<MonitorRecord> d; f.e->popMonitorRecords(d); continue; }
+                f.e->popMonitorRecords(recs);
                 const float rg = f.s->published().gi.cards.relightGpuMs;
                 if (rg > 0.0f) { relight[arm] += rg; ++nr[arm]; }
             }

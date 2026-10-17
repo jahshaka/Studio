@@ -753,7 +753,7 @@ void armMonitor(Env &env)
 std::vector<MonitorRecord> drain(Env &env)
 {
     std::vector<MonitorRecord> out;
-    env.engine->takeMonitorRecords(out);
+    env.engine->popMonitorRecords(out);
     return out;
 }
 

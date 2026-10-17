@@ -1187,7 +1187,7 @@ static int costMain(Engine *e, const char *, const char *)
         // it is printed on its own — a target with no bar (the reflect bars below are on trace + filter).
         {
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             std::vector<float> dec;
             for (const MonitorRecord &r : recs) {
                 float sum = -1.0f;

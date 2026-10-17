@@ -2369,7 +2369,7 @@ int main() {
                       int(thrown.state));
             engine->setFrameMonitor(MonitorLevel::Off);
             std::vector<MonitorRecord> sink;
-            engine->takeMonitorRecords(sink);
+            engine->popMonitorRecords(sink);
 
             // AND THE EYES ARE NOT BLACK. A leaked acquire cannot be seen in a
             // counter alone: the next frames' copies would have no image to

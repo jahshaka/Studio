@@ -5885,8 +5885,8 @@ void monitor_off_is_inert() {
     CHECK(!st.gpuActive);
     std::vector<MonitorRecord> recs;
     std::vector<MonitorEvent> evs;
-    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
-    CHECK(fx.e->takeMonitorEvents(evs) == 0u);
+    CHECK(fx.e->popMonitorRecords(recs) == 0u);
+    CHECK(fx.e->popMonitorEvents(evs) == 0u);
     CHECK(recs.empty() && evs.empty());
     // The host's hooks are safe to call with it off — a caller never has to ask.
     MonitorEvent hook; hook.kind = MonitorEventKind::Host; hook.label = "ignored";
@@ -5894,7 +5894,7 @@ void monitor_off_is_inert() {
     fx.e->noteHostStage("ignored", 1.0f);
     fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Scripted));
     render(fx.e);
-    CHECK(fx.e->takeMonitorEvents(evs) == 0u);
+    CHECK(fx.e->popMonitorEvents(evs) == 0u);
     CHECK(fx.e->published().monitor.framesRecorded == 0ull);
 
     // ...and ON then OFF returns to exactly that state (nothing is leaked and
@@ -5911,15 +5911,15 @@ void monitor_off_is_inert() {
     // STOPPING FLUSHES, and the next drain hands back the tail even with the
     // monitor off — the host's natural "stop, then drain" order is lossless.
     recs.clear();
-    const unsigned tail = fx.e->takeMonitorRecords(recs);
+    const unsigned tail = fx.e->popMonitorRecords(recs);
     std::printf("    tail handed back after the stop: %u record(s)\n", tail);
     CHECK_MSG(tail > 0u, "stopping must not discard the frames just recorded");
     // ...and that is the END of it: the storage is gone.
     recs.clear();
-    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
+    CHECK(fx.e->popMonitorRecords(recs) == 0u);
     render(fx.e, 2);
     CHECK(fx.e->published().monitor.ringFrames == 0u);   // the snapshot, a frame after the drain (U3 stage 2b)
-    CHECK(fx.e->takeMonitorRecords(recs) == 0u);
+    CHECK(fx.e->popMonitorRecords(recs) == 0u);
 }
 
 void monitor_passes_sum_to_the_frame() {
@@ -5944,7 +5944,7 @@ void monitor_passes_sum_to_the_frame() {
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
     std::vector<MonitorRecord> recs;
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     recs.clear();
     fx.e->submitFrame(jahshaka::engine::FrameInput::withCause(FrameCause::Driver));
     // MOVE A CASTER so the measured frame re-renders the lamp's map: every
@@ -5961,7 +5961,7 @@ void monitor_passes_sum_to_the_frame() {
     // drawn".)
     CHECK(enginetest::renderStats(fx.e, rs));
     render(fx.e, 4);                       // past the GPU readback latency
-    const unsigned drained = fx.e->takeMonitorRecords(recs);   // once: REQUIRE evaluates twice
+    const unsigned drained = fx.e->popMonitorRecords(recs);   // once: REQUIRE evaluates twice
     REQUIRE(drained > 0u);
     // The frame that re-rendered the lamp's map is the richest one; the flush
     // frames behind it are idle and execute no shadow pass (which is the cache
@@ -6056,10 +6056,10 @@ void monitor_records_work_with_its_reason() {
 
     // (1) A LIGHT MOVES -> its cached shadow map is re-rendered, reason Light.
     render(fx.e, 6);
-    fx.e->takeMonitorRecords(recs); recs.clear();
+    fx.e->popMonitorRecords(recs); recs.clear();
     rig.s->setNodeTransform(rig.lamp, Vec3(-2, 3, 2), Quat(), Vec3(1, 1, 1));
     renderAndFlush(fx.e, 1);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     bool lampRelit = false;
     for (const MonitorRecord &r : recs)
         for (const CacheWork &w : r.cacheWork)
@@ -6072,7 +6072,7 @@ void monitor_records_work_with_its_reason() {
     // (2) A CASTER MOVES -> the same map, reason Caster (not Light).
     rig.s->setNodeTransform(rig.cube, Vec3(0.4f, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
     renderAndFlush(fx.e, 1);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     bool casterRelit = false;
     for (const MonitorRecord &r : recs)
         for (const CacheWork &w : r.cacheWork)
@@ -6087,7 +6087,7 @@ void monitor_records_work_with_its_reason() {
     //     the case the lead reads. The assertion is only that idle frames are
     //     recorded at all and that any shadow work they contain is attributed.
     render(fx.e, 10);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     CHECK_MSG(recs.size() >= 6u, "every frame must produce a record: %zu", recs.size());
     unsigned idleShadowWork = 0, idleUnattributed = 0;
     for (const MonitorRecord &r : recs)
@@ -6101,11 +6101,11 @@ void monitor_records_work_with_its_reason() {
     recs.clear();
 
     // (4) AN EXPLICIT GI REFRESH -> a cause-tagged event.
-    fx.e->takeMonitorEvents(evs); evs.clear();
+    fx.e->popMonitorEvents(evs); evs.clear();
     rig.s->refreshGlobalIllumination();
     renderAndFlush(fx.e, 2);
-    fx.e->takeMonitorEvents(evs);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorEvents(evs);
+    fx.e->popMonitorRecords(recs);
     bool giEvent = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::GiRebuild || e.kind == MonitorEventKind::GiRefresh ||
@@ -6130,8 +6130,8 @@ void monitor_records_work_with_its_reason() {
     fx.e->noteHostStage("host.tick", 4.5f);
     renderAndFlush(fx.e, 1);
     evs.clear(); recs.clear();
-    fx.e->takeMonitorEvents(evs);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorEvents(evs);
+    fx.e->popMonitorRecords(recs);
     bool sawHook = false, sawHostStage = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::Host && e.label == "page.switch") sawHook = true;
@@ -6165,12 +6165,12 @@ void monitor_survives_rebuilds_and_view_destruction() {
     fx.e->setShadowResolution(1024);
     render(fx.e, 6);
     std::vector<MonitorRecord> recs;
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     bool passesAfterAtlas = false;
     for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterAtlas = true;
     CHECK_MSG(passesAfterAtlas, "the listener must ride an atlas rebuild");
     std::vector<MonitorEvent> evs;
-    fx.e->takeMonitorEvents(evs);
+    fx.e->popMonitorEvents(evs);
     bool atlasEvent = false;
     for (const MonitorEvent &e : evs)
         if (e.kind == MonitorEventKind::AtlasRebuild) atlasEvent = true;
@@ -6184,7 +6184,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     rig.s->setGlobalIllumination(gi);
     render(fx.e, 3);
     evs.clear();
-    fx.e->takeMonitorEvents(evs); evs.clear();
+    fx.e->popMonitorEvents(evs); evs.clear();
     // A FROM-SCRATCH REBUILD, and it has to be ASKED for as one: the arm this
     // case used to run was Instant Radiosity, whose refresh WAS a from-scratch
     // re-trace. The voxel arm's refresh takes the reuse path when nothing it
@@ -6202,8 +6202,8 @@ void monitor_survives_rebuilds_and_view_destruction() {
     rig.s->setGlobalIllumination(gi);
     rig.s->refreshGlobalIllumination();
     render(fx.e, 6);
-    fx.e->takeMonitorRecords(recs);
-    fx.e->takeMonitorEvents(evs);
+    fx.e->popMonitorRecords(recs);
+    fx.e->popMonitorEvents(evs);
     bool passesAfterGi = false;
     for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterGi = true;
     CHECK_MSG(passesAfterGi, "the listener must ride a GI rebuild");
@@ -6238,7 +6238,7 @@ void monitor_survives_rebuilds_and_view_destruction() {
     fx.forget(v2);
     fx.e->destroyView(v2);
     render(fx.e, 6);
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     bool passesAfterDestroy = false;
     for (const MonitorRecord &r : recs) if (!r.passes.empty()) passesAfterDestroy = true;
     CHECK_MSG(passesAfterDestroy, "destroying a view must not stop the monitor");
@@ -6403,7 +6403,7 @@ void monitor_is_forward_only_for_compiles() {
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
     std::vector<MonitorRecord> recs;
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     unsigned compiles = 0;
     for (const MonitorRecord &r : recs) compiles += r.shaderCompiles;
     std::printf("    first capture, warm process: %u compile(s) reported over %zu frame(s)\n",
@@ -6412,13 +6412,13 @@ void monitor_is_forward_only_for_compiles() {
               "a capture in a warm process must report NO compiles from before it: %u", compiles);
     fx.e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
 
     // A SECOND capture must not re-report the first one's window either.
     fx.e->setFrameMonitor(MonitorLevel::Review);
     renderAndFlush(fx.e, 1);
     recs.clear();
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     compiles = 0;
     for (const MonitorRecord &r : recs) compiles += r.shaderCompiles;
     CHECK_MSG(compiles == 0u, "a second capture must not re-report the first's: %u", compiles);
@@ -6495,11 +6495,11 @@ void monitor_heavy_frames_keep_their_samples() {
     std::vector<MonitorRecord> recs;
     // 48 capture frames: the bar counts >= 40 heavy records, and the capture publishes all but the 2-3 frames
     // still in flight (58 of 60 measured) — the frames the bar counts and that margin, no more.
-    for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->takeMonitorRecords(recs); }
+    for (int i = 0; i < 48; ++i) { render(fx.e, 1); fx.e->popMonitorRecords(recs); }
     st = fx.e->published().monitor;
     const unsigned pools = st.gpuQueryPools;
     fx.e->setFrameMonitor(MonitorLevel::Off);
-    { std::vector<MonitorRecord> tail; fx.e->takeMonitorRecords(tail); }
+    { std::vector<MonitorRecord> tail; fx.e->popMonitorRecords(tail); }
     // THE HEAVY PASS is the one that drew the most triangles in the record.
     unsigned records = 0, carried = 0;
     double sumMs = 0;
@@ -6568,7 +6568,7 @@ void monitor_gpu_timestamps() {
                                 Vec3(0.8f, 0.8f, 0.8f));
         render(fx.e, 1);
     }
-    fx.e->takeMonitorRecords(recs);
+    fx.e->popMonitorRecords(recs);
     unsigned sampled = 0, frames = 0;
     float anyGpu = -1.0f;
     for (const MonitorRecord &r : recs) {

@@ -239,6 +239,26 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
     ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
     LABELS "perf")
 
+# app.capture_free_tick — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1): the
+# owner's path (JAH_FREE_RUNNING=1, --script-live: Ctrl+F4's 60-frame capture at 200 cubes, the diagnosis' method) —
+# every UI tick during the capture lasts at most one frame budget (<= 2 render-thread frames beside it), the capture
+# ends within 120 ticks and 120 render-thread frames, the bundle holds its 60 frames and nothing was dropped. Red on
+# the base (the drain by request: ~192 frames per tick); a GUARD, in frames. Cannot boot under TSan (Qt's recycled
+# pthread_t): its door's TSan form is the engine fixture frame.monitor_pop.
+set(_cft_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_free_tick)
+file(MAKE_DIRECTORY ${_cft_home}/run)
+jah_gpu_row(app.capture_free_tick CLASS app TIER low NEEDS NONE FRAMES 330
+         NEEDS_WHY "the monitor's door under a free-running capture, in frames per UI tick, its picture no claim"
+         COMMAND ${JAH_FRESH_HOME} --warm ${_cft_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/capture_free_tick.js --script-live
+         WORKING_DIRECTORY ${_cft_home}/run)
+set_tests_properties(app.capture_free_tick PROPERTIES
+    ENVIRONMENT "HOME=${_cft_home};JAHSHAKA_DATA_ROOT=${_cft_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_cft_home}/perf;JAH_FREE_RUNNING=1"
+    LABELS "perf"
+    TIMEOUT 120)
+jah_tsan_blocked(app.capture_free_tick)   # TSAN-GCC15-THREAD-REGISTRY (U3 decision 49): the door's TSan proof is frame.monitor_pop
+
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every

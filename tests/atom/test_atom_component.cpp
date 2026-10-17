@@ -133,12 +133,12 @@ int main()
     {
         std::vector<MonitorRecord> drop;
         enginetest::frames(e, 1);
-        e->takeMonitorRecords(drop);
+        e->popMonitorRecords(drop);
     }
     enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<MonitorRecord> recs;
-    e->takeMonitorRecords(recs);
+    e->popMonitorRecords(recs);
     Order o;
     readOrder(recs, "atomcompA", "atomcompB", o);
     const AtomDrawStatus sa = a->atomDrawStatus(), sb = b->atomDrawStatus();
@@ -169,12 +169,12 @@ int main()
     {
         std::vector<MonitorRecord> drop;
         enginetest::frames(e, 1);
-        e->takeMonitorRecords(drop);
+        e->popMonitorRecords(drop);
     }
     enginetest::frames(e, 3);
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    e->takeMonitorRecords(recs);
+    e->popMonitorRecords(recs);
     Order o2;
     readOrder(recs, "atomcompA", "atomcompA", o2);
     const AtomDrawStatus sa2 = a->atomDrawStatus();

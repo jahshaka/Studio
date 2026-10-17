@@ -269,7 +269,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
                     for (NodeId n : nodes) pose(s, n, 0.5f + 0.5f * std::sin(0.05f * float(frame) + float(n)));
                 enginetest::frames(e, 1);
                 std::vector<MonitorRecord> recs;
-                e->takeMonitorRecords(recs);
+                e->popMonitorRecords(recs);
                 if (f < 20) continue;                  // settle: the queries come back 3 frames late
                 for (const MonitorRecord &r : recs) {
                     if (r.gpuMs <= 0.0f) continue;

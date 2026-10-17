@@ -104,7 +104,7 @@ int main()
     e->setFrameMonitor(MonitorLevel::Review);
     std::vector<MonitorRecord> drop;
     enginetest::frames(e, 1);
-    e->takeMonitorRecords(drop);
+    e->popMonitorRecords(drop);
     const NodeId box = enginetest::leakroom::addSlab(s, Colour(0.9f, 0.9f, 0.2f), at,
                                                      Vec3(0.6f, 0.6f, 0.6f));
     CHECK(box != 0, "the edit's box exists");
@@ -123,14 +123,14 @@ int main()
         }
         enginetest::frames(e, 1);
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
         if (f > 30 && s->published().gi.giAtRest) break;
     }
     e->setFrameMonitor(MonitorLevel::Off);
     {
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);      // what the monitor still held (GPU samples come back late)
+        e->popMonitorRecords(recs);      // what the monitor still held (GPU samples come back late)
         all.insert(all.end(), recs.begin(), recs.end());
     }
     for (const MonitorRecord &r : all) {
@@ -229,14 +229,14 @@ int main()
             }
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
             if (f > writeFrame + 20 && wrote && s->published().gi.giAtRest) break;
         }
         e->setFrameMonitor(MonitorLevel::Off);
         {
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             keep.insert(keep.end(), recs.begin(), recs.end());
         }
         // The records carry the engine's frame numbers; the write happened before

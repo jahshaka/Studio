@@ -641,10 +641,10 @@ static int costMain(Engine *e)
             s->setSunContact(sc);
             render(e, 30);                           // warm: the shape rebuilt, the queries back
             std::vector<MonitorRecord> drop;
-            e->takeMonitorRecords(drop);
+            e->popMonitorRecords(drop);
             render(e, 60);
             std::vector<MonitorRecord> recs;
-            for (int k = 0; k < 8; ++k) { render(e, 1); e->takeMonitorRecords(recs); }
+            for (int k = 0; k < 8; ++k) { render(e, 1); e->popMonitorRecords(recs); }
             for (const MonitorRecord &r : recs) {
                 if (r.gpuMs > 0.0f) { frameSum[a] += r.gpuMs; ++frameN[a]; }
                 for (const CacheWork &w : r.cacheWork)

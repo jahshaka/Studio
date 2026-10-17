@@ -311,7 +311,7 @@ public:
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
     /// GPU timing marks the engine's query pool could not hold over this
     /// capture (MonitorStatus::gpuMarksDropped, cumulative — see
-    /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
+    /// FrameMonitor::drain) — reported in machine.json's truncation block,
     /// because incomplete GPU times are a truncation like any other. Each
     /// frame's own count is in frames.jsonl (`gpuMarksDropped`).
     void noteGpuMarksDropped(unsigned long long n) { mGpuMarksDropped = qMax(mGpuMarksDropped, n); }
@@ -509,7 +509,7 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
     };
     // THE FRAME-COUNTED WINDOW IS CLOSED AT THE WRITER (PERF-CAPTURE-SCRIPT-1),
     // not only at the drain: the engine's holding queue hands its tail back
-    // AFTER the monitor goes off (finish() drains in a loop for exactly that
+    // AFTER the monitor goes off (finish() pops it after the stop for exactly that
     // reason), so a budget enforced only by "stop when the count is reached"
     // would still let the tail past it. A record over the budget is NOT a
     // truncation — nothing was cut, the window simply ended — so it is not
@@ -1451,18 +1451,15 @@ void FrameMonitor::finish(bool early)
     }
     drain();
     gActive = false;
-    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it
+    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it (once a capture)
         eng->setFrameMonitor(MonitorLevel::Off);
         eng->request([](jahshaka::engine::Engine &) {});
     }
-    // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
-    // the NEXT drain hands it back with the monitor already off (Engine.h
-    // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
-    // expect one" — or the last frames of every capture are lost.
-    for (int i = 0; i < 8; ++i) {
-        const unsigned moved = drainOnce();
-        if (!moved) break;
-    }
+    // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue into
+    // its hand-back, and the next pop hands it back with the monitor already
+    // off (Engine.h popMonitorRecords). The request above applied the stop, and
+    // nothing is pushed after it: ONE pop takes the whole tail.
+    drain();
 
     QString path;
     if (mBundle) {
@@ -1488,7 +1485,7 @@ void FrameMonitor::finish(bool early)
                                        : tr("Capture written to %1").arg(path), 6000);
 }
 
-unsigned FrameMonitor::drainOnce()
+unsigned FrameMonitor::drain()
 {
     auto eng = engine();
     if (!eng || !mBundle) return 0;
@@ -1511,9 +1508,13 @@ unsigned FrameMonitor::drainOnce()
         mEngineEventsDropped = st.eventsDropped;
     }
     mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
+    // THE ENGINE'S HAND-BACK, POPPED (FRAME-MONITOR-DOOR-1): what is queued NOW, in one pop, never a request — a
+    // request on this per-tick path waited for the frame in flight while the next free frame pushed the next record,
+    // and the drain never found the queue empty (128 frame-waits a call, the editor answering every 3.5 s). What a
+    // frame retires after this pop is the next tick's.
     unsigned moved = 0;
     std::vector<MonitorRecord> frames;
-    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorRecords(frames); });   // a REQUEST (U3 4a)
+    moved += eng->popMonitorRecords(frames);
     for (const MonitorRecord &r : frames) mBundle->writeFrame(r);
     // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
     // 2026-09-18). The bundle is a file a lead opens later; this is the same
@@ -1539,17 +1540,9 @@ unsigned FrameMonitor::drainOnce()
         mLastPasses = rows;
     }
     std::vector<MonitorEvent> events;
-    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorEvents(events); });   // a REQUEST (U3 4a)
+    moved += eng->popMonitorEvents(events);
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);
     return moved;
-}
-
-void FrameMonitor::drain()
-{
-    // Loop while records keep coming: one call can hand back a batch, and the
-    // ring is the thing we are racing.
-    for (int i = 0; i < 64; ++i)
-        if (!drainOnce()) break;
 }
 
 // THE MONITOR'S OWN HOST COST (item 6). Draining is two JSON records per pass

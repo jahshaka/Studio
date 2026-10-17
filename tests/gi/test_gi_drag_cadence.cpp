@@ -270,7 +270,7 @@ int main()
             render(e, 1);
         }
         std::vector<MonitorRecord> recs;
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         engine->setFrameMonitor(MonitorLevel::Off);
         render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         const size_t chainSize = scene->published().gi.cascades.size();
