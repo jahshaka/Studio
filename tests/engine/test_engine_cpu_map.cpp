@@ -268,8 +268,12 @@ int drainRow(World &w, int n)
     for (int k : { 100, 2000, 10000 }) if (k <= n) arms.push_back(k);
     if (n >= 10000) arms.push_back(-1);
     const int warm = 3, measured = n >= 10000 ? 15 : 20;
+    const inspect::SceneEcho *echo = inspect::scene(w.scene);
+    if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     for (int k : arms) {
-        std::vector<double> whole, name, records, plan;
+        std::vector<double> whole, name, records, plan, planFrame;
+        unsigned boxes = 0;
+        unsigned long long planDigest = 1469598103934665603ull;   // FNV-1a over the frames' pending sets and picks
         bool counts = true, parts = true;
         unsigned recs = 0, moved = 0;
         for (int f = 0; f < warm + measured; ++f) {
@@ -280,6 +284,11 @@ int drainRow(World &w, int n)
             name.push_back(st.drainNameMicros);
             records.push_back(st.drainRecordsMicros);
             plan.push_back(st.drainPlanMicros);
+            const inspect::SceneEcho::GiPlan gp = echo->giPlan();
+            planFrame.push_back(gp.micros);
+            boxes = std::max(boxes, gp.boxes);
+            for (unsigned long long v : { (unsigned long long)gp.pending, (unsigned long long)(long long)gp.rebuild })
+                for (int b = 0; b < 8; ++b) { planDigest ^= (v >> (8 * b)) & 0xFFu; planDigest *= 1099511628211ull; }
             recs = st.nodeRecords;
             moved = st.changesMoved;
             const unsigned want = k < 0 ? 1u : unsigned(k);
@@ -287,15 +296,35 @@ int drainRow(World &w, int n)
             if (st.drainNameMicros + st.drainRecordsMicros + st.drainPlanMicros > st.drainMicros + 0.5) parts = false;
         }
         char b[32];
-        const Stats a = stats(whole), nm = stats(name), rc = stats(records), pl = stats(plan);
+        const Stats a = stats(whole), nm = stats(name), rc = stats(records), pl = stats(plan), pf = stats(planFrame);
         std::printf("CPU_MAP %s arm=%s world=%d frames=%d drain_ms=%.3f (min %.3f max %.3f) name_ms=%.3f records_ms=%.3f "
-                    "plan_ms=%.3f other_ms=%.3f\n", row, armName(k, b, sizeof b), n, measured, a.median / 1000.0,
-                    a.min / 1000.0, a.max / 1000.0, nm.median / 1000.0, rc.median / 1000.0, pl.median / 1000.0,
-                    (a.median - nm.median - rc.median - pl.median) / 1000.0);
+                    "plan_ms=%.3f other_ms=%.3f | planFrame_ms=%.3f boxes=%u plan_digest=%016llx\n", row,
+                    armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0,
+                    nm.median / 1000.0, rc.median / 1000.0, pl.median / 1000.0,
+                    (a.median - nm.median - rc.median - pl.median) / 1000.0, pf.median / 1000.0, boxes, planDigest);
         CHECK(counts, "%s arm %s: every frame's drain applied every record and named every write (%u records, %u moved)",
               row, armName(k, b, sizeof b), recs, moved);
         CHECK(parts, "%s arm %s: the three parts are inside the drain's whole on every frame", row,
               armName(k, b, sizeof b));
+        // THE PLAN'S GUARDS (stage 3), three more frames of the arm with both arms on: the incremental geometry
+        // signature equals the whole sum, and one box per moved subtree root marks no cascade the items' own
+        // boxes reach fewer (the union's extra printed).
+        const inspect::SceneEcho::GiPlan g0 = echo->giPlan();
+        w.e->setArm("gi.geomSigParity", 1.0);
+        w.e->setArm("gi.rootBoxParity", 1.0);
+        for (int f = 0; f < 3; ++f) writeFrame(w, k);
+        w.e->setArm("gi.geomSigParity", 0.0);
+        w.e->setArm("gi.rootBoxParity", 0.0);
+        writeFrame(w, k);
+        const inspect::SceneEcho::GiPlan g1 = echo->giPlan();
+        std::printf("CPU_MAP %s arm=%s guards: signature %llu passes checked, %llu misses | roots %llu marks checked, "
+                    "%llu misses, %llu extra cascades\n", row, armName(k, b, sizeof b), g1.sigChecks - g0.sigChecks,
+                    g1.sigMisses - g0.sigMisses, g1.rootChecks - g0.rootChecks, g1.rootMisses - g0.rootMisses,
+                    g1.rootExtras - g0.rootExtras);
+        CHECK(g1.sigChecks >= g0.sigChecks + 3u && g1.sigMisses == g0.sigMisses, "%s arm %s: the incremental "
+              "geometry signature equals the whole sum on every pass", row, armName(k, b, sizeof b));
+        CHECK(g1.rootMisses == g0.rootMisses, "%s arm %s: the roots' boxes mark every cascade the items' own boxes "
+              "reach (%llu marks checked)", row, armName(k, b, sizeof b), g1.rootChecks - g0.rootChecks);
     }
     return 0;
 }
@@ -421,14 +450,62 @@ int composeRow(World &w, int n)
     return 0;
 }
 
+// ---- the drag (CASCADE-DRAG-STARVE-1's premise, a measurement) ------------------------------------------------------
+// One cube brought in front of the camera (inside every cascade), then dragged 1 cm a frame for 120 frames by the
+// host's records (one record, one moved root a frame); each cascade's rebuilds over the drag printed. The debt: the
+// scheduler spends one rebuild a frame on the innermost pending cascade, and a drag marks every cascade that holds it
+// each frame — so the outer ones starve until the release.
+int dragArm(World &w)
+{
+    const NodeId cube = w.cubes.front();
+    const auto place = [&](float x) {
+        FrameInput in = stepRecord(w);
+        FrameInputScene part;
+        part.scene = w.scene;
+        part.gi = epicGi();
+        NodeRecord r;
+        r.id = cube;
+        r.fields = NodeRecord::Trs;
+        r.position = Vec3(x, 38.0f, 84.0f);   // 7.5 m in front of the camera at (0, 40, 90)
+        r.rotation = Quat(0, 0, 0, 1);
+        r.scale = Vec3(kCube, kCube, kCube);
+        part.nodes.push_back(r);
+        part.changes.moved.push_back(cube);
+        in.scenes.push_back(std::move(part));
+        enginetest::frames(w.e, 1, in);
+    };
+    place(0.0f);
+    settleCards(w);
+    for (int f = 0; f < 120; ++f) {   // the settle after the placement: every cascade rebuilt for it
+        FrameInput still = stepRecord(w);
+        FrameInputScene sp;
+        sp.scene = w.scene;
+        sp.gi = epicGi();
+        still.scenes.push_back(std::move(sp));
+        enginetest::frames(w.e, 1, still);
+    }
+    const std::vector<GiStatus::CascadeStatus> c0 = w.scene->published().gi.cascades;
+    for (int f = 1; f <= 120; ++f) place(0.01f * float(f));
+    const std::vector<GiStatus::CascadeStatus> c1 = w.scene->published().gi.cascades;
+    unsigned starved = 0;
+    std::printf("CPU_MAP drag frames=120 rebuilds per cascade:");
+    for (size_t i = 0; i < c1.size() && i < c0.size(); ++i) {
+        const unsigned long long r = c1[i].rebuilds - c0[i].rebuilds;
+        std::printf(" c%zu=%llu (pending %d)", i, r, c1[i].pending);
+        if (r == 0ull) ++starved;
+    }
+    std::printf(" | starved %u of %zu\n", starved, c1.size());
+    return 0;
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
 {
     std::string mode = argc > 1 ? argv[1] : "";
     const int n = argc > 2 ? std::atoi(argv[2]) : 10000;
-    if (mode != "--drain" && mode != "--trace-sun" && mode != "--compose") {
-        std::printf("usage: test_engine_cpu_map --drain|--trace-sun|--compose [nodes]\n");
+    if (mode != "--drain" && mode != "--trace-sun" && mode != "--compose" && mode != "--drag") {
+        std::printf("usage: test_engine_cpu_map --drain|--trace-sun|--compose|--drag [nodes]\n");
         return 2;
     }
     std::printf("== the render thread's CPU map, %s at %d nodes\n", mode.c_str(), n);
@@ -446,6 +523,7 @@ int main(int argc, char **argv)
     int rc = 0;
     if (mode == "--drain") rc = drainRow(w, n);
     else if (mode == "--trace-sun") rc = traceSunRow(w, n);
+    else if (mode == "--drag") rc = dragArm(w);
     else rc = composeRow(w, n);
     w.view->setScene(nullptr);
     w.e->destroyScene(w.scene);

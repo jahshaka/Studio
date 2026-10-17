@@ -252,20 +252,47 @@ int main(int argc, char **argv)
         { "a nodeless write (a mesh-less group moved, its cube under it)", [&] {
               enginetest::setNodePosition(scene, group, Vec3(0.0f, 0.5f, 0.0f)); } },
     };
+    // THE GEOMETRY SIGNATURE'S GUARD TOO (ENGINE-UPGRADE-U4 stage 3): the same writers, every frame a record that
+    // carries the scene's GI (planGi reads the signature on it), and the arm gi.geomSigParity recomputing the whole
+    // order-free sum after every incremental pass — 0 misses.
+    const inspect::SceneEcho *echo = inspect::scene(scene);
+    CHECK(echo != nullptr && e->setArm("gi.geomSigParity", 1.0), "the signature guard's arm");
+    const auto giFrames = [&](int k) {
+        for (int f = 0; f < k; ++f) {
+            FrameInput in;
+            FrameInputScene part;
+            part.scene = scene;
+            part.gi = gi;
+            in.scenes.push_back(part);
+            enginetest::frames(e, 1, in);
+        }
+    };
+    giFrames(2);
     for (const Step &st : steps) {
         const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
         const GpuSceneStatus gb = scene->published().gpuScene;
+        const inspect::SceneEcho::GiPlan pb = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
         st.run();
-        enginetest::frames(e, 4);
+        giFrames(4);
         const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
         const GpuSceneStatus ga = scene->published().gpuScene;
+        const inspect::SceneEcho::GiPlan pa = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
         CHECK(after.walkMissed == before.walkMissed,
               "%s: the table holds every slot (%llu misses over %llu checks; last miss slot %u)", st.name,
               after.walkMissed - before.walkMissed, after.walkChecked - before.walkChecked,
               after.walkLastMissed);
         CHECK(ga.updates > gb.updates, "%s: the table took the writer's change (%llu commits)", st.name,
               (unsigned long long)(ga.updates - gb.updates));
+        CHECK(pa.sigMisses == pb.sigMisses, "%s: the geometry signature is the whole sum (%llu misses over %llu "
+              "passes, %llu of them full)", st.name, pa.sigMisses - pb.sigMisses, pa.sigChecks - pb.sigChecks,
+              pa.sigFullPasses - pb.sigFullPasses);
     }
+    {
+        const inspect::SceneEcho::GiPlan p = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
+        CHECK(p.sigChecks > p.sigFullPasses, "the signature's guard checked incremental passes (%llu checks, %llu full)",
+              p.sigChecks, p.sigFullPasses);
+    }
+    e->setArm("gi.geomSigParity", 0.0);
     e->setArm("gpuscene.walkParity", 0.0);
     std::printf("engine.gpu_walk_parity: %s (%d failure(s))\n", failures ? "FAIL" : "ok", failures);
     return failures ? 1 : 0;
