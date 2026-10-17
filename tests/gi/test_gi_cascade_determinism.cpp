@@ -448,9 +448,110 @@ static int scrollSlabMain()
     return failures ? 1 : 0;
 }
 
+// =========================================================================================
+// gi.cascade_drag_age (--drag) — UNDER A DRAG EVERY DIRTY CASCADE IS SERVED WITHIN N FRAMES
+// (CASCADE-DRAG-STARVE-1, the lead's decision 7). A cube 7.5 m before the camera - outside cascade 0,
+// inside 1, 2 and 3 - dragged 1 cm a frame for 120 frames marks cascades 1-3 every frame. The scheduler
+// spends one cascade's work a frame; "innermost first" gave cascade 1 all 120 and 2 and 3 none (U4's
+// measurement on its 10k fixture: 0 / 119 / 0 / 0). By AGE (the oldest owed work first, ties to the
+// innermost) each dirty cascade is rebuilt >= 120/N - 1 times and never waits more than N frames between
+// two rebuilds (N = the chain's cascades). And the ORDER is all that changed: once the drag ends and GI
+// is at rest the picture is a whole build's (within 1/255).
+static int dragAgeMain()
+{
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig("test-gi-cascade-drag-age-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
+    Engine *e = engine.get();
+    int frames = 1;
+    const auto run = [&](int n) { render(e, n); frames += n; };
+    View *view = e->createOffscreenView("drag", kSize, kSize, Colour(0, 0, 0));
+    Scene *scene = e->createScene("drag");
+    if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+    const NodeId ground = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.9f);
+    enginetest::setNodePosition(scene, ground, Vec3(0.0f, -0.05f, 0.0f));
+    enginetest::setNodeScale(scene, ground, Vec3(60.0f, 0.1f, 60.0f));
+    const NodeId wall = enginetest::addTestCube(scene, Colour(0.9f, 0.2f, 0.1f), 0.0f, 0.8f);
+    enginetest::setNodePosition(scene, wall, Vec3(0.0f, 2.0f, -11.0f));
+    enginetest::setNodeScale(scene, wall, Vec3(12.0f, 4.0f, 0.3f));
+    const NodeId cube = enginetest::addTestCube(scene, Colour(0.2f, 0.4f, 0.9f), 0.0f, 0.5f);
+    enginetest::setNodePosition(scene, cube, Vec3(0.0f, 0.5f, -7.5f));
+    enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 1.0f, -7.5f));
+    CHECK(scene->setGlobalIllumination(chainGi()), "the High chain builds");
+    run(12);
+    GiStatus st = scene->published().gi;
+    const size_t n = st.cascades.size();
+    if (n < 3u) { std::printf("FAIL: the chain has %zu cascades\n", n); return 1; }
+    std::printf("   %zu cascades (halves", n);
+    for (const auto &c : st.cascades) std::printf(" %.1f", double(c.halfSize));
+    std::printf(" m); the cube at 7.5 m\n");
+
+    const int kDrag = 120;
+    std::vector<unsigned long long> last(n), count(n, 0);
+    std::vector<int> lastFrame(n, -1), worstGap(n, 0), first(n, -1);
+    for (size_t i = 0; i < n; ++i) last[i] = st.cascades[i].rebuilds;
+    std::string order;
+    for (int f = 0; f < kDrag; ++f) {
+        enginetest::setNodePosition(scene, cube, Vec3(0.01f * float(f + 1), 0.5f, -7.5f));
+        run(1);
+        const GiStatus now = scene->published().gi;
+        for (size_t i = 0; i < n; ++i) {
+            if (now.cascades[i].rebuilds == last[i]) continue;
+            count[i] += now.cascades[i].rebuilds - last[i];
+            last[i] = now.cascades[i].rebuilds;
+            if (first[i] < 0) first[i] = f;
+            if (lastFrame[i] >= 0) worstGap[i] = std::max(worstGap[i], f - lastFrame[i]);
+            lastFrame[i] = f;
+            if (f < 24) order += char('0' + int(i));
+        }
+    }
+    std::printf("   the first 24 frames rebuilt, in order: %s\n", order.c_str());
+    const int floorCount = kDrag / int(n) - 1;
+    for (size_t i = 0; i < n; ++i)
+        std::printf("   cascade %zu: %llu rebuilds over %d drag frames, first at frame %d, worst gap %d frame(s)\n", i,
+                    count[i], kDrag, first[i], worstGap[i]);
+    bool fair = true, prompt = true;
+    for (size_t i = 1; i < n; ++i) {   // cascade 0 does not reach the cube: nothing dirties it
+        fair = fair && int(count[i]) >= floorCount;
+        prompt = prompt && first[i] >= 0 && first[i] <= int(n) && worstGap[i] <= int(n);
+    }
+    CHECK(count[0] == 0u, "cascade 0 (the cube is outside its box) is not rebuilt");
+    CHECK(fair, "EVERY DIRTY CASCADE IS REBUILT >= 120/N - 1 TIMES OVER THE DRAG (none starves)");
+    CHECK(prompt, "...and none waits more than N frames for its first rebuild or between two");
+
+    // THE ORDER CHANGED, NOT THE ANSWER: at rest, the picture is a whole build's.
+    int rest = 0;
+    for (; rest < 2000 && !scene->published().gi.giAtRest; ++rest) run(1);
+    run(6);
+    Image dragged, built;
+    view->readPixels(dragged);
+    GiParams off; off.mode = GiMode::Off;
+    scene->setGlobalIllumination(off);
+    run(2);
+    scene->setGlobalIllumination(chainGi());
+    run(8);
+    for (int k = 0; k < 2000 && !scene->published().gi.giAtRest; ++k) run(1);
+    run(6);
+    view->readPixels(built);
+    std::printf("   at rest after %d frames; dragged vs whole build: %.2f of 255\n", rest, apart(dragged, built) * 255.0f);
+    CHECK(rest < 2000, "GI comes to rest after the drag");
+    CHECK(apart(dragged, built) <= kOneOf255, "THE SETTLED PICTURE IS A WHOLE BUILD'S (the order changed, not the answer)");
+    scene->setGlobalIllumination(off);
+    run(2);
+    std::printf("\n   frames rendered: %d\n", frames);
+    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && std::string(argv[1]) == "--scroll-slab") return scrollSlabMain();
+    if (argc > 1 && std::string(argv[1]) == "--drag") return dragAgeMain();
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-cascade-determinism-ogre.log");
     auto engine = Engine::create(cfg, err);
