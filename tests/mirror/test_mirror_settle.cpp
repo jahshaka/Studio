@@ -619,6 +619,10 @@ int main(int argc, char **argv)
               "memoryStats' simdNodes (LIVE nodes) is invariant under promotion (the same nodes, moved)");
         CHECK(c.simdNodes + 50u == b.simdNodes,
               "...and a held removal is an EVICTION: the live count drops by exactly the 50 removed");
+        // (AN ALLOCATOR DEPENDENCY, deterministic on this fixture: a non-LIFO destroy stays a hole only until a
+        // depth level's free list passes its cleanup threshold — OgreArrayMemoryManager::destroySlot defragments
+        // past mCleanupThreshold, 100 by default, and that would move the used slots; here it does not, measured
+        // 104040 x3.)
         CHECK(c.simdNodeSlots == b.simdNodeSlots,
               "...while the pools' used slots do not move: the 50 non-LIFO destroys are holes, still used slots");
         L.mirror->setSource(iris::ScenePtr());

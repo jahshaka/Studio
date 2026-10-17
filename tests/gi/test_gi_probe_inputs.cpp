@@ -336,7 +336,14 @@ int main(int argc, char **argv)
     // roughness, so a roughness edit moves the material generation). The premise
     // before it — "seen by the probes but not by the voxelizer, no re-solve" — is
     // dead; the arm takes the albedo arm's shape: the settle wait with no light
-    // re-inject, then EXACTLY ONE re-solve.
+    // re-inject, then EXACTLY ONE re-solve. WHAT THE STORE HOLDS OF IT: the voxel's
+    // roughness (the emissive volume's alpha), which scales the light the voxel holds —
+    // the injection by jahDiffuseAlbedo(cos, r), the bounce's re-emission by
+    // jahDiffuseAlbedoHemi(r). THIS room's voxels hold NO light to scale (measured: the
+    // red wall's 264 voxels read 0.0000 before and after; the room is closed above, and
+    // the voxel march, unlike the shadowless raster the probes capture, finds the sun
+    // behind the ceiling), so here the re-solve is the observable and the event is the
+    // law; the output belongs to a row with lit voxels.
     frames(1);   // the snapshot moves at a frame's close (U3 stage 2b)
     const quint64 solvesBeforeRough = mirror.target()->published().gi.schedulerResolves;
     const quint64 injectsBeforeRough = mirror.target()->published().gi.schedulerLightTicks;
