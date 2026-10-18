@@ -81,8 +81,10 @@ static void build(Doc &d, Engine *engine, const char *label, int count, int rows
 
 int main(int argc, char **argv)
 {
-    int nodes = 2000;
+    int nodes = 2000, profileRounds = 0;
     for (int i = 1; i + 1 < argc; ++i) if (!std::strcmp(argv[i], "--nodes")) nodes = std::atoi(argv[i + 1]);
+    // --profile N: after the build, N rounds of (every cube written, one sync) and nothing else — for a profiler.
+    for (int i = 1; i + 1 < argc; ++i) if (!std::strcmp(argv[i], "--profile")) profileRounds = std::atoi(argv[i + 1]);
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     const auto cfg = enginetest::testEngineConfig("test_mirror_extract_movers-ogre.log");
@@ -105,6 +107,14 @@ int main(int argc, char **argv)
             for (const auto &c : d.cubes) c->setLocalPos(c->getLocalPos() + iris::Vec3(0, lift > 0.0f ? lift : -0.001f, 0));
         };
         const auto timed = [&]() { const auto t0 = Clock::now(); d.mirror->sync(); return msSince(t0); };
+        if (profileRounds > 0) {
+            std::printf("PROFILE_START\n");
+            std::fflush(stdout);
+            const auto t0 = Clock::now();
+            for (int i = 0; i < profileRounds; ++i) { moveAll(); d.mirror->sync(); }
+            std::printf("PROFILE_END %d rounds %.3f ms each\n", profileRounds, msSince(t0) / profileRounds);
+            return 0;
+        }
         for (int i = 0; i < 3; ++i) { d.mirror->requestFullWalk(); timed(); moveAll(); timed(); timed(); }
         // THE WALK AT EQUAL WORK (mirror.scale's law as MAIN-REDS-1 stage 4a restated it): every node moved, then the
         // full walk — both arms pay each written node's extract, so the ratio reads the list's own overhead.
@@ -133,6 +143,12 @@ int main(int argc, char **argv)
         std::printf("\n");
         CHECK(all < fullMoved * 1.5, "100%% movers cost about what the full walk of the same moves cost — the list "
               "degrades to it, never past (%.3f vs %.3f ms)", all, fullMoved);
+        // THE ORACLE (DIRTY_SET_MIRROR_SPEC §7.1): the full walk straight after a movers sync pushes NOTHING — the dirty
+        // path (its transform-only fast path included) left no latch behind.
+        moveAll();
+        d.mirror->sync();
+        const quint64 late = d.mirror->verifyAgainstFullWalk();
+        CHECK(late == 0, "the full walk after the movers sync pushes nothing (%llu late)", (unsigned long long)late);
         if (nodes >= 10000)
             CHECK(all <= 12.0, "THE STAGE'S BAR: 100%% movers <= 12 ms at %d nodes (%.3f)", nodes, all);
     }
