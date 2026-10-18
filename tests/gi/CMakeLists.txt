@@ -856,7 +856,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --sc
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 152)   # counted by the suite (frames rendered)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 153)   # counted by the suite (frames rendered)
 # gi.cascade_drag_age — UNDER A DRAG EVERY DIRTY CASCADE IS SERVED WITHIN N FRAMES (CASCADE-DRAG-STARVE-1,
 # ENGINE-UPGRADE-U5 decision 7): the --drag mode. A cube outside cascade 0 and inside 1-3 dragged 120 frames:
 # by AGE (oldest owed work first, ties innermost) each of 1-3 is rebuilt >= 120/N - 1 times, never more than N
@@ -865,7 +865,7 @@ jah_gpu_row(gi.cascade_drag_age CLASS engine COMMAND test_gi_cascade_determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_drag_age PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.cascade_drag_age PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+set_tests_properties(gi.cascade_drag_age PROPERTIES JAHSHAKA_TEST_FRAMES 164)   # counted by the suite
 
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
