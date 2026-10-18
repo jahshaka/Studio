@@ -814,6 +814,132 @@ static CullTally tallyOf(const AtomDrawStatus &st)
     return t;
 }
 
+/// A solid-colour TGA (the decal's image).
+static bool writeSolidTga(const std::string &path, unsigned char r, unsigned char g, unsigned char b)
+{
+    const unsigned n = 32;
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    unsigned char hdr[18] = {};
+    hdr[2] = 2;
+    hdr[12] = (unsigned char)n;
+    hdr[14] = (unsigned char)n;
+    hdr[16] = 32;
+    hdr[17] = 0x28;
+    std::fwrite(hdr, 1, sizeof(hdr), f);
+    for (unsigned i = 0; i < n * n; ++i) {
+        const unsigned char px[4] = { b, g, r, 255 };
+        std::fwrite(px, 1, 4, f);
+    }
+    std::fclose(f);
+    return true;
+}
+
+/// THE RECEIVER TEST'S LAW (stage 4b, decision 17): two lockstep worlds, the same roof and field, a particle
+/// system and a decal in view, the same camera every frame - one with the sun maps' receiver test, the other
+/// with it off (Scene::setShadowReceiverCull) - and THE PICTURES bit-equal (the maps themselves may differ where
+/// no receiver samples them). A control first: both on, the pictures equal (the fixture is deterministic).
+static int receiverSection(unsigned long long &framesOut)
+{
+    std::printf("\n== the receiver test: the picture with the sun maps' receiver test on and off ==\n");
+    World a, b;
+    if (!makeWorld(a, "recv-on", false) || !makeWorld(b, "recv-off", false)) { std::printf("FAIL: the worlds\n"); return 1; }
+    const bool tga = writeSolidTga("recv_decal_red.tga", 230, 30, 20);
+    Vec3 roofCentre(1.0f, 6.0f, -15.0f);
+    const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
+    NodeId roofs[2] = {};
+    World *ws[2] = { &a, &b };
+    for (int i = 0; i < 2; ++i) {
+        Scene *sc = ws[i]->scene;
+        PbrParams rp;
+        rp.albedo = Colour(0.5f, 0.5f, 0.5f);
+        rp.roughness = 0.9f;
+        roofs[i] = addBox(sc, roofCentre, roofHalf, sc->createPbrMaterial(rp));
+        // A PARTICLE SYSTEM in view (unlit: it samples no shadow map) and a DECAL on the ground under it (shaded on
+        // the surface it lies on).
+        ParticleSystemDesc pd;
+        pd.additive = true;
+        ParticleEmitterDesc em;
+        em.shape = ParticleEmitterShape::Box;
+        em.extents = Vec3(0.6f, 0.6f, 0.6f);
+        em.rate = 60.0f;
+        em.velocityMin = em.velocityMax = 0.0f;
+        em.ttlMin = em.ttlMax = 30.0f;
+        em.sizeWidth = em.sizeHeight = 0.3f;
+        pd.emitters.push_back(em);
+        const NodeId ps = sc->createNode();
+        enginetest::setNodePosition(sc, ps, Vec3(-1.0f, 1.2f, -2.0f));
+        CHECK(sc->setParticleSystem(ps, pd), "a particle system in view");
+        if (tga) {
+            const TextureId t = sc->loadDecalTexture("recv_decal_red.tga", DecalMap::Diffuse);
+            const NodeId dn = sc->createNode();
+            sc->setNodeTransform(dn, Vec3(1.0f, 0.0f, -2.0f), Quat(), Vec3(1, 1, 1));
+            DecalDesc dd;
+            dd.diffuse = t;
+            dd.width = dd.height = 1.5f;
+            dd.depth = 1.0f;
+            CHECK(t && sc->setDecal(dn, dd), "a decal on the ground in view");
+        }
+    }
+    // THE CAMERA LOOKS DOWN AT THE NEAR GROUND: most of the field's shadows fall outside the picture.
+    CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 3.0f, 3.0f), Vec3(0.0f, 0.0f, -3.0f));
+    a.view->setCamera(cam);
+    b.view->setCamera(cam);
+    enginetest::frames(gE, 40);
+    const auto same = [&](const char *what) {
+        Image ia, ib;
+        const bool read = a.view->readPixels(ia) && b.view->readPixels(ib);
+        size_t diff = 0;
+        if (read && ia.rgba.size() == ib.rgba.size())
+            for (size_t i = 0; i < ia.rgba.size(); ++i) diff += ia.rgba[i] != ib.rgba[i] ? 1u : 0u;
+        else
+            diff = size_t(-1);
+        if (diff) std::printf("   %s: %zu bytes differ\n", what, diff);
+        return read && diff == 0;
+    };
+    CHECK(same("control"), "CONTROL: both worlds with the receiver test, the pictures bit-equal (a deterministic fixture)");
+    b.scene->setShadowReceiverCull(false);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
+    unsigned long long ta = 0ull, tb = 0ull;
+    unsigned tested = 0u, testedOff = 0u;
+    for (const AtomCasterMapStats &m : sa.casterPerMap)
+        if (m.kind == 0u) { ta += m.triangles; tested += m.receiverTested ? 1u : 0u; }
+    for (const AtomCasterMapStats &m : sb.casterPerMap)
+        if (m.kind == 0u) { tb += m.triangles; testedOff += m.receiverTested ? 1u : 0u; }
+    std::printf("   sun maps' Atom caster triangles: %llu with the receiver test, %llu without (maps tested %u / %u)\n",
+                ta, tb, tested, testedOff);
+    CHECK_MSG(tested >= 3u && testedOff == 0u, "the receiver test ran on the three sun maps of one world only (%u / %u)",
+              tested, testedOff);
+    CHECK_MSG(ta < tb, "IT CUTS: fewer caster triangles with the receiver test (%llu < %llu)", ta, tb);
+    CHECK(same("at rest"), "AT REST THE PICTURE IS BIT-EQUAL with the receiver test on and off");
+    // IN MOTION: the roof slides off, then the camera pans.
+    unsigned steps = 0, equal = 0;
+    for (int i = 0; i < 12; ++i) {
+        roofCentre.x += 1.0f;
+        for (int k = 0; k < 2; ++k) ws[k]->scene->setNodeTransform(roofs[k], roofCentre, Quat(), Vec3(1, 1, 1));
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("slide") ? 1u : 0u;
+    }
+    for (int i = 0; i < 8; ++i) {
+        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(0.5f * float(i + 1), 3.0f, 3.0f - 0.6f * float(i + 1)),
+                                                            Vec3(0.3f * float(i + 1), 0.0f, -3.0f - 0.8f * float(i + 1)));
+        a.view->setCamera(c2);
+        b.view->setCamera(c2);
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("pan") ? 1u : 0u;
+    }
+    CHECK_MSG(equal == steps, "IN MOTION the picture is bit-equal every frame of a slide and a pan (%u of %u)", equal, steps);
+    framesOut = a.scene->published().frame;   // the engine's frame count: every frame of this process
+    gE->destroyView(a.view);
+    gE->destroyScene(a.scene);
+    gE->destroyView(b.view);
+    gE->destroyScene(b.scene);
+    return 0;
+}
+
 static int lightCullMain()
 {
     std::printf("== shadow.caster_cull: the sun maps' casters culled by the light's own depth, the maps unchanged\n");
@@ -826,6 +952,8 @@ static int lightCullMain()
     const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
     Vec3 roofCentre(1.0f, 6.0f, -15.0f);
     const NodeId roof = addBox(w.scene, roofCentre, roofHalf, rm);
+    // THE LIGHT-DEPTH LAWS ARE ABOUT THE WHOLE MAP: the receiver test (stage 4b, the section after) is off here.
+    w.scene->setShadowReceiverCull(false);
     // A PLANAR MIRROR in front of the camera (decision 16.5): its node's sun maps ride the same cull and are
     // compared with the view's.
     const NodeId mirror = addBox(w.scene, Vec3(0.0f, 0.02f, -2.0f), Vec3(2.0f, 0.01f, 2.0f), rm);
@@ -991,10 +1119,12 @@ static int lightCullMain()
     CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
               lateDrawn);
     gE->setArm("shadow.casterCull", 1.0);
-    std::printf("\n   frames rendered: %llu\n", w.scene->published().frame);
     gE->destroyView(w.view);
     gE->destroyScene(w.scene);
-    return 0;
+    unsigned long long frames = 0ull;
+    const int rc = receiverSection(frames);
+    std::printf("\n   frames rendered: %llu\n", frames);
+    return rc;
 }
 
 int main(int argc, char **argv)

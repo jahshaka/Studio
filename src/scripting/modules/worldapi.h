@@ -63,6 +63,8 @@ public:
     Q_INVOKABLE QVariantList shadowCasterRoutes();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
+    /// THE SUN MAPS' RECEIVER TEST'S MEASURING DOOR (ENGINE-UPGRADE-U5 stage 4b).
+    Q_INVOKABLE bool setShadowReceiverCull(bool on);
     Q_INVOKABLE bool setAtomOcclusion(bool on);
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
