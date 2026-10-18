@@ -343,7 +343,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     scale.gpu_coverage
     # ENGINE-UPGRADE-U4 stage 1: the render thread's CPU phases at 10k nodes (the drain, the sun trace, the GPU
     # scene's compose) — milliseconds of CPU by design, and over a fixture's budget by price (a 10k world's settle).
-    frame.drain_cost_10k gi.trace_sun_cost engine.gpuscene_compose)
+    frame.drain_cost_10k gi.trace_sun_cost engine.gpuscene_compose
+    # ENGINE-UPGRADE-U4 stage 5: the mirror's extract with 10k nodes moving (milliseconds of CPU, by hand).
+    mirror.extract_movers_10k)
 # THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
 # resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
 # time holds the card (scripts/gpu-exclusive.sh), and inside it ctest keeps each class to its width.
