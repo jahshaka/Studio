@@ -353,6 +353,14 @@ int main(int argc, char **argv)
     GatherTuning shipped;
     shipped.readback = true;
     shipped.restOff = true;
+    // MEASURE (ENGINE-UPGRADE-U5 decision 20): a CANDIDATE reconstruction as the "shipped" arm - the grid's common
+    // jitter (--candidate-common) and the filter off beside it (--candidate-common-nofilter) - against the same
+    // pre-lane estimator, by hand; the row runs the shipped one.
+    const bool candCommon = argc > 1 && (std::strcmp(argv[1], "--candidate-common") == 0 ||
+                                         std::strcmp(argv[1], "--candidate-common-nofilter") == 0);
+    const bool candNoFilter = argc > 1 && std::strcmp(argv[1], "--candidate-common-nofilter") == 0;
+    if (candCommon) shipped.jitterCommon = true;
+    if (candNoFilter) shipped.filterOff = true;
     if (swapArms) {
         std::printf("   --swap-arms: the arms' roles exchanged (the bar's own proof: this run must FAIL)\n");
         std::swap(preLane, shipped);

@@ -835,6 +835,75 @@ static bool writeSolidTga(const std::string &path, unsigned char r, unsigned cha
     return true;
 }
 
+/// A RIGGED COLUMN (decision 19.5; atom.cpu_walks' rig): two 0.4 x 1 x 0.4 m boxes, the lower on the root bone, the
+/// upper on the tip bone at 1 m, and a clip that bends the tip 90 degrees - posed at the clip's end the upper box lies
+/// OUTSIDE the mesh's bind-pose box, which is the box the GPU scene carries.
+static void addRigBox(MeshData &d, float x0, float x1, float y0, float y1, float z0, float z1, unsigned char bone)
+{
+    auto quad = [&](const float q[4][3], const float n[3]) {
+        const unsigned base = unsigned(d.positions.size() / 3u);
+        for (int k = 0; k < 4; ++k) {
+            d.positions.insert(d.positions.end(), { q[k][0], q[k][1], q[k][2] });
+            d.normals.insert(d.normals.end(), { n[0], n[1], n[2] });
+            d.uvs.insert(d.uvs.end(), { float(k & 1), float(k >> 1) });
+            d.blendIndices.insert(d.blendIndices.end(), { bone, 0, 0, 0 });
+            d.blendWeights.insert(d.blendWeights.end(), { 1.0f, 0.0f, 0.0f, 0.0f });
+        }
+        d.indices.insert(d.indices.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+    };
+    const float fz[4][3] = { { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } };
+    const float bz[4][3] = { { x1, y0, z0 }, { x0, y0, z0 }, { x0, y1, z0 }, { x1, y1, z0 } };
+    const float px[4][3] = { { x1, y0, z1 }, { x1, y0, z0 }, { x1, y1, z0 }, { x1, y1, z1 } };
+    const float nx[4][3] = { { x0, y0, z0 }, { x0, y0, z1 }, { x0, y1, z1 }, { x0, y1, z0 } };
+    const float py[4][3] = { { x0, y1, z1 }, { x1, y1, z1 }, { x1, y1, z0 }, { x0, y1, z0 } };
+    const float ny[4][3] = { { x0, y0, z0 }, { x1, y0, z0 }, { x1, y0, z1 }, { x0, y0, z1 } };
+    const float nFz[3] = { 0, 0, 1 }, nBz[3] = { 0, 0, -1 }, nPx[3] = { 1, 0, 0 }, nNx[3] = { -1, 0, 0 },
+                nPy[3] = { 0, 1, 0 }, nNy[3] = { 0, -1, 0 };
+    quad(fz, nFz); quad(bz, nBz); quad(px, nPx); quad(nx, nNx); quad(py, nPy); quad(ny, nNy);
+}
+static bool addSwungColumn(Scene *s, const Vec3 &at, MaterialId m)
+{
+    MeshData d;
+    addRigBox(d, -0.2f, 0.2f, 0.0f, 1.0f, -0.2f, 0.2f, 0);
+    addRigBox(d, -0.2f, 0.2f, 1.0f, 2.0f, -0.2f, 0.2f, 1);
+    SkeletonDesc rig;
+    rig.id = "shadow.caster_cull swung column v1";
+    BoneDesc root;
+    root.name = "root";
+    rig.bones.push_back(root);
+    BoneDesc tip;
+    tip.name = "tip";
+    tip.parent = 0;
+    tip.bindPosition = Vec3(0.0f, 1.0f, 0.0f);
+    rig.bones.push_back(tip);
+    ClipDesc c;
+    c.id = rig.id + " / swing";
+    c.name = "Swing";
+    c.length = 1.0f;
+    BoneTrack t;
+    t.bone = 1;
+    for (int i = 0; i <= 2; ++i) {
+        BoneKey k;
+        k.time = 0.5f * float(i);
+        k.position = Vec3(0.0f, 1.0f, 0.0f);
+        const float a = -1.5707963f * k.time;
+        k.rotation = Quat(0.0f, 0.0f, std::sin(0.5f * a), std::cos(0.5f * a));
+        t.keys.push_back(k);
+    }
+    c.tracks.push_back(t);
+    const NodeId n = s->createNode();
+    const MeshId mesh = s->createMesh(d);
+    if (!s->attachSkinnedMesh(n, mesh, m, rig) || !s->attachClips(n, &c, 1)) return false;
+    enginetest::setNodePosition(s, n, at);
+    ClipState st;
+    st.name = "Swing";
+    st.enabled = true;
+    st.time = 1.0f;   // the clip's end: the tip lies along +x, out of the bind pose's box
+    st.weight = 1.0f;
+    st.looping = false;
+    return s->setClipStates(n, &st, 1);
+}
+
 /// THE RECEIVER TEST'S LAW (stage 4b, decision 17): two lockstep worlds, the same roof and field, a particle
 /// system and a decal in view, the same camera every frame - one with the sun maps' receiver test, the other
 /// with it off (Scene::setShadowReceiverCull) - and THE PICTURES bit-equal (the maps themselves may differ where
@@ -880,6 +949,28 @@ static int receiverSection(unsigned long long &framesOut)
             dd.depth = 1.0f;
             CHECK(t && sc->setDecal(dn, dd), "a decal on the ground in view");
         }
+        // AN ALPHA-TESTED RECEIVER (decision 19.4): a cut-out plate on the stock route - the id pass does not draw
+        // it, so it is a receiver by its box - and A RIGGED COLUMN whose tip swings out of its bind-pose box
+        // (decision 19.5: the stock route's skinned receiver, its box grown to a sphere of twice its half-diagonal),
+        // each with an Atom block above it toward the sun so their own shadows fall on them.
+        PbrParams cp;
+        cp.albedo = Colour(0.8f, 0.8f, 0.7f);
+        cp.roughness = 0.8f;
+        cp.alphaMode = PbrAlphaMode::Cutout;
+        cp.alphaCutoff = 0.5f;
+        addBox(sc, Vec3(2.2f, 0.6f, -1.5f), Vec3(0.6f, 0.02f, 0.6f), sc->createPbrMaterial(cp));
+        PbrParams sp;
+        sp.albedo = Colour(0.7f, 0.6f, 0.5f);
+        sp.roughness = 0.7f;
+        CHECK(addSwungColumn(sc, Vec3(-2.4f, 0.0f, -1.5f), sc->createPbrMaterial(sp)),
+              "a rigged column, its tip swung out of its bind pose");
+        PbrParams bp;
+        bp.albedo = Colour(0.4f, 0.4f, 0.45f);
+        bp.roughness = 0.9f;
+        const MaterialId bm = sc->createPbrMaterial(bp);
+        // toward the sun from each receiver (the fixture's sun: light travelling -0.45, -0.8, -0.4)
+        addBox(sc, Vec3(2.2f + 0.56f, 0.6f + 1.0f, -1.5f + 0.5f), Vec3(0.25f, 0.05f, 0.25f), bm);
+        addBox(sc, Vec3(-2.4f + 1.5f + 0.56f, 1.2f + 1.0f, -1.5f + 0.5f), Vec3(0.25f, 0.05f, 0.25f), bm);
     }
     // THE CAMERA LOOKS DOWN AT THE NEAR GROUND: most of the field's shadows fall outside the picture.
     CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 3.0f, 3.0f), Vec3(0.0f, 0.0f, -3.0f));
@@ -913,7 +1004,18 @@ static int receiverSection(unsigned long long &framesOut)
               tested, testedOff);
     CHECK_MSG(ta < tb, "IT CUTS: fewer caster triangles with the receiver test (%llu < %llu)", ta, tb);
     CHECK(same("at rest"), "AT REST THE PICTURE IS BIT-EQUAL with the receiver test on and off");
-    // IN MOTION: the roof slides off, then the camera pans.
+    // EVERY STEP RAN THE TEST (decision 19.4): the receiver test on the sun maps of world a, never of world b.
+    unsigned testedSteps = 0;
+    const auto testedNow = [&]() {
+        unsigned on = 0u, off = 0u;
+        for (const AtomCasterMapStats &m : a.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u) on += m.receiverTested ? 1u : 0u;
+        for (const AtomCasterMapStats &m : b.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u) off += m.receiverTested ? 1u : 0u;
+        return on >= 3u && off == 0u;
+    };
+    // IN MOTION: the roof slides off, then the camera pans - the last steps along the field at a grazing pitch (the
+    // focused splits' windows long and narrow: map 2's x and y rows differ, decision 19.1).
     unsigned steps = 0, equal = 0;
     for (int i = 0; i < 12; ++i) {
         roofCentre.x += 1.0f;
@@ -921,17 +1023,34 @@ static int receiverSection(unsigned long long &framesOut)
         enginetest::frames(gE, 1);
         ++steps;
         equal += same("slide") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
     }
-    for (int i = 0; i < 8; ++i) {
-        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(0.5f * float(i + 1), 3.0f, 3.0f - 0.6f * float(i + 1)),
-                                                            Vec3(0.3f * float(i + 1), 0.0f, -3.0f - 0.8f * float(i + 1)));
+    for (int i = 0; i < 12; ++i) {
+        const CameraDesc c2 =
+            i < 8 ? enginetest::testCameraDescLookAt(Vec3(0.5f * float(i + 1), 3.0f, 3.0f - 0.6f * float(i + 1)),
+                                                     Vec3(0.3f * float(i + 1), 0.0f, -3.0f - 0.8f * float(i + 1)))
+                  : enginetest::testCameraDescLookAt(Vec3(0.0f, 1.2f, 4.0f), Vec3(0.2f * float(i - 8), 0.6f, -60.0f));
         a.view->setCamera(c2);
         b.view->setCamera(c2);
         enginetest::frames(gE, 1);
         ++steps;
         equal += same("pan") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
     }
-    CHECK_MSG(equal == steps, "IN MOTION the picture is bit-equal every frame of a slide and a pan (%u of %u)", equal, steps);
+    // THE WIDEST FILTER (decision 19.4): PCF 6 x 6, its 3-texel reach the dilation's first term.
+    gE->setShadowFilter(ShadowFilter::VerySoft);
+    for (int i = 0; i < 4; ++i) {
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("pcf 6x6") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
+    }
+    gE->setShadowFilter(ShadowFilter::Soft);
+    enginetest::frames(gE, 2);
+    CHECK_MSG(equal == steps, "IN MOTION the picture is bit-equal every frame of a slide, a pan, a grazing look along "
+              "the field and PCF 6 x 6 (%u of %u)", equal, steps);
+    CHECK_MSG(testedSteps == steps, "every one of those frames ran the receiver test on world a's sun maps and none of "
+              "world b's (%u of %u)", testedSteps, steps);
     framesOut = a.scene->published().frame;   // the engine's frame count: every frame of this process
     gE->destroyView(a.view);
     gE->destroyScene(a.scene);

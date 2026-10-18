@@ -52,6 +52,7 @@ public:
     /// under a screen rectangle — counts and mean radiance per source (the arm
     /// "gather.hitsReadback" on).
     Q_INVOKABLE QVariantMap gatherHits(const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QVariantMap gatherIrradiance(const QVariantMap &params = QVariantMap());
     /// ONE CASCADE'S STORE AT WORLD POINTS (FAR-SUN-1): the voxel texels a point falls in,
     /// read back whole (a test-and-tool readback, like giVoxelStats).
     Q_INVOKABLE QVariantMap giVoxelRead(const QVariantMap &params);

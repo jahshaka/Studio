@@ -8,7 +8,11 @@
 //      samples with their fields (a normal of three components), and off again it is not ready;
 //   3. world.giVoxelRead answers cascade 0's cell, origin and multiplier, and at the camera's
 //      point the texel's index and fields; a point outside the volume answers no index;
-//      a cascade that does not exist answers available: false.
+//      a cascade that does not exist answers available: false;
+//   4. world.gatherIrradiance (ENGINE-UPGRADE-U5 stage 5): not ready without the arm
+//      "gather.irradianceReadback", naming why; with it ready, the whole view's mean E/pi finite and
+//      positive where the gather answers, the rectangle's pixels counted; the reconstruction's arms
+//      "gather.jitter" (0..2) and "gather.filterOff" set and read back; off again it is not ready.
 // Frames, never time: the waits count editor.frame calls.
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -71,5 +75,32 @@ if (!gs.gather || !gs.gather.on) {
            "a point outside the volume answers no index");
     var none = world.giVoxelRead({ cascade: 99, points: [cam] });
     assert(none.available === false, "a cascade that does not exist answers available: false");
+
+    // ---- 4. the gather's answer ---------------------------------------------------------
+    var i0 = world.gatherIrradiance();
+    assert(i0.ready === false && typeof i0.reason === "string" && i0.reason.length > 0,
+           "without the arm world.gatherIrradiance is not ready, naming why (" + i0.reason + ")");
+    assert(engine.arm("gather.irradianceReadback", 1) === 1, "the arm gather.irradianceReadback is set");
+    var ir = null;
+    for (var k = 0; k < 40 && !(ir && ir.ready); ++k) { editor.frame(2); ir = world.gatherIrradiance(); }
+    assert(ir && ir.ready === true, "with the arm world.gatherIrradiance is ready");
+    ["frame", "width", "height", "pixels", "answered", "irradiance"].forEach(
+        function (k2) { assert(ir[k2] !== undefined, "world.gatherIrradiance answers '" + k2 + "'"); });
+    assert(ir.pixels === ir.width * ir.height && ir.answered > 0 && ir.answered <= 1,
+           "the whole view's pixels are counted and some answered (" + ir.pixels + ", " + ir.answered.toFixed(3) + ")");
+    assert(isFinite(ir.irradiance.r) && ir.irradiance.r + ir.irradiance.g + ir.irradiance.b > 0,
+           "the answered pixels' mean E/pi is finite and lit (" + J(ir.irradiance) + ")");
+    var half = world.gatherIrradiance({ x: 0, y: 0, w: 0.5, h: 1 });
+    assert(half.ready === true && Math.abs(half.pixels - ir.pixels / 2) <= ir.height,
+           "a half-view rectangle counts half the pixels (" + half.pixels + " of " + ir.pixels + ")");
+    assert(engine.arm("gather.jitter", 2) === 2 && engine.arm("gather.filterOff", 1) === 1,
+           "the reconstruction's arms gather.jitter and gather.filterOff are set");
+    editor.frame(4);
+    assert(world.gatherIrradiance().ready === true, "the gather answers under the arms");
+    engine.arm("gather.jitter", 0);
+    engine.arm("gather.filterOff", 0);
+    engine.arm("gather.irradianceReadback", 0);
+    editor.frame(4);
+    assert(world.gatherIrradiance().ready === false, "the arm off: world.gatherIrradiance is not ready again");
 }
 "ok";

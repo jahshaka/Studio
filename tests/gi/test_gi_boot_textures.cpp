@@ -43,6 +43,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -178,6 +179,31 @@ int main()
               "voxelised twice (the base build reads two per cascade here)");
         CHECK(o.cascadeFullRebuilds == 0, "...with no cascade dragged in by the teleport guard");
         CHECK(o.cascadeDeferrals == 0, "...and no frame left a rebuild owed");
+        // THE BASE'S VOXEL CONTENT AFTER THE REFRESH (BOOT-TEXTURES-GUARD-1, ENGINE-UPGRADE-U5 stage 6): the count
+        // tells the arms apart, the CONTENT says the build read the texture - an arm voxelised before the pixels
+        // arrived whose material generation did not move would pass the count with the untextured albedo. The
+        // ground's top voxel under the camera holds the material's albedo times the texture's: 0.8 x the sRGB
+        // grey 200 decoded (0.578) = 0.462 - the untextured ground reads 0.8. Bar: two RGBA8 quanta.
+        {
+            GiVoxelVolume v;
+            const bool got = scene->giVoxelVolume(0, v) && v.available && !v.albedo.empty();
+            CHECK(got, "cascade 0's voxels read back");
+            if (got) {
+                // the ground's top under the cascade's centre (the ground spans 40 m: inside every cascade)
+                const int cx = v.width / 2;
+                const int cy = int(std::floor((-0.01f - v.origin[1]) / v.cell[1]));
+                const int cz = v.depth / 2;
+                const bool inside = cy >= 0 && cy < v.height;
+                CHECK(inside, "the ground's top lies inside cascade 0");
+                const size_t i = inside ? 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz))) : 0u;
+                const double c = 200.0 / 255.0;
+                const double want = 0.8 * (c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4));
+                CHECK_MSG(inside && std::fabs(double(v.albedo[i]) - want) <= 2.0 / 255.0,
+                          "THE BASE HOLDS THE TEXTURED ALBEDO after the refresh: the ground's voxel reads %.4f "
+                          "(want %.4f = 0.8 x the texture's 0.578; the untextured ground reads 0.8)",
+                          double(v.albedo[i]), want);
+            }
+        }
         Image img;
         CHECK(view->readPixels(img), "the view reads back");
         GiParams down; down.mode = GiMode::Off;

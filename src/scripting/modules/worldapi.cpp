@@ -400,6 +400,15 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'sunlitUp', 'shadedUp' and 'other' split the HITS by what they landed on: an upward-facing surface (the hit normal's y above 0.7) where the hit's own sun ray reached the sun, one where it did not, and everything else — each {count, sources: {name: {count, luminance}}}: the reading that says what a ray on the sunlit street returned and who answered it. "
           "'probes' is how many probes the rectangle held and 'rays' the rays counted; 'frame' which gather frame it is of. {rays: N} also returns the first N counted rays one by one as 'samples' — {source, cascade, cell, radiance [r, g, b], distance, hit [x, y, z] (half precision), normal [x, y, z] (the hit's geometric normal, snorm8; zero for a far hit, which names no triangle), sun} — for a caller that classifies the hits itself (a document raycast at each hit).",
           Needs::Document },
+        { "gatherIrradiance", "world.gatherIrradiance({x, y, w, h}) -> {ready, frame, width, height, pixels, answered, irradiance}",
+          "THE SCREEN-PROBE GATHER'S ANSWER, AS NUMBERS — the diffuse irradiance E/pi the gather hands the pixels of a "
+          "rectangle {x, y, w, h} (fractions of the view, the whole view by default), the mean over the pixels it answered, "
+          "{r, g, b} in 'irradiance'; 'answered' the share of the rectangle's pixels it answered and 'pixels' how many the "
+          "rectangle holds. An INSTRUMENT: the answer is copied to the host only while the arm is on - "
+          "engine.arm('gather.irradianceReadback', 1), then a frame - and the verb answers {ready: false, reason} otherwise. "
+          "'frame' is which gather frame it is of (a still view's rest repeats one). A TOOL's reading (the reconstruction's "
+          "arms engine.arm('gather.jitter') and engine.arm('gather.filterOff') measured on a scene), never a document's.",
+          Needs::Document },
         { "giVoxelRead", "world.giVoxelRead({cascade, points: [{x, y, z}, ...]}) -> {available, cascade, cell, origin, multiplier, points: [{index, light, radiance, back, albedo, normal, coverageP, coverageN}]}",
           "ONE CASCADE'S STORE AT WORLD POINTS — the voxel texel each point falls in, as it is STORED (before any read's kernel). A TEST AND TOOL verb: the renderer flushes and downloads the cascade's level-0 volumes whole (like world.giVoxelStats). Per point: 'index' [i, j, k] (null outside the cascade), 'light' the total light texel [r, g, b, a] in the store's units (premultiplied by the voxel's opacity a, times 'multiplier'), 'radiance' the surface radiance it stands for (rgb / a / multiplier), 'back' the same for the voxel's back side, 'albedo' [r, g, b, opacity], 'normal' the voxeliser's normal [x, y, z biased 0.5 + 0.5 n, 1 = two-sided], 'coverageP' / 'coverageN' the per-axis coverage of the faces looking +a / -a. 'cell' and 'origin' are the cascade's lattice in metres.",
           Needs::Document },
@@ -1921,6 +1930,52 @@ QVariantMap WorldApi::giVoxelStats(const QVariantMap &params)
                         { QStringLiteral("emissiveAboveOne"), double(st.emissiveAboveOne) },
                         { QStringLiteral("lightDigest"), st.lightDigest },
                         { QStringLiteral("storeDigest"), st.storeDigest } };
+}
+
+QVariantMap WorldApi::gatherIrradiance(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.gatherIrradiance"));
+    if (!scene) return QVariantMap();
+    jahshaka::engine::Scene *es =
+        (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
+    if (!es)
+        return QVariantMap{ { QStringLiteral("ready"), false },
+                            { QStringLiteral("reason"), QStringLiteral("no engine viewport") } };
+    const jahshaka::engine::GatherStatus &g = es->published().gi.gather;   // the last frame's
+    if (g.irradiance.empty() || !g.irradianceW || !g.irradianceH ||
+        g.irradiance.size() < size_t(g.irradianceW) * g.irradianceH * 4u)
+        return QVariantMap{ { QStringLiteral("ready"), false },
+                            { QStringLiteral("reason"),
+                              g.running ? QStringLiteral("no answer copied yet: engine.arm('gather.irradianceReadback', 1), "
+                                                         "then render a frame")
+                                        : QStringLiteral("the screen-probe gather is not running on this view") } };
+    const double rx = std::clamp(params.value(QStringLiteral("x"), 0.0).toDouble(), 0.0, 1.0);
+    const double ry = std::clamp(params.value(QStringLiteral("y"), 0.0).toDouble(), 0.0, 1.0);
+    const double rw = std::clamp(params.value(QStringLiteral("w"), 1.0).toDouble(), 0.0, 1.0 - rx);
+    const double rh = std::clamp(params.value(QStringLiteral("h"), 1.0).toDouble(), 0.0, 1.0 - ry);
+    const unsigned x0 = unsigned(rx * g.irradianceW), y0 = unsigned(ry * g.irradianceH);
+    const unsigned x1 = std::min(g.irradianceW, unsigned(std::ceil((rx + rw) * g.irradianceW)));
+    const unsigned y1 = std::min(g.irradianceH, unsigned(std::ceil((ry + rh) * g.irradianceH)));
+    double sum[3] = { 0.0, 0.0, 0.0 };
+    unsigned pixels = 0, answered = 0;
+    for (unsigned y = y0; y < y1; ++y)
+        for (unsigned x = x0; x < x1; ++x) {
+            const float *v = &g.irradiance[(size_t(y) * g.irradianceW + x) * 4u];
+            ++pixels;
+            if (!(v[3] > 0.0f)) continue;
+            ++answered;
+            for (int c = 0; c < 3; ++c) sum[c] += double(v[c]);
+        }
+    const double inv = answered ? 1.0 / double(answered) : 0.0;
+    return QVariantMap{ { QStringLiteral("ready"), true },
+                        { QStringLiteral("frame"), qulonglong(g.irradianceFrame) },
+                        { QStringLiteral("width"), g.irradianceW },
+                        { QStringLiteral("height"), g.irradianceH },
+                        { QStringLiteral("pixels"), pixels },
+                        { QStringLiteral("answered"), pixels ? double(answered) / double(pixels) : 0.0 },
+                        { QStringLiteral("irradiance"), QVariantMap{ { QStringLiteral("r"), sum[0] * inv },
+                                                                     { QStringLiteral("g"), sum[1] * inv },
+                                                                     { QStringLiteral("b"), sum[2] * inv } } } };
 }
 
 QVariantMap WorldApi::gatherHits(const QVariantMap &params)
