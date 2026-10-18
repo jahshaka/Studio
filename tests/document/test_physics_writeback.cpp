@@ -270,6 +270,8 @@ void run(int checkEvery)
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
+    // THE SHIPPED WORLD (U4 stage 6): Bullet's multi-threaded world, this thread its game thread, as the app binds it.
+    iris::Environment::bindGameThread(4);
     enginetest::DocumentGraph graph("physics-writeback-ogre.log");
     if (!graph.ok()) { std::printf("FAIL: no document graph\n"); return 1; }
     run(2);

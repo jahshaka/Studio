@@ -184,15 +184,15 @@ static int composeIdentityArm()
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     unsigned long long step = 0;
-    const auto record = [&](int pose) {
+    const auto record = [&](int pose, bool send = true) {
         FrameInput in;
         in.frameDelta = 1.0f / 60.0f;
-        in.stepSerial = ++step;
+        in.stepSerial = send ? ++step : step;   // a frame that sends nothing is no new step (it would interpolate)
         in.stepPeriod = 1.0f / 60.0f;
         FrameInputScene part;
         part.scene = scene;
         part.gi = gi;
-        for (int i = 0; i < kCubes; ++i) {
+        for (int i = 0; send && i < kCubes; ++i) {
             NodeRecord r;
             r.id = cubes[size_t(i)];
             r.fields = NodeRecord::Trs;
@@ -216,7 +216,9 @@ static int composeIdentityArm()
     // digests of a parity class — the staged rows, the tails and the observers' notifies, in their order — must all be
     // equal, serial against parallel against recovered.
     const int pattern[10] = { 1, 1, 0, 0, 0, 0, 0, 0, 1, 1 };
-    const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 0, 0, 0 };   // share + 1 (9 = the frame thread's share 8)
+    // share + 1 (9 = the frame thread's share 8) throws before its first stage; 17 + share throws AFTER it (decision
+    // 22.4 a: the row staged, its tail and lane halves not collected — the redo starts the share over, the row kept).
+    const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 20, 0, 0 };
     unsigned long long digest[10] = {}, recomposes[10] = {};
     unsigned composed[10] = {}, shares[10] = {}, atoms[10] = {}, queues[10] = {};
     for (int f = 0; f < 10; ++f) {
@@ -237,7 +239,9 @@ static int composeIdentityArm()
     for (int f = 0; f < 10; ++f)
         std::printf("   frame %d (%s%s): %u slots composed on %u shares, tails %u atom / %u queued, recomposes %llu, "
                     "digest %016llx\n", f, pattern[f] ? "serial" : "parallel",
-                    throwAt[f] ? (throwAt[f] == 9 ? ", the frame thread's share throws" : ", a worker's share throws") : "",
+                    throwAt[f] ? (throwAt[f] == 9 ? ", the frame thread's share throws"
+                                                  : throwAt[f] > 16 ? ", a worker's share throws after its stage"
+                                                                    : ", a worker's share throws") : "",
                     composed[f], shares[f], atoms[f], queues[f], recomposes[f], digest[f]);
     for (int f = 0; f < 10; ++f)
         if (!pattern[f])
@@ -247,11 +251,43 @@ static int composeIdentityArm()
         CHECK(digest[f] == digest[f % 2], "frame %d (%s) folds what frame %d (serial) folded: the same rows, tails and "
               "notifies in the same order (%016llx / %016llx)", f, pattern[f] ? "serial" : "parallel", f % 2, digest[f],
               digest[f % 2]);
-    CHECK(recomposes[4] == recomposes[3] + 1u && recomposes[5] == recomposes[4] + 1u && recomposes[9] == recomposes[5],
-          "each throw recomposed its one share on the frame's thread, and nothing after it (%llu, %llu, %llu)",
-          recomposes[3], recomposes[4], recomposes[5]);
-    CHECK(digest[6] == digest[0] && digest[7] == digest[1], "...and the frames after the throws composed whole: every "
-          "barrier paired");
+    CHECK(recomposes[4] == recomposes[3] + 1u && recomposes[5] == recomposes[4] + 1u && recomposes[6] == recomposes[5] &&
+          recomposes[7] == recomposes[6] + 1u && recomposes[9] == recomposes[7],
+          "each throw recomposed its one share on the frame's thread, and nothing after it (%llu, %llu, %llu, %llu)",
+          recomposes[3], recomposes[4], recomposes[5], recomposes[7]);
+    CHECK(digest[6] == digest[0] && digest[8] == digest[0] && digest[9] == digest[1], "...and the frames after the throws "
+          "composed whole: every barrier paired");
+
+    // THE SHARE THAT THROWS EVERY TIME (decision 22.4 b): share 3 throws in its lane AND in the frame thread's redo on
+    // frame 10 (pose 0). The frame says so, every other share's replay runs, and the share's slots are owed to the next
+    // compose (MARKED: a frame nothing moves in runs no walk, so a name would wait): frame 11 sends NOTHING and is no
+    // new step — only the marks compose there (to pose 0) — and frames 12 (pose 1) and 13 (pose 0) fold exactly what
+    // frames 1 and 0 folded: the table caught up. (Unmarked, the share's slots keep pose 1 in the table while Ogre holds
+    // pose 0; frame 12's compare then finds them equal and frame 12 folds 910 slots, not 1024 — measured with names.)
+    const unsigned long long giveUps0 = echo->gpuWalk().shareGiveUps;
+    e->setArm("gpuscene.composeDigest", 1.0);
+    record(1);   // from pose 1: frame 10's pose 0 moves every slot
+    e->setArm("gpuscene.throwInLane", 36.0);   // 33 + share 3
+    record(0);
+    const inspect::SceneEcho::GpuWalk g10 = echo->gpuWalk();
+    const std::string err10 = e->published().frameError;
+    e->setArm("gpuscene.throwInLane", 0.0);
+    record(0, false);
+    record(1);
+    const unsigned long long d12 = echo->gpuWalk().composeDigest;
+    record(0);
+    const unsigned long long d13 = echo->gpuWalk().composeDigest;
+    e->setArm("gpuscene.composeDigest", 0.0);
+    std::printf("   frame 10 (share 3 throws every time): %u composed, give-ups %llu -> %llu; the frame's error: %s\n"
+                "   frame 11 (nothing sent, no step: nothing moves, no walk runs — only the marks compose); frames 12 / 13 "
+                "digests %016llx / %016llx\n", g10.slotsComposed, giveUps0, g10.shareGiveUps, err10.c_str(), d12, d13);
+    CHECK(g10.shareGiveUps == giveUps0 + 1u, "the share that threw twice gave up once (%llu -> %llu)", giveUps0,
+          g10.shareGiveUps);
+    CHECK(err10.find("again on the frame's thread") != std::string::npos, "...and the frame said so");
+    CHECK(g10.slotsComposed > 0u && g10.slotsComposed < unsigned(kCubes), "...while every other share composed "
+          "(%u of %d)", g10.slotsComposed, kCubes);
+    CHECK(d12 == digest[1] && d13 == digest[0], "...and the table caught up: frames 12 and 13 fold what frames 1 and 0 "
+          "folded (%016llx / %016llx)", d12, d13);
     view->setScene(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);

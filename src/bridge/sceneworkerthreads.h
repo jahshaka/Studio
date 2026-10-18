@@ -6,7 +6,8 @@
 // Every SceneManager forks its culling, render-queue building and object
 // updates across ITS OWN pool and joins them on a barrier — pools are not
 // shared between scenes. Studio's createScene calls used to take the engine's
-// hardcoded 2 for all of them, which on a 16-core box drew the editor on two
+// hardcoded 2 for all of them, which on the owner's box (10 cores / 20 hardware
+// threads) drew the editor on two
 // threads while a thumbnail scene, a material-preview scene, an asset-preview
 // scene and an avatar-preview scene each held two more they never needed.
 //
@@ -42,7 +43,7 @@
 // THE CAP IS MEASURED, NOT GUESSED. More threads is not free — the barrier
 // costs at every parallel pass, so at small scene sizes extra threads make the
 // frame SLOWER. bench_scenegraph --threads N is the instrument; the numbers
-// behind the 8 are in the perf wave's report (Debug build, 16-core box, scenes
+// behind the 8 are in the perf wave's report (Debug build, a 20-thread box, scenes
 // of 1k / 10k / 50k nodes: 8 threads is where the 10k and 50k idle-tick gains
 // stop growing, and 1k is flat rather than worse).
 //
@@ -100,6 +101,28 @@ inline unsigned count(Tier tier)
     case Tier::MainThread: return jahshaka::engine::kSceneMainThreadOnly;
     }
     return 2u;
+}
+
+/// THE PHYSICS STEP'S THREADS (ENGINE-UPGRADE-U4 stage 6, decision 23): Bullet's own task scheduler, sized from the
+/// ONE core budget, the game thread included (it runs jobs during the step). The box's hardware threads, minus the
+/// threads that run beside the step and are not Bullet's: the game thread's own place is Bullet's thread 0, so it is
+/// counted in the share; the render thread; the dedicated ones (the shader-cache writer, the texture loader, Ogre's
+/// streaming thread, the texture multiload); and the primary tier's pool (Ogre's SceneManager workers, whose frame
+/// work runs on the render thread's timeline WHILE the game thread steps — the two overlap, so the split is fixed,
+/// never shared). On the 20-thread box: 20 - 1 (render) - 4 (dedicated) - 8 (Ogre's pool) = 7 = the game thread + 6
+/// workers. JAHSHAKA_PHYSICS_THREADS overrides it, the same measurement escape hatch as JAHSHAKA_SCENE_THREADS.
+/// MEASURED (physics.step_overlap, Debug, 2026-10-18): a free-running engine's pool spans cover 22-35 % of the step's
+/// time and every step meets one — the two do overlap, so the split is fixed. (physics.step_cost: a 10,000-body pile
+/// steps in 279 ms on one thread, 218 on 7 — one toppled island solves on one thread, so past 4 threads the step
+/// barely moves; 500 bodies in separate islands, 10.0 -> 6.2 ms.)
+inline int physicsThreads()
+{
+    bool ok = false;
+    const int forced = qEnvironmentVariableIntValue("JAHSHAKA_PHYSICS_THREADS", &ok);
+    if (ok && forced > 0) return std::clamp(forced, 1, 32);
+    constexpr int kRenderThread = 1, kDedicatedThreads = 4;
+    const int hardware = std::max(1, QThread::idealThreadCount());
+    return std::max(1, hardware - kRenderThread - kDedicatedThreads - int(count(Tier::Primary)));
 }
 
 }   // namespace sceneworkers

@@ -295,8 +295,11 @@ set_tests_properties(mirror.settle_incremental PROPERTIES JAHSHAKA_TEST_FRAMES 0
 # mirror.extract_movers — THE MIRROR'S EXTRACT WITH EVERY NODE MOVING (ENGINE-UPGRADE-U4 stage 5): each written node's
 # entry looked up once, the owed fields and the written stamp on the entry; the list degrades to the full walk and never
 # past it (2,000 cubes, the guard); and the settle's hole — a node reparented under a parent the running rotation had
-# passed is settled by the next rotation. mirror.extract_movers_10k (measure, by hand): the same at 10,000 cubes with
-# the stage's bar (100 % movers <= 12 ms).
+# passed is settled by the next rotation. The same movers IN PLAY (decision 22.1: a movable node's transform write is
+# the fast path's there too); the RECORDS ORACLE (22.3: a mixed last sync — a material swap, a mobility flip, a
+# reparent, a hidden mover — whose node records and moved list equal a full walk's over the same history, set and
+# contents); the dirty list's invariant (22.5: every listed node queued). mirror.extract_movers_10k (measure, by
+# hand): the same at 10,000 cubes with the stage's bar, edit and play (100 % movers <= 12 ms).
 add_executable(test_mirror_extract_movers test_mirror_extract_movers.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_mirror_extract_movers PROPERTIES

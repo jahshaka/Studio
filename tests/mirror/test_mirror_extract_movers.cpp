@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <map>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -66,6 +67,7 @@ static void build(Doc &d, Engine *engine, const char *label, int count, int rows
     }
     for (int i = 0; i < count; ++i) {
         auto m = iris::MeshNode::create();
+        m->setName(QStringLiteral("c%1").arg(i));
         m->setMesh(mesh);
         m->setMaterial(iris::PbrMaterial::create());
         m->setLocalPos(iris::Vec3(float(i % 100) * 1.1f - 55.0f, 0, float((i / 100) % 100) * 1.1f - 55.0f));
@@ -77,6 +79,96 @@ static void build(Doc &d, Engine *engine, const char *label, int count, int rows
     d.mirror->setVerifierBudget(0);   // the walk is measured, not the amortised verifier (mirror.scale's note)
     d.mirror->setSource(d.doc);
     d.mirror->sync();
+}
+
+// THE RECORDS ORACLE (decision 22.3): the latch-push count (verifyAgainstFullWalk) cannot see a record the dirty path
+// left out or wrote wrong — so the same history runs on two identical documents, the last sync DIRTY on one (the
+// fast path serving what it may) and a FULL WALK on the other, and the two syncs' node records and moved lists must
+// be the same set with the same contents, keyed by node name. The last sync is MIXED: every cube moved, and among
+// them a material swapped, a mobility flipped, a reparent and a hidden mover.
+struct TapRec { quint8 fields = 0; std::string parent; bool isStatic = false; float trs[10] = {}; };
+
+static std::map<std::string, TapRec> tapOf(const Doc &d, std::vector<std::string> &moved)
+{
+    std::map<jahshaka::engine::NodeId, std::string> names;
+    for (const auto &g : d.groups) names[d.mirror->engineNode(g.data())] = g->getName().toStdString();
+    for (const auto &c : d.cubes) names[d.mirror->engineNode(c.data())] = c->getName().toStdString();
+    std::map<std::string, TapRec> out;
+    for (const auto &r : d.mirror->lastNodeRecords()) {
+        TapRec t;
+        t.fields = r.fields;
+        if (r.fields & jahshaka::engine::NodeRecord::Parent) t.parent = names.count(r.parent) ? names[r.parent] : "<root>";
+        if (r.fields & jahshaka::engine::NodeRecord::Static) t.isStatic = r.isStatic;
+        if (r.fields & jahshaka::engine::NodeRecord::Trs) {
+            const float v[10] = { r.position.x, r.position.y, r.position.z, r.rotation.w, r.rotation.x, r.rotation.y,
+                                  r.rotation.z, r.scale.x, r.scale.y, r.scale.z };
+            std::copy(v, v + 10, t.trs);
+        }
+        out[names.count(r.id) ? names[r.id] : "<unnamed>"] = t;
+    }
+    moved.clear();
+    for (auto id : d.mirror->lastMovedList()) moved.push_back(names.count(id) ? names[id] : "<unnamed>");
+    std::sort(moved.begin(), moved.end());
+    return out;
+}
+
+static void recordsOracle(Engine *engine, bool play)
+{
+    const char *arm = play ? "play" : "edit";
+    Doc d[2];
+    build(d[0], engine, play ? "oracleP0" : "oracleE0", 400, 4);
+    build(d[1], engine, play ? "oracleP1" : "oracleE1", 400, 4);
+    float lift = 0.0f;
+    const auto history = [&](Doc &x, bool full) {
+        for (int i = 0; i < SceneMirror::kStaticSettleFrames * 6; ++i) x.mirror->sync();
+        if (play) { x.doc->setPlaying(true); x.mirror->sync(); }
+        for (int k = 0; k < 4; ++k) {
+            lift = lift > 0.0f ? 0.0f : 0.001f;
+            for (const auto &c : x.cubes) c->setLocalPos(c->getLocalPos() + iris::Vec3(0, lift > 0.0f ? lift : -0.001f, 0));
+            if (k < 3) { x.mirror->sync(); continue; }
+            // THE MIXED LAST SYNC: on top of every cube moved —
+            static_cast<iris::MeshNode *>(x.cubes[5].data())->setMaterial(iris::PbrMaterial::create());              // a material swapped on a mover
+            x.cubes[6]->setMobility(iris::Mobility::Static);                   // a mobility flipped
+            x.groups[2]->addChild(x.cubes[7]);                                 // a reparent
+            x.cubes[8]->setVisible(false);                                     // a hidden mover
+            x.mirror->setRecordTap(true);
+            if (full) x.mirror->requestFullWalk();
+            x.mirror->sync();
+            x.mirror->setRecordTap(false);
+        }
+    };
+    history(d[0], false);
+    const int served = d[0].mirror->fastPathServedCount();
+    lift = 0.0f;
+    history(d[1], true);
+    std::vector<std::string> movedDirty, movedFull;
+    const auto dirty = tapOf(d[0], movedDirty), full = tapOf(d[1], movedFull);
+    int missing = 0, extra = 0, differ = 0;
+    std::string first;
+    for (const auto &kv : full) {
+        const auto it = dirty.find(kv.first);
+        if (it == dirty.end()) { ++missing; if (first.empty()) first = "missing " + kv.first; continue; }
+        const TapRec &a = it->second, &b = kv.second;
+        if (a.fields != b.fields || a.parent != b.parent || a.isStatic != b.isStatic ||
+            !std::equal(a.trs, a.trs + 10, b.trs)) {
+            ++differ;
+            if (first.empty()) first = "differs " + kv.first;
+        }
+    }
+    for (const auto &kv : dirty) if (!full.count(kv.first)) { ++extra; if (first.empty()) first = "extra " + kv.first; }
+    std::printf("    %s: the mixed sync's records — dirty %zu (the fast path served %d), full walk %zu; moved %zu / %zu%s%s\n",
+                arm, dirty.size(), served, full.size(), movedDirty.size(), movedFull.size(), first.empty() ? "" : "; first: ",
+                first.c_str());
+    CHECK(full.size() >= 400u, "[%s] the full walk's records hold every moved cube (%zu)", arm, full.size());
+    CHECK(missing == 0 && extra == 0 && differ == 0, "[%s] THE RECORDS ORACLE: the dirty sync's node records are the "
+          "full walk's, set and contents (%d missing, %d extra, %d differ)", arm, missing, extra, differ);
+    CHECK(movedDirty == movedFull, "[%s] ...and its moved list is the full walk's (%zu vs %zu)", arm, movedDirty.size(),
+          movedFull.size());
+    const quint64 late = d[0].mirror->verifyAgainstFullWalk();
+    CHECK(late == 0, "[%s] the full walk after the mixed sync pushes nothing (%llu late)", arm, (unsigned long long)late);
+    CHECK(d[0].mirror->unqueuedDirtySlots() == 0, "[%s] the dirty list's invariant held: every listed node queued "
+          "(%llu not)", arm, (unsigned long long)d[0].mirror->unqueuedDirtySlots());
+    if (play) for (auto &x : d) { x.doc->setPlaying(false); x.mirror->sync(); }
 }
 
 int main(int argc, char **argv)
@@ -149,9 +241,51 @@ int main(int argc, char **argv)
         d.mirror->sync();
         const quint64 late = d.mirror->verifyAgainstFullWalk();
         CHECK(late == 0, "the full walk after the movers sync pushes nothing (%llu late)", (unsigned long long)late);
+        moveAll();
+        d.mirror->sync();
+        const int editServed = d.mirror->fastPathServedCount();
+        std::printf("    edit: the fast path served %d of %d written cubes\n", editServed, nodes);
         if (nodes >= 10000)
             CHECK(all <= 12.0, "THE STAGE'S BAR: 100%% movers <= 12 ms at %d nodes (%.3f)", nodes, all);
+
+        // ---- THE SAME MOVERS IN PLAY (decision 22.1) --------------------------------------------------------------
+        // The physics bodies' frame: play on, every cube written each sync. The play edge walks everything once; the
+        // first play write is the surprise mover's soft promotion (a VISIT — the one question a play write asks); from
+        // then on each cube is MOVABLE and its transform-only write is the fast path's, as in edit — the same bar.
+        d.doc->setPlaying(true);
+        d.mirror->sync();                    // the edge's full walk
+        moveAll(); d.mirror->sync();         // the soft promotions
+        const int promotedVisit = d.mirror->visitedCount() - d.mirror->fastPathServedCount();
+        for (int i = 0; i < 3; ++i) { moveAll(); timed(); }
+        std::vector<double> playMs;
+        std::vector<int> playServed;
+        for (int i = 0; i < 9; ++i) {
+            d.mirror->requestFullWalk(); timed();      // the same contention as the edit arm's interleave
+            moveAll(); playMs.push_back(timed()); playServed.push_back(d.mirror->fastPathServedCount());
+        }
+        const double play = med(playMs);
+        const int served = *std::min_element(playServed.begin(), playServed.end());
+        std::printf("    play: %d cubes, 100%% movers %7.3f ms (%.3f us/node); the promotion sync walked %d; the fast "
+                    "path served >= %d per movers sync\n", nodes, play, play * 1000.0 / double(nodes), promotedVisit,
+                    served);
+        CHECK(served == nodes, "in play the fast path serves every movable cube's write (%d of %d)", served, nodes);
+        moveAll();
+        d.mirror->sync();
+        const quint64 latePlay = d.mirror->verifyAgainstFullWalk();
+        CHECK(latePlay == 0, "in play the full walk after the movers sync pushes nothing (%llu late)",
+              (unsigned long long)latePlay);
+        if (nodes >= 10000)
+            CHECK(play <= 12.0, "THE STAGE'S BAR IN PLAY: 100%% movers <= 12 ms at %d nodes (%.3f)", nodes, play);
+        d.doc->setPlaying(false);
+        d.mirror->sync();
+        CHECK(d.mirror->unqueuedDirtySlots() == 0, "the dirty list's invariant held through both modes: every listed "
+              "node queued — the fast path's take cancelled its slot (%llu not)",
+              (unsigned long long)d.mirror->unqueuedDirtySlots());
     }
+
+    // ---- THE RECORDS ORACLE, ONCE PER RUN, BOTH MODES -----------------------------------------------------------------
+    recordsOracle(engine.get(), false);
+    recordsOracle(engine.get(), true);
 
     // ---- THE SETTLE'S HOLE: A REPARENT UNDER AN ALREADY-VISITED PARENT -----------------------------------------------
     {
