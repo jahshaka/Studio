@@ -530,12 +530,24 @@ static int scrollSlabMain()
             for (float x : *a) empty = empty && x == 0.0f;
         for (unsigned x : v.accumWeight) empty = empty && x == 0u;
         CHECK(empty, "...EMPTY: albedo, emissive, coverage, the area weight and the light all zero (no bounce, never a torn one)");
-        // A REBUILD THAT SUCCEEDS lifts it: the camera steps on.
-        look(Vec3(cam.x + 4.5f * step, cam.y, cam.z));
+        // AN EDIT INSIDE THE HELD CASCADE re-marks it (decision 16.7): the hold is the camera step test's only -
+        // an edit's mark is the dirty path's - and the rebuild that succeeds lifts the torn-cleared mark, the
+        // camera never having moved.
+        const GiStatus held = scene->published().gi;
+        const GiStatus pre2 = scene->published().gi;
+        enginetest::setNodePosition(scene, propNodes[0], Vec3(pre2.cascades[0].centre.x + 0.3f, 0.7f, 1.0f));
+        run(1);
+        const bool remarked = scene->published().gi.cascades[0].pending != 0 ||
+                              scene->published().gi.cascades[0].rebuilds > held.cascades[0].rebuilds;
         int n = 0;
         for (; n < 40 && (scene->published().gi.cascades[0].pending || scene->published().gi.cascades[0].tornCleared ||
                           scene->published().gi.cascades[0].scrolling); ++n)
             run(1);
+        std::printf("   an edit in the held cascade: re-marked %d, rebuilds %llu -> %llu, torn-cleared %d after %d frames\n",
+                    int(remarked), held.cascades[0].rebuilds, scene->published().gi.cascades[0].rebuilds,
+                    int(scene->published().gi.cascades[0].tornCleared), n);
+        CHECK(remarked && scene->published().gi.cascades[0].rebuilds > held.cascades[0].rebuilds,
+              "AN EDIT INSIDE A HELD CASCADE RE-MARKS IT (the hold stops the camera's re-arm, never an edit's)");
         CHECK(!scene->published().gi.cascades[0].tornCleared, "the next rebuild that succeeds clears the torn-cleared mark");
         rebuildWhole();
     }

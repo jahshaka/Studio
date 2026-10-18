@@ -59,6 +59,8 @@ public:
     Q_INVOKABLE QVariantMap atomStatus();
     /// THE SUN'S SHADOW MAPS AS CONTENT (ENGINE-UPGRADE-U5 stage 4's parity door).
     Q_INVOKABLE QVariantList shadowMapDigests();
+    /// THE SUN MAPS' CASTERS BY ROUTE (decision 15.1's measurement; ATOM-ROUTE-COVERAGE-1).
+    Q_INVOKABLE QVariantList shadowCasterRoutes();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
     Q_INVOKABLE bool setAtomOcclusion(bool on);

@@ -312,8 +312,9 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # declared 60 was below the policy, honest only with the +900 s widening (now deleted).
     set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.caster_cull — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5 stage 4): the parity
-    # world under a roof; the sun maps bit-equal with the cull on and off at rest and through a slide and a
-    # pan, the hidden objects drawn by neither half, fewer triangles (test_shadow_atom_cut.cpp states it).
+    # world under a roof, with a planar mirror; the view's and the mirror's sun maps bit-equal with the cull on
+    # and off at rest and through a slide and a pan, every object the roof certainly hides drawn by neither
+    # half of any map (per object, at the cull's stated grain), fewer triangles (test_shadow_atom_cut.cpp).
     jah_gpu_row(shadow.caster_cull CLASS engine COMMAND test_shadow_atom_cut --light-cull
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_cull PROPERTIES TIMEOUT 120 LABELS "engine")
@@ -454,7 +455,7 @@ foreach(_row_frames
         "engine.tlas_compute=46"
         "shadow.atom_cut=80"
         "shadow.atom_parity=111"
-        "shadow.caster_cull=129"
+        "shadow.caster_cull=147"
         "shadow.caster_first_frame=12"
         "shadow.stock_lod=71"
         )

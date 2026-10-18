@@ -728,11 +728,12 @@ static int firstFrameMain()
 // laws:
 //   1. AT REST the three sun maps are BIT-EQUAL with the cull on and off (shadow.casterCull 1 / 0;
 //      Scene::shadowMapDigests: every texel of each map);
-//   2. THE CULL IS NOT VACUOUS: at least every field object the roof hides from the sun with a
-//      margin (all eight corners of its box, pushed toward the sun to the roof's underside, inside
-//      the roof's footprint shrunk by the object's own diameter - the pyramid's coarse footprint)
-//      is drawn by NEITHER half of the cut (summed over the maps), and the maps draw fewer caster
-//      triangles with the cull on;
+//   2. THE CULL IS NOT VACUOUS: EVERY field object the roof hides from the sun with a margin (all
+//      eight corners of its box, pushed toward the sun to the roof's underside, inside the roof's
+//      footprint shrunk by the box's light-space width - the cull's grain: the instance box against
+//      the pyramid's mip where it is <= 2 texels wide, read over <= 3 x 3 of them) is drawn by
+//      NEITHER half of ANY sun map's cut (per object, the test door's two drawn sets), the mirror's
+//      maps are culled too, and the maps draw fewer caster triangles with the cull on;
 //   3. IN MOTION the maps stay bit-equal: the roof slides off the field 0.75 m a step (each "on"
 //      frame predicts from the pyramid of the roof's PREVIOUS place, so what the slide uncovered is
 //      rejected by the first half and must be drawn by the late half - which it is: the late half's
@@ -825,6 +826,17 @@ static int lightCullMain()
     const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
     Vec3 roofCentre(1.0f, 6.0f, -15.0f);
     const NodeId roof = addBox(w.scene, roofCentre, roofHalf, rm);
+    // A PLANAR MIRROR in front of the camera (decision 16.5): its node's sun maps ride the same cull and are
+    // compared with the view's.
+    const NodeId mirror = addBox(w.scene, Vec3(0.0f, 0.02f, -2.0f), Vec3(2.0f, 0.01f, 2.0f), rm);
+    {
+        PlanarReflectionParams pr;
+        pr.budget = 1;
+        pr.resolution = 256;
+        pr.shadows = true;
+        CHECK(w.scene->setPlanarReflections(pr) && w.scene->setNodePlanarReflector(mirror, true),
+              "a planar mirror with shadows (its own shadow node)");
+    }
     const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
     w.view->setCamera(cam);
     enginetest::frames(gE, 40);
@@ -835,6 +847,7 @@ static int lightCullMain()
     const float tx = -lx / ll, ty = -ly / ll, tz = -lz / ll;   // toward the sun
     const float under = roofCentre.y - roofHalf.y;
     unsigned certain = 0;
+    std::vector<NodeId> hidden;
     {
         int k = 0;
         for (int zi = 0; zi < 7; ++zi)
@@ -847,32 +860,39 @@ static int lightCullMain()
                                 pz = z + ((c & 4) ? r : -r);
                     const float t = (under - py) / ty;
                     const float hx = px + tx * t, hz = pz + tz * t;
-                    const float margin = 2.0f * r;
+                    // THE CULL'S GRAIN (stated): an instance's box against the pyramid at the mip where its
+                    // light-space rectangle is <= 2 texels wide, read over <= 3 x 3 of them - a footprint up
+                    // to one rectangle width past each side. The box's light-space width is at most its
+                    // diagonal, 2 r sqrt 3: so a box that deep inside the roof's shadow is hidden at that grain.
+                    const float margin = 2.0f * r * std::sqrt(3.0f) + 0.5f;
                     inside = hx > roofCentre.x - roofHalf.x + margin && hx < roofCentre.x + roofHalf.x - margin &&
                              hz > roofCentre.z - roofHalf.z + margin && hz < roofCentre.z + roofHalf.z - margin;
                 }
-                if (inside) ++certain;
+                if (inside) {
+                    ++certain;
+                    hidden.push_back(w.placed[size_t(k)].node);
+                }
             }
     }
     std::printf("   the roof certainly hides %u of the field's 35 objects from the sun\n", certain);
-    CHECK_MSG(certain >= 6u, "the fixture hides something (%u objects)", certain);
+    CHECK_MSG(certain >= 4u, "the fixture hides something (%u objects)", certain);
 
     // ---- 1 + 2: AT REST ----------------------------------------------------------------------
     std::vector<ShadowMapDigest> on, off;
     gE->setArm("shadow.casterCull", 1.0);
     enginetest::frames(gE, 12);
     const AtomDrawStatus sOn = w.scene->atomDrawStatus();
-    CHECK(w.scene->shadowMapDigests(on) && on.size() == 3u, "the three sun maps read back (cull on)");
+    CHECK(w.scene->shadowMapDigests(on) && on.size() >= 6u, "the view's three sun maps and the mirror's read back (cull on)");
     gE->setArm("shadow.casterCull", 0.0);
     enginetest::frames(gE, 12);
     const AtomDrawStatus sOff = w.scene->atomDrawStatus();
-    CHECK(w.scene->shadowMapDigests(off) && off.size() == 3u, "the three sun maps read back (cull off)");
+    CHECK(w.scene->shadowMapDigests(off) && off.size() >= 6u, "the view's three sun maps and the mirror's read back (cull off)");
     std::string why;
     CHECK_MSG(mapsEqual(on, off, why), "AT REST the sun maps are bit-equal with the cull on and off (%s)",
               why.empty() ? "every texel" : why.c_str());
     for (const ShadowMapDigest &d : on)
-        std::printf("   map %u: %ux%u at (%u, %u), %u texels covered, digest %016llx\n", d.map, d.width, d.height,
-                    d.x, d.y, d.covered, d.digest);
+        std::printf("   %s map %u: %ux%u at (%u, %u), %u texels covered, digest %016llx\n", d.kind ? "mirror" : "view  ",
+                    d.map, d.width, d.height, d.x, d.y, d.covered, d.digest);
     const CullTally tOn = tallyOf(sOn), tOff = tallyOf(sOff);
     std::printf("   cull on : %u maps (%u tested by the light's depth), %llu triangles; first half rejected %u, "
                 "late half drew %u (%llu triangles), neither drew %u\n",
@@ -886,8 +906,43 @@ static int lightCullMain()
                         m.lateOccluded);
     CHECK_MSG(tOn.tested >= 3u && tOff.tested == 0u, "the three sun maps were tested by the light's depth with the "
               "cull on, none with it off (%u / %u)", tOn.tested, tOff.tested);
-    CHECK_MSG(tOn.lateOccluded >= certain, "every object the roof certainly hides is drawn by neither half "
-              "(%u hidden >= %u)", tOn.lateOccluded, certain);
+    {
+        unsigned mirrorTested = 0u;
+        for (const AtomCasterMapStats &m : sOn.casterPerMap) mirrorTested += (m.kind == 1u && m.lightTested) ? 1u : 0u;
+        CHECK_MSG(mirrorTested >= 1u, "the mirror's sun maps were culled by the light's depth too (%u)", mirrorTested);
+    }
+    // LAW 2 PER OBJECT (decision 16.5): every object the roof certainly hides is drawn by NEITHER half of ANY
+    // sun map's cut - the test door's drawn sets, the first half's and the late half's.
+    {
+        gE->setArm("shadow.casterCull", 1.0);
+        enginetest::frames(gE, 4);
+        auto *os = static_cast<OgreScene *>(w.scene);
+        unsigned drawnHidden = 0, probed = 0;
+        for (unsigned m = 0; m < 3u; ++m) {
+            OgreScene::CasterProbe p;
+            if (!probe(w, m, 0u, p)) continue;
+            ++probed;
+            std::map<NodeId, int> drawnNodes;   // 1 the first half drew it, 2 the late half
+            int half = 1;
+            for (const auto *set : { &p.drawn, &p.lateDrawn }) {
+                for (const OgreScene::CasterProbe::Drawn &d : *set) {
+                    GpuSceneEntry e;
+                    if (os->gpuSceneEntry(d.slot, e)) drawnNodes[NodeId(e.nodeId)] |= half;
+                }
+                half = 2;
+            }
+            for (size_t i = 0; i < hidden.size(); ++i) {
+                const auto it = drawnNodes.find(hidden[i]);
+                if (it == drawnNodes.end()) continue;
+                ++drawnHidden;
+                std::printf("   hidden object %zu (node %llu) drawn in map %u by the %s half\n", i,
+                            (unsigned long long)hidden[i], m, it->second & 1 ? "first" : "late");
+            }
+        }
+        CHECK_MSG(probed == 3u && drawnHidden == 0u,
+                  "EVERY OBJECT THE ROOF CERTAINLY HIDES is drawn by neither half of any sun map (%u of %u objects "
+                  "x 3 maps drawn)", drawnHidden, certain);
+    }
     CHECK_MSG(tOn.triangles < tOff.triangles, "the maps draw fewer caster triangles with the cull (%llu < %llu)",
               tOn.triangles, tOff.triangles);
 
@@ -936,6 +991,7 @@ static int lightCullMain()
     CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
               lateDrawn);
     gE->setArm("shadow.casterCull", 1.0);
+    std::printf("\n   frames rendered: %llu\n", w.scene->published().frame);
     gE->destroyView(w.view);
     gE->destroyScene(w.scene);
     return 0;

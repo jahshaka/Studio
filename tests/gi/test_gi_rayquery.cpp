@@ -471,6 +471,18 @@ static int updateMain(bool cost)
         const unsigned lightsAdded = unsigned(scene->published().rayQuery.hitLights);
         enginetest::setNodePosition(scene, lamp, Vec3(2.0f, 4.0f, 5.0f));
         const Counts moved = window(3);
+        // A LAMP DRAGGED 12 FRAMES (decision 16.2): the hit table written every frame re-makes no ring buffer
+        // once its three slots exist (from the drag's 4th frame on, at the latest).
+        unsigned long long buffersAt4 = 0ull;
+        for (int f = 0; f < 12; ++f) {
+            enginetest::setNodePosition(scene, lamp, Vec3(2.0f + 0.1f * float(f + 1), 4.0f, 5.0f));
+            run(1);
+            if (f == 3) buffersAt4 = scene->published().rayQuery.hitTableBuffers;
+        }
+        const unsigned long long buffersMade = scene->published().rayQuery.hitTableBuffers - buffersAt4;
+        std::printf("   a lamp dragged 12 frames: %llu hit-table buffers made after its 4th frame\n", buffersMade);
+        CHECK_MSG(buffersMade == 0ull, "A HIT TABLE WRITTEN EVERY FRAME RE-MAKES NO BUFFER once its ring is full (%llu)",
+                  buffersMade);
         scene->removeLight(lamp);
         Counts deleted = window(1);
         const unsigned lightsNext = unsigned(scene->published().rayQuery.hitLights);
