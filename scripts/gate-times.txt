@@ -985,3 +985,7 @@ engine.async_queue 3.20  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lo
 engine.async_queue_nofamily 2.18  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
 engine.async_queue_validation 1.81  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
 engine.async_record 2.29  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
+engine.ray_update_counts 1.47  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
+gi.cascade_drag_age 2.52  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
+gi.scroll_slab 5.27  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
+shadow.caster_cull 22.03  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1, 229 frames)
