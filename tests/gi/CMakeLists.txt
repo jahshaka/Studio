@@ -855,7 +855,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --sc
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 198)   # counted by the suite (frames rendered)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 219)   # counted by the suite (frames rendered)
 # gi.scroll_slab.timing — the same binary with JAHSHAKA_TIMING_BARS=1: the scroll by the shipped step voxelises in
 # <= 0.35 of a whole build at 128 cells (GPU, paired in this process). A measure row (the lead's verdict, decision 10).
 jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
@@ -863,7 +863,7 @@ jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
-set_tests_properties(gi.scroll_slab.timing PROPERTIES JAHSHAKA_TEST_FRAMES 198)
+set_tests_properties(gi.scroll_slab.timing PROPERTIES JAHSHAKA_TEST_FRAMES 219)
 set_property(TEST gi.scroll_slab.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
 # gi.cascade_drag_age — UNDER A DRAG EVERY DIRTY CASCADE IS SERVED WITHIN N FRAMES (CASCADE-DRAG-STARVE-1,
 # ENGINE-UPGRADE-U5 decision 7): the --drag mode. A cube outside cascade 0 and inside 1-3 dragged 120 frames:
@@ -1099,19 +1099,22 @@ jah_gpu_row(gi.rayquery CLASS engine COMMAND test_gi_rayquery
 set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.rayquery PROPERTIES JAHSHAKA_TEST_FRAMES 180)
 # engine.ray_update_counts — THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3): the
-# --update-counts mode. 200 objects, each its own mesh: an idle frame does 0 lookups and writes 0 rows; k moved
-# objects cost none; k hidden / shown / added / removed cost <= 20 lookups and <= 2 rows each. COUNTS, never ms.
+# --update-counts mode. 200 objects, each its own mesh: an idle frame does 0 lookups, 0 rows and 0 whole-pass
+# visits; k moved cost none (a pass over the structures, once); per kind, DERIVED in the test (decision 14.4):
+# hide / show 1 lookup, add 23 + 2 rows, remove 2 + 1 row, a re-level 26 + 2 rows, a cut-out hidden the alpha
+# table's rows, a lamp added / moved / deleted the hit table's rows (the deleted lamp gone the next frame),
+# 12 stale cut-out masks remade within ceil(12 / 8) frames. COUNTS, never ms.
 jah_gpu_row(engine.ray_update_counts CLASS engine COMMAND test_gi_rayquery --update-counts
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.ray_update_counts PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(engine.ray_update_counts PROPERTIES JAHSHAKA_TEST_FRAMES 31)   # the frames it renders, counted 2026-10-18
+set_tests_properties(engine.ray_update_counts PROPERTIES JAHSHAKA_TEST_FRAMES 61)   # the frames it renders, counted 2026-10-18
 # engine.ray_update_cost — the same tier's update in ms per frame at 1,393 objects with 0 / 10 / 100 changes a
 # frame (the engine.rayquery stage). A measure row, run by hand (the lead's decision 9).
 jah_gpu_exclusive_test(NAME engine.ray_update_cost CLASS engine RUN_TIMEOUT 300
          COMMAND test_gi_rayquery --update-cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.ray_update_cost PROPERTIES LABELS "engine;measure")
-set_tests_properties(engine.ray_update_cost PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+set_tests_properties(engine.ray_update_cost PROPERTIES JAHSHAKA_TEST_FRAMES 215)   # the frames it renders, counted 2026-10-18
 
 # engine.descriptor_pools — D6-FORK-TOOLING (audit V2-D F8): every raw descriptor
 # pool is planned by the same call that creates its layout and allocates its maximum

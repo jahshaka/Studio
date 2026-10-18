@@ -311,6 +311,12 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # TESTING-CLEANUP-2B item 2: TIMEOUT 120 = 6 x the run log's quiet median 18.8 s (44 quiet PASS runs since 2026-10-01, worst 32.2 s);
     # declared 60 was below the policy, honest only with the +900 s widening (now deleted).
     set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 120 LABELS "engine")
+    # shadow.caster_cull — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5 stage 4): the parity
+    # world under a roof; the sun maps bit-equal with the cull on and off at rest and through a slide and a
+    # pan, the hidden objects drawn by neither half, fewer triangles (test_shadow_atom_cut.cpp states it).
+    jah_gpu_row(shadow.caster_cull CLASS engine COMMAND test_shadow_atom_cut --light-cull
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.caster_cull PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
     # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
     jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
@@ -448,6 +454,7 @@ foreach(_row_frames
         "engine.tlas_compute=46"
         "shadow.atom_cut=80"
         "shadow.atom_parity=111"
+        "shadow.caster_cull=129"
         "shadow.caster_first_frame=12"
         "shadow.stock_lod=71"
         )

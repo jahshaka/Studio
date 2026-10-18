@@ -155,6 +155,9 @@ static const float kOneVoxelStep = 1.6f / 255.0f;
 //      box is edited is dropped for the edit's whole rebuild (the dirty path's `editLast`).
 //   F. A COMMIT THAT THROWS HALF WAY (gi.cascadeFaultCommit): the live store is torn, so the cascade
 //      scrolls no more until a WHOLE rebuild has made it one box's again - the store a whole build's.
+//   F2. ...AND ITS WHOLE REBUILD FAILS TWICE (gi.cascadeFault, decision 14.8): the store is CLEARED (every
+//      volume zero: no bounce, never a torn store's) and the cascade stands down, the status saying
+//      torn-cleared, until a rebuild succeeds - bounded, never the GI budget spent every frame for ever.
 //   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive (the roughness in its alpha), the
 //   coverage and the position per half, the area weight and the position sums - and nothing else needs
 //   to be: the commit regenerates every mip from level 0, so equal level 0 is equal mips.
@@ -487,6 +490,54 @@ static int scrollSlabMain()
         rebuildWhole();
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
         CHECK(sameStore(scrolled, built, "F"), "THE REBUILT STORE IS A WHOLE BUILD'S");
+    }
+
+    // ---- F2. a torn store whose whole rebuild fails TWICE (decision 14.8) -----------------------
+    std::printf("\n== F2: a torn store whose whole rebuild fails twice is cleared and stood down ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        e->setArm("gi.cascadeFaultCommit", 0.0);
+        look(Vec3(cam.x + 3.0f * step, cam.y, cam.z));
+        run(1);   // torn
+        e->setArm("gi.cascadeFaultCommit", -1.0);
+        e->setArm("gi.cascadeFault", 0.0);
+        run(1);   // the first whole rebuild fails: still owed (decision 12.1)
+        const GiStatus once = scene->published().gi;
+        run(1);   // the second: cleared and stood down
+        const GiStatus twice = scene->published().gi;
+        // STILL FAILING: it stays stood down and cleared - the frames after spend nothing on it.
+        unsigned long long rebuildsBefore = scene->published().gi.cascades[0].rebuilds;
+        int owed = 0;
+        for (int f = 0; f < 6; ++f) { run(1); owed += scene->published().gi.cascades[0].pending ? 1 : 0; }
+        const GiStatus after = scene->published().gi;
+        std::printf("   still failing: owed in %d of 6 frames, rebuilds %llu -> %llu\n", owed, rebuildsBefore,
+                    after.cascades[0].rebuilds);
+        std::printf("   pending %d / %d / %d, torn-cleared %d / %d (cleared %llu -> %llu)\n", once.cascades[0].pending,
+                    twice.cascades[0].pending, after.cascades[0].pending, int(twice.cascades[0].tornCleared),
+                    int(after.cascades[0].tornCleared), pre.cascadeTornCleared, after.cascadeTornCleared);
+        CHECK(once.cascades[0].pending != 0 && !once.cascades[0].tornCleared,
+              "one failed whole rebuild of a torn store: still owed it (never stood down as it is)");
+        CHECK(twice.cascades[0].pending == 0 && after.cascades[0].pending == 0 && owed == 0 &&
+                  after.cascades[0].tornCleared && after.cascadeTornCleared == pre.cascadeTornCleared + 1u &&
+                  after.cascades[0].rebuilds == rebuildsBefore,
+              "TWO: ITS VOLUMES CLEARED AND IT STANDS DOWN until the camera's next step - the status saying "
+              "torn-cleared, no frame after it spent on it (bounded)");
+        GiVoxelVolume v;
+        CHECK(scene->giVoxelVolume(0, v), "the cleared store reads back");
+        e->setArm("gi.cascadeFault", -1.0);
+        bool empty = v.available && !v.albedo.empty();
+        for (const std::vector<float> *a : { &v.albedo, &v.emissive, &v.coverageP, &v.coverageN, &v.light })
+            for (float x : *a) empty = empty && x == 0.0f;
+        for (unsigned x : v.accumWeight) empty = empty && x == 0u;
+        CHECK(empty, "...EMPTY: albedo, emissive, coverage, the area weight and the light all zero (no bounce, never a torn one)");
+        // A REBUILD THAT SUCCEEDS lifts it: the camera steps on.
+        look(Vec3(cam.x + 4.5f * step, cam.y, cam.z));
+        int n = 0;
+        for (; n < 40 && (scene->published().gi.cascades[0].pending || scene->published().gi.cascades[0].tornCleared ||
+                          scene->published().gi.cascades[0].scrolling); ++n)
+            run(1);
+        CHECK(!scene->published().gi.cascades[0].tornCleared, "the next rebuild that succeeds clears the torn-cleared mark");
+        rebuildWhole();
     }
 
     scene->removeNode(ground);

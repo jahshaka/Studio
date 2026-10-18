@@ -719,6 +719,228 @@ static int firstFrameMain()
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// --light-cull (shadow.caster_cull) — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5
+// stage 4, the lead's decision 10). The parity world under a ROOF: a 26 x 0.3 x 38 m slab 6 m up
+// over the field's three near rows, between them and the sun. A sun map's Atom casters are tested
+// against the previous frame's depth pyramid of that map, the rejected again against this frame's
+// once the map holds the rest, and only the ones not wholly behind the map's depth are drawn. The
+// laws:
+//   1. AT REST the three sun maps are BIT-EQUAL with the cull on and off (shadow.casterCull 1 / 0;
+//      Scene::shadowMapDigests: every texel of each map);
+//   2. THE CULL IS NOT VACUOUS: at least every field object the roof hides from the sun with a
+//      margin (all eight corners of its box, pushed toward the sun to the roof's underside, inside
+//      the roof's footprint shrunk by the object's own diameter - the pyramid's coarse footprint)
+//      is drawn by NEITHER half of the cut (summed over the maps), and the maps draw fewer caster
+//      triangles with the cull on;
+//   3. IN MOTION the maps stay bit-equal: the roof slides off the field 0.75 m a step (each "on"
+//      frame predicts from the pyramid of the roof's PREVIOUS place, so what the slide uncovered is
+//      rejected by the first half and must be drawn by the late half - which it is: the late half's
+//      draws are counted), then the camera pans (the splits' bounds move under the history's
+//      matrix). Frames, never time.
+static NodeId addBox(Scene *s, const Vec3 &c, const Vec3 &half, MaterialId m)
+{
+    MeshData g;
+    const float sx = half.x, sy = half.y, sz = half.z;
+    // six faces, four corners each, outward normals, counter-clockwise from outside
+    const float n[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+    for (int f = 0; f < 6; ++f) {
+        const float nx = n[f][0], ny = n[f][1], nz = n[f][2];
+        // two tangents
+        const float ux = ny != 0.0f ? 1.0f : nz != 0.0f ? 1.0f : 0.0f;
+        const float uy = 0.0f;
+        const float uz = nx != 0.0f ? 1.0f : 0.0f;
+        const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+        const float cs[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        const unsigned base = unsigned(g.positions.size() / 3);
+        for (int k = 0; k < 4; ++k) {
+            const float a = cs[k][0], b = cs[k][1];
+            g.positions.push_back((nx + a * ux + b * vx) * sx);
+            g.positions.push_back((ny + a * uy + b * vy) * sy);
+            g.positions.push_back((nz + a * uz + b * vz) * sz);
+            g.normals.push_back(nx);
+            g.normals.push_back(ny);
+            g.normals.push_back(nz);
+            g.uvs.push_back(a * 0.5f + 0.5f);
+            g.uvs.push_back(b * 0.5f + 0.5f);
+        }
+        // the winding the ground quad uses (0, 2, 1 / 0, 3, 2 with an upward normal)
+        g.indices.insert(g.indices.end(), { base, base + 2, base + 1, base, base + 3, base + 2 });
+    }
+    const NodeId node = s->createNode();
+    s->setNodeTransform(node, c, Quat(), Vec3(1, 1, 1));
+    s->attachMesh(node, s->createMesh(g), m);
+    return node;
+}
+
+static bool mapsEqual(const std::vector<ShadowMapDigest> &a, const std::vector<ShadowMapDigest> &b,
+                      std::string &why)
+{
+    if (a.size() != b.size() || a.empty()) { why = "different map sets"; return false; }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (a[i].map != b[i].map || a[i].width != b[i].width || a[i].height != b[i].height) {
+            why = "map " + std::to_string(a[i].map) + ": a different rectangle";
+            return false;
+        }
+        if (a[i].digest != b[i].digest) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "map %u: %016llx vs %016llx (covered %u vs %u)", a[i].map, a[i].digest,
+                          b[i].digest, a[i].covered, b[i].covered);
+            why = buf;
+            return false;
+        }
+    }
+    return true;
+}
+
+struct CullTally {
+    unsigned long long triangles = 0, lateTriangles = 0;
+    unsigned occluded = 0, lateInstances = 0, lateOccluded = 0, tested = 0, maps = 0;
+};
+static CullTally tallyOf(const AtomDrawStatus &st)
+{
+    CullTally t;
+    for (const AtomCasterMapStats &m : st.casterPerMap) {
+        if (m.kind != 0u) continue;
+        ++t.maps;
+        t.triangles += m.triangles;
+        t.lateTriangles += m.lateTriangles;
+        t.occluded += m.occluded;
+        t.lateInstances += m.lateInstances;
+        t.lateOccluded += m.lateOccluded;
+        if (m.lightTested) ++t.tested;
+    }
+    return t;
+}
+
+static int lightCullMain()
+{
+    std::printf("== shadow.caster_cull: the sun maps' casters culled by the light's own depth, the maps unchanged\n");
+    World w;
+    if (!makeWorld(w, "light-cull", false)) { std::printf("FAIL: the world\n"); return 1; }
+    PbrParams rp;
+    rp.albedo = Colour(0.5f, 0.5f, 0.5f);
+    rp.roughness = 0.9f;
+    const MaterialId rm = w.scene->createPbrMaterial(rp);
+    const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
+    Vec3 roofCentre(1.0f, 6.0f, -15.0f);
+    const NodeId roof = addBox(w.scene, roofCentre, roofHalf, rm);
+    const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
+    w.view->setCamera(cam);
+    enginetest::frames(gE, 40);
+
+    // THE OBJECTS THE ROOF CERTAINLY HIDES from the sun (law 2's floor), from the field's own layout.
+    const float lx = -0.45f, ly = -0.8f, lz = -0.4f;
+    const float ll = std::sqrt(lx * lx + ly * ly + lz * lz);
+    const float tx = -lx / ll, ty = -ly / ll, tz = -lz / ll;   // toward the sun
+    const float under = roofCentre.y - roofHalf.y;
+    unsigned certain = 0;
+    {
+        int k = 0;
+        for (int zi = 0; zi < 7; ++zi)
+            for (int xi = -2; xi <= 2; ++xi, ++k) {
+                const float x = 2.6f * float(xi) + 0.4f * float(zi % 2), z = -4.0f - 11.0f * float(zi);
+                const float r = 0.8f * std::sqrt(3.0f);   // ~1.6 m objects: the box's half-diagonal
+                bool inside = true;
+                for (int c = 0; c < 8 && inside; ++c) {
+                    const float px = x + ((c & 1) ? r : -r), py = 1.0f + ((c & 2) ? r : -r),
+                                pz = z + ((c & 4) ? r : -r);
+                    const float t = (under - py) / ty;
+                    const float hx = px + tx * t, hz = pz + tz * t;
+                    const float margin = 2.0f * r;
+                    inside = hx > roofCentre.x - roofHalf.x + margin && hx < roofCentre.x + roofHalf.x - margin &&
+                             hz > roofCentre.z - roofHalf.z + margin && hz < roofCentre.z + roofHalf.z - margin;
+                }
+                if (inside) ++certain;
+            }
+    }
+    std::printf("   the roof certainly hides %u of the field's 35 objects from the sun\n", certain);
+    CHECK_MSG(certain >= 6u, "the fixture hides something (%u objects)", certain);
+
+    // ---- 1 + 2: AT REST ----------------------------------------------------------------------
+    std::vector<ShadowMapDigest> on, off;
+    gE->setArm("shadow.casterCull", 1.0);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sOn = w.scene->atomDrawStatus();
+    CHECK(w.scene->shadowMapDigests(on) && on.size() == 3u, "the three sun maps read back (cull on)");
+    gE->setArm("shadow.casterCull", 0.0);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sOff = w.scene->atomDrawStatus();
+    CHECK(w.scene->shadowMapDigests(off) && off.size() == 3u, "the three sun maps read back (cull off)");
+    std::string why;
+    CHECK_MSG(mapsEqual(on, off, why), "AT REST the sun maps are bit-equal with the cull on and off (%s)",
+              why.empty() ? "every texel" : why.c_str());
+    for (const ShadowMapDigest &d : on)
+        std::printf("   map %u: %ux%u at (%u, %u), %u texels covered, digest %016llx\n", d.map, d.width, d.height,
+                    d.x, d.y, d.covered, d.digest);
+    const CullTally tOn = tallyOf(sOn), tOff = tallyOf(sOff);
+    std::printf("   cull on : %u maps (%u tested by the light's depth), %llu triangles; first half rejected %u, "
+                "late half drew %u (%llu triangles), neither drew %u\n",
+                tOn.maps, tOn.tested, tOn.triangles, tOn.occluded, tOn.lateInstances, tOn.lateTriangles,
+                tOn.lateOccluded);
+    std::printf("   cull off: %u maps (%u tested), %llu triangles\n", tOff.maps, tOff.tested, tOff.triangles);
+    for (const AtomCasterMapStats &m : sOn.casterPerMap)
+        if (m.kind == 0u)
+            std::printf("     map %u face %u: %u instances %llu triangles (late %u / %llu), rejected %u, hidden %u\n",
+                        m.map, m.face, m.instances, m.triangles, m.lateInstances, m.lateTriangles, m.occluded,
+                        m.lateOccluded);
+    CHECK_MSG(tOn.tested >= 3u && tOff.tested == 0u, "the three sun maps were tested by the light's depth with the "
+              "cull on, none with it off (%u / %u)", tOn.tested, tOff.tested);
+    CHECK_MSG(tOn.lateOccluded >= certain, "every object the roof certainly hides is drawn by neither half "
+              "(%u hidden >= %u)", tOn.lateOccluded, certain);
+    CHECK_MSG(tOn.triangles < tOff.triangles, "the maps draw fewer caster triangles with the cull (%llu < %llu)",
+              tOn.triangles, tOff.triangles);
+
+    // ---- 3: IN MOTION ------------------------------------------------------------------------
+    unsigned stepsEqual = 0, steps = 0;
+    unsigned long long lateDrawn = 0ull;
+    std::string firstWhy;
+    // `lead`: frames rendered with the cull on before the compared one - a pushed CAMERA reaches the
+    // light's splits one frame after it is set (measured: two cull-off frames after a pan differ, the
+    // second and third agree), so a pan's compared frame is its second, and its history the first's
+    // pyramid - drawn from the previous pose's splits.
+    const auto step = [&](int lead) {
+        std::vector<ShadowMapDigest> a, b;
+        gE->setArm("shadow.casterCull", 1.0);
+        if (lead > 0) enginetest::frames(gE, lead);
+        enginetest::frames(gE, 1);
+        lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+        w.scene->shadowMapDigests(a);
+        gE->setArm("shadow.casterCull", 0.0);
+        enginetest::frames(gE, 1);
+        lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+        w.scene->shadowMapDigests(b);
+        std::string wy;
+        ++steps;
+        if (mapsEqual(a, b, wy)) ++stepsEqual;
+        else if (firstWhy.empty()) firstWhy = "step " + std::to_string(steps) + ": " + wy;
+    };
+    for (int i = 0; i < 16; ++i) {
+        roofCentre.x += 0.75f;
+        w.scene->setNodeTransform(roof, roofCentre, Quat(), Vec3(1, 1, 1));
+        step(0);
+    }
+    for (int i = 0; i < 8; ++i) {
+        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(0.6f * float(i + 1), 2.2f, 4.0f - 0.8f * float(i + 1)),
+                                                            Vec3(0.0f, 0.8f, -30.0f));
+        w.view->setCamera(c2);
+        step(1);
+    }
+    gE->setArm("shadow.casterCull", 1.0);
+    enginetest::frames(gE, 8);
+    lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+    std::printf("   in motion: %u of %u steps bit-equal; the late half drew %llu instances over the steps\n", stepsEqual,
+                steps, lateDrawn);
+    CHECK_MSG(stepsEqual == steps, "IN MOTION every step's sun maps are bit-equal on and off (%s)",
+              firstWhy.empty() ? "all" : firstWhy.c_str());
+    CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
+              lateDrawn);
+    gE->setArm("shadow.casterCull", 1.0);
+    gE->destroyView(w.view);
+    gE->destroyScene(w.scene);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -727,12 +949,16 @@ int main(int argc, char **argv)
     std::string err;
     const auto cfg = enginetest::testEngineConfig(mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
                   : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"
+                  : mode == "--light-cull"  ? "test-shadow-caster-cull-ogre.log"
                                             : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     gE = engine.get();
-    const int rc = mode == "--parity" ? parityMain() : mode == "--first-frame" ? firstFrameMain() : cutMain();
+    const int rc = mode == "--parity"        ? parityMain()
+                 : mode == "--first-frame" ? firstFrameMain()
+                 : mode == "--light-cull"  ? lightCullMain()
+                                           : cutMain();
     engine.reset();
     std::printf("%s (%d failure%s)\n", failures || rc ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures || rc ? 1 : 0;

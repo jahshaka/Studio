@@ -168,22 +168,86 @@ static bool imagesEqual(const Image &a, const Image &b)
 
 // =========================================================================================
 // engine.ray_update_counts (--update-counts) and engine.ray_update_cost (--update-cost, a measure row)
-// THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3). On Bistro's walk
-// updateRayQuery was 12.9 % of the render thread: the job's per-mesh table re-written whole every frame a
-// BLAS level was built (a hash find per mesh per level), two scans over every BLAS key with a find each,
-// the alpha and hit tables re-derived every frame. Now the tables are patched by the change feed's
-// events. The guard counts the work, never times it (RayQueryStatus::updateLookups / updateRows):
-//   * an IDLE frame (nothing changed) does none: 0 lookups, 0 rows;
-//   * k objects MOVED (transforms only - the instances are written on the device): 0 lookups, 0 rows;
-//   * k objects HIDDEN, SHOWN, ADDED or REMOVED: <= kPerChange x k lookups and <= kRowsPerChange x k rows.
-//     THE CONSTANT, counted for the worst change - an object ADDED with a mesh of its own: its key event's
-//     find (1), the find for the structure built (1), the mesh table's new entry (its index 1 + its record
-//     of kTlasLevels finds 8, a row) and, a few frames later, the compaction's new address (the dirty
-//     record's index 1 + 8, a row) = 20 lookups and 2 rows. A hide or a show is one event's find.
+// THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3, the bars ruled by the
+// lead's decision 14.4). On Bistro's walk updateRayQuery was 12.9 % of the render thread: the job's per-mesh
+// table re-written whole every frame a BLAS level was built, two scans over every BLAS key with a find each,
+// the alpha and hit tables re-derived every frame. Now the tables are patched by the change feed's events.
+// The guard COUNTS the work, never times it (RayQueryStatus: updateLookups = every hash or map operation,
+// updateRows = every table row written, updateVisits = every element a whole pass visited), with a bar PER
+// KIND OF CHANGE, each DERIVED from the code path (headroom 0: a count, not a time):
+//   * IDLE (nothing changed): 0 lookups, 0 rows, 0 visits.
+//   * k MOVED (transforms only - the instances are written on the device): 0 lookups, 0 rows; the visits are
+//     the moved frame's one status pass, <= 1 per structure per frame.
+//   * k HIDDEN or SHOWN: <= 1 lookup and 0 rows each - the key event's find (a built key is never missing).
+//   * k ADDED, each its own mesh: <= kAddLookups = 23 lookups and 2 rows each -
+//       1 the key event's find + 1 `missing` insert + 1 the build's visit of it + 1 the find after the build
+//       + 1 `missing` erase + (1 + 8) the mesh table's new entry (its index, its record's kTlasLevels finds,
+//       a row) + (1 + 8) the compaction's new address a few frames later (the dirty record's index + its
+//       eight finds, a row) = 23; rows 2.
+//   * k REMOVED: <= 2 lookups and 1 row each - the key event's find, the old mesh's index erased, and its
+//       record ZERO-FILLED (a row).
+//   * k RE-LEVELLED (an LOD mesh moved past the ray rule's band: its near copy's level changes): <= 26
+//       lookups and 2 rows each - a slot whose keys changed re-takes BOTH its copies' keys, so four key
+//       events (the near copy's old and new level, the far copy's out and back: a find each) + the new
+//       level's 1 `missing` insert, its build's visit, the find after it and the erase (3) + its record
+//       (1 + 8) + the compaction's (1 + 8) = 26; rows 2.
+//   * an ALPHA-TESTED slot hidden: the alpha table is re-written whole: <= 1 lookup + the members left rows.
+//   * a LAMP added, moved or DELETED: the hit table re-written whole: 0 lookups, its lights + material rows;
+//     a deleted lamp's light is GONE from the table the next frame (decision 14.1).
+//   * n > 8 CUT-OUT MASKS stale in one frame (their textures re-uploaded): all remade within ceil(n / 8)
+//     frames of the first (decision 14.2 - past the budget a stale mask was served as made and never remade).
 // The cost row prints the tier's update in ms (the engine.rayquery stage) at N meshes with 0 / 10 / 100
-// changes a frame.
-static const unsigned long long kPerChange = 20ull;
-static const unsigned long long kRowsPerChange = 2ull;
+// changes a frame, over the CHANGE frames only (decision 14.3).
+static const unsigned long long kAddLookups = 23ull;
+static const unsigned long long kRelevelLookups = 26ull;
+
+/// Eight vertical bars across u, the even ones solid, the odd ones clear; `tint` makes each texture its own.
+static std::vector<unsigned char> barsTexels(unsigned tint)
+{
+    const unsigned n = 32;
+    std::vector<unsigned char> rgba(size_t(n) * n * 4u);
+    for (unsigned y = 0; y < n; ++y)
+        for (unsigned x = 0; x < n; ++x) {
+            unsigned char *p = &rgba[(size_t(y) * n + x) * 4u];
+            const bool solid = ((x * 8u / n) % 2u) == 0u;
+            p[0] = (unsigned char)(40u + 13u * tint); p[1] = 120; p[2] = 30; p[3] = solid ? 255 : 0;
+        }
+    return rgba;
+}
+
+/// A sphere with eight levels whose measured bounds double level to level (0.02 m at level 1): the ray
+/// rule's level moves with the distance (the footprint grows with it).
+static MeshData lodSphere()
+{
+    MeshData d;
+    const float kPi = 3.14159265358979f;
+    const int rings = 12, segments = 24;
+    for (int r = 0; r <= rings; ++r) {
+        const float th = float(r) / float(rings) * kPi;
+        for (int sg = 0; sg < segments; ++sg) {
+            const float ph = float(sg) / float(segments) * 2.0f * kPi;
+            const float x = std::sin(th) * std::cos(ph), y = std::cos(th), z = std::sin(th) * std::sin(ph);
+            d.positions.insert(d.positions.end(), { 0.5f * x, 0.5f * y, 0.5f * z });
+            d.normals.insert(d.normals.end(), { x, y, z });
+        }
+    }
+    for (int r = 0; r < rings; ++r)
+        for (int sg = 0; sg < segments; ++sg) {
+            const unsigned a = unsigned(r * segments + sg), b = unsigned(r * segments + (sg + 1) % segments);
+            const unsigned c = a + unsigned(segments), e = b + unsigned(segments);
+            d.indices.insert(d.indices.end(), { a, b, c, b, e, c });
+        }
+    for (int l = 1; l < 8; ++l) {
+        d.lodIndices.push_back(d.indices);
+        d.lodBounds.push_back(0.02f * float(1u << unsigned(l - 1)));
+        d.lodErrors.push_back(0.02f * float(1u << unsigned(l - 1)));
+    }
+    return d;
+}
+
+struct Counts {
+    unsigned long long lookups = 0, rows = 0, visits = 0;
+};
 
 static int updateMain(bool cost)
 {
@@ -217,94 +281,244 @@ static int updateMain(bool cost)
         place(n, i, 0.3f);
         nodes.push_back(n);
     }
+    // THE COUNTS FIXTURE'S OWN OBJECTS: four LOD spheres near the camera (the re-level arm) and twelve
+    // cut-out quads, each with its own texture (the alpha arms).
+    std::vector<NodeId> spheres, cutouts;
+    std::vector<TextureId> cutTex;
+    if (!cost) {
+        for (unsigned i = 0; i < 4u; ++i) {
+            const NodeId n = scene->createNode();
+            PbrParams p; p.albedo = Colour(0.6f, 0.6f, 0.6f); p.roughness = 0.6f;
+            scene->attachMesh(n, scene->createMesh(lodSphere()), scene->createPbrMaterial(p));
+            enginetest::setNodePosition(scene, n, Vec3(-3.0f + 2.0f * float(i), 15.0f, 30.0f));
+            spheres.push_back(n);
+        }
+        for (unsigned i = 0; i < 12u; ++i) {
+            const std::vector<unsigned char> texels = barsTexels(i);
+            const TextureId t = scene->createTexture(32, 32, texels.data(), true);
+            PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.7f;
+            p.alphaMode = PbrAlphaMode::Cutout; p.alphaCutoff = 0.5f;
+            const MaterialId m = scene->createPbrMaterial(p);
+            scene->setPbrTexture(m, PbrTextureSlot::Albedo, t);
+            const NodeId n = enginetest::addTestCube(scene, Colour(1, 1, 1), 0.0f, 0.7f);
+            scene->setNodeMaterial(n, m);
+            enginetest::setNodePosition(scene, n, Vec3(-12.0f + 2.0f * float(i), 0.5f, 10.0f));
+            cutouts.push_back(n);
+            cutTex.push_back(t);
+        }
+    }
+    const unsigned structures = N + unsigned(spheres.size() + cutouts.size());
     int frames = 5;
     const auto run = [&](int k) { render(e, k); frames += k; };
-    for (int k = 0; k < 200 && scene->published().rayQuery.blasCount < int(N); ++k) run(1);
-    run(4);
+    for (int k = 0; k < 300 && scene->published().rayQuery.blasCount < int(structures); ++k) run(1);
+    run(8);
     const RayQueryStatus at = scene->published().rayQuery;
-    std::printf("   %u objects, %d bottom-level structures, %d traced instances\n", N, at.blasCount, at.instances);
-    CHECK(at.blasCount >= int(N), "every object's structure is resident");
+    std::printf("   %u objects, %d bottom-level structures, %d traced instances\n", structures, at.blasCount, at.instances);
+    CHECK(at.blasCount >= int(structures), "every object's structure is resident");
 
     if (cost) {
-        // THE MEASURE ROW: the tier's update in ms per frame (the monitor's engine.rayquery stage).
+        // THE MEASURE ROW: the tier's update in ms per frame (the monitor's engine.rayquery stage), over the
+        // CHANGE frames only (decision 14.3): frame f hides the range f and shows the range f - 1 hid, so every
+        // frame of the window changes 2 x k slots (the first hides only); a frame is a change frame when the
+        // tier's own counters say it did work, and the record of that frame (by the engine's frame stamp) is
+        // what is measured. 0 changes: the idle frames, the baseline.
         e->setFrameMonitor(MonitorLevel::Review);
         std::vector<MonitorRecord> recs;
         for (const unsigned changes : { 0u, 10u, 100u }) {
             e->takeMonitorRecords(recs);
-            for (int f = 0; f < 60; ++f) {
-                for (unsigned c = 0; c < changes; ++c) {   // hide one, show another: k key events a frame
-                    const unsigned i = (unsigned(f) * changes + c) % N;
-                    scene->setNodeVisible(nodes[i], (f & 1) != 0);
-                }
+            std::vector<unsigned long long> changeFrames, idleFrames;
+            const auto range = [&](int f, bool visible) {
+                for (unsigned c = 0; c < changes; ++c) scene->setNodeVisible(nodes[(unsigned(f) * changes + c) % N], visible);
+            };
+            for (int f = 0; f <= 60; ++f) {
+                if (f < 60) range(f, false);
+                if (f > 0) range(f - 1, true);
                 run(1);
+                const PublishedFrame &pf = scene->published();
+                const bool worked = pf.rayQuery.updateLookups || pf.rayQuery.updateRows;
+                (worked ? changeFrames : idleFrames).push_back(pf.frame);
             }
-            run(4);
+            run(6);
             e->takeMonitorRecords(recs);
+            const std::vector<unsigned long long> &want = changes ? changeFrames : idleFrames;
             std::vector<double> ms;
-            for (const MonitorRecord &r : recs)
+            for (const MonitorRecord &r : recs) {
+                if (std::find(want.begin(), want.end(), r.frame) == want.end()) continue;
                 for (const auto &st : r.stages)
                     if (st.name == "engine.rayquery") ms.push_back(st.ms);
+            }
             std::sort(ms.begin(), ms.end());
-            std::printf("engine.ray_update_cost: N %u, %u changes a frame: engine.rayquery median %.3f ms, max %.3f ms (%zu frames)\n",
-                        N, changes, ms.empty() ? -1.0 : ms[ms.size() / 2], ms.empty() ? -1.0 : ms.back(), ms.size());
+            const double med = ms.empty() ? -1.0 : ms[ms.size() / 2];
+            const double p95 = ms.empty() ? -1.0 : ms[std::min(ms.size() - 1u, size_t(double(ms.size()) * 0.95))];
+            std::printf("engine.ray_update_cost: N %u, %u changes a frame (%u slot edits): engine.rayquery median %.3f ms, "
+                        "p95 %.3f ms, max %.3f ms over %zu %s frames (%zu change, %zu idle in the window)\n",
+                        N, changes, 2u * changes, med, p95, ms.empty() ? -1.0 : ms.back(), ms.size(),
+                        changes ? "change" : "idle", changeFrames.size(), idleFrames.size());
+            CHECK_MSG(changes == 0u || changeFrames.size() >= 59u, "the %u-change window's frames changed (%zu of 61)",
+                      changes, changeFrames.size());
+            CHECK_MSG(!ms.empty(), "the %u-change window was measured", changes);
         }
         e->setFrameMonitor(MonitorLevel::Off);
+        std::printf("\n   frames rendered: %d\n", frames);
         std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
         return failures ? 1 : 0;
     }
 
-    // IDLE: nothing changed.
-    bool idle = true;
-    for (int f = 0; f < 4; ++f) {
-        run(1);
-        const RayQueryStatus st = scene->published().rayQuery;
-        idle = idle && st.updateLookups == 0u && st.updateRows == 0u;
-        if (f == 3) std::printf("   idle frame: %llu lookups, %llu rows\n", st.updateLookups, st.updateRows);
-    }
-    CHECK(idle, "AN IDLE FRAME DOES NO HOST WORK: 0 lookups, 0 rows (four frames)");
-
-    const unsigned k = 20u;
-    // The counters are the LAST update's; a change is answered in the frame after it is made (the
-    // table carries it then), so every frame of the window is summed.
-    const auto window = [&](int nFrames) {
-        unsigned long long L = 0, R = 0;
+    // The counters are the LAST update's; a change is answered in the frame after it is made (the table
+    // carries it then), so every frame of a window is summed.
+    const auto window = [&](int nFrames, unsigned *peakVisits = nullptr) {
+        Counts c;
         for (int f = 0; f < nFrames; ++f) {
             run(1);
             const RayQueryStatus st = scene->published().rayQuery;
-            L += st.updateLookups;
-            R += st.updateRows;
+            c.lookups += st.updateLookups;
+            c.rows += st.updateRows;
+            c.visits += st.updateVisits;
+            if (peakVisits) *peakVisits = std::max(*peakVisits, unsigned(st.updateVisits));
         }
-        return std::make_pair(L, R);
+        return c;
     };
-    // MOVED: transforms only.
-    for (unsigned c = 0; c < k; ++c) place(nodes[c], c, 1.3f);
-    const auto moved = window(3);
-    std::printf("   %u moved: %llu lookups, %llu rows\n", k, moved.first, moved.second);
-    CHECK(moved.first == 0u && moved.second == 0u, "k MOVED objects cost no lookup and no row (their instances are the device's)");
-    // HIDDEN, then SHOWN.
-    for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], false);
-    const auto hidden = window(3);
-    for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], true);
-    const auto shown = window(3);
-    // ADDED (new meshes), then REMOVED.
-    std::vector<NodeId> extra;
-    for (unsigned c = 0; c < k; ++c) {
-        const NodeId n = enginetest::addTestCube(scene, Colour(0.9f, 0.3f, 0.2f), 0.0f, 0.5f);
-        place(n, N + c, 0.3f);
-        extra.push_back(n);
+    const auto say = [](const char *what, unsigned k, const Counts &c) {
+        std::printf("   %-22s k %2u: %5llu lookups, %4llu rows, %6llu visits\n", what, k, c.lookups, c.rows, c.visits);
+    };
+
+    // IDLE: nothing changed.
+    {
+        const Counts idle = window(4);
+        say("idle (4 frames)", 0u, idle);
+        CHECK(idle.lookups == 0u && idle.rows == 0u && idle.visits == 0u,
+              "AN IDLE FRAME DOES NO HOST WORK: 0 lookups, 0 rows, 0 visits (four frames)");
     }
-    const auto added = window(4);
-    for (NodeId n : extra) scene->removeNode(n);
-    const auto removed = window(4);
-    std::printf("   %u hidden: %llu / %llu; shown: %llu / %llu; added: %llu / %llu; removed: %llu / %llu (lookups / rows)\n", k,
-                hidden.first, hidden.second, shown.first, shown.second, added.first, added.second, removed.first,
-                removed.second);
-    const auto within = [&](const std::pair<unsigned long long, unsigned long long> &p) {
-        return p.first <= kPerChange * k && p.second <= kRowsPerChange * k;
-    };
-    CHECK(within(hidden) && within(shown), "k HIDDEN or SHOWN objects cost <= 20 lookups and <= 2 rows each");
-    CHECK(within(added) && within(removed), "k ADDED or REMOVED objects cost <= 20 lookups and <= 2 rows each");
-    CHECK(hidden.first > 0u && added.first > 0u, "...and the changes were seen (not vacuous)");
+    const unsigned k = 20u;
+    const unsigned blas = unsigned(scene->published().rayQuery.blasCount);
+    // MOVED: transforms only.
+    {
+        for (unsigned c = 0; c < k; ++c) place(nodes[c], c, 1.3f);
+        unsigned peak = 0u;
+        const Counts moved = window(3, &peak);
+        say("moved", k, moved);
+        CHECK(moved.lookups == 0u && moved.rows == 0u, "k MOVED objects cost no lookup and no row (their instances are the device's)");
+        CHECK_MSG(peak <= blas, "a moved frame's whole passes visit each structure at most once (%u <= %u)", peak, blas);
+    }
+    // HIDDEN, then SHOWN.
+    {
+        for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], false);
+        const Counts hidden = window(3);
+        for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], true);
+        const Counts shown = window(3);
+        say("hidden", k, hidden);
+        say("shown", k, shown);
+        CHECK_MSG(hidden.lookups <= 1ull * k && hidden.rows == 0u && shown.lookups <= 1ull * k && shown.rows == 0u,
+                  "k HIDDEN or SHOWN objects cost <= 1 lookup and 0 rows each (%llu / %llu, %llu / %llu)",
+                  hidden.lookups, hidden.rows, shown.lookups, shown.rows);
+        CHECK(hidden.lookups > 0u, "...and the hides were seen (not vacuous)");
+    }
+    // ADDED (new meshes), then REMOVED.
+    {
+        std::vector<NodeId> extra;
+        for (unsigned c = 0; c < k; ++c) {
+            const NodeId n = enginetest::addTestCube(scene, Colour(0.9f, 0.3f, 0.2f), 0.0f, 0.5f);
+            place(n, N + c, 0.3f);
+            extra.push_back(n);
+        }
+        const Counts added = window(6);
+        for (NodeId n : extra) scene->removeNode(n);
+        const Counts removed = window(4);
+        say("added", k, added);
+        say("removed", k, removed);
+        CHECK_MSG(added.lookups <= kAddLookups * k && added.rows <= 2ull * k && added.lookups > 0u,
+                  "k ADDED objects cost <= 23 lookups and <= 2 rows each (%llu, %llu)", added.lookups, added.rows);
+        CHECK_MSG(removed.lookups <= 2ull * k && removed.rows <= 1ull * k && removed.rows > 0u,
+                  "k REMOVED objects cost <= 2 lookups and 1 row each - the zero-filled record counted (%llu, %llu)",
+                  removed.lookups, removed.rows);
+    }
+    // RE-LEVELLED: the LOD spheres from 25 m to 110 m of the camera, then back.
+    {
+        const RayQueryStatus before = scene->published().rayQuery;
+        for (size_t i = 0; i < spheres.size(); ++i)
+            enginetest::setNodePosition(scene, spheres[i], Vec3(-3.0f + 2.0f * float(i), 15.0f, -60.0f));
+        const Counts away = window(6);
+        const RayQueryStatus after = scene->published().rayQuery;
+        say("re-levelled (away)", unsigned(spheres.size()), away);
+        CHECK_MSG(after.blasBuilds > before.blasBuilds && away.lookups > 0u,
+                  "the spheres' near copies changed level (structures built %llu -> %llu)", before.blasBuilds,
+                  after.blasBuilds);
+        CHECK_MSG(away.lookups <= kRelevelLookups * spheres.size() && away.rows <= 2ull * spheres.size(),
+                  "k RE-LEVELLED objects cost <= 26 lookups and <= 2 rows each (%llu, %llu)", away.lookups, away.rows);
+    }
+    // AN ALPHA-TESTED SLOT HIDDEN: the alpha table re-written, a row per member left.
+    {
+        scene->setNodeVisible(cutouts[0], false);
+        const Counts a = window(3);
+        say("cut-out hidden", 1u, a);
+        CHECK_MSG(a.lookups <= 1u && a.rows <= cutouts.size() - 1u && a.rows > 0u,
+                  "a hidden cut-out costs <= 1 lookup and the alpha table's rows of the members left (%llu, %llu <= %zu)",
+                  a.lookups, a.rows, cutouts.size() - 1u);
+        scene->setNodeVisible(cutouts[0], true);
+        window(3);
+    }
+    // A LAMP added, moved, DELETED: the hit table re-written whole; the deleted lamp gone from it.
+    {
+        const unsigned lightsBefore = unsigned(scene->published().rayQuery.hitLights);
+        const NodeId lamp = scene->createNode();
+        enginetest::setNodePosition(scene, lamp, Vec3(0.0f, 4.0f, 5.0f));
+        LightDesc l;
+        l.type = LightType::Point;
+        l.intensity = 20.0f;
+        l.range = 12.0f;
+        scene->setLight(lamp, l);
+        const Counts added = window(3);
+        const unsigned lightsAdded = unsigned(scene->published().rayQuery.hitLights);
+        enginetest::setNodePosition(scene, lamp, Vec3(2.0f, 4.0f, 5.0f));
+        const Counts moved = window(3);
+        scene->removeLight(lamp);
+        Counts deleted = window(1);
+        const unsigned lightsNext = unsigned(scene->published().rayQuery.hitLights);
+        const Counts tail = window(1);
+        deleted.lookups += tail.lookups;
+        deleted.rows += tail.rows;
+        deleted.visits += tail.visits;
+        const unsigned rowsPer = lightsAdded + unsigned(scene->published().rayQuery.hitMaterialRows);
+        say("lamp added", 1u, added);
+        say("lamp moved", 1u, moved);
+        say("lamp deleted", 1u, deleted);
+        std::printf("   the hit table's lights: %u before, %u with the lamp, %u the frame after it was deleted\n",
+                    lightsBefore, lightsAdded, lightsNext);
+        CHECK_MSG(lightsAdded == lightsBefore + 1u && lightsNext == lightsBefore,
+                  "A DELETED LAMP IS GONE FROM THE HIT TABLE THE NEXT FRAME (%u -> %u -> %u)", lightsBefore, lightsAdded,
+                  lightsNext);
+        CHECK_MSG(added.lookups == 0u && moved.lookups == 0u && deleted.lookups == 0u && added.rows <= rowsPer &&
+                      moved.rows <= rowsPer && deleted.rows <= rowsPer && moved.rows > 0u && deleted.rows > 0u,
+                  "a lamp added, moved or deleted re-writes the hit table once: 0 lookups, <= its lights + material rows "
+                  "(%llu, %llu, %llu <= %u)", added.rows, moved.rows, deleted.rows, rowsPer);
+        scene->removeNode(lamp);
+        window(2);
+    }
+    // n > 8 MASKS STALE IN ONE FRAME: every cut-out's texture re-uploaded at once.
+    {
+        const unsigned n = unsigned(cutTex.size());
+        const unsigned long long made0 = scene->published().rayQuery.alphaMasksMade;
+        for (unsigned i = 0; i < n; ++i) {
+            const std::vector<unsigned char> texels = barsTexels(i + 20u);
+            scene->updateTexture(cutTex[i], 32, 32, texels.data());
+        }
+        int first = -1, done = -1;
+        unsigned long long stale = 0ull;
+        for (int f = 0; f < 30 && done < 0; ++f) {
+            run(1);
+            const RayQueryStatus st = scene->published().rayQuery;
+            stale += st.alphaStaleServed;
+            if (first < 0 && st.alphaMasksMade > made0) first = f;
+            if (st.alphaMasksMade >= made0 + n) done = f;
+        }
+        const int needed = int((n + 7u) / 8u);
+        std::printf("   %u masks stale at once: remade from frame %d to frame %d (%llu stale served on the way)\n", n,
+                    first, done, stale);
+        CHECK_MSG(done >= 0 && first >= 0 && done - first + 1 <= needed,
+                  "n STALE MASKS ARE ALL REMADE within ceil(n / 8) = %d frames of the first (%d)", needed,
+                  done >= 0 && first >= 0 ? done - first + 1 : -1);
+        CHECK_MSG(stale > 0u, "the frame past the budget served stale masks and said so (%llu)", stale);
+    }
     std::printf("\n   frames rendered: %d\n", frames);
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
