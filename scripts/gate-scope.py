@@ -135,6 +135,7 @@ OGRE_ENGINE_FUNCTIONS = {
     # texture streaming and the texture cache
     **{f: ["engine", "assets", "thumbnails", "openasync"] for f in (
         "texturesDoneStreaming", "collectTextureStreaming", "drainTextureStreaming", "waitForTextureLoads",
+        "pumpTextureLoads", "beginTextureDrain", "stepTextureDrain",
         "textureLoadRequests", "textureMetadataCacheEntries", "textureChannelCacheEntries", "saveTextureCache",
         "textureManagerOf", "countPendingTextures", "textureMultiLoadThreads", "textureWaitAdvances")},
     # the shader build: async compiles, the shader cache
