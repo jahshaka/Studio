@@ -219,6 +219,11 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
     // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still view
     // holds one N-sample rest mean; the rest door keeps every frame live.
     t.restOff = true;
+    // MEASURE (decision 21, by hand): the age at which the filter has fallen to none (the rows run the shipped one)
+    if (const char *age = std::getenv("JAH_GATHER_FILTER_AGE")) {
+        t.filterByAge = true;
+        t.filterAgeFrames = unsigned(std::atoi(age));
+    }
     s->setGatherTuning(t);
     render(e, 40);
 
@@ -233,10 +238,15 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
         const float zs[3] = { kFront + strideM, kFront + 2.0f * strideM, kFront + 3.0f * strideM };
         double closedM[3];
         for (int i = 0; i < 3; ++i) { double fo = 0.0; closedM[i] = panelClosedForm(zs[i], strideM, kLe, kHalfW, kY0, kH, kFront, fo); }
-        struct Arm { const char *name; bool jitterOff, filterOff, common; };
-        const Arm armsM[6] = { { "shipped", false, false, false }, { "filter off", false, true, false },
-                               { "jitter off", true, false, false }, { "jitter + filter off", true, true, false },
-                               { "common jitter", false, false, true }, { "common + filter off", false, true, true } };
+        // decision 21: the shipped reconstruction against the filter's width by the probe's age (none from 12 or 24
+        // frames, the measuring door GatherTuning::filterByAge) and the filter and the jitter off.
+        struct Arm { const char *name; bool jitterOff, filterOff, common; unsigned byAge; };
+        const Arm armsM[6] = { { "shipped", false, false, false, 0u },
+                               { "filter by age, 12", false, false, false, 12u },
+                               { "filter by age, 24", false, false, false, 24u },
+                               { "filter off", false, true, false, 0u },
+                               { "jitter off", true, false, false, 0u },
+                               { "jitter + filter off", true, true, false, 0u } };
         for (const Arm &arm : armsM) {
             GatherTuning ta;
             ta.readback = true;
@@ -244,6 +254,8 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
             ta.jitterOff = arm.jitterOff;
             ta.filterOff = arm.filterOff;
             ta.jitterCommon = arm.common;
+            ta.filterByAge = arm.byAge > 0u;
+            ta.filterAgeFrames = arm.byAge;
             s->setGatherTuning(ta);
             std::vector<double> series[3];
             unsigned last = ~0u;

@@ -585,9 +585,11 @@ static int scrollSlabMain()
         e->setFrameMonitor(MonitorLevel::Review);
         std::vector<double> scrollGpu, wholeGpu;
         float x = 0.0f;
-        // SEVEN PAIRS, their medians (the master check of ENGINE-UPGRADE-U5: three pairs' median read 0.28-0.37 on one
-        // binary - one slow sample in three moved it across the bar; the bar is unchanged, the estimate's spread is not)
-        for (int rep = 0; rep < 7; ++rep) {
+        // SEVEN PAIRS IN THE .timing ROW, their medians (the master check of ENGINE-UPGRADE-U5: three pairs' median read
+        // 0.28-0.37 on one binary - one slow sample in three moved it across the bar; the bar is unchanged, the
+        // estimate's spread is not); the guard asserts no time and keeps its three (decision 22.7: its price is 220 frames).
+        const int pairs = jahtest::timingBarsArmed() ? 7 : 3;
+        for (int rep = 0; rep < pairs; ++rep) {
             // A SCROLL by the shipped step, then a WHOLE rebuild of cascade 0 at the same place (an
             // edit inside its box: one lattice cube nudged and put back).
             std::vector<MonitorRecord> recs;

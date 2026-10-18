@@ -55,6 +55,7 @@
 #include <QCoreApplication>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -115,7 +116,9 @@ static void nudgeLamps(World &w, float dy)
 
 static std::vector<clusterfix::Fixture> gFixtures;
 
-static bool loadFixtures()
+/// `dense`: the 68k-triangle dragon too (5 of a light-law row's 10 s to bake; the cut's own laws want its clusters,
+/// the light's and the receivers' bit-equal laws hold over any field - decision 22.4's budget).
+static bool loadFixtures(bool dense = true)
 {
     const std::string prim = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/app/content/primitives/";
     std::vector<std::pair<std::string, iris::MeshPtr>> meshes;
@@ -124,6 +127,7 @@ static bool loadFixtures()
         if (!ms.empty()) meshes.push_back({ name, ms.front() });
     }
     for (const char *name : { "/matcaps_dragon.obj", "/physics_model.obj" }) {
+        if (!dense && std::string(name) == "/matcaps_dragon.obj") continue;
         const auto ms = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + name);
         if (!ms.empty()) meshes.push_back({ name + 1, ms.front() });
     }
@@ -138,7 +142,8 @@ static bool loadFixtures()
     return gFixtures.size() >= 3;
 }
 
-static void buildWorld(World &w, bool dense)
+/// A GAP IN THE GROUND (decision 22.3): x0, x1, z0, z1 - the ground is the four quads around it; null = one quad.
+static void buildWorld(World &w, bool dense, const float *gap = nullptr)
 {
     Scene *s = w.scene;
     s->setLodBias(1.0f);
@@ -153,10 +158,24 @@ static void buildWorld(World &w, bool dense)
     const MaterialId om = s->createPbrMaterial(op);
     {
         MeshData g;
-        g.positions = { -150.0f, 0.0f, -150.0f, 150.0f, 0.0f, -150.0f, 150.0f, 0.0f, 150.0f, -150.0f, 0.0f, 150.0f };
-        g.normals = { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
-        g.uvs = { 0, 0, 20, 0, 20, 20, 0, 20 };
-        g.indices = { 0, 2, 1, 0, 3, 2 };
+        // the ground's rectangles (x0, x1, z0, z1): the whole field, or the four around the gap
+        std::vector<std::array<float, 4>> rects;
+        if (!gap) rects.push_back({ -150.0f, 150.0f, -150.0f, 150.0f });
+        else {
+            rects.push_back({ -150.0f, 150.0f, -150.0f, gap[2] });
+            rects.push_back({ -150.0f, 150.0f, gap[3], 150.0f });
+            rects.push_back({ -150.0f, gap[0], gap[2], gap[3] });
+            rects.push_back({ gap[1], 150.0f, gap[2], gap[3] });
+        }
+        for (const auto &r : rects) {
+            const unsigned b = unsigned(g.positions.size() / 3u);
+            g.positions.insert(g.positions.end(), { r[0], 0.0f, r[2], r[1], 0.0f, r[2], r[1], 0.0f, r[3], r[0], 0.0f, r[3] });
+            g.normals.insert(g.normals.end(), { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 });
+            g.uvs.insert(g.uvs.end(), { (r[0] + 150.0f) / 15.0f, (r[2] + 150.0f) / 15.0f, (r[1] + 150.0f) / 15.0f,
+                                        (r[2] + 150.0f) / 15.0f, (r[1] + 150.0f) / 15.0f, (r[3] + 150.0f) / 15.0f,
+                                        (r[0] + 150.0f) / 15.0f, (r[3] + 150.0f) / 15.0f });
+            g.indices.insert(g.indices.end(), { b, b + 2, b + 1, b, b + 3, b + 2 });
+        }
         const NodeId n = s->createNode();
         s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));
         s->attachMesh(n, s->createMesh(g), gm);
@@ -205,12 +224,12 @@ static void buildWorld(World &w, bool dense)
     }
 }
 
-static bool makeWorld(World &w, const char *name, bool dense)
+static bool makeWorld(World &w, const char *name, bool dense, const float *gap = nullptr)
 {
     w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     w.scene = gE->createScene(name);
     if (!w.view || !w.scene) return false;
-    buildWorld(w, dense);
+    buildWorld(w, dense, gap);
     // THE DENSE CASTER: the split's door shut (every item on the stock PBS caster) and a LOD
     // bias of 0 (no level affordable: every object at level 0 in every pass).
     if (dense) {
@@ -912,7 +931,13 @@ static int receiverSection(unsigned long long &framesOut)
 {
     std::printf("\n== the receiver test: the picture with the sun maps' receiver test on and off ==\n");
     World a, b;
-    if (!makeWorld(a, "recv-on", false) || !makeWorld(b, "recv-off", false)) { std::printf("FAIL: the worlds\n"); return 1; }
+    // THE GAP (decision 22.3): under the alpha-tested plate and the rigged column, and down-sun of them, no ground -
+    // so no Atom receiver lies behind either in its light column, and only their own boxes (the stock route's mode 1)
+    // keep the blockers that shadow them: the box path is load-bearing (the negative control below proves it).
+    // (wide: the cut reads the receiver grid in tiles - at the mip where the blocker's dilated rectangle is <= 4 tiles
+    // wide - so ground within a tile or two of a blocker's light column would keep it)
+    const float gap[4] = { -6.5f, 6.5f, -5.5f, 0.5f };
+    if (!makeWorld(a, "recv-on", false, gap) || !makeWorld(b, "recv-off", false, gap)) { std::printf("FAIL: the worlds\n"); return 1; }
     const bool tga = writeSolidTga("recv_decal_red.tga", 230, 30, 20);
     Vec3 roofCentre(1.0f, 6.0f, -15.0f);
     const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
@@ -942,7 +967,7 @@ static int receiverSection(unsigned long long &framesOut)
         if (tga) {
             const TextureId t = sc->loadDecalTexture("recv_decal_red.tga", DecalMap::Diffuse);
             const NodeId dn = sc->createNode();
-            sc->setNodeTransform(dn, Vec3(1.0f, 0.0f, -2.0f), Quat(), Vec3(1, 1, 1));
+            sc->setNodeTransform(dn, Vec3(1.0f, 0.0f, -7.5f), Quat(), Vec3(1, 1, 1));   // on the ground past the gap
             DecalDesc dd;
             dd.diffuse = t;
             dd.width = dd.height = 1.5f;
@@ -968,9 +993,19 @@ static int receiverSection(unsigned long long &framesOut)
         bp.albedo = Colour(0.4f, 0.4f, 0.45f);
         bp.roughness = 0.9f;
         const MaterialId bm = sc->createPbrMaterial(bp);
-        // toward the sun from each receiver (the fixture's sun: light travelling -0.45, -0.8, -0.4)
-        addBox(sc, Vec3(2.2f + 0.56f, 0.6f + 1.0f, -1.5f + 0.5f), Vec3(0.25f, 0.05f, 0.25f), bm);
-        addBox(sc, Vec3(-2.4f + 1.5f + 0.56f, 1.2f + 1.0f, -1.5f + 0.5f), Vec3(0.25f, 0.05f, 0.25f), bm);
+        // toward the sun from each receiver (the fixture's sun: light travelling -0.45, -0.8, -0.4), FOUR metres up its
+        // light (+2.25, +4, +2): above the camera's picture, so no blocker is a receiver of its own in the id depth (a
+        // visible caster always has itself behind it) - only the receiver under it keeps it
+        addBox(sc, Vec3(2.2f + 2.25f, 0.6f + 4.0f, -1.5f + 2.0f), Vec3(0.25f, 0.05f, 0.25f), bm);
+        // the column's blocker over the SWUNG TIP's outer part (x + 0.6 .. + 1.0, top at y 1.2): outside the bind
+        // pose's box (x +- 0.2), so only the grown sphere keeps it
+        addBox(sc, Vec3(-2.4f + 0.8f + 2.25f, 1.2f + 4.0f, -1.5f + 2.0f), Vec3(0.2f, 0.05f, 0.25f), bm);
+        // THE NON-SQUARE SPLIT (decision 19.1): a WIDE LOW RECEIVER BAND far down the field - 60 m across, 0.3 m
+        // high - with a bar above it toward the sun, so the far focused split's window (Ogre's setOrthoWindow(w, h),
+        // wide and short at the grazing look below) holds receivers whose shadow reach differs along the map's x
+        // and y: the dilation per axis is what keeps the bar's clusters.
+        addBox(sc, Vec3(0.0f, 0.15f, -45.0f), Vec3(30.0f, 0.15f, 0.6f), bm);
+        addBox(sc, Vec3(0.0f + 1.4f, 2.6f, -45.0f + 1.25f), Vec3(20.0f, 0.1f, 0.3f), bm);
     }
     // THE CAMERA LOOKS DOWN AT THE NEAR GROUND: most of the field's shadows fall outside the picture.
     CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 3.0f, 3.0f), Vec3(0.0f, 0.0f, -3.0f));
@@ -1017,26 +1052,43 @@ static int receiverSection(unsigned long long &framesOut)
     // IN MOTION: the roof slides off, then the camera pans - the last steps along the field at a grazing pitch (the
     // focused splits' windows long and narrow: map 2's x and y rows differ, decision 19.1).
     unsigned steps = 0, equal = 0;
-    for (int i = 0; i < 12; ++i) {
-        roofCentre.x += 1.0f;
+    float maxAsym = 0.0f, asymX = 0.0f, asymY = 0.0f;
+    unsigned asymMap = 0u;
+    for (int i = 0; i < 4; ++i) {   // (decision 22.4: the same travel in a third of the steps)
+        roofCentre.x += 3.0f;
         for (int k = 0; k < 2; ++k) ws[k]->scene->setNodeTransform(roofs[k], roofCentre, Quat(), Vec3(1, 1, 1));
         enginetest::frames(gE, 1);
         ++steps;
         equal += same("slide") ? 1u : 0u;
         testedSteps += testedNow() ? 1u : 0u;
     }
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < 7; ++i) {
         const CameraDesc c2 =
-            i < 8 ? enginetest::testCameraDescLookAt(Vec3(0.5f * float(i + 1), 3.0f, 3.0f - 0.6f * float(i + 1)),
-                                                     Vec3(0.3f * float(i + 1), 0.0f, -3.0f - 0.8f * float(i + 1)))
-                  : enginetest::testCameraDescLookAt(Vec3(0.0f, 1.2f, 4.0f), Vec3(0.2f * float(i - 8), 0.6f, -60.0f));
+            i < 3 ? enginetest::testCameraDescLookAt(Vec3(1.33f * float(i + 1), 3.0f, 3.0f - 1.6f * float(i + 1)),
+                                                     Vec3(0.8f * float(i + 1), 0.0f, -3.0f - 2.13f * float(i + 1)))
+                  : enginetest::testCameraDescLookAt(Vec3(0.0f, 1.2f, 4.0f), Vec3(0.2f * float(i - 3), 0.6f, -60.0f));
         a.view->setCamera(c2);
         b.view->setCamera(c2);
         enginetest::frames(gE, 1);
         ++steps;
         equal += same("pan") ? 1u : 0u;
         testedSteps += testedNow() ? 1u : 0u;
+        for (const AtomCasterMapStats &m : a.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u && m.receiverTested) {
+                const float asym = std::fabs(m.receiverDilation[1] - m.receiverDilation[0]);
+                if (asym > maxAsym) {
+                    maxAsym = asym;
+                    asymMap = m.map;
+                    asymX = m.receiverDilation[0];
+                    asymY = m.receiverDilation[1];
+                }
+            }
     }
+    std::printf("   the widest per-axis split of the dilation over the pan: map %u, %.2f texels along x, %.2f along y\n",
+                asymMap, double(asymX), double(asymY));
+    CHECK_MSG(maxAsym >= 0.5f,
+              "THE NON-SQUARE SPLIT IS SEEN: a sun map's receiver dilation differs along its x and y in the pan (map %u: "
+              "%.2f / %.2f texels) - the per-axis law under the bit-equal steps", asymMap, double(asymX), double(asymY));
     // THE WIDEST FILTER (decision 19.4): PCF 6 x 6, its 3-texel reach the dilation's first term.
     gE->setShadowFilter(ShadowFilter::VerySoft);
     for (int i = 0; i < 4; ++i) {
@@ -1051,6 +1103,23 @@ static int receiverSection(unsigned long long &framesOut)
               "the field and PCF 6 x 6 (%u of %u)", equal, steps);
     CHECK_MSG(testedSteps == steps, "every one of those frames ran the receiver test on world a's sun maps and none of "
               "world b's (%u of %u)", testedSteps, steps);
+    // THE NEGATIVE CONTROL (decision 22.3): the box path off (shadow.receiverBoxesOff - the grid from the id depth
+    // alone) and world a's picture must DIFFER from world b's: the alpha-tested plate and the swung tip, over the gap,
+    // are receivers through their boxes only, so without them the cut drops their blockers and their shadows go.
+    // the roof slid out of the light (its shadow covered the receivers): the blockers' shadows are the picture's
+    for (int k = 0; k < 2; ++k) ws[k]->scene->setNodeTransform(roofs[k], Vec3(80.0f, 6.0f, -15.0f), Quat(), Vec3(1, 1, 1));
+    a.view->setCamera(cam);
+    b.view->setCamera(cam);
+    enginetest::frames(gE, 3);
+    const bool restSame = same("rest, the box path on");
+    CHECK(gE->setArm("shadow.receiverBoxesOff", 1.0), "the box path's door");
+    enginetest::frames(gE, 3);
+    const bool controlSame = same("rest, the box path OFF (the negative control)");
+    gE->setArm("shadow.receiverBoxesOff", 0.0);
+    enginetest::frames(gE, 2);
+    CHECK_MSG(restSame && !controlSame, "THE BOX PATH IS LOAD-BEARING: at rest the pictures are bit-equal with it (%s) "
+              "and differ without it (%s) - the fixture's receivers depend on the stock route's boxes alone",
+              restSame ? "equal" : "DIFFER", controlSame ? "EQUAL" : "differ");
     framesOut = a.scene->published().frame;   // the engine's frame count: every frame of this process
     gE->destroyView(a.view);
     gE->destroyScene(a.scene);
@@ -1062,9 +1131,8 @@ static int receiverSection(unsigned long long &framesOut)
 static int lightCullMain()
 {
     std::printf("== shadow.caster_cull: the sun maps' casters culled by the light's own depth, the maps unchanged\n");
-    // A 1024 ATLAS: every law here is per texel of whatever atlas the maps have, and each of the run's ~50 map digests
-    // reads the whole atlas back (a fixture's budget is 10 s).
-    gE->setShadowResolution(1024u);
+    // THE SHIPPED ATLAS (decision 22.4): each step's two digests read the whole atlas back, so the fixture's budget
+    // (10 s) is kept by its steps - six slides and three pans, the old travel in a third of the steps.
     World w;
     if (!makeWorld(w, "light-cull", false)) { std::printf("FAIL: the world\n"); return 1; }
     PbrParams rp;
@@ -1220,13 +1288,13 @@ static int lightCullMain()
         if (mapsEqual(a, b, wy)) ++stepsEqual;
         else if (firstWhy.empty()) firstWhy = "step " + std::to_string(steps) + ": " + wy;
     };
-    for (int i = 0; i < 16; ++i) {
-        roofCentre.x += 0.75f;
+    for (int i = 0; i < 6; ++i) {
+        roofCentre.x += 2.0f;
         w.scene->setNodeTransform(roof, roofCentre, Quat(), Vec3(1, 1, 1));
         step(0);
     }
-    for (int i = 0; i < 8; ++i) {
-        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(0.6f * float(i + 1), 2.2f, 4.0f - 0.8f * float(i + 1)),
+    for (int i = 0; i < 3; ++i) {
+        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(1.6f * float(i + 1), 2.2f, 4.0f - 2.1f * float(i + 1)),
                                                             Vec3(0.0f, 0.8f, -30.0f));
         w.view->setCamera(c2);
         step(1);
@@ -1262,7 +1330,10 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const std::string mode = argc > 1 ? argv[1] : "--cut";
-    if (!loadFixtures()) { std::printf("FAIL: the fixtures (the shipped models did not bake)\n"); return 1; }
+    if (!loadFixtures(mode != "--light-cull" && mode != "--receivers")) {
+        std::printf("FAIL: the fixtures (the shipped models did not bake)\n");
+        return 1;
+    }
     std::string err;
     const auto cfg = enginetest::testEngineConfig(mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
                   : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"

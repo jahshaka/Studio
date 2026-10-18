@@ -259,7 +259,7 @@ gi.id_depth 4.81  quiet n=37
 gi.id_depth_rays 4.60  quiet n=34
 gi.lamp_falloff 5.39  quiet n=36
 gi.leak_room 6.00  quiet n=41
-gi.march_underread 5.33  solo 2026-10-15 (PHOTON-MARCH-1 stage 3: n=3, 5.33-5.40 s, 2236 frames: Low + Medium + the slab)
+gi.march_underread 8.22  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 21/22: + the junction halves; the inside-fraction cases are gi.march_inside; n=1)
 gi.material_swap 2.69  quiet n=44
 gi.mobility 6.80  ship 3a0422b4e (2026-10-13)
 gi.modes 3.48  quiet n=41
@@ -330,7 +330,7 @@ gi.voxel_coverage 44.23  quiet n=42
 gi.voxel_emissive 6.75  quiet n=39
 gi.voxel_feed 3.03  quiet n=40
 gi.voxel_lab 1.45  quiet n=34
-gi.metal_bounce 6.85  solo 2026-10-18 (ENGINE-UPGRADE-U5 stage 5, METAL-BOUNCE-1: replaces gi.voxel_metal_albedo; n=1, 1310 frames)
+gi.metal_bounce 6.15  solo 2026-10-18 (ENGINE-UPGRADE-U5 stage 5, METAL-BOUNCE-1; the tinted metal and the mover are gi.metal_bounce_route; n=1, 1310 frames)
 gi.voxel_resident 4.72  quiet n=45
 gizmo.drag_frame 0.10  ship 3a0422b4e (2026-10-13)
 gizmo.group_transform 0.06  quiet n=46
@@ -987,6 +987,9 @@ engine.async_queue_validation 1.81  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10
 engine.async_record 2.29  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the lowest of record)
 engine.ray_update_counts 1.47  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
 gi.cascade_drag_age 2.52  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
-gi.scroll_slab 5.27  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
-shadow.caster_cull 8.48  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check: the light-depth laws alone on a 1024 atlas, n=2, 147 frames)
-shadow.caster_receivers 9.06  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check: the receiver law, split from shadow.caster_cull, n=2, 82 frames)
+gi.scroll_slab 5.80  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.7: three pairs again, 220 frames; n=1)
+shadow.caster_cull 5.29  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.4: the shipped 2048 atlas, six slides and three pans, no dragon bake; n=1, 112 frames)
+shadow.caster_receivers 5.10  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.3/22.4: the gap, the out-of-view blockers, the negative control; no dragon bake; n=1, 77 frames)
+engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.5: the host drain reset on a throw; n=1, 11 frames)
+gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
+gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)

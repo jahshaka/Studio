@@ -132,8 +132,9 @@ OGRE_ENGINE_FUNCTIONS = {
                            "endLostOrStoppedVrSession", "vrState", "vrStatus", "vrEyeScreenshot", "setVrMirrorView",
                            "vrInjectInput", "vrHandJoints", "vrBindingBlocks", "vrInjectJoints", "vrHaptic",
                            "setVrOrigin", "vrView")},
-    # texture streaming and the texture cache
-    **{f: ["engine", "assets", "thumbnails", "openasync"] for f in (
+    # texture streaming and the texture cache (decision 22.6: threading.texture_wait_watchdog proves the drain's
+    # give-up, materialpreview and avatar wait on texture loads)
+    **{f: ["engine", "assets", "thumbnails", "openasync", "threading", "materialpreview", "avatar"] for f in (
         "texturesDoneStreaming", "collectTextureStreaming", "drainTextureStreaming", "waitForTextureLoads",
         "pumpTextureLoads", "beginTextureDrain", "stepTextureDrain",
         "textureLoadRequests", "textureMetadataCacheEntries", "textureChannelCacheEntries", "saveTextureCache",

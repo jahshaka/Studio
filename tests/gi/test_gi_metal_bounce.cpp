@@ -66,8 +66,10 @@ double bounceRatio(double m, double r)
 
 }  // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    // `--route`: THE TINTED METAL AND THE MOVER (gi.metal_bounce_route); the rest is gi.metal_bounce
+    const bool route = argc > 1 && std::string(argv[1]) == "--route";
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-metal-bounce-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -140,6 +142,7 @@ int main()
     struct Case { float rough, metal; };
     const std::pair<GiToggle, const char *> arms[2] = { { GiToggle::Off, "field off" }, { GiToggle::On, "field on" } };
 
+    if (!route) {
     // ---- THE DIRECT ARM -------------------------------------------------------------------------
     const Case direct[5] = { { 0.3f, 0.0f }, { 0.3f, 0.5f }, { 0.3f, 1.0f }, { 0.9f, 0.0f }, { 0.9f, 1.0f } };
     double store[5][2] = {}, bounce[5][2] = {};
@@ -205,6 +208,134 @@ int main()
         }
     }
 
+    }
+    // ---- THE TINTED METAL AND THE MOVER (decision 22.1) ----------------------------------------------
+    if (route)
+    // A TINTED metal (base 1 / 0.6 / 0.3, metalness 1, r 0.3): the lobe F0 A + w B per CHANNEL, F0 = b, w = 1 - so a
+    // store or a route that swapped the two (A + b B) reads a different colour. The store against the white diffuser,
+    // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on, a still metal's hits read the
+    // store (no cards here) and a MOVER's go to the decode (jahHitAlwaysDecodes) - the decode re-emits the same lobe
+    // from the same table (800.Atom_piece_ps.any, atomGatherMetalLobe), so the panel's gathered E/pi is the same within
+    // 0.4 % per channel when the plate becomes a mover. The gather's sample sequence is held (freezeFrameIndex): the
+    // two arms trace the same rays, and their difference is the route's alone.
+    {
+        const float tint[3] = { 1.0f, 0.6f, 0.3f };
+        double diffuserRgb[3] = {}, metalRgb[3] = {};
+        double gathered[2][3] = {};
+        bool gatherRan = false;
+        for (int pass = 0; pass < 2; ++pass) {
+            Scene *s = e->createScene("metaltint");
+            CHECK(rv->setScene(s), "the view shows the tinted scene");
+            float sh[27] = { 0 };
+            s->setAmbientSh(sh);
+            s->setEnvironmentLight(Colour(0, 0, 0, 1));
+            CHECK(enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), 3.0f) != 0, "the sun straight down");
+            const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+            PbrParams plate;
+            plate.albedo = pass ? Colour(tint[0], tint[1], tint[2]) : Colour(1.0f, 1.0f, 1.0f);
+            plate.roughness = 0.3f;
+            plate.metalness = pass ? 1.0f : 0.0f;
+            const NodeId plateNode = s->createNode();
+            s->attachMesh(plateNode, cube, s->createPbrMaterial(plate));
+            s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
+            PbrParams panel; panel.albedo = Colour(1, 1, 1); panel.roughness = 1.0f;
+            const NodeId panelNode = s->createNode();
+            s->attachMesh(panelNode, cube, s->createPbrMaterial(panel));
+            s->setNodeTransform(panelNode, Vec3(0.0f, 0.85f, 1.15f), Quat(), Vec3(2.0f, 1.5f, 0.1f));
+            enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.9f, -2.0f), Vec3(0.0f, 0.75f, 1.1f));
+            s->setGlobalIllumination(giOn(GiToggle::Off, 1));
+            settle(s);
+            GiVoxelVolume v;
+            double rgb[3] = {};
+            int n = 0;
+            if (s->giVoxelVolume(0, v) && v.available)
+                for (int dz = -2; dz <= 2; ++dz)
+                    for (int dx = -2; dx <= 2; ++dx) {
+                        const int cx = int((0.0f - v.origin[0]) / v.cell[0]) + dx;
+                        const int cy = int((0.05f - v.origin[1]) / v.cell[1]);
+                        const int cz = int((0.0f - v.origin[2]) / v.cell[2]) + dz;
+                        const size_t i = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                        if (v.light[i + 3] > 0.0f) {
+                            for (int c = 0; c < 3; ++c) rgb[c] += v.light[i + c] / v.light[i + 3];
+                            ++n;
+                        }
+                    }
+            for (int c = 0; c < 3; ++c) (pass ? metalRgb : diffuserRgb)[c] = n ? rgb[c] / n : -1.0;
+            if (pass == 1 && e->rayQueryAvailable() && e->rayTracing()) {
+                // the gather's own view (the screen-probe gather runs at High, on a picture its stride resolves)
+                View *gv = e->createOffscreenView("metalroute", 256, 256, Colour(0, 0, 0));
+                PostFxDesc gfx;
+                gfx.allowOffscreen = true;
+                gfx.ssr = 0;
+                gv->setPostFx(gfx);
+                gv->setShadows(true);
+                gv->setOffscreenContract(OffscreenContract::StillPicture);
+                rv->setScene(nullptr);
+                CHECK(gv->setScene(s), "the gather's view shows the tinted scene");
+                enginetest::testCameraLookAt(gv, Vec3(0.0f, 0.9f, -2.0f), Vec3(0.0f, 0.75f, 1.1f));
+                GiParams g = giOn(GiToggle::Off, 1);
+                g.quality = GiQuality::High;
+                g.gather = GiToggle::On;
+                g.cards = false;
+                s->setGlobalIllumination(g);
+                GatherTuning t;
+                t.readback = true;
+                t.restOff = true;
+                t.freezeFrameIndex = true;
+                s->setGatherTuning(t);
+                for (int arm = 0; arm < 2; ++arm) {
+                    if (arm == 1) s->setNodeMovable(plateNode, true);
+                    settle(s);
+                    run(48);   // the held sequence's history converged on the arm's route
+                    const GatherStatus st = s->published().gi.gather;
+                    double sum[3] = {};
+                    unsigned px = 0;
+                    if (!st.irradiance.empty())
+                        for (unsigned y = 80; y < 128; ++y)
+                            for (unsigned x = 96; x < 160; ++x) {
+                                const float *q = &st.irradiance[(size_t(y) * st.irradianceW + x) * 4u];
+                                if (q[3] <= 0.0f) continue;
+                                for (int c = 0; c < 3; ++c) sum[c] += q[c];
+                                ++px;
+                            }
+                    for (int c = 0; c < 3; ++c) gathered[arm][c] = px ? sum[c] / px : -1.0;
+                    std::printf("the route: the plate %s, the panel's gathered E/pi %.5f %.5f %.5f (%u px; readback %ux%u, "
+                                "%zu floats, gather running %d)\n", arm ? "a MOVER (the decode)" : "still (the store)",
+                                gathered[arm][0], gathered[arm][1], gathered[arm][2], px, st.irradianceW, st.irradianceH,
+                                st.irradiance.size(), int(st.running));
+                }
+                gatherRan = true;
+                gv->setScene(nullptr);
+                e->destroyView(gv);
+            }
+            GiParams off; off.mode = GiMode::Off;
+            s->setGlobalIllumination(off);
+            rv->setScene(nullptr);
+            e->destroyScene(s);
+        }
+        double A = 0.0, B = 0.0;
+        enginetest::ggxSpecularAlbedo(1.0, 0.3, A, B, 512);
+        const double dd = enginetest::disneyDiffuseAlbedo(1.0, 0.3, 256);
+        for (int c = 0; c < 3; ++c) {
+            const double want = (tint[c] * A + B) / dd, swapped = (A + tint[c] * B) / dd;
+            char msg[300];
+            std::snprintf(msg, sizeof msg, "tinted metal, channel %d: the store holds F0 A + w B of the diffuser's "
+                          "(%.4f; want %.4f, the two swapped %.4f; bar 1.5 %%)", c, metalRgb[c] / diffuserRgb[c], want,
+                          swapped);
+            CHECK(diffuserRgb[c] > 0.0 && std::fabs(metalRgb[c] / diffuserRgb[c] / want - 1.0) <= 0.015, msg);
+        }
+        if (gatherRan)
+            for (int c = 0; c < 3; ++c) {
+                char msg[300];
+                std::snprintf(msg, sizeof msg, "THE ROUTE DOES NOT MOVE THE BOUNCE, channel %d: the panel's gathered E/pi "
+                              "from the tinted metal still %.5f, as a mover %.5f (%.4f; bar 0.4 %%)", c, gathered[0][c],
+                              gathered[1][c], gathered[1][c] / gathered[0][c]);
+                CHECK(gathered[0][c] > 0.0 && std::fabs(gathered[1][c] / gathered[0][c] - 1.0) <= 0.004, msg);
+            }
+        else std::printf("ok: no ray queries on this machine - the route arm skips\n");
+    }
+
+    if (!route) {
     // ---- THE BOUNCE ARM (the furnace's answer) --------------------------------------------------
     const Case furnace[4] = { { 0.3f, 0.0f }, { 0.3f, 1.0f }, { 0.9f, 0.0f }, { 0.9f, 1.0f } };
     double reemit[4] = {};
@@ -331,6 +462,7 @@ int main()
         s->setGlobalIllumination(off);
         rv->setScene(nullptr);
         e->destroyScene(s);
+    }
     }
     e->destroyView(rv);
     std::printf("frames rendered: %llu\n", rendered);

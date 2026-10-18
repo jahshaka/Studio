@@ -855,7 +855,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --sc
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 316)   # counted by the suite (frames rendered)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 220)   # counted by the suite (frames rendered)
 # gi.scroll_slab.timing — the same binary with JAHSHAKA_TIMING_BARS=1: the scroll by the shipped step voxelises in
 # <= 0.35 of a whole build at 128 cells (GPU, paired in this process). A measure row (the lead's verdict, decision 10).
 jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
@@ -1964,6 +1964,13 @@ jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 2236)
+# gi.march_inside — THE SHADOW MARCH'S INSIDE FRACTION (ENGINE-UPGRADE-U5 decision 22.2): two one-sided quads of opacity
+# 0.6 facing away from each other along the ray transmit (1 - c1)(1 - c2) = 0.16, one solid of the same opacity 1 - c = 0.4,
+# each against the store's own coverage, at 32 / 64 / 128 cells (the old max of the entries and the exits read both 0.4).
+jah_gpu_row(gi.march_inside CLASS engine COMMAND test_gi_march_underread --veils
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.march_inside PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.march_inside PROPERTIES JAHSHAKA_TEST_FRAMES 600)
 # gi.metal_bounce — A METAL RE-EMITS BY ITS SPECULAR LOBE'S INTEGRAL (ENGINE-UPGRADE-U5 stage 5,
 # METAL-BOUNCE-1; it replaces gi.voxel_metal_albedo's diffuse-only law): a white plate at metalness 0 / 0.5 / 1,
 # roughness 0.3 and 0.9, under a sun (the store and a facing panel's bounce in the lobes' directional ratio,
@@ -1985,6 +1992,13 @@ jah_gpu_row(gi.metal_bounce CLASS engine COMMAND test_gi_metal_bounce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1310)
+# gi.metal_bounce_route — THE TINTED METAL AND THE MOVER (ENGINE-UPGRADE-U5 decision 22.1): the store holds F0 A + w B per
+# channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
+# it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %).
+jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 176)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.
