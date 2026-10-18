@@ -327,15 +327,15 @@ target_compile_definitions(test_engine_cpu_map PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_cpu_map PRIVATE JahshakaEngine)
 add_dependencies(test_engine_cpu_map JahshakaEngineMedia)
-jah_gpu_row(frame.drain_cost CLASS engine FRAMES 79 COMMAND test_engine_cpu_map --drain 2000
+jah_gpu_row(frame.drain_cost CLASS engine FRAMES 87 COMMAND test_engine_cpu_map --drain 2000
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drain_cost PROPERTIES TIMEOUT 120 LABELS "engine")
 jah_gpu_exclusive_test(NAME frame.drain_cost_10k CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --drain 10000
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(frame.drain_cost_10k PROPERTIES LABELS "engine")
+set_tests_properties(frame.drain_cost_10k PROPERTIES LABELS "engine" JAHSHAKA_TEST_FRAMES 434)   # metered 2026-10-18
 jah_gpu_exclusive_test(NAME engine.gpuscene_compose CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --compose 10000
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.gpuscene_compose PROPERTIES LABELS "engine")
+set_tests_properties(engine.gpuscene_compose PROPERTIES LABELS "engine" JAHSHAKA_TEST_FRAMES 480)   # metered 2026-10-18
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.

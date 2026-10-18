@@ -208,6 +208,10 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["gi"] for f in ("walkCardLights", "cardEligible", "cardColumnKey", "cardLightKey", "cardSceneFacts",
                            "foldCardEnvironment", "cardCandidates", "readCardTexel", "readCardAt", "dumpCardAtlas")},
     "gpuSlotChanged": ["atom", "engine", "scale"],
+    # ENGINE-UPGRADE-U4 decision 17.1: the card feed's halves (the lane half in the compose task, the ordered half in
+    # the replay) and their shared read — the change feed the cards' scans and the compose's identity row read
+    **{f: ["gi", "atom", "engine"] for f in ("gpuSlotChangedLane", "gpuSlotChangedOwed", "measure", "fileSlotFields",
+                                             "fileColumn")},
     "query": ["engine", "picking"],
 }
 OGRE_VIEW_FUNCTIONS = {
@@ -220,6 +224,8 @@ OGRE_VIEW_FUNCTIONS = {
                           # U3 stage 4a: the host's setters as record fields, the readbacks as requests, the create's halves
                           "postRecord", "hostPosts", "callIsTheHosts", "requestOnEngine", "adoptTarget",
                           "buildChain")},
+    # ENGINE-UPGRADE-U4 stage 3 (decision 8): the view's camera, told to its scene's GI plan after the scene graph
+    "noteGiCamera": ["gi", "engine"],
     **{f: ["engine"] for f in ("name", "scene", "published", "width", "height", "isOffscreen", "isEnabled", "sampleCount", "target",
                                "targetSamples", "targetTexture", "viewAspect", "background", "cameraWorldPosition",
                                "addWorkspaceListener", "removeWorkspaceListener", "workspaceGeneration",

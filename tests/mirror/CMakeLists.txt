@@ -321,7 +321,8 @@ set_tests_properties(mirror.extract_movers PROPERTIES
 set_tests_properties(mirror.extract_movers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 jah_gpu_exclusive_test(NAME mirror.extract_movers_10k CLASS engine RUN_TIMEOUT 600 COMMAND test_mirror_extract_movers --nodes 10000
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(mirror.extract_movers_10k PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
+set_tests_properties(mirror.extract_movers_10k PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror"
+    JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
 
 # mirror.settle_thumbnails — a settle is fed by ITS OWN document's writes:
 # a 10k scene demoted by one edit settles within its quiet window + one

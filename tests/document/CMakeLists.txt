@@ -85,10 +85,12 @@ set_tests_properties(physics.mt_determinism PROPERTIES
 jah_no_display(physics.mt_determinism)
 jah_gpu_exclusive_test(NAME physics.step_cost CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
          --frames 60 --threads 7 --runs 1 --mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(physics.step_cost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
+set_tests_properties(physics.step_cost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
+    JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
 jah_gpu_exclusive_test(NAME physics.step_overlap CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
          --frames 120 --threads 7 --overlap WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
+set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
+    JAHSHAKA_TEST_FRAMES 3470)   # metered 2026-10-18: the free-running render thread at 60 Hz for the run (120 frames of warm-up first)
 
 # document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
 # §3.3.2): which objects the renderer may bake into the room's lighting and
