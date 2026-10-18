@@ -150,12 +150,24 @@ static const float kOneVoxelStep = 1.6f / 255.0f;
 //   C. AN EDIT DURING THE SPREAD that reaches only the box being built (outside the live one, which
 //      the dirty path tests) drops the scroll and the next one builds the edited scene: the store is
 //      again a whole build's of the scene as it now stands.
+//   E. TWO SCROLLS WITH NO REBUILD BETWEEN (the second copies what the first copied, the position
+//      re-resolved twice from the same sums): a whole build's store; and a scroll in flight whose LIVE
+//      box is edited is dropped for the edit's whole rebuild (the dirty path's `editLast`).
+//   F. A COMMIT THAT THROWS HALF WAY (gi.cascadeFaultCommit): the live store is torn, so the cascade
+//      scrolls no more until a WHOLE rebuild has made it one box's again - the store a whole build's.
+//   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive (the roughness in its alpha), the
+//   coverage and the position per half, the area weight and the position sums - and nothing else needs
+//   to be: the commit regenerates every mip from level 0, so equal level 0 is equal mips.
 //   D. THE COST, on a lattice at 128 cells (the High tier): the voxelisation of a scroll by the
 //      shipped step (its rows vct.voxel0 + vct.scroll0) <= 0.35 of a whole build of cascade 0
 //      (vct.voxel0 of an edit's rebuild) - decision 1's bar for a slab of 26 % of the volume; GPU
 //      time, paired in this process, a millisecond bar (gi.scroll_slab.timing asserts it).
 // A, B and C run a two-cascade table at 64 cells (a dyadic cell, 10 m / 64: the arithmetic every
 // shipped table has), so a store read is 0.26 M voxels.
+// THE EQUALITY'S ONE STATED LIMIT (the lead's decision 10, accepted): with an instance budget on
+// (GiParams::cascadeInstanceCap > 0) the slab is gathered from the NEW box's ranking, but the copied
+// overlap carries the ranking of the place it was built at - equal only where the two rankings pick the
+// same set. The cap is 0 by default, and every case here runs at 0.
 static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char *what)
 {
     if (!a.available || !b.available || a.width != b.width || a.height != b.height || a.depth != b.depth) {
@@ -171,8 +183,26 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
     struct Arr { const char *name; const std::vector<float> *x, *y; };
     const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo }, { "normal", &a.normal, &b.normal },
                          { "coverageP", &a.coverageP, &b.coverageP }, { "coverageN", &a.coverageN, &b.coverageN },
-                         { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN } };
+                         { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN },
+                         { "emissive", &a.emissive, &b.emissive } };
     bool same = true;
+    // THE RAW INTEGERS a build keeps (the area weight, the four position sums), compared as integers.
+    struct UArr { const char *name; const std::vector<unsigned> *x, *y; };
+    const UArr uarrs[] = { { "accumWeight", &a.accumWeight, &b.accumWeight },
+                           { "positionSums", &a.positionSums, &b.positionSums } };
+    for (const UArr &r : uarrs) {
+        size_t diff = 0;
+        if (r.x->size() != r.y->size() || r.x->empty()) {
+            std::printf("   %s: %s sizes %zu vs %zu\n", what, r.name, r.x->size(), r.y->size());
+            same = false;
+            continue;
+        }
+        for (size_t i = 0; i < r.x->size(); ++i) diff += (*r.x)[i] != (*r.y)[i] ? 1u : 0u;
+        if (diff) {
+            std::printf("   %s: %s differs in %zu of %zu\n", what, r.name, diff, r.x->size());
+            same = false;
+        }
+    }
     for (const Arr &r : arrs) {
         if (r.x->size() != r.y->size() || r.x->empty()) {
             std::printf("   %s: %s sizes %zu vs %zu\n", what, r.name, r.x->size(), r.y->size());
@@ -201,8 +231,8 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
 
 /// THE SPREAD ARMS' BUDGET: small enough that the fixture's slab is cut into many chunks over many
 /// frames (B asserts >= 8), large enough that the cut stops at layers rather than single groups, so a
-/// spread is tens of frames, not hundreds (measured on this fixture: B's scroll takes ~20 frames).
-static const double kSpreadBudgetMs = 0.01;
+/// spread is tens of frames, not hundreds (measured on this fixture: B takes 7 frames at 0.01 ms).
+static const double kSpreadBudgetMs = 0.005;
 
 static int scrollSlabMain()
 {
@@ -244,6 +274,20 @@ static int scrollSlabMain()
         enginetest::setNodePosition(scene, n, p.pos);
         enginetest::setNodeScale(scene, n, p.scale);
         propNodes.push_back(n);
+    }
+    // ONE EMISSIVE SURFACE (decision 11 g), above one: the emissive store is a half float.
+    NodeId glow = 0;
+    {
+        glow = scene->createNode();
+        PbrParams gp;
+        gp.albedo = Colour(0.8f, 0.8f, 0.8f);
+        gp.roughness = 0.35f;
+        gp.emissive = Colour(2.5f, 1.2f, 0.4f);
+        const MeshId gm = scene->createMesh(enginetest::unitCubeMesh());
+        const MaterialId gmat = scene->createPbrMaterial(gp);
+        CHECK(glow && gm && gmat && scene->attachMesh(glow, gm, gmat), "an emissive panel");
+        enginetest::setNodePosition(scene, glow, Vec3(5.2f, 1.6f, -1.0f));
+        enginetest::setNodeScale(scene, glow, Vec3(0.1f, 1.2f, 1.6f));
     }
     enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
 
@@ -369,8 +413,77 @@ static int scrollSlabMain()
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
         CHECK(sameStore(scrolled, built, "C"), "THE COMMITTED STORE HOLDS THE EDITED SCENE, AS A WHOLE BUILD DOES");
     }
+    // ---- E. two scrolls chained; a live-box edit mid-flight -----------------------------------
+    std::printf("\n== E: two scrolls with no rebuild between; a live-box edit drops a scroll ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        look(Vec3(cam.x + 1.5f * step, cam.y, cam.z));
+        untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        look(Vec3(cam.x, cam.y + 0.2f * step, cam.z - 1.5f * step));
+        untilScrolls(pre.cascades[0].scrolls + 2u, 8);
+        const GiStatus two = scene->published().gi;
+        CHECK(two.cascades[0].scrolls == pre.cascades[0].scrolls + 2u &&
+              two.cascades[0].rebuilds == pre.cascades[0].rebuilds + 2u,
+              "two scrolls, no rebuild between them");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the twice-scrolled store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "E1"), "TWO CHAINED SCROLLS LEAVE A WHOLE BUILD'S STORE, FLOAT FOR FLOAT");
+
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre2 = scene->published().gi;
+        look(Vec3(cam.x - 1.5f * step, cam.y, cam.z));
+        run(3);
+        const bool flying = scene->published().gi.cascades[0].scrolling;
+        // A prop INSIDE the live box (and the target's): the dirty path marks the cascade itself.
+        enginetest::setNodePosition(scene, propNodes[0], Vec3(pre2.cascades[0].centre.x - 0.4f, 0.7f, 1.0f));
+        int n = 0;
+        for (; n < 400 && (scene->published().gi.cascades[0].pending || scene->published().gi.cascades[0].scrolling); ++n)
+            run(1);
+        const GiStatus post = scene->published().gi;
+        std::printf("   in flight when edited: %d; aborts %llu -> %llu; scrolls %llu -> %llu; settled after %d frames\n",
+                    int(flying), pre2.cascadeScrollAborts, post.cascadeScrollAborts, pre2.cascades[0].scrolls,
+                    post.cascades[0].scrolls, n);
+        CHECK(flying, "the scroll was in flight when its live box was edited");
+        CHECK(post.cascadeScrollAborts > pre2.cascadeScrollAborts, "THE LIVE-BOX EDIT DROPPED THE SCROLL");
+        CHECK(post.cascades[0].scrolls == pre2.cascades[0].scrolls, "...for the edit's whole rebuild (no scroll committed)");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        run(2);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "E2"), "THE EDITED SCENE'S STORE IS A WHOLE BUILD'S");
+    }
+
+    // ---- F. a commit that throws half way -------------------------------------------------------
+    std::printf("\n== F: a commit that throws half way leaves a torn store that never scrolls ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        e->setArm("gi.cascadeFaultCommit", 0.0);
+        look(Vec3(cam.x + 1.5f * step, cam.y, cam.z));
+        run(1);
+        e->setArm("gi.cascadeFaultCommit", -1.0);
+        run(1);
+        const GiStatus bad = scene->published().gi;
+        int n = 0;
+        for (; n < 8 && scene->published().gi.cascades[0].pending; ++n) run(1);
+        const GiStatus post = scene->published().gi;
+        std::printf("   scrolls %llu -> %llu -> %llu, rebuilds %llu -> %llu, owed after %d frames: %d\n",
+                    pre.cascades[0].scrolls, bad.cascades[0].scrolls, post.cascades[0].scrolls,
+                    pre.cascades[0].rebuilds, post.cascades[0].rebuilds, n, post.cascades[0].pending);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls, "THE TORN STORE IS NEVER SCROLLED FROM");
+        CHECK(post.cascades[0].rebuilds == pre.cascades[0].rebuilds + 1u && !post.cascades[0].pending,
+              "...the next frame rebuilds it whole, and it owes nothing");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "F"), "THE REBUILT STORE IS A WHOLE BUILD'S");
+    }
+
     scene->removeNode(ground);
     scene->removeNode(wallB);
+    scene->removeNode(glow);
     for (NodeId n : propNodes) scene->removeNode(n);
     run(2);
 
@@ -523,6 +636,45 @@ static int dragAgeMain()
     CHECK(count[0] == 0u, "cascade 0 (the cube is outside its box) is not rebuilt");
     CHECK(fair, "EVERY DIRTY CASCADE IS REBUILT >= 120/N - 1 TIMES OVER THE DRAG (none starves)");
     CHECK(prompt, "...and none waits more than N frames for its first rebuild or between two");
+
+    // ALL FOUR DIRTY (decision 11 c): a second cube dragged INSIDE cascade 0 - every cascade marked
+    // every frame, the law the same: >= 120/N - 1 rebuilds each, no gap over N frames.
+    {
+        const NodeId near = enginetest::addTestCube(scene, Colour(0.9f, 0.8f, 0.2f), 0.0f, 0.5f);
+        enginetest::setNodePosition(scene, near, Vec3(0.6f, 0.4f, -2.5f));
+        enginetest::setNodeScale(scene, near, Vec3(0.5f, 0.5f, 0.5f));
+        for (int k = 0; k < 2000 && !scene->published().gi.giAtRest; ++k) run(1);
+        GiStatus s4 = scene->published().gi;
+        std::vector<unsigned long long> l4(n), c4(n, 0);
+        std::vector<int> lf4(n, -1), g4(n, 0), f4(n, -1);
+        for (size_t i = 0; i < n; ++i) l4[i] = s4.cascades[i].rebuilds;
+        std::string order4;
+        for (int f = 0; f < kDrag; ++f) {
+            enginetest::setNodePosition(scene, near, Vec3(0.6f + 0.01f * float(f + 1), 0.4f, -2.5f));
+            run(1);
+            const GiStatus now = scene->published().gi;
+            for (size_t i = 0; i < n; ++i) {
+                if (now.cascades[i].rebuilds == l4[i]) continue;
+                c4[i] += now.cascades[i].rebuilds - l4[i];
+                l4[i] = now.cascades[i].rebuilds;
+                if (f4[i] < 0) f4[i] = f;
+                if (lf4[i] >= 0) g4[i] = std::max(g4[i], f - lf4[i]);
+                lf4[i] = f;
+                if (f < 24) order4 += char('0' + int(i));
+            }
+        }
+        std::printf("   four dirty: the first 24 frames rebuilt, in order: %s\n", order4.c_str());
+        bool fair4 = true, prompt4 = true;
+        for (size_t i = 0; i < n; ++i) {
+            std::printf("   cascade %zu: %llu rebuilds, first at frame %d, worst gap %d frame(s)\n", i, c4[i], f4[i], g4[i]);
+            fair4 = fair4 && int(c4[i]) >= floorCount;
+            prompt4 = prompt4 && f4[i] >= 0 && f4[i] <= int(n) && g4[i] <= int(n);
+        }
+        CHECK(fair4, "ALL FOUR DIRTY: EVERY CASCADE IS REBUILT >= 120/N - 1 TIMES");
+        CHECK(prompt4, "...and none waits more than N frames");
+        scene->removeNode(near);
+        run(2);
+    }
 
     // THE ORDER CHANGED, NOT THE ANSWER: at rest, the picture is a whole build's.
     int rest = 0;

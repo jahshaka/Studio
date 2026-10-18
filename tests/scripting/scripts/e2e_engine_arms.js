@@ -35,7 +35,7 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "gather.restSeed": 0, "gather.ageView": 0, "gather.freezeFrame": 0,
                  "gather.youngFrames": 0, "gather.youngReach": 0, "gather.validationOff": 0,
                  "gather.crossStrata": 0,
-                 "gi.cascadeFault": -1, "gi.cascadeFaultPost": -1, "gi.scrollBudgetMs": 0, "gi.voxelOctants": 1, "gi.rebuildCascade": -1, "gi.rebuildSettle": 1,
+                 "gi.cascadeFault": -1, "gi.cascadeFaultPost": -1, "gi.cascadeFaultCommit": -1, "gi.scrollBudgetMs": 0, "gi.voxelOctants": 1, "gi.rebuildCascade": -1, "gi.rebuildSettle": 1,
                  "gi.fieldRays": 0, "gi.fieldSamples": 0, "gi.fieldStatic": 0, "gi.fieldStopOff": 0, "gi.refuseGeometry": 0,
                  "atom.discriminate": 0, "atom.hitWorldLights": 0, "atom.hitVctSpecular": 1,
                  "gather.hitsReadback": 0, "reflect.metalDecode": 0.3, "gi.hitDirect": 1,
