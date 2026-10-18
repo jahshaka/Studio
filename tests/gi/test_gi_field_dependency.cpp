@@ -229,7 +229,7 @@ int main(int argc, char **argv)
         enginetest::frames(e, 1);
         if (stopArm) captureOracle();
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         const FieldWork w = fieldWork(recs);
         settleWork += w.framesWithWork;
         quiet = (w.frames && !w.framesWithWork) ? quiet + int(w.frames) : (w.frames ? 0 : quiet);
@@ -249,14 +249,14 @@ int main(int argc, char **argv)
         // S6's half: A LIGHT TICK, the common event (an at-rest re-injection: the field's RESET path, not the
         // build's), settled - the job's integrations and the frames it took.
         const auto lightTick = [&](unsigned long long &integrations, int &frames) {
-            { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }   // the frames before are not the tick's
+            { std::vector<MonitorRecord> drop; e->popMonitorRecords(drop); }   // the frames before are not the tick's
             const PhotonFieldStatus t0 = photonFieldStatus(*s);
             s->refreshGiLighting(false);
             int q = 0, f = 0;
             for (; f < 1200 && q < 30; ++f) {
                 enginetest::frames(e, 1);
                 std::vector<MonitorRecord> recs;
-                e->takeMonitorRecords(recs);
+                e->popMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
         for (; sf < 1200 && sq < 30; ++sf) {
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             sq = (w.frames && !w.framesWithWork) ? sq + int(w.frames) : (w.frames ? 0 : sq);
         }
@@ -422,7 +422,7 @@ int main(int argc, char **argv)
         for (int f = 0; f < 600 && quietRun < 20; ++f) {
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             const FieldWork w = fieldWork(recs);
             quietRun = (w.frames && !w.framesWithWork) ? quietRun + 1 : 0;
             const unsigned owed = s->published().gi.ifdRefinesOwed;
@@ -510,7 +510,7 @@ int main(int argc, char **argv)
             for (; n < 2000 && q < 30; ++n) {
                 enginetest::frames(e, 1);
                 std::vector<MonitorRecord> recs;
-                e->takeMonitorRecords(recs);
+                e->popMonitorRecords(recs);
                 const FieldWork w = fieldWork(recs);
                 q = (w.frames && !w.framesWithWork) ? q + int(w.frames) : (w.frames ? 0 : q);
             }
@@ -561,13 +561,13 @@ int main(int argc, char **argv)
                                                                    0.5f, -3.0f));
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         for (int f = 0; f < 6; ++f) {
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             all.insert(all.end(), recs.begin(), recs.end());
         }
         const FieldWork w = fieldWork(all);
@@ -602,19 +602,19 @@ int main(int argc, char **argv)
     // re-integrates the WHOLE field per re-injection (OgreGi.cpp, stage 4's).
     if (stillsArm) {
         enginetest::frames(e, 300);
-        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
+        { std::vector<MonitorRecord> drop; e->popMonitorRecords(drop); }
         run("stills move", 120, false, false, true);
         // ONE STILL MOVED ONCE (ENGINE-UPGRADE-2B stage 4's instrument): the field's work from the
         // move until it settles — its frames, its probe integrations, its GPU ms.
         enginetest::frames(e, 300);
-        { std::vector<MonitorRecord> drop; e->takeMonitorRecords(drop); }
+        { std::vector<MonitorRecord> drop; e->popMonitorRecords(drop); }
         const PhotonFieldStatus i0 = photonFieldStatus(*s);
         enginetest::setNodePosition(s, stills[0], Vec3(-2.0f, 0.5f, -3.0f));
         std::vector<MonitorRecord> one;
         for (int f = 0; f < 240; ++f) {
             enginetest::frames(e, 1);
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            e->popMonitorRecords(recs);
             one.insert(one.end(), recs.begin(), recs.end());
         }
         const GiStatus gs = s->published().gi;

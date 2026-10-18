@@ -349,7 +349,7 @@ int main()
     enginetest::frames(e, 24);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<MonitorRecord> records;
-    while (e->takeMonitorRecords(records) > 0) {}
+    while (e->popMonitorRecords(records) > 0) {}
 
     // The best (lowest) measured frame: this box runs other lanes, and the
     // question "what does the pyramid cost" is answered by the cheapest clean
@@ -412,7 +412,7 @@ int main()
         enginetest::frames(e, 24);
         e->setFrameMonitor(MonitorLevel::Off);
         std::vector<MonitorRecord> recs;
-        while (e->takeMonitorRecords(recs) > 0) {}
+        while (e->popMonitorRecords(recs) > 0) {}
         const std::string ws = "hzb4k/Workspace";
         float best = -1.0f;
         unsigned measured = 0, passes = 0;

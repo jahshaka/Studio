@@ -311,7 +311,7 @@ public:
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
     /// GPU timing marks the engine's query pool could not hold over this
     /// capture (MonitorStatus::gpuMarksDropped, cumulative — see
-    /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
+    /// FrameMonitor::drain) — reported in machine.json's truncation block,
     /// because incomplete GPU times are a truncation like any other. Each
     /// frame's own count is in frames.jsonl (`gpuMarksDropped`).
     void noteGpuMarksDropped(unsigned long long n) { mGpuMarksDropped = qMax(mGpuMarksDropped, n); }
@@ -509,7 +509,7 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
     };
     // THE FRAME-COUNTED WINDOW IS CLOSED AT THE WRITER (PERF-CAPTURE-SCRIPT-1),
     // not only at the drain: the engine's holding queue hands its tail back
-    // AFTER the monitor goes off (finish() drains in a loop for exactly that
+    // AFTER the monitor goes off (finish() pops it after the stop for exactly that
     // reason), so a budget enforced only by "stop when the count is reached"
     // would still let the tail past it. A record over the budget is NOT a
     // truncation — nothing was cut, the window simply ended — so it is not
@@ -1281,8 +1281,11 @@ bool FrameMonitor::start(const Request &request, QString *error)
 
     // The START snapshot comes FIRST, because it is what names the bundle: the
     // engine knows which scene is on screen and the caller usually does not.
+    // ONE REQUEST (FRAME-MONITOR-DOOR-1 stage 3): the snapshot walks Ogre, so it is asked between two frames on the
+    // render thread — never read from the UI thread while a free frame draws. Once per capture, not on the tick path.
     EngineSnapshot startSnapshot;
-    const bool haveSnapshot = eng->captureSnapshot(startSnapshot, "start", nullptr);
+    bool haveSnapshot = false;
+    eng->request([&](jahshaka::engine::Engine &e) { haveSnapshot = e.captureSnapshot(startSnapshot, "start", nullptr); });
     QString label = request.label;
     if (label.isEmpty() && haveSnapshot) label = qs(startSnapshot.scene);
     if (slug(label).isEmpty()) label = QStringLiteral("scene");
@@ -1363,6 +1366,9 @@ bool FrameMonitor::start(const Request &request, QString *error)
     // for the next read.
     eng->setFrameMonitor(MonitorLevel::Review);
     eng->request([](jahshaka::engine::Engine &) {});
+    // THE WINDOW COUNTS THE ENGINE'S FRAMES (FRAME-MONITOR-DOOR-1, the lead's ruling 2): every frame after this one
+    // carries a record; the snapshot the request republished names the last frame drawn without the monitor.
+    mStartFrame = eng->published().frame;
     gActive = true;
     mBlockedNs = 0;
     mBlockedAt = 0;
@@ -1445,24 +1451,25 @@ void FrameMonitor::finish(bool early)
     if (eng && mBundle) {
         EngineSnapshot endSnapshot;
         // Taken while the monitor is still ON, so it describes the engine the
-        // capture recorded rather than the one left after it stopped.
-        if (eng->captureSnapshot(endSnapshot, "end", nullptr))
+        // capture recorded rather than the one left after it stopped. ONE
+        // REQUEST (stage 3), like the start's: its `frame` is the last frame
+        // that closed before the request ran, read live (Engine.h).
+        bool haveEnd = false;
+        eng->request([&](jahshaka::engine::Engine &e) { haveEnd = e.captureSnapshot(endSnapshot, "end", nullptr); });
+        if (haveEnd)
             mBundle->writeSnapshot(endSnapshot, QStringLiteral("snapshot_end.json"));
     }
     drain();
     gActive = false;
-    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it
+    if (eng) {   // the stop, the same: the host's call (its record), then the request that applies it (once a capture)
         eng->setFrameMonitor(MonitorLevel::Off);
         eng->request([](jahshaka::engine::Engine &) {});
     }
-    // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue, and
-    // the NEXT drain hands it back with the monitor already off (Engine.h
-    // takeMonitorRecords). Drain in a LOOP until it is empty — never "render one,
-    // expect one" — or the last frames of every capture are lost.
-    for (int i = 0; i < 8; ++i) {
-        const unsigned moved = drainOnce();
-        if (!moved) break;
-    }
+    // THE TAIL. Stopping the monitor FLUSHES the engine's holding queue into
+    // its hand-back, and the next pop hands it back with the monitor already
+    // off (Engine.h popMonitorRecords). The request above applied the stop, and
+    // nothing is pushed after it: ONE pop takes the whole tail.
+    drain();
 
     QString path;
     if (mBundle) {
@@ -1488,7 +1495,7 @@ void FrameMonitor::finish(bool early)
                                        : tr("Capture written to %1").arg(path), 6000);
 }
 
-unsigned FrameMonitor::drainOnce()
+unsigned FrameMonitor::drain()
 {
     auto eng = engine();
     if (!eng || !mBundle) return 0;
@@ -1511,9 +1518,13 @@ unsigned FrameMonitor::drainOnce()
         mEngineEventsDropped = st.eventsDropped;
     }
     mBundle->noteEngineDrops(mEngineFramesDropped, mEngineEventsDropped);
+    // THE ENGINE'S HAND-BACK, POPPED (FRAME-MONITOR-DOOR-1): what is queued NOW, in one pop, never a request — a
+    // request on this per-tick path waited for the frame in flight while the next free frame pushed the next record,
+    // and the drain never found the queue empty (128 frame-waits a call, the editor answering every 3.5 s). What a
+    // frame retires after this pop is the next tick's.
     unsigned moved = 0;
     std::vector<MonitorRecord> frames;
-    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorRecords(frames); });   // a REQUEST (U3 4a)
+    moved += eng->popMonitorRecords(frames);
     for (const MonitorRecord &r : frames) mBundle->writeFrame(r);
     // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
     // 2026-09-18). The bundle is a file a lead opens later; this is the same
@@ -1539,17 +1550,9 @@ unsigned FrameMonitor::drainOnce()
         mLastPasses = rows;
     }
     std::vector<MonitorEvent> events;
-    eng->request([&](jahshaka::engine::Engine &e) { moved += e.takeMonitorEvents(events); });   // a REQUEST (U3 4a)
+    moved += eng->popMonitorEvents(events);
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);
     return moved;
-}
-
-void FrameMonitor::drain()
-{
-    // Loop while records keep coming: one call can hand back a batch, and the
-    // ring is the thing we are racing.
-    for (int i = 0; i < 64; ++i)
-        if (!drainOnce()) break;
 }
 
 // THE MONITOR'S OWN HOST COST (item 6). Draining is two JSON records per pass
@@ -1659,7 +1662,18 @@ void FrameMonitor::noteTickEnd(bool rendered)
     // — EngineRenderDriver's tick end and the viewport's scripted
     // `editor.frame` loop — which is what makes "N frames, whoever draws them"
     // expressible at all (PERF-CAPTURE-SCRIPT-1).
-    ++mFramesDrawn;
+    // THE ENGINE'S FRAMES, NOT THE TICKS (FRAME-MONITOR-DOOR-1, ruling 2): in
+    // free-running a tick is not a frame — the 100 ms fallback tick draws none,
+    // a late tick follows two — so the window counts the frames the engine
+    // published since the capture began (one record each), read off the
+    // snapshot this tick latched. Not the records POPPED: a record waits for
+    // its GPU samples and is popped frames later, so a script that steps
+    // exactly N frames would never see the Nth (the stop's flush hands back
+    // that tail).
+    if (auto eng = engine()) {
+        const unsigned long long now = eng->published().frame;
+        mFramesDrawn = now > mStartFrame ? now - mStartFrame : 0ull;
+    }
     drainAndCharge();
     mSinceTickEnd.restart();
     mBlockedNs = 0;

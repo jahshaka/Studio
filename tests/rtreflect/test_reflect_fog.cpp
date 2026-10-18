@@ -289,7 +289,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 300; ++i) {
                 enginetest::frames(e, 1);
                 std::vector<MonitorRecord> recs;
-                e->takeMonitorRecords(recs);
+                e->popMonitorRecords(recs);
                 for (const MonitorRecord &r : recs) {
                     double g = 0.0;
                     bool any = false;

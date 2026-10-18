@@ -171,7 +171,7 @@ endfunction()
 #       the recycled pthread_t is Qt's, uninstrumented, and both runtimes reject it. host.sync_getters and
 #       host.error_door stay quarantined; the render thread's proofs run as ENGINE FIXTURES under TSan (label
 #       tsan-render: frame.record_determinism, engine.message_order, frame.drag_latency, frame.interpolation,
-#       view.window_on_render_thread, engine.error_door).
+#       view.window_on_render_thread, engine.error_door, frame.monitor_pop).
 #       MEASURED AGAIN 2026-10-11 (RUNNER-A7A, every row run once in build-tsan with lavapipe): the registry CHECK
 #       now fires in 4 of the 27 rows only; the app boots in the rest, and every boot reports a race in OUR
 #       engine's LOD update (irisgl/engine/src/OgreMesh.cpp lodUpdateImpl on the updateAllLodsThread workers), and
@@ -327,6 +327,8 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # TESTING-CLEANUP-2 P10e/P10f: the selection's and the recorder's millisecond bars
     # (the gating row/pool arms keep the counts and print the milliseconds).
     ui.selection_cost.timing capture.first_recording.timing capture.offline_unique.timing
+    # FRAME-MONITOR-DOOR-1 stage 4 (the read's item 6): the shader-cache save's milliseconds (the guard counts).
+    shadercache.save_off_frame.timing
     # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
     # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
     # GPU work inside their window would print someone else's number.

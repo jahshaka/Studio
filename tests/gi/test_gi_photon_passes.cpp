@@ -89,12 +89,12 @@ int main()
     {
         std::vector<MonitorRecord> drop;
         enginetest::frames(e, 1);
-        e->takeMonitorRecords(drop);
+        e->popMonitorRecords(drop);
     }
     enginetest::frames(e, 4);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<MonitorRecord> recs;
-    e->takeMonitorRecords(recs);
+    e->popMonitorRecords(recs);
     CHECK(!recs.empty(), "the monitor recorded frames");
 
     enginetest::frames(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
@@ -168,7 +168,7 @@ int main()
         s2->setGlobalIllumination(g2);
         enginetest::frames(e, 12);
         e->setFrameMonitor(MonitorLevel::Review);
-        { std::vector<MonitorRecord> drop; enginetest::frames(e, 1); e->takeMonitorRecords(drop); }
+        { std::vector<MonitorRecord> drop; enginetest::frames(e, 1); e->popMonitorRecords(drop); }
         // A STILL OBJECT MOVED: its cascades re-voxelise and re-inject, frame after frame.
         for (int f = 0; f < 6; ++f) {
             enginetest::setNodePosition(s2, still, Vec3(0.2f * float(f + 1), 0.3f, 0.0f));
@@ -176,7 +176,7 @@ int main()
         }
         e->setFrameMonitor(MonitorLevel::Off);
         std::vector<MonitorRecord> r2;
-        e->takeMonitorRecords(r2);
+        e->popMonitorRecords(r2);
         unsigned withUpdate = 0;
         for (const MonitorRecord &r : r2)
             for (const FramePass &p : r.passes)

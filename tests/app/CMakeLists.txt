@@ -85,6 +85,15 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 320
     LABELS "app")
 
+# app.knob_refusals — THE RENDER THREAD'S TEST KNOBS REFUSE WHAT THEY CANNOT HONOUR (FRAME-MONITOR-DOOR-1 stage 2):
+# JAH_FREE_RUNNING=1 with a script run and no --script-live exits 2 naming --script-live (the Off policy owns the loop:
+# no driver tick, the free2k hang); with --script-live it runs; JAH_ENGINE_ONE_THREAD=1 + free-running exits 2. Three
+# --headless processes, refused before QApplication: no engine, no display (a CPU row).
+add_test(NAME app.knob_refusals COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/knob_refusals.sh"
+         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set_tests_properties(app.knob_refusals PROPERTIES TIMEOUT 60 LABELS "app")
+jah_no_display(app.knob_refusals)
+
 # app.test_needs_boot — A TEST PROCESS BOOTS WHAT ITS ROW NEEDS (TEST-NEEDS-1; services/testtier.h,
 # worldmodes::applyTestTier). Three boots of one home under their own JAHSHAKA_TEST_TIER /
 # JAHSHAKA_TEST_NEEDS — `high photon` (Photon High, bloom/SSAO/SMAA/planar off), `low none`

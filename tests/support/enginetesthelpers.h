@@ -633,7 +633,7 @@ public:
         if (!mArmed) return;
         mE->setFrameMonitor(MonitorLevel::Off);
         std::vector<MonitorRecord> tail;   // the capture's records are not this window's subject
-        mE->takeMonitorRecords(tail);
+        mE->popMonitorRecords(tail);
     }
     GpuTimingWindow(const GpuTimingWindow &) = delete;
     GpuTimingWindow &operator=(const GpuTimingWindow &) = delete;

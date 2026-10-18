@@ -71,7 +71,7 @@ struct Spend { int worstPerFrame = 0; int total = 0; int frames = 0; };
 static Spend spendOf(Engine *engine)
 {
     std::vector<MonitorRecord> recs;
-    engine->takeMonitorRecords(recs);
+    engine->popMonitorRecords(recs);
     Spend s;
     s.frames = int(recs.size());
     for (const MonitorRecord &r : recs) {

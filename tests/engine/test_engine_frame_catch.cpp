@@ -126,7 +126,7 @@ int main()
     {
         e->setFrameMonitor(MonitorLevel::Review);
         std::vector<MonitorRecord> drained;
-        e->takeMonitorRecords(drained);                     // start from a clean ring
+        e->popMonitorRecords(drained);                     // start from a clean ring
         drained.clear();
         const unsigned long long rec0 = e->published().monitor.framesRecorded;
 
@@ -158,7 +158,7 @@ int main()
         // not about this lane.
         e->setFrameMonitor(MonitorLevel::Off);
         drained.clear();
-        e->takeMonitorRecords(drained);
+        e->popMonitorRecords(drained);
         unsigned long long last = 0ull;
         bool increasing = !drained.empty();
         for (const MonitorRecord &r : drained) {

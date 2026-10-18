@@ -93,7 +93,7 @@ int main()
     enginetest::frames(e, 16);
     e->setFrameMonitor(MonitorLevel::Off);
     std::vector<MonitorRecord> recs;
-    e->takeMonitorRecords(recs);
+    e->popMonitorRecords(recs);
     const PhotonBindingStatus b1 = photonBindingStatus();
     CHECK(!recs.empty(), "the monitor recorded frames");
 

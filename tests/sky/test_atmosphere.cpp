@@ -591,11 +591,11 @@ int main()
                                  double &frameMs, int &frameN, double jobMs[4], int jobN[4]) {
             r.e->setFrameMonitor(MonitorLevel::Review);
             std::vector<MonitorRecord> drop;
-            r.e->takeMonitorRecords(drop);
+            r.e->popMonitorRecords(drop);
             for (int i = 0; i < frames; ++i) { perFrame(i); enginetest::frames(r.e, 1); }
             r.e->setFrameMonitor(MonitorLevel::Off);
             std::vector<MonitorRecord> recs;
-            r.e->takeMonitorRecords(recs);
+            r.e->popMonitorRecords(recs);
             static const char *kJobs[4] = { "Jahshaka/AtmoTransmittance", "Jahshaka/AtmoMultiScatter",
                                             "Jahshaka/AtmoSkyView", "Jahshaka/AtmoAerial" };
             for (const MonitorRecord &f : recs) {

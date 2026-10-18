@@ -514,7 +514,7 @@ int main()
         enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         double jobMs[3] = { -1.0, -1.0, -1.0 };
         static const char *kJobs[3] = { "cull.test", "cull.compact", "cull.draws" };
         for (const MonitorRecord &f : recs)

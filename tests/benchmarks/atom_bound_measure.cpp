@@ -5,7 +5,7 @@
 // asserted (ATOM_BUILD_SPEC.md:65's stage 3 payoff stands on it).
 //
 // THE INSTRUMENT is the render-loop monitor at `MonitorLevel::Review`
-// (Engine.h:2557, `takeMonitorRecords` :2575). Per Main-bucket pass:
+// (Engine.h:2557, `popMonitorRecords` :2575). Per Main-bucket pass:
 // `gpuMs`/`cpuMs`/`draws`/`batches`/`instances`/`triangles`
 // (Types.h:5951 FramePass), plus the "engine.record" stage (Types.h:6051,
 // written at OgreEngine.cpp:1274) — the CPU cost of RECORDING the frame on the
@@ -301,7 +301,7 @@ int main()
     // ---- THE MEASUREMENT: one frame per arm, round robin, three windows.
     for (unsigned rep = 0; rep < kRepeats; ++rep) {
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         e->setFrameMonitor(MonitorLevel::Review);
         for (Built &b : built) b.reps.push_back(Fold());
         const std::string clockAt = gpuClock();
@@ -321,11 +321,11 @@ int main()
                 view->setCamera(b.cam);
                 enginetest::frames(e, 1);
                 recs.clear();
-                e->takeMonitorRecords(recs);
+                e->popMonitorRecords(recs);
                 all.insert(all.end(), recs.begin(), recs.end());
             }
         }
-        recs.clear(); e->takeMonitorRecords(recs);
+        recs.clear(); e->popMonitorRecords(recs);
         all.insert(all.end(), recs.begin(), recs.end());
         unsigned long long f0 = 0ull;
         bool haveF0 = false;

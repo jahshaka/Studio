@@ -643,7 +643,7 @@ int main()
             render(e, 1);
         }
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         unsigned rows = 0, camera = 0, other = 0, worstPerFrame = 0, counterTotal = 0;
         for (const MonitorRecord &r : recs) {
             unsigned inFrame = 0;

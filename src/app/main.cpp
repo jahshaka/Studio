@@ -122,6 +122,16 @@ int main(int argc, char *argv[])
                                  "thread\n");
             return 2;
         }
+        // THE OWNER'S MODE NEEDS A DRIVER (FRAME-MONITOR-DOOR-1 stage 2): a script run's default feedback policy (Off)
+        // owns the loop — the driver's tick returns before it draws (EngineRenderDriver::tick, ScriptRun::Off), so in
+        // free-running no tick ever runs: `rendered` and a capture's frames never move and a frame-counted capture never
+        // ends (measured: the 21 h free2k hang). The sanctioned free-running runs are LIVE (--script-live, the driver
+        // ticking between the verbs) — refused here otherwise, like any other unhonourable request.
+        if (cli.isScriptRun() && !cli.liveScript && qEnvironmentVariableIntValue("JAH_FREE_RUNNING") == 1) {
+            std::fprintf(stderr, "Jahshaka: JAH_FREE_RUNNING=1 with a script run needs --script-live: without it the "
+                                 "script owns the loop and no driver tick ever runs in free-running\n");
+            return 2;
+        }
     }
     // THE PROCESS'S TEST TIER (TEST-TIER-1, services/testtier.h): the flag, else
     // JAHSHAKA_TEST_TIER; validated here, where the World Mode names are known,

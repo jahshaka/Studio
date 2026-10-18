@@ -268,7 +268,7 @@ int main()
     // far away), then the scene settles; the field must be where cascade 0 is.
     const auto jumpTo = [&](Arm &arm, const Vec3 &p) {
         std::vector<MonitorRecord> pre;
-        engine->takeMonitorRecords(pre);
+        engine->popMonitorRecords(pre);
         arm.records.insert(arm.records.end(), pre.begin(), pre.end());
         const unsigned long long replacedBefore = scene->published().gi.ifdReplacements;
         view->setCamera(enginetest::testCameraDescLookAt(p, Vec3(p.x, p.y - 1.0f, p.z - 8.0f)));
@@ -288,7 +288,7 @@ int main()
         j.meanDuring = sawDuring ? meanLum(during) : -1.0f;
         j.meanAfter = meanLum(after);
         std::vector<MonitorRecord> recs;
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         for (const MonitorRecord &r : recs) {
             float fieldGpu = 0.0f;
             bool slab = false, timedAll = true;
@@ -352,7 +352,7 @@ int main()
         render(e, 90);
         std::vector<MonitorRecord> drop;
         render(e, 8);
-        engine->takeMonitorRecords(drop);
+        engine->popMonitorRecords(drop);
         const unsigned long long f0 = scene->published().gi.ifdFollows;
         const unsigned long long r0 = scene->published().gi.ifdReplacements;
         float x2 = 0.0f;
@@ -385,7 +385,7 @@ int main()
         arm.follows = scene->published().gi.ifdFollows - f0;
         arm.replacements = scene->published().gi.ifdReplacements - r0;
         std::vector<MonitorRecord> recs;
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         recs.insert(recs.begin(), arm.records.begin(), arm.records.end());
         for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork) {

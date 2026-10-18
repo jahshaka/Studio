@@ -176,7 +176,7 @@ static bool runOnce(int iteration) {
         e->setFrameMonitor(MonitorLevel::Review);
         enginetest::frames(e, 8);
         std::vector<MonitorRecord> recs;
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         std::snprintf(msg, sizeof msg, "iteration %d: a capture records frames (%zu)", iteration,
                       recs.size());
         CHECK(!recs.empty(), msg);

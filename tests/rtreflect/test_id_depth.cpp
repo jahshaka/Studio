@@ -137,7 +137,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
             enginetest::frames(e, 1);
         }
         recs.clear();
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         if (round == 0) continue;   // warm-up: the first second is pipeline creation
         for (const MonitorRecord &r : recs) {
             double c = -1.0;
@@ -149,7 +149,7 @@ static int costMain(Engine *e, Scene *s, NodeId sphere)
     }
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
-    e->takeMonitorRecords(recs);
+    e->popMonitorRecords(recs);
     const double c = nCopy ? copy / nCopy : -1.0, fr = nFrame ? frame / nFrame : -1.0;
     std::printf("target: 1920x1080, a moving Atom sphere behind a still skinned comb on a mirror floor: the id "
                 "depth copy %.4f ms of a %.4f ms frame (bar %.2f) [%d / %d frames]\n", c, fr, kBarMs, nCopy, nFrame);

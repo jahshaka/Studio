@@ -15,6 +15,7 @@ app.first_launch 0.00  ship 3a0422b4e (2026-10-13)
 app.help_exits 0.30  quiet n=46
 app.input_keys 49.40  quiet n=57
 app.input_keys.fresh_home 0.01  quiet n=15
+app.knob_refusals 3.39  solo, the card lock held, :82 (FRAME-MONITOR-DOOR-1 stage 3, 2026-10-18; the lowest of record)
 app.library_generation 9.80  ship 3a0422b4e (2026-10-13)
 app.library_generation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 app.library_keep 27.70  ship 3a0422b4e (2026-10-13)
@@ -161,6 +162,7 @@ export.raw 0.00  ship 3a0422b4e (2026-10-13)
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 frame.runtime_pace 5.09  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
@@ -430,6 +432,7 @@ particles.fire_shape 1.45  quiet n=45
 perf.capture_bundle 61.05  hand: DBUILD-FIX-1 re-declared TIER low NEEDS photon (2026-10-11), one admitted run on :81 (the n=42 median 64.69 was NEEDS NONE)
 perf.capture_bundle.capture_bundle.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 perf.capture_bundle.capture_quit.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+perf.capture_free_tick 13.31  solo, the card lock held, :82 (FRAME-MONITOR-DOOR-1 stage 3, 2026-10-18; the lowest of record)
 perf.capture_off_is_free 12.90  ship 3a0422b4e (2026-10-13)
 perf.capture_off_is_free.fresh_home 0.01  quiet n=7
 perf.drag_mirror_room 33.49  quiet n=47
@@ -782,6 +785,8 @@ shader.live_compiles 91.32  quiet n=18
 shader.sample_opens_quiet 181.10  ship 3a0422b4e (2026-10-13)
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadercache.app.churn 64.28  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.save_off_frame 47.86  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4 round: the guard of counts, 2026-10-18; load 16-22)
+shadercache.save_off_frame.timing 44.56  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4 round: the measure sibling, 2026-10-18; load 13-16)
 shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
 shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
 shadercache.engine_pipelines 11.27  quiet n=36

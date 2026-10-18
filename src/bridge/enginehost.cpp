@@ -442,29 +442,18 @@ void EngineHost::startShaderCacheWatchdog()
         unsigned compiled = 0, cached = 0, expected = 0;
         mEngine->shaderBuildProgress(compiled, cached, expected);
         const unsigned total = compiled + cached;
-        // NEVER while a world is opening. Writing the cache means serializing
-        // about a megabyte and calling vkGetPipelineCacheData, all on the UI
-        // thread — and the open path's contract is that the window keeps
-        // answering (open.responsive budgets the worst gap at 500 ms). The
-        // ledger already knows when an open is in flight; deferring costs a
-        // second.
+        // NEVER while a world is opening, NOR WHILE AN ARCHIVE IS IN FLIGHT (FSYNC-1, the belt) — the policy is
+        // unchanged; what a save costs moved (FRAME-MONITOR-DOOR-1 stage 4). This thread only POSTS the save (an
+        // engine message); the render thread copies what is new since the last save in chunks of at most 8 shader
+        // entries a frame (<= 1 ms each) and snapshots the microcode map; the engine's writer thread serializes the
+        // copies and the pipeline cache and writes them. An open and an archive are where the render loop is busiest
+        // and the disk is already writing: a save can wait for them, it has waited minutes already.
         if (LoadTimeline::isRunning()) { mQuietTicks = 0; return; }
-        // NOR WHILE AN ARCHIVE IS IN FLIGHT (FSYNC-1, the belt). The write
-        // itself is off this thread now, but SERIALIZING is not — it walks
-        // Ogre's Hlms caches and serializes a megabyte and more in memory —
-        // and an export or import is precisely a stretch where the user is
-        // watching a progress bar this thread has to keep drawing. An archive
-        // is seconds long and the save has waited minutes already; it can wait
-        // for the bar. (An open gets the same courtesy above; nothing else on
-        // this thread runs long enough to need it.)
         if (ProjectArchiver::anyRunning()) { mQuietTicks = 0; return; }
         if (total != mShadersSeen) { mShadersSeen = total; mQuietTicks = 0; return; }
         if (mShadersSeen == mShadersSaved) return;         // nothing new since the last save
         if (++mQuietTicks < 3) return;                     // still inside the burst
-        // Named for the two probes: what is left here is the SERIALIZATION, the
-        // file write having moved to the engine's writer thread.
-        UiStep::Scope step("shader cache: serializing the save");
-        if (mEngine->saveShaderCache()) mShadersSaved = mShadersSeen;
+        if (mEngine->saveShaderCache()) mShadersSaved = mShadersSeen;   // a post: the engine copies and writes
         mQuietTicks = 0;
     });
     mCacheWatchdog->start();

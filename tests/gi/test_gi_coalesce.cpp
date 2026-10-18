@@ -349,10 +349,10 @@ int main(int argc, char **argv)
         // cascade a frame and then settles: counted, not timed).
         frame();   // the snapshot moves at a frame's close (U3 stage 2b)
         for (int f = 0; f < 240 && !escene->published().gi.giAtRest; ++f) frame();
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         for (int f = 0; f < 20; ++f) frame();
         recs.clear();
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         const unsigned idleRows = giRows(nullptr);
         for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
             frame();
         }
         recs.clear();
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         unsigned lightTicks = 0, lightRowsNamed = 0, untimed = 0;
         for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
         // (3) LETTING GO: the settle's full re-solve files its own row too.
         for (int f = 0; f < 40; ++f) frame();
         recs.clear();
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         unsigned solveRows = 0;
         for (const MonitorRecord &r : recs)
             for (const CacheWork &w : r.cacheWork)

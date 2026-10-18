@@ -120,7 +120,7 @@ int main()
         {
             std::vector<MonitorRecord> drop;
             enginetest::frames(e, 1);
-            e->takeMonitorRecords(drop);
+            e->popMonitorRecords(drop);
         }
         const unsigned long long rebuilds0 = cascadeRebuilds(scene);
         unsigned maxWalks = 0, maxScans = 0, maxCopyWrites = 0, sameCopyTwice = 0, writeFrames = 0, laterCalls = 0;
@@ -150,7 +150,7 @@ int main()
         std::vector<MonitorRecord> recs;
         enginetest::frames(e, 6);
         e->setFrameMonitor(MonitorLevel::Off);
-        e->takeMonitorRecords(recs);
+        e->popMonitorRecords(recs);
         unsigned wordsMin = 0xFFFFFFFFu, wordsMax = 0;
         for (const MonitorRecord &r : recs) {
             wordsMin = std::min(wordsMin, stageCount(r, "engine.atomwords"));

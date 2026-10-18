@@ -314,7 +314,7 @@ int main() {
         // is what the field's re-integration cost inside it.
         std::vector<MonitorRecord> recs;
         engine->setFrameMonitor(MonitorLevel::Off);
-        engine->takeMonitorRecords(recs);
+        engine->popMonitorRecords(recs);
         float worstMs = 0.0f, worstFollowMs = -1.0f, worstFollowGpu = -1.0f;
         float worstCascadeMs = -1.0f, worstCascadeGpu = -1.0f;
         unsigned followRows = 0, followProbes = 0;
@@ -602,7 +602,7 @@ int main() {
             }
             std::vector<MonitorRecord> recs;
             engine->setFrameMonitor(MonitorLevel::Off);
-            engine->takeMonitorRecords(recs);
+            engine->popMonitorRecords(recs);
             float worst = 0.0f, sum = 0.0f, worstGpu = -1.0f, sumGpu = 0.0f;
             unsigned nGpu = 0;
             for (const MonitorRecord &r : recs) {

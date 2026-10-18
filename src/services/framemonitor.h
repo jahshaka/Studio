@@ -16,7 +16,7 @@ For more information see the LICENSE file
 // (SPECS/RENDER_LOOP_MONITOR_SPEC.md §4.8, lane MON-P1b).
 //
 // The engine records what each frame DID and why (Engine::setFrameMonitor,
-// takeMonitorRecords, takeMonitorEvents, captureSnapshot — lane MON-P1a). This
+// popMonitorRecords, popMonitorEvents, captureSnapshot — lane MON-P1a). This
 // object is everything around that:
 //
 //   * the CAPTURE STATE MACHINE — idle -> recording -> writing -> idle, with a
@@ -270,24 +270,26 @@ private:
 
     class Bundle;    ///< the writer (framemonitor.cpp)
 
-    /// Moves everything the engine has published into the bundle. Called on
-    /// every tick end, on a slow timer (so a capture with no ticks still
-    /// drains) and in a LOOP at stop — the engine's holding queue hands back
-    /// its tail AFTER the monitor goes off (Engine.h takeMonitorRecords).
-    void drain();
+    /// Moves everything the engine has queued NOW into the bundle — ONE POP of
+    /// each of its two queues (Engine::popMonitorRecords / popMonitorEvents,
+    /// FRAME-MONITOR-DOOR-1), never a request, never a loop: it ends because
+    /// the pop emptied the queue. Returns how many records and events moved.
+    /// Called on every tick end, on a slow timer (so a capture with no ticks
+    /// still drains), and once more after the stop — the engine's holding
+    /// queue hands back its tail AFTER the monitor goes off.
+    unsigned drain();
     /// drain(), timed, published as the `host.monitor` stage — the monitor's
     /// own cost on the UI thread, which nothing could see before (item 6).
     void drainAndCharge();
-    /// One pass over the engine's two queues; returns how many records moved.
-    unsigned drainOnce();
     /// THE FRAME-COUNTED WINDOW'S END, counted at `noteTickEnd` — i.e. at
-    /// FRAMES DRAWN, whoever drew them, and NOT at records already drained.
+    /// the ENGINE'S FRAMES (its published counter since the start), whoever
+    /// drew them — never the ticks, and NOT at records already drained.
     /// The two differ: the engine publishes through a ring and a holding queue,
     /// so the drain that runs at the end of frame N typically carries frame
     /// N-3 (measured: 60 stepped frames leave 57 in the bundle and three in the
     /// engine). A window that waited for the sixtieth RECORD would therefore
     /// never close on a script that stepped exactly sixty frames. finish()
-    /// drains the tail in a loop, and the writer refuses anything past the
+    /// pops the tail after the stop, and the writer refuses anything past the
     /// budget, so the bundle ends up holding exactly the frames that were
     /// asked for.
     void finishIfFrameBudgetSpent();
@@ -309,8 +311,9 @@ private:
     double  mLastFrames = 0.0, mLastEvents = 0.0;
     double  mPlannedSeconds = 0.0;
     /// The frame-counted window's budget, 0 when the capture is timed, and how
-    /// many frames have been DRAWN inside it so far (one per rendered tick end).
-    unsigned long long mPlannedFrames = 0, mFramesDrawn = 0;
+    /// many frames the ENGINE has drawn inside it so far (its published frame
+    /// counter since `mStartFrame`, read at each tick end — one record each).
+    unsigned long long mPlannedFrames = 0, mFramesDrawn = 0, mStartFrame = 0;
     /// The GPU timing marks the engine dropped during this capture (cumulative),
     /// and what the ENGINE dropped on its own side (ring records nobody drained
     /// in time, events past its queue's cap) — all three go into the bundle's
