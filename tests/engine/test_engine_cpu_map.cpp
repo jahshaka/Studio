@@ -299,8 +299,11 @@ int drainRow(World &w, int n)
         std::vector<double> whole, name, records, plan, planFrame, boxesUs, pickUs;
         unsigned boxes = 0;
         unsigned long long planDigest = 1469598103934665603ull;   // FNV-1a over the frames' pending sets and picks
-        bool counts = true, parts = true;
-        unsigned recs = 0, moved = 0;
+        bool counts = true, parts = true, lookups = true;
+        unsigned recs = 0, moved = 0, recLookups = 0, visits = 0, nameLookups = 0;
+        // THE NODES THE FRAME'S RECORDS MOVE: each record's own node at a k arm; the group's whole subtree (the group,
+        // the subgroup where the world has one, every cube) on the group arm.
+        const unsigned wantVisits = k < 0 ? unsigned(n) + 1u + (w.subgroup ? 1u : 0u) : unsigned(k);
         for (int f = 0; f < warm + measured; ++f) {
             writeFrame(w, k);
             const FrameInputStatus &st = w.e->published().input;
@@ -320,6 +323,11 @@ int drainRow(World &w, int n)
             moved = st.changesMoved;
             const unsigned want = k < 0 ? 1u : unsigned(k);
             if (st.nodeRecords != want || st.changesMoved != want) counts = false;
+            recLookups = st.drainRecordLookups;
+            visits = st.drainNameVisits;
+            nameLookups = st.drainNameLookups;
+            if (st.drainRecordLookups != st.nodeRecords || st.drainNameVisits != wantVisits ||
+                st.drainNameLookups != st.drainNameVisits) lookups = false;
             if (st.drainNameMicros + st.drainRecordsMicros > st.drainMicros + 0.5) parts = false;
         }
         char b[32];
@@ -336,6 +344,32 @@ int drainRow(World &w, int n)
               row, armName(k, b, sizeof b), recs, moved);
         CHECK(parts, "%s arm %s: the drain's parts are inside its whole on every frame", row,
               armName(k, b, sizeof b));
+        // THE COUNTS AT EVERY ARM (decision 15 — what catches a scan creeping back, whatever the box's load): one
+        // index lookup per record, each node of the moved subtrees visited once by the naming pass, one lookup per
+        // visit.
+        CHECK(lookups, "%s arm %s: one lookup per record (%u for %u records), every moved node visited once (%u of %u), "
+              "one lookup per visit (%u)", row, armName(k, b, sizeof b), recLookups, recs, visits, wantVisits,
+              nameLookups);
+        // THE µs BARS, PER ARM (decision 15): the quiet-box medians x 1.25 (the load spread), measured 2026-10-18
+        // 09:00-09:57 at load 3.0-4.5 — k100 name 0.284-0.289 / records 0.182-0.190 -> 0.36 / 0.24; k2000 0.284-0.302 /
+        // 0.177-0.189 -> 0.355 / 0.221 (the lead's); k10000 0.377-0.383 / 0.301-0.308 -> 0.48 / 0.385; the group move
+        // 0.298-0.301 per node -> 0.37. (The old "10k <= 1.25 x the 2k cost" clause is DELETED: its premise was false.
+        // The group arm walks the same 10k nodes from one record flat at 0.30 us/node, so the k10000 rise is the
+        // working set of 10k separate records leaving the caches, not more work per record. Applying the records in
+        // SoA slot order instead of arrival order measured 0.49 vs 0.30 us/record at k10000 — arrival order is 88 %
+        // slot order already and the sort costs more than it saves — so it is not built.)
+        // ON THE MEASURE ROW ONLY (frame.drain_cost_10k, run by hand on a quiet box): the 2k guard row in the gate keeps
+        // the counts above — a µs bar there would read the box's load, not the drain.
+        if (n >= 10000) {
+            const double nameBar = k < 0 ? 0.37 : k <= 100 ? 0.36 : k <= 2000 ? 0.355 : 0.48;
+            const double recBar = k <= 100 ? 0.24 : k <= 2000 ? 0.221 : 0.385;
+            const double nameUs = nm.median / per, recUs = rc.median / double(k < 0 ? 1 : k);
+            CHECK(nameUs <= nameBar, "%s arm %s: naming %.3f us/node <= %.3f", row, armName(k, b, sizeof b), nameUs,
+                  nameBar);
+            if (k > 0)
+                CHECK(recUs <= recBar, "%s arm %s: the records %.3f us/record <= %.3f", row, armName(k, b, sizeof b),
+                      recUs, recBar);
+        }
         // THE PLAN'S GUARDS (stage 3), three more frames of the arm with both arms on: the incremental geometry
         // signature equals the whole sum, and one box per moved subtree root marks no cascade the items' own
         // boxes reach fewer (the union's extra printed).
@@ -360,9 +394,13 @@ int drainRow(World &w, int n)
               "geometry signature equals the whole sum on every pass", row, armName(k, b, sizeof b));
         CHECK(g1.rootMisses == g0.rootMisses, "%s arm %s: the roots' boxes mark every cascade the items' own boxes "
               "reach (%llu marks checked)", row, armName(k, b, sizeof b), g1.rootChecks - g0.rootChecks);
-        // planFrame's bar (decision 8): <= 5 ms on the group move, the plan reading the boxes the scene graph made.
+        // planFrame's bars: <= 5 ms on the group move (decision 8), the plan reading the boxes the scene graph made;
+        // at k10000 the median + 0.5 = 8.6 ms (decision 15: measured 7.83-8.10 at load 3-4.5, the 10k moved leaves'
+        // boxes folding into the collapsed union).
         if (k < 0) CHECK(pf.median / 1000.0 <= 5.0, "%s arm %s: planFrame %.3f ms <= 5 ms", row, armName(k, b, sizeof b),
                          pf.median / 1000.0);
+        if (k == 10000) CHECK(pf.median / 1000.0 <= 8.6, "%s arm %s: planFrame %.3f ms <= 8.6 ms", row,
+                              armName(k, b, sizeof b), pf.median / 1000.0);
     }
     return 0;
 }
