@@ -171,6 +171,26 @@ int main(int argc, char **argv)
                               "value (%.4f / %.4f = %.3f; bar 3 %%)", tier.second, res, standing ? "on the plate" : "free-standing",
                               arm.second, withWall, open, withWall / open);
                 if (junction) std::printf("MEASURE (JUNCTION-NORMAL-1): %s\n", msg);
+                if (junction && arm.first == GiToggle::Off) {
+                    // THE JUNCTION VOXELS (JUNCTION-NORMAL-1): the face column at x = 0, the rows from the plate's top
+                    // up - the voxel's emissive (an area MEAN over every surface in it) against L, its two z halves'
+                    // and its +y half's coverage, and where the wall's face sits in its cell
+                    GiVoxelVolume v;
+                    if (s->giVoxelVolume(0, v) && v.available && !v.emissive.empty()) {
+                        const int cx = int((0.0f - v.origin[0]) / v.cell[0]);
+                        const int cz = int((1.5f - v.origin[2]) / v.cell[2]);
+                        const double frac = (1.5 - v.origin[2]) / v.cell[2] - cz;
+                        for (int cy = int((0.05f - v.origin[1]) / v.cell[1]); cy <= int((0.05f - v.origin[1]) / v.cell[1]) + 2; ++cy) {
+                            const size_t i = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                            std::printf("MEASURE (JUNCTION-NORMAL-1): %d cells, row y %.4f .. %.4f (the face at %.3f of its cell): "
+                                        "emissive / L %.4f, covN.z %.3f covP.y %.3f, normal %.3f %.3f %.3f two-sided %.0f\n", res,
+                                        double(v.origin[1] + cy * v.cell[1]), double(v.origin[1] + (cy + 1) * v.cell[1]), frac,
+                                        double(v.emissive[i]) / L, double(v.coverageN[i + 2]), double(v.coverageP[i + 1]),
+                                        2.0 * v.normal[i] - 1.0, 2.0 * v.normal[i + 1] - 1.0, 2.0 * v.normal[i + 2] - 1.0,
+                                        double(v.normal[i + 3]));
+                        }
+                    }
+                }
                 else CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
                 if (tier.first == GiQuality::Low) readings[0].push_back(withWall / open);
                 if (tier.first == GiQuality::Medium) readings[1].push_back(withWall / open);
@@ -240,6 +260,55 @@ int main(int argc, char **argv)
         s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
         double faceWall = 0.0, lobeWall = 0.0;
         measure(faceWall, lobeWall);
+        // THE SUN-LIT WALL'S LOBE PER RESOLUTION (SUN-INJECTION-RES-1, printed: the debt's own table - 1.019 / 1.003 /
+        // 0.982 at 32 / 64 / 128 cells on the base, 1.019 / 1.007 / 0.995 with the shadow march's entries and exits
+        // apart; the residual is the coverage's statistics - see the column law below)
+        std::printf("MEASURE (SUN-INJECTION-RES-1): %d cells, the sun-lit wall's lobe / its face %.5f / %.5f = %.5f\n", res,
+                    lobeWall, faceWall, lobeWall / faceWall);
+        {
+            // THE INJECTION'S SHADOW OF A THIN SLAB (SUN-INJECTION-RES-1, ENGINE-UPGRADE-U5 stage 5): the wall sunk 2 m
+            // under the plate's plane, so the 0.1 m plate (y 0 .. 0.1, end on to the suns) shadows a band of its lit face.
+            // A voxel of the face column stores the face's light times the transmittance of the cells between it and the
+            // sun, and the plate's end faces cover the share of the voxel's height the plate fills - so a voxel of the
+            // column at [y0, y0 + cell] holds 1 - |[y0, y0 + cell] n [0, 0.1]| / cell of the lit face's light: the
+            // coverage's own law, at every resolution. The plate is crossed END TO END - in at z 1.35, out at z -2 - and
+            // its two end faces carry the one band: summed, the march stopped the ray twice (the row at 64 cells black,
+            // 0.000 against the law's 0.286; 0.155 against 0.571 at 128). BAR 1 % of the lit face (one half-float quantum
+            // is 0.1 %).
+            s->setNodeTransform(wallNode, Vec3(0.0f, 3.05f, 1.75f), Quat(), Vec3(12.0f, 9.9f, 0.5f));
+            s->refreshGlobalIllumination();
+            double f2 = 0.0, l2 = 0.0;
+            measure(f2, l2);
+            GiVoxelVolume v;
+            const bool got = s->giVoxelVolume(0, v) && v.available && !v.direct.empty();
+            CHECK(got, "the store's direct volume reads back");
+            if (got) {
+                const int cx = int((0.0f - v.origin[0]) / v.cell[0]);
+                const int cz = int((1.5f - v.origin[2]) / v.cell[2]);
+                const auto litAt = [&](int cy) {
+                    const size_t i = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                    return v.direct[i + 3] > 0.0f ? double(v.direct[i + 1]) / double(v.direct[i + 3]) / double(v.multiplier) : 0.0;
+                };
+                const double lit = litAt(int((-1.0f - v.origin[1]) / v.cell[1]));   // a voxel well under the band
+                double worst = 0.0;
+                for (int cy = int((-0.3f - v.origin[1]) / v.cell[1]); cy <= int((0.5f - v.origin[1]) / v.cell[1]); ++cy) {
+                    const double y0 = double(v.origin[1]) + double(cy) * double(v.cell[1]);
+                    const double y1 = y0 + double(v.cell[1]);
+                    const double band = std::max(0.0, std::min(y1, 0.1) - std::max(y0, 0.0));
+                    const double want = 1.0 - band / double(v.cell[1]);
+                    const double reading = lit > 0.0 ? litAt(cy) / lit : 0.0;
+                    worst = std::max(worst, std::fabs(reading - want));
+                    if (band > 0.0)
+                        std::printf("%d cells, the face column's voxel at y %.4f .. %.4f: %.4f of the lit face (the law %.4f)\n",
+                                    res, y0, y1, reading, want);
+                }
+                char msg[240];
+                std::snprintf(msg, sizeof msg, "%d cells: the plate's shadow on the face column is its coverage's, crossed "
+                              "once (worst %.4f of the lit face %.5f; bar 0.01)", res, worst, lit);
+                CHECK(lit > 0.0 && worst <= 0.01, msg);
+            }
+            s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
+        }
         // the slab: its plate face at z 1.5, 0.02 m thick
         s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.51f), Quat(), Vec3(12.0f, 7.9f, 0.02f));
         const struct { const char *what; float nearP, farP; float dz; } arms[3] = {

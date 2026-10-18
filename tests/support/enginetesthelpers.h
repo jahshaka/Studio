@@ -573,6 +573,69 @@ inline double disneyDiffuseAlbedo(double v, double r, int n = 64)
     return sum / double(n * 2 * n);
 }
 
+/// THE METAL'S SPECULAR LOBE, BY DIRECT INTEGRATION (METAL-BOUNCE-1): HlmsPbs's BRDF_Default specular
+/// (200.BRDFs_piece_ps.any: GGX D, the height-correlated Smith GGX visibility, Schlick's Fresnel on V.H;
+/// alpha = perceptual roughness squared) integrated over the light directions for a view at
+/// cos theta_v = `v` - its directional albedo is F0 x A + B, A the (1 - Fc) part and B the Fc part,
+/// Fc = (1 - V.H)^5. The suites' reference for what the store's table (PhotonSpecularAlbedo.h) must
+/// reproduce: computed here from the lobe, never read from the table. The half vector is drawn by
+/// D(h) cos(h) over the full circle, n x 2n stratified.
+inline void ggxSpecularAlbedo(double v, double r, double &A, double &B, int n = 256)
+{
+    v = std::min(1.0, std::max(1e-3, v));
+    const double a = std::max(r * r, 1e-3), a2 = a * a;
+    const double V[3] = { std::sqrt(std::max(0.0, 1.0 - v * v)), 0.0, v };
+    double sa = 0.0, sb = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double u = (double(i) + 0.5) / double(n);
+        const double c2 = (1.0 - u) / (1.0 + (a2 - 1.0) * u);
+        const double ch = std::sqrt(c2), sh = std::sqrt(std::max(0.0, 1.0 - c2));
+        for (int j = 0; j < 2 * n; ++j) {
+            const double ph = 2.0 * 3.14159265358979323846 * (double(j) + 0.5) / double(2 * n);
+            const double H[3] = { sh * std::cos(ph), sh * std::sin(ph), ch };
+            const double vh = V[0] * H[0] + V[1] * H[1] + V[2] * H[2];
+            const double lz = 2.0 * vh * H[2] - V[2];
+            if (!(lz > 0.0) || !(vh > 0.0)) continue;
+            const double lv = lz * std::sqrt(v * v * (1.0 - a2) + a2);
+            const double ll = v * std::sqrt(lz * lz * (1.0 - a2) + a2);
+            // f cos_l / pdf(l), pdf(l) = D(h) cos(h) / (4 V.H): the D cancels
+            const double w = 0.5 / (lv + ll) * lz * 4.0 * vh / ch;
+            const double fc = std::pow(1.0 - vh, 5.0);
+            sa += w * (1.0 - fc);
+            sb += w * fc;
+        }
+    }
+    A = sa / double(n * 2 * n);
+    B = sb / double(n * 2 * n);
+}
+
+/// ...and over a UNIFORM incoming hemisphere: A-bar = 2 x integral of A(mu) mu dmu (B-bar likewise), at
+/// `m` cosines - what the bounce re-emits of what a metal gathers.
+inline void ggxSpecularAlbedoHemi(double r, double &A, double &B, int m = 64, int n = 128)
+{
+    A = 0.0;
+    B = 0.0;
+    for (int k = 0; k < m; ++k) {
+        const double mu = (double(k) + 0.5) / double(m);
+        double a = 0.0, b = 0.0;
+        ggxSpecularAlbedo(mu, r, a, b, n);
+        A += 2.0 * a * mu / double(m);
+        B += 2.0 * b * mu / double(m);
+    }
+}
+
+/// THE DIFFUSE LOBE'S HEMISPHERICAL ALBEDO, by direct integration: 2 x integral of
+/// disneyDiffuseAlbedo(mu, r) mu dmu - the bounce's jahDiffuseAlbedoHemi.
+inline double disneyDiffuseAlbedoHemi(double r, int m = 64, int n = 48)
+{
+    double h = 0.0;
+    for (int k = 0; k < m; ++k) {
+        const double mu = (double(k) + 0.5) / double(m);
+        h += 2.0 * disneyDiffuseAlbedo(mu, r, n) * mu / double(m);
+    }
+    return h;
+}
+
 inline float cosineSkyVisibilityUp(const Vec3 &p, const std::vector<AnalyticBox> &boxes,
                                    int n = 200)
 {
