@@ -542,7 +542,7 @@ int main(int argc, char **argv)
         V.mirror->setSource(iris::ScenePtr());
     }
 
-    // ---- 10: the live node count is invariant under promotion ---------------------
+    // ---- 10: the live node count: invariant under promotion, exact under an eviction ---
     {
         Arm L;
         L.target = engine->createScene("livecount");
@@ -568,7 +568,8 @@ int main(int argc, char **argv)
         // run: the settle classifies them). Counted once they are in the engine, then
         // counted again after the settle promoted them dynamic -> static: the same
         // nodes, each moved once — a non-LIFO destroy in the dynamic level (a hole,
-        // still a used slot) and a new slot in the static one.
+        // still a used slot) and a slot in the static one — a new one, or a hole an earlier
+        // removal left (hole reuse is why no used-slot count is asserted across a promotion).
         std::vector<iris::SceneNodePtr> fresh;
         for (int i = 0; i < 50; ++i) {
             auto m = iris::MeshNode::create();
@@ -592,8 +593,12 @@ int main(int argc, char **argv)
         enginetest::frames(engine, 1);
         const bool gotB = engine->memoryStats(b);
         // ...and 50 props REMOVED from the document, kept alive (an undo stack's hold:
-        // pool.doc's doc.memory arm): detached and demoted, never destroyed — the
-        // path that left the hole the arm's used-slot count read as a node.
+        // pool.doc's doc.memory arm). SINCE U2 A REMOVAL IS AN EVICTION (scenenode.cpp
+        // removeChildInternal -> removeFromScene records it; the mirror's consumeEvicted
+        // releases the entry): the held node's engine node is DESTROYED, so the live count
+        // drops by the 50 — and their destroys are not LIFO, so each leaves a hole that is
+        // still a used slot. (The premise before U2 — "detached and demoted, never
+        // destroyed", live unchanged — is MS1 a183c07's rememberDetached path, deleted.)
         std::vector<iris::SceneNodePtr> held;
         for (size_t i = 0; i < 50; ++i) {
             const iris::SceneNodePtr p = props[i * 37 % props.size()];
@@ -610,10 +615,16 @@ int main(int argc, char **argv)
                     a.simdNodeSlots, b.simdNodeSlots, c.simdNodeSlots, dynamicFresh, back);
         CHECK(gotA && gotB && gotC && dynamicFresh == 50 && back == 50,
               "50 new props were dynamic in the engine and the settle promoted them");
-        CHECK(b.simdNodes == a.simdNodes && c.simdNodes == b.simdNodes,
-              "memoryStats' simdNodes (LIVE nodes) is invariant under promotion and a held removal");
-        CHECK(b.simdNodeSlots != a.simdNodeSlots || c.simdNodeSlots != b.simdNodeSlots,
-              "...while the pools' used slots (the old stat) are not: they count the holes");
+        CHECK(b.simdNodes == a.simdNodes,
+              "memoryStats' simdNodes (LIVE nodes) is invariant under promotion (the same nodes, moved)");
+        CHECK(c.simdNodes + 50u == b.simdNodes,
+              "...and a held removal is an EVICTION: the live count drops by exactly the 50 removed");
+        // (AN ALLOCATOR DEPENDENCY, deterministic on this fixture: a non-LIFO destroy stays a hole only until a
+        // depth level's free list passes its cleanup threshold — OgreArrayMemoryManager::destroySlot defragments
+        // past mCleanupThreshold, 100 by default, and that would move the used slots; here it does not, measured
+        // 104040 x3.)
+        CHECK(c.simdNodeSlots == b.simdNodeSlots,
+              "...while the pools' used slots do not move: the 50 non-LIFO destroys are holes, still used slots");
         L.mirror->setSource(iris::ScenePtr());
     }
 

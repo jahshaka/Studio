@@ -141,6 +141,7 @@ jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp)
 jah_d11_suite(test_archive_closure archive.closure test_archive_closure.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetclosure.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/bundlestage.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetrefs.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp)

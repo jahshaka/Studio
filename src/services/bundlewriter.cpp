@@ -185,7 +185,7 @@ bool BundleExport::isFinished() const { return mFuture.isValid() && mFuture.isFi
 int BundleExport::done() const { return mShared->done.load(); }
 int BundleExport::total() const { return mShared->total.load(); }
 
-ExportResult BundleExport::wait(QEventLoop::ProcessEventsFlags flags)
+ExportResult BundleExport::wait(QEventLoop::ProcessEventsFlags flags, UiStepClock *clock)
 {
     if (!mStarted) start();
     if (!mFuture.isFinished() && QCoreApplication::instance()) {
@@ -195,12 +195,20 @@ ExportResult BundleExport::wait(QEventLoop::ProcessEventsFlags flags)
         watcher.setFuture(mFuture);
         // The future may have finished between the check and the connection;
         // the watcher then reports it on its first event, which the loop runs.
-        if (!mFuture.isFinished()) loop.exec(flags);
+        if (!mFuture.isFinished()) {
+            if (clock) clock->turn([&] { loop.exec(flags); });
+            else loop.exec(flags);
+        }
     }
     // An application quitting ends every loop early: the write is still
     // bounded file I/O, so it is joined rather than abandoned mid-rename.
     mFuture.waitForFinished();
-    return mFuture.result();
+    ExportResult result = mFuture.result();
+    if (clock) {
+        clock->close();   // the resume after the worker: the export's last stretch
+        result.worstUiStepMs = clock->worstMs();
+    }
+    return result;
 }
 
 namespace {
@@ -287,7 +295,7 @@ UnpackedBundle unpackBundle(const QString &path)
     return out;
 }
 
-ExportResult exportAndWait(BundleStage stage, const QString &destPath)
+ExportResult exportAndWait(BundleStage stage, const QString &destPath, UiStepClock *clock)
 {
     if (!stage.ok()) {
         ExportResult result;
@@ -296,7 +304,7 @@ ExportResult exportAndWait(BundleStage stage, const QString &destPath)
     }
     BundleExport job(std::move(stage), destPath);
     job.start();
-    return job.wait(QEventLoop::ExcludeUserInputEvents);
+    return job.wait(QEventLoop::ExcludeUserInputEvents, clock);
 }
 
 }   // namespace assetshare

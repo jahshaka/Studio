@@ -20,13 +20,15 @@
 // the panel's GI-on value minus its GI-off value (the control: ~0).
 // THE LIVE EDITS (the voxel inputs of a PBR edit, OgreMaterials.cpp): on the diffuser, a roughness-only
 // edit (0.6 -> 0.3) and then a metalness edit (0 -> 0.5), each settled by the host's refresh, re-voxelise
-// the cascade exactly once and the store follows them.
+// the cascade exactly once and the store follows them: the roughness by the Disney lobe's albedo change
+// (direct x1.099, hemispherical x1.075 from 0.6 to 0.3), the metalness by 1 - m.
 // THE BASE (irisgl d46046f), measured: the store and the bounce 1.000 of the diffuser's at metalness
 // 0.5 and 1 (the base colour stood for the albedo), and either live edit re-voxelised nothing (0) and
 // moved no voxel (spikes/photon-march-1/stage2-row-base.log). After: 0.500 / 0.000, one rebuild each.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -169,6 +171,27 @@ int main()
             std::snprintf(msg, sizeof msg, "a roughness-only edit re-voxelises the cascade exactly once (%llu)", r1 - r0);
             CHECK(r1 - r0 == 1ull, msg);
             const double mid = plateRadiance(s, n);
+            {   // THE ROUGHNESS IS IN THE STORE (MAIN-REDS-1's fix round): the voxel holds the light its surface
+                // scatters through HlmsPbs's normalised Disney diffuse lobe — the injection's direct term times the
+                // lobe's directional albedo at the sun's cosine (1 here: the sun straight down on the plate's top),
+                // the bounce's re-emission times its hemispherical mean. Both rise from r 0.6 to 0.3 (the lobe's
+                // energy factor, lerp(1, 1/1.51, r), grows as r falls), so the stored radiance rises, by a ratio between the two
+                // factors' — computed from the lobe (enginetest::disneyDiffuseAlbedo), within the 1 % the store's
+                // ratios carry (the renderer's jahDiffuseAlbedo is a fit to the DFG table, the quantum 0.1 %).
+                const double direct = enginetest::disneyDiffuseAlbedo(1.0, 0.3) / enginetest::disneyDiffuseAlbedo(1.0, 0.6);
+                double h3 = 0.0, h6 = 0.0;
+                for (int k = 0; k < 32; ++k) {   // the hemispherical mean, cosine-weighted views
+                    const double v = std::sqrt((k + 0.5) / 32.0);
+                    h3 += enginetest::disneyDiffuseAlbedo(v, 0.3);
+                    h6 += enginetest::disneyDiffuseAlbedo(v, 0.6);
+                }
+                const double hemi = h3 / h6, lo = std::min(direct, hemi), hi = std::max(direct, hemi);
+                const double got = before > 0.0 ? mid / before : 0.0;
+                char rmsg[260];
+                std::snprintf(rmsg, sizeof rmsg, "...and the STORE follows the roughness: the plate's radiance x%.4f, "
+                              "between the lobe's direct x%.4f and hemispherical x%.4f factors (bar 1 %%)", got, direct, hemi);
+                CHECK(got > 1.0 && got >= lo - 0.01 && got <= hi + 0.01, rmsg);
+            }
             edit.metalness = 0.5f;
             CHECK(s->setPbrMaterial(plateMat, edit), "the metalness edit applies");
             s->refreshGlobalIllumination();

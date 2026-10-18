@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
 #include "services/assetshare.h"
+#include "bridge/enginehost.h"
+#include "viewport/enginerenderdriver.h"
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
 #include "services/materialpresetassets.h"
@@ -411,7 +413,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         // `exportBundle`, beside the `exportRaw` it belongs with, and the
         // alternative (an alias mechanism in the API core, for one name) buys
         // nothing a reader of the docs would notice.
-        { "exportBundle", "assets.exportBundle(guid | [guid], path) -> {path, kind, assets, bytes, worker}",
+        { "exportBundle", "assets.exportBundle(guid | [guid], path) -> {path, kind, assets, bytes, worker, worstUiStepMs, "
+                          "framesRendered, ticks}",
           "Writes assets and everything they are made of as ONE self-contained share file (a .jbundle zip: "
           "manifest v2 plus the closure with its bytes inline) — THE export: the Assets tray's Export Texture, "
           "Export Sky, Export Material and Export Asset Pack and the Materials module's Export material all call "
@@ -423,7 +426,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "which answers the first entry's guid and lands them all. THE WRITE IS A WORKER'S: the catalog is read "
           "on the calling thread, then the bytes are read, the payload serialised and the zip built on a worker "
           "while the app keeps drawing (user input held back); the verb returns when the file is complete, and "
-          "`worker` is true when the write ran off the UI thread. The UI doors write through the same job "
+          "`worker` is true when the write ran off the UI thread. WHAT IT COSTS THE UI THREAD, measured by the verb "
+          "itself: `worstUiStepMs` is the longest stretch the export's OWN work held the calling thread between two "
+          "event-loop turns (a describe slice, the hand-over to the worker, the resume after it — never the frames "
+          "and timers that ran inside the turns); `ticks` / `framesRendered` are the render loop's timer fires and "
+          "the frames they drew over the verb's span (FRAMES, the driver's count: an export that lets every tick draw "
+          "reads framesRendered >= ticks - 1). The UI doors write through the same job "
           "behind a progress dialog that can cancel it.",
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
@@ -1991,7 +1999,11 @@ QVariantMap AssetsApi::exportBundle(const QVariant &guids, const QString &path)
         entries << guids.toString();
     }
     if (path.trimmed().isEmpty()) { fail("assets.exportBundle: a destination path is required"); return out; }
+    // THE RENDER LOOP OVER THE SPAN, COUNTED (MAIN-REDS-1 stage 5): its timer fires and the frames they drew.
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    const EngineRenderDriver::Stats before = driver ? driver->stats() : EngineRenderDriver::Stats{};
     const auto written = assetshare::exportBundle(host.db, host.project, entries, path.trimmed());
+    const EngineRenderDriver::Stats after = driver ? driver->stats() : EngineRenderDriver::Stats{};
     if (!written.ok()) {
         fail(QStringLiteral("assets.exportBundle: %1").arg(written.error));
         return out;
@@ -2001,6 +2013,9 @@ QVariantMap AssetsApi::exportBundle(const QVariant &guids, const QString &path)
     out["assets"] = written.assets;
     out["bytes"] = static_cast<qlonglong>(written.bytes);
     out["worker"] = written.offUiThread;
+    out["worstUiStepMs"] = written.worstUiStepMs;
+    out["ticks"] = static_cast<qlonglong>(after.ticks - before.ticks);
+    out["framesRendered"] = static_cast<qlonglong>(after.rendered - before.rendered);
     return out;
 }
 

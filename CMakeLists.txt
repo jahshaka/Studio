@@ -340,6 +340,7 @@ set(SRCS
     src/services/materialmembers.cpp
     src/services/memberstamp.cpp
     src/services/assetshare.cpp
+    src/services/bundlestage.cpp
     src/services/bundlewriter.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
