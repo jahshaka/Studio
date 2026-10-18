@@ -158,7 +158,7 @@ static const float kOneVoxelStep = 1.6f / 255.0f;
 //   F2. ...AND ITS WHOLE REBUILD FAILS TWICE (gi.cascadeFault, decision 14.8): the store is CLEARED (every
 //      volume zero: no bounce, never a torn store's) and the cascade stands down, the status saying
 //      torn-cleared, until a rebuild succeeds - bounded, never the GI budget spent every frame for ever.
-//   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive (the roughness in its alpha), the
+//   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive (the roughness in its alpha), its factor per half, the
 //   coverage and the position per half, the area weight and the position sums - and nothing else needs
 //   to be: the commit regenerates every mip from level 0, so equal level 0 is equal mips.
 //   D. THE COST, on a lattice at 128 cells (the High tier): the voxelisation of a scroll by the
@@ -187,7 +187,8 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
     const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo }, { "normal", &a.normal, &b.normal },
                          { "coverageP", &a.coverageP, &b.coverageP }, { "coverageN", &a.coverageN, &b.coverageN },
                          { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN },
-                         { "emissive", &a.emissive, &b.emissive } };
+                         { "emissive", &a.emissive, &b.emissive },
+                         { "emitP", &a.emitP, &b.emitP }, { "emitN", &a.emitN, &b.emitN } };   // JUNCTION-NORMAL-1
     bool same = true;
     // THE RAW INTEGERS a build keeps (the area weight, the four position sums), compared as integers.
     struct UArr { const char *name; const std::vector<unsigned> *x, *y; };
