@@ -785,7 +785,8 @@ shader.live_compiles 91.32  quiet n=18
 shader.sample_opens_quiet 181.10  ship 3a0422b4e (2026-10-13)
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadercache.app.churn 64.28  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
-shadercache.save_off_frame 46.95  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4, 2026-10-18; two launches, cold then warm)
+shadercache.save_off_frame 47.86  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4 round: the guard of counts, 2026-10-18; load 16-22)
+shadercache.save_off_frame.timing 44.56  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4 round: the measure sibling, 2026-10-18; load 13-16)
 shadercache.container 51.50  ship 3a0422b4e (2026-10-13)
 shadercache.container_asan 257.80  ship 3a0422b4e (2026-10-13)
 shadercache.engine_pipelines 11.27  quiet n=36

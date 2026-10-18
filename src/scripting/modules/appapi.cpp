@@ -231,7 +231,7 @@ QVector<VerbInfo> AppApi::verbs() const
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
                          "microcodeEntries, hlmsCachesLoaded, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
-                         "save:{copied, messages, worstMs, chunkWorstMs, written}, "
+                         "save:{copied, messages, worstMs, chunkWorstMs, chunkMaxEntries, chunkEntries, frames, frameOverruns, written}, "
                          "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
                          "renderableCacheCapacity, liveCompiles}",
           "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
@@ -954,6 +954,8 @@ QVariantMap AppApi::shaderCache()
     m["lastSaved"]           = QVariant::fromValue(qlonglong(s.lastSavedUnixMs));
     m["save"] = QVariantMap{ { "copied", s.savesCopied }, { "messages", s.copyMessages },
                              { "worstMs", s.copyWorstMs }, { "chunkWorstMs", s.copyChunkWorstMs },
+                             { "chunkMaxEntries", s.copyChunkMaxEntries }, { "chunkEntries", s.copyChunkEntries },
+                             { "frames", s.copyFrames }, { "frameOverruns", s.copyFrameOverruns },
                              { "written", s.savesWritten } };
     m["passCacheEntries"]        = s.passCacheEntries;
     m["passCacheCapacity"]       = s.passCacheCapacity;

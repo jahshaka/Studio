@@ -3,9 +3,13 @@
 // a render frame). The run, twice by its driver (save_off_frame.sh): COLD on a fresh data root, then WARM on the same
 // root. A compile burst (a cube selected under the translate gizmo: its outline and gizmo shaders compile even warm),
 // then the watchdog's save, waited for in FRAMES (the writer's finished writes, app.shaderCache().save.written).
-// THE BARS: every render-thread message of every save this process ran <= 2 ms (save.worstMs) and every chunk of the
-// incremental copy <= 1 ms (save.chunkWorstMs, at most 8 entries a chunk); the frames across the save carry no frame
-// overrun (app.frameStats().submit.frameOverruns, the driver's attribution); the writer's "saved N files" arrived.
+// THE GUARD COUNTS (tests count frames, never a clock): on the cold arm the copy ran in more messages than saves (it
+// chunked); no chunked message took more than K entries (save.chunkMaxEntries <= save.chunkEntries); the frames that
+// CARRIED the save's messages carry no frame overrun (save.frameOverruns: the driver's attribution — a frame's work over
+// the display period — counted by the render loop on exactly those frames; the window-wide driver count is printed, a
+// sibling lane's load overruns other frames of a 2-4 s window); the writer's
+// "saved N files" arrived. The milliseconds — the longest message (<= 2 ms) and the longest chunk (<= 1 ms) — are
+// PRINTED here and judged by the measure sibling shadercache.save_off_frame.timing (its driver reads this line).
 // BEFORE (70ab28e3f, measured by hand: spikes/frame-monitor-door/stage4-measure.txt): one message of 22.7 ms cold,
 // 12.5 ms warm; the drag row's pad shape 1-2 frame overruns with the save in its window.
 function assert(cond, msg) {
@@ -47,9 +51,12 @@ assert(c1.written > c0.written, tag + ": the writer's \"saved N files\" arrived 
        c1.written + ", " + ticks + " ticks)");
 assert(c1.copied >= 1 && c1.messages >= c1.copied, tag + ": the copies were made on the render thread (" + c1.copied +
        " save(s) in " + c1.messages + " message(s))");
-assert(c1.worstMs <= 2.0, tag + ": every message of every save <= 2 ms (the longest " + c1.worstMs.toFixed(3) + " ms)");
-assert(c1.chunkWorstMs <= 1.0, tag + ": every chunk of the copy <= 1 ms (the longest " + c1.chunkWorstMs.toFixed(3) +
-       " ms, " + (c1.messages - c1.copied) + " chunk(s) before the catch-ups)");
-assert(frameOver === 0, tag + ": the frames across the save carry no frame overrun (" + frameOver + ")");
+if (!warm)
+    assert(c1.messages > c1.copied, tag + ": the copy chunked (" + c1.copied + " save(s) in " + c1.messages + " messages)");
+assert(c1.chunkEntries > 0 && c1.chunkMaxEntries <= c1.chunkEntries,
+       tag + ": no chunked message took more than K entries (" + c1.chunkMaxEntries + ", K " + c1.chunkEntries + ")");
+assert(c1.frames >= 1 && c1.frameOverruns === 0,
+       tag + ": the frames that carried the save's messages carry no frame overrun (" + c1.frameOverruns + " of " +
+       c1.frames + " frames; the window's driver count, printed: " + frameOver + ")");
 console.log("save_off_frame " + tag + ": PASS");
 app.quit();
