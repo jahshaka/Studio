@@ -988,4 +988,5 @@ engine.async_record 2.29  spec ENGINE-UPGRADE-ASYNC c336325b1 (2026-10-14, the l
 engine.ray_update_counts 1.47  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
 gi.cascade_drag_age 2.52  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
 gi.scroll_slab 5.27  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1)
-shadow.caster_cull 22.03  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check, n=1, 229 frames)
+shadow.caster_cull 8.48  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check: the light-depth laws alone on a 1024 atlas, n=2, 147 frames)
+shadow.caster_receivers 9.06  spec 2026-10-18 (ENGINE-UPGRADE-U5 master check: the receiver law, split from shadow.caster_cull, n=2, 82 frames)

@@ -1062,6 +1062,9 @@ static int receiverSection(unsigned long long &framesOut)
 static int lightCullMain()
 {
     std::printf("== shadow.caster_cull: the sun maps' casters culled by the light's own depth, the maps unchanged\n");
+    // A 1024 ATLAS: every law here is per texel of whatever atlas the maps have, and each of the run's ~50 map digests
+    // reads the whole atlas back (a fixture's budget is 10 s).
+    gE->setShadowResolution(1024u);
     World w;
     if (!makeWorld(w, "light-cull", false)) { std::printf("FAIL: the world\n"); return 1; }
     PbrParams rp;
@@ -1238,8 +1241,17 @@ static int lightCullMain()
     CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
               lateDrawn);
     gE->setArm("shadow.casterCull", 1.0);
+    const unsigned long long frames = w.scene->published().frame;   // the engine's frame count: every frame of this process
     gE->destroyView(w.view);
     gE->destroyScene(w.scene);
+    std::printf("\n   frames rendered: %llu\n", frames);
+    return 0;
+}
+
+/// --receivers (shadow.caster_receivers) - THE RECEIVER TEST'S LAW alone (receiverSection), its own row: the light-depth
+/// laws and this one together outran a fixture's 10 s budget (source.row_budget, U5's master check).
+static int receiversMain()
+{
     unsigned long long frames = 0ull;
     const int rc = receiverSection(frames);
     std::printf("\n   frames rendered: %llu\n", frames);
@@ -1255,6 +1267,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig(mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
                   : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"
                   : mode == "--light-cull"  ? "test-shadow-caster-cull-ogre.log"
+                  : mode == "--receivers"   ? "test-shadow-caster-receivers-ogre.log"
                                             : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
@@ -1263,6 +1276,7 @@ int main(int argc, char **argv)
     const int rc = mode == "--parity"        ? parityMain()
                  : mode == "--first-frame" ? firstFrameMain()
                  : mode == "--light-cull"  ? lightCullMain()
+                 : mode == "--receivers"   ? receiversMain()
                                            : cutMain();
     engine.reset();
     std::printf("%s (%d failure%s)\n", failures || rc ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
