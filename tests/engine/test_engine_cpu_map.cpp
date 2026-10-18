@@ -10,13 +10,14 @@
 // N-node subtree named), a K ARM writes K cubes (K records, K moved). One shared material (the phases measured here
 // are per node, not per datablock).
 //
-//   frame.drain_cost      (--drain 2000, a guard): the drain (OgreEngine::drainFrameInput) and its three parts at
+//   frame.drain_cost      (--drain 2000, a guard): the drain (OgreEngine::drainFrameInput) and its parts at
 //                         K = 100 and 2,000 records in a 2,000-node world — the counts its law is (every record applied,
-//                         every write named), the parts printed.
+//                         every write named), the parts printed; and the plan (`engine.plan`, after the scene graph since
+//                         stage 3: the geometry signature, planFrame's walk / boxes / pick) with its two guards (the
+//                         incremental signature equals the whole sum; one box per moved root marks no cascade fewer).
 //   frame.drain_cost_10k  (--drain 10000, `measure`, by hand): the same at K = 100 / 2,000 / 10,000 and the group arm.
-//                         THE BASE (3962c2f0b, this fixture): see the stage 1 evidence (spikes/engine-upgrade/u4/stage1);
-//                         the deep read's app figures: group 19.7 ms, 100 % 26 ms (name 16 / records 7 / plan 3).
-//                         Stage 3's bar: <= 5 ms on the group move, <= 8 ms at 100 %.
+//                         Stage 1 (this fixture): group 16.09 ms, 100 % 23.60 ms. Stage 3: planFrame <= 5 ms on the group
+//                         move; the drain's bars are the lead's, from the per-record table (stage 3's report).
 //   gi.trace_sun_cost     (--trace-sun, `measure`, by hand): SurfaceCache::traceSun's whole CPU per frame at the 10k
 //                         group move and at 12 % movers (P1: every moved still caster against every card). The deep
 //                         read's app figures: 64.5 ms (group) / 18.4 ms (12 %) / 64.6 ms (100 %). Stage 2's bar: <= 5 ms
@@ -71,7 +72,7 @@ struct World {
     Engine *e = nullptr;
     View *view = nullptr;
     Scene *scene = nullptr;
-    NodeId group = 0;
+    NodeId group = 0, subgroup = 0;
     std::vector<NodeId> cubes;
     unsigned long long step = 0;
     int frame = 0;   // the arm's frame counter (the writes alternate by it)
@@ -93,6 +94,21 @@ GiParams epicGi()
     gi.cards = true;
     return gi;
 }
+
+/// THE CHECKERBOARD ARM's key: every cube whose grid cell is "black" moves; its white neighbours stand, their cards
+/// landed, so the moved casters' shadows fall on cards the sun trace must re-trace (a non-empty hit set).
+constexpr int kChecker = -2;
+bool black(int i) { return ((i % kSide) + (i / kSide)) % 2 == 0; }
+/// THE MOVERS' ARM: the black cubes of the 24 rows nearest the viewer (1,200) declared MOVABLE (the movers' channel:
+/// steps 3 and 3b of the sun trace, their footprints against the landed cards of their white neighbours) and written
+/// every frame.
+constexpr int kMovers = -3;
+constexpr int kMoverCount = 1200;
+bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
+/// THE SUBGROUP ARM (decision 11 b): the movers' 1,200 cubes hang under their OWN group node (a child of the world's
+/// group, in the 10k world), and the arm writes that group alone — a group move over a landed, standing world: the
+/// white neighbours' cards and the wide plate's stay landed, so the still casters' search is a real one.
+constexpr int kSubgroup = -4;
 
 FrameInput stepRecord(World &w)
 {
@@ -139,6 +155,14 @@ bool build(World &w, int n, bool cards)
         enginetest::setNodeScale(s, floor, Vec3(150.0f, 0.2f, 150.0f));
         enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
     }
+    if (n >= 10000) {
+        // THE WIDE PLATE (decision 11 b): a 40 m x 30 m carded slab under the near rows, inside the residency — its
+        // cards are far wider than the median card (the grid's `wide` list), and the moved cubes shade them.
+        const NodeId plate = s->createNode();
+        s->attachMesh(plate, mesh, mat);
+        enginetest::setNodeScale(s, plate, Vec3(40.0f, 0.1f, 30.0f));
+        enginetest::setNodePosition(s, plate, Vec3(0.0f, -0.05f, 52.0f));
+    }
     w.group = s->createDocumentNode(reserveNodeId());
     FrameInput in = stepRecord(w);
     FrameInputScene part;
@@ -151,8 +175,18 @@ bool build(World &w, int n, bool cards)
         r.rotation = Quat(0, 0, 0, 1);
         part.nodes.push_back(r);
     }
+    if (n >= 10000) {
+        w.subgroup = s->createDocumentNode(reserveNodeId(), w.group);
+        NodeRecord r;
+        r.id = w.subgroup;
+        r.fields = NodeRecord::Trs;
+        r.position = Vec3(0, 0, 0);
+        r.rotation = Quat(0, 0, 0, 1);
+        part.nodes.push_back(r);
+    }
     for (int i = 0; i < n; ++i) {
-        const NodeId c = s->createDocumentNode(reserveNodeId(), w.group);
+        const NodeId parent = (w.subgroup && moverCube(i, n)) ? w.subgroup : w.group;
+        const NodeId c = s->createDocumentNode(reserveNodeId(), parent);
         if (!c) { std::printf("FAIL: document node %d: %s\n", i, e->lastError().c_str()); return false; }
         s->attachMesh(c, mesh, mat);
         w.cubes.push_back(c);
@@ -188,16 +222,6 @@ bool build(World &w, int n, bool cards)
     return true;
 }
 
-/// THE CHECKERBOARD ARM's key: every cube whose grid cell is "black" moves; its white neighbours stand, their cards
-/// landed, so the moved casters' shadows fall on cards the sun trace must re-trace (a non-empty hit set).
-constexpr int kChecker = -2;
-bool black(int i) { return ((i % kSide) + (i / kSide)) % 2 == 0; }
-/// THE MOVERS' ARM: the black cubes of the 24 rows nearest the viewer (1,200) declared MOVABLE (the movers' channel:
-/// steps 3 and 3b of the sun trace, their footprints against the landed cards of their white neighbours) and written
-/// every frame.
-constexpr int kMovers = -3;
-constexpr int kMoverCount = 1200;
-bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
 
 /// Still frames until the cards are resident and the card queue is empty (every card a moved instance threw back is
 /// captured again; a mobility edge's GI rebuild re-made the cache): each arm starts from a landed state.
@@ -225,14 +249,14 @@ void writeFrame(World &w, int k)
     const float lift = (w.frame++ % 2) ? 0.01f : 0.0f;
     const GiParams gi = epicGi();
     part.gi = gi;
-    if (k == -1) {
+    if (k == -1 || k == kSubgroup) {
         NodeRecord r;
-        r.id = w.group;
+        r.id = k == -1 ? w.group : w.subgroup;
         r.fields = NodeRecord::Trs;
         r.position = Vec3(0.0f, lift, 0.0f);
         r.rotation = Quat(0, 0, 0, 1);
         part.nodes.push_back(r);
-        part.changes.moved.push_back(w.group);
+        part.changes.moved.push_back(r.id);
     } else {
         for (int i = 0; i < int(w.cubes.size()); ++i) {
             // (the grid's last rows face the viewer)
@@ -255,6 +279,7 @@ const char *armName(int k, char *buf, size_t n)
 {
     if (k == kChecker) std::snprintf(buf, n, "checker");
     else if (k == kMovers) std::snprintf(buf, n, "movers%d", kMoverCount);
+    else if (k == kSubgroup) std::snprintf(buf, n, "subgroup%d", kMoverCount);
     else if (k < 0) std::snprintf(buf, n, "group");
     else std::snprintf(buf, n, "k%d", k);
     return buf;
@@ -271,7 +296,7 @@ int drainRow(World &w, int n)
     const inspect::SceneEcho *echo = inspect::scene(w.scene);
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     for (int k : arms) {
-        std::vector<double> whole, name, records, plan, planFrame;
+        std::vector<double> whole, name, records, plan, planFrame, boxesUs, pickUs;
         unsigned boxes = 0;
         unsigned long long planDigest = 1469598103934665603ull;   // FNV-1a over the frames' pending sets and picks
         bool counts = true, parts = true;
@@ -283,9 +308,11 @@ int drainRow(World &w, int n)
             whole.push_back(st.drainMicros);
             name.push_back(st.drainNameMicros);
             records.push_back(st.drainRecordsMicros);
-            plan.push_back(st.drainPlanMicros);
             const inspect::SceneEcho::GiPlan gp = echo->giPlan();
+            plan.push_back(gp.signatureMicros);
             planFrame.push_back(gp.micros);
+            boxesUs.push_back(gp.boxesMicros);
+            pickUs.push_back(gp.pickMicros);
             boxes = std::max(boxes, gp.boxes);
             for (unsigned long long v : { (unsigned long long)gp.pending, (unsigned long long)(long long)gp.rebuild })
                 for (int b = 0; b < 8; ++b) { planDigest ^= (v >> (8 * b)) & 0xFFu; planDigest *= 1099511628211ull; }
@@ -293,15 +320,18 @@ int drainRow(World &w, int n)
             moved = st.changesMoved;
             const unsigned want = k < 0 ? 1u : unsigned(k);
             if (st.nodeRecords != want || st.changesMoved != want) counts = false;
-            if (st.drainNameMicros + st.drainRecordsMicros + st.drainPlanMicros > st.drainMicros + 0.5) parts = false;
+            if (st.drainNameMicros + st.drainRecordsMicros > st.drainMicros + 0.5) parts = false;
         }
         char b[32];
         const Stats a = stats(whole), nm = stats(name), rc = stats(records), pl = stats(plan), pf = stats(planFrame);
+        const Stats bx = stats(boxesUs), pk = stats(pickUs);
+        const double per = k < 0 ? double(n) : double(std::max(k, 1));   // the records' nodes (the group's subtree)
         std::printf("CPU_MAP %s arm=%s world=%d frames=%d drain_ms=%.3f (min %.3f max %.3f) name_ms=%.3f records_ms=%.3f "
-                    "plan_ms=%.3f other_ms=%.3f | planFrame_ms=%.3f boxes=%u plan_digest=%016llx\n", row,
-                    armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0,
-                    nm.median / 1000.0, rc.median / 1000.0, pl.median / 1000.0,
-                    (a.median - nm.median - rc.median - pl.median) / 1000.0, pf.median / 1000.0, boxes, planDigest);
+                    "other_ms=%.3f | per node: name_us=%.3f records_us=%.3f | plan: signature_ms=%.3f planFrame_ms=%.3f "
+                    "(boxes %.3f, pick %.3f) boxes=%u plan_digest=%016llx\n", row, armName(k, b, sizeof b), n, measured,
+                    a.median / 1000.0, a.min / 1000.0, a.max / 1000.0, nm.median / 1000.0, rc.median / 1000.0,
+                    (a.median - nm.median - rc.median) / 1000.0, nm.median / per, rc.median / double(k < 0 ? 1 : k),
+                    pl.median / 1000.0, pf.median / 1000.0, bx.median / 1000.0, pk.median / 1000.0, boxes, planDigest);
         CHECK(counts, "%s arm %s: every frame's drain applied every record and named every write (%u records, %u moved)",
               row, armName(k, b, sizeof b), recs, moved);
         CHECK(parts, "%s arm %s: the three parts are inside the drain's whole on every frame", row,
@@ -325,6 +355,9 @@ int drainRow(World &w, int n)
               "geometry signature equals the whole sum on every pass", row, armName(k, b, sizeof b));
         CHECK(g1.rootMisses == g0.rootMisses, "%s arm %s: the roots' boxes mark every cascade the items' own boxes "
               "reach (%llu marks checked)", row, armName(k, b, sizeof b), g1.rootChecks - g0.rootChecks);
+        // planFrame's bar (decision 8): <= 5 ms on the group move, the plan reading the boxes the scene graph made.
+        if (k < 0) CHECK(pf.median / 1000.0 <= 5.0, "%s arm %s: planFrame %.3f ms <= 5 ms", row, armName(k, b, sizeof b),
+                         pf.median / 1000.0);
     }
     return 0;
 }
@@ -335,16 +368,18 @@ int traceSunRow(World &w, int n)
     const inspect::SceneEcho *echo = inspect::scene(w.scene);
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     const int warm = 3, measured = 15;
+    bool deathDone = false;
     // checker: the hit set's arm (the still casters' shadows on their standing neighbours' cards); 12 %: the deep
     // read's movers12 shape (1,200 still casters written, far from the landed cards); the movers' channel (steps 3 and
-    // 3b); the group move last (every card's instance moves: all of them thrown back on the queue).
-    for (int k : { kChecker, n * 12 / 100, kMovers, -1 }) {
+    // 3b); the subgroup: a group move over a landed, standing world; the group move last (every cube's instance moves:
+    // their cards back on the queue, the wide plate's standing).
+    for (int k : { kChecker, n * 12 / 100, kMovers, kSubgroup, -1 }) {
         if (k == kMovers) {
             for (int i = 0; i < int(w.cubes.size()); ++i)
                 if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], true);
         }
         settleCards(w);
-        std::vector<double> us, hook, stepOne;
+        std::vector<double> us, hook, stepOne, step3, step3b;
         unsigned moves = 0, cards = 0, hits = 0;
         unsigned long long digest = 1469598103934665603ull;   // FNV-1a over every measured frame's hit-set digest
         bool ran = true;
@@ -357,16 +392,34 @@ int traceSunRow(World &w, int n)
             us.push_back(t.micros);
             hook.push_back(t.hookMicros);
             stepOne.push_back(t.stepOneMicros);
+            step3.push_back(t.step3Micros);
+            step3b.push_back(t.step3bMicros);
             moves = std::max(moves, t.casterMoves);
             cards = t.cards;
             hits = std::max(hits, t.casterHits);
             for (int b = 0; b < 8; ++b) { digest ^= (t.casterHitDigest >> (8 * b)) & 0xFFu; digest *= 1099511628211ull; }
         }
-        // THE GRID'S GUARD (stage 2): three more frames of the arm with `cards.sunGridParity` on — every search of
-        // the frame repeated exhaustively, every card whose answer differs a miss. 0 misses is the law.
+        // THE GRID'S GUARD: three more frames of the arm with `cards.sunGridParity` on — every search of the frame
+        // repeated exhaustively, every card whose answer differs a miss — and `cards.nullMove` on (a BOX_NULL still
+        // caster: the unbounded and unplaceable searches); on the subgroup arm also a DEATH (a standing cube removed:
+        // its last box is a still caster's move). 0 misses is the law.
         const inspect::SceneEcho::TraceSun p0 = echo->traceSun();
+        unsigned wide = 0;
         w.e->setArm("cards.sunGridParity", 1.0);
-        for (int f = 0; f < 3; ++f) writeFrame(w, k);
+        w.e->setArm("cards.nullMove", 1.0);
+        for (int f = 0; f < 3; ++f) {
+            if (k == kSubgroup && f == 1 && !deathDone) {
+                // a white cube of the near rows (standing, landed, shading its neighbours)
+                for (int i = int(w.cubes.size()) - 1; i >= 0 && !deathDone; --i)
+                    if (!moverCube(i, int(w.cubes.size())) && i >= int(w.cubes.size()) - 2 * kMoverCount) {
+                        deathDone = w.scene->removeNode(w.cubes[size_t(i)]);
+                        if (deathDone) w.cubes.erase(w.cubes.begin() + i);
+                    }
+            }
+            writeFrame(w, k);
+            wide = std::max(wide, echo->traceSun().wideCards);
+        }
+        w.e->setArm("cards.nullMove", 0.0);
         w.e->setArm("cards.sunGridParity", 0.0);
         writeFrame(w, k);
         const inspect::SceneEcho::TraceSun p1 = echo->traceSun();
@@ -375,32 +428,41 @@ int traceSunRow(World &w, int n)
                 if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], false);
         }
         char b[32];
-        const Stats a = stats(us);
+        const Stats a = stats(us), hk = stats(hook), s1 = stats(stepOne), s3 = stats(step3), s3b = stats(step3b);
         const GiStatus &g = w.scene->published().gi;
         std::printf("CPU_MAP gi.trace_sun_cost arm=%s world=%d frames=%d trace_sun_ms=%.3f (min %.3f max %.3f) "
-                    "(the moves' producer %.3f, step 1 %.3f) caster_moves=%u cards=%u hits=%u hit_digest=%016llx "
-                    "mover_casters=%u mover_traced_last=%u\n",
+                    "(producer %.3f, step 1 %.3f, step 3 %.3f, step 3b %.3f, rest %.3f; floor = producer + step 1 = %.3f) "
+                    "caster_moves=%u cards=%u hits=%u hit_digest=%016llx mover_casters=%u mover_traced_last=%u\n",
                     armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0,
-                    stats(hook).median / 1000.0, stats(stepOne).median / 1000.0, moves, cards, hits, digest,
-                    g.cards.moverCasters, g.cards.moverTracedLastFrame);
+                    hk.median / 1000.0, s1.median / 1000.0, s3.median / 1000.0, s3b.median / 1000.0,
+                    (a.median - hk.median - s1.median - s3.median - s3b.median) / 1000.0,
+                    (hk.median + s1.median) / 1000.0, moves, cards, hits, digest, g.cards.moverCasters,
+                    g.cards.moverTracedLastFrame);
         CHECK(ran, "gi.trace_sun_cost arm %s: the sun trace ran on every measured frame", armName(k, b, sizeof b));
-        // STAGE 2's BARS (the sun-space grid): the group move <= 5 ms and 12 % <= 2 ms (stage 1's base on this
-        // fixture: 166.8 / 84.9 ms; the floor the grid cannot remove — the moves' producer and the exact footprints of
-        // the moves near a landed card — measured 1.2 + 2.3 ms on the group move).
+        CHECK(p1.parityChecks >= p0.parityChecks + 3u && p1.parityMisses == p0.parityMisses,
+              "gi.trace_sun_cost arm %s: the sun-space grid's searches equal the exhaustive search card for card, a "
+              "BOX_NULL move included (%llu calls checked, %llu misses, %u wide cards in its grids)",
+              armName(k, b, sizeof b), p1.parityChecks - p0.parityChecks, p1.parityMisses - p0.parityMisses, wide);
+        if (k == kSubgroup) CHECK(wide > 0u, "gi.trace_sun_cost arm %s: the wide plate's cards were searched as "
+                                  "wide (%u)", armName(k, b, sizeof b), wide);
+        if (k == kSubgroup) CHECK(deathDone, "gi.trace_sun_cost arm %s: a standing caster died under the guard",
+                                  armName(k, b, sizeof b));
+        // THE BARS (decision 2, decision 11 a): 12 % <= its floor + 0.5 = 1.17 ms (producer 0.231 + step 1 0.441 at
+        // stage 2). The group move: decision 2's rule — 5 ms stands only while its floor is <= 4 ms; with the wide plate
+        // (decision 11 b) the group move searches landed cards for real and its floor measures 5.63 ms (producer 1.19 +
+        // step 1 4.44, stage 3), so its bar is floor + 1 = 6.63 ms. The subgroup's and the movers' bars wait for the
+        // lead (their floors printed above).
         if (k == -1 || k == n * 12 / 100) {
-            const double bar = k == -1 ? 5.0 : 2.0;
-            CHECK(a.median / 1000.0 <= bar, "gi.trace_sun_cost arm %s: the sun trace's CPU %.3f ms <= %.1f ms",
+            const double bar = k == -1 ? 6.63 : 1.17;
+            CHECK(a.median / 1000.0 <= bar, "gi.trace_sun_cost arm %s: the sun trace's CPU %.3f ms <= %.2f ms",
                   armName(k, b, sizeof b), a.median / 1000.0, bar);
         }
-        CHECK(p1.parityChecks >= p0.parityChecks + 3u && p1.parityMisses == p0.parityMisses,
-              "gi.trace_sun_cost arm %s: the sun-space grid's searches equal the exhaustive search card for card "
-              "(%llu calls checked, %llu misses)", armName(k, b, sizeof b), p1.parityChecks - p0.parityChecks,
-              p1.parityMisses - p0.parityMisses);
         if (k == kMovers) {
             CHECK(g.cards.moverCasters >= unsigned(kMoverCount) && cards > 0u, "gi.trace_sun_cost arm %s: %u movers "
                   "on the movers' channel against %u cards", armName(k, b, sizeof b), g.cards.moverCasters, cards);
         } else {
-            const unsigned want = k == kChecker ? unsigned(n / 2) : k < 0 ? unsigned(n) : unsigned(k);
+            const unsigned want = k == kChecker ? unsigned(n / 2) : k == kSubgroup ? unsigned(kMoverCount)
+                                : k < 0 ? unsigned(n) - 1u : unsigned(k);
             CHECK(moves >= want && cards > 0u, "gi.trace_sun_cost arm %s: %u still casters moved a frame against %u "
                   "cards (want %u moves)", armName(k, b, sizeof b), moves, cards, want);
         }
@@ -415,30 +477,49 @@ int composeRow(World &w, int n)
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     const int warm = 3, measured = 15;
     for (int k : { -1, n }) {
-        std::vector<double> name, compare, compose, notify;
+        // THE NOTIFY SHARE AS A PAIRED ARM (decision 11 d): blocks of frames with the change feed's observers told and
+        // muted (gpuscene.observersOff), alternated A B A B in one process; the observers' cost = the medians'
+        // difference. The notify timer (gpuscene.walkTiming) runs in its own block only: never a clock read per
+        // notify in the measured ones.
+        std::vector<double> name, compare, compose, composeOff, notify;
         unsigned composed = 0, shares = 0;
         bool walked = true;
-        for (int f = 0; f < warm + measured; ++f) {
-            const unsigned long long walks0 = echo->gpuWalk().walks;
-            writeFrame(w, k);
-            const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
-            if (f < warm) continue;
-            if (g.walks == walks0) walked = false;
-            name.push_back(g.nameMicros);
-            compare.push_back(g.compareMicros);
-            compose.push_back(g.composeMicros);
-            notify.push_back(g.notifyMicros);
-            composed = std::max(composed, g.slotsComposed);
-            shares = g.shares;
+        for (int f = 0; f < warm; ++f) writeFrame(w, k);
+        const int blocks = 4, perBlock = measured / 3 + 1;
+        for (int blk = 0; blk < 2 * blocks; ++blk) {
+            const bool muted = (blk % 2) == 1;
+            w.e->setArm("gpuscene.observersOff", muted ? 1.0 : 0.0);
+            writeFrame(w, k);   // the arm latches at this frame's top: one settling frame, not counted
+            for (int f = 0; f < perBlock; ++f) {
+                const unsigned long long walks0 = echo->gpuWalk().walks;
+                writeFrame(w, k);
+                const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
+                if (g.walks == walks0) walked = false;
+                (muted ? composeOff : compose).push_back(g.composeMicros);
+                if (!muted) { name.push_back(g.nameMicros); compare.push_back(g.compareMicros); }
+                composed = std::max(composed, g.slotsComposed);
+                shares = g.shares;
+            }
         }
+        w.e->setArm("gpuscene.observersOff", 0.0);
+        w.e->setArm("gpuscene.walkTiming", 1.0);
+        for (int f = 0; f < perBlock + 1; ++f) {
+            writeFrame(w, k);
+            if (f) notify.push_back(echo->gpuWalk().notifyMicros);
+        }
+        w.e->setArm("gpuscene.walkTiming", 0.0);
+        writeFrame(w, k);
         char b[32];
-        const Stats nm = stats(name), cm = stats(compare), co = stats(compose), no = stats(notify);
+        const Stats nm = stats(name), cm = stats(compare), co = stats(compose), cf = stats(composeOff),
+                    no = stats(notify);
         const double total = nm.median + cm.median + co.median;
-        std::printf("CPU_MAP engine.gpuscene_compose arm=%s world=%d frames=%d compose_ms=%.3f (min %.3f max %.3f) "
-                    "notify_ms=%.3f (share of the compose %.2f) compare_ms=%.3f name_ms=%.3f serial_share=%.2f "
-                    "slots_composed=%u shares=%u\n",
-                    armName(k, b, sizeof b), n, measured, co.median / 1000.0, co.min / 1000.0, co.max / 1000.0,
-                    no.median / 1000.0, co.median > 0.0 ? no.median / co.median : 0.0, cm.median / 1000.0,
+        const double observers = co.median - cf.median;
+        std::printf("CPU_MAP engine.gpuscene_compose arm=%s world=%d frames=%d+%d compose_ms=%.3f (min %.3f max %.3f) "
+                    "compose_observers_off_ms=%.3f observers_ms=%.3f (share of the compose %.2f; the timed arm's "
+                    "notify_ms %.3f) compare_ms=%.3f name_ms=%.3f serial_share=%.2f slots_composed=%u shares=%u\n",
+                    armName(k, b, sizeof b), n, int(compose.size()), int(composeOff.size()), co.median / 1000.0,
+                    co.min / 1000.0, co.max / 1000.0, cf.median / 1000.0, observers / 1000.0,
+                    co.median > 0.0 ? observers / co.median : 0.0, no.median / 1000.0, cm.median / 1000.0,
                     nm.median / 1000.0, total > 0.0 ? co.median / total : 0.0, composed, shares);
         CHECK(walked, "engine.gpuscene_compose arm %s: the GPU scene walked on every measured frame",
               armName(k, b, sizeof b));
