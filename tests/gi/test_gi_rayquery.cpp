@@ -325,7 +325,8 @@ static int updateMain(bool cost)
         e->setFrameMonitor(MonitorLevel::Review);
         std::vector<MonitorRecord> recs;
         for (const unsigned changes : { 0u, 10u, 100u }) {
-            e->takeMonitorRecords(recs);
+            recs.clear();
+            e->popMonitorRecords(recs);   // (the pop appends: the frames since the last pop alone)
             std::vector<unsigned long long> changeFrames, idleFrames;
             const auto range = [&](int f, bool visible) {
                 for (unsigned c = 0; c < changes; ++c) scene->setNodeVisible(nodes[(unsigned(f) * changes + c) % N], visible);
@@ -339,7 +340,8 @@ static int updateMain(bool cost)
                 (worked ? changeFrames : idleFrames).push_back(pf.frame);
             }
             run(6);
-            e->takeMonitorRecords(recs);
+            recs.clear();
+            e->popMonitorRecords(recs);   // (the pop appends: the frames since the last pop alone)
             const std::vector<unsigned long long> &want = changes ? changeFrames : idleFrames;
             std::vector<double> ms;
             for (const MonitorRecord &r : recs) {

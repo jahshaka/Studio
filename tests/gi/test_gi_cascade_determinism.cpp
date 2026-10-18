@@ -594,11 +594,13 @@ static int scrollSlabMain()
             // A SCROLL by the shipped step, then a WHOLE rebuild of cascade 0 at the same place (an
             // edit inside its box: one lattice cube nudged and put back).
             std::vector<MonitorRecord> recs;
-            e->takeMonitorRecords(recs);
+            recs.clear();
+            e->popMonitorRecords(recs);   // (the pop appends: the frames since the last pop alone)
             x += hStep * 1.02f;
             look(Vec3(x, 2.0f, 0.0f));
             run(12);
-            e->takeMonitorRecords(recs);
+            recs.clear();
+            e->popMonitorRecords(recs);   // (the pop appends: the frames since the last pop alone)
             double s = 0.0, sv = 0.0, sc = 0.0; bool timed = false;
             for (const MonitorRecord &r : recs)
                 for (const CacheWork &w : r.cacheWork)
@@ -612,7 +614,8 @@ static int scrollSlabMain()
             const NodeId nudge = lattice[size_t(4 * 45 + 2 * 9 + 4)];   // the cube at (0, 2.7, 0)
             enginetest::setNodePosition(scene, nudge, Vec3(x + 0.05f, 2.7f, 0.0f));
             run(12);
-            e->takeMonitorRecords(recs);
+            recs.clear();
+            e->popMonitorRecords(recs);   // (the pop appends: the frames since the last pop alone)
             double w0 = -1.0;
             for (const MonitorRecord &r : recs)
                 for (const CacheWork &w : r.cacheWork)
