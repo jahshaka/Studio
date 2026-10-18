@@ -510,14 +510,14 @@ add_dependencies(test_engine_gpu_walk_parity JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_walk_parity CLASS engine COMMAND test_engine_gpu_walk_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine"
-    JAHSHAKA_TEST_FRAMES 103)   # counted from the source (4 + 8 + 2 + 4 + 21 steps x 4 + the drag's own one)
+    JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted (decision 18.7: the two U4 steps and the death sequence added)
 # engine.gpuscene_identity — THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE FOR BYTE (ENGINE-UPGRADE-U4 stage 4): 8 workers,
 # 1,024 moving cubes, the compose's digest (every composed slot's index, row and tail in replay order) compared between
 # the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
 jah_gpu_row(engine.gpuscene_identity CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"
-    JAHSHAKA_TEST_FRAMES 16)   # 1 + 6 warm + 8 + 1
+    JAHSHAKA_TEST_FRAMES 18)   # 1 + 6 warm + 10 + 1
 jah_tsan_render(engine.gpuscene_identity)
 # engine.gpu_walk_parity_free — THE INTERPOLATED POSE IS THE TABLE'S (ENGINE-UPGRADE-U3 decision 56): FREE-RUNNING on the
 # render thread, a mover drawn between its grid states at 90 over 60 and then stopped: 0 misses moving and stopped.

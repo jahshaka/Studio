@@ -468,6 +468,26 @@ jah_gpu_row(gi.pcc_placement_lights CLASS engine COMMAND test_gi_pcc_placement_l
 set_tests_properties(gi.pcc_placement_lights PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.pcc_placement_lights PROPERTIES JAHSHAKA_TEST_FRAMES 48)   # 2 + 3 + 8 + 3 staged, 3 whole, 12 + 12 + 4 the recapture, 1
 
+# gi.union_clear — A COLLAPSED DIRTY UNION NEVER OUTLIVES ITS LIST (ENGINE-UPGRADE-U4 decision 18.1): 100 dense
+# cubes removed and the arm rebuilt in one record, then a lamp added with nothing moving — its re-solve re-voxelises
+# nothing (the rebuild's clear took the union's members with it).
+add_executable(test_gi_union_clear test_gi_union_clear.cpp)
+set_target_properties(test_gi_union_clear PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_union_clear PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_union_clear PRIVATE JahshakaEngine)
+add_dependencies(test_gi_union_clear JahshakaEngineMedia)
+jah_gpu_row(gi.union_clear CLASS engine COMMAND test_gi_union_clear
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.union_clear PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.union_clear PROPERTIES JAHSHAKA_TEST_FRAMES 100)
+
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
 # OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to

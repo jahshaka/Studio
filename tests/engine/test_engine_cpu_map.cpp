@@ -326,7 +326,9 @@ int drainRow(World &w, int n)
             recLookups = st.drainRecordLookups;
             visits = st.drainNameVisits;
             nameLookups = st.drainNameLookups;
-            if (st.drainRecordLookups != st.nodeRecords || st.drainNameVisits != wantVisits ||
+            // (decision 18.6: counted INSIDE record() and registryNode(), every call of the drain: a record's lookup and
+            // the change set's for its moved node — two per moved node, exactly; one Ogre-id lookup per naming visit)
+            if (st.drainRecordLookups != st.nodeRecords + st.changesMoved || st.drainNameVisits != wantVisits ||
                 st.drainNameLookups != st.drainNameVisits) lookups = false;
             if (st.drainNameMicros + st.drainRecordsMicros > st.drainMicros + 0.5) parts = false;
         }
@@ -347,9 +349,9 @@ int drainRow(World &w, int n)
         // THE COUNTS AT EVERY ARM (decision 15 — what catches a scan creeping back, whatever the box's load): one
         // index lookup per record, each node of the moved subtrees visited once by the naming pass, one lookup per
         // visit.
-        CHECK(lookups, "%s arm %s: one lookup per record (%u for %u records), every moved node visited once (%u of %u), "
-              "one lookup per visit (%u)", row, armName(k, b, sizeof b), recLookups, recs, visits, wantVisits,
-              nameLookups);
+        CHECK(lookups, "%s arm %s: one lookup per record and one per change-set entry (%u for %u records + %u moved), "
+              "every moved node visited once (%u of %u), one lookup per visit (%u)", row, armName(k, b, sizeof b),
+              recLookups, recs, moved, visits, wantVisits, nameLookups);
         // THE µs BARS, PER ARM (decision 15): the quiet-box medians x 1.25 (the load spread), measured 2026-10-18
         // 09:00-09:57 at load 3.0-4.5 — k100 name 0.284-0.289 / records 0.182-0.190 -> 0.36 / 0.24; k2000 0.284-0.302 /
         // 0.177-0.189 -> 0.355 / 0.221 (the lead's); k10000 0.377-0.383 / 0.301-0.308 -> 0.48 / 0.385; the group move
@@ -593,9 +595,23 @@ int composeRow(World &w, int n)
         }
         w.e->setArm("gpuscene.observersOff", 0.0);
         w.e->setArm("gpuscene.walkTiming", 1.0);
+        std::vector<double> laneObs, otherObs;   // the observers' replay time, per frame: the lane-split one / the rest
+        inspect::SceneEcho::GpuWalk prev = echo->gpuWalk();
         for (int f = 0; f < perBlock + 1; ++f) {
             writeFrame(w, k);
-            if (f) notify.push_back(echo->gpuWalk().notifyMicros);
+            const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
+            if (f) {
+                notify.push_back(g.notifyMicros);
+                laneObs.push_back(g.observerLaneMicros - prev.observerLaneMicros);
+                otherObs.push_back(g.observerOtherMicros - prev.observerOtherMicros);
+            }
+            prev = g;
+        }
+        {
+            const Stats lo = stats(laneObs), oo = stats(otherObs);
+            std::printf("CPU_MAP engine.gpuscene_compose arm=%d the observers in the replay (decision 17.1): the card "
+                        "feed's ordered half %.3f ms, the ray feed (whole; U5's) %.3f ms\n", k, lo.median / 1000.0,
+                        oo.median / 1000.0);
         }
         w.e->setArm("gpuscene.walkTiming", 0.0);
         writeFrame(w, k);

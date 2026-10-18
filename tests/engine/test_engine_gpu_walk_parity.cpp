@@ -209,33 +209,49 @@ static int composeIdentityArm()
     const inspect::SceneEcho *echo = inspect::scene(scene);
     CHECK(echo && e->setArm("gpuscene.composeDigest", 1.0), "the compose's digest arm");
     if (!echo) return 1;
-    // ABBA over frame pairs: serial for frames 0-1, parallel 2-5, serial 6-7 — frame f against f + 2 (the same pose
-    // after the same pose).
-    const int pattern[8] = { 1, 1, 0, 0, 0, 0, 1, 1 };
-    unsigned long long digest[8] = {};
-    unsigned composed[8] = {}, shares[8] = {};
-    for (int f = 0; f < 8; ++f) {
+    // THE PATTERN (decision 18.4): the OLD compose (gpuscene.serialCompose: per slot compose -> tail -> stage -> every
+    // observer whole) on frames 0-1 and 8-9, the parallel one on 2-7 — with a THROW in a worker's share on frame 4 and in
+    // the frame thread's share on frame 5 (gpuscene.throwInLane, decision 18.3: recomposed on the frame's thread). The
+    // poses alternate, so every even frame composes the same input after the same input, and every odd one: the
+    // digests of a parity class — the staged rows, the tails and the observers' notifies, in their order — must all be
+    // equal, serial against parallel against recovered.
+    const int pattern[10] = { 1, 1, 0, 0, 0, 0, 0, 0, 1, 1 };
+    const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 0, 0, 0 };   // share + 1 (9 = the frame thread's share 8)
+    unsigned long long digest[10] = {}, recomposes[10] = {};
+    unsigned composed[10] = {}, shares[10] = {}, atoms[10] = {}, queues[10] = {};
+    for (int f = 0; f < 10; ++f) {
         e->setArm("gpuscene.serialCompose", double(pattern[f]));
+        e->setArm("gpuscene.throwInLane", double(throwAt[f]));
         record(f % 2);
         const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
         digest[f] = g.composeDigest;
         composed[f] = g.slotsComposed;
         shares[f] = g.shares;
+        atoms[f] = g.tailAtoms;
+        queues[f] = g.tailQueues;
+        recomposes[f] = g.shareRecomposes;
     }
+    e->setArm("gpuscene.throwInLane", 0.0);
     e->setArm("gpuscene.serialCompose", 0.0);
     e->setArm("gpuscene.composeDigest", 0.0);
-    for (int f = 0; f < 8; ++f)
-        std::printf("   frame %d (%s): %u slots composed on %u shares, digest %016llx\n", f,
-                    pattern[f] ? "serial" : "parallel", composed[f], shares[f], digest[f]);
-    // (the arm latches at the frame's top: frame f's compose is f's pattern entry)
-    CHECK(composed[2] >= 512u && shares[2] == 9u, "the walk went wide: %u slots on %u shares", composed[2], shares[2]);
-    for (int f = 0; f < 6; ++f) {
-        if (pattern[f] == pattern[f + 2]) continue;
-        CHECK(digest[f] == digest[f + 2] && digest[f] != 0ull,
-              "frame %d (%s) and frame %d (%s): the same rows, tails and order (%016llx / %016llx)", f,
-              pattern[f] ? "serial" : "parallel", f + 2, pattern[f + 2] ? "serial" : "parallel", digest[f],
-              digest[f + 2]);
-    }
+    for (int f = 0; f < 10; ++f)
+        std::printf("   frame %d (%s%s): %u slots composed on %u shares, tails %u atom / %u queued, recomposes %llu, "
+                    "digest %016llx\n", f, pattern[f] ? "serial" : "parallel",
+                    throwAt[f] ? (throwAt[f] == 9 ? ", the frame thread's share throws" : ", a worker's share throws") : "",
+                    composed[f], shares[f], atoms[f], queues[f], recomposes[f], digest[f]);
+    for (int f = 0; f < 10; ++f)
+        if (!pattern[f])
+            CHECK(composed[f] >= 512u && shares[f] == 9u, "frame %d went wide: %u slots on %u shares", f, composed[f],
+                  shares[f]);
+    for (int f = 2; f < 10; ++f)
+        CHECK(digest[f] == digest[f % 2], "frame %d (%s) folds what frame %d (serial) folded: the same rows, tails and "
+              "notifies in the same order (%016llx / %016llx)", f, pattern[f] ? "serial" : "parallel", f % 2, digest[f],
+              digest[f % 2]);
+    CHECK(recomposes[4] == recomposes[3] + 1u && recomposes[5] == recomposes[4] + 1u && recomposes[9] == recomposes[5],
+          "each throw recomposed its one share on the frame's thread, and nothing after it (%llu, %llu, %llu)",
+          recomposes[3], recomposes[4], recomposes[5]);
+    CHECK(digest[6] == digest[0] && digest[7] == digest[1], "...and the frames after the throws composed whole: every "
+          "barrier paired");
     view->setScene(nullptr);
     e->destroyScene(scene);
     e->destroyView(view);
@@ -489,6 +505,10 @@ int main(int argc, char **argv)
             CHECK(g0.namedListed >= 3u, "the sequence holds C listed beside the live A and B (%u listed)", g0.namedListed);
             CHECK(g1.namedDangling == 0u, "a death leaves no dead record on the name list (%u dangling)",
                   g1.namedDangling);
+            CHECK(g0.namedNotFlagged == 0u && g0.namedDuplicates == 0u && g1.namedNotFlagged == 0u &&
+                  g1.namedDuplicates == 0u, "every listed record carries its listed flag and is listed once (%u/%u "
+                  "before, %u/%u after)", g0.namedNotFlagged, g0.namedDuplicates, g1.namedNotFlagged,
+                  g1.namedDuplicates);
             if (uv) e->destroyView(uv);
             e->destroyScene(u);
         }

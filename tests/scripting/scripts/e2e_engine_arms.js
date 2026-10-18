@@ -44,7 +44,8 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "cards.sunGridParity": 0, "gi.geomSigParity": 0, "gi.rootBoxParity": 0,
                  "gpuscene.walkTiming": 0, "gpuscene.observersOff": 0, "cards.nullMove": 0,
                  "gi.pccPlacementLights": 0,
-                 "gpuscene.serialCompose": 0, "gpuscene.composeDigest": 0 };
+                 "gpuscene.serialCompose": 0, "gpuscene.composeDigest": 0,
+                 "gpuscene.throwInLane": 0 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
