@@ -17,7 +17,11 @@
 // word: not a writer of the table), a mobility flip (setNodeMovable) and a nodeless write (a
 // transform on a node that carries no mesh, its slot-carrying child moving under it).
 // Each writer is followed by frames; each one must also have CHANGED what the table holds for
-// its node (its flags word or its transform), or the step tested nothing.
+// its node (its flags word or its transform), or the step tested nothing. AND THE READS AFTER
+// THE SCENE GRAPH (ENGINE-UPGRADE-U4 decision 13.2): a recomputing read in the frame's
+// `engine.plan` would overwrite a node's SoA-derived transform with its scalar recompute (an
+// ulp apart) and the table would miss it — a decal riding a moving cube (the GI walk reads its
+// box there) and the view's camera socketed on a moving cube (the plan reads its position there).
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GpuSubstrate.h"
 #include "jahshaka/engine/EngineInspect.h"
@@ -25,6 +29,7 @@
 #include "../support/gesture.h"
 
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <string>
@@ -139,8 +144,161 @@ static int freeRunningArm()
     return failures ? 1 : 0;
 }
 
+// engine.gpuscene_identity (`--compose-identity`, ENGINE-UPGRADE-U4 stage 4): THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE
+// FOR BYTE. The compose runs inside the compare's task (each worker share stages its own slots' rows) and replays what
+// is not lane-local — the Atom route, the material store's queue, the observers — after the barrier in slot order. The
+// arm gpuscene.serialCompose composes after the barrier on the frame's thread instead. A scene with 8 workers and 1,024
+// moving cubes (>= 512 named slots: the walk goes wide) is walked with the digest on (every composed slot's index, row
+// and tail, in replay order), the poses alternating between two states so frame f and f + 2 compose the same input: the
+// pairs are compared serial against parallel, A B B A. The row also runs under the clang TSan arm (tsan-render).
+static int composeIdentityArm()
+{
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig("test-engine-gpuscene-identity-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    Engine *e = engine.get();
+    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
+    View *view = e->createOffscreenView("identity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    Scene *scene = e->createScene("identity", 8u);
+    if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.3f, 0.3f, 0.3f));
+    enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 30.0f, 40.0f), Vec3(0.0f, 0.0f, 0.0f));
+    const MeshId cubeMesh = scene->createMesh(enginetest::unitCubeMesh());
+    const int kCubes = 1024;
+    std::vector<NodeId> cubes;
+    for (int i = 0; i < kCubes; ++i) {
+        const NodeId n = scene->createDocumentNode(reserveNodeId());
+        PbrParams p;
+        p.albedo = Colour(0.2f + 0.0005f * float(i), 0.5f, 0.6f);
+        p.roughness = 0.4f + 0.0004f * float(i);
+        scene->attachMesh(n, cubeMesh, scene->createPbrMaterial(p));
+        cubes.push_back(n);
+    }
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::Medium;
+    gi.numBounces = 1;
+    gi.ddgi = GiToggle::Off;
+    gi.updateBudget = 0;
+    unsigned long long step = 0;
+    const auto record = [&](int pose, bool send = true) {
+        FrameInput in;
+        in.frameDelta = 1.0f / 60.0f;
+        in.stepSerial = send ? ++step : step;   // a frame that sends nothing is no new step (it would interpolate)
+        in.stepPeriod = 1.0f / 60.0f;
+        FrameInputScene part;
+        part.scene = scene;
+        part.gi = gi;
+        for (int i = 0; send && i < kCubes; ++i) {
+            NodeRecord r;
+            r.id = cubes[size_t(i)];
+            r.fields = NodeRecord::Trs;
+            r.position = Vec3(float(i % 32) * 1.2f - 19.0f, 0.3f + 0.05f * float(pose), float(i / 32) * 1.2f - 19.0f);
+            r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+            r.scale = Vec3(0.5f, 0.5f, 0.5f);
+            part.nodes.push_back(r);
+            part.changes.moved.push_back(r.id);
+        }
+        in.scenes.push_back(part);
+        enginetest::frames(e, 1, in);
+    };
+    for (int f = 0; f < 6; ++f) record(f % 2);
+    const inspect::SceneEcho *echo = inspect::scene(scene);
+    CHECK(echo && e->setArm("gpuscene.composeDigest", 1.0), "the compose's digest arm");
+    if (!echo) return 1;
+    // THE PATTERN (decision 18.4): the OLD compose (gpuscene.serialCompose: per slot compose -> tail -> stage -> every
+    // observer whole) on frames 0-1 and 8-9, the parallel one on 2-7 — with a THROW in a worker's share on frame 4 and in
+    // the frame thread's share on frame 5 (gpuscene.throwInLane, decision 18.3: recomposed on the frame's thread). The
+    // poses alternate, so every even frame composes the same input after the same input, and every odd one: the
+    // digests of a parity class — the staged rows, the tails and the observers' notifies, in their order — must all be
+    // equal, serial against parallel against recovered.
+    const int pattern[10] = { 1, 1, 0, 0, 0, 0, 0, 0, 1, 1 };
+    // share + 1 (9 = the frame thread's share 8) throws before its first stage; 17 + share throws AFTER it (decision
+    // 22.4 a: the row staged, its tail and lane halves not collected — the redo starts the share over, the row kept).
+    const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 20, 0, 0 };
+    unsigned long long digest[10] = {}, recomposes[10] = {};
+    unsigned composed[10] = {}, shares[10] = {}, atoms[10] = {}, queues[10] = {};
+    for (int f = 0; f < 10; ++f) {
+        e->setArm("gpuscene.serialCompose", double(pattern[f]));
+        e->setArm("gpuscene.throwInLane", double(throwAt[f]));
+        record(f % 2);
+        const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
+        digest[f] = g.composeDigest;
+        composed[f] = g.slotsComposed;
+        shares[f] = g.shares;
+        atoms[f] = g.tailAtoms;
+        queues[f] = g.tailQueues;
+        recomposes[f] = g.shareRecomposes;
+    }
+    e->setArm("gpuscene.throwInLane", 0.0);
+    e->setArm("gpuscene.serialCompose", 0.0);
+    e->setArm("gpuscene.composeDigest", 0.0);
+    for (int f = 0; f < 10; ++f)
+        std::printf("   frame %d (%s%s): %u slots composed on %u shares, tails %u atom / %u queued, recomposes %llu, "
+                    "digest %016llx\n", f, pattern[f] ? "serial" : "parallel",
+                    throwAt[f] ? (throwAt[f] == 9 ? ", the frame thread's share throws"
+                                                  : throwAt[f] > 16 ? ", a worker's share throws after its stage"
+                                                                    : ", a worker's share throws") : "",
+                    composed[f], shares[f], atoms[f], queues[f], recomposes[f], digest[f]);
+    for (int f = 0; f < 10; ++f)
+        if (!pattern[f])
+            CHECK(composed[f] >= 512u && shares[f] == 9u, "frame %d went wide: %u slots on %u shares", f, composed[f],
+                  shares[f]);
+    for (int f = 2; f < 10; ++f)
+        CHECK(digest[f] == digest[f % 2], "frame %d (%s) folds what frame %d (serial) folded: the same rows, tails and "
+              "notifies in the same order (%016llx / %016llx)", f, pattern[f] ? "serial" : "parallel", f % 2, digest[f],
+              digest[f % 2]);
+    CHECK(recomposes[4] == recomposes[3] + 1u && recomposes[5] == recomposes[4] + 1u && recomposes[6] == recomposes[5] &&
+          recomposes[7] == recomposes[6] + 1u && recomposes[9] == recomposes[7],
+          "each throw recomposed its one share on the frame's thread, and nothing after it (%llu, %llu, %llu, %llu)",
+          recomposes[3], recomposes[4], recomposes[5], recomposes[7]);
+    CHECK(digest[6] == digest[0] && digest[8] == digest[0] && digest[9] == digest[1], "...and the frames after the throws "
+          "composed whole: every barrier paired");
+
+    // THE SHARE THAT THROWS EVERY TIME (decision 22.4 b): share 3 throws in its lane AND in the frame thread's redo on
+    // frame 10 (pose 0). The frame says so, every other share's replay runs, and the share's slots are owed to the next
+    // compose (MARKED: a frame nothing moves in runs no walk, so a name would wait): frame 11 sends NOTHING and is no
+    // new step — only the marks compose there (to pose 0) — and frames 12 (pose 1) and 13 (pose 0) fold exactly what
+    // frames 1 and 0 folded: the table caught up. (Unmarked, the share's slots keep pose 1 in the table while Ogre holds
+    // pose 0; frame 12's compare then finds them equal and frame 12 folds 910 slots, not 1024 — measured with names.)
+    const unsigned long long giveUps0 = echo->gpuWalk().shareGiveUps;
+    e->setArm("gpuscene.composeDigest", 1.0);
+    record(1);   // from pose 1: frame 10's pose 0 moves every slot
+    e->setArm("gpuscene.throwInLane", 36.0);   // 33 + share 3
+    record(0);
+    const inspect::SceneEcho::GpuWalk g10 = echo->gpuWalk();
+    const std::string err10 = e->published().frameError;
+    e->setArm("gpuscene.throwInLane", 0.0);
+    record(0, false);
+    record(1);
+    const unsigned long long d12 = echo->gpuWalk().composeDigest;
+    record(0);
+    const unsigned long long d13 = echo->gpuWalk().composeDigest;
+    e->setArm("gpuscene.composeDigest", 0.0);
+    std::printf("   frame 10 (share 3 throws every time): %u composed, give-ups %llu -> %llu; the frame's error: %s\n"
+                "   frame 11 (nothing sent, no step: nothing moves, no walk runs — only the marks compose); frames 12 / 13 "
+                "digests %016llx / %016llx\n", g10.slotsComposed, giveUps0, g10.shareGiveUps, err10.c_str(), d12, d13);
+    CHECK(g10.shareGiveUps == giveUps0 + 1u, "the share that threw twice gave up once (%llu -> %llu)", giveUps0,
+          g10.shareGiveUps);
+    CHECK(err10.find("again on the frame's thread") != std::string::npos, "...and the frame said so");
+    CHECK(g10.slotsComposed > 0u && g10.slotsComposed < unsigned(kCubes), "...while every other share composed "
+          "(%u of %d)", g10.slotsComposed, kCubes);
+    CHECK(d12 == digest[1] && d13 == digest[0], "...and the table caught up: frames 12 and 13 fold what frames 1 and 0 "
+          "folded (%016llx / %016llx)", d12, d13);
+    view->setScene(nullptr);
+    e->destroyScene(scene);
+    e->destroyView(view);
+    enginetest::frames(e, 1);
+    std::printf(failures ? "engine.gpuscene_identity: FAILED\n" : "engine.gpuscene_identity: PASS\n");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc > 1 && std::string(argv[1]) == "--compose-identity") return composeIdentityArm();
     if (argc > 1 && std::string(argv[1]) == "--free-running") return freeRunningArm();
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-engine-gpu-walk-parity-ogre.log");
@@ -211,6 +369,28 @@ int main(int argc, char **argv)
     bone.name = "root";
     skel.bones.push_back(bone);
     const NodeId rig = scene->createNode();
+    // The decal's rider: a decal node parented under a cube (its box is read by the GI walk after the scene graph).
+    TextureId decalTex = 0;
+    {
+        const unsigned n = 16;
+        unsigned char hdr[18];
+        std::memset(hdr, 0, sizeof hdr);
+        hdr[2] = 2; hdr[12] = (unsigned char)n; hdr[14] = (unsigned char)n; hdr[16] = 32; hdr[17] = 0x28;
+        std::vector<unsigned char> px(size_t(n) * n * 4u, 255u);
+        if (FILE *tf = std::fopen("gpu_walk_parity_decal.tga", "wb")) {
+            std::fwrite(hdr, 1, sizeof hdr, tf);
+            std::fwrite(px.data(), 1, px.size(), tf);
+            std::fclose(tf);
+            decalTex = scene->loadDecalTexture("gpu_walk_parity_decal.tga", DecalMap::Diffuse);
+        }
+    }
+    const NodeId decalRider = cubes[23], decalNode = scene->createNode();
+    scene->setNodeParent(decalNode, decalRider);
+    DecalDesc dd;
+    dd.diffuse = decalTex;
+    dd.width = dd.height = dd.depth = 1.0f;
+    CHECK(decalTex != 0 && scene->setDecal(decalNode, dd), "the decal on its rider (a cube)");
+    const NodeId socket = cubes[22];
     enginetest::frames(e, 4);
     std::vector<Step> steps = {
         { "the detach tail (a middle slot detached: the last slot is moved into its hole)", [&] {
@@ -251,22 +431,124 @@ int main(int argc, char **argv)
         { "a mobility flip (setNodeMovable)", [&] { scene->setNodeMovable(cubes[20], true); } },
         { "a nodeless write (a mesh-less group moved, its cube under it)", [&] {
               enginetest::setNodePosition(scene, group, Vec3(0.0f, 0.5f, 0.0f)); } },
+        { "a decal's rider moved (the GI walk's decal box, after the scene graph)", [&] {
+              enginetest::setNodePosition(scene, decalRider, Vec3(2.5f, 0.6f, 1.0f)); } },
+        { "a socketed camera (the view's camera on a moving cube: the plan's camera, after the scene graph)", [&] {
+              view->setCameraNode(socket);
+              enginetest::setNodePosition(scene, socket, Vec3(1.5f, 0.9f, 3.0f)); } },
     };
+    // THE GEOMETRY SIGNATURE'S GUARD TOO (ENGINE-UPGRADE-U4 stage 3): the same writers, every frame a record that
+    // carries the scene's GI (planGi reads the signature on it), and the arm gi.geomSigParity recomputing the whole
+    // order-free sum after every incremental pass — 0 misses.
+    const inspect::SceneEcho *echo = inspect::scene(scene);
+    CHECK(echo != nullptr && e->setArm("gi.geomSigParity", 1.0), "the signature guard's arm");
+    const auto giFrames = [&](int k) {
+        for (int f = 0; f < k; ++f) {
+            FrameInput in;
+            FrameInputScene part;
+            part.scene = scene;
+            part.gi = gi;
+            in.scenes.push_back(part);
+            enginetest::frames(e, 1, in);
+        }
+    };
+    giFrames(2);
     for (const Step &st : steps) {
         const GpuSubstrateStatus before = gpuSubstrateStatus(*scene);
         const GpuSceneStatus gb = scene->published().gpuScene;
+        const inspect::SceneEcho::GiPlan pb = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
         st.run();
-        enginetest::frames(e, 4);
+        giFrames(4);
         const GpuSubstrateStatus after = gpuSubstrateStatus(*scene);
         const GpuSceneStatus ga = scene->published().gpuScene;
+        const inspect::SceneEcho::GiPlan pa = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
         CHECK(after.walkMissed == before.walkMissed,
               "%s: the table holds every slot (%llu misses over %llu checks; last miss slot %u)", st.name,
               after.walkMissed - before.walkMissed, after.walkChecked - before.walkChecked,
               after.walkLastMissed);
         CHECK(ga.updates > gb.updates, "%s: the table took the writer's change (%llu commits)", st.name,
               (unsigned long long)(ga.updates - gb.updates));
+        CHECK(pa.sigMisses == pb.sigMisses, "%s: the geometry signature is the whole sum (%llu misses over %llu "
+              "passes, %llu of them full)", st.name, pa.sigMisses - pb.sigMisses, pa.sigChecks - pb.sigChecks,
+              pa.sigFullPasses - pb.sigFullPasses);
     }
+    {
+        const inspect::SceneEcho::GiPlan p = echo ? echo->giPlan() : inspect::SceneEcho::GiPlan();
+        CHECK(p.sigChecks > p.sigFullPasses, "the signature's guard checked incremental passes (%llu checks, %llu full)",
+              p.sigChecks, p.sigFullPasses);
+    }
+    view->setCameraNode(0);
+    e->setArm("gi.geomSigParity", 0.0);
     e->setArm("gpuscene.walkParity", 0.0);
+    std::remove("gpu_walk_parity_decal.tga");   // the decal's image, written for this run (decision 16.5)
+
+    // THE NAME LIST'S DEATH (decision 16.2): a record whose bits were all taken stays LISTED until the list compacts,
+    // and its death must take it off the list. The exact sequence: a scene drawn a few frames (its GPU walk and GI
+    // scan primed: their names are recorded from then on) and then UNDRAWN (nothing consumes those names any more),
+    // no lamp (its caster scan never primes), C named for the geometry signature alone (a material swap), A and B
+    // moving (named for every consumer: the list stays live, so it never compacts), the signature takes C's bit, then
+    // C is removed — the list must hold no dead record.
+    {
+        Scene *u = e->createScene("parity-undrawn");
+        View *uv = u ? e->createOffscreenView("parity-undrawn", 64, 64, Colour(0, 0, 0, 1)) : nullptr;
+        if (uv) {
+            uv->setScene(u);
+            enginetest::testCameraLookAt(uv, Vec3(0.0f, 3.0f, 8.0f), Vec3(0.0f, 0.0f, 0.0f));
+        }
+        const MeshId um = u ? u->createMesh(enginetest::unitCubeMesh()) : MeshId(0);
+        const MaterialId m1 = u ? u->createPbrMaterial(PbrParams()) : MaterialId(0);
+        PbrParams p2; p2.albedo = Colour(0.9f, 0.2f, 0.2f);
+        const MaterialId m2 = u ? u->createPbrMaterial(p2) : MaterialId(0);
+        NodeId abc[3] = {};
+        for (int i = 0; u && i < 3; ++i) {
+            abc[i] = u->createDocumentNode(reserveNodeId());
+            u->attachMesh(abc[i], um, m1);
+        }
+        const inspect::SceneEcho *ue = u ? inspect::scene(u) : nullptr;
+        CHECK(u && ue && abc[2], "the undrawn scene and its three cubes");
+        if (u && ue) {
+            GiParams ugi = gi;
+            const auto uframe = [&](int moveStep) {
+                FrameInput in;
+                FrameInputScene part;
+                part.scene = u;
+                part.gi = ugi;
+                for (int i = 0; moveStep >= 0 && i < 2; ++i) {
+                    NodeRecord r;
+                    r.id = abc[i];
+                    r.fields = NodeRecord::Trs;
+                    r.position = Vec3(float(i) * 2.0f, 0.1f * float(moveStep), 0.0f);
+                    r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+                    r.scale = Vec3(1.0f, 1.0f, 1.0f);
+                    part.nodes.push_back(r);
+                    part.changes.moved.push_back(r.id);
+                }
+                in.scenes.push_back(part);
+                enginetest::frames(e, 1, in);
+            };
+            for (int f = 0; f < 3; ++f) uframe(f);   // drawn: the walk and the scan primed
+            if (uv) uv->setScene(nullptr);          // ...then undrawn
+            uframe(-1);
+            u->setNodeMaterial(abc[2], m2);   // C: named for the signature alone
+            uframe(1);                        // A and B move; the signature's plan takes C's bit
+            uframe(2);
+            const inspect::SceneEcho::GpuWalk g0 = ue->gpuWalk();
+            u->removeNode(abc[2]);
+            uframe(3);
+            const inspect::SceneEcho::GpuWalk g1 = ue->gpuWalk();
+            std::printf("   the undrawn scene's name list: %u listed (%u owed by a consumer) before C's death, %u after; "
+                        "dangling %u\n", g0.namedListed, g0.namedLive, g1.namedListed, g1.namedDangling);
+            CHECK(g0.namedListed >= 3u, "the sequence holds C listed beside the live A and B (%u listed)", g0.namedListed);
+            CHECK(g1.namedDangling == 0u, "a death leaves no dead record on the name list (%u dangling)",
+                  g1.namedDangling);
+            CHECK(g0.namedNotFlagged == 0u && g0.namedDuplicates == 0u && g1.namedNotFlagged == 0u &&
+                  g1.namedDuplicates == 0u, "every listed record carries its listed flag and is listed once (%u/%u "
+                  "before, %u/%u after)", g0.namedNotFlagged, g0.namedDuplicates, g1.namedNotFlagged,
+                  g1.namedDuplicates);
+            if (uv) e->destroyView(uv);
+            e->destroyScene(u);
+        }
+    }
     std::printf("engine.gpu_walk_parity: %s (%d failure(s))\n", failures ? "FAIL" : "ok", failures);
     return failures ? 1 : 0;
 }

@@ -55,6 +55,43 @@ set_tests_properties(document.physics_writeback PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
 jah_no_display(document.physics_writeback)
 
+# physics.mt_determinism / physics.step_cost / physics.step_overlap — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
+# (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23). A pile of boxes dropped in layers, stepped by the document at the
+# fixed step, frames counted; Bullet's own scheduler bound on the test's thread (its game thread) at the box's share.
+# The GUARD (500 bodies, document only): single- vs multi-threaded and run to run, BIT-EQUAL before the first contact
+# and within the derived bound (the landing's sqrt(2gh) dt once, g dt^2 a step) through the settling (16 steps; the
+# growth to 32 printed) — Bullet MT is not bit-equal by construction.
+# The MEASURES (by hand): the step at 10,000 bodies, 1 thread against 7, in play with the mirror's extract (its share
+# of a 60 Hz frame, the fast path serving every body), and the core budget's question — the step's overlap with a
+# free-running engine's pool spans.
+add_executable(test_physics_step_cost test_physics_step_cost.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_physics_step_cost PROPERTIES AUTOMOC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_physics_step_cost PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_physics_step_cost PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_physics_step_cost PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_physics_step_cost JahshakaEngineMedia)
+add_test(NAME physics.mt_determinism COMMAND test_physics_step_cost --bodies 500 --frames 32 --threads 7 --runs 3
+         --bound 16 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(physics.mt_determinism PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120 JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(physics.mt_determinism)
+jah_gpu_exclusive_test(NAME physics.step_cost CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
+         --frames 60 --threads 7 --runs 1 --mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(physics.step_cost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
+    JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
+jah_gpu_exclusive_test(NAME physics.step_overlap CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
+         --frames 120 --threads 7 --overlap WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
+    JAHSHAKA_TEST_FRAMES 3470)   # metered 2026-10-18: the free-running render thread at 60 Hz for the run (120 frames of warm-up first)
+
 # document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
 # §3.3.2): which objects the renderer may bake into the room's lighting and
 # which it has to handle per frame. Every driver with its own reason, rule 2's

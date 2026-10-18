@@ -292,6 +292,38 @@ set_tests_properties(mirror.settle_incremental PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 430 LABELS "mirror")
 set_tests_properties(mirror.settle_incremental PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
+# mirror.extract_movers — THE MIRROR'S EXTRACT WITH EVERY NODE MOVING (ENGINE-UPGRADE-U4 stage 5): each written node's
+# entry looked up once, the owed fields and the written stamp on the entry; the list degrades to the full walk and never
+# past it (2,000 cubes, the guard); and the settle's hole — a node reparented under a parent the running rotation had
+# passed is settled by the next rotation. The same movers IN PLAY (decision 22.1: a movable node's transform write is
+# the fast path's there too); the RECORDS ORACLE (22.3: a mixed last sync — a material swap, a mobility flip, a
+# reparent, a hidden mover — whose node records and moved list equal a full walk's over the same history, set and
+# contents); the dirty list's invariant (22.5: every listed node queued). mirror.extract_movers_10k (measure, by
+# hand): the same at 10,000 cubes with the stage's bar, edit and play (100 % movers <= 12 ms).
+add_executable(test_mirror_extract_movers test_mirror_extract_movers.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_extract_movers PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_mirror_extract_movers PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_mirror_extract_movers PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_mirror_extract_movers PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_mirror_extract_movers JahshakaEngineMedia)
+jah_gpu_row(mirror.extract_movers CLASS engine COMMAND test_mirror_extract_movers --nodes 2000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.extract_movers PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.extract_movers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+jah_gpu_exclusive_test(NAME mirror.extract_movers_10k CLASS engine RUN_TIMEOUT 600 COMMAND test_mirror_extract_movers --nodes 10000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.extract_movers_10k PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror"
+    JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
+
 # mirror.settle_thumbnails — a settle is fed by ITS OWN document's writes:
 # a 10k scene demoted by one edit settles within its quiet window + one
 # rotation while a thumbnail (a throwaway document: a write and a destruction

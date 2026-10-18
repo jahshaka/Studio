@@ -340,7 +340,14 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     scale.shadow_cut
     # TEST-1 (the perf audit's F5): the frame's own GPU span against its monitor rows — a share
     # of two GPU times read in one frame, which a sibling's GPU work inside the span would inflate.
-    scale.gpu_coverage)
+    scale.gpu_coverage
+    # ENGINE-UPGRADE-U4 stage 1: the render thread's CPU phases at 10k nodes (the drain, the sun trace, the GPU
+    # scene's compose) — milliseconds of CPU by design, and over a fixture's budget by price (a 10k world's settle).
+    frame.drain_cost_10k gi.trace_sun_cost engine.gpuscene_compose
+    # ENGINE-UPGRADE-U4 stage 5: the mirror's extract with 10k nodes moving (milliseconds of CPU, by hand).
+    mirror.extract_movers_10k
+    # ENGINE-UPGRADE-U4 stage 6: the physics step at 10k bodies and its overlap with the render thread's pool (by hand).
+    physics.step_cost physics.step_overlap)
 # THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
 # resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
 # time holds the card (scripts/gpu-exclusive.sh), and inside it ctest keeps each class to its width.

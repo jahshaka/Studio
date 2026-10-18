@@ -143,6 +143,7 @@ engine.gpu_scene 1.62  quiet n=43
 engine.gpu_substrate 2.73  solo (ASYNC-3 stage-1 read F4: + the graphics-build frame, 2026-10-15)
 engine.gpu_walk_parity 6.12  spec EU-2B stage 3 fix (2026-10-15)
 engine.gpu_walk_parity_free 1.15  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+engine.gpuscene_identity 2.16  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
@@ -162,6 +163,7 @@ export.raw 0.00  ship 3a0422b4e (2026-10-13)
 export.walkers 0.06  quiet n=45
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.drain_cost 3.10  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
@@ -268,6 +270,7 @@ gi.pcc_bounds 7.11  quiet n=41
 gi.pcc_mirror 9.10  ship 3a0422b4e (2026-10-13)
 gi.pcc_mirror.ray_tier 53.60  quiet n=44
 gi.pcc_mirror.ray_tier.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+gi.pcc_placement_lights 2.54  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 gi.pcc_second_scene 3.47  quiet n=41
 gi.pcc_stability 6.01  quiet n=41
 gi.photon_passes 3.41  spec EU-2 stage 2 (2026-10-14)
@@ -320,6 +323,7 @@ gi.sun_contact_both 3.30  quiet n=42
 gi.sun_contact_legs 1.96  quiet n=41
 gi.sun_contact_norays 1.80  quiet n=43
 gi.tiers 0.06  quiet n=45
+gi.union_clear 2.54  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 gi.volume_edge 2.12  quiet n=42
 gi.volume_edge_spec_target 2.11  quiet n=42
 gi.voxel_coverage 44.23  quiet n=42
@@ -408,6 +412,7 @@ meshbake.shipped_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.cull_twin 3.36  quiet n=45
 mirror.dirty_equals_full 1.12  quiet n=44
 mirror.document_to_engine 9.72  quiet n=43
+mirror.extract_movers 2.12  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 mirror.full_walk_recreate 1.70  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 mirror.grid_floor 1.66  quiet n=43
 mirror.ground_plane 1.91  quiet n=44
@@ -445,6 +450,7 @@ perf.offscreen_isolation 21.27  quiet n=42
 perf.offscreen_isolation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 perf.pacing 0.00  ship 3a0422b4e (2026-10-13)
 photon.tiers 0.05  quiet n=45
+physics.mt_determinism 0.71  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 picking.document 0.07  quiet n=45
 picking.fov_cap 1.54  quiet n=44
 picking.trimesh_index 8.30  ship 3a0422b4e (2026-10-13)

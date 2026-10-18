@@ -447,6 +447,47 @@ jah_gpu_row(gi.mobility CLASS engine COMMAND test_gi_mobility
 set_tests_properties(gi.mobility PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.mobility PROPERTIES JAHSHAKA_TEST_FRAMES 704)
 
+# gi.pcc_placement_lights — A PROBE PLACEMENT AFTER THE SCENE GRAPH DRAWS WITH ITS LAMPS (ENGINE-UPGRADE-U4
+# decision 14): on the tier that places probes (VctPccHybrid, rays off) every staged placement stage leaves the
+# frame's light list as it found it and its probes' nodes where they were set (the arm gi.pccPlacementLights;
+# the fork's ParallaxCorrectedCubemapAuto / CubemapProbe fix). Staged frame by frame, then whole.
+add_executable(test_gi_pcc_placement_lights test_gi_pcc_placement_lights.cpp)
+set_target_properties(test_gi_pcc_placement_lights PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_placement_lights PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_placement_lights PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_placement_lights JahshakaEngineMedia)
+jah_gpu_row(gi.pcc_placement_lights CLASS engine COMMAND test_gi_pcc_placement_lights
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_placement_lights PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.pcc_placement_lights PROPERTIES JAHSHAKA_TEST_FRAMES 48)   # 2 + 3 + 8 + 3 staged, 3 whole, 12 + 12 + 4 the recapture, 1
+
+# gi.union_clear — A COLLAPSED DIRTY UNION NEVER OUTLIVES ITS LIST (ENGINE-UPGRADE-U4 decision 18.1): 100 dense
+# cubes removed and the arm rebuilt in one record, then a lamp added with nothing moving — its re-solve re-voxelises
+# nothing (the rebuild's clear took the union's members with it).
+add_executable(test_gi_union_clear test_gi_union_clear.cpp)
+set_target_properties(test_gi_union_clear PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_union_clear PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_union_clear PRIVATE JahshakaEngine)
+add_dependencies(test_gi_union_clear JahshakaEngineMedia)
+jah_gpu_row(gi.union_clear CLASS engine COMMAND test_gi_union_clear
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.union_clear PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.union_clear PROPERTIES JAHSHAKA_TEST_FRAMES 100)
+
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
 # OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to
@@ -1265,6 +1306,13 @@ target_compile_definitions(test_gi_card_walk PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_card_walk PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_walk JahshakaEngineMedia)
+
+# gi.trace_sun_cost — THE SUN TRACE'S CPU AT 10k MOVES (ENGINE-UPGRADE-U4 stage 1, P1): SurfaceCache::traceSun per frame
+# on the 10k group move and at 12 % movers, against the resident cards — the CPU map's fixture (tests/engine,
+# test_engine_cpu_map --trace-sun). A `measure` row, by hand.
+jah_gpu_exclusive_test(NAME gi.trace_sun_cost CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --trace-sun 10000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.trace_sun_cost PROPERTIES LABELS "gi" JAHSHAKA_TEST_FRAMES 960)   # metered 2026-10-18
 
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES

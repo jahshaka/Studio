@@ -40,7 +40,12 @@ var EXPECTED = { "reflect.motion": 1, "reflect.posed": 1, "reflect.alphaTested":
                  "atom.discriminate": 0, "atom.hitWorldLights": 0, "atom.hitVctSpecular": 1,
                  "gather.hitsReadback": 0, "reflect.metalDecode": 0.3, "gi.hitDirect": 1,
                  "gpuscene.wholeWalk": 0, "gpuscene.walkParity": 0,
-                 "messages.refuse": 0, "interp.serial": 0, "vr.fakeRuntimePace": 0, "view.fakePresentBlock": 0 };
+                 "messages.refuse": 0, "interp.serial": 0, "vr.fakeRuntimePace": 0, "view.fakePresentBlock": 0,
+                 "cards.sunGridParity": 0, "gi.geomSigParity": 0, "gi.rootBoxParity": 0,
+                 "gpuscene.walkTiming": 0, "gpuscene.observersOff": 0, "cards.nullMove": 0,
+                 "gi.pccPlacementLights": 0,
+                 "gpuscene.serialCompose": 0, "gpuscene.composeDigest": 0,
+                 "gpuscene.throwInLane": 0 };
 
 var guid = project.create("Engine Arms " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);

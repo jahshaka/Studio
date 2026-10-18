@@ -313,6 +313,29 @@ add_dependencies(test_engine_runtime_pace JahshakaEngineMedia)
 jah_gpu_row(frame.runtime_pace CLASS engine FRAMES 300 COMMAND test_engine_runtime_pace
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.runtime_pace PROPERTIES TIMEOUT 60 LABELS "engine")
+# THE RENDER THREAD'S CPU MAP (ENGINE-UPGRADE-U4 stage 1, the deep read's P1-P3): one fixture, a carded-cube world
+# written by the host's records (the group alone, or K cubes); each row one phase, frame-counted, read off the snapshot
+# or the inspect door. frame.drain_cost is the GUARD (a 2,000-node world: every record applied and named, the drain's
+# three parts printed); the 10k rows are `measure`, by hand (gi.trace_sun_cost is registered with the gi rows).
+add_executable(test_engine_cpu_map test_engine_cpu_map.cpp)
+set_target_properties(test_engine_cpu_map PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_cpu_map PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_cpu_map PRIVATE JahshakaEngine)
+add_dependencies(test_engine_cpu_map JahshakaEngineMedia)
+jah_gpu_row(frame.drain_cost CLASS engine FRAMES 87 COMMAND test_engine_cpu_map --drain 2000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drain_cost PROPERTIES TIMEOUT 120 LABELS "engine")
+jah_gpu_exclusive_test(NAME frame.drain_cost_10k CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --drain 10000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drain_cost_10k PROPERTIES LABELS "engine" JAHSHAKA_TEST_FRAMES 434)   # metered 2026-10-18
+jah_gpu_exclusive_test(NAME engine.gpuscene_compose CLASS engine RUN_TIMEOUT 600 COMMAND test_engine_cpu_map --compose 10000
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpuscene_compose PROPERTIES LABELS "engine" JAHSHAKA_TEST_FRAMES 480)   # metered 2026-10-18
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
@@ -487,7 +510,15 @@ add_dependencies(test_engine_gpu_walk_parity JahshakaEngineMedia)
 jah_gpu_row(engine.gpu_walk_parity CLASS engine COMMAND test_engine_gpu_walk_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine"
-    JAHSHAKA_TEST_FRAMES 103)   # counted from the source (4 + 8 + 2 + 4 + 21 steps x 4 + the drag's own one)
+    JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted (decision 18.7: the two U4 steps and the death sequence added)
+# engine.gpuscene_identity — THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE FOR BYTE (ENGINE-UPGRADE-U4 stage 4): 8 workers,
+# 1,024 moving cubes, the compose's digest (every composed slot's index, row and tail in replay order) compared between
+# the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
+jah_gpu_row(engine.gpuscene_identity CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"
+    JAHSHAKA_TEST_FRAMES 18)   # 1 + 6 warm + 10 + 1
+jah_tsan_render(engine.gpuscene_identity)
 # engine.gpu_walk_parity_free — THE INTERPOLATED POSE IS THE TABLE'S (ENGINE-UPGRADE-U3 decision 56): FREE-RUNNING on the
 # render thread, a mover drawn between its grid states at 90 over 60 and then stopped: 0 misses moving and stopped.
 jah_gpu_row(engine.gpu_walk_parity_free CLASS engine COMMAND test_engine_gpu_walk_parity --free-running
