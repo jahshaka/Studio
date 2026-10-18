@@ -466,7 +466,7 @@ add_dependencies(test_gi_pcc_placement_lights JahshakaEngineMedia)
 jah_gpu_row(gi.pcc_placement_lights CLASS engine COMMAND test_gi_pcc_placement_lights
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_placement_lights PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.pcc_placement_lights PROPERTIES JAHSHAKA_TEST_FRAMES 54)
+set_tests_properties(gi.pcc_placement_lights PROPERTIES JAHSHAKA_TEST_FRAMES 48)   # 2 + 3 + 8 + 3 staged, 3 whole, 12 + 12 + 4 the recapture, 1
 
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from

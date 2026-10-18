@@ -147,6 +147,46 @@ int main()
     CHECK(b.pccProbeOffsetMax == 0.0f, "...and its probes' nodes where they were set (%.6f m)",
           double(b.pccProbeOffsetMax));
 
+    // ARM 3: A BUDGETED RECAPTURE SEES A LAMP THE VIEWER DOES NOT (decision 16.1). A short-range point lamp BEHIND
+    // the camera (its sphere entirely behind the near plane: the main camera's light culling drops it) lighting the
+    // red wall the chrome cube reflects back at the viewer. The lamp stales the grid; the budget (1 probe a frame)
+    // recaptures each probe through its own light-culling camera, after the frame's scene graph — the fork rebuilds
+    // the frame's light list once the collection queued those cameras, so the list holds every lamp, and what the
+    // probes captured holds the lamp: the chrome pixel with the lamp differs from the one without.
+    const auto chrome = [&]() { Image img; view->readPixels(img); return img.at(img.width / 2, img.height / 2); };
+    for (int f = 0; f < 12; ++f) frame(FramePace::Complete);   // the 3x1x2 grid's catch-up spent
+    const Colour without = chrome();
+    const NodeId behind = s->createNode();
+    s->setNodeTransform(behind, Vec3(0.0f, 2.0f, 3.95f), Quat(), Vec3(1, 1, 1));
+    LightDesc bl;
+    bl.type = LightType::Point;
+    bl.colour = Colour(1.0f, 1.0f, 1.0f);
+    bl.intensity = 40.0f;
+    bl.range = 0.4f;
+    CHECK(s->setLight(behind, bl), "the lamp behind the viewer (range 0.4 m, at z 3.95; the camera at z 3.5)");
+    unsigned recaptureFrames = 0u, short_ = 0u, worst = lamps + 1u;
+    for (int f = 0; f < 12; ++f) {
+        frame(FramePace::Complete);
+        const GiStatus gs = s->published().gi;
+        const inspect::SceneEcho::GiPlan p = echo->giPlan();
+        if (gs.probeCapturesLastFrame > 0) {
+            ++recaptureFrames;
+            if (p.pccCollectLights != lamps + 1u) ++short_;
+            worst = std::min(worst, p.pccCollectLights);
+        }
+    }
+    for (int f = 0; f < 4; ++f) frame(FramePace::Complete);
+    const Colour with = chrome();
+    std::printf("   recapture: %u frames recaptured, %u of them with a short light list (fewest %u of %u lamps); chrome "
+                "%.4f/%.4f/%.4f without the lamp, %.4f/%.4f/%.4f with it\n", recaptureFrames, short_, worst, lamps + 1u,
+                without.r, without.g, without.b, with.r, with.g, with.b);
+    CHECK(recaptureFrames > 0u, "the lamp staled the grid and the budget recaptured (%u frames)", recaptureFrames);
+    CHECK(short_ == 0u, "every recapture frame's light list after the collection holds every lamp (%u short; fewest "
+          "%u of %u)", short_, worst, lamps + 1u);
+    const float change = std::fabs(with.r - without.r) + std::fabs(with.g - without.g) + std::fabs(with.b - without.b);
+    CHECK(change > 0.002f, "what the probes captured holds the lamp behind the viewer (chrome %.4f/%.4f/%.4f -> "
+          "%.4f/%.4f/%.4f)", without.r, without.g, without.b, with.r, with.g, with.b);
+
     e->setFramePace(FramePace::Complete);
     e->setArm("gi.pccPlacementLights", 0.0);
     view->setScene(nullptr);

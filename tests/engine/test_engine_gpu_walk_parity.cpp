@@ -144,8 +144,109 @@ static int freeRunningArm()
     return failures ? 1 : 0;
 }
 
+// engine.gpuscene_identity (`--compose-identity`, ENGINE-UPGRADE-U4 stage 4): THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE
+// FOR BYTE. The compose runs inside the compare's task (each worker share stages its own slots' rows) and replays what
+// is not lane-local — the Atom route, the material store's queue, the observers — after the barrier in slot order. The
+// arm gpuscene.serialCompose composes after the barrier on the frame's thread instead. A scene with 8 workers and 1,024
+// moving cubes (>= 512 named slots: the walk goes wide) is walked with the digest on (every composed slot's index, row
+// and tail, in replay order), the poses alternating between two states so frame f and f + 2 compose the same input: the
+// pairs are compared serial against parallel, A B B A. The row also runs under the clang TSan arm (tsan-render).
+static int composeIdentityArm()
+{
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig("test-engine-gpuscene-identity-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    Engine *e = engine.get();
+    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
+    View *view = e->createOffscreenView("identity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    Scene *scene = e->createScene("identity", 8u);
+    if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.3f, 0.3f, 0.3f));
+    enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 30.0f, 40.0f), Vec3(0.0f, 0.0f, 0.0f));
+    const MeshId cubeMesh = scene->createMesh(enginetest::unitCubeMesh());
+    const int kCubes = 1024;
+    std::vector<NodeId> cubes;
+    for (int i = 0; i < kCubes; ++i) {
+        const NodeId n = scene->createDocumentNode(reserveNodeId());
+        PbrParams p;
+        p.albedo = Colour(0.2f + 0.0005f * float(i), 0.5f, 0.6f);
+        p.roughness = 0.4f + 0.0004f * float(i);
+        scene->attachMesh(n, cubeMesh, scene->createPbrMaterial(p));
+        cubes.push_back(n);
+    }
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::Medium;
+    gi.numBounces = 1;
+    gi.ddgi = GiToggle::Off;
+    gi.updateBudget = 0;
+    unsigned long long step = 0;
+    const auto record = [&](int pose) {
+        FrameInput in;
+        in.frameDelta = 1.0f / 60.0f;
+        in.stepSerial = ++step;
+        in.stepPeriod = 1.0f / 60.0f;
+        FrameInputScene part;
+        part.scene = scene;
+        part.gi = gi;
+        for (int i = 0; i < kCubes; ++i) {
+            NodeRecord r;
+            r.id = cubes[size_t(i)];
+            r.fields = NodeRecord::Trs;
+            r.position = Vec3(float(i % 32) * 1.2f - 19.0f, 0.3f + 0.05f * float(pose), float(i / 32) * 1.2f - 19.0f);
+            r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+            r.scale = Vec3(0.5f, 0.5f, 0.5f);
+            part.nodes.push_back(r);
+            part.changes.moved.push_back(r.id);
+        }
+        in.scenes.push_back(part);
+        enginetest::frames(e, 1, in);
+    };
+    for (int f = 0; f < 6; ++f) record(f % 2);
+    const inspect::SceneEcho *echo = inspect::scene(scene);
+    CHECK(echo && e->setArm("gpuscene.composeDigest", 1.0), "the compose's digest arm");
+    if (!echo) return 1;
+    // ABBA over frame pairs: serial for frames 0-1, parallel 2-5, serial 6-7 — frame f against f + 2 (the same pose
+    // after the same pose).
+    const int pattern[8] = { 1, 1, 0, 0, 0, 0, 1, 1 };
+    unsigned long long digest[8] = {};
+    unsigned composed[8] = {}, shares[8] = {};
+    for (int f = 0; f < 8; ++f) {
+        e->setArm("gpuscene.serialCompose", double(pattern[f]));
+        record(f % 2);
+        const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
+        digest[f] = g.composeDigest;
+        composed[f] = g.slotsComposed;
+        shares[f] = g.shares;
+    }
+    e->setArm("gpuscene.serialCompose", 0.0);
+    e->setArm("gpuscene.composeDigest", 0.0);
+    for (int f = 0; f < 8; ++f)
+        std::printf("   frame %d (%s): %u slots composed on %u shares, digest %016llx\n", f,
+                    pattern[f] ? "serial" : "parallel", composed[f], shares[f], digest[f]);
+    // (the arm latches at the frame's top: frame f's compose is f's pattern entry)
+    CHECK(composed[2] >= 512u && shares[2] == 9u, "the walk went wide: %u slots on %u shares", composed[2], shares[2]);
+    for (int f = 0; f < 6; ++f) {
+        if (pattern[f] == pattern[f + 2]) continue;
+        CHECK(digest[f] == digest[f + 2] && digest[f] != 0ull,
+              "frame %d (%s) and frame %d (%s): the same rows, tails and order (%016llx / %016llx)", f,
+              pattern[f] ? "serial" : "parallel", f + 2, pattern[f + 2] ? "serial" : "parallel", digest[f],
+              digest[f + 2]);
+    }
+    view->setScene(nullptr);
+    e->destroyScene(scene);
+    e->destroyView(view);
+    enginetest::frames(e, 1);
+    std::printf(failures ? "engine.gpuscene_identity: FAILED\n" : "engine.gpuscene_identity: PASS\n");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc > 1 && std::string(argv[1]) == "--compose-identity") return composeIdentityArm();
     if (argc > 1 && std::string(argv[1]) == "--free-running") return freeRunningArm();
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-engine-gpu-walk-parity-ogre.log");
@@ -327,6 +428,71 @@ int main(int argc, char **argv)
     view->setCameraNode(0);
     e->setArm("gi.geomSigParity", 0.0);
     e->setArm("gpuscene.walkParity", 0.0);
+    std::remove("gpu_walk_parity_decal.tga");   // the decal's image, written for this run (decision 16.5)
+
+    // THE NAME LIST'S DEATH (decision 16.2): a record whose bits were all taken stays LISTED until the list compacts,
+    // and its death must take it off the list. The exact sequence: a scene drawn a few frames (its GPU walk and GI
+    // scan primed: their names are recorded from then on) and then UNDRAWN (nothing consumes those names any more),
+    // no lamp (its caster scan never primes), C named for the geometry signature alone (a material swap), A and B
+    // moving (named for every consumer: the list stays live, so it never compacts), the signature takes C's bit, then
+    // C is removed — the list must hold no dead record.
+    {
+        Scene *u = e->createScene("parity-undrawn");
+        View *uv = u ? e->createOffscreenView("parity-undrawn", 64, 64, Colour(0, 0, 0, 1)) : nullptr;
+        if (uv) {
+            uv->setScene(u);
+            enginetest::testCameraLookAt(uv, Vec3(0.0f, 3.0f, 8.0f), Vec3(0.0f, 0.0f, 0.0f));
+        }
+        const MeshId um = u ? u->createMesh(enginetest::unitCubeMesh()) : MeshId(0);
+        const MaterialId m1 = u ? u->createPbrMaterial(PbrParams()) : MaterialId(0);
+        PbrParams p2; p2.albedo = Colour(0.9f, 0.2f, 0.2f);
+        const MaterialId m2 = u ? u->createPbrMaterial(p2) : MaterialId(0);
+        NodeId abc[3] = {};
+        for (int i = 0; u && i < 3; ++i) {
+            abc[i] = u->createDocumentNode(reserveNodeId());
+            u->attachMesh(abc[i], um, m1);
+        }
+        const inspect::SceneEcho *ue = u ? inspect::scene(u) : nullptr;
+        CHECK(u && ue && abc[2], "the undrawn scene and its three cubes");
+        if (u && ue) {
+            GiParams ugi = gi;
+            const auto uframe = [&](int moveStep) {
+                FrameInput in;
+                FrameInputScene part;
+                part.scene = u;
+                part.gi = ugi;
+                for (int i = 0; moveStep >= 0 && i < 2; ++i) {
+                    NodeRecord r;
+                    r.id = abc[i];
+                    r.fields = NodeRecord::Trs;
+                    r.position = Vec3(float(i) * 2.0f, 0.1f * float(moveStep), 0.0f);
+                    r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+                    r.scale = Vec3(1.0f, 1.0f, 1.0f);
+                    part.nodes.push_back(r);
+                    part.changes.moved.push_back(r.id);
+                }
+                in.scenes.push_back(part);
+                enginetest::frames(e, 1, in);
+            };
+            for (int f = 0; f < 3; ++f) uframe(f);   // drawn: the walk and the scan primed
+            if (uv) uv->setScene(nullptr);          // ...then undrawn
+            uframe(-1);
+            u->setNodeMaterial(abc[2], m2);   // C: named for the signature alone
+            uframe(1);                        // A and B move; the signature's plan takes C's bit
+            uframe(2);
+            const inspect::SceneEcho::GpuWalk g0 = ue->gpuWalk();
+            u->removeNode(abc[2]);
+            uframe(3);
+            const inspect::SceneEcho::GpuWalk g1 = ue->gpuWalk();
+            std::printf("   the undrawn scene's name list: %u listed (%u owed by a consumer) before C's death, %u after; "
+                        "dangling %u\n", g0.namedListed, g0.namedLive, g1.namedListed, g1.namedDangling);
+            CHECK(g0.namedListed >= 3u, "the sequence holds C listed beside the live A and B (%u listed)", g0.namedListed);
+            CHECK(g1.namedDangling == 0u, "a death leaves no dead record on the name list (%u dangling)",
+                  g1.namedDangling);
+            if (uv) e->destroyView(uv);
+            e->destroyScene(u);
+        }
+    }
     std::printf("engine.gpu_walk_parity: %s (%d failure(s))\n", failures ? "FAIL" : "ok", failures);
     return failures ? 1 : 0;
 }

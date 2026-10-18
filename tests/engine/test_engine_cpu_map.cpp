@@ -566,7 +566,7 @@ int composeRow(World &w, int n)
         // muted (gpuscene.observersOff), paired A B B A in one process (the measuring rule); the observers' cost = the medians'
         // difference. The notify timer (gpuscene.walkTiming) runs in its own block only: never a clock read per
         // notify in the measured ones.
-        std::vector<double> name, compare, compose, composeOff, notify;
+        std::vector<double> name, compare, compose, composeOff, notify, walkUs, replay;
         unsigned composed = 0, shares = 0;
         bool walked = true;
         for (int f = 0; f < warm; ++f) writeFrame(w, k);
@@ -581,7 +581,12 @@ int composeRow(World &w, int n)
                 const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
                 if (g.walks == walks0) walked = false;
                 (muted ? composeOff : compose).push_back(g.composeMicros);
-                if (!muted) { name.push_back(g.nameMicros); compare.push_back(g.compareMicros); }
+                if (!muted) {
+                    name.push_back(g.nameMicros);
+                    compare.push_back(g.compareMicros);
+                    replay.push_back(g.replayMicros);
+                    walkUs.push_back(g.compareMicros + g.composeMicros);   // the task (compare + the shares' compose) + the serial part
+                }
                 composed = std::max(composed, g.slotsComposed);
                 shares = g.shares;
             }
@@ -596,7 +601,7 @@ int composeRow(World &w, int n)
         writeFrame(w, k);
         char b[32];
         const Stats nm = stats(name), cm = stats(compare), co = stats(compose), cf = stats(composeOff),
-                    no = stats(notify);
+                    no = stats(notify), wk = stats(walkUs), rp = stats(replay);
         const double total = nm.median + cm.median + co.median;
         const double observers = co.median - cf.median;
         std::printf("CPU_MAP engine.gpuscene_compose arm=%s world=%d frames=%d+%d compose_ms=%.3f (min %.3f max %.3f) "
@@ -606,8 +611,17 @@ int composeRow(World &w, int n)
                     co.min / 1000.0, co.max / 1000.0, cf.median / 1000.0, observers / 1000.0,
                     co.median > 0.0 ? observers / co.median : 0.0, no.median / 1000.0, cm.median / 1000.0,
                     nm.median / 1000.0, total > 0.0 ? co.median / total : 0.0, composed, shares);
+        std::printf("CPU_MAP engine.gpuscene_compose arm=%s the walk (stage 4): compare + compose %.3f ms (min %.3f max "
+                    "%.3f) = the task %.3f (the shares' compare and compose) + the serial part %.3f (the replay %.3f)\n",
+                    armName(k, b, sizeof b), wk.median / 1000.0, wk.min / 1000.0, wk.max / 1000.0, cm.median / 1000.0,
+                    co.median / 1000.0, rp.median / 1000.0);
         CHECK(walked, "engine.gpuscene_compose arm %s: the GPU scene walked on every measured frame",
               armName(k, b, sizeof b));
+        // STAGE 4'S BAR (decision 16.4: the serial replay is the floor): floor + (the parallel part) / 8 + 2 ms, from the
+        // before numbers (decision 15, load 3-4.5): the serial compose 15.1 ms of which the observers 8.6 (the replay's
+        // floor) -> 8.6 + (15.1 - 8.6) / 8 + 2 = 11.4 ms for the walk's compare + compose, at the group move and k10000.
+        CHECK(wk.median / 1000.0 <= 11.4, "engine.gpuscene_compose arm %s: the walk's compare + compose %.3f ms <= 11.4",
+              armName(k, b, sizeof b), wk.median / 1000.0);
         CHECK(composed >= unsigned(n), "engine.gpuscene_compose arm %s: every cube's slot composed (%u of %d)",
               armName(k, b, sizeof b), composed, n);
         CHECK(shares == kWorkers + 1u, "engine.gpuscene_compose arm %s: the compare ran on the pool's %u shares",
