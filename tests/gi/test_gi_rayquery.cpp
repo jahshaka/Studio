@@ -75,6 +75,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -165,8 +166,154 @@ static bool imagesEqual(const Image &a, const Image &b)
     return true;
 }
 
-int main()
+// =========================================================================================
+// engine.ray_update_counts (--update-counts) and engine.ray_update_cost (--update-cost, a measure row)
+// THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3). On Bistro's walk
+// updateRayQuery was 12.9 % of the render thread: the job's per-mesh table re-written whole every frame a
+// BLAS level was built (a hash find per mesh per level), two scans over every BLAS key with a find each,
+// the alpha and hit tables re-derived every frame. Now the tables are patched by the change feed's
+// events. The guard counts the work, never times it (RayQueryStatus::updateLookups / updateRows):
+//   * an IDLE frame (nothing changed) does none: 0 lookups, 0 rows;
+//   * k objects MOVED (transforms only - the instances are written on the device): 0 lookups, 0 rows;
+//   * k objects HIDDEN, SHOWN, ADDED or REMOVED: <= kPerChange x k lookups and <= kRowsPerChange x k rows.
+//     THE CONSTANT, counted for the worst change - an object ADDED with a mesh of its own: its key event's
+//     find (1), the find for the structure built (1), the mesh table's new entry (its index 1 + its record
+//     of kTlasLevels finds 8, a row) and, a few frames later, the compaction's new address (the dirty
+//     record's index 1 + 8, a row) = 20 lookups and 2 rows. A hide or a show is one event's find.
+// The cost row prints the tier's update in ms (the engine.rayquery stage) at N meshes with 0 / 10 / 100
+// changes a frame.
+static const unsigned long long kPerChange = 20ull;
+static const unsigned long long kRowsPerChange = 2ull;
+
+static int updateMain(bool cost)
 {
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig(cost ? "test-gi-rayquery-update-cost-ogre.log"
+                                                       : "test-gi-rayquery-update-counts-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
+    Engine *e = engine.get();
+    View *view = e->createOffscreenView("rq-update", kSize, kSize, Colour(0, 0, 0));
+    Scene *scene = e->createScene("rq-update");
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.2f, 0.2f, 0.25f));
+    enginetest::addDirectionalLight(scene, Vec3(-0.4f, -0.8f, -0.45f), 3.0f);
+    view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 20.0f, 40.0f), Vec3(0.0f, 0.0f, 0.0f)));
+    render(e, 4);
+    if (!e->rayQueryAvailable()) {
+        std::printf("SKIP: no ray-query tier on this device\n");
+        return 0;
+    }
+    const unsigned N = cost ? 1393u : 200u;
+    // N objects, each its OWN mesh (addTestCube makes one per call): N bottom-level structures.
+    std::vector<NodeId> nodes;
+    const auto place = [&](NodeId n, unsigned i, float lift) {
+        enginetest::setNodePosition(scene, n, Vec3(float(int(i % 40u)) * 1.5f - 30.0f, lift, float(int(i / 40u)) * 1.5f - 30.0f));
+        enginetest::setNodeScale(scene, n, Vec3(0.6f, 0.6f, 0.6f));
+    };
+    for (unsigned i = 0; i < N; ++i) {
+        const NodeId n = enginetest::addTestCube(scene, Colour(0.3f + 0.5f * float(i % 7u) / 7.0f, 0.5f, 0.6f), 0.0f, 0.7f);
+        place(n, i, 0.3f);
+        nodes.push_back(n);
+    }
+    int frames = 5;
+    const auto run = [&](int k) { render(e, k); frames += k; };
+    for (int k = 0; k < 200 && scene->published().rayQuery.blasCount < int(N); ++k) run(1);
+    run(4);
+    const RayQueryStatus at = scene->published().rayQuery;
+    std::printf("   %u objects, %d bottom-level structures, %d traced instances\n", N, at.blasCount, at.instances);
+    CHECK(at.blasCount >= int(N), "every object's structure is resident");
+
+    if (cost) {
+        // THE MEASURE ROW: the tier's update in ms per frame (the monitor's engine.rayquery stage).
+        e->setFrameMonitor(MonitorLevel::Review);
+        std::vector<MonitorRecord> recs;
+        for (const unsigned changes : { 0u, 10u, 100u }) {
+            e->takeMonitorRecords(recs);
+            for (int f = 0; f < 60; ++f) {
+                for (unsigned c = 0; c < changes; ++c) {   // hide one, show another: k key events a frame
+                    const unsigned i = (unsigned(f) * changes + c) % N;
+                    scene->setNodeVisible(nodes[i], (f & 1) != 0);
+                }
+                run(1);
+            }
+            run(4);
+            e->takeMonitorRecords(recs);
+            std::vector<double> ms;
+            for (const MonitorRecord &r : recs)
+                for (const auto &st : r.stages)
+                    if (st.name == "engine.rayquery") ms.push_back(st.ms);
+            std::sort(ms.begin(), ms.end());
+            std::printf("engine.ray_update_cost: N %u, %u changes a frame: engine.rayquery median %.3f ms, max %.3f ms (%zu frames)\n",
+                        N, changes, ms.empty() ? -1.0 : ms[ms.size() / 2], ms.empty() ? -1.0 : ms.back(), ms.size());
+        }
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
+        return failures ? 1 : 0;
+    }
+
+    // IDLE: nothing changed.
+    bool idle = true;
+    for (int f = 0; f < 4; ++f) {
+        run(1);
+        const RayQueryStatus st = scene->published().rayQuery;
+        idle = idle && st.updateLookups == 0u && st.updateRows == 0u;
+        if (f == 3) std::printf("   idle frame: %llu lookups, %llu rows\n", st.updateLookups, st.updateRows);
+    }
+    CHECK(idle, "AN IDLE FRAME DOES NO HOST WORK: 0 lookups, 0 rows (four frames)");
+
+    const unsigned k = 20u;
+    // The counters are the LAST update's; a change is answered in the frame after it is made (the
+    // table carries it then), so every frame of the window is summed.
+    const auto window = [&](int nFrames) {
+        unsigned long long L = 0, R = 0;
+        for (int f = 0; f < nFrames; ++f) {
+            run(1);
+            const RayQueryStatus st = scene->published().rayQuery;
+            L += st.updateLookups;
+            R += st.updateRows;
+        }
+        return std::make_pair(L, R);
+    };
+    // MOVED: transforms only.
+    for (unsigned c = 0; c < k; ++c) place(nodes[c], c, 1.3f);
+    const auto moved = window(3);
+    std::printf("   %u moved: %llu lookups, %llu rows\n", k, moved.first, moved.second);
+    CHECK(moved.first == 0u && moved.second == 0u, "k MOVED objects cost no lookup and no row (their instances are the device's)");
+    // HIDDEN, then SHOWN.
+    for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], false);
+    const auto hidden = window(3);
+    for (unsigned c = 0; c < k; ++c) scene->setNodeVisible(nodes[k + c], true);
+    const auto shown = window(3);
+    // ADDED (new meshes), then REMOVED.
+    std::vector<NodeId> extra;
+    for (unsigned c = 0; c < k; ++c) {
+        const NodeId n = enginetest::addTestCube(scene, Colour(0.9f, 0.3f, 0.2f), 0.0f, 0.5f);
+        place(n, N + c, 0.3f);
+        extra.push_back(n);
+    }
+    const auto added = window(4);
+    for (NodeId n : extra) scene->removeNode(n);
+    const auto removed = window(4);
+    std::printf("   %u hidden: %llu / %llu; shown: %llu / %llu; added: %llu / %llu; removed: %llu / %llu (lookups / rows)\n", k,
+                hidden.first, hidden.second, shown.first, shown.second, added.first, added.second, removed.first,
+                removed.second);
+    const auto within = [&](const std::pair<unsigned long long, unsigned long long> &p) {
+        return p.first <= kPerChange * k && p.second <= kRowsPerChange * k;
+    };
+    CHECK(within(hidden) && within(shown), "k HIDDEN or SHOWN objects cost <= 20 lookups and <= 2 rows each");
+    CHECK(within(added) && within(removed), "k ADDED or REMOVED objects cost <= 20 lookups and <= 2 rows each");
+    CHECK(hidden.first > 0u && added.first > 0u, "...and the changes were seen (not vacuous)");
+    std::printf("\n   frames rendered: %d\n", frames);
+    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
+    return failures ? 1 : 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1 && std::string(argv[1]) == "--update-counts") return updateMain(false);
+    if (argc > 1 && std::string(argv[1]) == "--update-cost") return updateMain(true);
     std::string err;
     // A LOG PER RUN. Three ctest entries share this binary and this working
     // directory (rays on, rays off, and the sanitised twin); one log name would

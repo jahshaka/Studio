@@ -462,8 +462,16 @@ static int scrollSlabMain()
         const GiStatus pre = scene->published().gi;
         e->setArm("gi.cascadeFaultCommit", 0.0);
         look(Vec3(cam.x + 1.5f * step, cam.y, cam.z));
-        run(1);
+        run(1);   // the commit throws half way: torn, the first failure
+        // ...AND THE WHOLE REBUILD THAT REPAIRS IT FAILS TOO (gi.cascadeFault): the second failure, which stands
+        // an ordinary cascade down - never a torn one (decision 12.1).
         e->setArm("gi.cascadeFaultCommit", -1.0);
+        e->setArm("gi.cascadeFault", 0.0);
+        run(1);
+        e->setArm("gi.cascadeFault", -1.0);
+        const GiStatus torn = scene->published().gi;
+        CHECK(torn.cascades[0].pending != 0 && torn.cascades[0].scrolls == pre.cascades[0].scrolls,
+              "A TORN STORE IS NEVER STOOD DOWN: two failures, still owed its whole rebuild");
         run(1);
         const GiStatus bad = scene->published().gi;
         int n = 0;

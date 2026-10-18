@@ -311,6 +311,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # ENGINE-UPGRADE-U5 (the lead's verdict, decision 10: "The row `gi.scroll_slab.timing` IS a measure row - the lead's
     # verdict: add it to the measuring list in the branch with this line quoted."): a scroll's GPU against a whole build's.
     gi.scroll_slab.timing
+    # ENGINE-UPGRADE-U5 decision 9: "the measure row `engine.ray_update_cost` (ms per frame at N = 1,393 Bistro-like
+    # BLAS, 0 / 10 / 100 changes) run by hand."
+    engine.ray_update_cost
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).

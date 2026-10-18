@@ -1098,6 +1098,20 @@ jah_gpu_row(gi.rayquery CLASS engine COMMAND test_gi_rayquery
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.rayquery PROPERTIES JAHSHAKA_TEST_FRAMES 180)
+# engine.ray_update_counts — THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3): the
+# --update-counts mode. 200 objects, each its own mesh: an idle frame does 0 lookups and writes 0 rows; k moved
+# objects cost none; k hidden / shown / added / removed cost <= 20 lookups and <= 2 rows each. COUNTS, never ms.
+jah_gpu_row(engine.ray_update_counts CLASS engine COMMAND test_gi_rayquery --update-counts
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.ray_update_counts PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(engine.ray_update_counts PROPERTIES JAHSHAKA_TEST_FRAMES 31)   # the frames it renders, counted 2026-10-18
+# engine.ray_update_cost — the same tier's update in ms per frame at 1,393 objects with 0 / 10 / 100 changes a
+# frame (the engine.rayquery stage). A measure row, run by hand (the lead's decision 9).
+jah_gpu_exclusive_test(NAME engine.ray_update_cost CLASS engine RUN_TIMEOUT 300
+         COMMAND test_gi_rayquery --update-cost
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.ray_update_cost PROPERTIES LABELS "engine;measure")
+set_tests_properties(engine.ray_update_cost PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 
 # engine.descriptor_pools — D6-FORK-TOOLING (audit V2-D F8): every raw descriptor
 # pool is planned by the same call that creates its layout and allocates its maximum
