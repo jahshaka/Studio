@@ -447,6 +447,27 @@ jah_gpu_row(gi.mobility CLASS engine COMMAND test_gi_mobility
 set_tests_properties(gi.mobility PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.mobility PROPERTIES JAHSHAKA_TEST_FRAMES 704)
 
+# gi.pcc_placement_lights — A PROBE PLACEMENT AFTER THE SCENE GRAPH DRAWS WITH ITS LAMPS (ENGINE-UPGRADE-U4
+# decision 14): on the tier that places probes (VctPccHybrid, rays off) every staged placement stage leaves the
+# frame's light list as it found it and its probes' nodes where they were set (the arm gi.pccPlacementLights;
+# the fork's ParallaxCorrectedCubemapAuto / CubemapProbe fix). Staged frame by frame, then whole.
+add_executable(test_gi_pcc_placement_lights test_gi_pcc_placement_lights.cpp)
+set_target_properties(test_gi_pcc_placement_lights PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_placement_lights PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_placement_lights PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_placement_lights JahshakaEngineMedia)
+jah_gpu_row(gi.pcc_placement_lights CLASS engine COMMAND test_gi_pcc_placement_lights
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_placement_lights PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.pcc_placement_lights PROPERTIES JAHSHAKA_TEST_FRAMES 54)
+
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
 # OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to

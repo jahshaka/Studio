@@ -334,7 +334,7 @@ int drainRow(World &w, int n)
                     pl.median / 1000.0, pf.median / 1000.0, bx.median / 1000.0, pk.median / 1000.0, boxes, planDigest);
         CHECK(counts, "%s arm %s: every frame's drain applied every record and named every write (%u records, %u moved)",
               row, armName(k, b, sizeof b), recs, moved);
-        CHECK(parts, "%s arm %s: the three parts are inside the drain's whole on every frame", row,
+        CHECK(parts, "%s arm %s: the drain's parts are inside its whole on every frame", row,
               armName(k, b, sizeof b));
         // THE PLAN'S GUARDS (stage 3), three more frames of the arm with both arms on: the incremental geometry
         // signature equals the whole sum, and one box per moved subtree root marks no cascade the items' own
@@ -347,6 +347,11 @@ int drainRow(World &w, int n)
         w.e->setArm("gi.rootBoxParity", 0.0);
         writeFrame(w, k);
         const inspect::SceneEcho::GiPlan g1 = echo->giPlan();
+        if (k < 0) {
+            const inspect::SceneEcho::GpuWalk gw = echo->gpuWalk();
+            std::printf("CPU_MAP %s the direct indexes: Ogre ids reach %llu (%llu pages of 4096), registry ids reach %llu "
+                        "(%llu pages)\n", row, gw.ogreIdReach, gw.ogreIdPages, gw.nodeIdReach, gw.nodeIdPages);
+        }
         std::printf("CPU_MAP %s arm=%s guards: signature %llu passes checked, %llu misses | roots %llu marks checked, "
                     "%llu misses, %llu extra cascades\n", row, armName(k, b, sizeof b), g1.sigChecks - g0.sigChecks,
                     g1.sigMisses - g0.sigMisses, g1.rootChecks - g0.rootChecks, g1.rootMisses - g0.rootMisses,
@@ -379,7 +384,7 @@ int traceSunRow(World &w, int n)
                 if (moverCube(i, int(w.cubes.size()))) w.scene->setNodeMovable(w.cubes[size_t(i)], true);
         }
         settleCards(w);
-        std::vector<double> us, hook, stepOne, step3, step3b;
+        std::vector<double> us, hook, stepOne, step3, step3b, still, step2, step4, job;
         unsigned moves = 0, cards = 0, hits = 0;
         unsigned long long digest = 1469598103934665603ull;   // FNV-1a over every measured frame's hit-set digest
         bool ran = true;
@@ -394,6 +399,10 @@ int traceSunRow(World &w, int n)
             stepOne.push_back(t.stepOneMicros);
             step3.push_back(t.step3Micros);
             step3b.push_back(t.step3bMicros);
+            still.push_back(t.stillMicros);
+            step2.push_back(t.step2Micros);
+            step4.push_back(t.step4Micros);
+            job.push_back(t.traceJobMicros);
             moves = std::max(moves, t.casterMoves);
             cards = t.cards;
             hits = std::max(hits, t.casterHits);
@@ -405,19 +414,54 @@ int traceSunRow(World &w, int n)
         // its last box is a still caster's move). 0 misses is the law.
         const inspect::SceneEcho::TraceSun p0 = echo->traceSun();
         unsigned wide = 0;
+        bool deathFrame = false;
+        // THE DOOMED CUBE (the subgroup arm): a white cube of the near rows (standing, landed, shading its
+        // neighbours), marked one frame before its death with a light mask the inspect door reads back — the door
+        // answers a missing record with the default mask, so the death is proven by the read, not by the post.
+        int doomed = -1;
+        constexpr unsigned kDoomedMask = 0x3u;
+        if (k == kSubgroup && !deathDone)
+            for (int i = int(w.cubes.size()) - 1; i >= 0 && doomed < 0; --i)
+                if (!moverCube(i, int(w.cubes.size())) && i >= int(w.cubes.size()) - 2 * kMoverCount) doomed = i;
+        NodeId doomedId = doomed >= 0 ? w.cubes[size_t(doomed)] : NodeId(0);
+        unsigned long long scans0 = 0ull, scansFull0 = 0ull;
         w.e->setArm("cards.sunGridParity", 1.0);
         w.e->setArm("cards.nullMove", 1.0);
         for (int f = 0; f < 3; ++f) {
-            if (k == kSubgroup && f == 1 && !deathDone) {
-                // a white cube of the near rows (standing, landed, shading its neighbours)
-                for (int i = int(w.cubes.size()) - 1; i >= 0 && !deathDone; --i)
-                    if (!moverCube(i, int(w.cubes.size())) && i >= int(w.cubes.size()) - 2 * kMoverCount) {
-                        deathDone = w.scene->removeNode(w.cubes[size_t(i)]);
-                        if (deathDone) w.cubes.erase(w.cubes.begin() + i);
-                    }
+            if (doomed >= 0 && f == 0) w.scene->setNodeLightMask(doomedId, kDoomedMask);
+            if (doomed >= 0 && f == 1) {
+                CHECK(echo->nodeLightMask(doomedId) == kDoomedMask, "gi.trace_sun_cost: the doomed cube's record "
+                      "reads back before its death (mask %#x)", echo->nodeLightMask(doomedId));
+                scans0 = w.scene->published().gi.giScans;
+                scansFull0 = w.scene->published().gi.giScansFull;
+                w.scene->removeNode(doomedId);
+                w.cubes.erase(w.cubes.begin() + doomed);
+                deathFrame = true;
             }
             writeFrame(w, k);
             wide = std::max(wide, echo->traceSun().wideCards);
+            if (deathFrame) {
+                // THE DEATH, ASSERTED (decision 13.7): the record is gone (the door's default answer), and the GI scan
+                // walked this frame over the names alone (one scan, not a full one).
+                const GiStatus &gd = w.scene->published().gi;
+                deathDone = echo->nodeLightMask(doomedId) == 0xFFFFFFFFu;
+                CHECK(deathDone, "gi.trace_sun_cost: the doomed cube's record is gone after its frame (mask %#x)",
+                      echo->nodeLightMask(doomedId));
+                CHECK(gd.giScans == scans0 + 1u && gd.giScansFull == scansFull0,
+                      "gi.trace_sun_cost: the death frame's GI scan walked the names (%llu scans, %llu full)",
+                      gd.giScans - scans0, gd.giScansFull - scansFull0);
+                // THE DEATH'S FRAME (decision 12.5): the record leaves the one name list and no consumer owes a full
+                // pass for it — the GPU scene's walk compares the named slots, not the whole index.
+                const inspect::SceneEcho::GpuWalk gw = echo->gpuWalk();
+                const double scanMs = w.scene->published().gi.giScanMicros / 1000.0;
+                const double gpuMs = (gw.nameMicros + gw.compareMicros + gw.composeMicros) / 1000.0;
+                std::printf("CPU_MAP gi.trace_sun_cost the death frame: GI scan %.3f ms + the GPU scene's walk %.3f ms "
+                            "(%u slots compared of %d) = %.3f ms\n", scanMs, gpuMs, gw.slotsCompared, n,
+                            scanMs + gpuMs);
+                CHECK(gw.slotsCompared < unsigned(n) / 2u, "gi.trace_sun_cost: a death owes no full walk (%u slots "
+                      "compared, the arm's own names)", gw.slotsCompared);
+                deathFrame = false;
+            }
         }
         w.e->setArm("cards.nullMove", 0.0);
         w.e->setArm("cards.sunGridParity", 0.0);
@@ -429,14 +473,17 @@ int traceSunRow(World &w, int n)
         }
         char b[32];
         const Stats a = stats(us), hk = stats(hook), s1 = stats(stepOne), s3 = stats(step3), s3b = stats(step3b);
+        const Stats st = stats(still), s2 = stats(step2), s4 = stats(step4), jb = stats(job);
         const GiStatus &g = w.scene->published().gi;
+        const double named = hk.median + s1.median + st.median + s2.median + s3.median + s3b.median + s4.median + jb.median;
         std::printf("CPU_MAP gi.trace_sun_cost arm=%s world=%d frames=%d trace_sun_ms=%.3f (min %.3f max %.3f) "
-                    "(producer %.3f, step 1 %.3f, step 3 %.3f, step 3b %.3f, rest %.3f; floor = producer + step 1 = %.3f) "
-                    "caster_moves=%u cards=%u hits=%u hit_digest=%016llx mover_casters=%u mover_traced_last=%u\n",
+                    "(producer %.3f, step 1 %.3f, still trace %.3f [%.3f us/hit], step 2 %.3f, step 3 %.3f, step 3b %.3f, "
+                    "step 4 %.3f, trace job %.3f; unnamed %.3f) caster_moves=%u cards=%u hits=%u hit_digest=%016llx "
+                    "mover_casters=%u mover_traced_last=%u\n",
                     armName(k, b, sizeof b), n, measured, a.median / 1000.0, a.min / 1000.0, a.max / 1000.0,
-                    hk.median / 1000.0, s1.median / 1000.0, s3.median / 1000.0, s3b.median / 1000.0,
-                    (a.median - hk.median - s1.median - s3.median - s3b.median) / 1000.0,
-                    (hk.median + s1.median) / 1000.0, moves, cards, hits, digest, g.cards.moverCasters,
+                    hk.median / 1000.0, s1.median / 1000.0, st.median / 1000.0, hits ? st.median / double(hits) : 0.0,
+                    s2.median / 1000.0, s3.median / 1000.0, s3b.median / 1000.0, s4.median / 1000.0, jb.median / 1000.0,
+                    (a.median - named) / 1000.0, moves, cards, hits, digest, g.cards.moverCasters,
                     g.cards.moverTracedLastFrame);
         CHECK(ran, "gi.trace_sun_cost arm %s: the sun trace ran on every measured frame", armName(k, b, sizeof b));
         CHECK(p1.parityChecks >= p0.parityChecks + 3u && p1.parityMisses == p0.parityMisses,
@@ -447,13 +494,13 @@ int traceSunRow(World &w, int n)
                                   "wide (%u)", armName(k, b, sizeof b), wide);
         if (k == kSubgroup) CHECK(deathDone, "gi.trace_sun_cost arm %s: a standing caster died under the guard",
                                   armName(k, b, sizeof b));
-        // THE BARS (decision 2, decision 11 a): 12 % <= its floor + 0.5 = 1.17 ms (producer 0.231 + step 1 0.441 at
-        // stage 2). The group move: decision 2's rule — 5 ms stands only while its floor is <= 4 ms; with the wide plate
-        // (decision 11 b) the group move searches landed cards for real and its floor measures 5.63 ms (producer 1.19 +
-        // step 1 4.44, stage 3), so its bar is floor + 1 = 6.63 ms. The subgroup's and the movers' bars wait for the
-        // lead (their floors printed above).
-        if (k == -1 || k == n * 12 / 100) {
-            const double bar = k == -1 ? 6.63 : 1.17;
+        // THE BARS — ONE FORMULA FOR EVERY ARM (decision 12.3): floor = producer + step 1 + hits x c_hit (+ the mover
+        // path's named steps), bar = floor + 0.5. c_hit = 0.75 us/hit (the still trace's per-hit term: 1.08 ms / 1428
+        // hits on the checker and the subgroup, measured 0.74-0.75 at load 4, 2026-10-18 09:0x). k1200 0.63 + 0.5 =
+        // 1.13; subgroup 4.46 + 1.07 + 0.5 = 6.03; checker 5.83 + 1.07 + 0.5 = 7.40; group 5.54 + 0.04 + 0.5 = 6.08;
+        // the movers: producer + steps 2, 3, 3b, 4 + the trace job, named = 8.16 (unnamed 0.15) + 0.5 = 8.66.
+        {
+            const double bar = k == kChecker ? 7.40 : k == kMovers ? 8.66 : k == kSubgroup ? 6.03 : k == -1 ? 6.08 : 1.13;
             CHECK(a.median / 1000.0 <= bar, "gi.trace_sun_cost arm %s: the sun trace's CPU %.3f ms <= %.2f ms",
                   armName(k, b, sizeof b), a.median / 1000.0, bar);
         }
@@ -478,7 +525,7 @@ int composeRow(World &w, int n)
     const int warm = 3, measured = 15;
     for (int k : { -1, n }) {
         // THE NOTIFY SHARE AS A PAIRED ARM (decision 11 d): blocks of frames with the change feed's observers told and
-        // muted (gpuscene.observersOff), alternated A B A B in one process; the observers' cost = the medians'
+        // muted (gpuscene.observersOff), paired A B B A in one process (the measuring rule); the observers' cost = the medians'
         // difference. The notify timer (gpuscene.walkTiming) runs in its own block only: never a clock read per
         // notify in the measured ones.
         std::vector<double> name, compare, compose, composeOff, notify;
@@ -487,7 +534,7 @@ int composeRow(World &w, int n)
         for (int f = 0; f < warm; ++f) writeFrame(w, k);
         const int blocks = 4, perBlock = measured / 3 + 1;
         for (int blk = 0; blk < 2 * blocks; ++blk) {
-            const bool muted = (blk % 2) == 1;
+            const bool muted = (blk % 4) == 1 || (blk % 4) == 2;   // A B B A, A B B A
             w.e->setArm("gpuscene.observersOff", muted ? 1.0 : 0.0);
             writeFrame(w, k);   // the arm latches at this frame's top: one settling frame, not counted
             for (int f = 0; f < perBlock; ++f) {

@@ -17,7 +17,11 @@
 // word: not a writer of the table), a mobility flip (setNodeMovable) and a nodeless write (a
 // transform on a node that carries no mesh, its slot-carrying child moving under it).
 // Each writer is followed by frames; each one must also have CHANGED what the table holds for
-// its node (its flags word or its transform), or the step tested nothing.
+// its node (its flags word or its transform), or the step tested nothing. AND THE READS AFTER
+// THE SCENE GRAPH (ENGINE-UPGRADE-U4 decision 13.2): a recomputing read in the frame's
+// `engine.plan` would overwrite a node's SoA-derived transform with its scalar recompute (an
+// ulp apart) and the table would miss it — a decal riding a moving cube (the GI walk reads its
+// box there) and the view's camera socketed on a moving cube (the plan reads its position there).
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GpuSubstrate.h"
 #include "jahshaka/engine/EngineInspect.h"
@@ -25,6 +29,7 @@
 #include "../support/gesture.h"
 
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <string>
@@ -211,6 +216,28 @@ int main(int argc, char **argv)
     bone.name = "root";
     skel.bones.push_back(bone);
     const NodeId rig = scene->createNode();
+    // The decal's rider: a decal node parented under a cube (its box is read by the GI walk after the scene graph).
+    TextureId decalTex = 0;
+    {
+        const unsigned n = 16;
+        unsigned char hdr[18];
+        std::memset(hdr, 0, sizeof hdr);
+        hdr[2] = 2; hdr[12] = (unsigned char)n; hdr[14] = (unsigned char)n; hdr[16] = 32; hdr[17] = 0x28;
+        std::vector<unsigned char> px(size_t(n) * n * 4u, 255u);
+        if (FILE *tf = std::fopen("gpu_walk_parity_decal.tga", "wb")) {
+            std::fwrite(hdr, 1, sizeof hdr, tf);
+            std::fwrite(px.data(), 1, px.size(), tf);
+            std::fclose(tf);
+            decalTex = scene->loadDecalTexture("gpu_walk_parity_decal.tga", DecalMap::Diffuse);
+        }
+    }
+    const NodeId decalRider = cubes[23], decalNode = scene->createNode();
+    scene->setNodeParent(decalNode, decalRider);
+    DecalDesc dd;
+    dd.diffuse = decalTex;
+    dd.width = dd.height = dd.depth = 1.0f;
+    CHECK(decalTex != 0 && scene->setDecal(decalNode, dd), "the decal on its rider (a cube)");
+    const NodeId socket = cubes[22];
     enginetest::frames(e, 4);
     std::vector<Step> steps = {
         { "the detach tail (a middle slot detached: the last slot is moved into its hole)", [&] {
@@ -251,6 +278,11 @@ int main(int argc, char **argv)
         { "a mobility flip (setNodeMovable)", [&] { scene->setNodeMovable(cubes[20], true); } },
         { "a nodeless write (a mesh-less group moved, its cube under it)", [&] {
               enginetest::setNodePosition(scene, group, Vec3(0.0f, 0.5f, 0.0f)); } },
+        { "a decal's rider moved (the GI walk's decal box, after the scene graph)", [&] {
+              enginetest::setNodePosition(scene, decalRider, Vec3(2.5f, 0.6f, 1.0f)); } },
+        { "a socketed camera (the view's camera on a moving cube: the plan's camera, after the scene graph)", [&] {
+              view->setCameraNode(socket);
+              enginetest::setNodePosition(scene, socket, Vec3(1.5f, 0.9f, 3.0f)); } },
     };
     // THE GEOMETRY SIGNATURE'S GUARD TOO (ENGINE-UPGRADE-U4 stage 3): the same writers, every frame a record that
     // carries the scene's GI (planGi reads the signature on it), and the arm gi.geomSigParity recomputing the whole
@@ -292,6 +324,7 @@ int main(int argc, char **argv)
         CHECK(p.sigChecks > p.sigFullPasses, "the signature's guard checked incremental passes (%llu checks, %llu full)",
               p.sigChecks, p.sigFullPasses);
     }
+    view->setCameraNode(0);
     e->setArm("gi.geomSigParity", 0.0);
     e->setArm("gpuscene.walkParity", 0.0);
     std::printf("engine.gpu_walk_parity: %s (%d failure(s))\n", failures ? "FAIL" : "ok", failures);
