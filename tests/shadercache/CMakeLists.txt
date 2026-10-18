@@ -101,6 +101,23 @@ jah_gpu_row(shadercache.app.churn CLASS app TIER document   COMMAND test_shader_
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.churn PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
+# shadercache.save_off_frame — THE SAVE LEAVES THE FRAME (FRAME-MONITOR-DOOR-1 stage 4): free-running (--script-live,
+# JAH_FREE_RUNNING=1), COLD on a fresh data root then WARM on the same root (save_off_frame.sh): a compile burst, the
+# watchdog's save waited for in frames — every render-thread message of every save <= 2 ms, every chunk of the
+# incremental copy (<= 8 entries) <= 1 ms, no frame overrun across the save, the writer's write arrived. Before: one
+# message of 22.7 ms cold / 12.5 ms warm (spikes/frame-monitor-door/stage4-measure.txt).
+set(_sof_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-save_off_frame)
+file(MAKE_DIRECTORY ${_sof_home}/run)
+jah_gpu_row(shadercache.save_off_frame CLASS app TIER document FRAMES 640
+         COMMAND sh ${JAH_FRESH_HOME} ${_sof_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/save_off_frame.sh" "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_save_off_frame.js"
+         WORKING_DIRECTORY ${_sof_home}/run)
+set_tests_properties(shadercache.save_off_frame PROPERTIES
+    ENVIRONMENT "HOME=${_sof_home};JAHSHAKA_DATA_ROOT=${_sof_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "shadercache")
+jah_tsan_blocked(shadercache.save_off_frame)   # TSAN-GCC15-THREAD-REGISTRY: the copies' hand-off is frame.monitor_pop's arm
+
 # shader.live_compiles (SHADER-WARM-2): after the splash, nothing compiles on the UI
 # thread outside a compile window — a create/open in flight or a compile dialog
 # (src/services/livecompiles.h). A cold launch, a warm one and a warm one whose global-pass

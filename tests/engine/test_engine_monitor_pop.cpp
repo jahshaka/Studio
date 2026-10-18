@@ -8,10 +8,14 @@
 // takes it, the next returns 0); nothing dropped. AND THE CAPTURE'S SNAPSHOT IS ASKED (stage 3): one Engine::request
 // in each mode, while the render thread draws free and while it is stepped — the same shape both times (live, the label,
 // the view's workspaces), its `frame` the last frame that closed before the request (no popped record is newer). (That a pop never waits on a frame is the app row's, in frames per
-// UI tick: perf.capture_free_tick.) Under TSan, zero reports.
+// UI tick: perf.capture_free_tick.) AND THE SHADER CACHE'S SAVE (stage 4), posted while the render thread draws free:
+// its incremental copy continued by the frames, then the writer serializing the copies and the pipeline cache while
+// frames keep drawing — the copies' cross-thread hand-off, on the fixture's OWN cold cache (a warm one has nothing to
+// save). Under TSan, zero reports.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
@@ -51,7 +55,12 @@ struct Got {
 int main()
 {
     std::printf("== frame.monitor_pop: the monitor's hand-back popped against a free-running render thread, then lockstep\n");
-    EngineConfig cfg = enginetest::testEngineConfig("test-monitor-pop-ogre.log");
+    // ITS OWN CACHE, COLD EVERY RUN: the save arm needs shaders this session compiled (a warm cache saves nothing).
+    const std::string cacheDir = std::filesystem::current_path().string() + "/monitor-pop-shadercache";
+    std::error_code ec;
+    std::filesystem::remove_all(cacheDir, ec);
+    EngineConfig cfg = enginetest::testEngineConfig("test-monitor-pop-ogre.log",
+                                                    enginetest::EngineOverrides().shaderCacheDir(cacheDir));
     cfg.renderThread = true;
     cfg.hostRecords = true;
     std::string err;
@@ -91,6 +100,23 @@ int main()
     const unsigned long long beforeFreeSnap = free.newest();   // every record popped before the request
     Snap freeSnap;
     freeSnap.ask(e, "free");
+    // THE SAVE, CONCURRENT WITH FREE FRAMES (stage 4): posted (a message), its copy continued a chunk a frame, the
+    // writer serializing while the frames go on; then the flush (a message: completes a copy in progress, waits).
+    ShaderCacheStats sc0, sc1;
+    e->request([&](Engine &x) { sc0 = x.shaderCacheStats(); });
+    const bool posted = e->saveShaderCache();
+    int saveFrames = 0;
+    for (int i = 0; i < 30; ++i) {
+        e->latchSnapshot();
+        const unsigned long long f0 = e->published().frame;
+        for (int spin = 0; spin < 2000000; ++spin) {
+            e->latchSnapshot();
+            if (e->published().frame > f0) { ++saveFrames; break; }
+            std::this_thread::yield();
+        }
+    }
+    const bool flushed = e->flushShaderCache(20000u);
+    e->request([&](Engine &x) { sc1 = x.shaderCacheStats(); });
     e->setFreeRunning(false);
     e->request([](Engine &) {});   // the loop idle: no frame in flight, the snapshot republished
     e->latchSnapshot();
@@ -106,6 +132,15 @@ int main()
                 framesSeen, onFree.framesRecorded, free.frames.size(), tail, free.events, onFree.framesDropped,
                 onFree.eventsDropped);
     CHECK(framesSeen >= kFree - 10, "the render thread drew on its own between the pops (%d of %d)", framesSeen, kFree);
+    std::printf("MONITOR_POP save: enabled=%d posted=%d flushed=%d frames=%d copied %u->%u messages %u->%u worst %.3f ms "
+                "chunk worst %.3f ms written %u->%u\n", int(sc1.enabled), int(posted), int(flushed), saveFrames,
+                sc0.savesCopied, sc1.savesCopied, sc0.copyMessages, sc1.copyMessages, sc1.copyWorstMs,
+                sc1.copyChunkWorstMs, sc0.savesWritten, sc1.savesWritten);
+    CHECK(sc1.enabled && posted && flushed && saveFrames >= 25,
+          "the save was posted and flushed while the render thread drew free (%d frames beside it)", saveFrames);
+    CHECK(sc1.savesCopied > sc0.savesCopied && sc1.savesWritten > sc0.savesWritten,
+          "its copy was made on the render thread and the writer wrote it (copies %u -> %u, writes %u -> %u)",
+          sc0.savesCopied, sc1.savesCopied, sc0.savesWritten, sc1.savesWritten);
     CHECK(onFree.framesRecorded >= (unsigned long long)kFree &&
           free.frames.size() == size_t(onFree.framesRecorded),
           "every record the monitor recorded reached the host (%zu popped of %llu recorded)", free.frames.size(),

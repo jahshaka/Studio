@@ -231,6 +231,7 @@ QVector<VerbInfo> AppApi::verbs() const
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
                          "microcodeEntries, hlmsCachesLoaded, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
+                         "save:{copied, messages, worstMs, chunkWorstMs, written}, "
                          "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
                          "renderableCacheCapacity, liveCompiles}",
           "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
@@ -294,15 +295,17 @@ QVector<VerbInfo> AppApi::verbs() const
           "thing --clear-shader-cache does before the engine starts.",
           Needs::Engine },
         { "saveShaderCache", "app.saveShaderCache() -> bool",
-          "Serializes the shader cache now instead of waiting for the burst-settle watchdog or a "
-          "clean quit, and hands the FILE write to the engine's writer thread — the fsync that "
-          "makes it durable waits behind whatever else the disk is flushing, and no UI thread may "
-          "wait for that. True means 'serialized and handed over'; app.flushShaderCache() waits "
-          "for the bytes to land. A no-op returning true when nothing new has been compiled. "
-          "Mostly for tests: the app saves on its own.",
+          "Starts a shader-cache save now instead of waiting for the burst-settle watchdog or a "
+          "clean quit. The render thread copies what is new since the last save, at most 8 shader "
+          "entries a frame (<= 1 ms each), then the engine's writer thread serializes the copies and "
+          "the pipeline cache and writes them — no UI thread and no frame waits for the disk. True "
+          "means 'started' (app.shaderCache().save counts the copies and the writes); "
+          "app.flushShaderCache() completes a copy in progress and waits for the bytes to land. A "
+          "no-op returning true when nothing new has been compiled. Mostly for tests: the app saves "
+          "on its own.",
           Needs::Engine },
         { "flushShaderCache", "app.flushShaderCache(budgetMs?) -> bool",
-          "Waits for the write app.saveShaderCache() handed off (default 20 s). True when the "
+          "Completes a save's copy in progress and waits for the write (default 20 s). True when the "
           "writer is idle — nothing in flight, or it finished; false when the budget ran out and "
           "the write is still going. For a test that wants to read the files back; the app itself "
           "waits at quit.",
@@ -949,6 +952,9 @@ QVariantMap AppApi::shaderCache()
     m["loadedThisRun"]       = s.loadedThisRun;
     m["expectedShaders"]     = s.expectedShaders;
     m["lastSaved"]           = QVariant::fromValue(qlonglong(s.lastSavedUnixMs));
+    m["save"] = QVariantMap{ { "copied", s.savesCopied }, { "messages", s.copyMessages },
+                             { "worstMs", s.copyWorstMs }, { "chunkWorstMs", s.copyChunkWorstMs },
+                             { "written", s.savesWritten } };
     m["passCacheEntries"]        = s.passCacheEntries;
     m["passCacheCapacity"]       = s.passCacheCapacity;
     m["renderableCacheEntries"]  = s.renderableCacheEntries;
