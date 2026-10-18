@@ -855,7 +855,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --sc
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 220)   # counted by the suite (frames rendered)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 316)   # counted by the suite (frames rendered)
 # gi.scroll_slab.timing — the same binary with JAHSHAKA_TIMING_BARS=1: the scroll by the shipped step voxelises in
 # <= 0.35 of a whole build at 128 cells (GPU, paired in this process). A measure row (the lead's verdict, decision 10).
 jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
@@ -863,7 +863,7 @@ jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
-set_tests_properties(gi.scroll_slab.timing PROPERTIES JAHSHAKA_TEST_FRAMES 220)
+set_tests_properties(gi.scroll_slab.timing PROPERTIES JAHSHAKA_TEST_FRAMES 316)
 set_property(TEST gi.scroll_slab.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
 # gi.cascade_drag_age — UNDER A DRAG EVERY DIRTY CASCADE IS SERVED WITHIN N FRAMES (CASCADE-DRAG-STARVE-1,
 # ENGINE-UPGRADE-U5 decision 7): the --drag mode. A cube outside cascade 0 and inside 1-3 dragged 120 frames:

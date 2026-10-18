@@ -164,7 +164,7 @@ static const float kOneVoxelStep = 1.6f / 255.0f;
 //   D. THE COST, on a lattice at 128 cells (the High tier): the voxelisation of a scroll by the
 //      shipped step (its rows vct.voxel0 + vct.scroll0) <= 0.35 of a whole build of cascade 0
 //      (vct.voxel0 of an edit's rebuild) - decision 1's bar for a slab of 26 % of the volume; GPU
-//      time, paired in this process, a millisecond bar (gi.scroll_slab.timing asserts it).
+//      time, seven pairs in this process and their medians, a millisecond bar (gi.scroll_slab.timing asserts it).
 // A, B and C run a two-cascade table at 64 cells (a dyadic cell, 10 m / 64: the arithmetic every
 // shipped table has), so a store read is 0.26 M voxels.
 // THE EQUALITY'S ONE STATED LIMIT (the lead's decision 10, accepted): with an instance budget on
@@ -585,7 +585,9 @@ static int scrollSlabMain()
         e->setFrameMonitor(MonitorLevel::Review);
         std::vector<double> scrollGpu, wholeGpu;
         float x = 0.0f;
-        for (int rep = 0; rep < 3; ++rep) {
+        // SEVEN PAIRS, their medians (the master check of ENGINE-UPGRADE-U5: three pairs' median read 0.28-0.37 on one
+        // binary - one slow sample in three moved it across the bar; the bar is unchanged, the estimate's spread is not)
+        for (int rep = 0; rep < 7; ++rep) {
             // A SCROLL by the shipped step, then a WHOLE rebuild of cascade 0 at the same place (an
             // edit inside its box: one lattice cube nudged and put back).
             std::vector<MonitorRecord> recs;
@@ -594,11 +596,16 @@ static int scrollSlabMain()
             look(Vec3(x, 2.0f, 0.0f));
             run(12);
             e->takeMonitorRecords(recs);
-            double s = 0.0; bool timed = false;
+            double s = 0.0, sv = 0.0, sc = 0.0; bool timed = false;
             for (const MonitorRecord &r : recs)
                 for (const CacheWork &w : r.cacheWork)
-                    if ((w.detail == "vct.voxel0" || w.detail == "vct.scroll0") && w.gpuMs >= 0.0f) { s += w.gpuMs; timed = true; }
+                    if ((w.detail == "vct.voxel0" || w.detail == "vct.scroll0") && w.gpuMs >= 0.0f) {
+                        s += w.gpuMs;
+                        (w.detail == "vct.voxel0" ? sv : sc) += w.gpuMs;
+                        timed = true;
+                    }
             if (timed) scrollGpu.push_back(s);
+            std::printf("   scroll %d: vct.voxel0 %.3f ms + vct.scroll0 %.3f ms\n", rep, sv, sc);
             const NodeId nudge = lattice[size_t(4 * 45 + 2 * 9 + 4)];   // the cube at (0, 2.7, 0)
             enginetest::setNodePosition(scene, nudge, Vec3(x + 0.05f, 2.7f, 0.0f));
             run(12);
