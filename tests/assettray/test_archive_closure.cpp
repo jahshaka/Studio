@@ -160,34 +160,54 @@ int main(int argc, char **argv)
     Database::setQueryLog(false);
 
     // ---- THE SHIPPING PATH (MAIN-REDS-1's fix round): the share file's stage, stageBundle — the closure's walk,
-    // then the same payload law, its catalog reads sliced between event-loop turns (a counting yield stands for the
-    // UI thread's turn: slicing must add no statement) -------------------------------------------------------------
-    {
+    // then the payload, its catalog reads sliced between event-loop turns and its SET reads cut into chunks whose
+    // size the last chunk's measured cost sets (bundlestage.cpp: ChunkSizer, never under kChunkMin = 32 rows). THE
+    // COUNT RULE (D11's, chunked): per set read at most ceil(N / 32) statements — the headers' and the payload's
+    // edges' — and the walk at most one a level plus ceil(N / 32); a BLOB read and a files statement an asset. A
+    // counting yield stands for the UI thread's turn (slicing adds no statement); the stretches between turns are
+    // printed, never asserted here (a millisecond bar is archive.responsive.timing's) -----------------------------
+    const auto stagedArm = [&](const QStringList &entries, int expectAssets, int walkLevels, const char *label) {
         AssetStorePaths::setRootOverride(store.path());
         int turns = 0;
+        assetshare::UiStepClock clock;
         Database::setQueryLog(true);
         const int sf0 = CasContentSource::statements();
-        const assetshare::BundleStage staged = assetshare::stageBundle(&db, nullptr, models, [&turns] { ++turns; });
+        const assetshare::BundleStage staged =
+            assetshare::stageBundle(&db, nullptr, entries, [&] { ++turns; clock.turn([] {}); });
+        clock.close();
         const int sDb = Database::queryLogStatements();
         const int sFiles = CasContentSource::statements() - sf0;
         const int sBlobs = statementsNamed(QStringLiteral("fetchAssetRowBlobs"));
-        std::printf("   stageBundle: %d entries, %d assets, %d catalog statements (%d BLOB reads), %d files statements, "
-                    "%d event-loop turns\n", int(models.size()), int(staged.envelope.assets.size()), sDb, sBlobs, sFiles,
-                    turns);
-        CHECK(staged.ok() && staged.envelope.assets.size() == assets && staged.envelope.items.size() == models.size(),
-              "stageBundle stages the %d entries and their whole closure (%d assets)", int(models.size()), assets);
-        CHECK(statementsNamed(QStringLiteral("fetchAssetHeaders")) == 1,
-              "stageBundle: ONE header statement for the whole set — the entries' rows come from it");
-        CHECK(statementsNamed(QStringLiteral("fetchDependencyEdges")) == 3 + 1,
-              "stageBundle: the walk's statement per level (3) and ONE edge statement for the set");
-        CHECK(sBlobs == assets && sFiles == assets, "stageBundle: one BLOB read and one files statement an asset");
-        CHECK(statementsNamed(QStringLiteral("fetchAsset")) == 0, "stageBundle: no full-row read of any asset");
-        CHECK(sDb + sFiles - sBlobs <= assets + 2 + 3,
-              "stageBundle: non-BLOB statements <= the assets + the set's two + the walk's three: %d for %d assets",
-              sDb + sFiles - sBlobs, assets);
-        CHECK(turns >= 1, "stageBundle turned the loop between its steps (%d turns)", turns);
+        const int sHeaders = statementsNamed(QStringLiteral("fetchAssetHeaders"));
+        const int sEdges = statementsNamed(QStringLiteral("fetchDependencyEdges"));
+        const int n = expectAssets, setCap = (n + 31) / 32;
+        std::printf("   stageBundle [%s]: %d entries, %d assets, %d catalog statements (%d headers, %d edges, %d BLOB "
+                    "reads), %d files statements, %d event-loop turns, its longest stretch %.2f ms\n", label,
+                    int(entries.size()), int(staged.envelope.assets.size()), sDb, sHeaders, sEdges, sBlobs, sFiles,
+                    turns, clock.worstMs());
+        CHECK(staged.ok() && staged.envelope.assets.size() == n && staged.envelope.items.size() == entries.size(),
+              "[%s] stageBundle stages the %d entries and their whole closure (%d assets)", label,
+              int(entries.size()), n);
+        CHECK(sHeaders >= 1 && sHeaders <= setCap,
+              "[%s] the headers: %d statements, at most ceil(%d / 32) = %d — the entries' rows come from them", label,
+              sHeaders, n, setCap);
+        CHECK(sEdges >= walkLevels + 1 && sEdges <= walkLevels + 2 * setCap,
+              "[%s] the edges: %d statements, the walk's a level (%d) plus at most ceil(N / 32) a set read (%d)",
+              label, sEdges, walkLevels, walkLevels + 2 * setCap);
+        CHECK(sBlobs == n && sFiles == n, "[%s] one BLOB read and one files statement an asset", label);
+        CHECK(statementsNamed(QStringLiteral("fetchAsset")) == 0, "[%s] no full-row read of any asset", label);
+        CHECK(sDb + sFiles - sBlobs <= n + walkLevels + 3 * setCap,
+              "[%s] non-BLOB statements %d <= the assets + the walk's levels + 3 x ceil(N / 32) (%d)", label,
+              sDb + sFiles - sBlobs, n + walkLevels + 3 * setCap);
+        CHECK(turns >= 1, "[%s] stageBundle turned the loop between its steps (%d turns)", label, turns);
         Database::setQueryLog(false);
         AssetStorePaths::setRootOverride(QString());
+    };
+    stagedArm(models, assets, 3, "12 models");
+    {   // THE BIG SET: 600 synthetic picture rows, no edges (a pack of 600 textures; the walk is one level)
+        QStringList pictures;
+        for (int i = 0; i < 600; ++i) pictures << make(ModelTypes::Texture, QStringLiteral("picture %1").arg(i));
+        stagedArm(pictures, 600, 1, "600 pictures");
     }
 
     // ---- THE SAME ANSWER as the per-row reads -----------------------------

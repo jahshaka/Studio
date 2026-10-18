@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QSet>
 
+#include <limits>
 #include <utility>
 
 #include "data/database/database.h"
@@ -24,56 +25,88 @@ For more information see the LICENSE file
 
 namespace assetclosure {
 
-namespace {
-
-/// The catalog's dependency edges from `seeds`, transitively, with a visited
-/// set (the same contract AssetHelper::fetchAssetAndAllDependencies documents:
-/// a dependency table is a graph a user can cycle through).
-QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
+// THE WALK, STEP BY STEP (MAIN-REDS-1's fix round): the catalog's dependency edges from the seeds, transitively,
+// with a visited set (the same contract AssetHelper::fetchAssetAndAllDependencies documents: a dependency table
+// is a graph a user can cycle through). ONE QUERY PER BFS LEVEL (D11-LIBRARY-SCALE §3.6) — or per CHUNK of a
+// level, when a caller slices it: the level's guids are walked in frontier order chunk after chunk, which is the
+// whole level's visit order, so the answer is the same however the level is cut.
+struct Expander::State
 {
-    QStringList out;
-    if (!db) return seeds;
+    Database *db = nullptr;
+    QStringList out, level, next;
+    int at = 0;   // the next guid of `level` to fetch
     QSet<QString> seen;
-    QStringList frontier;
-    const auto push = [&](const QString &guid) {
+    void push(const QString &guid)
+    {
         if (guid.isEmpty() || assetrefs::isReservedGuid(guid) || seen.contains(guid)) return;
         seen.insert(guid);
         out.append(guid);
-        frontier.append(guid);
-    };
-    for (const QString &seed : seeds) push(seed);
-    // ONE QUERY PER BFS LEVEL (D11-LIBRARY-SCALE §3.6): the whole frontier's
-    // edges at once, then walked in frontier order — the same visit order the
-    // query-per-node walk had, at a statement per level instead of per asset.
-    while (!frontier.isEmpty()) {
-        const QStringList level = frontier;
-        frontier.clear();
-        // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 reads 4-5): a model's Mesh member keeps its
-        // import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`), and a
-        // node names the member; the dependency table points object -> members only, so a closure
-        // seeded from a node lost the record and a paste re-baked the member at identity. The
-        // Object rides — for a Mesh member ONLY: a model's texture rows hang under the Object too,
-        // and a texture a material borrowed from model A must not drag model A into every copy.
-        // In the level's one statement (fetchDependencyEdges' withMemberObjects).
-        const QHash<QString, QStringList> edges = db->fetchDependencyEdges(level, true);
-        for (const QString &guid : level) {
-            // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
-            push(guid);
-            for (const QString &dep : edges.value(guid)) push(dep);
-        }
+        next.append(guid);
     }
-    return out;
+};
+
+Expander::Expander(const QStringList &seeds, Database *db) : d(new State)
+{
+    d->db = db;
+    for (const QString &seed : seeds) d->push(seed);
+    d->level = std::exchange(d->next, {});
+    if (!db) { d->out = seeds; d->level.clear(); }   // no catalog: the seeds are the answer, as given
+}
+
+Expander::~Expander() = default;
+
+bool Expander::done() const { return d->level.isEmpty(); }
+
+int Expander::step(int maxGuids)
+{
+    if (done()) return 0;
+    const QStringList chunk = d->level.mid(d->at, qMax(1, maxGuids));
+    d->at += int(chunk.size());
+    // THE MEMBER-TO-OBJECT EDGE (STAGE-CLOSE-TRIAGE-1 reads 4-5): a model's Mesh member keeps its
+    // import record on its OBJECT row (MeshBakeStore::importRecordForGuid walks `parent`), and a
+    // node names the member; the dependency table points object -> members only, so a closure
+    // seeded from a node lost the record and a paste re-baked the member at identity. The
+    // Object rides — for a Mesh member ONLY: a model's texture rows hang under the Object too,
+    // and a texture a material borrowed from model A must not drag model A into every copy.
+    // In the chunk's one statement (fetchDependencyEdges' withMemberObjects).
+    const QHash<QString, QStringList> edges = d->db->fetchDependencyEdges(chunk, true);
+    for (const QString &guid : chunk) {
+        // Self first, as fetchAssetGUIDAndDependencies(guid) answered.
+        d->push(guid);
+        for (const QString &dep : edges.value(guid)) d->push(dep);
+    }
+    if (d->at >= d->level.size()) {   // the level is walked: the next one
+        d->level = std::exchange(d->next, {});
+        d->at = 0;
+    }
+    return int(chunk.size());
+}
+
+QStringList Expander::result() const { return d->out; }
+
+namespace {
+
+QStringList expandThroughCatalog(const QStringList &seeds, Database *db)
+{
+    Expander walk(seeds, db);
+    while (!walk.done()) walk.step(std::numeric_limits<int>::max());
+    return walk.result();
 }
 
 } // namespace
 
-QStringList forNodes(const QVector<QJsonObject> &nodeObjects, Database *db)
+QStringList nodeSeeds(const QVector<QJsonObject> &nodeObjects)
 {
     QStringList seeds;
     for (const QJsonObject &nodeObj : nodeObjects)
         for (const QString &guid : assetrefs::collectAssetGuids(nodeObj))
             if (!seeds.contains(guid)) seeds << guid;
-    return expandThroughCatalog(seeds, db);
+    return seeds;
+}
+
+QStringList forNodes(const QVector<QJsonObject> &nodeObjects, Database *db)
+{
+    return expandThroughCatalog(nodeSeeds(nodeObjects), db);
 }
 
 QStringList expand(const QStringList &seeds, Database *db)
@@ -91,6 +124,7 @@ struct Describer::State
     QStringList wanted, known;
     QHash<QString, AssetRecord> headers;
     QHash<QString, QStringList> edges;
+    int headersAt = 0, edgesAt = 0;   // the next guid each set read fetches
     QMap<QString, clipboardformat::ClipAsset> out;
     int inlined = 0, referenced = 0;
     State(Database *d, const Options &o, QVector<DeferredRead> *def)
@@ -110,20 +144,34 @@ Describer::~Describer() = default;
 // THE CLOSURE'S ROWS IN TWO STATEMENTS (D11-LIBRARY-SCALE §3.6): every header without a BLOB, and every asset's
 // direct edges, for the whole guid set at once. A row's JSON BLOBs are read when that asset is described (and
 // only when the item carries them) — never a thumbnail.
-void Describer::readHeaders()
+// ...IN CHUNKS when a caller slices them (MAIN-REDS-1's fix round): `maxRows` guids a statement, from where the
+// last chunk stopped; the default reads the rest in one. The answer is the same however the set is cut.
+int Describer::readHeaders(int maxRows)
 {
-    d->headers.clear();
-    d->known.clear();
-    if (!d->db) return;
-    for (const AssetRecord &row : d->db->fetchAssetHeaders(d->wanted)) d->headers.insert(row.guid, row);
-    for (const QString &guid : d->wanted)
-        if (d->headers.contains(guid)) d->known.append(guid);   // a guid this catalog does not know is no step
+    if (!d->db || headersDone()) { d->headersAt = int(d->wanted.size()); return 0; }
+    const QStringList chunk = d->wanted.mid(d->headersAt, qMax(1, maxRows));
+    d->headersAt += int(chunk.size());
+    for (const AssetRecord &row : d->db->fetchAssetHeaders(chunk)) d->headers.insert(row.guid, row);
+    if (headersDone()) {
+        d->known.clear();
+        for (const QString &guid : d->wanted)
+            if (d->headers.contains(guid)) d->known.append(guid);   // a guid this catalog does not know is no step
+    }
+    return int(chunk.size());
 }
 
-void Describer::readEdges()
+int Describer::readEdges(int maxRows)
 {
-    if (d->db) d->edges = d->db->fetchDependencyEdges(d->wanted);
+    if (!d->db || edgesDone()) { d->edgesAt = int(d->wanted.size()); return 0; }
+    const QStringList chunk = d->wanted.mid(d->edgesAt, qMax(1, maxRows));
+    d->edgesAt += int(chunk.size());
+    const QHash<QString, QStringList> edges = d->db->fetchDependencyEdges(chunk);
+    for (auto it = edges.constBegin(); it != edges.constEnd(); ++it) d->edges.insert(it.key(), it.value());
+    return int(chunk.size());
 }
+
+bool Describer::headersDone() const { return d->headersAt >= d->wanted.size(); }
+bool Describer::edgesDone() const { return d->edgesAt >= d->wanted.size(); }
 
 int Describer::steps() const { return int(d->known.size()); }
 
@@ -209,7 +257,7 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
         return {};
     }
     Describer describer(guids, db, options, deferredOut);
-    describer.readHeaders();
+    describer.readHeaders();   // the whole set: ONE statement each
     describer.readEdges();
     for (int i = 0; i < describer.steps(); ++i) describer.step(i);
     if (inlinedOut) *inlinedOut = describer.inlined();

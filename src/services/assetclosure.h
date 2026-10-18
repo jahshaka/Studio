@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+#include <limits>
 #include <memory>
 
 
@@ -69,6 +70,10 @@ struct Options
     /// arrive as a usable row), off for the closure riding a `node` item.
     bool includeRowBlobs = false;
 };
+
+/// The asset guids the nodes reference (the clipboard's key-aware walk, io/assetrefs.h), each once, in order —
+/// forNodes' seeds.
+QStringList nodeSeeds(const QVector<QJsonObject> &nodeObjects);
 
 /// The asset guids `nodeObjects` reference, plus every guid those depend on,
 /// transitively through the catalog. Reserved builtin guids are excluded (they
@@ -110,9 +115,30 @@ QMap<QString, clipboardformat::ClipAsset> describe(const QStringList &guids, Dat
                                                    int *referencedOut = nullptr,
                                                    QVector<DeferredRead> *deferredOut = nullptr);
 
+/// expand(), STEP BY STEP (MAIN-REDS-1's fix round) — the form a caller on the UI thread slices: `step(n)` walks
+/// the next n guids of the current BFS level in ONE edges statement (the default walk is one statement a level);
+/// the answer and its order are expand()'s however the levels are cut.
+class Expander
+{
+public:
+    Expander(const QStringList &seeds, Database *db);
+    ~Expander();
+    Expander(const Expander &) = delete;
+    Expander &operator=(const Expander &) = delete;
+    bool done() const;
+    /// Walks up to `maxGuids` of the current level; returns how many it walked.
+    int step(int maxGuids);
+    QStringList result() const;
+
+private:
+    struct State;
+    std::unique_ptr<State> d;
+};
+
 /// describe(), STEP BY STEP (MAIN-REDS-1's fix round) — the form a caller on the UI thread slices. The SET
 /// half reads the whole set's catalog rows ONCE (D11-LIBRARY-SCALE §3.6): `readHeaders` one statement for every
-/// header (no BLOB), `readEdges` one for every direct edge; then `step(i)` describes the i-th asset of the set
+/// header (no BLOB), `readEdges` one for every direct edge — or a chunk of them a statement, for a caller that
+/// slices; then `step(i)` describes the i-th asset of the set
 /// (walk order) — its BLOB read and its files statement, the two per-asset reads the law allows. The caller may
 /// turn its event loop between any two calls; describe() is the same calls back to back.
 class Describer
@@ -123,8 +149,12 @@ public:
     ~Describer();
     Describer(const Describer &) = delete;
     Describer &operator=(const Describer &) = delete;
-    void readHeaders();
-    void readEdges();
+    /// The set's reads, `maxRows` guids a statement from where the last one stopped (the default: the rest in
+    /// one). Each returns the guids it fetched; done when the set is read.
+    int readHeaders(int maxRows = std::numeric_limits<int>::max());
+    int readEdges(int maxRows = std::numeric_limits<int>::max());
+    bool headersDone() const;
+    bool edgesDone() const;
     /// The steps: the set's guids the catalog knows, in walk order (after readHeaders).
     int steps() const;
     void step(int i);
