@@ -27,7 +27,9 @@
 // UI THREAD ONLY, like every Engine call, and meant to be used INSIDE an
 // OffscreenRenderScope so the on-screen views do not pay for the extra frames.
 
+#include <chrono>
 #include <functional>
+#include <thread>
 
 #include "jahshaka/engine/Engine.h"
 #include "services/framemonitor.h"
@@ -67,11 +69,20 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
     for (unsigned extra = 0; extra < maxExtra; ++extra) {
         bool gaveUp = false;
         unsigned long long now = 0;
-        engine->request([&](jahshaka::engine::Engine &e) {
-            e.waitForTextureLoads();
-            gaveUp = e.textureWaitTimeouts() > 0u;
-            now = e.textureLoadRequests();
-        });
+        // THE WAIT IS THE HOST'S (WAIT-TEXTURE-LOADS-1): the render thread takes ONE step of the bounded drain per
+        // request (Engine::pumpTextureLoads) and this thread waits between them - the render thread is never held by
+        // the wait, so a free-running view's frames go on beside it. The drain, its budget and its cadence are the
+        // ones waitForTextureLoads ran in one piece; only where the millisecond's sleep happens has moved.
+        for (int step = 1; step == 1;) {
+            engine->request([&](jahshaka::engine::Engine &e) {
+                step = e.pumpTextureLoads();
+                if (step != 1) {
+                    gaveUp = e.textureWaitTimeouts() > 0u;
+                    now = e.textureLoadRequests();
+                }
+            });
+            if (step == 1) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         // A WAIT THAT GAVE UP ENDS THE LOOP (defect 2026-09-08). Engine.h's
         // texture-wait contract says the wait is bounded: it drains while the
         // pending set shrinks and then stops, loudly. If that happened, the

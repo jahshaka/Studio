@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 #include "services/livecompiles.h"
 #include "app/notices.h"
@@ -545,7 +547,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "to ask.",
           Needs::Engine },
         { "waitForTextures", "app.waitForTextures() -> {waitedMs, loadRequests, doneStreaming}",
-          "Blocks until every scheduled texture load has finished, and reports how long that "
+          "Blocks the CALLER until every scheduled texture load has finished (the render thread takes one step of the "
+          "bounded drain per request and is never held by the wait), and reports how long that "
           "took in `waitedMs` (0 when there was nothing to wait for). NOT NEEDED before an "
           "ordinary frame — the render loop already waits at the head of every frame, which is "
           "what keeps the pixel suites byte-exact. It is here for two callers: a script that "
@@ -1976,11 +1979,26 @@ QVariantMap AppApi::waitForTextures()
     QVariantMap out;
     auto engine = EngineHost::instance().engine();
     if (!engine) { fail("app.waitForTextures: no engine in this session"); return out; }
-    engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 3): the wait, then the counters it moved
-        out.insert("waitedMs", e.waitForTextureLoads());
-        out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
-        out.insert("doneStreaming", e.texturesDoneStreaming());
-    });
+    // THE WAIT IS THE CALLER'S (WAIT-TEXTURE-LOADS-1): one step of the bounded drain per request
+    // (Engine::pumpTextureLoads), the millisecond between steps on this thread - the render thread is never held by
+    // it - and the counters read in the request that ended it.
+    const auto t0 = std::chrono::steady_clock::now();
+    bool waited = false;
+    for (int step = 1; step == 1;) {
+        engine->request([&](jahshaka::engine::Engine &e) {
+            step = e.pumpTextureLoads();
+            if (step != 1) {
+                out.insert("loadRequests", QVariant::fromValue(qulonglong(e.textureLoadRequests())));
+                out.insert("doneStreaming", e.texturesDoneStreaming());
+            }
+        });
+        if (step == 1) {
+            waited = true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    out.insert("waitedMs", waited ? std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()
+                                  : 0.0);
     return out;
 }
 
