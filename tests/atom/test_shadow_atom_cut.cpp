@@ -55,6 +55,7 @@
 #include <QCoreApplication>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -115,7 +116,9 @@ static void nudgeLamps(World &w, float dy)
 
 static std::vector<clusterfix::Fixture> gFixtures;
 
-static bool loadFixtures()
+/// `dense`: the 68k-triangle dragon too (5 of a light-law row's 10 s to bake; the cut's own laws want its clusters,
+/// the light's and the receivers' bit-equal laws hold over any field - decision 22.4's budget).
+static bool loadFixtures(bool dense = true)
 {
     const std::string prim = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/app/content/primitives/";
     std::vector<std::pair<std::string, iris::MeshPtr>> meshes;
@@ -124,6 +127,7 @@ static bool loadFixtures()
         if (!ms.empty()) meshes.push_back({ name, ms.front() });
     }
     for (const char *name : { "/matcaps_dragon.obj", "/physics_model.obj" }) {
+        if (!dense && std::string(name) == "/matcaps_dragon.obj") continue;
         const auto ms = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + name);
         if (!ms.empty()) meshes.push_back({ name + 1, ms.front() });
     }
@@ -138,7 +142,8 @@ static bool loadFixtures()
     return gFixtures.size() >= 3;
 }
 
-static void buildWorld(World &w, bool dense)
+/// A GAP IN THE GROUND (decision 22.3): x0, x1, z0, z1 - the ground is the four quads around it; null = one quad.
+static void buildWorld(World &w, bool dense, const float *gap = nullptr)
 {
     Scene *s = w.scene;
     s->setLodBias(1.0f);
@@ -153,10 +158,24 @@ static void buildWorld(World &w, bool dense)
     const MaterialId om = s->createPbrMaterial(op);
     {
         MeshData g;
-        g.positions = { -150.0f, 0.0f, -150.0f, 150.0f, 0.0f, -150.0f, 150.0f, 0.0f, 150.0f, -150.0f, 0.0f, 150.0f };
-        g.normals = { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
-        g.uvs = { 0, 0, 20, 0, 20, 20, 0, 20 };
-        g.indices = { 0, 2, 1, 0, 3, 2 };
+        // the ground's rectangles (x0, x1, z0, z1): the whole field, or the four around the gap
+        std::vector<std::array<float, 4>> rects;
+        if (!gap) rects.push_back({ -150.0f, 150.0f, -150.0f, 150.0f });
+        else {
+            rects.push_back({ -150.0f, 150.0f, -150.0f, gap[2] });
+            rects.push_back({ -150.0f, 150.0f, gap[3], 150.0f });
+            rects.push_back({ -150.0f, gap[0], gap[2], gap[3] });
+            rects.push_back({ gap[1], 150.0f, gap[2], gap[3] });
+        }
+        for (const auto &r : rects) {
+            const unsigned b = unsigned(g.positions.size() / 3u);
+            g.positions.insert(g.positions.end(), { r[0], 0.0f, r[2], r[1], 0.0f, r[2], r[1], 0.0f, r[3], r[0], 0.0f, r[3] });
+            g.normals.insert(g.normals.end(), { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 });
+            g.uvs.insert(g.uvs.end(), { (r[0] + 150.0f) / 15.0f, (r[2] + 150.0f) / 15.0f, (r[1] + 150.0f) / 15.0f,
+                                        (r[2] + 150.0f) / 15.0f, (r[1] + 150.0f) / 15.0f, (r[3] + 150.0f) / 15.0f,
+                                        (r[0] + 150.0f) / 15.0f, (r[3] + 150.0f) / 15.0f });
+            g.indices.insert(g.indices.end(), { b, b + 2, b + 1, b, b + 3, b + 2 });
+        }
         const NodeId n = s->createNode();
         s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));
         s->attachMesh(n, s->createMesh(g), gm);
@@ -205,12 +224,12 @@ static void buildWorld(World &w, bool dense)
     }
 }
 
-static bool makeWorld(World &w, const char *name, bool dense)
+static bool makeWorld(World &w, const char *name, bool dense, const float *gap = nullptr)
 {
     w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     w.scene = gE->createScene(name);
     if (!w.view || !w.scene) return false;
-    buildWorld(w, dense);
+    buildWorld(w, dense, gap);
     // THE DENSE CASTER: the split's door shut (every item on the stock PBS caster) and a LOD
     // bias of 0 (no level affordable: every object at level 0 in every pass).
     if (dense) {
@@ -719,20 +738,617 @@ static int firstFrameMain()
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// --light-cull (shadow.caster_cull) — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5
+// stage 4, the lead's decision 10). The parity world under a ROOF: a 26 x 0.3 x 38 m slab 6 m up
+// over the field's three near rows, between them and the sun. A sun map's Atom casters are tested
+// against the previous frame's depth pyramid of that map, the rejected again against this frame's
+// once the map holds the rest, and only the ones not wholly behind the map's depth are drawn. The
+// laws:
+//   1. AT REST the three sun maps are BIT-EQUAL with the cull on and off (shadow.casterCull 1 / 0;
+//      Scene::shadowMapDigests: every texel of each map);
+//   2. THE CULL IS NOT VACUOUS: EVERY field object the roof hides from the sun with a margin (all
+//      eight corners of its box, pushed toward the sun to the roof's underside, inside the roof's
+//      footprint shrunk by the box's light-space width - the cull's grain: the instance box against
+//      the pyramid's mip where it is <= 2 texels wide, read over <= 3 x 3 of them) is drawn by
+//      NEITHER half of ANY sun map's cut (per object, the test door's two drawn sets), the mirror's
+//      maps are culled too, and the maps draw fewer caster triangles with the cull on;
+//   3. IN MOTION the maps stay bit-equal: the roof slides off the field 0.75 m a step (each "on"
+//      frame predicts from the pyramid of the roof's PREVIOUS place, so what the slide uncovered is
+//      rejected by the first half and must be drawn by the late half - which it is: the late half's
+//      draws are counted), then the camera pans (the splits' bounds move under the history's
+//      matrix). Frames, never time.
+static NodeId addBox(Scene *s, const Vec3 &c, const Vec3 &half, MaterialId m)
+{
+    MeshData g;
+    const float sx = half.x, sy = half.y, sz = half.z;
+    // six faces, four corners each, outward normals, counter-clockwise from outside
+    const float n[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+    for (int f = 0; f < 6; ++f) {
+        const float nx = n[f][0], ny = n[f][1], nz = n[f][2];
+        // two tangents
+        const float ux = ny != 0.0f ? 1.0f : nz != 0.0f ? 1.0f : 0.0f;
+        const float uy = 0.0f;
+        const float uz = nx != 0.0f ? 1.0f : 0.0f;
+        const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+        const float cs[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        const unsigned base = unsigned(g.positions.size() / 3);
+        for (int k = 0; k < 4; ++k) {
+            const float a = cs[k][0], b = cs[k][1];
+            g.positions.push_back((nx + a * ux + b * vx) * sx);
+            g.positions.push_back((ny + a * uy + b * vy) * sy);
+            g.positions.push_back((nz + a * uz + b * vz) * sz);
+            g.normals.push_back(nx);
+            g.normals.push_back(ny);
+            g.normals.push_back(nz);
+            g.uvs.push_back(a * 0.5f + 0.5f);
+            g.uvs.push_back(b * 0.5f + 0.5f);
+        }
+        // the winding the ground quad uses (0, 2, 1 / 0, 3, 2 with an upward normal)
+        g.indices.insert(g.indices.end(), { base, base + 2, base + 1, base, base + 3, base + 2 });
+    }
+    const NodeId node = s->createNode();
+    s->setNodeTransform(node, c, Quat(), Vec3(1, 1, 1));
+    s->attachMesh(node, s->createMesh(g), m);
+    return node;
+}
+
+static bool mapsEqual(const std::vector<ShadowMapDigest> &a, const std::vector<ShadowMapDigest> &b,
+                      std::string &why)
+{
+    if (a.size() != b.size() || a.empty()) { why = "different map sets"; return false; }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (a[i].map != b[i].map || a[i].width != b[i].width || a[i].height != b[i].height) {
+            why = "map " + std::to_string(a[i].map) + ": a different rectangle";
+            return false;
+        }
+        if (a[i].digest != b[i].digest) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "map %u: %016llx vs %016llx (covered %u vs %u)", a[i].map, a[i].digest,
+                          b[i].digest, a[i].covered, b[i].covered);
+            why = buf;
+            return false;
+        }
+    }
+    return true;
+}
+
+struct CullTally {
+    unsigned long long triangles = 0, lateTriangles = 0;
+    unsigned occluded = 0, lateInstances = 0, lateOccluded = 0, tested = 0, maps = 0;
+};
+static CullTally tallyOf(const AtomDrawStatus &st)
+{
+    CullTally t;
+    for (const AtomCasterMapStats &m : st.casterPerMap) {
+        if (m.kind != 0u) continue;
+        ++t.maps;
+        t.triangles += m.triangles;
+        t.lateTriangles += m.lateTriangles;
+        t.occluded += m.occluded;
+        t.lateInstances += m.lateInstances;
+        t.lateOccluded += m.lateOccluded;
+        if (m.lightTested) ++t.tested;
+    }
+    return t;
+}
+
+/// A solid-colour TGA (the decal's image).
+static bool writeSolidTga(const std::string &path, unsigned char r, unsigned char g, unsigned char b)
+{
+    const unsigned n = 32;
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    unsigned char hdr[18] = {};
+    hdr[2] = 2;
+    hdr[12] = (unsigned char)n;
+    hdr[14] = (unsigned char)n;
+    hdr[16] = 32;
+    hdr[17] = 0x28;
+    std::fwrite(hdr, 1, sizeof(hdr), f);
+    for (unsigned i = 0; i < n * n; ++i) {
+        const unsigned char px[4] = { b, g, r, 255 };
+        std::fwrite(px, 1, 4, f);
+    }
+    std::fclose(f);
+    return true;
+}
+
+/// A RIGGED COLUMN (decision 19.5; atom.cpu_walks' rig): two 0.4 x 1 x 0.4 m boxes, the lower on the root bone, the
+/// upper on the tip bone at 1 m, and a clip that bends the tip 90 degrees - posed at the clip's end the upper box lies
+/// OUTSIDE the mesh's bind-pose box, which is the box the GPU scene carries.
+static void addRigBox(MeshData &d, float x0, float x1, float y0, float y1, float z0, float z1, unsigned char bone)
+{
+    auto quad = [&](const float q[4][3], const float n[3]) {
+        const unsigned base = unsigned(d.positions.size() / 3u);
+        for (int k = 0; k < 4; ++k) {
+            d.positions.insert(d.positions.end(), { q[k][0], q[k][1], q[k][2] });
+            d.normals.insert(d.normals.end(), { n[0], n[1], n[2] });
+            d.uvs.insert(d.uvs.end(), { float(k & 1), float(k >> 1) });
+            d.blendIndices.insert(d.blendIndices.end(), { bone, 0, 0, 0 });
+            d.blendWeights.insert(d.blendWeights.end(), { 1.0f, 0.0f, 0.0f, 0.0f });
+        }
+        d.indices.insert(d.indices.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+    };
+    const float fz[4][3] = { { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } };
+    const float bz[4][3] = { { x1, y0, z0 }, { x0, y0, z0 }, { x0, y1, z0 }, { x1, y1, z0 } };
+    const float px[4][3] = { { x1, y0, z1 }, { x1, y0, z0 }, { x1, y1, z0 }, { x1, y1, z1 } };
+    const float nx[4][3] = { { x0, y0, z0 }, { x0, y0, z1 }, { x0, y1, z1 }, { x0, y1, z0 } };
+    const float py[4][3] = { { x0, y1, z1 }, { x1, y1, z1 }, { x1, y1, z0 }, { x0, y1, z0 } };
+    const float ny[4][3] = { { x0, y0, z0 }, { x1, y0, z0 }, { x1, y0, z1 }, { x0, y0, z1 } };
+    const float nFz[3] = { 0, 0, 1 }, nBz[3] = { 0, 0, -1 }, nPx[3] = { 1, 0, 0 }, nNx[3] = { -1, 0, 0 },
+                nPy[3] = { 0, 1, 0 }, nNy[3] = { 0, -1, 0 };
+    quad(fz, nFz); quad(bz, nBz); quad(px, nPx); quad(nx, nNx); quad(py, nPy); quad(ny, nNy);
+}
+static bool addSwungColumn(Scene *s, const Vec3 &at, MaterialId m)
+{
+    MeshData d;
+    addRigBox(d, -0.2f, 0.2f, 0.0f, 1.0f, -0.2f, 0.2f, 0);
+    addRigBox(d, -0.2f, 0.2f, 1.0f, 2.0f, -0.2f, 0.2f, 1);
+    SkeletonDesc rig;
+    rig.id = "shadow.caster_cull swung column v1";
+    BoneDesc root;
+    root.name = "root";
+    rig.bones.push_back(root);
+    BoneDesc tip;
+    tip.name = "tip";
+    tip.parent = 0;
+    tip.bindPosition = Vec3(0.0f, 1.0f, 0.0f);
+    rig.bones.push_back(tip);
+    ClipDesc c;
+    c.id = rig.id + " / swing";
+    c.name = "Swing";
+    c.length = 1.0f;
+    BoneTrack t;
+    t.bone = 1;
+    for (int i = 0; i <= 2; ++i) {
+        BoneKey k;
+        k.time = 0.5f * float(i);
+        k.position = Vec3(0.0f, 1.0f, 0.0f);
+        const float a = -1.5707963f * k.time;
+        k.rotation = Quat(0.0f, 0.0f, std::sin(0.5f * a), std::cos(0.5f * a));
+        t.keys.push_back(k);
+    }
+    c.tracks.push_back(t);
+    const NodeId n = s->createNode();
+    const MeshId mesh = s->createMesh(d);
+    if (!s->attachSkinnedMesh(n, mesh, m, rig) || !s->attachClips(n, &c, 1)) return false;
+    enginetest::setNodePosition(s, n, at);
+    ClipState st;
+    st.name = "Swing";
+    st.enabled = true;
+    st.time = 1.0f;   // the clip's end: the tip lies along +x, out of the bind pose's box
+    st.weight = 1.0f;
+    st.looping = false;
+    return s->setClipStates(n, &st, 1);
+}
+
+/// THE RECEIVER TEST'S LAW (stage 4b, decision 17): two lockstep worlds, the same roof and field, a particle
+/// system and a decal in view, the same camera every frame - one with the sun maps' receiver test, the other
+/// with it off (Scene::setShadowReceiverCull) - and THE PICTURES bit-equal (the maps themselves may differ where
+/// no receiver samples them). A control first: both on, the pictures equal (the fixture is deterministic).
+static int receiverSection(unsigned long long &framesOut)
+{
+    std::printf("\n== the receiver test: the picture with the sun maps' receiver test on and off ==\n");
+    World a, b;
+    // THE GAP (decision 22.3): under the alpha-tested plate and the rigged column, and down-sun of them, no ground -
+    // so no Atom receiver lies behind either in its light column, and only their own boxes (the stock route's mode 1)
+    // keep the blockers that shadow them: the box path is load-bearing (the negative control below proves it).
+    // (wide: the cut reads the receiver grid in tiles - at the mip where the blocker's dilated rectangle is <= 4 tiles
+    // wide - so ground within a tile or two of a blocker's light column would keep it)
+    const float gap[4] = { -6.5f, 6.5f, -5.5f, 0.5f };
+    if (!makeWorld(a, "recv-on", false, gap) || !makeWorld(b, "recv-off", false, gap)) { std::printf("FAIL: the worlds\n"); return 1; }
+    const bool tga = writeSolidTga("recv_decal_red.tga", 230, 30, 20);
+    Vec3 roofCentre(1.0f, 6.0f, -15.0f);
+    const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
+    NodeId roofs[2] = {};
+    World *ws[2] = { &a, &b };
+    for (int i = 0; i < 2; ++i) {
+        Scene *sc = ws[i]->scene;
+        PbrParams rp;
+        rp.albedo = Colour(0.5f, 0.5f, 0.5f);
+        rp.roughness = 0.9f;
+        roofs[i] = addBox(sc, roofCentre, roofHalf, sc->createPbrMaterial(rp));
+        // A PARTICLE SYSTEM in view (unlit: it samples no shadow map) and a DECAL on the ground under it (shaded on
+        // the surface it lies on).
+        ParticleSystemDesc pd;
+        pd.additive = true;
+        ParticleEmitterDesc em;
+        em.shape = ParticleEmitterShape::Box;
+        em.extents = Vec3(0.6f, 0.6f, 0.6f);
+        em.rate = 60.0f;
+        em.velocityMin = em.velocityMax = 0.0f;
+        em.ttlMin = em.ttlMax = 30.0f;
+        em.sizeWidth = em.sizeHeight = 0.3f;
+        pd.emitters.push_back(em);
+        const NodeId ps = sc->createNode();
+        enginetest::setNodePosition(sc, ps, Vec3(-1.0f, 1.2f, -2.0f));
+        CHECK(sc->setParticleSystem(ps, pd), "a particle system in view");
+        if (tga) {
+            const TextureId t = sc->loadDecalTexture("recv_decal_red.tga", DecalMap::Diffuse);
+            const NodeId dn = sc->createNode();
+            sc->setNodeTransform(dn, Vec3(1.0f, 0.0f, -7.5f), Quat(), Vec3(1, 1, 1));   // on the ground past the gap
+            DecalDesc dd;
+            dd.diffuse = t;
+            dd.width = dd.height = 1.5f;
+            dd.depth = 1.0f;
+            CHECK(t && sc->setDecal(dn, dd), "a decal on the ground in view");
+        }
+        // AN ALPHA-TESTED RECEIVER (decision 19.4): a cut-out plate on the stock route - the id pass does not draw
+        // it, so it is a receiver by its box - and A RIGGED COLUMN whose tip swings out of its bind-pose box
+        // (decision 19.5: the stock route's skinned receiver, its box grown to a sphere of twice its half-diagonal),
+        // each with an Atom block above it toward the sun so their own shadows fall on them.
+        PbrParams cp;
+        cp.albedo = Colour(0.8f, 0.8f, 0.7f);
+        cp.roughness = 0.8f;
+        cp.alphaMode = PbrAlphaMode::Cutout;
+        cp.alphaCutoff = 0.5f;
+        addBox(sc, Vec3(2.2f, 0.6f, -1.5f), Vec3(0.6f, 0.02f, 0.6f), sc->createPbrMaterial(cp));
+        PbrParams sp;
+        sp.albedo = Colour(0.7f, 0.6f, 0.5f);
+        sp.roughness = 0.7f;
+        CHECK(addSwungColumn(sc, Vec3(-2.4f, 0.0f, -1.5f), sc->createPbrMaterial(sp)),
+              "a rigged column, its tip swung out of its bind pose");
+        PbrParams bp;
+        bp.albedo = Colour(0.4f, 0.4f, 0.45f);
+        bp.roughness = 0.9f;
+        const MaterialId bm = sc->createPbrMaterial(bp);
+        // toward the sun from each receiver (the fixture's sun: light travelling -0.45, -0.8, -0.4), FOUR metres up its
+        // light (+2.25, +4, +2): above the camera's picture, so no blocker is a receiver of its own in the id depth (a
+        // visible caster always has itself behind it) - only the receiver under it keeps it
+        addBox(sc, Vec3(2.2f + 2.25f, 0.6f + 4.0f, -1.5f + 2.0f), Vec3(0.25f, 0.05f, 0.25f), bm);
+        // the column's blocker over the SWUNG TIP's outer part (x + 0.6 .. + 1.0, top at y 1.2): outside the bind
+        // pose's box (x +- 0.2), so only the grown sphere keeps it
+        addBox(sc, Vec3(-2.4f + 0.8f + 2.25f, 1.2f + 4.0f, -1.5f + 2.0f), Vec3(0.2f, 0.05f, 0.25f), bm);
+        // THE NON-SQUARE SPLIT (decision 19.1): a WIDE LOW RECEIVER BAND far down the field - 60 m across, 0.3 m
+        // high - with a bar above it toward the sun, so the far focused split's window (Ogre's setOrthoWindow(w, h),
+        // wide and short at the grazing look below) holds receivers whose shadow reach differs along the map's x
+        // and y: the dilation per axis is what keeps the bar's clusters.
+        addBox(sc, Vec3(0.0f, 0.15f, -45.0f), Vec3(30.0f, 0.15f, 0.6f), bm);
+        addBox(sc, Vec3(0.0f + 1.4f, 2.6f, -45.0f + 1.25f), Vec3(20.0f, 0.1f, 0.3f), bm);
+    }
+    // THE CAMERA LOOKS DOWN AT THE NEAR GROUND: most of the field's shadows fall outside the picture.
+    CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 3.0f, 3.0f), Vec3(0.0f, 0.0f, -3.0f));
+    a.view->setCamera(cam);
+    b.view->setCamera(cam);
+    enginetest::frames(gE, 40);
+    const auto same = [&](const char *what) {
+        Image ia, ib;
+        const bool read = a.view->readPixels(ia) && b.view->readPixels(ib);
+        size_t diff = 0;
+        if (read && ia.rgba.size() == ib.rgba.size())
+            for (size_t i = 0; i < ia.rgba.size(); ++i) diff += ia.rgba[i] != ib.rgba[i] ? 1u : 0u;
+        else
+            diff = size_t(-1);
+        if (diff) std::printf("   %s: %zu bytes differ\n", what, diff);
+        return read && diff == 0;
+    };
+    CHECK(same("control"), "CONTROL: both worlds with the receiver test, the pictures bit-equal (a deterministic fixture)");
+    b.scene->setShadowReceiverCull(false);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
+    unsigned long long ta = 0ull, tb = 0ull;
+    unsigned tested = 0u, testedOff = 0u;
+    for (const AtomCasterMapStats &m : sa.casterPerMap)
+        if (m.kind == 0u) { ta += m.triangles; tested += m.receiverTested ? 1u : 0u; }
+    for (const AtomCasterMapStats &m : sb.casterPerMap)
+        if (m.kind == 0u) { tb += m.triangles; testedOff += m.receiverTested ? 1u : 0u; }
+    std::printf("   sun maps' Atom caster triangles: %llu with the receiver test, %llu without (maps tested %u / %u)\n",
+                ta, tb, tested, testedOff);
+    CHECK_MSG(tested >= 3u && testedOff == 0u, "the receiver test ran on the three sun maps of one world only (%u / %u)",
+              tested, testedOff);
+    CHECK_MSG(ta < tb, "IT CUTS: fewer caster triangles with the receiver test (%llu < %llu)", ta, tb);
+    CHECK(same("at rest"), "AT REST THE PICTURE IS BIT-EQUAL with the receiver test on and off");
+    // EVERY STEP RAN THE TEST (decision 19.4): the receiver test on the sun maps of world a, never of world b.
+    unsigned testedSteps = 0;
+    const auto testedNow = [&]() {
+        unsigned on = 0u, off = 0u;
+        for (const AtomCasterMapStats &m : a.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u) on += m.receiverTested ? 1u : 0u;
+        for (const AtomCasterMapStats &m : b.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u) off += m.receiverTested ? 1u : 0u;
+        return on >= 3u && off == 0u;
+    };
+    // IN MOTION: the roof slides off, then the camera pans - the last steps along the field at a grazing pitch (the
+    // focused splits' windows long and narrow: map 2's x and y rows differ, decision 19.1).
+    unsigned steps = 0, equal = 0;
+    float maxAsym = 0.0f, asymX = 0.0f, asymY = 0.0f;
+    unsigned asymMap = 0u;
+    for (int i = 0; i < 4; ++i) {   // (decision 22.4: the same travel in a third of the steps)
+        roofCentre.x += 3.0f;
+        for (int k = 0; k < 2; ++k) ws[k]->scene->setNodeTransform(roofs[k], roofCentre, Quat(), Vec3(1, 1, 1));
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("slide") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
+    }
+    for (int i = 0; i < 7; ++i) {
+        const CameraDesc c2 =
+            i < 3 ? enginetest::testCameraDescLookAt(Vec3(1.33f * float(i + 1), 3.0f, 3.0f - 1.6f * float(i + 1)),
+                                                     Vec3(0.8f * float(i + 1), 0.0f, -3.0f - 2.13f * float(i + 1)))
+                  : enginetest::testCameraDescLookAt(Vec3(0.0f, 1.2f, 4.0f), Vec3(0.2f * float(i - 3), 0.6f, -60.0f));
+        a.view->setCamera(c2);
+        b.view->setCamera(c2);
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("pan") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
+        for (const AtomCasterMapStats &m : a.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 0u && m.receiverTested) {
+                const float asym = std::fabs(m.receiverDilation[1] - m.receiverDilation[0]);
+                if (asym > maxAsym) {
+                    maxAsym = asym;
+                    asymMap = m.map;
+                    asymX = m.receiverDilation[0];
+                    asymY = m.receiverDilation[1];
+                }
+            }
+    }
+    std::printf("   the widest per-axis split of the dilation over the pan: map %u, %.2f texels along x, %.2f along y\n",
+                asymMap, double(asymX), double(asymY));
+    CHECK_MSG(maxAsym >= 0.5f,
+              "THE NON-SQUARE SPLIT IS SEEN: a sun map's receiver dilation differs along its x and y in the pan (map %u: "
+              "%.2f / %.2f texels) - the per-axis law under the bit-equal steps", asymMap, double(asymX), double(asymY));
+    // THE WIDEST FILTER (decision 19.4): PCF 6 x 6, its 3-texel reach the dilation's first term.
+    gE->setShadowFilter(ShadowFilter::VerySoft);
+    for (int i = 0; i < 4; ++i) {
+        enginetest::frames(gE, 1);
+        ++steps;
+        equal += same("pcf 6x6") ? 1u : 0u;
+        testedSteps += testedNow() ? 1u : 0u;
+    }
+    gE->setShadowFilter(ShadowFilter::Soft);
+    enginetest::frames(gE, 2);
+    CHECK_MSG(equal == steps, "IN MOTION the picture is bit-equal every frame of a slide, a pan, a grazing look along "
+              "the field and PCF 6 x 6 (%u of %u)", equal, steps);
+    CHECK_MSG(testedSteps == steps, "every one of those frames ran the receiver test on world a's sun maps and none of "
+              "world b's (%u of %u)", testedSteps, steps);
+    // THE NEGATIVE CONTROL (decision 22.3): the box path off (shadow.receiverBoxesOff - the grid from the id depth
+    // alone) and world a's picture must DIFFER from world b's: the alpha-tested plate and the swung tip, over the gap,
+    // are receivers through their boxes only, so without them the cut drops their blockers and their shadows go.
+    // the roof slid out of the light (its shadow covered the receivers): the blockers' shadows are the picture's
+    for (int k = 0; k < 2; ++k) ws[k]->scene->setNodeTransform(roofs[k], Vec3(80.0f, 6.0f, -15.0f), Quat(), Vec3(1, 1, 1));
+    a.view->setCamera(cam);
+    b.view->setCamera(cam);
+    enginetest::frames(gE, 3);
+    const bool restSame = same("rest, the box path on");
+    CHECK(gE->setArm("shadow.receiverBoxesOff", 1.0), "the box path's door");
+    enginetest::frames(gE, 3);
+    const bool controlSame = same("rest, the box path OFF (the negative control)");
+    gE->setArm("shadow.receiverBoxesOff", 0.0);
+    enginetest::frames(gE, 2);
+    CHECK_MSG(restSame && !controlSame, "THE BOX PATH IS LOAD-BEARING: at rest the pictures are bit-equal with it (%s) "
+              "and differ without it (%s) - the fixture's receivers depend on the stock route's boxes alone",
+              restSame ? "equal" : "DIFFER", controlSame ? "EQUAL" : "differ");
+    framesOut = a.scene->published().frame;   // the engine's frame count: every frame of this process
+    gE->destroyView(a.view);
+    gE->destroyScene(a.scene);
+    gE->destroyView(b.view);
+    gE->destroyScene(b.scene);
+    return 0;
+}
+
+static int lightCullMain()
+{
+    std::printf("== shadow.caster_cull: the sun maps' casters culled by the light's own depth, the maps unchanged\n");
+    // THE SHIPPED ATLAS (decision 22.4): each step's two digests read the whole atlas back, so the fixture's budget
+    // (10 s) is kept by its steps - six slides and three pans, the old travel in a third of the steps.
+    World w;
+    if (!makeWorld(w, "light-cull", false)) { std::printf("FAIL: the world\n"); return 1; }
+    PbrParams rp;
+    rp.albedo = Colour(0.5f, 0.5f, 0.5f);
+    rp.roughness = 0.9f;
+    const MaterialId rm = w.scene->createPbrMaterial(rp);
+    const Vec3 roofHalf(13.0f, 0.15f, 19.0f);
+    Vec3 roofCentre(1.0f, 6.0f, -15.0f);
+    const NodeId roof = addBox(w.scene, roofCentre, roofHalf, rm);
+    // THE LIGHT-DEPTH LAWS ARE ABOUT THE WHOLE MAP: the receiver test (stage 4b, the section after) is off here.
+    w.scene->setShadowReceiverCull(false);
+    // A PLANAR MIRROR in front of the camera (decision 16.5): its node's sun maps ride the same cull and are
+    // compared with the view's.
+    const NodeId mirror = addBox(w.scene, Vec3(0.0f, 0.02f, -2.0f), Vec3(2.0f, 0.01f, 2.0f), rm);
+    {
+        PlanarReflectionParams pr;
+        pr.budget = 1;
+        pr.resolution = 256;
+        pr.shadows = true;
+        CHECK(w.scene->setPlanarReflections(pr) && w.scene->setNodePlanarReflector(mirror, true),
+              "a planar mirror with shadows (its own shadow node)");
+    }
+    const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
+    w.view->setCamera(cam);
+    enginetest::frames(gE, 40);
+
+    // THE OBJECTS THE ROOF CERTAINLY HIDES from the sun (law 2's floor), from the field's own layout.
+    const float lx = -0.45f, ly = -0.8f, lz = -0.4f;
+    const float ll = std::sqrt(lx * lx + ly * ly + lz * lz);
+    const float tx = -lx / ll, ty = -ly / ll, tz = -lz / ll;   // toward the sun
+    const float under = roofCentre.y - roofHalf.y;
+    unsigned certain = 0;
+    std::vector<NodeId> hidden;
+    {
+        int k = 0;
+        for (int zi = 0; zi < 7; ++zi)
+            for (int xi = -2; xi <= 2; ++xi, ++k) {
+                const float x = 2.6f * float(xi) + 0.4f * float(zi % 2), z = -4.0f - 11.0f * float(zi);
+                const float r = 0.8f * std::sqrt(3.0f);   // ~1.6 m objects: the box's half-diagonal
+                bool inside = true;
+                for (int c = 0; c < 8 && inside; ++c) {
+                    const float px = x + ((c & 1) ? r : -r), py = 1.0f + ((c & 2) ? r : -r),
+                                pz = z + ((c & 4) ? r : -r);
+                    const float t = (under - py) / ty;
+                    const float hx = px + tx * t, hz = pz + tz * t;
+                    // THE CULL'S GRAIN (stated): an instance's box against the pyramid at the mip where its
+                    // light-space rectangle is <= 2 texels wide, read over <= 3 x 3 of them - a footprint up
+                    // to one rectangle width past each side. The box's light-space width is at most its
+                    // diagonal, 2 r sqrt 3: so a box that deep inside the roof's shadow is hidden at that grain.
+                    const float margin = 2.0f * r * std::sqrt(3.0f) + 0.5f;
+                    inside = hx > roofCentre.x - roofHalf.x + margin && hx < roofCentre.x + roofHalf.x - margin &&
+                             hz > roofCentre.z - roofHalf.z + margin && hz < roofCentre.z + roofHalf.z - margin;
+                }
+                if (inside) {
+                    ++certain;
+                    hidden.push_back(w.placed[size_t(k)].node);
+                }
+            }
+    }
+    std::printf("   the roof certainly hides %u of the field's 35 objects from the sun\n", certain);
+    CHECK_MSG(certain >= 4u, "the fixture hides something (%u objects)", certain);
+
+    // ---- 1 + 2: AT REST ----------------------------------------------------------------------
+    std::vector<ShadowMapDigest> on, off;
+    gE->setArm("shadow.casterCull", 1.0);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sOn = w.scene->atomDrawStatus();
+    CHECK(w.scene->shadowMapDigests(on) && on.size() >= 6u, "the view's three sun maps and the mirror's read back (cull on)");
+    gE->setArm("shadow.casterCull", 0.0);
+    enginetest::frames(gE, 12);
+    const AtomDrawStatus sOff = w.scene->atomDrawStatus();
+    CHECK(w.scene->shadowMapDigests(off) && off.size() >= 6u, "the view's three sun maps and the mirror's read back (cull off)");
+    std::string why;
+    CHECK_MSG(mapsEqual(on, off, why), "AT REST the sun maps are bit-equal with the cull on and off (%s)",
+              why.empty() ? "every texel" : why.c_str());
+    for (const ShadowMapDigest &d : on)
+        std::printf("   %s map %u: %ux%u at (%u, %u), %u texels covered, digest %016llx\n", d.kind ? "mirror" : "view  ",
+                    d.map, d.width, d.height, d.x, d.y, d.covered, d.digest);
+    const CullTally tOn = tallyOf(sOn), tOff = tallyOf(sOff);
+    std::printf("   cull on : %u maps (%u tested by the light's depth), %llu triangles; first half rejected %u, "
+                "late half drew %u (%llu triangles), neither drew %u\n",
+                tOn.maps, tOn.tested, tOn.triangles, tOn.occluded, tOn.lateInstances, tOn.lateTriangles,
+                tOn.lateOccluded);
+    std::printf("   cull off: %u maps (%u tested), %llu triangles\n", tOff.maps, tOff.tested, tOff.triangles);
+    for (const AtomCasterMapStats &m : sOn.casterPerMap)
+        if (m.kind == 0u)
+            std::printf("     map %u face %u: %u instances %llu triangles (late %u / %llu), rejected %u, hidden %u\n",
+                        m.map, m.face, m.instances, m.triangles, m.lateInstances, m.lateTriangles, m.occluded,
+                        m.lateOccluded);
+    CHECK_MSG(tOn.tested >= 3u && tOff.tested == 0u, "the three sun maps were tested by the light's depth with the "
+              "cull on, none with it off (%u / %u)", tOn.tested, tOff.tested);
+    {
+        unsigned mirrorTested = 0u;
+        for (const AtomCasterMapStats &m : sOn.casterPerMap) mirrorTested += (m.kind == 1u && m.lightTested) ? 1u : 0u;
+        CHECK_MSG(mirrorTested >= 1u, "the mirror's sun maps were culled by the light's depth too (%u)", mirrorTested);
+    }
+    // LAW 2 PER OBJECT (decision 16.5): every object the roof certainly hides is drawn by NEITHER half of ANY
+    // sun map's cut - the test door's drawn sets, the first half's and the late half's.
+    {
+        gE->setArm("shadow.casterCull", 1.0);
+        enginetest::frames(gE, 4);
+        auto *os = static_cast<OgreScene *>(w.scene);
+        unsigned drawnHidden = 0, probed = 0;
+        for (unsigned m = 0; m < 3u; ++m) {
+            OgreScene::CasterProbe p;
+            if (!probe(w, m, 0u, p)) continue;
+            ++probed;
+            std::map<NodeId, int> drawnNodes;   // 1 the first half drew it, 2 the late half
+            int half = 1;
+            for (const auto *set : { &p.drawn, &p.lateDrawn }) {
+                for (const OgreScene::CasterProbe::Drawn &d : *set) {
+                    GpuSceneEntry e;
+                    if (os->gpuSceneEntry(d.slot, e)) drawnNodes[NodeId(e.nodeId)] |= half;
+                }
+                half = 2;
+            }
+            for (size_t i = 0; i < hidden.size(); ++i) {
+                const auto it = drawnNodes.find(hidden[i]);
+                if (it == drawnNodes.end()) continue;
+                ++drawnHidden;
+                std::printf("   hidden object %zu (node %llu) drawn in map %u by the %s half\n", i,
+                            (unsigned long long)hidden[i], m, it->second & 1 ? "first" : "late");
+            }
+        }
+        CHECK_MSG(probed == 3u && drawnHidden == 0u,
+                  "EVERY OBJECT THE ROOF CERTAINLY HIDES is drawn by neither half of any sun map (%u of %u objects "
+                  "x 3 maps drawn)", drawnHidden, certain);
+    }
+    CHECK_MSG(tOn.triangles < tOff.triangles, "the maps draw fewer caster triangles with the cull (%llu < %llu)",
+              tOn.triangles, tOff.triangles);
+
+    // ---- 3: IN MOTION ------------------------------------------------------------------------
+    unsigned stepsEqual = 0, steps = 0;
+    unsigned long long lateDrawn = 0ull;
+    std::string firstWhy;
+    // `lead`: frames rendered with the cull on before the compared one - a pushed CAMERA reaches the
+    // light's splits one frame after it is set (measured: two cull-off frames after a pan differ, the
+    // second and third agree), so a pan's compared frame is its second, and its history the first's
+    // pyramid - drawn from the previous pose's splits.
+    const auto step = [&](int lead) {
+        std::vector<ShadowMapDigest> a, b;
+        gE->setArm("shadow.casterCull", 1.0);
+        if (lead > 0) enginetest::frames(gE, lead);
+        enginetest::frames(gE, 1);
+        lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+        w.scene->shadowMapDigests(a);
+        gE->setArm("shadow.casterCull", 0.0);
+        enginetest::frames(gE, 1);
+        lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+        w.scene->shadowMapDigests(b);
+        std::string wy;
+        ++steps;
+        if (mapsEqual(a, b, wy)) ++stepsEqual;
+        else if (firstWhy.empty()) firstWhy = "step " + std::to_string(steps) + ": " + wy;
+    };
+    for (int i = 0; i < 6; ++i) {
+        roofCentre.x += 2.0f;
+        w.scene->setNodeTransform(roof, roofCentre, Quat(), Vec3(1, 1, 1));
+        step(0);
+    }
+    for (int i = 0; i < 3; ++i) {
+        const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(1.6f * float(i + 1), 2.2f, 4.0f - 2.1f * float(i + 1)),
+                                                            Vec3(0.0f, 0.8f, -30.0f));
+        w.view->setCamera(c2);
+        step(1);
+    }
+    gE->setArm("shadow.casterCull", 1.0);
+    enginetest::frames(gE, 8);
+    lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
+    std::printf("   in motion: %u of %u steps bit-equal; the late half drew %llu instances over the steps\n", stepsEqual,
+                steps, lateDrawn);
+    CHECK_MSG(stepsEqual == steps, "IN MOTION every step's sun maps are bit-equal on and off (%s)",
+              firstWhy.empty() ? "all" : firstWhy.c_str());
+    CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
+              lateDrawn);
+    gE->setArm("shadow.casterCull", 1.0);
+    const unsigned long long frames = w.scene->published().frame;   // the engine's frame count: every frame of this process
+    gE->destroyView(w.view);
+    gE->destroyScene(w.scene);
+    std::printf("\n   frames rendered: %llu\n", frames);
+    return 0;
+}
+
+/// --receivers (shadow.caster_receivers) - THE RECEIVER TEST'S LAW alone (receiverSection), its own row: the light-depth
+/// laws and this one together outran a fixture's 10 s budget (source.row_budget, U5's master check).
+static int receiversMain()
+{
+    unsigned long long frames = 0ull;
+    const int rc = receiverSection(frames);
+    std::printf("\n   frames rendered: %llu\n", frames);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const std::string mode = argc > 1 ? argv[1] : "--cut";
-    if (!loadFixtures()) { std::printf("FAIL: the fixtures (the shipped models did not bake)\n"); return 1; }
+    if (!loadFixtures(mode != "--light-cull" && mode != "--receivers")) {
+        std::printf("FAIL: the fixtures (the shipped models did not bake)\n");
+        return 1;
+    }
     std::string err;
     const auto cfg = enginetest::testEngineConfig(mode == "--parity"        ? "test-shadow-atom-parity-ogre.log"
                   : mode == "--first-frame" ? "test-shadow-caster-first-frame-ogre.log"
+                  : mode == "--light-cull"  ? "test-shadow-caster-cull-ogre.log"
+                  : mode == "--receivers"   ? "test-shadow-caster-receivers-ogre.log"
                                             : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     gE = engine.get();
-    const int rc = mode == "--parity" ? parityMain() : mode == "--first-frame" ? firstFrameMain() : cutMain();
+    const int rc = mode == "--parity"        ? parityMain()
+                 : mode == "--first-frame" ? firstFrameMain()
+                 : mode == "--light-cull"  ? lightCullMain()
+                 : mode == "--receivers"   ? receiversMain()
+                                           : cutMain();
     engine.reset();
     std::printf("%s (%d failure%s)\n", failures || rc ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures || rc ? 1 : 0;

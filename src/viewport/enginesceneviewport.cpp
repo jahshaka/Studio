@@ -2922,6 +2922,7 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.emissiveAtMax = qint64(st.emissiveAtMax);
     out.emissiveAboveOne = qint64(st.emissiveAboveOne);
     out.lightDigest = QString::fromStdString(st.lightDigest);
+    out.storeDigest = QString::fromStdString(st.storeDigest);
     return out;
 }
 
@@ -3031,6 +3032,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.guaranteedRadius = c.guaranteedRadius;
         ci.centre     = q(c.centre);
         ci.rebuilds   = quint64(c.rebuilds);
+        ci.scrolls      = quint64(c.scrolls);
+        ci.scrollFrames = quint64(c.scrollFrames);
         ci.pending    = c.pending;
         ci.items      = c.items;
         ci.attached   = c.attached;

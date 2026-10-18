@@ -570,6 +570,17 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const QString hashMotion = fileSha256(motionPng);
     std::fprintf(stderr, "engine-selftest: pose motion sha256 %s (%s)\n",
                  qPrintable(hashMotion), qPrintable(motionPng));
+    // THE SCROLLS THE TWO MOVING POSES PAID (ENGINE-UPGRADE-U5, the reader's decision 11 e): each a
+    // count and the frames its slabs took - every one commits in its first frame here (the spread is a
+    // pure function of the scene), which is why the hashes above hold; a change in these is a change in
+    // when the voxels land.
+    {
+        const auto gi = window.viewport()->giStatus();
+        for (int i = 0; i < gi.cascades.size(); ++i)
+            std::fprintf(stderr, "engine-selftest: cascade %d: %llu scrolls over %llu chunk frames, %llu rebuilds\n", i,
+                         (unsigned long long)gi.cascades[i].scrolls, (unsigned long long)gi.cascades[i].scrollFrames,
+                         (unsigned long long)gi.cascades[i].rebuilds);
+    }
     if (!isPicture(imgMotion) || hashMotion == hash2) {
         std::fprintf(stderr, "engine-selftest: the motion pose is %s\n",
                      !isPicture(imgMotion) ? "the CLEAR COLOUR" : "pose 2's picture — the walk did not take");

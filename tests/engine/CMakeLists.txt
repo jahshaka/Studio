@@ -372,6 +372,23 @@ jah_gpu_row(frame.monitor_pop CLASS engine FRAMES 280 COMMAND test_engine_monito
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.monitor_pop PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(engine.error_door frame.monitor_pop)
+
+# engine.texture_drain_reset — A THROW INSIDE THE HOST'S TEXTURE WAIT LEAVES THE NEXT WAIT CLEAN (ENGINE-UPGRADE-U5
+# decision 22.5): the arm textures.pumpFault throws inside a step; the next wait, past the thrown one's 300 ms budget,
+# steps as a fresh drain and finishes; no timeout counted, nothing latched.
+add_executable(test_engine_texture_drain test_engine_texture_drain.cpp)
+set_target_properties(test_engine_texture_drain PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_texture_drain PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_texture_drain PRIVATE JahshakaEngine)
+add_dependencies(test_engine_texture_drain JahshakaEngineMedia)
+jah_gpu_row(engine.texture_drain_reset CLASS engine FRAMES 11 COMMAND test_engine_texture_drain
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.texture_drain_reset PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fixtures: the host reads published() against a publishing render thread (decision 54)
 
 add_executable(test_engine_gi_scan test_engine_gi_scan.cpp)

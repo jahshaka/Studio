@@ -41,6 +41,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -97,10 +98,13 @@ int main(int argc, char **argv)
     // 256 cells, Medium, printed and not asserted: 256 is no shipped cascade resolution - the tiers ship
     // 64 and 128 - so its reading is the debt JUNCTION-NORMAL-1's number, not the row's bar).
     const bool junction = argc > 1 && std::string(argv[1]) == "--junction-256";
+    // `--veils`: THE INSIDE FRACTION'S OWN CASES (gi.march_inside, ENGINE-UPGRADE-U5 decision 22.2), alone
+    const bool veils = argc > 1 && std::string(argv[1]) == "--veils";
     std::vector<std::pair<GiQuality, const char *>> tiers = { { GiQuality::Low, "Low" }, { GiQuality::Medium, "Medium" } };
     if (argc > 1 && std::string(argv[1]) == "--all-tiers")
         tiers.insert(tiers.end(), { { GiQuality::High, "High" }, { GiQuality::Epic, "Epic" } });
     if (junction) tiers = { { GiQuality::Medium, "Medium" } };
+    if (veils) tiers.clear();
     const std::vector<int> resolutions = junction ? std::vector<int>{ 128, 256 } : std::vector<int>{ 32, 64, 128 };
     std::vector<double> readings[2];   // Low, Medium: per (res, wall, field) arm, in order
     for (const auto &tier : tiers)
@@ -171,7 +175,45 @@ int main(int argc, char **argv)
                               "value (%.4f / %.4f = %.3f; bar 3 %%)", tier.second, res, standing ? "on the plate" : "free-standing",
                               arm.second, withWall, open, withWall / open);
                 if (junction) std::printf("MEASURE (JUNCTION-NORMAL-1): %s\n", msg);
-                else CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
+                if (standing && arm.first == GiToggle::Off) {
+                    // THE JUNCTION VOXELS (JUNCTION-NORMAL-1): the face column at x = 0, the rows from the plate's top
+                    // up - the voxel's emissive (an area MEAN over every surface in it) against L, its two z halves'
+                    // and its +y half's coverage, and where the wall's face sits in its cell
+                    GiVoxelVolume v;
+                    if (s->giVoxelVolume(0, v) && v.available && !v.emissive.empty()) {
+                        const int cx = int((0.0f - v.origin[0]) / v.cell[0]);
+                        const int cz = int((1.5f - v.origin[2]) / v.cell[2]);
+                        const double frac = (1.5 - v.origin[2]) / v.cell[2] - cz;
+                        // THE EMISSIVE PER HALF (JUNCTION-NORMAL-1, decision 21.2): every voxel of the face column holding
+                        // the wall's face emits L on the half that face looks to (-z), the plate's area in the voxel
+                        // notwithstanding (it used to emit the voxel's AREA MEAN: 0.554 L at 128 cells). BAR 1 %.
+                        double worstHalf = 0.0;
+                        int halves = 0;
+                        for (int cy = int((0.05f - v.origin[1]) / v.cell[1]); cy <= int((0.05f - v.origin[1]) / v.cell[1]) + 2; ++cy) {
+                            const size_t i = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                            // the half the wall's face looks to (-z): its emissive factor f (JUNCTION-NORMAL-1)
+                            const double cN = std::floor(double(v.emitN[i + 2]) * 1023.0 + 0.5), fN = cN / (1022.0 - cN);
+                            if (v.coverageN[i + 2] > 0.05f) {
+                                worstHalf = std::max(worstHalf, std::fabs(double(v.emissive[i]) / L * fN - 1.0));
+                                ++halves;
+                            }
+                            if (junction)
+                            std::printf("MEASURE (JUNCTION-NORMAL-1): %d cells, row y %.4f .. %.4f (the face at %.3f of its cell): "
+                                        "emissive / L %.4f, the -z half emits %.4f L, covN.z %.3f covP.y %.3f, normal %.3f %.3f %.3f "
+                                        "two-sided %.0f\n", res,
+                                        double(v.origin[1] + cy * v.cell[1]), double(v.origin[1] + (cy + 1) * v.cell[1]), frac,
+                                        double(v.emissive[i]) / L, double(v.emissive[i]) / L * fN, double(v.coverageN[i + 2]),
+                                        double(v.coverageP[i + 1]),
+                                        2.0 * v.normal[i] - 1.0, 2.0 * v.normal[i + 1] - 1.0, 2.0 * v.normal[i + 2] - 1.0,
+                                        double(v.normal[i + 3]));
+                        }
+                        char hmsg[200];
+                        std::snprintf(hmsg, sizeof hmsg, "%s, %d cells: the wall's half emits L in every junction voxel of "
+                                      "its face (%d; worst %.4f; bar 1 %%)", tier.second, res, halves, worstHalf);
+                        CHECK(halves > 0 && worstHalf <= 0.01, hmsg);
+                    }
+                }
+                if (!junction) CHECK(std::fabs(withWall / open - 1.0) <= 0.03, msg);
                 if (tier.first == GiQuality::Low) readings[0].push_back(withWall / open);
                 if (tier.first == GiQuality::Medium) readings[1].push_back(withWall / open);
             }
@@ -240,12 +282,157 @@ int main(int argc, char **argv)
         s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
         double faceWall = 0.0, lobeWall = 0.0;
         measure(faceWall, lobeWall);
+        // THE SUN-LIT WALL'S LOBE PER RESOLUTION (SUN-INJECTION-RES-1, printed: the debt's own table - 1.019 / 1.003 /
+        // 0.982 at 32 / 64 / 128 cells on the base, 1.019 / 1.007 / 0.995 with the shadow march's entries and exits
+        // apart; the residual is the coverage's statistics - see the column law below)
+        std::printf("MEASURE (SUN-INJECTION-RES-1): %d cells, the sun-lit wall's lobe / its face %.5f / %.5f = %.5f\n", res,
+                    lobeWall, faceWall, lobeWall / faceWall);
+        if (!veils) {
+            // THE INJECTION'S SHADOW OF A THIN SLAB (SUN-INJECTION-RES-1, ENGINE-UPGRADE-U5 stage 5): the wall sunk 2 m
+            // under the plate's plane, so the 0.1 m plate (y 0 .. 0.1, end on to the suns) shadows a band of its lit face.
+            // A voxel of the face column stores the face's light times the transmittance of the cells between it and the
+            // sun, and the plate's end faces cover the share of the voxel's height the plate fills - so a voxel of the
+            // column at [y0, y0 + cell] holds 1 - |[y0, y0 + cell] n [0, 0.1]| / cell of the lit face's light: the
+            // coverage's own law, at every resolution. The plate is crossed END TO END - in at z 1.35, out at z -2 - and
+            // its two end faces carry the one band: summed, the march stopped the ray twice (the row at 64 cells black,
+            // 0.000 against the law's 0.286; 0.155 against 0.571 at 128). BAR 1 % of the lit face (one half-float quantum
+            // is 0.1 %).
+            s->setNodeTransform(wallNode, Vec3(0.0f, 3.05f, 1.75f), Quat(), Vec3(12.0f, 9.9f, 0.5f));
+            s->refreshGlobalIllumination();
+            double f2 = 0.0, l2 = 0.0;
+            measure(f2, l2);
+            GiVoxelVolume v;
+            const bool got = s->giVoxelVolume(0, v) && v.available && !v.direct.empty();
+            CHECK(got, "the store's direct volume reads back");
+            if (got) {
+                const int cx = int((0.0f - v.origin[0]) / v.cell[0]);
+                const int cz = int((1.5f - v.origin[2]) / v.cell[2]);
+                const auto litAt = [&](int cy) {
+                    const size_t i = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                    return v.direct[i + 3] > 0.0f ? double(v.direct[i + 1]) / double(v.direct[i + 3]) / double(v.multiplier) : 0.0;
+                };
+                const double lit = litAt(int((-1.0f - v.origin[1]) / v.cell[1]));   // a voxel well under the band
+                double worst = 0.0;
+                for (int cy = int((-0.3f - v.origin[1]) / v.cell[1]); cy <= int((0.5f - v.origin[1]) / v.cell[1]); ++cy) {
+                    const double y0 = double(v.origin[1]) + double(cy) * double(v.cell[1]);
+                    const double y1 = y0 + double(v.cell[1]);
+                    const double band = std::max(0.0, std::min(y1, 0.1) - std::max(y0, 0.0));
+                    const double want = 1.0 - band / double(v.cell[1]);
+                    const double reading = lit > 0.0 ? litAt(cy) / lit : 0.0;
+                    worst = std::max(worst, std::fabs(reading - want));
+                    if (band > 0.0) {
+                        std::printf("%d cells, the face column's voxel at y %.4f .. %.4f: %.4f of the lit face (the law %.4f)\n",
+                                    res, y0, y1, reading, want);
+                        if (std::getenv("JAH_UNDERREAD_DUMP"))
+                            for (int z = 0; z < v.depth; ++z) {
+                                const size_t j = 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(z)));
+                                if (v.coverageP[j + 2] > 0.0f || v.coverageN[j + 2] > 0.0f)
+                                    std::printf("   DUMP z %.4f: covP.z %.4f covN.z %.4f posP.z %.4f posN.z %.4f\n",
+                                                double(v.origin[2] + z * v.cell[2]), double(v.coverageP[j + 2]),
+                                                double(v.coverageN[j + 2]), double(v.positionP[j + 2]), double(v.positionN[j + 2]));
+                            }
+                    }
+                }
+                char msg[240];
+                std::snprintf(msg, sizeof msg, "%d cells: the plate's shadow on the face column is its coverage's, crossed "
+                              "once (worst %.4f of the lit face %.5f; bar 0.01)", res, worst, lit);
+                CHECK(lit > 0.0 && worst <= 0.01, msg);
+            }
+            s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
+        }
+        if (veils) {
+            // THE INSIDE FRACTION'S OWN CASES (ENGINE-UPGRADE-U5 decision 22.2): the march takes the faces it crosses in
+            // order, a FRONT face blocking and entering, a BACK face first leaving what was entered and blocking only its
+            // remainder (an open surface seen from behind). Between the lit face (z 1.5, the near sun travelling +z, so
+            // the march goes -z) and the sun, a band y 3 .. 4 the width of the wall:
+            //   OPEN: two ONE-SIDED quads at opacity 0.6 facing AWAY from each other along the ray - the nearer (z 1.0)
+            //   looking -z (the ray's way: seen from behind), the farther (z 0.5) looking +z - transmittance
+            //   (1 - c1)(1 - c2) = 0.16, where the max of the entries and the exits read them as one solid, 0.4;
+            //   SOLID: one box of the same opacity (z 0.4 .. 0.6): crossed in and out, 1 - c = 0.4.
+            // Each reading against the store's own coverage of those faces (the independent coverage), BAR 1 % of the
+            // lit face, on the face column's rows inside the band.
+            s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
+            MeshData quad;
+            quad.positions = { -0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f };
+            quad.normals = { 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1 };
+            quad.indices = { 0, 1, 2, 0, 2, 3 };
+            const MeshId quadMesh = s->createMesh(quad);
+            PbrParams veil; veil.albedo = Colour(0.5f, 0.5f, 0.5f); veil.roughness = 1.0f;
+            veil.alphaMode = PbrAlphaMode::Blend;
+            veil.alpha = 0.6f;
+            const MaterialId veilMat = s->createPbrMaterial(veil);
+            const Quat facingMinusZ(0.0f, 1.0f, 0.0f, 0.0f);   // 180 degrees about y: the quad looks -z
+            struct Case { const char *what; bool open; };
+            for (const Case &c : { Case{ "two open quads facing away from each other", true },
+                                   Case{ "one solid of the same opacity", false } }) {
+                std::vector<NodeId> added;
+                const auto put = [&](MeshId m, const Vec3 &pos, const Quat &q, const Vec3 &scale) {
+                    const NodeId nd = s->createNode();
+                    s->attachMesh(nd, m, veilMat);
+                    s->setNodeTransform(nd, pos, q, scale);
+                    added.push_back(nd);
+                };
+                if (c.open) {
+                    put(quadMesh, Vec3(0.0f, 3.5f, 1.0f), facingMinusZ, Vec3(12.0f, 1.0f, 1.0f));
+                    put(quadMesh, Vec3(0.0f, 3.5f, 0.5f), Quat(), Vec3(12.0f, 1.0f, 1.0f));
+                } else {
+                    put(cube, Vec3(0.0f, 3.5f, 0.5f), Quat(), Vec3(12.0f, 1.0f, 0.2f));
+                }
+                s->refreshGlobalIllumination();
+                double fq = 0.0, lq = 0.0;
+                measure(fq, lq);
+                GiVoxelVolume v;
+                const bool got = s->giVoxelVolume(0, v) && v.available && !v.direct.empty();
+                CHECK(got, "the store reads back under the veils");
+                if (got) {
+                    const int cx = int((0.0f - v.origin[0]) / v.cell[0]);
+                    const auto at = [&](int cy, float z) {
+                        const int cz = int((z - v.origin[2]) / v.cell[2]);
+                        return 4 * (size_t(cx) + size_t(v.width) * (size_t(cy) + size_t(v.height) * size_t(cz)));
+                    };
+                    const auto litAt = [&](int cy) {
+                        const size_t i = at(cy, 1.5f);
+                        return v.direct[i + 3] > 0.0f ? double(v.direct[i + 1]) / double(v.direct[i + 3]) / double(v.multiplier) : 0.0;
+                    };
+                    const double lit = litAt(int((2.0f - v.origin[1]) / v.cell[1]));   // a row the veils do not shade
+                    double worst = 0.0, worstWant = 0.0;
+                    int rows = 0;
+                    for (int cy = int((3.0f - v.origin[1]) / v.cell[1]); cy <= int((4.0f - v.origin[1]) / v.cell[1]); ++cy) {
+                        const double y0 = double(v.origin[1]) + double(cy) * double(v.cell[1]);
+                        if (y0 < 3.0 - 1e-4 || y0 + double(v.cell[1]) > 4.0 + 1e-4) continue;   // the band's whole rows
+                        double want;
+                        if (c.open) {
+                            const double c1 = double(v.coverageN[at(cy, 1.0f) + 2]);   // the near quad looks -z
+                            const double c2 = double(v.coverageP[at(cy, 0.5f) + 2]);   // the far one +z
+                            want = (1.0 - c1) * (1.0 - c2);
+                        } else {
+                            const double cf = double(v.coverageP[at(cy, 0.6f) + 2]);   // the box's face the ray enters
+                            want = 1.0 - cf;
+                        }
+                        const double reading = lit > 0.0 ? litAt(cy) / lit : 0.0;
+                        std::printf("%d cells, %s: the face column at y %.4f reads %.4f of the lit face (the law %.4f)\n",
+                                    res, c.what, y0, reading, want);
+                        worst = std::max(worst, std::fabs(reading - want));
+                        worstWant = std::max(worstWant, want);
+                        ++rows;
+                    }
+                    char msg[260];
+                    std::snprintf(msg, sizeof msg, "%d cells, %s: the march's transmittance is the coverage's law on %d rows "
+                                  "(worst %.4f; bar 0.01; the law %s)", res, c.what, rows, worst,
+                                  c.open ? "(1 - c1)(1 - c2), 0.16 at 0.6" : "1 - c, 0.4 at 0.6");
+                    CHECK(lit > 0.0 && rows > 0 && worst <= 0.01 &&
+                              (c.open ? worstWant <= 0.2 : worstWant >= 0.35 && worstWant <= 0.45), msg);
+                }
+                for (NodeId nd : added) s->removeNode(nd);
+            }
+        }
         // the slab: its plate face at z 1.5, 0.02 m thick
         s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.51f), Quat(), Vec3(12.0f, 7.9f, 0.02f));
         const struct { const char *what; float nearP, farP; float dz; } arms[3] = {
             { "at rest, the plate's face lit 1", 3.0f, 0.75f, 0.0f },
             { "the suns swapped, the plate's face lit 0.25", 0.75f, 3.0f, 0.0f },
             { "moved 0.05 m, the plate's face lit 0.25", 0.75f, 3.0f, 0.05f } };
+        if (!veils)
         for (const auto &a : arms) {
             sunPower(nearSun, a.nearP);
             sunPower(farSun, a.farP);
@@ -264,7 +451,7 @@ int main(int argc, char **argv)
         rv->setScene(nullptr);
         e->destroyScene(s);
     }
-    if (!junction) {
+    if (!junction && !veils) {
         // THE LOW TIER'S OWN CHAIN (two 64^3 cascades): its light store and the mip dispatches its
         // build and settle make. The total's chain exists only for the specular SDF skip, which
         // runs on a one-cascade chain only; a shipped chain allocates and regenerates none.
@@ -301,7 +488,7 @@ int main(int argc, char **argv)
         e->destroyScene(s);
     }
     e->destroyView(rv);
-    if (!junction) {
+    if (!junction && !veils) {
         // ONE READER AT EVERY TIER: Low reads Medium's value on every arm (the same store, the same law)
         double worst = 0.0;
         for (size_t k = 0; k < readings[0].size() && k < readings[1].size(); ++k)

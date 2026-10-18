@@ -173,7 +173,7 @@ static double panelClosedForm(double z, double stride, double le, double halfW, 
     return acc / 64.0;
 }
 
-static int planeMain(Engine *e, bool targetRow)
+static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
 {
     View *view = e->createOffscreenView("plane", kPlaneSize, kPlaneSize, Colour(0, 0, 0));
     if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
@@ -219,8 +219,89 @@ static int planeMain(Engine *e, bool targetRow)
     // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still view
     // holds one N-sample rest mean; the rest door keeps every frame live.
     t.restOff = true;
+    // MEASURE (decision 21, by hand): the age at which the filter has fallen to none (the rows run the shipped one)
+    if (const char *age = std::getenv("JAH_GATHER_FILTER_AGE")) {
+        t.filterByAge = true;
+        t.filterAgeFrames = unsigned(std::atoi(age));
+    }
     s->setGatherTuning(t);
     render(e, 40);
+
+    if (kernelArms) {
+        // MEASURE (GATHER-INTEGRATION-FACTOR, decision 20 item 2): THE RECONSTRUCTION'S KERNEL, ARM BY ARM. For each arm
+        // the gather runs from a fresh history (a tuning change resets it) for 576 distinct frames; per frame the
+        // 9 x 9 block's E/pi at 1 / 2 / 3 strides (the row's points). SETTLED = the mean of frames 96..575; the bias =
+        // settled / the closed form's one-cell average; THE ROW'S READING's noise = the spread (standard deviation)
+        // of the five 96-frame means after the first 96 (the row reads one such mean); the frames to converge = the
+        // first frame from which the running mean since the reset stays within 2 % of the settled value.
+        const float strideM = 16.0f * (2.0f * kOrthoHalf / float(kPlaneSize));
+        const float zs[3] = { kFront + strideM, kFront + 2.0f * strideM, kFront + 3.0f * strideM };
+        double closedM[3];
+        for (int i = 0; i < 3; ++i) { double fo = 0.0; closedM[i] = panelClosedForm(zs[i], strideM, kLe, kHalfW, kY0, kH, kFront, fo); }
+        // decision 21: the shipped reconstruction against the filter's width by the probe's age (none from 12 or 24
+        // frames, the measuring door GatherTuning::filterByAge) and the filter and the jitter off.
+        struct Arm { const char *name; bool jitterOff, filterOff, common; unsigned byAge; };
+        const Arm armsM[6] = { { "shipped", false, false, false, 0u },
+                               { "filter by age, 12", false, false, false, 12u },
+                               { "filter by age, 24", false, false, false, 24u },
+                               { "filter off", false, true, false, 0u },
+                               { "jitter off", true, false, false, 0u },
+                               { "jitter + filter off", true, true, false, 0u } };
+        for (const Arm &arm : armsM) {
+            GatherTuning ta;
+            ta.readback = true;
+            ta.restOff = true;
+            ta.jitterOff = arm.jitterOff;
+            ta.filterOff = arm.filterOff;
+            ta.jitterCommon = arm.common;
+            ta.filterByAge = arm.byAge > 0u;
+            ta.filterAgeFrames = arm.byAge;
+            s->setGatherTuning(ta);
+            std::vector<double> series[3];
+            unsigned last = ~0u;
+            for (int f = 0; f < 1600 && series[0].size() < 576u; ++f) {
+                enginetest::frames(e, 1);
+                const GatherStatus st = s->published().gi.gather;
+                if (st.irradiance.empty() || st.irradianceFrame == last) continue;
+                last = st.irradianceFrame;
+                for (int i = 0; i < 3; ++i) {
+                    int cx, cy;
+                    worldToPixel(0.0f, zs[i], cx, cy);
+                    double sum = 0.0; unsigned n = 0;
+                    for (int y = cy - 4; y <= cy + 4; ++y)
+                        for (int x = cx - 4; x <= cx + 4; ++x) { sum += st.irradiance[(size_t(y) * st.irradianceW + x) * 4u]; ++n; }
+                    series[i].push_back(sum / n);
+                }
+            }
+            for (int i = 0; i < 3; ++i) {
+                const std::vector<double> &v = series[i];
+                if (v.size() < 576u) { std::printf("MEASURE (decision 20): %s: only %zu frames\n", arm.name, v.size()); continue; }
+                double m = 0.0;
+                for (size_t k = 96; k < v.size(); ++k) m += v[k];
+                m /= double(v.size() - 96u);
+                double bm[5], q = 0.0;
+                for (int blk = 0; blk < 5; ++blk) {
+                    bm[blk] = 0.0;
+                    for (size_t k = 96u + 96u * size_t(blk); k < 96u + 96u * size_t(blk + 1); ++k) bm[blk] += v[k];
+                    bm[blk] /= 96.0;
+                    q += (bm[blk] - m) * (bm[blk] - m);
+                }
+                const double sd = std::sqrt(q / 4.0);
+                size_t conv = v.size();
+                double run = 0.0;
+                std::vector<double> cum(v.size());
+                for (size_t k = 0; k < v.size(); ++k) { run += v[k]; cum[k] = run / double(k + 1); }
+                for (size_t k = v.size(); k-- > 0;) {
+                    if (std::fabs(cum[k] / m - 1.0) > 0.02) break;
+                    conv = k + 1;
+                }
+                std::printf("MEASURE (decision 20): %-20s %d stride%s: settled %.5f / closed %.5f = %.4f; a 96-frame mean's "
+                            "spread %.2f %%; the running mean within 2 %% from frame %zu\n", arm.name, i + 1, i ? "s" : " ", m,
+                            closedM[i], m / closedM[i], 100.0 * sd / m, conv);
+            }
+        }
+        return 0;
+    }
 
     // THE READING: the red channel of the gather's E/pi, averaged over 96 live
     // frames (a mean of the estimator, as gi.gather_reference takes it) in a
@@ -612,7 +693,8 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
-    if (mode == "plane") return planeMain(e, argc > 2 && std::string(argv[2]) == "--target");
+    if (mode == "plane") return planeMain(e, argc > 2 && std::string(argv[2]) == "--target",
+                                          argc > 2 && std::string(argv[2]) == "--kernel-arms");
     if (mode == "deterministic") return deterministicMain(e);
     if (mode == "cards") return cardsMain(e);
     std::printf("FAIL: unknown mode '%s' (plane | deterministic | cards)\n", mode.c_str());

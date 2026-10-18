@@ -814,6 +814,10 @@ public:
             float     guaranteedRadius = 0.0f;
             QVector3D centre;
             quint64   rebuilds = 0;
+            /// The incremental scroll (engine CascadeStatus::scrolls / scrollFrames): scrolls committed, and
+            /// the frames spent building their slabs.
+            quint64   scrolls = 0;
+            quint64   scrollFrames = 0;
             int       pending = 0;
             int       items = 0;
             int       attached = 0;
@@ -1009,6 +1013,8 @@ public:
         /// THE BYTES (PHOTON-WRITER-1): a hash of every light volume a reader
         /// samples, 16 hex digits — equal exactly when byte-identical.
         QString lightDigest;
+        /// ...and of the voxeliser's store (albedo, emissive, normal, coverage, position at level 0).
+        QString storeDigest;
         float   peakEmissive = 0.0f;
         qint64  emissiveAtMax = 0;    ///< on a UNORM emissive store this IS the clip
         qint64  emissiveAboveOne = 0;

@@ -844,6 +844,37 @@ jah_gpu_row(gi.cascade_determinism CLASS engine COMMAND test_gi_cascade_determin
 set_tests_properties(gi.cascade_determinism PROPERTIES
     TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.cascade_determinism PROPERTIES JAHSHAKA_TEST_FRAMES 160)
+# gi.scroll_slab — A SCROLLED CASCADE IS THE CASCADE BUILT WHERE IT IS, AND IT COST A SLAB
+# (ENGINE-UPGRADE-U5 stage 1): the same binary in its --scroll-slab mode. A scroll by three slabs (none
+# a multiple of the dispatch's four), the same spread over many frames by a tiny budget, and one an
+# edit reaches mid-flight each leave cascade 0's voxeliser store equal, float for float, to a whole
+# build at the same placement; the spread keeps the readers' box until its commit. The GPU bar (a
+# scroll by the shipped step <= 0.35 of a whole build at 128 cells) is a millisecond bar: printed
+# here and asserted by gi.scroll_slab.timing (below).
+jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_cascade_determinism --scroll-slab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scroll_slab PROPERTIES
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 220)   # counted by the suite (frames rendered)
+# gi.scroll_slab.timing — the same binary with JAHSHAKA_TIMING_BARS=1: the scroll by the shipped step voxelises in
+# <= 0.35 of a whole build at 128 cells (GPU, paired in this process). A measure row (the lead's verdict, decision 10).
+jah_gpu_exclusive_test(NAME gi.scroll_slab.timing CLASS engine RUN_TIMEOUT 300
+         COMMAND test_gi_cascade_determinism --scroll-slab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scroll_slab.timing PROPERTIES
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
+set_tests_properties(gi.scroll_slab.timing PROPERTIES JAHSHAKA_TEST_FRAMES 316)
+set_property(TEST gi.scroll_slab.timing APPEND PROPERTY RESOURCE_LOCK gi_chain)
+# gi.cascade_drag_age — UNDER A DRAG EVERY DIRTY CASCADE IS SERVED WITHIN N FRAMES (CASCADE-DRAG-STARVE-1,
+# ENGINE-UPGRADE-U5 decision 7): the --drag mode. A cube outside cascade 0 and inside 1-3 dragged 120 frames:
+# by AGE (oldest owed work first, ties innermost) each of 1-3 is rebuilt >= 120/N - 1 times, never more than N
+# frames apart; again with a second cube inside cascade 0 (all four dirty: 30/30/30/29, gaps 4); at rest the
+# picture is a whole build's.
+jah_gpu_row(gi.cascade_drag_age CLASS engine COMMAND test_gi_cascade_determinism --drag
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cascade_drag_age PROPERTIES
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.cascade_drag_age PROPERTIES JAHSHAKA_TEST_FRAMES 296)   # counted by the suite
 
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
@@ -1067,6 +1098,23 @@ jah_gpu_row(gi.rayquery CLASS engine COMMAND test_gi_rayquery
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rayquery PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.rayquery PROPERTIES JAHSHAKA_TEST_FRAMES 180)
+# engine.ray_update_counts — THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3): the
+# --update-counts mode. 200 objects, each its own mesh: an idle frame does 0 lookups, 0 rows and 0 whole-pass
+# visits; k moved cost none (a pass over the structures, once); per kind, DERIVED in the test (decision 14.4):
+# hide / show 1 lookup, add 23 + 2 rows, remove 2 + 1 row, a re-level 26 + 2 rows, a cut-out hidden the alpha
+# table's rows, a lamp added / moved / deleted the hit table's rows (the deleted lamp gone the next frame),
+# 12 stale cut-out masks remade within ceil(12 / 8) frames. COUNTS, never ms.
+jah_gpu_row(engine.ray_update_counts CLASS engine COMMAND test_gi_rayquery --update-counts
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.ray_update_counts PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(engine.ray_update_counts PROPERTIES JAHSHAKA_TEST_FRAMES 73)   # the frames it renders, counted 2026-10-18
+# engine.ray_update_cost — the same tier's update in ms per frame at 1,393 objects with 0 / 10 / 100 changes a
+# frame (the engine.rayquery stage). A measure row, run by hand (the lead's decision 9).
+jah_gpu_exclusive_test(NAME engine.ray_update_cost CLASS engine RUN_TIMEOUT 300
+         COMMAND test_gi_rayquery --update-cost
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.ray_update_cost PROPERTIES LABELS "engine;measure")
+set_tests_properties(engine.ray_update_cost PROPERTIES JAHSHAKA_TEST_FRAMES 215)   # the frames it renders, counted 2026-10-18
 
 # engine.descriptor_pools — D6-FORK-TOOLING (audit V2-D F8): every raw descriptor
 # pool is planned by the same call that creates its layout and allocates its maximum
@@ -1916,26 +1964,41 @@ jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 2236)
-# gi.voxel_metal_albedo — A METAL RE-EMITS ITS DIFFUSE LOBE, base x (1 - metalness), INTO THE BOUNCE
-# (PHOTON-MARCH-1 stage 2, VOXEL-METAL-ALBEDO-1): a plate of base colour 0.8 at metalness 0 / 0.5 / 1
-# under a sun, a white panel facing it lit by nothing else: the store and the panel's bounce in the ratio
-# 1 - metalness (field off and on); a live roughness edit and a live metalness edit each re-voxelise once.
-add_executable(test_gi_voxel_metal_albedo test_gi_voxel_metal_albedo.cpp)
-set_target_properties(test_gi_voxel_metal_albedo PROPERTIES
+# gi.march_inside — THE SHADOW MARCH'S INSIDE FRACTION (ENGINE-UPGRADE-U5 decision 22.2): two one-sided quads of opacity
+# 0.6 facing away from each other along the ray transmit (1 - c1)(1 - c2) = 0.16, one solid of the same opacity 1 - c = 0.4,
+# each against the store's own coverage, at 32 / 64 / 128 cells (the old max of the entries and the exits read both 0.4).
+jah_gpu_row(gi.march_inside CLASS engine COMMAND test_gi_march_underread --veils
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.march_inside PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.march_inside PROPERTIES JAHSHAKA_TEST_FRAMES 600)
+# gi.metal_bounce — A METAL RE-EMITS BY ITS SPECULAR LOBE'S INTEGRAL (ENGINE-UPGRADE-U5 stage 5,
+# METAL-BOUNCE-1; it replaces gi.voxel_metal_albedo's diffuse-only law): a white plate at metalness 0 / 0.5 / 1,
+# roughness 0.3 and 0.9, under a sun (the store and a facing panel's bounce in the lobes' directional ratio,
+# field off and on) and under an emitter of albedo 0 (the store in the lobes' hemispherical ratio - the
+# furnace's answer); a live roughness edit and a live metalness edit each re-voxelise once.
+add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)
+set_target_properties(test_gi_metal_bounce PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_voxel_metal_albedo PRIVATE
+target_compile_definitions(test_gi_metal_bounce PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_voxel_metal_albedo PRIVATE JahshakaEngine)
-add_dependencies(test_gi_voxel_metal_albedo JahshakaEngineMedia)
-jah_gpu_row(gi.voxel_metal_albedo CLASS engine COMMAND test_gi_voxel_metal_albedo
+target_link_libraries(test_gi_metal_bounce PRIVATE JahshakaEngine)
+add_dependencies(test_gi_metal_bounce JahshakaEngineMedia)
+jah_gpu_row(gi.metal_bounce CLASS engine COMMAND test_gi_metal_bounce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.voxel_metal_albedo PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.voxel_metal_albedo PROPERTIES JAHSHAKA_TEST_FRAMES 1128)
+set_tests_properties(gi.metal_bounce PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1310)
+# gi.metal_bounce_route — THE TINTED METAL AND THE MOVER (ENGINE-UPGRADE-U5 decision 22.1): the store holds F0 A + w B per
+# channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
+# it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %).
+jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 176)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.

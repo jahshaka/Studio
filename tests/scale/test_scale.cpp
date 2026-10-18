@@ -234,10 +234,11 @@ static int worldMain()
 }
 
 // ===========================================================================
-// scale.voxel_scroll — W1: A SCROLL RE-VOXELISES THE WHOLE CASCADE.
-// Anchor: irisgl/engine/src/OgreGi.cpp:5472-5474 ("In THIS arm the rebuild is whole
-// either way") — a cascade step rebuilds the whole cascade; no slab/toroidal scroll.
-// Number: ms per cascade rebuild (CPU and GPU, per cascade) on the 2 km walk and the
+// scale.voxel_scroll — W1: WHAT A CASCADE STEP COSTS.
+// Since ENGINE-UPGRADE-U5 stage 1 a walking step SCROLLS (the overlap copied, only the entering
+// slab voxelised, spread over frames by the per-frame budget: `vct.scrollN` rows, then the commit's
+// `vct.cascadeN`); a teleport of a whole box or more rebuilds whole.
+// Number: ms per cascade rebuild row (CPU and GPU, per cascade) on the 2 km walk and the
 // teleport set (60 m, 250 m, 1 km, 1.9 km) over the 2 km world, from the monitor's
 // `vct.cascadeN` rows (the 0027 timestamp pair).
 // ===========================================================================
@@ -308,7 +309,7 @@ static int voxelScrollMain()
             const Stats c = stats(kv.second.cpu), g = stats(kv.second.gpu);
             std::printf("W1 %-22s %-14s rebuilds %3zu | CPU ms med %7.2f max %7.2f | GPU ms med %8.2f max %8.2f\n",
                         label, kv.first.c_str(), c.n, c.median, c.max, g.median, g.max);
-            const std::string what = std::string(label) + ": " + kv.first + " GPU ms per whole-cascade rebuild (median)";
+            const std::string what = std::string(label) + ": " + kv.first + " GPU ms per cascade rebuild row (median)";
             target("W1", g.median, "ms", what.c_str());
         }
     }
