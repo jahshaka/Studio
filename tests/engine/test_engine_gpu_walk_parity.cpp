@@ -151,6 +151,12 @@ static int freeRunningArm()
 // moving cubes (>= 512 named slots: the walk goes wide) is walked with the digest on (every composed slot's index, row
 // and tail, in replay order), the poses alternating between two states so frame f and f + 2 compose the same input: the
 // pairs are compared serial against parallel, A B B A. The row also runs under the clang TSan arm (tsan-render).
+// THE RAY FEED (RAY-FEED-OBSERVER-1): the ray tier LIVE on the view (the viewport's post chain), so its change feed is
+// an observer with a lane half and its traced set — records, keys, pending key events, sets, words, rows — is folded
+// into the digest after the replay; the scene holds the four kinds of slot it keeps apart, every one changing with the
+// pose: a RE-LEVEL (a two-level cube the ray rule moves between its levels every frame, its scale alternating so the
+// far copy's hand-over width moves and the slot owes the ordered body in the lane), an ALPHA slot (a Cutout cube), a
+// RIGGED slot (a GPU-skinned cube) and a MESH SWAP (a cube re-attached to the other of two meshes every frame).
 static int composeIdentityArm()
 {
     std::string err;
@@ -177,6 +183,42 @@ static int composeIdentityArm()
         scene->attachMesh(n, cubeMesh, scene->createPbrMaterial(p));
         cubes.push_back(n);
     }
+    // THE RAY TIER LIVE: the viewport's post chain on the offscreen view (the editor screenshot's door).
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    view->setPostFx(fx);
+    const bool rays = e->rayQueryAvailable() && e->rayTracing();
+    MeshData chained = enginetest::unitCubeMesh();
+    chained.lodIndices.push_back(chained.indices);
+    chained.lodBounds.push_back(0.3f);
+    const MeshId chainMesh = scene->createMesh(chained);
+    const MeshId swapA = scene->createMesh(enginetest::unitCubeMesh()), swapB = scene->createMesh(enginetest::unitCubeMesh());
+    MeshData skinned = enginetest::unitCubeMesh();
+    {
+        const size_t nv = skinned.positions.size() / 3;
+        skinned.blendIndices.assign(nv * 4, 0);
+        skinned.blendWeights.assign(nv * 4, 0.0f);
+        for (size_t v = 0; v < nv; ++v) skinned.blendWeights[v * 4] = 1.0f;
+    }
+    const MeshId skinMesh = scene->createMesh(skinned);
+    SkeletonDesc skel;
+    skel.id = "identity/rig";
+    BoneDesc bone;
+    bone.name = "root";
+    skel.bones.push_back(bone);
+    PbrParams cut;
+    cut.alphaMode = PbrAlphaMode::Cutout;
+    cut.alphaCutoff = 0.5f;
+    const MaterialId plainMat = scene->createPbrMaterial(PbrParams()), cutMat = scene->createPbrMaterial(cut);
+    const NodeId relevel = scene->createDocumentNode(reserveNodeId());
+    scene->attachMesh(relevel, chainMesh, plainMat);
+    const NodeId alphaNode = scene->createDocumentNode(reserveNodeId());
+    scene->attachMesh(alphaNode, cubeMesh, cutMat);
+    const NodeId rigNode = scene->createDocumentNode(reserveNodeId());
+    scene->attachSkinnedMesh(rigNode, skinMesh, plainMat, skel);
+    const NodeId swapNode = scene->createDocumentNode(reserveNodeId());   // the last slot: its free moves no other slot
+    scene->attachMesh(swapNode, swapA, plainMat);
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
@@ -202,6 +244,25 @@ static int composeIdentityArm()
             part.nodes.push_back(r);
             part.changes.moved.push_back(r.id);
         }
+        if (send) {
+            // The ray feed's four slots: the re-level 2.5 m from the camera or 400 m away (its scale alternating), the
+            // alpha and the rigged cubes stepping with the pose, the swap re-attached to the pose's mesh.
+            const auto place = [&](NodeId id, const Vec3 &at, float scale) {
+                NodeRecord r;
+                r.id = id;
+                r.fields = NodeRecord::Trs;
+                r.position = at;
+                r.rotation = Quat(0.0f, 0.0f, 0.0f, 1.0f);
+                r.scale = Vec3(scale, scale, scale);
+                part.nodes.push_back(r);
+                part.changes.moved.push_back(id);
+            };
+            place(relevel, pose ? Vec3(0.0f, 29.0f, -360.0f) : Vec3(0.0f, 28.5f, 38.0f), pose ? 0.7f : 0.5f);
+            place(alphaNode, Vec3(-21.0f, 0.3f + 0.05f * float(pose), 0.0f), 0.5f);
+            place(rigNode, Vec3(21.0f, 0.3f + 0.05f * float(pose), 0.0f), 0.5f);
+            place(swapNode, Vec3(0.0f, 0.3f + 0.05f * float(pose), 21.0f), 0.5f);
+            scene->attachMesh(swapNode, pose ? swapB : swapA, plainMat);
+        }
         in.scenes.push_back(part);
         enginetest::frames(e, 1, in);
     };
@@ -219,13 +280,29 @@ static int composeIdentityArm()
     // share + 1 (9 = the frame thread's share 8) throws before its first stage; 17 + share throws AFTER it (decision
     // 22.4 a: the row staged, its tail and lane halves not collected — the redo starts the share over, the row kept).
     const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 20, 0, 0 };
-    unsigned long long digest[10] = {}, recomposes[10] = {};
+    unsigned long long digest[10] = {}, recomposes[10] = {}, raysTold[10] = {}, raysOwed[10] = {}, refits[10] = {};
     unsigned composed[10] = {}, shares[10] = {}, atoms[10] = {}, queues[10] = {};
+    const auto raysOf = [](const inspect::SceneEcho::GpuWalk &g, unsigned long long &told, unsigned long long &owed) {
+        for (const inspect::SceneEcho::GpuWalk::Observer &o : g.observers)
+            if (o.name == "rays" && o.laneHalf) { told = o.told; owed = o.owed; return true; }
+        return false;
+    };
+    unsigned long long told0 = 0, owed0 = 0;
+    const bool raysLive = raysOf(echo->gpuWalk(), told0, owed0);
+    unsigned long long refits0 = scene->published().gpuScene.rayLevelRefits;
     for (int f = 0; f < 10; ++f) {
         e->setArm("gpuscene.serialCompose", double(pattern[f]));
         e->setArm("gpuscene.throwInLane", double(throwAt[f]));
         record(f % 2);
         const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
+        unsigned long long told = 0, owed = 0;
+        raysOf(g, told, owed);
+        raysTold[f] = told - told0;
+        raysOwed[f] = owed - owed0;
+        told0 = told;
+        owed0 = owed;
+        refits[f] = scene->published().gpuScene.rayLevelRefits - refits0;
+        refits0 = scene->published().gpuScene.rayLevelRefits;
         digest[f] = g.composeDigest;
         composed[f] = g.slotsComposed;
         shares[f] = g.shares;
@@ -247,6 +324,23 @@ static int composeIdentityArm()
         if (!pattern[f])
             CHECK(composed[f] >= 512u && shares[f] == 9u, "frame %d went wide: %u slots on %u shares", f, composed[f],
                   shares[f]);
+    // THE RAY FEED IN THE DIGEST (RAY-FEED-OBSERVER-1): live, lane-split, its lane halves answering the movers and its
+    // ordered half replaying the slots whose facts moved (the re-level's hand-over width), the ray rule re-levelling.
+    if (rays) {
+        CHECK(raysLive, "the ray tier is live: its change feed is a registered observer with a lane half ('rays')");
+        for (int f = 0; f < 10; ++f) {
+            std::printf("   frame %d: the ray feed handed %llu composed slots, owed %llu; the ray rule re-levelled %llu\n",
+                        f, raysTold[f], raysOwed[f], refits[f]);
+            if (pattern[f] || throwAt[f]) continue;   // a serial frame tells every slot whole; a throw's redo varies
+            CHECK(raysTold[f] >= 512u && raysOwed[f] >= 1u && raysOwed[f] * 10u <= raysTold[f],
+                  "frame %d: the ray feed's lane halves answered the movers (%llu of %llu owed the ordered body: the "
+                  "re-level's moved hand-over width, never the transform-only movers)", f, raysOwed[f], raysTold[f]);
+        }
+        CHECK(refits[2] >= 1u && refits[3] >= 1u, "the ray rule re-levelled the chained cube every frame (%llu, %llu)",
+              refits[2], refits[3]);
+    } else {
+        std::printf("ok:   no ray-query device here: the ray feed is not a registered observer (its digest is not folded)\n");
+    }
     for (int f = 2; f < 10; ++f)
         CHECK(digest[f] == digest[f % 2], "frame %d (%s) folds what frame %d (serial) folded: the same rows, tails and "
               "notifies in the same order (%016llx / %016llx)", f, pattern[f] ? "serial" : "parallel", f % 2, digest[f],

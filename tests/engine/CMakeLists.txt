@@ -531,6 +531,8 @@ set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine
 # engine.gpuscene_identity — THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE FOR BYTE (ENGINE-UPGRADE-U4 stage 4): 8 workers,
 # 1,024 moving cubes, the compose's digest (every composed slot's index, row and tail in replay order) compared between
 # the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
+# RAY-FEED-OBSERVER-1: the ray tier live on the view, the ray feed's traced set folded into the digest (a re-level, an
+# alpha slot, a rigged slot and a mesh swap in the scene); its lane halves owe the ordered body for <= 10 % of the movers.
 jah_gpu_row(engine.gpuscene_identity CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"

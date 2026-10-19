@@ -595,23 +595,42 @@ int composeRow(World &w, int n)
         }
         w.e->setArm("gpuscene.observersOff", 0.0);
         w.e->setArm("gpuscene.walkTiming", 1.0);
-        std::vector<double> laneObs, otherObs;   // the observers' replay time, per frame: the lane-split one / the rest
+        // THE OBSERVERS IN THE REPLAY, per observer and per frame (RAY-FEED-OBSERVER-1): its time there (the ordered
+        // half of a lane-split observer, the whole notify of the rest) and its owed fraction (the slots it was told in
+        // the replay over the composed slots handed to it).
+        std::vector<std::vector<double>> obsMs, obsOwed;
+        std::vector<std::string> obsName;
+        std::vector<bool> obsLane;
         inspect::SceneEcho::GpuWalk prev = echo->gpuWalk();
         for (int f = 0; f < perBlock + 1; ++f) {
             writeFrame(w, k);
             const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
             if (f) {
                 notify.push_back(g.notifyMicros);
-                laneObs.push_back(g.observerLaneMicros - prev.observerLaneMicros);
-                otherObs.push_back(g.observerOtherMicros - prev.observerOtherMicros);
+                for (size_t o = 0; o < g.observers.size(); ++o) {
+                    if (obsMs.size() <= o) {
+                        obsMs.emplace_back();
+                        obsOwed.emplace_back();
+                        obsName.push_back(g.observers[o].name);
+                        obsLane.push_back(g.observers[o].laneHalf);
+                    }
+                    const bool had = o < prev.observers.size();
+                    const double us = g.observers[o].micros - (had ? prev.observers[o].micros : 0.0);
+                    const unsigned long long told = g.observers[o].told - (had ? prev.observers[o].told : 0ull);
+                    const unsigned long long owed = g.observers[o].owed - (had ? prev.observers[o].owed : 0ull);
+                    obsMs[o].push_back(us / 1000.0);
+                    obsOwed[o].push_back(told ? double(owed) / double(told) : 0.0);
+                }
             }
             prev = g;
         }
-        {
-            const Stats lo = stats(laneObs), oo = stats(otherObs);
-            std::printf("CPU_MAP engine.gpuscene_compose arm=%d the observers in the replay (decision 17.1): the card "
-                        "feed's ordered half %.3f ms, the ray feed (whole; U5's) %.3f ms\n", k, lo.median / 1000.0,
-                        oo.median / 1000.0);
+        double raysMs = -1.0, raysOwed = -1.0;
+        for (size_t o = 0; o < obsMs.size(); ++o) {
+            const Stats ms = stats(obsMs[o]), ow = stats(obsOwed[o]);
+            std::printf("CPU_MAP engine.gpuscene_compose arm=%d the observers in the replay: '%s' (%s) %.3f ms, owed "
+                        "fraction %.4f (max %.4f)\n", k, obsName[o].c_str(), obsLane[o] ? "lane-split: its ordered half"
+                        : "told whole", ms.median, ow.median, ow.max);
+            if (obsName[o] == "rays") { raysMs = ms.median; raysOwed = ow.max; }
         }
         w.e->setArm("gpuscene.walkTiming", 0.0);
         writeFrame(w, k);
@@ -638,6 +657,13 @@ int composeRow(World &w, int n)
         // floor) -> 8.6 + (15.1 - 8.6) / 8 + 2 = 11.4 ms for the walk's compare + compose, at the group move and k10000.
         CHECK(wk.median / 1000.0 <= 11.4, "engine.gpuscene_compose arm %s: the walk's compare + compose %.3f ms <= 11.4",
               armName(k, b, sizeof b), wk.median / 1000.0);
+        // RAY-FEED-OBSERVER-1'S BAR: the ray feed's share of the replay at 10k movers 5.0-5.1 ms (U4's measure; 2.5 on a
+        // quieter box) -> <= 1.0 ms, its per-slot work lane-local; the pattern fits only where a mover owes nothing (a
+        // transform-only move changes none of the feed's facts): at most 10 % of the slots owe the ordered body.
+        CHECK(raysMs >= 0.0 && raysMs <= 1.0, "engine.gpuscene_compose arm %s: the ray feed's ordered half %.3f ms <= 1.0",
+              armName(k, b, sizeof b), raysMs);
+        CHECK(raysOwed >= 0.0 && raysOwed <= 0.10, "engine.gpuscene_compose arm %s: the ray feed's owed fraction %.4f <= "
+              "0.10 (the movers owe nothing)", armName(k, b, sizeof b), raysOwed);
         CHECK(composed >= unsigned(n), "engine.gpuscene_compose arm %s: every cube's slot composed (%u of %d)",
               armName(k, b, sizeof b), composed, n);
         CHECK(shares == kWorkers + 1u, "engine.gpuscene_compose arm %s: the compare ran on the pool's %u shares",
