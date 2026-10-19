@@ -1654,7 +1654,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ENVIRONMENT "HOME=${_vos_home};JAHSHAKA_DATA_ROOT=${_vos_home}/.local/share/Jahshaka"
             TIMEOUT 260 LABELS "ui")
         jah_tsan_blocked(ui.view_options_submenu)   # spawns the app (TSAN-BOOT-TOO-SLOW, as its neighbours)
-        jah_lsan_blocked(ui.view_options_submenu)   # spawns the app (LSAN-L1-MATERIAL-PROPERTIES, as its neighbours)
+        # NOT in the leak lane (LEAK-1): its script ignores how the app ended (no exit-code read), so a green there
+        # would not mean the app leaked nothing — tests/CMakeLists.txt's membership rule. (LSAN-L1 is closed.)
     else()
         message(STATUS "ui.view_options_submenu skipped: needs xdotool, curl, jq, Xvfb and xdpyinfo")
     endif()
