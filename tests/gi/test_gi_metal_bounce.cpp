@@ -349,20 +349,21 @@ int main(int argc, char **argv)
     // A TINTED metal (base 1 / 0.6 / 0.3, metalness 1, r 0.3): the lobe F0 A + w B per CHANNEL, F0 = b, w = 1 - so a
     // store or a route that swapped the two (A + b B) reads a different colour. The store against the white diffuser,
     // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on and the SURFACE CACHE ON, a still
-    // metal's hits read its CARD first and a MOVER's go to the decode (jahHitAlwaysDecodes). SINCE PHOTON-3 stage 2 every
-    // route sends the LIGHTS' lobe toward its own ray, E mu f_s( L, V ): the card read from the ray tier's light table
-    // (jah_rq_card_lights.glsl), the decode by the BRDF itself (viewDir the reversed ray), the store's hit by
-    // jahHitDirect - so (i) the card's flat term holds the GATHERED light's lobe alone (no light's integral any more);
-    // (ii) the panel's gathered E/pi from the still plate is the mover's times the lobe at the card's own F0 (its 8-bit
-    // Specular layer) against the material's, through the panel's view of the plate (panelSeesPlate), per channel within
-    // 0.4 %; and THE STORE'S LEG: the same plate still on the uncarded cube, its hits reading the store's material and
-    // direct term, against the mover within 0.4 %. The gather's sample sequence is held (freezeFrameIndex): the two arms
-    // trace the same rays, and their difference is the route's alone.
+    // metal's hits read its CARD first and a MOVER's go to the decode (jahHitAlwaysDecodes). A GATHER RAY READS THE LIGHTS'
+    // LOBE BY ITS INTEGRAL on every route (PHOTON-3, the lead's ruling: an irradiance estimator cannot sample a polished
+    // hit's near-delta lobe; a REFLECTION takes the lobe toward its ray - this file's law arm): the card read from the ray
+    // tier's light table (jah_rq_card_lights.glsl), the decode's record (atomGatherMetalLobe), the store's hit
+    // (jahHitDirect) - so (i) the card's flat term holds the GATHERED light's lobe alone (the lights' is the read's own);
+    // (ii) the panel's gathered E/pi from the still plate is the mover's times the integral at the card's own F0 (its
+    // 8-bit Specular layer) against the material's, per channel within 0.4 %; and THE STORE'S LEG: the same plate still
+    // on the uncarded cube, its hits reading the store's material and direct term, against the mover within 0.4 %. The
+    // gather's sample sequence is held (freezeFrameIndex): the two arms trace the same rays, and their difference is the
+    // route's alone.
     // THE DIELECTRIC'S ROUTE: the same plate, a BLACK dielectric first (its re-emission is its 0.04 lobe alone; the
     // material edited in place, the gather's view kept), then the tinted metal: the panel's gathered E/pi from the black
-    // plate is the 0.04 lobe toward the panel against the tinted metal's RED channel (base 1 there: F0 = 1), by the
-    // panel's view of the plate - as a MOVER (the decode) within 0.4 %, and still (its card) by the card's F0 the same
-    // way as the metal's.
+    // plate is (0.04 A + B) / (A + B) of the tinted metal's RED channel (base 1 there: F0 = 1), the panel's view factor
+    // cancelling (every plate point sees the sun at cosine 1) - as a MOVER (the decode) within 0.4 %, and still (its
+    // card) by the card's F0 the same way as the metal's.
     // (The dielectric FIRST: the gather's held history keeps ~0.1 % of the previous plate after 48 frames, which is
     // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric.) THE
     // METAL EDIT IS MADE WHILE THE PLATE IS A MOVER (BUGS-1 item 3): a mover is in no voxel, so the edit re-voxelises
@@ -548,21 +549,13 @@ int main(int argc, char **argv)
                     CHECK(cardLit[k] && cardFlat[k][c] < 0.05 * exact[k][c], msg);
                 }
             (void)halfStep;
-            // THE READ'S LOBE, toward each panel point, by the panel's own view of the plate (panelSeesPlate): the sun
-            // straight down, the lobe D Vis ( F0 ( 1 - Fc ) + w Fc ) at r 0.3 - for a given F0 and w
-            const double sunL[3] = { 0.0, 1.0, 0.0 };
-            const auto panelLobe = [&](double F0, double w) {
-                return panelSeesPlate([&](int, int, const double *V) {
-                    double dvis = 0.0, fc = 0.0;
-                    ggxLobe(sunL, V, 0.3, dvis, fc);
-                    return dvis * (F0 * (1.0 - fc) + w * fc);
-                });
-            };
-            // THE ROUTE DOES NOT MOVE THE BOUNCE: the card's read uses the card's own F0 (its 8-bit Specular layer:
-            // 0.3 x 255 = 76.5 rounds), the decode the material's - their ratio is the lobe at the one against the
-            // other, through the panel's view
+            // A GATHER RAY READS THE LOBE'S INTEGRAL ON EVERY ROUTE (the lead's ruling on PHOTON-3): the card read and
+            // the store's hit in the gather job, the decode's record - mu ( F0 A + w B ) E / pi, every plate point at the
+            // sun's cosine 1, so the panel's view of the plate cancels from a route's ratio. THE ROUTE DOES NOT MOVE THE
+            // BOUNCE: the card's read uses the card's own F0 (its 8-bit Specular layer: 0.3 x 255 = 76.5 rounds), the
+            // decode the material's - their ratio is the integral at the one against the other.
             for (int c = 0; c < 3; ++c) {
-                const double want = cardLit[1] ? panelLobe(cardF0[1][c], cardW[1]) / panelLobe(tint[c], 1.0) : 0.0;
+                const double want = cardLit[1] ? (cardF0[1][c] * A + cardW[1] * B) / (tint[c] * A + B) : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE ROUTE DOES NOT MOVE THE BOUNCE, channel %d: the panel's gathered E/pi "
                               "from the tinted metal by its card %.5f, as a mover %.5f (%.4f; the card's F0 against the "
@@ -578,20 +571,17 @@ int main(int argc, char **argv)
                               storeLeg[c], gathered[1][c], gathered[1][c] > 0.0 ? storeLeg[c] / gathered[1][c] : 0.0);
                 CHECK(gathered[1][c] > 0.0 && std::fabs(storeLeg[c] / gathered[1][c] - 1.0) <= 0.004, msg);
             }
-            // THE LOBE TOWARD THE PANEL, not its integral (PHOTON-3 stage 2): the black dielectric's F0 0.04 against the
-            // white-red metal's 1, by the panel's view of the plate - where the integrals' ( 0.04 A + B ) / ( A + B )
-            // weighted every direction alike
-            const double wantD = panelLobe(0.04, 1.0) / panelLobe(1.0, 1.0);
+            const double wantD = (0.04 * A + B) / (A + B);
             for (int c = 0; c < 3; ++c) {
                 const double ratio = gathered[1][0] > 0.0 ? dielectric[1][c] / gathered[1][0] : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY THE DECODE (a mover), channel %d: the panel's "
-                              "gathered E/pi from the black dielectric is its lobe toward the panel against the white-red "
-                              "metal's (%.5f; want %.5f, bar 0.4 %%)", c, ratio, wantD);
+                              "gathered E/pi from the black dielectric is (0.04 A + B) / (A + B) of the white-red metal's "
+                              "(%.5f; want %.5f, bar 0.4 %%)", c, ratio, wantD);
                 CHECK(dielectric[1][c] > 0.0 && std::fabs(ratio / wantD - 1.0) <= 0.004, msg);
             }
             for (int c = 0; c < 3; ++c) {
-                const double want = cardLit[0] && dielectric[1][c] > 0.0 ? panelLobe(cardF0[0][c], cardW[0]) / panelLobe(0.04, 1.0) : 0.0;
+                const double want = cardLit[0] && dielectric[1][c] > 0.0 ? (cardF0[0][c] * A + cardW[0] * B) / (0.04 * A + B) : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY ITS CARD (still), channel %d: the panel's "
                               "gathered E/pi %.6f, as a mover %.6f (%.4f; the card's F0 against the material's %.4f; bar 0.4 %%)", c,

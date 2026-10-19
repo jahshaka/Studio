@@ -2003,12 +2003,12 @@ set_tests_properties(gi.metal_bounce PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1514)
 # gi.metal_bounce_route — THE TINTED METAL AND THE MOVER (ENGINE-UPGRADE-U5 decision 22.1): the store holds F0 A + w B per
 # channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
-# it becomes a mover - its hits then go to the decode (bar 0.4 %); a BLACK dielectric's bounce is its 0.04 lobe toward
-# the panel against the metal's, still and as a mover. THE SURFACE CACHE IS ON: a still plate's hits read its card
-# first. SINCE PHOTON-3 every route sends the lights' lobe toward its own ray (the card read from the ray tier's light
-# table, the decode by the BRDF, the store's hit by jahHitDirect): the card's flat term holds no light's lobe, and
-# still / mover = the lobe at the card's own F0 against the material's through the panel's view (bar 0.4 %). The
-# panel is black, so the plate's only light is the sun's.
+# it becomes a mover - its hits then go to the decode (bar 0.4 %); a BLACK dielectric's bounce is (0.04 A + B) / (A + B)
+# of the metal's, still and as a mover. THE SURFACE CACHE IS ON: a still plate's hits read its card first. A GATHER ray
+# reads the lights' lobe by its INTEGRAL on every route (PHOTON-3, the lead's ruling: the card read from the ray tier's
+# light table, the decode's record, the store's hit): the card's flat term holds no light's lobe, and still / mover =
+# the integral at the card's own F0 against the material's (bar 0.4 %). The panel is black: the sun is the plate's
+# only light.
 jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
