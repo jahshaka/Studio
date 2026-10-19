@@ -301,6 +301,50 @@
     "theme.sheets"
    ],
    "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 A: a command the reader cannot resolve in irisgl/CMakeLists.txt (a new execute_process) is the WHOLE TIER, never its directory",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "set(BULLET2_MULTITHREADING ON)\n",
+   "new": "set(BULLET2_MULTITHREADING ON)\nexecute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different a b)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 B: set(${out} … PARENT_SCOPE) inside a function writes its CALLER's variable — the whole tier, never nothing",
+   "file": "cmake/OgreInstallStamp.cmake",
+   "old": "    set(${out} \"${_files}\" PARENT_SCOPE)\n",
+   "new": "    set(${out} \"${_files}\" PARENT_SCOPE)\n    set(${out} \"${_files}\" PARENT_SCOPE)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 C: a reader resolves the block at ITS OWN line — set(JAH_RAY_QUERY_OK ON) reaches the second if(JAH_RAY_QUERY_OK)'s ray jobs",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "        set(JAH_RAY_QUERY_OK ON)\n",
+   "new": "        set(JAH_RAY_QUERY_OK  ON)\n",
+   "must": [
+    "gi.rt_reflect",
+    "engine.ray_update_counts"
+   ],
+   "must_not": [],
+   "why_has": [
+    "variable JAH_RQ_GEN_DIR",
+    "variable JAH_RQ_HEADERS",
+    "target JahshakaRayQuerySpv"
+   ],
+   "note": "the rows are the same either way (jahshaka_engine_ray_query(JahshakaEngine) already spans every engine fixture): the case pins the READ — the second if()'s body (the SPIR-V rules' variables), which the first if()'s two message() calls never named"
+  },
+  {
+   "case": "TOOLING-2 round 3 D: a COMPILE property beside the inert helper's OBJECT_DEPENDS (a computed source list) is the WHOLE TIER — another reader that reaches nothing never owns it",
+   "file": "cmake/UicObjectDepends.cmake",
+   "old": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_forms})\n",
+   "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_forms})\n            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY COMPILE_DEFINITIONS JAH_UI_FORM=1)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
   }
  ]
 }

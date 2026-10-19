@@ -1257,7 +1257,7 @@ class Selection:
         """A PATH NOBODY OWNS (TESTING-SPEED-A item 1): recorded as a fallback (printed, and gate.selection refuses a lane
         that has one) — and it selects THE SUBSYSTEM OF ITS DIRECTORY by AREA_RULES (the nearest parent directory a rule
         matches), NEVER the whole tier."""
-        self.fallback.append(f"{tag}: {why}")
+        # the reason is recorded WITH ITS OUTCOME (TOOLING-2: master_check prints it — "its directory's rows" or NOTHING)
         parts = p.split("/")
         if parts[:2] == ["tests", "lanes"] and len(parts) > 3:
             parts = ["tests"] + parts[2:]      # tests/lanes/<LANE>/: the lane's own directory
@@ -1265,15 +1265,18 @@ class Selection:
             # a tests/<dir>/ path: that directory's rows ARE its subsystem
             self.add(self.by_dir[parts[1]], f"{tag}: its directory tests/{parts[1]}")
             notes.append(f"NO RULE → its directory's rows: tests/{parts[1]}")
+            self.fallback.append(f"{tag}: {why} → its directory tests/{parts[1]} ({len(self.by_dir[parts[1]])} row(s))")
             return
         d = os.path.dirname(p)
         while d:
             r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
             if r:
                 notes.append(f"NO RULE → its directory's subsystem: {r}")
+                self.fallback.append(f"{tag}: {why} → its directory {d}/'s rule ({r})")
                 return
             d = os.path.dirname(d)
         notes.append("NO RULE and no rule for any parent directory → nothing more (never the whole tier)")
+        self.fallback.append(f"{tag}: {why} → NOTHING (no rule owns it or any parent directory)")
 
     def argv_rows(self, p, why):
         """Rows whose command line or script IS this file (a wrapper, a lint, a configured .js)."""
@@ -1900,7 +1903,7 @@ class Selection:
             unresolved = []
         if unresolved:
             parts = p.split("/")
-            if parts[0] == "tests" and len(parts) == 3 and parts[1] in self.by_dir:
+            if parts[0] == "tests" and len(parts) == 3 and parts[1] in self.by_dir and parts[2] == "CMakeLists.txt":
                 # a test directory's own build file: its commands build and register that directory's rows only
                 self._fallback(p, tag, notes, f"CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
             else:
@@ -2352,7 +2355,13 @@ class Selection:
                 users = [c for c in gate_graph.cmake_commands(whole)
                          if "${" + var + "}" in c[3] and c[3] != args and c[0] != "set"]
                 for (un, uf, ul, ua, ufn) in users:
-                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf): got = True
+                    # ANOTHER READER OWNS THIS COMMAND only if it REACHED something (TOOLING-2, the reader's second round): a
+                    # reader that resolves to nothing compiled says nothing about this command — a COMPILE_DEFINITIONS
+                    # property on a computed source list beside OBJECT_DEPENDS ones narrowed to 0 rows that way
+                    before = self._reach_mark()
+                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf) \
+                            and self._reach_mark() != before:
+                        got = True
                 if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
         # 7. a directory-scope setting: every target under this directory
         if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
@@ -2379,6 +2388,10 @@ class Selection:
               "continue", "break", "return", "list", "string", "math", "message", "unset", "cmake_path",
               "get_target_property", "get_property", "get_directory_property", "get_filename_component",
               "get_source_file_property", "get_test_property", "get_cmake_property"}
+
+    def _reach_mark(self):
+        """What the selection holds so far (rows, arms, whole pools, the tier's reasons): a change means something was reached."""
+        return (len(self.selected), sum(len(v) for v in self.arms.values()), len(self.whole), len(self.full_tier))
 
     def inert_command(self, name, args):
         """True when a command changes no byte of a build (see _INERT): a file() read, a function-local set(), a

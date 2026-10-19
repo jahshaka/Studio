@@ -191,9 +191,18 @@ def hunk_cases(gs, graph, build, inv0, cases):
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
         # a hunk is read by what it names: never the whole inventory unless the case says so (TOOLING-2: a `must` list
         # passed by a whole-inventory reach proved nothing)
-        check(not S.full_tier or c.get("whole_tier"), "%s: no whole-inventory reach (%s)" % (c["case"][:60], S.full_tier[:1]))
+        if c.get("require_tier"):
+            # a change the reader CANNOT resolve stays the whole tier with its reason (TOOLING-2's reader rounds: a fallback
+            # to "its directory" reached nothing for irisgl/CMakeLists.txt; PARENT_SCOPE inside a function read as nothing)
+            check(bool(S.full_tier), "%s: the WHOLE TIER, its reason printed (%s)" % (c["case"][:60], S.full_tier[:1]))
+        else:
+            check(not S.full_tier or c.get("whole_tier"), "%s: no whole-inventory reach (%s)" % (c["case"][:60], S.full_tier[:1]))
         miss = [m for m in c["must"] if m not in S.selected and not S.full_tier]
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
+        if c.get("why_has"):
+            # what the reach was READ through, when the rows cannot tell (a reach the engine target already spans)
+            why = " ".join(r for _, r in S.rationale)
+            check(all(w in why for w in c["why_has"]), "%s: read through %s" % (c["case"][:60], c["why_has"]))
         extra = [m for m in c.get("must_not", []) if m in S.selected]
         check(not extra, "%s: does NOT select %s (%s)" % (c["case"][:60], c.get("must_not", []), extra))
 

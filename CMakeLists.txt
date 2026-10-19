@@ -23,13 +23,20 @@ endif()
 # -DJAH_NO_CCACHE=ON; an explicit CMAKE_<LANG>_COMPILER_LAUNCHER always wins.
 option(JAH_NO_CCACHE "Do not use ccache even when it is installed" OFF)
 find_program(JAH_CCACHE_PROGRAM ccache)
+# THE LAUNCHER PINS THE BUILD DIR'S SPELLING (TOOLING-2, measured): ccache's base_dir rewrites every depfile path
+# relative to the compile's working directory, which it reads from $PWD only when $PWD names the real cwd — and ninja
+# runs each compile in the build dir with whatever $PWD the caller had (a /mnt/work cwd: ~/Developer is a symlink to
+# it, `ninja -C`, `cmake --build` from the tree). Then ninja's deps log spelled every header
+# `../../../../../../../../home/…`, a node no rule produces: a generated header (ui_*.h, the ray jobs' SPIR-V) was no
+# input of its includers and went stale for one build. `env PWD=<the build dir as configured>` holds on every route
+# (ninja always runs the compile there); an older cache's bare ccache launcher is upgraded.
 if(JAH_CCACHE_PROGRAM AND NOT JAH_NO_CCACHE)
-    if(NOT CMAKE_C_COMPILER_LAUNCHER)
-        set(CMAKE_C_COMPILER_LAUNCHER "${JAH_CCACHE_PROGRAM}" CACHE STRING "C compiler launcher")
-    endif()
-    if(NOT CMAKE_CXX_COMPILER_LAUNCHER)
-        set(CMAKE_CXX_COMPILER_LAUNCHER "${JAH_CCACHE_PROGRAM}" CACHE STRING "C++ compiler launcher")
-    endif()
+    set(_jah_launcher /usr/bin/env "PWD=${CMAKE_BINARY_DIR}" "${JAH_CCACHE_PROGRAM}")
+    foreach(_jah_lang C CXX)
+        if(NOT CMAKE_${_jah_lang}_COMPILER_LAUNCHER OR "${CMAKE_${_jah_lang}_COMPILER_LAUNCHER}" STREQUAL "${JAH_CCACHE_PROGRAM}")
+            set(CMAKE_${_jah_lang}_COMPILER_LAUNCHER "${_jah_launcher}" CACHE STRING "${_jah_lang} compiler launcher" FORCE)
+        endif()
+    endforeach()
 endif()
 
 project(Jahshaka)
