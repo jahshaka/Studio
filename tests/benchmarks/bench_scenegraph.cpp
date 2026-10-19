@@ -899,12 +899,27 @@ int main(int argc, char **argv)
 
         SceneMirror mirror(es);
         mirror.setSource(s.doc);
+        const SceneChangeStats fs0 = es->published().changes;
         const auto tFirst = Clock::now();
         const int mirrored = mirror.sync();
         const double firstSyncMs = msSince(tFirst);
-        enginetest::frames(engine, 1);
+        enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         std::printf("    document %d nodes (%zu dynamic), mirror reported %d, first sync %.1f ms\n",
                     s.totalNodes, s.dynamic.size(), mirrored, firstSyncMs);
+        // THE FIRST SYNC'S COUNTS (SCENEGRAPH-BASELINE-2): its cost is the counts' — one visit per node, one material
+        // build per distinct material, one Item per mesh node, ONE GI invalidation for the whole adoption (the
+        // structural edit), never a count that grows as nodes x users.
+        {
+            const SceneChangeStats fs1 = es->published().changes;
+            std::printf("COUNT e.first_sync scale=%d visited=%d dirty=%llu pushes=%llu materials=%llu attaches=%llu "
+                        "walk=%s itemsCreated=%llu giInvalidations=%llu probeRestarts=%llu reclaimSweeps=%llu\n",
+                        n, mirrored, (unsigned long long)mirror.dirtyNodeCount(),
+                        (unsigned long long)mirror.visitPushCount(), (unsigned long long)mirror.materialBuildCount(),
+                        (unsigned long long)mirror.meshAttachCount(), mirror.walkMode(),
+                        fs1.itemsCreated - fs0.itemsCreated, fs1.giInvalidations - fs0.giInvalidations,
+                        fs1.probeBuildRestarts - fs0.probeBuildRestarts,
+                        (unsigned long long)mirror.reclaimSweepCount());
+        }
         CHECK(mirrored == s.totalNodes, "every synthetic node reached the engine");
 
         addSingle("e.build_doc", n, buildMs);
@@ -1220,15 +1235,30 @@ int main(int argc, char **argv)
 
             const LoopBudget bRig{ 5, 30, quick ? 40 : 400, quick ? 400.0 : 2000.0 };
             float t = 0.0f;
+            int rigIt = 0;
             auto st = runLoop(bRig, [&](int, Recorder &rec) {
                 t += 1.0f / 60.0f;
+                const quint64 pushes0 = mirror.visitPushCount();
+                const SceneChangeStats cs0 = es->published().changes;
                 const auto t0 = Clock::now();
                 doc->getRootNode()->updateAnimation(t);
-                mirror.sync();
+                const int visited = mirror.sync();
                 const double syncMs = msSince(t0);
                 enginetest::frames(engine, 1);
                 rec.add("d.anim_rig_200_sync", syncMs);
                 rec.add("d.anim_rig_200", msSince(t0));
+                // THE ANIMATED FRAME'S COUNTS (SCENEGRAPH-BASELINE-2): 200 written nodes = 200 transform records,
+                // each served by the journal's fast path (no walk visit), no push, no material build, no structural edit.
+                if (rigIt++ < 3) {
+                    const SceneChangeStats cs1 = es->published().changes;
+                    std::printf("COUNT d.anim_rig_200 visited=%d fastServed=%d dirty=%llu pushes=%llu materials=%llu "
+                                "records=%u walk=%s itemsCreated=%llu giInvalidations=%llu\n",
+                                visited, mirror.fastPathServedCount(), (unsigned long long)mirror.dirtyNodeCount(),
+                                (unsigned long long)(mirror.visitPushCount() - pushes0),
+                                (unsigned long long)mirror.materialBuildCount(),
+                                engine->published().input.nodeTransforms, mirror.walkMode(),
+                                cs1.itemsCreated - cs0.itemsCreated, cs1.giInvalidations - cs0.giInvalidations);
+                }
             });
             addMetric("d.anim_rig_200_sync", 200, st["d.anim_rig_200_sync"], true);
             addMetric("d.anim_rig_200", 200, st["d.anim_rig_200"], true);
