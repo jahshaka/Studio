@@ -354,11 +354,6 @@ int main(int argc, char **argv)
     GatherTuning shipped;
     shipped.readback = true;
     shipped.restOff = true;
-    // MEASURE (decision 21, by hand): the age at which the filter has fallen to none (the row runs the shipped one)
-    if (const char *age = std::getenv("JAH_GATHER_FILTER_AGE")) {
-        shipped.filterByAge = true;
-        shipped.filterAgeFrames = unsigned(std::atoi(age));
-    }
     if (swapArms) {
         std::printf("   --swap-arms: the arms' roles exchanged (the bar's own proof: this run must FAIL)\n");
         std::swap(preLane, shipped);

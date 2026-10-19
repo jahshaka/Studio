@@ -12,7 +12,7 @@
 //   4. world.gatherIrradiance (ENGINE-UPGRADE-U5 stage 5): not ready without the arm
 //      "gather.irradianceReadback", naming why; with it ready, the whole view's mean E/pi finite and
 //      positive where the gather answers, the rectangle's pixels counted; the reconstruction's arms
-//      "gather.jitter" (0..2), "gather.filterOff" and "gather.filterByAge" set and read back; off again it is not ready.
+//      "gather.jitter" (0..1) and "gather.filterOff" set and read back; off again it is not ready.
 // Frames, never time: the waits count editor.frame calls.
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -93,14 +93,12 @@ if (!gs.gather || !gs.gather.on) {
     var half = world.gatherIrradiance({ x: 0, y: 0, w: 0.5, h: 1 });
     assert(half.ready === true && Math.abs(half.pixels - ir.pixels / 2) <= ir.height,
            "a half-view rectangle counts half the pixels (" + half.pixels + " of " + ir.pixels + ")");
-    assert(engine.arm("gather.jitter", 2) === 2 && engine.arm("gather.filterOff", 1) === 1 &&
-           engine.arm("gather.filterByAge", 12) === 12,
-           "the reconstruction's arms gather.jitter, gather.filterOff and gather.filterByAge are set");
+    assert(engine.arm("gather.jitter", 1) === 1 && engine.arm("gather.filterOff", 1) === 1,
+           "the reconstruction's arms gather.jitter and gather.filterOff are set");
     editor.frame(4);
     assert(world.gatherIrradiance().ready === true, "the gather answers under the arms");
     engine.arm("gather.jitter", 0);
     engine.arm("gather.filterOff", 0);
-    engine.arm("gather.filterByAge", 0);
     engine.arm("gather.irradianceReadback", 0);
     editor.frame(4);
     assert(world.gatherIrradiance().ready === false, "the arm off: world.gatherIrradiance is not ready again");
