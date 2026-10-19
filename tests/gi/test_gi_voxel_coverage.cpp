@@ -457,6 +457,47 @@ static void measureRoof(Engine *e, View *view)
             CHECK_MSG(n > 0 && top > 0.0 && under <= top * (1.0 / 1024.0),
                       "A LIT ROOF'S UNDERSIDE HOLDS NONE OF THE TOP'S LIGHT at cascade %d: %.5f of the top's "
                       "(<= 2^-10)", cascades[k], top > 0.0 ? under / top : -1.0);
+        // ...AND A RAY READS THE SIDE IT MEETS (BUGS-1 item 4; preflight-photon-3 E-26): the ray hit's read
+        // (jahVoxelSample, the parity harness's hitRead) at the roof voxel over the room's centre, along two
+        // rays whose DOMINANT axis is x - one climbing into the underside, one falling onto the top. The side is
+        // the one the ray faces (sign of n . -dir), never the normal's component along the ray's dominant axis
+        // (a +y normal read along x got the MEAN of the two sides), and the kernel's y read takes the faces
+        // looking back at the ray (a ray heading +y meets the -y faces). The physics: the underside reads the
+        // dark room's light (0), the top its sunlit face. Bar: the underside at most 1 % of the top (the
+        // directional level's own residual; the mean - the defect - is 50 %).
+        if (bounces == 1) {
+            const double ext[3] = { st.cell * st.W, st.cell * st.H, st.cell * st.D };
+            const double wc[3] = { rooms[k], 3.05, 0.0 };
+            Vec3 posLS;
+            float *pl[3] = { &posLS.x, &posLS.y, &posLS.z };
+            for (int a = 0; a < 3; ++a) {
+                const double ix = std::floor((wc[a] - st.origin[a]) / st.cell);
+                *pl[a] = float(((ix + 0.5) * st.cell) / ext[a]);
+            }
+            std::vector<VoxelReaderCone> rays(2);
+            for (int r = 0; r < 2; ++r) {
+                const double dy = r == 0 ? 0.45 : -0.45, l = std::sqrt(1.0 + dy * dy);
+                rays[size_t(r)].posLS = posLS;
+                rays[size_t(r)].dirLS = Vec3(float(1.0 / l), float(dy / l), 0.0f);
+                rays[size_t(r)].biasDirLS = Vec3(0, 0, 0);
+                rays[size_t(r)].tanHalfAngle = 0.0f;
+                rays[size_t(r)].flags = 0u;
+                rays[size_t(r)].cascade = unsigned(cascades[k]);
+                rays[size_t(r)].lod = 0.0f;
+            }
+            std::vector<VoxelReaderAnswer> fr, co;
+            const bool ok = e->voxelReaderParity(s, rays, fr, co) && co.size() == 2;
+            const auto lum = [](const float *q) {
+                return q[3] > 0.0f ? (0.2126 * q[0] + 0.7152 * q[1] + 0.0722 * q[2]) / double(q[3]) : 0.0;
+            };
+            const double readUnder = ok ? lum(co[0].hitRead) : -1.0, readTop = ok ? lum(co[1].hitRead) : -1.0;
+            std::printf("   cascade %d: the ray hit's read at the roof voxel, dominant axis x: climbing into the "
+                        "underside %.5f, falling onto the top %.5f (%.4f of the top's; the physics 0)\n", cascades[k],
+                        readUnder, readTop, readTop > 0.0 ? readUnder / readTop : -1.0);
+            CHECK_MSG(ok && readTop > 0.0 && readUnder >= 0.0 && readUnder <= 0.01 * readTop,
+                      "A RAY READS THE SIDE IT MEETS at cascade %d: into the underside %.4f of the top's read (<= 1 %%)",
+                      cascades[k], readTop > 0.0 ? readUnder / readTop : -1.0);
+        }
     }
     }
     GiParams off; off.mode = GiMode::Off;
