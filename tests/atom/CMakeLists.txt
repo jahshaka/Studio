@@ -257,6 +257,14 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
+    # atom.view_colour — THE TRIANGLES VIEW'S COLOUR IS THE STRUCTURE'S (ENGINE-POLISH-ATOM-1 stage 6): three Atom
+    # spheres (two copies of one mesh) under the 'triangles' view, the first deleted - every kept object's pixels keep
+    # their colours although a slot was renumbered; the copies of one mesh share colours.
+    add_executable(test_atom_view_colour test_atom_view_colour.cpp)
+    jah_atom_engine_target(test_atom_view_colour)
+    jah_gpu_row(atom.view_colour CLASS engine COMMAND test_atom_view_colour
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.view_colour PROPERTIES TIMEOUT 60 LABELS "engine")
     # atom.component — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3,
     # atom/AtomComponent.h): two scenes with shadows, each through its own view — the id pass
     # once and before the screen decode, each caster pass after its map's shadow pass, the

@@ -2269,6 +2269,62 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
     return 0;
 }
 
+/// `--dag-depths <model>...`: THE DAG'S TRIANGLES PER DEPTH (ENGINE-POLISH-ATOM-1 stage 6, the owner's "far = near
+/// polygons"): every mesh of every file through the bake's own DAG build (MeshBake::buildClusterDag - a mesh under its
+/// floor gets none: the engine draws such a mesh from a flat DAG over level 0, its every triangle at depth 0), the
+/// triangles its clusters hold at each depth (a cluster's depth is its group's), summed over the files, and the ten
+/// largest meshes' own rows. A measurement of the bake as it is - nothing baked differently.
+static int dagDepths(const QStringList &paths)
+{
+    std::map<int, unsigned long long> total;
+    unsigned long long noDagTriangles = 0ull, level0 = 0ull;
+    unsigned meshesNoDag = 0u, meshesDag = 0u;
+    struct Row { QString name; unsigned long long tris; std::map<int, unsigned long long> perDepth; };
+    std::vector<Row> rows;
+    for (const QString &path : paths) {
+        const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
+        if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
+        for (int i = 0; i < meshes.size(); ++i) {
+            const iris::MeshPtr &m = meshes.at(i);
+            iris::MeshBake::buildClusterDag(m);
+            const iris::MeshClusterDag &dag = m->clusterDag;
+            Row r;
+            r.name = QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i);
+            r.tris = 0ull;
+            if (dag.clusters.isEmpty()) {
+                const iris::IndexBufferPtr ib = m->getIndexBuffer();
+                const unsigned long long t =
+                    (!ib.isNull() && ib->data) ? (unsigned long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0ull;
+                noDagTriangles += t;
+                level0 += t;
+                ++meshesNoDag;
+                continue;
+            }
+            ++meshesDag;
+            for (const iris::MeshClusterDag::Cluster &c : dag.clusters) {
+                const int d = (c.group >= 0 && c.group < dag.groups.size()) ? dag.groups.at(c.group).depth : 0;
+                r.perDepth[d] += c.triangleCount;
+                total[d] += c.triangleCount;
+                if (c.refined < 0) { r.tris += c.triangleCount; level0 += c.triangleCount; }
+            }
+            rows.push_back(std::move(r));
+        }
+    }
+    std::printf("dag-depths: %u meshes with a DAG, %u without (under the floor: %llu triangles, all at depth 0); "
+                "level 0 %llu triangles in all\n", meshesDag, meshesNoDag, noDagTriangles, level0);
+    std::printf("  depth  triangles (DAG meshes)   + the DAG-less meshes at depth 0\n");
+    for (const auto &kv : total)
+        std::printf("  %5d  %12llu%s\n", kv.first, kv.second,
+                    kv.first == 0 ? qUtf8Printable(QStringLiteral("   + %1").arg(noDagTriangles)) : "");
+    std::sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) { return a.tris > b.tris; });
+    for (size_t k = 0; k < rows.size() && k < 10u; ++k) {
+        std::printf("  %-28s level 0 %8llu:", qUtf8Printable(rows[k].name), rows[k].tris);
+        for (const auto &kv : rows[k].perDepth) std::printf(" d%d %llu", kv.first, kv.second);
+        std::printf("\n");
+    }
+    return 0;
+}
+
 /// `--bake-blob <model>`: the whole bake of any model file — its sha256, its size
 /// and its wall time. The blob is a pure function of the model (serialize), so two
 /// builds, two thread counts or two optimisation levels that print the same sha
@@ -3132,6 +3188,11 @@ int main(int argc, char **argv)
                     only.insert(n.toInt());
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
+    }
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-depths")) {
+        QStringList paths;
+        for (int a = 2; a < argc; ++a) paths << QString::fromLocal8Bit(argv[a]);
+        return dagDepths(paths);
     }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bake-blob"))
         return bakeBlobTool(QString::fromLocal8Bit(argv[2]), argc > 3 ? QString::fromLocal8Bit(argv[3]).toInt() : 0,
