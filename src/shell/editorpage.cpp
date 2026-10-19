@@ -83,6 +83,7 @@ void EditorPage::build(const Deps &deps)
 	screenShotBtn->setIconSize(QSize(16,17));
 
     wireFramesButton = new QToolButton;
+    wireFramesButton->setObjectName(QStringLiteral("viewOptionsButton"));   // app.widget's name for it
     wireFramesButton->setStyleSheet(StyleSheet::ViewportMenuButton());
     wireFramesMenu = new QMenu;
 	wireFramesMenu->setStyleSheet(StyleSheet::QMenuFlat());

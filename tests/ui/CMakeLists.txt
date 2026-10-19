@@ -1640,6 +1640,39 @@ jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMake
 # The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
 jah_lsan_blocked(ui.shot_aspect)   # spawns the app
 
+# ui.view_options_submenu — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the
+# owner's smoke 2026-10-19). Real pointer input at the editor's View Options button and its Atom
+# View / Photon View rows, where the app reports them (app.widget, app.menus): a hover pops each
+# submenu, a click on its row the moment the pointer arrives pops it (the press that used to
+# strand it behind Qt's menu fade), and after a use the first hover pops it again; each mode it
+# triggers is the view the world reads. TIER high NEEDS photon: the Atom view paints at High (Low
+# is a passthrough viewport) and Photon's Voxels needs Photon. ITS OWN XVFB, like app.input_keys
+# (the script says why: synthesised input goes to whatever is under the pointer), and registered
+# only where the tools it drives exist.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(JAH_XDOTOOL xdotool)
+    find_program(JAH_CURL curl)
+    find_program(JAH_JQ jq)
+    find_program(JAH_XVFB Xvfb)
+    find_program(JAH_XDPYINFO xdpyinfo)
+    if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB AND JAH_XDPYINFO)
+        set(_vos_home ${CMAKE_CURRENT_BINARY_DIR}/view-options-submenu-home)
+        file(MAKE_DIRECTORY ${_vos_home}/run)
+        jah_gpu_row(ui.view_options_submenu CLASS app TIER high NEEDS photon FRAMES 260
+                 COMMAND sh ${JAH_FRESH_HOME} --warm ${_vos_home} --
+                         bash "${CMAKE_CURRENT_SOURCE_DIR}/view_options_submenu.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 WORKING_DIRECTORY ${_vos_home}/run)
+        set_tests_properties(ui.view_options_submenu PROPERTIES
+            ENVIRONMENT "HOME=${_vos_home};JAHSHAKA_DATA_ROOT=${_vos_home}/.local/share/Jahshaka"
+            TIMEOUT 180 LABELS "ui")
+        jah_tsan_blocked(ui.view_options_submenu)   # spawns the app (TSAN-BOOT-TOO-SLOW, as its neighbours)
+        jah_lsan_blocked(ui.view_options_submenu)   # spawns the app (LSAN-L1-MATERIAL-PROPERTIES, as its neighbours)
+    else()
+        message(STATUS "ui.view_options_submenu skipped: needs xdotool, curl, jq, Xvfb and xdpyinfo")
+    endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing

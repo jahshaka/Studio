@@ -943,6 +943,7 @@ ui.toast 0.50  ship 3a0422b4e (2026-10-13)
 ui.tree_multiselect 0.06  quiet n=47
 ui.tree_reselect 0.00  ship 3a0422b4e (2026-10-13)
 ui.tree_scroll 0.06  quiet n=47
+ui.view_options_submenu 15.99  hand: ATOM-MENU-POPUP-1 solo 2026-10-19, warm shared cache (cold: 41.99)
 ui.vr_panel 0.00  ship 3a0422b4e (2026-10-13)
 ui.window_minimum 10.63  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.window_minimum.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

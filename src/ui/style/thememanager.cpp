@@ -107,6 +107,26 @@ public:
     // them reachable despite the QWidget override above.
     using oclero::qlementine::QlementineStyle::polish;
 
+    // MENUS POP WITHOUT QT'S MENU EFFECTS (ATOM-MENU-POPUP-1, gdb trace 2026-10-19).
+    // Qlementine's polish(QApplication*) switches UI_AnimateMenu + UI_FadeMenu on
+    // app-wide. Off Windows, Qt's fade (and roll) effect does not show the menu: it
+    // FAKES it shown (WA_WState_ExplicitShowHide set, WA_WState_Hidden cleared) and
+    // calls show() only when the animation ends. A second popup of the same submenu
+    // while it fades — a click on a submenu row before it opened pops it from the
+    // press, then again from the 20 ms timer the press starts — takes QMenu::popup's
+    // "kill any running effect" branch: the effect dies before its show(), and the
+    // menu's own show() is a no-op because the menu already reads "not hidden". The
+    // submenu is left stranded — never on screen, never hidden — and every later hover
+    // of its row asks show() again for nothing, until hovering another submenu row
+    // hides it (View Options > Atom View, the owner's smoke 2026-10-19). With the
+    // menu effects off, popup() shows the menu at once and the strand cannot exist.
+    void polish(QApplication *app) override
+    {
+        oclero::qlementine::QlementineStyle::polish(app);
+        QApplication::setEffectEnabled(Qt::UI_AnimateMenu, false);
+        QApplication::setEffectEnabled(Qt::UI_FadeMenu, false);
+    }
+
     // Focus-visible semantics, app-wide: Qlementine rings every focused
     // control (buttons included), so plain window activation showed a blue
     // ring on whichever chrome button happened to hold initial focus (top

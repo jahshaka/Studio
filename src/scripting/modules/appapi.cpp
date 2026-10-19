@@ -59,8 +59,11 @@ For more information see the LICENSE file
 #include "services/ogresamples.h"
 #include "services/testtier.h"
 #include "irisgl/core/irisutils.h"
+#include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
+#include <QMenu>
+#include <QWidgetAction>
 #include <QProcess>
 #include <QFileInfo>
 #include <QStyle>
@@ -772,6 +775,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "the record's fields into it; {accept} presses its OK button, which in that mode runs "
           "assets.reimport — the very path the user's click takes. The answer then also carries "
           "`settings` (the record the dialog holds) and `accepted`.",
+          Needs::Window },
+        { "menus", "app.menus() -> [{title, x, y, width, height, rows:[{text, x, y, width, height, enabled, checkable, checked, submenu}]}]",
+          "THE MENUS ON SCREEN (ATOM-MENU-POPUP-1): every popup menu shown right now, with each row's "
+          "rectangle in global screen pixels — the coordinates a rig synthesising mouse input works in, "
+          "so a client can point at a row the way a person does. `title` is the menu's own title ('' for "
+          "a button's menu); a row's `text` is its action's text, or the label of the switch a toggle row "
+          "carries; `submenu` is the title of the menu the row opens ('' for a plain row). A menu Qt has "
+          "not put on screen is not listed. Separators and hidden rows are left out.",
+          Needs::Window },
+        { "widget", "app.widget(name) -> {name, class, path, x, y, width, height, visible, enabled, text}",
+          "One widget by objectName, with its rectangle in global screen pixels — where a rig points to "
+          "press it (the editor's View Options button is 'viewOptionsButton'). `path` names it in the "
+          "widget tree (objectNames, class names where there are none); `text` is a button's label ('' "
+          "for anything else). Where several widgets share the name, the first one on screen answers. "
+          "Returns {} when no widget has the name.",
           Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -2094,6 +2112,82 @@ QVariantList AppApi::dialogs()
         out.append(QVariantMap{ { "name", name },
                                 { "open", host.shell->isDialogOpen(name) } });
     }
+    return out;
+}
+
+namespace {
+
+// A row's label as a person reads it: the action's text, or — a toggle row the
+// theme turned into a switch (ThemeManager::switchifyMenuToggles) — the switch's.
+QString menuRowText(QAction *action)
+{
+    if (!action->text().isEmpty()) return action->text();
+    if (auto *wa = qobject_cast<QWidgetAction *>(action)) {
+        if (QWidget *w = wa->defaultWidget()) {
+            if (auto *button = qobject_cast<QAbstractButton *>(w)) return button->text();
+            if (auto *button = w->findChild<QAbstractButton *>()) return button->text();
+        }
+    }
+    return QString();
+}
+
+QVariantMap globalRect(const QWidget *w, const QRect &local)
+{
+    const QPoint at = w->mapToGlobal(local.topLeft());
+    return QVariantMap{ { "x", at.x() }, { "y", at.y() },
+                        { "width", local.width() }, { "height", local.height() } };
+}
+
+} // namespace
+
+QVariantList AppApi::menus()
+{
+    QVariantList out;
+    for (QWidget *top : QApplication::topLevelWidgets()) {
+        auto *menu = qobject_cast<QMenu *>(top);
+        if (!menu || !menu->isVisible()) continue;
+        QVariantList rows;
+        for (QAction *action : menu->actions()) {
+            if (action->isSeparator() || !action->isVisible()) continue;
+            const QRect r = menu->actionGeometry(action);
+            if (r.isEmpty()) continue;
+            QVariantMap row = globalRect(menu, r);
+            row.insert("text", menuRowText(action));
+            row.insert("enabled", action->isEnabled());
+            row.insert("checkable", action->isCheckable());
+            row.insert("checked", action->isChecked());
+            row.insert("submenu", action->menu() ? action->menu()->title() : QString());
+            rows.append(row);
+        }
+        QVariantMap entry = globalRect(menu, menu->rect());
+        entry.insert("title", menu->title());
+        entry.insert("rows", rows);
+        out.append(entry);
+    }
+    return out;
+}
+
+QVariantMap AppApi::widget(const QString &name)
+{
+    if (name.isEmpty()) {
+        fail("app.widget: name is an objectName and cannot be empty");
+        return {};
+    }
+    QWidget *found = nullptr;
+    for (QWidget *w : QApplication::allWidgets()) {
+        if (w->objectName() != name) continue;
+        if (!found || (!found->isVisible() && w->isVisible())) found = w;
+        if (found->isVisible()) break;
+    }
+    if (!found) return {};
+    QVariantMap out = globalRect(found, found->rect());
+    out.insert("name", name);
+    out.insert("class", QString::fromLatin1(found->metaObject()->className()));
+    out.insert("path", widgetPath(found));
+    out.insert("visible", found->isVisible());
+    out.insert("enabled", found->isEnabled());
+    auto *button = qobject_cast<QAbstractButton *>(found);
+    out.insert("text", button ? button->text() : QString());
     return out;
 }
 
