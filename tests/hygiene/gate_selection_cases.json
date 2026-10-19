@@ -506,6 +506,40 @@
     "engine.window"
    ],
    "must_not": []
+  },
+  {
+   "case": "TOOLING-5 1: set(OGRE_NEXT_VULKAN_RS_LIB \"\" PARENT_SCOPE) in irisgl/engine — its reader if(NOT … OGRE_NEXT_VULKAN_RS_LIB) at tests/vr/CMakeLists.txt:50 holds a return() the reader cannot resolve beside a message() it can: the PARENT_SCOPE head takes tests/vr's step 7 (54 rows, vr.* 0 of 32 before)",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(OGRE_NEXT_VULKAN_RS_LIB \"${OGRE_NEXT_VULKAN_RS_LIB}\" PARENT_SCOPE)",
+   "new": "set(OGRE_NEXT_VULKAN_RS_LIB \"\" PARENT_SCOPE)",
+   "must": [
+    "vr.grab_maths",
+    "vr.session",
+    "vr.input_session",
+    "vr.eye_grade",
+    "pool.vr_session"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-5 2: a WrapHlmsPiece.cmake edit changes the Hlms media every render sees — the render loop's reach (_ALL), the app rows with it (491 rows, 0 of the 29 app rows before)",
+   "file": "irisgl/cmake/WrapHlmsPiece.cmake",
+   "old": "set(_body \"\")",
+   "new": "set(_body \" \")",
+   "must": [
+    "app.engine_selftest_validation",
+    "engine.window"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-5 4: an elseif() reached as a variable's reader spans its branch (and the branches after it) — set(UNIX ON) above cmake/CopyDependencies.cmake's elseif(UNIX), whose branch holds commands the reader cannot resolve, in a module include()d at the root's scope: the WHOLE TIER (the message() beside it alone before: 29 rows, the lints)",
+   "file": "cmake/CopyDependencies.cmake",
+   "old": "set(DEPLOY_STAMP \"${CMAKE_BINARY_DIR}/deploy.stamp\")\n",
+   "new": "set(DEPLOY_STAMP \"${CMAKE_BINARY_DIR}/deploy.stamp\")\nset(UNIX ON)\nmessage(STATUS \"deploy: ${UNIX}\")\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
   }
  ]
 }
