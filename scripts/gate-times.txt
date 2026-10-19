@@ -169,7 +169,7 @@ frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stag
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 frame.runtime_pace 5.09  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
-gate.selection 6.46  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)
+gate.selection 8.83  TOOLING-2 2026-10-19, beside a load of ~4 (+ BULLET-BATCHING-1's lane case and two irisgl/CMakeLists.txt hunks: 8.83-9.32 against the base's 7.08-7.10 in the same minutes; 6.46 solo before them)
 gi.ambient 1.96  quiet n=41
 gi.area_energy 5.29  quiet n=29
 gi.atlas_keeps_voxels 7.26  quiet n=41
