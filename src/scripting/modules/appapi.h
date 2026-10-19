@@ -56,6 +56,7 @@ public:
     Q_INVOKABLE QVariantMap compareImages(const QString &a, const QString &b, int tolerance = 0);
     Q_INVOKABLE QVariantMap engineObjects();
     Q_INVOKABLE QVariantMap threading();
+    Q_INVOKABLE QVariantMap threadBudget();
     Q_INVOKABLE QVariantMap memoryStats();
     Q_INVOKABLE QVariantMap textureMemory(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap reclaimMemory();

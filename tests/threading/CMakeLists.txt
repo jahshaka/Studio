@@ -30,6 +30,24 @@ jah_gpu_row(threading.staging_race CLASS engine COMMAND test_staging_race
 set_tests_properties(threading.staging_race PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "threading")
 
+# threading.budget — THE ONE CORE BUDGET (THREADING-1 stage 1; irisgl/core/threadbudget.h):
+# the law swept over every box size, the 20-thread box in numbers, and the process applying it (main.cpp's
+# processbudget::apply): Bullet's scheduler = the foreground share + the game thread, Qt's global pool capped at the
+# background width, the bake pool started at the background width, the primary scene tier = the render tier's pool.
+# IrisGL only (no engine, no display): seconds.
+add_executable(test_thread_budget test_thread_budget.cpp)
+set_target_properties(test_thread_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_thread_budget PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_thread_budget PRIVATE IrisGL Qt6::Core)
+add_test(NAME threading.budget COMMAND test_thread_budget WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(threading.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60
+    LABELS "threading" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(threading.budget)
+
 # The race lane (scripts/sanitize.sh tsan): this suite IS an async contract —
 # a worker building document nodes while the render loop runs — so it is a
 # member by the membership rule at the top of tests/CMakeLists.txt. Read its

@@ -454,6 +454,7 @@ perf.offscreen_isolation 21.27  quiet n=42
 perf.offscreen_isolation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 perf.pacing 0.00  ship 3a0422b4e (2026-10-13)
 photon.tiers 0.05  quiet n=45
+physics.many_movers 3.52  solo, the card lock held, :76, box ~50 % CPU-idle (THREADING-1 stage 2, 2026-10-19)
 physics.mt_determinism 0.71  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 picking.document 0.07  quiet n=45
 picking.fov_cap 1.54  quiet n=44
@@ -533,6 +534,7 @@ pool.doc::scale_lock 0.19  quiet n=43
 pool.doc::scene_bounds 0.14  quiet n=41
 pool.doc::scene_query 0.15  quiet n=40
 pool.doc::static_semantics 0.45  quiet n=42
+pool.doc::thread_budget 0.01  solo arm, the card lock held, ARM 8 ms (THREADING-1 stage 1, 2026-10-19)
 pool.doc::tier_table_atom 0.09  quiet n=40
 pool.doc::window_fits 0.00  ship 3a0422b4e (2026-10-13)
 pool.doc::world_modes 0.46  quiet n=41
@@ -891,6 +893,7 @@ theme.no_raw_sheets 0.05  quiet n=35
 theme.sheets 19.89  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 theme.sheets.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 theme.style_contracts 0.03  quiet n=26
+threading.budget 0.01  solo, the card lock held (THREADING-1 stage 1, 2026-10-19)
 threading.freshhome.import_soak 0.00  ship 3a0422b4e (2026-10-13)
 threading.freshhome.newproject_stall 0.00  ship 3a0422b4e (2026-10-13)
 threading.freshhome.newproject_stall_timing 0.00  ship 3a0422b4e (2026-10-13)

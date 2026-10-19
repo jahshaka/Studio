@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include <QPainterPath>
 #include <QThread>
 #include <QThreadPool>
+
+#include "irisgl/core/threadbudget.h"
 #include <QTimer>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -83,12 +85,13 @@ TileCache &TileCache::instance()
 
 TileCache::TileCache()
 {
-    // ITS OWN POOL, two threads: the decode must never queue behind (or starve)
-    // the global pool's long jobs — the open's parse, the import runner — and two
-    // decoders keep a screenful arriving within a few turns without taking the
-    // cores the engine's scene workers draw with.
+    // ITS OWN POOL, two threads of the background tier (irisgl/core/threadbudget.h,
+    // THREADING-1): the decode must never queue behind (or starve) the global pool's
+    // long jobs — the open's parse, the import runner — and two decoders keep a
+    // screenful arriving within a few turns without taking the cores the engine's
+    // scene workers draw with.
     mPool = new QThreadPool(this);
-    mPool->setMaxThreadCount(2);
+    mPool->setMaxThreadCount(std::min(2, iris::threadBudget().background));
     mPool->setObjectName(QStringLiteral("TileCacheDecode"));
 }
 

@@ -50,13 +50,11 @@
 // Debug builds are what the owner runs daily, and that is the build these
 // numbers were taken in.
 
-#include <QThread>
-#include <QtGlobal>
-#include <algorithm>
-
 // For kSceneMainThreadOnly — the boundary's spelling of "no worker pool"
 // (Tier::MainThread below). A POD header; it pulls in no Ogre and no Qt.
 #include "jahshaka/engine/Types.h"
+// The ONE core budget the primary tier is part of (THREADING-1).
+#include "irisgl/core/threadbudget.h"
 
 namespace sceneworkers {
 
@@ -81,48 +79,20 @@ enum class Tier {
 /// Never plain 0: at this boundary 0 means "engine default", and the two have
 /// to be distinguishable.
 ///
-/// JAHSHAKA_SCENE_THREADS overrides the PRIMARY tier, and exists so that the
-/// number above can be re-measured on a machine without editing this file:
-/// `JAHSHAKA_SCENE_THREADS=2 ./Jahshaka --script bench.js` reproduces the
-/// pre-wave behaviour exactly. A measurement escape hatch, not a preference —
-/// it is deliberately not in Preferences and not persisted.
+/// The PRIMARY tier is the render tier of the ONE core budget (irisgl/core/threadbudget.h, THREADING-1):
+/// clamp(hardware, 2, 8), measured above. JAHSHAKA_SCENE_THREADS overrides it there, so that the number can be
+/// re-measured on a machine without editing a file: `JAHSHAKA_SCENE_THREADS=2 ./Jahshaka --script bench.js`
+/// reproduces the pre-wave behaviour exactly. A measurement escape hatch, not a preference — it is deliberately not
+/// in Preferences and not persisted.
 inline unsigned count(Tier tier)
 {
-    const int cores = std::max(1, QThread::idealThreadCount());
     switch (tier) {
-    case Tier::Primary: {
-        bool ok = false;
-        const int forced = qEnvironmentVariableIntValue("JAHSHAKA_SCENE_THREADS", &ok);
-        if (ok && forced > 0) return unsigned(std::clamp(forced, 1, 32));
-        return unsigned(std::clamp(cores, 2, 8));
-    }
+    case Tier::Primary:    return unsigned(iris::threadBudget().ogrePool);
     case Tier::Preview:    return 2u;
     case Tier::Utility:    return 1u;
     case Tier::MainThread: return jahshaka::engine::kSceneMainThreadOnly;
     }
     return 2u;
-}
-
-/// THE PHYSICS STEP'S THREADS (ENGINE-UPGRADE-U4 stage 6, decision 23): Bullet's own task scheduler, sized from the
-/// ONE core budget, the game thread included (it runs jobs during the step). The box's hardware threads, minus the
-/// threads that run beside the step and are not Bullet's: the game thread's own place is Bullet's thread 0, so it is
-/// counted in the share; the render thread; the dedicated ones (the shader-cache writer, the texture loader, Ogre's
-/// streaming thread, the texture multiload); and the primary tier's pool (Ogre's SceneManager workers, whose frame
-/// work runs on the render thread's timeline WHILE the game thread steps — the two overlap, so the split is fixed,
-/// never shared). On the 20-thread box: 20 - 1 (render) - 4 (dedicated) - 8 (Ogre's pool) = 7 = the game thread + 6
-/// workers. JAHSHAKA_PHYSICS_THREADS overrides it, the same measurement escape hatch as JAHSHAKA_SCENE_THREADS.
-/// MEASURED (physics.step_overlap, Debug, 2026-10-18): a free-running engine's pool spans cover 22-35 % of the step's
-/// time and every step meets one — the two do overlap, so the split is fixed. (physics.step_cost: a 10,000-body pile
-/// steps in 279 ms on one thread, 218 on 7 — one toppled island solves on one thread, so past 4 threads the step
-/// barely moves; 500 bodies in separate islands, 10.0 -> 6.2 ms.)
-inline int physicsThreads()
-{
-    bool ok = false;
-    const int forced = qEnvironmentVariableIntValue("JAHSHAKA_PHYSICS_THREADS", &ok);
-    if (ok && forced > 0) return std::clamp(forced, 1, 32);
-    constexpr int kRenderThread = 1, kDedicatedThreads = 4;
-    const int hardware = std::max(1, QThread::idealThreadCount());
-    return std::max(1, hardware - kRenderThread - kDedicatedThreads - int(count(Tier::Primary)));
 }
 
 }   // namespace sceneworkers

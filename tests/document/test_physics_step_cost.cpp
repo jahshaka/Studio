@@ -17,6 +17,14 @@
 // in moves with the threads' timing): the mt arm against the seq arm, and the mt arm against itself across `--runs`.
 //
 //   --bodies N --frames F --threads T --runs R (the mt arm's repeats, default 1)
+//   --threads budget  Bullet's threads from the ONE core budget (irisgl/core/threadbudget.h: the game thread + the
+//                  foreground share — what the app binds; THREADING-1)
+//   --warmup W     the medians skip the first W frames (the pile's first contacts, the mirror's first pushes)
+//   --bar MS       THE MANY MOVERS' BAR (physics.many_movers, THREADING-1 stage 2): the mt arm's step + mirror sync,
+//                  per frame, median at most MS (with --mirror --mt-only)
+//   --beside-import FILE  THE CORE BUDGET'S PREMISE (THREADING-1 stage 1, by hand, once): the mt arm idle, then the
+//                  same arm while FILE is imported and baked over and over on Qt's global pool and the bake pool (the
+//                  import's two pools, capped by the budget as the app caps them) — the pair in ONE process
 //   --no-sleep     the mt arm with Bullet's workers NOT sent to sleep after the step (Bullet's 100 us spin runs on)
 //   --mirror       the physics frame the editor runs: the document in PLAY, a SceneMirror syncing the moved bodies to
 //                  an engine scene after each step (the transform-only fast path, decision 22.1) — the sync timed too
@@ -30,10 +38,15 @@
 //                  batches: Environment::setIslandBatching); the mt-nobatch arm is then not run (it would be the mt arm)
 //   --penetrating  the stress start: every layer interpenetrating (the pile explodes apart on its first steps)
 #include <QGuiApplication>
+#include <QFileInfo>
+#include <QTemporaryDir>
+#include <QThreadPool>
+#include <QtConcurrent/QtConcurrent>
 
 #include <sys/resource.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -55,6 +68,8 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/import/meshbake.h"
+#include "irisgl/core/threadbudget.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "btBulletDynamicsCommon.h"
 #include "jahshaka/engine/Engine.h"
@@ -72,6 +87,7 @@ namespace je = jahshaka::engine;
 
 iris::MeshPtr gCube;
 bool gPenetrating = false;   ///< --penetrating: the stress start (0.8 m boxes 0.5 m apart: every layer interpenetrating)
+int gWarmup = 0;             ///< --warmup: the frames the medians skip
 
 iris::SceneNodePtr box(const QString &guid, const iris::Vec3 &pos, float mass, const iris::Vec3 &scale)
 {
@@ -132,9 +148,16 @@ double median(std::vector<double> v)
     return v[v.size() / 2];
 }
 
+/// The frames the medians read: past the warm-up (all of them when the run is shorter).
+std::vector<double> measured(const std::vector<double> &v)
+{
+    if (gWarmup <= 0 || size_t(gWarmup) >= v.size()) return v;
+    return std::vector<double>(v.begin() + gWarmup, v.end());
+}
+
 struct Run {
     std::string arm;
-    double stepMs = 0, worstMs = 0, cpuPerFrameMs = 0, syncMs = 0;
+    double stepMs = 0, worstMs = 0, cpuPerFrameMs = 0, syncMs = 0, stepSyncMs = 0;
     int activeMedian = 0, servedMin = -1, nonFinite = 0;
     std::vector<btTransform> poses;
     std::vector<std::pair<int, std::vector<btTransform>>> checkpoints;   ///< the poses after frames 1, 2, 4, 8, ...
@@ -208,9 +231,12 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
     r.cpuPerFrameMs = (cpuMs() - cpu0) / double(frames);
     CHECK(r.nonFinite == 0, "[%s] every body stays on the reals through %d frames (%d off at the worst frame)",
           arm.c_str(), frames, r.nonFinite);
-    r.stepMs = median(ms);
+    r.stepMs = median(measured(ms));
     r.worstMs = *std::max_element(ms.begin(), ms.end());
-    r.syncMs = median(sync);
+    r.syncMs = median(measured(sync));
+    std::vector<double> both(ms);
+    for (size_t i = 0; i < both.size() && i < sync.size(); ++i) both[i] += sync[i];
+    r.stepSyncMs = median(measured(both));
     std::sort(active.begin(), active.end());
     r.activeMedian = active[active.size() / 2];
     for (const auto &n : pile.bodies)
@@ -259,12 +285,20 @@ void printRun(const Run &r, int bodies, int frames)
 int main(int argc, char **argv)
 {
     int bodies = 1000, frames = 120, threads = 1, runs = 1;
+    double bar = -1.0;
+    const char *besideImport = nullptr;
     bool overlap = false, mirror = false, noSleep = false, mtOnly = false, islandBatching = true;
     int boundSteps = -1;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--bodies") && i + 1 < argc) bodies = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) frames = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--threads") && i + 1 < argc) threads = std::atoi(argv[++i]);
+        else if (!std::strcmp(argv[i], "--threads") && i + 1 < argc) {
+            ++i;
+            threads = !std::strcmp(argv[i], "budget") ? iris::threadBudget().bulletThreads() : std::atoi(argv[i]);
+        }
+        else if (!std::strcmp(argv[i], "--warmup") && i + 1 < argc) gWarmup = std::max(0, std::atoi(argv[++i]));
+        else if (!std::strcmp(argv[i], "--bar") && i + 1 < argc) bar = std::atof(argv[++i]);
+        else if (!std::strcmp(argv[i], "--beside-import") && i + 1 < argc) besideImport = argv[++i];
         else if (!std::strcmp(argv[i], "--runs") && i + 1 < argc) runs = std::max(1, std::atoi(argv[++i]));
         else if (!std::strcmp(argv[i], "--bound") && i + 1 < argc) boundSteps = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--overlap")) overlap = true;
@@ -378,9 +412,63 @@ int main(int argc, char **argv)
     }
 
     Rig *mr = mirror ? &rig : nullptr;
-    if (mtOnly) {   // a thread count's own process (the sweep): the mt arm alone
-        printRun(runPile("mt", bodies, frames, mr), bodies, frames);
+    if (besideImport) {
+        // THE PREMISE (THREADING-1 stage 1): does an import beside a playing scene cost the step a frame? The pair in
+        // ONE process: the mt arm idle, then the same arm while the import runs on its own two pools — Qt's global
+        // pool (the parse and the bake's caller) capped as the app caps it, and the bake pool's nice-19 workers.
+        const iris::ThreadBudget &budget = iris::threadBudget();
+        QThreadPool::globalInstance()->setMaxThreadCount(budget.background);   // processbudget::apply's cap
+        const Run idle = runPile("mt", bodies, frames, mr);
+        printRun(idle, bodies, frames);
+        std::atomic<bool> stop{ false }, started{ false };
+        std::atomic<int> bakes{ 0 }, valid{ 0 };
+        const QString file = QString::fromLocal8Bit(besideImport);
+        const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("deadbeef").repeated(8));
+        QFuture<void> import = QtConcurrent::run([&]() {
+            QTemporaryDir scratch;
+            while (!stop.load()) {
+                started.store(true);
+                const iris::MeshBake::Model m = iris::MeshBake::buildFromFile(file, fp, scratch.path());
+                bakes.fetch_add(1);
+                if (m.valid) valid.fetch_add(1);
+            }
+        });
+        while (!started.load()) std::this_thread::yield();
+        const int bakesBefore = bakes.load();
+        const Run beside = runPile("mt", bodies, frames, mr);
+        const int bakesDuring = bakes.load() - bakesBefore;
+        stop.store(true);
+        import.waitForFinished();
+        printRun(beside, bodies, frames);
+        std::printf("PHYSICS_BESIDE_IMPORT bodies=%d frames=%d warmup=%d threads=%d qt_pool=%d bake_pool=%d: step %.3f -> "
+                    "%.3f ms, sync %.3f -> %.3f ms, step+sync %.3f -> %.3f ms (x%.2f) idle -> beside %d bake(s) of %s "
+                    "finishing during the arm (%d of %d valid)\n",
+                    bodies, frames, gWarmup, iris::Environment::taskThreads(), QThreadPool::globalInstance()->maxThreadCount(),
+                    iris::MeshBake::bakePoolThreads(), idle.stepMs, beside.stepMs, idle.syncMs, beside.syncMs,
+                    idle.stepSyncMs, beside.stepSyncMs, idle.stepSyncMs > 0 ? beside.stepSyncMs / idle.stepSyncMs : 0.0,
+                    bakesDuring, qUtf8Printable(QFileInfo(file).fileName()), valid.load(), bakes.load());
+        CHECK(valid.load() > 0 && valid.load() == bakes.load(), "the import beside the arm baked (%d of %d valid)",
+              valid.load(), bakes.load());
         if (rig.view) rig.engine->destroyView(rig.view);
+        return gFailures ? 1 : 0;
+    }
+    if (mtOnly) {   // a thread count's own process (the sweep): the mt arm alone
+        const Run run = runPile("mt", bodies, frames, mr);
+        printRun(run, bodies, frames);
+        if (bar > 0.0) {
+            // THE MANY MOVERS (THREADING-1 stage 2): the owner's real case — many movers per frame — on the threads the
+            // ONE core budget gives the step. The step and the sync are printed apart; the bar is on their sum, per
+            // frame, the median past the warm-up.
+            std::printf("PHYSICS_MANY_MOVERS bodies=%d frames=%d warmup=%d threads=%d: step %.3f ms + mirror sync %.3f ms; "
+                        "step+sync median %.3f ms against the bar %.3f ms (a 60 Hz frame)\n", bodies, frames, gWarmup,
+                        iris::Environment::taskThreads(), run.stepMs, run.syncMs, run.stepSyncMs, bar);
+            CHECK(mirror, "the bar reads the mirror's sync (--mirror)");
+            CHECK(run.stepSyncMs <= bar, "%d bodies: the step + the mirror's sync, median %.3f ms <= %.3f ms on %d thread(s)",
+                  bodies, run.stepSyncMs, bar, iris::Environment::taskThreads());
+            CHECK(run.servedMin == bodies, "in play the fast path serves every moved body (%d of %d)", run.servedMin, bodies);
+        }
+        if (rig.view) rig.engine->destroyView(rig.view);
+        std::printf(gFailures ? "physics.step_cost: FAILED (%d)\n" : "physics.step_cost: PASS\n", gFailures);
         return gFailures ? 1 : 0;
     }
     const Run seq = runPile("seq", bodies, frames, mr);

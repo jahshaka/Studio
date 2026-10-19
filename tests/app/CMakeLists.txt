@@ -252,6 +252,11 @@ jah_pool_arm(editor_view_c close_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cl
 # the condition the clamp exists for.
 jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 1 HEADLESS)
 
+# ---- pool.doc::thread_budget ------------------------------------------------
+# app.threadBudget() (THREADING-1 stage 1): the ONE core budget's tiers through the verb, and what the live process
+# applied at its start — Bullet's scheduler, Qt's global pool's cap, the bake pool's workers. Headless: no engine.
+jah_pool_arm(doc thread_budget ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_thread_budget.js 1 HEADLESS)
+
 # pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
 # src/app/cli/scriptrunner.cpp, so the row lives with the app's): the real app,
 # headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown

@@ -27,6 +27,8 @@ For more information see the LICENSE file
 #include <atomic>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QThreadPool>
+
+#include "irisgl/core/threadbudget.h"
 #include <QThread>
 #include <QFuture>
 #include <QPointer>
@@ -799,8 +801,10 @@ std::atomic<bool> sBackgroundStop { false };
 QThreadPool *backgroundPool()
 {
     static QThreadPool *pool = [] {
+        // ONE thread of the background tier (irisgl/core/threadbudget.h, THREADING-1): the library sweep
+        // rebuilds its bakes one at a time, each bake as wide as the bake pool lets it.
         auto *p = new QThreadPool;
-        p->setMaxThreadCount(1);
+        p->setMaxThreadCount(std::min(1, iris::threadBudget().background));
         p->setThreadPriority(QThread::LowestPriority);
         return p;
     }();
