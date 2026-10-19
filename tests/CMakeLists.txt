@@ -96,31 +96,17 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #       whose subject is an async contract — a runner, a heartbeat, a watchdog,
 #       a shutdown order.
 #
-#   jah_lsan_blocked(<test>...) / jah_tsan_blocked(<test>...)   the quarantine.
-#       A suite that is eligible for a lane and does NOT pass it today, for a
-#       reason that is not the suite's fault and is too structural to fix in
-#       passing. These get the label `lsan-blocked` / `tsan-blocked` instead:
-#       they stay one command away (`ctest -L '^lsan-blocked$'`, and
-#       sanitize.sh names them at the end of every run) but they do not hold the
-#       gate permanently red. Every call says WHAT blocks it. Moving a suite
-#       back into its lane is then a one-word edit. Nothing here is suppressed
-#       and nothing is hidden — a quarantined suite is a defect with a name.
-#
-#       LEAK-1 (2026-10-19): the five blockers the quarantine held — the
-#       material's rows, the light's shadow map, the session asset registry,
-#       the materials module's library / graph / undo nodes, the keyframes —
-#       each have one owner now, and every in-process row it held is in
-#       jah_lsan_lane. It still holds the nine app-spawning rows: the app
-#       leaks ~13 KB at exit under their scripts (each call names it).
+#   The LEAK lane has NO quarantine (LEAK-1, 2026-10-19): the five blockers it
+#   held — the material's rows, the light's shadow map, the session asset
+#   registry, the materials module's library / graph / undo nodes, the
+#   keyframes — and the app's own exit-time allocations each have one owner,
+#   and every row it held is in jah_lsan_lane. A row that leaks under the lane
+#   is a red: an owner is found for the allocation (a parent, a smart pointer,
+#   a destructor), or — a third party's own, never ours — its library frame and
+#   reason go in scripts/lsan.supp.
 function(jah_lsan_lane)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY LABELS lsan)
-    endforeach()
-endfunction()
-
-function(jah_lsan_blocked)
-    foreach(_t IN LISTS ARGV)
-        set_property(TEST ${_t} APPEND PROPERTY LABELS lsan-blocked)
     endforeach()
 endfunction()
 
@@ -137,8 +123,11 @@ function(jah_tsan_render)   # called in the directory that registers the row (a 
     endforeach()
 endfunction()
 
-#   jah_tsan_blocked(<test>...)   the race lane's quarantine, same idea as
-#       jah_lsan_blocked. As of 2026-09-04 it holds every suite that drives the
+#   jah_tsan_blocked(<test>...)   the race lane's quarantine: a suite eligible
+#       for the TSan lane that cannot run under it today, for a reason that is
+#       not the suite's fault; label `tsan-blocked`, one command away
+#       (`ctest -L '^tsan-blocked$'`), named at the end of every sanitize.sh tsan
+#       run, and each call says WHAT blocks it. As of 2026-09-04 it holds every suite that drives the
 #       REAL Jahshaka binary, for a reason that is not ours: GCC 15's libtsan
 #       aborts the app during startup with
 #           ThreadSanitizer: CHECK failed: sanitizer_thread_registry.cpp:186

@@ -71,10 +71,9 @@ Environment:
   JAH_SAN_BUILD_JOBS  the build width, an explicit override. Default: THE MEMORY
                       LAW — 12 compile jobs box-wide divided by
                       1 + the other live ninja processes, never below 2
-  DISPLAY             needed by the lsan lane's app-spawning rows (they boot
-                      Jahshaka; quarantined today, `ctest -L '^lsan-blocked$'`):
-                      your own Xvfb, never a shared session, under the card
-                      lock (scripts/gpu-exclusive.sh).
+  DISPLAY             REQUIRED by the lsan lane: its app-spawning rows boot
+                      Jahshaka — your own Xvfb, never a shared session, under
+                      the card lock (scripts/gpu-exclusive.sh).
 EOF
 }
 
@@ -131,6 +130,8 @@ run_lsan() {
     echo "sanitize: LeakSanitizer runtime $lsan_lib (canary ok)"
 
     [ -f "$BUILD_DIR/CMakeCache.txt" ] || die "$BUILD_DIR is not configured (see docs/BUILDING_LINUX.md)"
+    [ -n "${DISPLAY:-}" ] || [ -n "${JAH_SAN_BUILD_ONLY:-}" ] \
+        || die "no DISPLAY: the lane's app-spawning rows boot Jahshaka (your own Xvfb, under scripts/gpu-exclusive.sh)"
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building $BUILD_DIR at -j$(build_jobs)"
         cmake --build "$BUILD_DIR" -j"$(build_jobs)" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
@@ -151,24 +152,11 @@ run_lsan() {
     export VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=1
     echo "sanitize: LSAN_OPTIONS=$LSAN_OPTIONS"
 
-    # -L takes a REGEX: anchor it, or `lsan` also selects `lsan-blocked`.
+    # -L takes a REGEX: anchor it (an unanchored `lsan` matches every label that contains it).
     ( cd "$BUILD_DIR" && ctest -L '^lsan$' --output-on-failure "$@" )
     local rc=$?
     unset LD_PRELOAD LSAN_OPTIONS VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING
 
-    # The quarantine is part of the result, not a footnote: these suites are
-    # eligible for the lane and fail it today because of a known leak
-    # underneath them (each one names its blocker beside its add_test).
-    local blocked
-    blocked="$( cd "$BUILD_DIR" && ctest -N -L '^lsan-blocked$' 2>/dev/null \
-                | sed -n 's/^ *Test *#[0-9]*: //p' )"
-    if [ -n "$blocked" ]; then
-        echo
-        echo "=== quarantined suites (label lsan-blocked) — known leaks, NOT in the gate ==="
-        echo "$blocked" | sed 's/^/  /'
-        echo "  reproduce: (cd $BUILD_DIR && ctest -L '^lsan-blocked$') with the same env"
-        echo "  blockers:  tests/CMakeLists.txt, above jah_lsan_blocked()"
-    fi
     return $rc
 }
 
