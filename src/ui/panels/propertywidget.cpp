@@ -507,6 +507,7 @@ int PropertyWidget::takeSlot(iris::Property *prop, QWidget *valueRow)
     const int slot = properties.size();
     properties.append(prop);
     valueRows.append(valueRow);
+    shape.append(shapeOf(prop));
     return slot;
 }
 
@@ -560,7 +561,33 @@ void PropertyWidget::forgetProperties()
 {
     properties.clear();
     valueRows.clear();
+    shape.clear();
     rowByName.clear();
+}
+
+PropertyWidget::RowShape PropertyWidget::shapeOf(const iris::Property *prop)
+{
+    RowShape s;
+    s.type = prop->type;
+    s.name = prop->name;
+    s.displayName = prop->displayName;
+    switch (prop->type) {
+        case iris::PropertyType::Float: {
+            auto *f = static_cast<const iris::FloatProperty *>(prop);
+            s.lo = f->minValue; s.hi = f->maxValue;
+            break;
+        }
+        case iris::PropertyType::Int: {
+            auto *i = static_cast<const iris::IntProperty *>(prop);
+            s.lo = i->minValue; s.hi = i->maxValue;
+            break;
+        }
+        // The vocabulary IS the combo's item list (addEnumProperty).
+        case iris::PropertyType::List: s.labels = static_cast<const iris::ListProperty *>(prop)->labels; break;
+        case iris::PropertyType::File: s.suffix = static_cast<const iris::FileProperty *>(prop)->suffix; break;
+        default: break;
+    }
+    return s;
 }
 
 bool PropertyWidget::canRebind(const QList<iris::Property *> &props) const
@@ -571,39 +598,10 @@ bool PropertyWidget::canRebind(const QList<iris::Property *> &props) const
     // material. (forgetProperties alone would make the size test below fail,
     // but the reason belongs in the code and not in an emergent consequence.)
     if (bladerow::isRetired(this)) return false;
-    if (props.size() != properties.size() || props.isEmpty()) return false;
+    if (props.size() != shape.size() || props.isEmpty()) return false;
     for (int i = 0; i < props.size(); ++i) {
         const iris::Property *a = props.at(i);
-        const iris::Property *b = properties.at(i);
-        if (!a || !b || !valueRows.value(i)) return false;
-        if (a->type != b->type || a->name != b->name || a->displayName != b->displayName)
-            return false;
-        switch (a->type) {
-            case iris::PropertyType::Float: {
-                auto *fa = static_cast<const iris::FloatProperty *>(a);
-                auto *fb = static_cast<const iris::FloatProperty *>(b);
-                if (fa->minValue != fb->minValue || fa->maxValue != fb->maxValue) return false;
-                break;
-            }
-            case iris::PropertyType::Int: {
-                auto *ia = static_cast<const iris::IntProperty *>(a);
-                auto *ib = static_cast<const iris::IntProperty *>(b);
-                if (ia->minValue != ib->minValue || ia->maxValue != ib->maxValue) return false;
-                break;
-            }
-            case iris::PropertyType::List: {
-                // The vocabulary IS the combo's item list (addEnumProperty).
-                if (static_cast<const iris::ListProperty *>(a)->labels !=
-                    static_cast<const iris::ListProperty *>(b)->labels) return false;
-                break;
-            }
-            case iris::PropertyType::File: {
-                if (static_cast<const iris::FileProperty *>(a)->suffix !=
-                    static_cast<const iris::FileProperty *>(b)->suffix) return false;
-                break;
-            }
-            default: break;
-        }
+        if (!a || !valueRows.value(i) || !(shapeOf(a) == shape.at(i))) return false;
     }
     return true;
 }
@@ -625,6 +623,8 @@ void PropertyWidget::rebind(const QList<iris::Property *> &props)
     Q_ASSERT(canRebind(props));
     rebinding = true;
     properties = props;
+    shape.clear();
+    for (const iris::Property *prop : props) shape.append(shapeOf(prop));
     rowByName.clear();
     for (int i = 0; i < props.size(); ++i) {
         iris::Property *prop = props.at(i);
@@ -680,6 +680,7 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
     rowByName.clear();
     this->properties.clear();
     valueRows.clear();
+    shape.clear();
     for (auto prop : properties) {
         // THE ROW'S KEY IS THE PROPERTY'S NAME (PROPERTY_FILTER_SPEC §3.2).
         // Set here rather than in ten adders: addRow() is the one place the row

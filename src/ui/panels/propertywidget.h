@@ -60,11 +60,9 @@ public:
     /// `properties` is a bare list of `iris::Property *` INTO the document's
     /// material — a panel's window onto objects it does not own and is not
     /// told about when they die. Every handler these rows install reads it
-    /// (propertyAt) and canRebind DEREFERENCES the stored side, comparing
-    /// names, labels and enum vocabularies. A dangling entry is therefore both
-    /// a read and, through a row's value-changed handler, a WRITE into freed
-    /// memory: one Qt assert of this shape (`str || !len` in QStringView, out
-    /// of canRebind) was caught with a witness on 2026-09-15.
+    /// (propertyAt), so a dangling entry is, through a row's value-changed
+    /// handler, a WRITE into freed memory. (canRebind compares against the
+    /// rows' SHAPE, a copy, and never reads this list — see `shape`.)
     ///
     /// This drops them. Afterwards propertyAt() answers null for every slot —
     /// so the rows are inert rather than dangerous — and canRebind() answers
@@ -127,6 +125,26 @@ private:
     /// True while rebind() is putting values into the rows: the handlers are
     /// inert, so filling a slider is not an edit of the material it reads from.
     bool rebinding = false;
+    /// THE SHAPE OF THE ROWS ON SCREEN, BY VALUE, aligned with `properties`:
+    /// what canRebind compares a new list against. It used to read the stored
+    /// `properties` — rows the panel does not own — and a refill releases the
+    /// material it is leaving before it rebinds, so since the material frees
+    /// its rows (LEAK-1) that compare read freed rows (ui.material_drag's
+    /// `canRebind` assert, 2026-10-19). A copy cannot dangle.
+    struct RowShape
+    {
+        iris::PropertyType type = iris::PropertyType::None;
+        QString name, displayName, suffix;
+        double lo = 0.0, hi = 0.0;
+        QStringList labels;
+        bool operator==(const RowShape &o) const
+        {
+            return type == o.type && name == o.name && displayName == o.displayName && suffix == o.suffix &&
+                   lo == o.lo && hi == o.hi && labels == o.labels;
+        }
+    };
+    static RowShape shapeOf(const iris::Property *prop);
+    QVector<RowShape> shape;
     iris::PropertyListener *listener = nullptr;
     int progressiveHeight, stretch;
 
