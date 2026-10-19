@@ -450,6 +450,62 @@
    "require_tier": true,
    "must": [],
    "must_not": []
+  },
+  {
+   "case": "TOOLING-4 1a: the condition of if(JAHSHAKA_TSAN) (CMakeLists.txt:124) reaches its body's add_compile_options(-fsanitize=thread) for the whole tree — the WHOLE TIER, never the lints only because a sibling message() resolved",
+   "file": "CMakeLists.txt",
+   "old": "if(JAHSHAKA_TSAN)\n",
+   "new": "if(JAHSHAKA_TSAN OR JAH_PROBE_X)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-4 1b: the condition of if(USE_BREAKPAD) (cmake/IncludeBreakpad.cmake:11, include()d into the root's scope) reaches its body's add_definitions — the WHOLE TIER, never 167",
+   "file": "cmake/IncludeBreakpad.cmake",
+   "old": "if(USE_BREAKPAD)\n",
+   "new": "if(USE_BREAKPAD OR JAH_PROBE_X)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-4 1c: option(JAHSHAKA_TSAN … ON) reaches if(JAHSHAKA_TSAN) as its reader and that block's body one level down — the WHOLE TIER, never the lints only",
+   "file": "CMakeLists.txt",
+   "old": "(use a separate build dir)\" OFF)\n",
+   "new": "(use a separate build dir)\" ON)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-4 2a: set(CMAKE_CXX_FLAGS … CACHE STRING \"\" FORCE) in irisgl/engine writes the CACHE, read by the root's and every sibling's targets (spikes/tooling-3/reader/mini3/) — the WHOLE TIER, never the engine's step 7",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -ffast-math\" CACHE STRING \"\" FORCE)\nset(JAH_VR_OK OFF)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-4 2b: option() of a CMAKE_* name in irisgl/engine writes the CACHE — the WHOLE TIER",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "option(CMAKE_POSITION_INDEPENDENT_CODE \"x\" ON)\nset(JAH_VR_OK OFF)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-4 2c: unset(CMAKE_CXX_FLAGS) in irisgl/engine is a write of a variable CMake itself reads — step 7 of the engine with the app rows, never the engine's every-fixture rule (449, no app row)",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "unset(CMAKE_CXX_FLAGS)\nset(JAH_VR_OK OFF)\n",
+   "must": [
+    "app.engine_selftest_validation",
+    "engine.window"
+   ],
+   "must_not": []
   }
  ]
 }
