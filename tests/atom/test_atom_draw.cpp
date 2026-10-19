@@ -556,6 +556,10 @@ int main()
                       st.pbsItems == 5,
                   "(c) the blended, alpha-tested, front-culled, row-less (line) and backdrop items stay on PBS, each "
                   "under its reason (pbs %u)", st.pbsItems);
+        // THE CASTER-ONLY ROUTE (ENGINE-POLISH-ATOM-1 stage 2): the blended item's MAIN pass stays PBS (blended above),
+        // its caster goes through the caster cut.
+        CHECK_MSG(st.atomCaster == 1, "(c) the blended item's caster goes through the caster cut (atomCaster %u)",
+                  st.atomCaster);
         CHECK_MSG(st.materials == cells.size() + 1u && st.buckets < st.materials && st.buckets > 0,
                   "(d) the grid's and the ground's %u materials need %u decode draws (buckets)", st.materials,
                   st.buckets);

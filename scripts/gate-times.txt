@@ -993,3 +993,4 @@ shadow.caster_receivers 5.10  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.3/2
 engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.5: the host drain reset on a throw; n=1, 11 frames)
 gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
+shadow.caster_route 5.21  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 2: three worlds - the cut, the stock, the bare - a floor, a pole, a blended and a cutout plane; n=3)

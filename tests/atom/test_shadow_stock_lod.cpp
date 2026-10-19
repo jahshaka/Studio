@@ -2,8 +2,8 @@
 // SPECS/briefs/SHADOW-LOD-1.md; the fork commit "A shadow caster pass computes LOD for its
 // own camera").
 //
-// Before the fork change every shadow scene pass drew its stock-PBR casters (alpha-tested,
-// skinned, two-sided — what the Atom caster cut does not take) at the level the VIEW's pass
+// Before the fork change every shadow scene pass drew its stock-PBR casters (live materials,
+// skinned, front-culled — what the Atom caster cut does not take) at the level the VIEW's pass
 // had chosen for the EYE: the pin's CompositorShadowNodeDef::_validateAndFinish turned the
 // caster passes' LOD update off ("Regular nodes calculate the LOD values, we just use them").
 // A light behind the camera, a far PSSM split or a point light's cube faces drew what the eye
@@ -14,7 +14,7 @@
 // so the level read there is the level that map draws; a view pass's passPreExecute runs
 // after ITS walk and before the shadow node's update, and passSceneAfterShadowMaps after the
 // update, so the pair is the save/restore; passSceneAfterFrustumCulling is the level the
-// view draws. The world: alpha-tested stock casters on a hand-made eight-level chain — one
+// view draws. The world: scrolling-cutout stock casters on a hand-made eight-level chain — one
 // FAR from the eye under a spot light, one beside a point light, one near the eye — an
 // Atom-routed copy of the same mesh near the eye, a ground and a sun.
 //
@@ -318,13 +318,18 @@ int main()
         }
         const MeshId sphere = s->createMesh(lodSphere());
         CHECK_MSG(sphere != 0, "the eight-level sphere builds (%s)", e->lastError().c_str());
-        PbrParams cutout;   // THE STOCK CASTER: alpha-tested (no texture: every pixel passes)
+        // THE STOCK CASTER: a SCROLLING cutout (no texture: every pixel passes) - a live material is CustomPiece, a
+        // route whose caster stays on the stock pass whatever the cut learns (ENGINE-POLISH-ATOM-1: blended and
+        // alpha-tested casters go through the cut), as shadow.cutout_caster's scrolling cutout does.
+        PbrParams cutout;
         cutout.albedo = Colour(0.7f, 0.35f, 0.25f);
         cutout.roughness = 0.5f;
         cutout.alphaMode = PbrAlphaMode::Cutout;
+        cutout.uvVelocity[0] = 0.01f;
         const MaterialId stockMat = s->createPbrMaterial(cutout);
         PbrParams opaque = cutout;
         opaque.alphaMode = PbrAlphaMode::Opaque;
+        opaque.uvVelocity[0] = 0.0f;
         const MaterialId atomMat = s->createPbrMaterial(opaque);
 
         std::vector<Probe> probes = { { "far caster under the spot (50 m)" }, { "caster beside the point (14 m)" },
@@ -377,9 +382,9 @@ int main()
             const AtomDrawStatus st = s->atomDrawStatus();
             CHECK_MSG(st.on && probes[3].item->getRenderQueueGroup() == 11u &&
                           probes[0].item->getRenderQueueGroup() != 11u,
-                      "the split is on: the opaque twin rides the Atom queue, the alpha-tested casters stay on PBS "
-                      "(%u atom items, %u alpha-tested)",
-                      st.atomItems, st.alphaTested);
+                      "the split is on: the opaque twin rides the Atom queue, the scrolling casters stay on PBS "
+                      "(%u atom items, %u custom-piece, %u caster-only)",
+                      st.atomItems, st.customPiece, st.atomCaster);
         }
         const unsigned levels = unsigned(probes[0].item->getMesh()->_getLodValueArray()->size());
         CHECK_MSG(levels == unsigned(kLevels), "the mesh carries %d levels (Ogre's value array: %u)", kLevels, levels);
