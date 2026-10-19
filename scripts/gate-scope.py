@@ -385,9 +385,11 @@ AREA_RULES = [
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
     (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
-    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what every engine shader
-    # SEES: every engine fixture and the picture set (never the whole tier).
-    (r"^irisgl/cmake/WrapHlmsPiece", ["*engine-fixtures", "*picture"], []),
+    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces, irisgl/engine/CMakeLists.txt's Hlms
+    # media staging, and the ray-query unwrap) changes what every engine shader SEES — the picture of everything that
+    # renders: _ALL, the render loop's reach (TOOLING-5 item 2: the fixtures + the picture set held none of the 29 app rows,
+    # app.engine_selftest_validation among them). Never the whole tier.
+    (r"^irisgl/cmake/WrapHlmsPiece", _ALL, []),
     # THE BUILD'S STAMP (cmake/BuiltFrom.cmake: <build>/BUILT_FROM, what the records' `tip.built` reads): the tools that
     # read it — the serving, the records, the fork-stamp lint — never a product row (TOOLING-2)
     (r"^cmake/BuiltFrom\.cmake$", ["hygiene", "tooling"], []),
@@ -1790,11 +1792,18 @@ class Selection:
         invokers = self.p_script_invokers(p)
         if invokers:
             hit = 0
-            self._var_seen, self._var_got = set(), {}
+            self._var_seen, self._var_got, self._cmake_read_at = set(), {}, set()
             for f, text, c in invokers:
                 if self.cmake_command(f, os.path.dirname(f), c[0], c[3], c[4], c[3], text, tag, notes, depth=1):
                     hit += 1
-            if hit:
+            # EVERY INVOKER RESOLVED, or the script is read as a build file below (TOOLING-5 item 5): one invoker resolved
+            # and another not read as "the 1 command(s) that run it" — the unresolved one dropped. No case is possible
+            # today: every -P invoker of the tree resolves (an execute_process applying a patch stack, an
+            # add_custom_command naming its outputs' users), and a one-file hunk cannot add an invoker to the script it
+            # edits. A file the invokers' chains marked takes its scope's step 7 here, at the chain's head.
+            if hit == len(invokers):
+                self._step7_marked(sorted(self._cmake_read_at), "/".join(dict.fromkeys(c[0] for _, _, c in invokers)),
+                                   tag, notes)
                 if depth == 0: self.rationale.append((p, f"a -P script: the {hit} command(s) that run it; "
                                                          + "; ".join(dict.fromkeys(notes))))
                 return
@@ -1887,7 +1896,7 @@ class Selection:
                 # took with it, reaches what the commands inside it reach — resolved one by one
                 self._var_seen, self._var_got, self._cmake_read_at = set(), {}, set()
                 inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
-                hit, stepped = [], set()
+                hit, unres = [], []
                 for c in inner:
                     if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1):
                         hit.append(c[0])
@@ -1895,14 +1904,15 @@ class Selection:
                     # AN INNER COMMAND THE READER LEAVES UNRESOLVED IS NEVER DROPPED (TOOLING-4 item 1): at depth 1 step 7
                     # never runs, so add_compile_options(-fsanitize=thread) inside if(JAHSHAKA_TSAN) returned False and was
                     # lost the moment a sibling message() resolved (29 rows, the lints only) — it takes its scope's step 7
-                    for under in self.scope_dirs(p):
-                        self.dir_scope_reach(p, under, c[0], tag, notes)
-                    stepped.add(p)
+                    unres.append(c[0])
                     hit.append(c[0])
-                for f_ in sorted(self._cmake_read_at - stepped):
+                if unres:
+                    # ONCE PER FILE, after the loop (TOOLING-5 item 6): step 7 of <p>'s scope reaches the same rows whatever
+                    # the command — it was taken once per unresolved inner command
+                    self._step7_marked([p], "()/".join(dict.fromkeys(unres)), tag, notes)
+                for f_ in sorted(self._cmake_read_at - ({p} if unres else set())):
                     # a write of a variable CMake itself reads in the body (TOOLING-3 item 1): its scope's step 7
-                    for under in self.scope_dirs(f_):
-                        self.dir_scope_reach(f_, under, name, tag, notes)
+                    self._step7_marked([f_], name, tag, notes)
                     hit.append(name)
                 if hit:
                     notes.append(f"{name}() at line {first}: its block's {len(hit)} command(s)")
@@ -2394,7 +2404,14 @@ class Selection:
                                               line=uf):
                             got = True
                 notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
-                if got or not n_: return True
+                if got or not n_:
+                    if depth == 0:
+                        # THE HEAD OF THE CHAIN TAKES STEP 7 (TOOLING-5 item 1): a reader whose body holds a command the
+                        # reader cannot resolve marks its file (_cmake_read_at) — tests/vr/CMakeLists.txt:50's return() under
+                        # if(NOT … OGRE_NEXT_VULKAN_RS_LIB), beside a message() that resolves — and this return dropped the
+                        # mark: set(OGRE_NEXT_VULKAN_RS_LIB "" PARENT_SCOPE) selected 54 rows, vr.* 0 of 32
+                        self._step7_marked(sorted(self._cmake_read_at), name, tag, notes)
+                    return True
         # a quoted argument is one argument ("vendor patch applied:")
         var = _set_var(name, _cmake_split(args)) if setter and depth < _CHAIN_HOPS and not rows else ""
         if setter and depth < _CHAIN_HOPS and not rows and ("${" in var or re.match(r"^(CMAKE|CTEST|CPACK)_", var)):
@@ -2487,11 +2504,17 @@ class Selection:
                 or name in ("if", "option", "set", "list", "string"))):
             # (a CMake-read write met down the chain takes its scope's step 7 even where another reader resolved: what the
             # reader owns says nothing about what CMake itself reads)
-            for f_ in sorted(self._cmake_read_at | (set() if got else {p})):
-                for under in self.scope_dirs(f_):
-                    self.dir_scope_reach(f_, under, name, tag, notes)
+            self._step7_marked(sorted(self._cmake_read_at | (set() if got else {p})), name, tag, notes)
             got = True
         return got
+
+    def _step7_marked(self, files, name, tag, notes):
+        """STEP 7 FOR EACH FILE GIVEN (the files a chain marked in _cmake_read_at, or a block's own): a directory-scope
+        setting of every directory whose scope the file's commands run in. Every return of a chain's HEAD (depth 0) takes
+        it — the end of cmake_command, the PARENT_SCOPE readers, include_reach, the -P invokers (TOOLING-5 items 1, 3)."""
+        for f_ in files:
+            for under in self.scope_dirs(f_):
+                self.dir_scope_reach(f_, under, name, tag, notes)
 
     def dir_scope_reach(self, p, under, name, tag, notes):
         """A setting at directory scope of <under> (step 7): every target compiled under it; a top-level directory (the
@@ -2769,12 +2792,20 @@ class Selection:
         except OSError:
             return None
         if depth == 0:
-            self._var_seen, self._var_got = set(), {}
+            self._var_seen, self._var_got, self._cmake_read_at = set(), {}, set()
         top = [c for c in gate_graph.cmake_commands(text) if not c[4] and c[0] not in _BLOCK_LINES
                and c[0] not in ("function", "endfunction", "macro", "endmacro")]
         sub = []
-        ok = all(self.cmake_command(mod, os.path.dirname(mod), c[0], c[3], None, c[3], text, tag, sub, depth=depth + 1,
-                                    line=c[1]) for c in top)
+        # EVERY top-level command read (a list, never all()'s short cut): a command after the first unresolved one can still
+        # mark a file for step 7 (a file-scope PARENT_SCOPE write whose reader's body the reader cannot resolve)
+        res = [self.cmake_command(mod, os.path.dirname(mod), c[0], c[3], None, c[3], text, tag, sub, depth=depth + 1,
+                                  line=c[1]) for c in top]
+        ok = all(res)
+        if depth == 0:
+            # THE HEAD OF THE CHAIN TAKES STEP 7 (TOOLING-5 item 3): the files the module's commands' chains marked —
+            # dropped at this return before (no such shape in the tree today; the same drop as the PARENT_SCOPE head's)
+            self._step7_marked(sorted(self._cmake_read_at), "include", tag, sub)
+            self._cmake_read_at = set()
         notes.extend(sub)
         if ok:
             notes.append(f"include({a0}): its {len(top)} top-level command(s), each by what it reaches ({mod})")
@@ -2788,9 +2819,22 @@ class Selection:
         parsed = gate_graph.cmake_commands(whole or "")
         spans = _block_spans(parsed)
         for k, c in enumerate(parsed):
-            if c[0] == name and c[3] == args and k in spans and (line is None or c[1] == line):
+            if c[0] != name or c[3] != args or (line is not None and c[1] != line):
+                continue
+            if k in spans:
                 b0, b1 = spans[k]
-                return [x for x in parsed if b0 < x[1] and x[2] < b1 and x[0] not in _BLOCK_LINES]
+            elif name == "elseif":
+                # AN elseif() READ AS A READER (TOOLING-5 item 4; it read as [] — its branch dropped): from its own line to
+                # its if()'s endif() — the branches after it are reached too (a condition turning true stops the later
+                # elseif/else branches running), the branches before it are not (they are decided first). Its if() is the
+                # innermost if() whose block holds the line.
+                ifs = [sp for k0, sp in spans.items() if parsed[k0][0] == "if" and sp[0] < c[1] < sp[1]]
+                if not ifs:
+                    continue
+                b0, b1 = c[1], min(ifs, key=lambda sp: sp[1] - sp[0])[1]
+            else:
+                continue
+            return [x for x in parsed if b0 < x[1] and x[2] < b1 and x[0] not in _BLOCK_LINES]
         return []
 
     def deferring_functions(self, helper):
