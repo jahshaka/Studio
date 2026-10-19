@@ -609,7 +609,6 @@ void EditorPage::setAtomViewMode(int mode)
     if (!es || mode < 0 || mode > 4) return;
     if (mode != 0 && !es->published().atomViewPaintable) return;   // world.setAtomView's refusal
     sceneView->setEngineAtomView(mode);
-    for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
 }
 
 int EditorPage::photonViewMode() const
@@ -621,10 +620,8 @@ void EditorPage::setPhotonViewMode(int mode)
 {
     jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
     if (!es || mode < 0 || mode >= jahshaka::engine::kPhotonViewCount) return;
-    const auto view = static_cast<jahshaka::engine::PhotonView>(mode);
     if (!es->published().photonViewRefusals[mode].empty()) return;   // world.setPhotonView's refusal
     sceneView->setEnginePhotonView(mode);
-    for (int i = 0; i < photonViewActions.size(); ++i) photonViewActions[i]->setChecked(i == mode);
 }
 
 void EditorPage::takeScreenshot()

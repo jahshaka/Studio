@@ -1648,7 +1648,9 @@ jah_lsan_blocked(ui.shot_aspect)   # spawns the app
 # triggers is the view the world reads. TIER high NEEDS photon: the Atom view paints at High (Low
 # is a passthrough viewport) and Photon's Voxels needs Photon. ITS OWN XVFB, like app.input_keys
 # (the script says why: synthesised input goes to whatever is under the pointer), and registered
-# only where the tools it drives exist.
+# only where the tools it drives exist. FRAMES 260 is an OBSERVATION under the Live render policy
+# (the green runs rendered 260; the red run, which waits out its bounded polls, rendered 692).
+# TIMEOUT 260 = the cold price 41.99 s x 6.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XDOTOOL xdotool)
     find_program(JAH_CURL curl)
@@ -1665,7 +1667,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                  WORKING_DIRECTORY ${_vos_home}/run)
         set_tests_properties(ui.view_options_submenu PROPERTIES
             ENVIRONMENT "HOME=${_vos_home};JAHSHAKA_DATA_ROOT=${_vos_home}/.local/share/Jahshaka"
-            TIMEOUT 180 LABELS "ui")
+            TIMEOUT 260 LABELS "ui")
         jah_tsan_blocked(ui.view_options_submenu)   # spawns the app (TSAN-BOOT-TOO-SLOW, as its neighbours)
         jah_lsan_blocked(ui.view_options_submenu)   # spawns the app (LSAN-L1-MATERIAL-PROPERTIES, as its neighbours)
     else()

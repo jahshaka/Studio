@@ -21,9 +21,10 @@
 #   3. open View Options, HOVER the row once, no other submenu touched: the submenu is on screen.
 # "On screen" is app.menus() listing the menu — Qt's own visibility of the popup.
 #
-# WAITS ARE EVENT-LOOP TURNS, NEVER A CLOCK'S VERDICT: a wait polls app.menus() (each poll is one
-# request the app's event loop answers) until the menu is listed, bounded by POLLS. Qt's popup
-# delay is the style's 300 ms timer; a stranded submenu never appears however long the poll runs.
+# THE WAITS ARE BOUNDED POLLS: wait_menu / wait_closed ask app.menus() up to POLLS = 60 times, each
+# poll one request the app's event loop answers plus a 0.05 s sleep — at least 3 s of wall clock,
+# 10x headroom over the 300 ms popup timer Qt's menus wait on (a UI timer: no frame counts it). The
+# bound never decides the verdict: a stranded submenu never appears however long the poll runs.
 #
 # ITS OWN DISPLAY (as app.input_keys): it synthesises pointer input, which the X server delivers
 # to whatever window is under the pointer — a private Xvfb is the only safe place to do that.
@@ -58,13 +59,15 @@ done
 
 # ------------------------------------------------------------- its own display -----
 DISP=""
-for n in $(seq 100 199); do
+for n in $(seq 300 349); do   # this row's range, disjoint from input_keys 90-170, play_select 171-240, vr_eye_grade 241-299
     [ -e "/tmp/.X11-unix/X${n}" ] || [ -e "/tmp/.X${n}-lock" ] && continue
     Xvfb ":${n}" -screen 0 1920x1080x24 -nolisten tcp > /dev/null 2>&1 &
     XVFB_PID=$!
     for _ in $(seq 1 40); do
-        if DISPLAY=":${n}" xdpyinfo > /dev/null 2>&1; then DISP=":${n}"; break; fi
+        # OUR Xvfb must be alive before the display is ours: a loser of the race for :n answers
+        # xdpyinfo with the winner's server and would drive another script's pointer.
         kill -0 "$XVFB_PID" 2>/dev/null || break
+        if DISPLAY=":${n}" xdpyinfo > /dev/null 2>&1 && kill -0 "$XVFB_PID" 2>/dev/null; then DISP=":${n}"; break; fi
         sleep 0.25
     done
     [ -n "$DISP" ] && break
