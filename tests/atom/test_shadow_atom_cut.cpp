@@ -1269,14 +1269,14 @@ static int lightCullMain()
     unsigned stepsEqual = 0, steps = 0;
     unsigned long long lateDrawn = 0ull;
     std::string firstWhy;
-    // `lead`: frames rendered with the cull on before the compared one - a pushed CAMERA reaches the
-    // light's splits one frame after it is set (measured: two cull-off frames after a pan differ, the
-    // second and third agree), so a pan's compared frame is its second, and its history the first's
-    // pyramid - drawn from the previous pose's splits.
-    const auto step = [&](int lead) {
+    // A PUSHED CAMERA REACHES THE LIGHT'S SPLITS IN THE FRAME IT IS SET (ENGINE-POLISH-ATOM-1 stage 4,
+    // CAMERA-SPLITS-LAG-1): the first frame after a pan is compared, its history the previous pose's
+    // pyramid - and two cull-off frames after a pan are bit-equal from the first (panSettled).
+    unsigned panSettled = 0, pans = 0;
+    std::string panWhy;
+    const auto step = [&]() {
         std::vector<ShadowMapDigest> a, b;
         gE->setArm("shadow.casterCull", 1.0);
-        if (lead > 0) enginetest::frames(gE, lead);
         enginetest::frames(gE, 1);
         lateDrawn += tallyOf(w.scene->atomDrawStatus()).lateInstances;
         w.scene->shadowMapDigests(a);
@@ -1292,13 +1292,32 @@ static int lightCullMain()
     for (int i = 0; i < 6; ++i) {
         roofCentre.x += 2.0f;
         w.scene->setNodeTransform(roof, roofCentre, Quat(), Vec3(1, 1, 1));
-        step(0);
+        step();
     }
     for (int i = 0; i < 3; ++i) {
         const CameraDesc c2 = enginetest::testCameraDescLookAt(Vec3(1.6f * float(i + 1), 2.2f, 4.0f - 2.1f * float(i + 1)),
                                                             Vec3(0.0f, 0.8f, -30.0f));
         w.view->setCamera(c2);
-        step(1);
+        step();
+    }
+    // THE PAN'S FIRST TWO FRAMES, the cull off: the maps the first frame after the camera moved draws are the
+    // second's (nothing else moved) - a split computed before the camera's record was applied drew the first from
+    // the previous pose.
+    for (int i = 0; i < 3; ++i) {
+        const CameraDesc c3 = enginetest::testCameraDescLookAt(Vec3(-1.4f * float(i + 1), 2.4f, 3.0f - 1.7f * float(i + 1)),
+                                                            Vec3(0.5f, 0.8f, -30.0f));
+        gE->setArm("shadow.casterCull", 0.0);
+        enginetest::frames(gE, 1);   // the arm latched before the pan
+        w.view->setCamera(c3);
+        std::vector<ShadowMapDigest> a, b;
+        enginetest::frames(gE, 1);
+        w.scene->shadowMapDigests(a);
+        enginetest::frames(gE, 1);
+        w.scene->shadowMapDigests(b);
+        std::string wy;
+        ++pans;
+        if (mapsEqual(a, b, wy)) ++panSettled;
+        else if (panWhy.empty()) panWhy = "pan " + std::to_string(pans) + ": " + wy;
     }
     gE->setArm("shadow.casterCull", 1.0);
     enginetest::frames(gE, 8);
@@ -1307,6 +1326,9 @@ static int lightCullMain()
                 steps, lateDrawn);
     CHECK_MSG(stepsEqual == steps, "IN MOTION every step's sun maps are bit-equal on and off (%s)",
               firstWhy.empty() ? "all" : firstWhy.c_str());
+    CHECK_MSG(panSettled == pans && pans > 0u,
+              "A PAN REACHES THE SPLITS IN ITS OWN FRAME: the first two cull-off frames after a camera push are bit-equal "
+              "(%u of %u pans; %s)", panSettled, pans, panWhy.empty() ? "all" : panWhy.c_str());
     CHECK_MSG(lateDrawn > 0ull, "the slide made the late half draw what the first half's prediction rejected (%llu)",
               lateDrawn);
     gE->setArm("shadow.casterCull", 1.0);
