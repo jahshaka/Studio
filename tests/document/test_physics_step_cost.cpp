@@ -5,8 +5,10 @@
 // the rigid-body solve and the write-back), the frames COUNTED. Bullet's own task scheduler is bound ONCE on this
 // thread (Environment::bindGameThread: this thread is the game thread, Bullet's index 0) with `--threads T`; the arms:
 //
-//   seq   the worlds stepped on Bullet's sequential scheduler (one thread) — the single-threaded reference
-//   mt    the worlds stepped on the bound scheduler (T threads)
+//   seq         the worlds stepped on Bullet's sequential scheduler (one thread) — the single-threaded reference
+//   mt          the worlds stepped on the bound scheduler (T threads) — the SHIPPED world: Bullet's in-island batched
+//               solve on (BULLET-BATCHING-1)
+//   mt-nobatch  the mt arm with the in-island batching OFF — the pair (batching on / off) in one process
 //
 // Per arm: the step's median per frame, its share of a 60 Hz frame, the bodies Bullet integrated, the process CPU per
 // frame (Bullet's spinning workers show there), and every body's final pose. THE DETERMINISM IS BOUNDED, never
@@ -24,7 +26,8 @@
 //                  held to the derived bound — bit-equal before the first contact, then at most the landing's
 //                  sqrt(2gh) dt once and g dt^2 per step (see the law below)
 //   --mt-only      the mt arm alone (a thread count's own process: the sweep)
-//   --island-batching  Bullet's in-island batched solve ON (off in the shipped world: Environment::setIslandBatching)
+//   --no-island-batching  every arm with Bullet's in-island batched solve OFF (the comparison arm; the shipped world
+//                  batches: Environment::setIslandBatching); the mt-nobatch arm is then not run (it would be the mt arm)
 //   --penetrating  the stress start: every layer interpenetrating (the pile explodes apart on its first steps)
 #include <QGuiApplication>
 
@@ -182,7 +185,7 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
             if (!std::isfinite(o.x()) || !std::isfinite(o.y()) || !std::isfinite(o.z())) ++nonFinite;
         }
         active.push_back(a);
-        if (nonFinite) { std::printf("PHYSICS_NONFINITE frame %d: %d bodies off the reals\n", f, nonFinite); std::fflush(stdout); }
+        if (nonFinite && !r.nonFinite) { std::printf("PHYSICS_NONFINITE frame %d: %d bodies off the reals\n", f, nonFinite); std::fflush(stdout); }
         r.nonFinite = std::max(r.nonFinite, nonFinite);
         if (mirror) {
             const auto s0 = Clock::now();
@@ -203,6 +206,8 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
         }
     }
     r.cpuPerFrameMs = (cpuMs() - cpu0) / double(frames);
+    CHECK(r.nonFinite == 0, "[%s] every body stays on the reals through %d frames (%d off at the worst frame)",
+          arm.c_str(), frames, r.nonFinite);
     r.stepMs = median(ms);
     r.worstMs = *std::max_element(ms.begin(), ms.end());
     r.syncMs = median(sync);
@@ -254,7 +259,7 @@ void printRun(const Run &r, int bodies, int frames)
 int main(int argc, char **argv)
 {
     int bodies = 1000, frames = 120, threads = 1, runs = 1;
-    bool overlap = false, mirror = false, noSleep = false, mtOnly = false, islandBatching = false;
+    bool overlap = false, mirror = false, noSleep = false, mtOnly = false, islandBatching = true;
     int boundSteps = -1;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--bodies") && i + 1 < argc) bodies = std::atoi(argv[++i]);
@@ -266,18 +271,18 @@ int main(int argc, char **argv)
         else if (!std::strcmp(argv[i], "--mirror")) mirror = true;
         else if (!std::strcmp(argv[i], "--no-sleep")) noSleep = true;
         else if (!std::strcmp(argv[i], "--mt-only")) mtOnly = true;
-        else if (!std::strcmp(argv[i], "--island-batching")) islandBatching = true;
+        else if (!std::strcmp(argv[i], "--no-island-batching")) islandBatching = false;
         else if (!std::strcmp(argv[i], "--penetrating")) gPenetrating = true;
     }
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     iris::Environment::bindGameThread(threads);   // THIS thread is the game thread: Bullet's index 0
     iris::Environment::setSleepAfterStep(!noSleep);
-    if (islandBatching) iris::Environment::setIslandBatching(true);   // the measurement's arm (Bullet's grid batching)
+    if (!islandBatching) iris::Environment::setIslandBatching(false);   // the comparison arm (the shipped world batches)
     std::printf("== physics: %d bodies, %d frames, the %s world, Bullet's scheduler bound at %d threads, workers %s "
-                "after each step\n", bodies, frames,
+                "after each step, in-island batching %s\n", bodies, frames,
                 iris::Environment::multiThreadedWorld() ? "MULTI-threaded (btDiscreteDynamicsWorldMt)" : "single-threaded",
-                iris::Environment::taskThreads(), noSleep ? "left spinning" : "sent to sleep");
+                iris::Environment::taskThreads(), noSleep ? "left spinning" : "sent to sleep", islandBatching ? "ON" : "OFF");
     CHECK(iris::Environment::multiThreadedWorld(), "the build's world is Bullet's multi-threaded one");
     CHECK(iris::Environment::taskThreads() == std::max(1, threads), "the bound scheduler runs %d threads (%d asked)",
           iris::Environment::taskThreads(), threads);
@@ -392,6 +397,20 @@ int main(int argc, char **argv)
     std::printf("PHYSICS_GAIN bodies=%d threads=%d: step %.3f -> %.3f ms (x%.2f), share of a 60 Hz frame %.3f -> %.3f\n",
                 bodies, iris::Environment::taskThreads(), seq.stepMs, mts[0].stepMs,
                 mts[0].stepMs > 0 ? seq.stepMs / mts[0].stepMs : 0.0, seq.stepMs / 16.667, mts[0].stepMs / 16.667);
+    // THE PAIR (BULLET-BATCHING-1): the shipped world's in-island batching against the same mt world without it, in
+    // this process (Bullet reads the threshold at each solve; the arm sets it back after).
+    if (islandBatching) {
+        iris::Environment::setIslandBatching(false);
+        const Run off = runPile("mt-nobatch", bodies, frames, mr);
+        iris::Environment::setIslandBatching(true);
+        printRun(off, bodies, frames);
+        if (mirror)
+            CHECK(off.servedMin == bodies, "in play the fast path serves every moved body (mt-nobatch %d of %d)",
+                  off.servedMin, bodies);
+        std::printf("PHYSICS_BATCHING bodies=%d threads=%d: in-island batching off -> on %.3f -> %.3f ms (x%.2f)\n",
+                    bodies, iris::Environment::taskThreads(), off.stepMs, mts[0].stepMs,
+                    mts[0].stepMs > 0 ? off.stepMs / mts[0].stepMs : 0.0);
+    }
     // THE DETERMINISM, BOUNDED (decision 23.3).
     double worstSeq = 0.0, worstRun = 0.0;
     for (size_t k = 0; k < mts.size(); ++k) {
