@@ -373,6 +373,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "whether any material in the open scene reads the clock (false: nothing on screen would move). "
           "Not saved, not undoable: a viewing and testing control, like the timeline's playhead.",
           Needs::Document },
+        { "atomPixelError", "world.atomPixelError() -> number",
+          "THE VIEW'S PIXEL-ERROR THRESHOLD IN FORCE, in pixels: the scene's World Mode row 'atomPixelError' (Low 4, Medium 3, High 2, Epic 1, or the scene's override; world.override({id: 'atomPixelError', value}) sets it) times the engine viewport's LOD bias (editor.lodBias; 1 with no viewport) \u2014 the 'tolerance' every view's level rule affords, the Atom cluster cut and the stock chain alike. Shadow maps keep one texel and do not read it. Reads only.",
+          Needs::Document },
         { "atomView", "world.atomView() -> string",
           "The open scene's Atom view — 'off', 'triangles', 'levels', 'buckets', 'objects' or 'density' (world.setAtomView).",
           Needs::Document },
@@ -672,7 +675,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from. The cost notes are THIS MACHINE'S — a row that explains reflections at High and Epic reads differently where the scene traces rays, because no probe grid is built there — and the technique's name is the OPEN SCENE'S: 'VCT + rays' where its quality traces its reflections on this machine (world.giStatus().probeGridByRays), 'VCT + probes' where it does not. A row's 'options' are the entries the panels OFFER for the open scene on this machine: where its reflections are traced the SSR row lists exactly 'off' and 'traced' (followsTier true): off is honoured at every tier, any other value traces at the tier's own resolution, and world.override({id: \"ssr\", value: \"traced\"}) — what the panel's Traced entry does — DROPS the SSR pin so the tier decides again (pinning 'half' only where the World mode's column is off).",
           Needs::Document },
         { "tierTable", "world.tierTable() -> {photon: [...], world: [...], offscreen: [...]}",
-          "WHAT EACH PHOTON QUALITY TIER PHYSICALLY IS, read from the renderer's own tables rather than described in prose. Per tier: the registry columns it writes ('technique' off|vct|vct_pcc_hybrid, 'quality' low|medium|high|epic, 'ddgi' 0/1, 'bounces' 1-4, 'probeSize' 0 = follow the quality dial); 'gather' is the SCREEN-PROBE GATHER's row of the renderer's tier table {on, stride, octRes, raysPerProbe, adaptiveCapDivisor} — on at High and Epic (Epic four times the probes), on at Medium at 36 rays, off at Low — and 'vrGather' its VR column (the gather a HEADSET runs, per eye, its probe grid split at the eye seam and its pixel history the packed 16 B a pixel); then the PHYSICAL facts the engine derives from the quality column — 'chain' is the camera-centred voxel cascade table it builds, innermost first, each entry {halfSize, resolution, stepCells, cell, step, guaranteedRadius, nearFieldRadius} in metres and voxels (the cell is what that cascade can resolve; the step is RESOLVED here through the renderer's own derivation rather than reported as the tier row's 0, so this is the chain that would be built; guaranteedRadius is the radius around the camera that step guarantees the cascade covers at every moment of any walk, and nearFieldRadius the radius the rule requires of it \u2014 0.45 of the half-size); 'vrChain' is THE SAME TABLE'S VR COLUMN \u2014 the chain a HEADSET gets, which is not the same chain, because a headset renders it five times over for half the frame (2160x2376 per eye against a desktop 1080p is 10.26 against 2.07 megapixels, and 11.1 ms at 90 Hz against 16.7 at 60). It is the tier's own chain with the redundant middle cascade dropped and the outermost step doubled -- the two apply independently, so low, which has no middle to drop, still gets the doubled outer step and no tier's VR column equals its desktop one: measured at Quest Pro size on the rig, the opaque pass costs 0.31 ms PER EYE PER CASCADE, so one fewer cascade is 0.31 ms of every eye frame back, and halving the outermost cascade's rebuild rate is headroom on top. What is given up is one hand-over in the mid field and up to 30 m of off-centring on a 120 m box at 1.875 m per cell instead of 15; the reach and the inner cell are untouched. A live session reports which column it is on through world.giStatus()'s 'cascadeProfileVr'. 'probeFaceSize' the reflection probe's cube face in pixels; 'probeHdr' and 'probeShadows' what \"auto\" resolves to for the two expensive probe options. 'pixelTolerance' is the tier's geometric tolerance in SAMPLES of whatever is sampling \u2014 pixels for a view, cells for a cascade \u2014 i.e. the 'tolerance' argument of the quality currency allowedWorldError (the world-space deviation a consumer may afford = tolerance x its sample footprint / the mesh's scale): Low 2.0, Medium 1.0, High and Epic 0.5. Today it feeds the GPU cull's level output only; the shipped draw path keeps one pixel at every tier and the cascades keep their measured 1/256 of a cell. 'description' is the one-sentence English form of all of it, and it is the SAME string the World panel's tier tooltips are built from — the point of this verb is that a tier's description cannot drift from what the tier does, which it did for months (the panel promised Medium twice Low's resolution when both are 64, and 32/64/128 voxels per axis when the chain uses 64/64/128). 'world' maps each WORLD mode onto the Photon tier it selects, or 'off'. 'offscreen' is THE OFFSCREEN PICTURE CONTRACT: every picture rendered away from the viewport, {kind, tierPicture, renders} — viewport, screenshot.scene and screenshot.viewport render the tier's own picture (the tier's GI including the screen-probe gather, and every chain-borne term: the traced reflections, the screen march, sun contact); screenshot.plain, screenshot.tonemap, projectTile, liveOffscreen, probeCapture and cardCapture are DECLARED lower and 'renders' says what they render instead. Reads only: there is nothing here to set — world.photon picks a tier, world.gi pins a row.",
+          "WHAT EACH PHOTON QUALITY TIER PHYSICALLY IS, read from the renderer's own tables rather than described in prose. Per tier: the registry columns it writes ('technique' off|vct|vct_pcc_hybrid, 'quality' low|medium|high|epic, 'ddgi' 0/1, 'bounces' 1-4, 'probeSize' 0 = follow the quality dial); 'gather' is the SCREEN-PROBE GATHER's row of the renderer's tier table {on, stride, octRes, raysPerProbe, adaptiveCapDivisor} — on at High and Epic (Epic four times the probes), on at Medium at 36 rays, off at Low — and 'vrGather' its VR column (the gather a HEADSET runs, per eye, its probe grid split at the eye seam and its pixel history the packed 16 B a pixel); then the PHYSICAL facts the engine derives from the quality column — 'chain' is the camera-centred voxel cascade table it builds, innermost first, each entry {halfSize, resolution, stepCells, cell, step, guaranteedRadius, nearFieldRadius} in metres and voxels (the cell is what that cascade can resolve; the step is RESOLVED here through the renderer's own derivation rather than reported as the tier row's 0, so this is the chain that would be built; guaranteedRadius is the radius around the camera that step guarantees the cascade covers at every moment of any walk, and nearFieldRadius the radius the rule requires of it \u2014 0.45 of the half-size); 'vrChain' is THE SAME TABLE'S VR COLUMN \u2014 the chain a HEADSET gets, which is not the same chain, because a headset renders it five times over for half the frame (2160x2376 per eye against a desktop 1080p is 10.26 against 2.07 megapixels, and 11.1 ms at 90 Hz against 16.7 at 60). It is the tier's own chain with the redundant middle cascade dropped and the outermost step doubled -- the two apply independently, so low, which has no middle to drop, still gets the doubled outer step and no tier's VR column equals its desktop one: measured at Quest Pro size on the rig, the opaque pass costs 0.31 ms PER EYE PER CASCADE, so one fewer cascade is 0.31 ms of every eye frame back, and halving the outermost cascade's rebuild rate is headroom on top. What is given up is one hand-over in the mid field and up to 30 m of off-centring on a 120 m box at 1.875 m per cell instead of 15; the reach and the inner cell are untouched. A live session reports which column it is on through world.giStatus()'s 'cascadeProfileVr'. 'probeFaceSize' the reflection probe's cube face in pixels; 'probeHdr' and 'probeShadows' what \"auto\" resolves to for the two expensive probe options. 'description' is the one-sentence English form of all of it, and it is the SAME string the World panel's tier tooltips are built from — the point of this verb is that a tier's description cannot drift from what the tier does, which it did for months (the panel promised Medium twice Low's resolution when both are 64, and 32/64/128 voxels per axis when the chain uses 64/64/128). 'world' maps each WORLD mode onto the Photon tier it selects, or 'off', and carries its 'atomPixelError' \u2014 the view's pixel-error threshold in pixels (the World Mode row of that name: Low 4, Medium 3, High 2, Epic 1), the 'tolerance' argument of the quality currency allowedWorldError for every view's level rule (the Atom cut and the stock chain alike; shadow maps keep one texel). 'offscreen' is THE OFFSCREEN PICTURE CONTRACT: every picture rendered away from the viewport, {kind, tierPicture, renders} — viewport, screenshot.scene and screenshot.viewport render the tier's own picture (the tier's GI including the screen-probe gather, and every chain-borne term: the traced reflections, the screen march, sun contact); screenshot.plain, screenshot.tonemap, projectTile, liveOffscreen, probeCapture and cardCapture are DECLARED lower and 'renders' says what they render instead. Reads only: there is nothing here to set — world.photon picks a tier, world.gi pins a row.",
           Needs::Document },
     };
 }
@@ -2066,6 +2069,18 @@ QString WorldApi::photonView()
     const int mode = es ? host.viewport->enginePhotonView() : 0;
     return QLatin1String(
         kPhotonViewNames[(mode >= 0 && mode < jahshaka::engine::kPhotonViewCount) ? mode : 0]);
+}
+
+double WorldApi::atomPixelError()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.atomPixelError"));
+    if (!scene) return 0.0;
+    // THE PRODUCT THE CUT TAKES (OgreAtomIdPass: Scene::pixelTolerance x lodBias): the row's value is
+    // what the mirror pushes; the bias is the host's own record of the session dial (editor.lodBias).
+    const double bias = host.isEngineReady() && host.viewport && host.viewport->engineScene()
+                            ? double(host.viewport->engineLodBias())
+                            : 1.0;
+    return double(scene->atomPixelError) * bias;
 }
 
 QString WorldApi::atomView()
@@ -4164,12 +4179,6 @@ QVariantMap WorldApi::tierTable()
             { QStringLiteral("chain"), chain },
             { QStringLiteral("vrChain"), vrChain },
             { QStringLiteral("probeFaceSize"), worldmodes::photonTierProbeFaceSize(t) },
-            // THE ATOM COLUMN (ATOM P3's SUB-ERROR): the tier's geometric
-            // tolerance in SAMPLES — the one dial of the level rule that is
-            // taste rather than arithmetic. Reported from `giQualityFacts` like
-            // every other derived column here, so there is no second copy to
-            // drift; `lodBias` (a session dial) multiplies it at the consumer.
-            { QStringLiteral("pixelTolerance"), double(facts.pixelTolerance) },
             { QStringLiteral("probeHdr"), facts.probeHdrDefault },
             { QStringLiteral("probeShadows"), facts.probeShadowsDefault },
             // THE GATHER COLUMN (PHOTON-GATHER-1d): the engine's gather row,
@@ -4183,9 +4192,9 @@ QVariantMap WorldApi::tierTable()
     // Which Photon tier each WORLD mode selects — the `photon` row's own four
     // columns, reported by name so nobody has to map an ordinal.
     QVariantList worldList;
-    const worldmodes::Row *photonRow = nullptr;
-    for (const worldmodes::Row &r : worldmodes::rows())
-        if (r.id == worldmodes::photonRowId()) photonRow = &r;
+    // ...and its PIXEL-ERROR THRESHOLD (ATOM-3 stage 1): the World Mode row's own column.
+    const worldmodes::Row *photonRow = worldmodes::row(worldmodes::photonRowId());
+    const worldmodes::Row *pixelRow = worldmodes::row(QStringLiteral("atomPixelError"));
     const QStringList modeNames = worldmodes::modeNames();
     for (int i = 0; i < modeNames.size(); ++i) {
         const int column = photonRow ? photonRow->tier[i] : 0;
@@ -4194,7 +4203,8 @@ QVariantMap WorldApi::tierTable()
             { QStringLiteral("photon"),
               column <= 0 ? QStringLiteral("off")
                           : worldmodes::photonTierName(
-                                worldmodes::PhotonTier(qBound(0, column - 1, 3))) } });
+                                worldmodes::PhotonTier(qBound(0, column - 1, 3))) },
+            { QStringLiteral("atomPixelError"), pixelRow && i < 4 ? pixelRow->tier[i] : 0 } });
     }
 
     // THE OFFSCREEN PICTURE CONTRACT (D4-PHOTON-TIERS): what every picture the app

@@ -28,6 +28,7 @@ jah_gpu_row(atom.dolly_gate CLASS engine COMMAND test_atom_dolly_gate
 # for a contended one.
 # budget 30 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — two walks x 153 steps at 1024^2,
 # a readback each, ARE the subject (554 frames; 28 s quiet, 34.7-42 s loaded; spikes/testing-speed-b3/profile.txt).
+# ATOM-3 stage 1 adds the 2 and 3 px walks (the tiers' thresholds, the silhouette caveat MEASURED): 920 frames.
 set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 240 LABELS "engine")
 
 # ---------------------------------------------------------------------------
@@ -149,7 +150,7 @@ target_include_directories(test_atom_cut_probe PRIVATE
     "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
 target_link_libraries(test_atom_cut_probe PRIVATE OgreNext)
 add_dependencies(test_atom_cut_probe JahshakaEngineMedia)
-jah_gpu_row(atom.cut_probe CLASS engine FRAMES 24 COMMAND test_atom_cut_probe
+jah_gpu_row(atom.cut_probe CLASS engine FRAMES 33 COMMAND test_atom_cut_probe
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cut_probe PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
@@ -511,7 +512,7 @@ foreach(_row_frames
         "atom.cluster_crack=1153"
         "atom.cluster_cut=0"
         "atom.dag_chain_validate=372"
-        "atom.dolly_gate=554"
+        "atom.dolly_gate=920"
         "atom.lod_switch=27651"
         "atom.occlusion_exact=348"
         "atom.two_sided=378"

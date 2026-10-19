@@ -460,6 +460,56 @@ int main()
               "own pose (%u over; worst %.2f codes of %.2f)",
               overExcess, worstExcess * 255.0, excessBar * 255.0);
 
+    // ---- THE TIERS' THRESHOLDS: 2 AND 3 PX (ATOM-3 stage 1) ------------------
+    //
+    // Types.h's caveat on kLodBudgetPixels — "two pixels may be visible on a moving
+    // silhouette" — MEASURED: the same 152 poses at High's 2 px and Medium's 3 px
+    // (Scene::setPixelTolerance, the World Mode's atomPixelError row, reaching the
+    // stock strategy through the view camera's LOD factor), each step's EXCESS over the
+    // pinned control printed against the 1 px arm's own bar. NOT GATED ON THE BAR: the
+    // numbers are the lead's and whether a 2 px pop shows is the owner's visual call
+    // at the smoke (SPECS/ATOM-3.md stage 1). What IS asserted is the physics of a
+    // threshold: a larger one never draws a finer level at any pose, the walk still
+    // switches, and dollying in still never coarsens.
+    {
+        std::vector<Step> prevArm = steps;
+        for (const float tol : { 2.0f, 3.0f }) {
+            scene->setPixelTolerance(tol);
+            char what[64];
+            std::snprintf(what, sizeof(what), "the chain at %.0f px", double(tol));
+            const std::vector<Step> arm = walk(what);
+            CHECK_MSG(arm.size() == steps.size(), "%s walked the same %zu poses", what, arm.size());
+            unsigned finer = 0, armSwitches = 0, armOver = 0;
+            bool armMonotone = true;
+            double armWorst = 0.0;
+            float armWorstDist = 0.0f;
+            std::printf("\n== %s: the switch steps (excess over the control, codes; the 1 px bar %.2f) ==\n",
+                        what, excessBar * 255.0);
+            for (size_t i = 0; i < arm.size() && i < steps.size(); ++i) {
+                if (arm[i].level < prevArm[i].level) ++finer;
+                if (i && arm[i].level > arm[i - 1].level) armMonotone = false;
+                const double x = arm[i].delta - (i < ref.size() ? ref[i].delta : 0.0);
+                if (x > excessBar) ++armOver;
+                if (x > armWorst) { armWorst = x; armWorstDist = arm[i].dist; }
+                if (arm[i].switched) {
+                    ++armSwitches;
+                    std::printf("   %-8.2f level %u  delta %.2f  excess %.2f%s\n", arm[i].dist, arm[i].level,
+                                arm[i].delta * 255.0, x * 255.0, x > excessBar ? "  OVER the 1 px bar" : "");
+                }
+            }
+            std::printf("   %s: %u switches, worst excess %.2f codes at %.2f m, %u step%s over the 1 px "
+                        "arm's bar of %.2f (MEASURED, not gated: the owner's visual call)\n",
+                        what, armSwitches, armWorst * 255.0, armWorstDist, armOver, armOver == 1 ? "" : "s",
+                        excessBar * 255.0);
+            CHECK_MSG(finer == 0u, "%s never draws a finer level than the smaller threshold at any pose (%u do)",
+                      what, finer);
+            CHECK_MSG(armSwitches >= 2u, "%s still walks the chain (%u switches)", what, armSwitches);
+            CHECK_MSG(armMonotone, "%s: dollying in never coarsens", what);
+            prevArm = arm;
+        }
+        scene->setPixelTolerance(kLodBudgetPixels);
+    }
+
     // ---- THE SCALED ARM (ATOM-RESUMES-1 item 1's acceptance) ----------------
     //
     // THE RULE IS HOMOGENEOUS IN (SCALE, DISTANCE): an instance ten times as

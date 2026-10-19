@@ -126,7 +126,7 @@ foreach(_row_frames
         "chain.hzb.timing=68"   # chain.hzb's (the same binary)
         "engine.gpu_cull=916"
         "engine.gpu_cull.timing=916"   # engine.gpu_cull's (the same binary)
-        "engine.lod_rule_parity=12"
+        "engine.lod_rule_parity=14"
         "engine.voxel_reader_parity=17"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

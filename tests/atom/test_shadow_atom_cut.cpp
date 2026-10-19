@@ -35,7 +35,8 @@
 //     silhouette texels (one covered, the other not), and the texels a receiver would
 //     FLIP between lit and shadowed at the shipped constant bias (the depth difference
 //     past the bias, or a silhouette texel). Bar: p99 <= 1 texel on every map; flips
-//     <= 0.5 % of the covered texels.
+//     <= 0.5 % of the covered texels. The cut world's VIEW runs at 3 px (ATOM-3 stage 1:
+//     the World Mode's pixel-error row is the view's; the maps keep their texel).
 // Frames, never time.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -496,6 +497,10 @@ static int parityMain()
         std::printf("FAIL: the worlds\n");
         return 1;
     }
+    // THE VIEW AT MEDIUM'S 3 PX (ATOM-3 stage 1): the World Mode's pixel-error row is the VIEW's — the caster cut
+    // keeps one texel and a stock caster's level walk runs on the map's own camera, whose LOD factor the row never
+    // touches — so the maps must hold the bar below with the view's threshold raised.
+    a.scene->setPixelTolerance(3.0f);
     const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.2f, 4.0f), Vec3(0.0f, 0.8f, -30.0f));
     a.view->setCamera(cam);
     b.view->setCamera(cam);
