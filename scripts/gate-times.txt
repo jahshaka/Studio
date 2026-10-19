@@ -111,6 +111,7 @@ distortion.engine 1.63  quiet n=43
 distortion.engine_asan 9.51  quiet n=44
 document.cascade_set_reader 0.00  ship 3a0422b4e (2026-10-13)
 document.characterisation 0.08  quiet n=47
+document.material_duplicate 0.03  quiet n=3 (LEAK-1, 2026-10-19: 0.02-0.04 s solo under the lock)
 document.color_json 0.03  quiet n=9
 document.dirty_list 0.09  quiet n=46
 document.light_defaults 0.05  quiet n=47
