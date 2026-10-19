@@ -28,10 +28,6 @@ static int failures = 0;
 /// THE SETTLED PICTURE'S TOLERANCE against the warm launch's (mean |difference| per channel,
 /// codes 0-255). Measured: see the evidence file named in the lane report.
 static constexpr double kSettledMeanTolerance = 0.5;
-/// THE SAFETY NET'S BOUND per phase: a frame held because an object had neither its shader
-/// nor a placeholder. Measured 0 (material and tier, a cold cache); a frame or two of slack
-/// for a placeholder that lands one frame late under a loaded box.
-static constexpr int kMaxHeldFrames = 2;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -209,18 +205,13 @@ int main(int argc, char **argv)
         CHECK(c.value("failed").toInt() == 0, ("cold " + n + ": no permutation failed").constData());
         // WHILE A SHADER BUILDS THE WAITING OBJECTS DRAW GREY: the PBS and the Atom decode
         // placeholders (a tier's are built by the startup gate's sweep, the placeholders-only
-        // pass). A frame with an object that has none yet is HELD, never presented with a hole
-        // — the safety net, which must stay rare: measured 0 frames for both phases.
+        // pass). Every frame is presented (BISTRO-STREAM-IN-1: the held frame is deleted).
         CHECK(c.value("placeholderDraws").toInt() > 0,
               ("cold " + n + ": the waiting objects drew the grey placeholder").constData());
-        CHECK(c.value("heldFrames").toInt() <= kMaxHeldFrames,
-              ("cold " + n + ": the held-frame safety net stayed rare").constData());
-        CHECK(c.value("holeyPresented").toInt() == 0,
-              ("cold " + n + ": no frame with a hole was presented").constData());
         CHECK(w.value("placeholderDraws").toInt() == 0 && w.value("pendingSkips").toInt() == 0,
               ("warm " + n + ": nothing took the placeholder or skipped a draw").constData());
-        std::printf("    cold %s: placeholder draws %d, held frames %d\n", name,
-                    c.value("placeholderDraws").toInt(), c.value("heldFrames").toInt());
+        std::printf("    cold %s: placeholder draws %d, pending skips %d\n", name,
+                    c.value("placeholderDraws").toInt(), c.value("pendingSkips").toInt());
 
         // The placeholder is ON SCREEN when one was drawn: that frame differs from the settled one.
         const QString during = c.value("pictureDuring").toString();

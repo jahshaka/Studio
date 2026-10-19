@@ -4608,6 +4608,11 @@ void EngineSceneViewport::primeSceneEnvironment()
         main.sky = true;
         main.camera = viewCamera();
         main.framingAspect = freeCameraFramingAspect();
+        // ONE FRAME'S SHARE HERE TOO (BISTRO-STREAM-IN-1): the attach budget is one sync's (primeSceneGeometry set the
+        // last), and this sync without it attached every mesh the geometry slice had left — measured on Bistro's
+        // in-place open: 13,990 ms of SceneMirror::toMeshData on the UI thread in this slice. The rest stream in on
+        // the driver's ticks after the reveal, as primeSceneGeometry's own remainder does.
+        mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
         mMirror->sync(SceneMirror::FrameViews{ { main } });
     }
 }

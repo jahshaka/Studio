@@ -1,0 +1,66 @@
+// app.open_streams — THE OPEN STREAMS IN: NO PLATE (BISTRO-STREAM-IN-1 stage 2). Driven by test_open_streams.cpp, which
+// photographs the SCREEN (the X root, cropped to the viewport) the moment this script says the open returned.
+//
+// THE OWNER'S PATH: free-running (JAH_FREE_RUNNING=1, --script-live: the render thread draws on its own, the driver's
+// tick is posted by each frame's publish) with the background compiler on, from a COLD home (the row's home is wiped
+// with its caches every run): the sample's shaders and textures are cold — none of them was ever drawn in this
+// process or this cache — and the open is the session's FIRST, from the Desktop, so the editor's View is born at the
+// open's reveal, exactly as the owner opens Bistro.
+//
+// WHAT WAS WRONG (measured on the base 70a1e4ed1, spikes/bistro-stream-in-1/): the view held its frames while any draw
+// or compute had no shader yet (the deleted AsyncHoldListener), and on a first open the last picture it had presented
+// was the empty view's background — the plate stayed on screen for every frame of the probe (413 held frames, Showroom 2
+// cold) and the toolbar's "Compiling shaders (N)" was drawn in the toolbar's BUTTON text (~1.1:1 on its band).
+//
+// THE CLAIMS, IN FRAMES (the clock below is printed for the driver's photograph only):
+//  * this script prints the frame the open returned on; the driver's photograph is placed in this script's frame
+//    timeline and must fall within kGrabFrames of it (else the reading is void and the row is red);
+//  * the photographed viewport draws the scene (the driver: its luminance spread above the plate's);
+//  * while the background compiler had work, the toolbar's indicator was VISIBLE with a count > 0;
+//  * the final materials within kFinalFrames: nothing pending in the compiler and no material drawing a fallback
+//    (editor.viewportState().pending.textures), within kFinalFrames frames of the open.
+function J(x) { return JSON.stringify(x); }
+var SCENES = "@CMAKE_SOURCE_DIR@/scenes";
+var kFinalFrames = 600;
+var failures = 0;
+function ok(cond, msg) { if (cond) console.log("ok:   " + msg); else { console.log("FAIL: " + msg); ++failures; } }
+
+app.setAsyncShaders(true);
+var imported = project.importArchive(SCENES + "/Showroom 2.zip");
+ok(!!imported && !!imported.guid, "the Showroom 2 sample imported (" + J(imported && imported.guid) + ")");
+ok(app.columns().space === "desktop", "the open starts from the Desktop (the session's first open: the View is born at its reveal)");
+project.open(imported.guid);
+var f0 = app.frameStats().rendered;
+var vs = editor.viewportState();
+// THE DRIVER'S CUE — one line, flushed at once: the frame the open returned on and where the viewport sits.
+console.log("OPEN_STREAMS opened " + Date.now() + " " + f0 + " " + vs.windowX + " " + vs.windowY + " " + vs.windowW + " " +
+            vs.windowH);
+
+var timeline = [], last = -1, indicatorSeen = null, pendingSeen = 0, finalAt = -1, guard = 0;
+while (app.frameStats().rendered < f0 + kFinalFrames && ++guard < 50000000) {
+    var fs = app.frameStats();
+    if (fs.rendered === last) continue;
+    last = fs.rendered;
+    var a = app.asyncShaders();
+    var tb = editor.toolbar(), ind = null;
+    for (var i = 0; i < tb.length; ++i) if (String(tb[i].id).indexOf("haderCompiles") >= 0) ind = tb[i];
+    var p = editor.viewportState().pending;
+    timeline.push([Date.now(), fs.rendered]);
+    if (a.pending > 0) ++pendingSeen;
+    var m = ind && ind.visible ? /Compiling shaders \((\d+)\)/.exec(String(ind.tooltip)) : null;
+    if (!indicatorSeen && a.pending > 0 && m && Number(m[1]) > 0)
+        indicatorSeen = { frame: fs.rendered - f0, tooltip: ind.tooltip, pending: a.pending };
+    if (a.pending === 0 && p && p.textures === 0 && p.meshes === 0) {
+        if (finalAt < 0) finalAt = fs.rendered - f0;
+        if (fs.rendered - f0 >= finalAt + 30) break;   // and stays so for 30 frames
+    } else {
+        finalAt = -1;
+    }
+}
+console.log("OPEN_STREAMS timeline " + J(timeline));
+ok(pendingSeen > 0, "the background compiler had work after the open (" + pendingSeen + " frames with shaders pending)");
+ok(!!indicatorSeen, "the toolbar's indicator was visible with a count > 0 while shaders were pending (" + J(indicatorSeen) + ")");
+ok(finalAt >= 0 && finalAt <= kFinalFrames,
+   "the final materials within " + kFinalFrames + " frames of the open (" + finalAt + ")");
+console.log(failures ? "OPEN_STREAMS script FAILED" : "OPEN_STREAMS script PASS");
+app.quit();

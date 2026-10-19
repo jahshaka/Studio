@@ -89,6 +89,17 @@ inline void setTone(QWidget *w, Tone tone)
     w->setPalette(pal);
 }
 
+/// TEXT ON A TOOLBAR (BISTRO-STREAM-IN-1): a label a QToolBar holds paints with its FOREGROUND ROLE, and a widget
+/// with no explicit role takes the one that contrasts with its parent's background — a toolbar's is Button, so the
+/// label drew ButtonText, Qlementine's dark text FOR a light button plate (the "Compiling shaders (N)" indicator read
+/// ~1.1:1 on the toolbar's band). The label says it is window text, in the tone asked.
+inline void setToolbarText(QWidget *w, Tone tone = Tone::Normal)
+{
+    if (!w || StyleSheet::classicThemeActive()) return;
+    w->setForegroundRole(QPalette::WindowText);
+    setTone(w, tone);
+}
+
 enum class Surface {
     Header,     // the near-black band behind the space menu (#111111)
     Workspace,  // backgroundColorWorkspace  #151515

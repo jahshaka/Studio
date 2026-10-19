@@ -137,3 +137,29 @@ foreach(_row_frames
         set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
     endif()
 endforeach()
+
+# app.open_streams — THE OPEN STREAMS IN: NO PLATE (BISTRO-STREAM-IN-1 stage 2). The owner's path, free-running with
+# the background compiler, from a COLD home (shaders and textures never built: the subject IS the cold open, so the row
+# carries no warm cache — fresh_home.sh without --warm): the session's first open, from the Desktop, of the Showroom 2
+# sample. The driver photographs the X root the moment the open returns and asserts the viewport draws the scene, not a
+# plate; the script asserts the "Compiling shaders (N)" indicator was visible with a count while shaders were pending
+# and the final materials within 600 frames. RED on the base 70a1e4ed1 (the held plate, every frame of the probe), green
+# at the tip; the table in spikes/bistro-stream-in-1/RESUME.md.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+configure_file(e2e_open_streams.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js @ONLY)
+add_executable(test_open_streams test_open_streams.cpp)
+set_target_properties(test_open_streams PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_open_streams PRIVATE Qt6::Core Qt6::Gui)
+target_compile_definitions(test_open_streams PRIVATE
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+    OPEN_STREAMS_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js")
+set(_streams_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-streams)
+file(MAKE_DIRECTORY ${_streams_home}/run)
+jah_gpu_row(app.open_streams CLASS app TIER document FRAMES 1100
+         COMMAND sh ${JAH_FRESH_HOME} ${_streams_home} -- $<TARGET_FILE:test_open_streams>
+         WORKING_DIRECTORY ${_streams_home}/run)
+set_tests_properties(app.open_streams PROPERTIES
+    ENVIRONMENT "HOME=${_streams_home};JAHSHAKA_DATA_ROOT=${_streams_home}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
+    TIMEOUT 120 LABELS "openasync")
+jah_tsan_blocked(app.open_streams)   # spawns the app: see jah_tsan_blocked

@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "viewport/cameraspeed.h"
 #include "viewport/ieditorviewport.h"
 #include "viewport/snapsettings.h"
+#include "ui/style/themeroles.h"
 
 EditorToolbar::EditorToolbar(QObject *parent) : QObject(parent)
 {
@@ -240,6 +241,7 @@ void EditorToolbar::build(const Deps &deps)
     {
         QLabel *label = new QLabel;
         label->setObjectName(QStringLiteral("shaderCompileIndicator"));
+        ThemeRoles::setToolbarText(label);   // the theme's text on the toolbar's band, never its button text
         QAction *indicator = toolBar->addWidget(label);
         indicator->setObjectName(QStringLiteral("actionShaderCompiles"));
         indicator->setVisible(false);

@@ -297,6 +297,22 @@ add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
 jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.drain_budget — A FREE FRAME'S DRAIN IS BOUNDED, THE REST CARRIED IN ORDER (BISTRO-STREAM-IN-1 stage 2): a batch of
+# 20,000 parented creates applies in ONE lockstep frame, and free-running over several frames (a drain cut) with no
+# create refused (each met its parent: the order held). A law in counts.
+add_executable(test_engine_drain_budget test_engine_drain_budget.cpp)
+set_target_properties(test_engine_drain_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_drain_budget PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_drain_budget PRIVATE JahshakaEngine)
+add_dependencies(test_engine_drain_budget JahshakaEngineMedia)
+jah_gpu_row(frame.drain_budget CLASS engine FRAMES 40 COMMAND test_engine_drain_budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drain_budget PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.runtime_pace — A HEADSET FASTER THAN THE PANEL IS PACED BY ITS RUNTIME (ENGINE-UPGRADE-U3 decision 53): free frames
 # under a fake runtime at 11 ms (vr.fakeRuntimePace) are never padded to the panel's 16.7 ms; with the session's period
 # sent the interpolation draws in-between weights. Its bars are the decision's (mean interval <= 11.5 ms, 90 frames).
