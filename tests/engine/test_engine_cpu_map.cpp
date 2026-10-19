@@ -110,7 +110,7 @@ bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
 /// white neighbours' cards and the wide plate's stay landed, so the still casters' search is a real one.
 constexpr int kSubgroup = -4;
 /// THE ROTATING ARM (ENGINE-POLISH-PHOTON-2 fix round, engine.gpuscene_compose): every cube written each frame with
-/// its yaw alternating (0 / 0.35 rad), at its place - a transform-only move whose world columns move by an ulp, on
+/// its rotation alternating (0 / 0.35 rad about a tilted axis), at its place - a transform-only move whose world columns move by an ulp, on
 /// the compose row's CHAINED cubes (a level chain: the ray feed's hand-over width is the coarsest bound times the
 /// largest axis scale, so a rotation reaches it). The Bullet bodies' case: many rotating movers a frame.
 constexpr int kRotate = -5;
@@ -278,8 +278,10 @@ void writeFrame(World &w, int k)
             r.id = w.cubes[size_t(i)];
             r.fields = NodeRecord::Trs;
             r.position = cubeAt(i, k == kRotate ? 0.0f : lift);
-            // yaw 0 / 0.35 rad: (0, sin(0.175), 0, cos(0.175))
-            r.rotation = k == kRotate && lift > 0.0f ? Quat(0.0f, 0.17410813f, 0.0f, 0.98472658f) : Quat(0, 0, 0, 1);
+            // 0 / 0.35 rad about the tilted axis (1, 1, 1) / sqrt(3): every world column rotates (a yaw keeps the
+            // y column exact, and the largest axis scale with it): (s, s, s, cos(0.175)), s = sin(0.175) / sqrt(3)
+            r.rotation = k == kRotate && lift > 0.0f ? Quat(0.10052109f, 0.10052109f, 0.10052109f, 0.98472658f)
+                                                     : Quat(0, 0, 0, 1);
             r.scale = Vec3(kCube, kCube, kCube);
             part.nodes.push_back(r);
             part.changes.moved.push_back(r.id);
