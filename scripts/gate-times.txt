@@ -998,3 +998,4 @@ gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
 shadow.caster_route 5.21  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 2: three worlds - the cut, the stock, the bare - a floor, a pole, a blended and a cutout plane; n=3)
 atom.view_colour 1.08  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 6: three spheres under the triangles view, one delete; n=2)
+atom.cut_probe 2.05  solo 2026-10-19 (ATOM-2 stage 1: a baked sphere in metres and its centimetre twin, two probes, the density view; n=3, 24 frames)

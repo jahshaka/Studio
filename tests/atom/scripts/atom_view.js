@@ -13,7 +13,9 @@
 //       floor keeps its lit picture: the id image still names the floor under it, and
 //       the view paints only where the final depth is the id pass's;
 //   (e) the verb refuses an unknown name, and world.atomStatus() reports the view;
-//   (f) at the Low tier (a passthrough viewport, no id pass) the verb refuses.
+//   (f) at the Low tier (a passthrough viewport, no id pass) the verb refuses;
+//   (g) world.atomCutProbe() reads one frame's cut back (ATOM-2): the floor's every group judged, its visible
+//       pixels counted, and the 'density' view's figures in world.atomStatus().density add up to its pixels.
 // Frames, never time: every shot renders until the scene is at rest.
 
 function assert(cond, msg) {
@@ -57,7 +59,7 @@ try { world.setAtomView("wireframe"); } catch (e) { refused = /unknown view/.tes
 assert(refused, "an unknown view is refused, by name");
 assert(world.atomView() === "off", "...and changes nothing");
 
-var modes = ["triangles", "levels", "buckets", "objects"];
+var modes = ["triangles", "levels", "buckets", "objects", "density"];
 var grades = ["scene", "plain"];
 for (var g = 0; g < grades.length; ++g) {
     var grade = grades[g];
@@ -78,6 +80,27 @@ for (var g = 0; g < grades.length; ++g) {
     assert(same(off, back), grade + ": 'off' restores the off picture exactly (" + changed(off, back) +
            " pixels differ)");
 }
+
+// (g) THE CUT PROBE AND THE DENSITY FIGURES (ATOM-2)
+var probe = world.atomCutProbe({ objects: 4 });
+console.log("probe: " + J({ valid: probe.valid, atomPixels: probe.atomPixels, groups: probe.groupsTotal,
+                             objects: probe.objects.length, tolerance: probe.tolerance, viewportHeight: probe.viewportHeight }));
+assert(probe.valid && probe.atomPixels > 0 && probe.groupsTotal >= 1 && probe.objects.length >= 1,
+       "world.atomCutProbe reads one frame's cut (" + probe.groupsTotal + " groups, " + probe.atomPixels + " Atom pixels)");
+var top = probe.objects[0];
+assert(top.pixels > 0 && top.groupCount >= 1 && top.groups.length === top.groupCount && top.level0Triangles > 0 &&
+       Math.abs(top.trianglesPerPixel - top.level0Triangles / top.pixels) < 1e-9,
+       "its largest object: pixels, groups and the level-0 triangles per pixel (" + J({ name: top.name, pixels: top.pixels,
+       groups: top.groupCount, tpp: top.trianglesPerPixel }) + ")");
+assert(probe.tolerance === 1 && probe.viewportHeight > 0, "the request read back (tolerance 1 px)");
+assert(world.setAtomView("density") === true, "density on");
+editor.frame(2);
+var dens = world.atomStatus().density;
+console.log("density: " + J(dens));
+assert(dens && dens.pixels > 0 && dens.classPixels[0] + dens.classPixels[1] + dens.classPixels[2] === dens.pixels &&
+       dens.depthPixels.reduce(function (a, b) { return a + b; }, 0) === dens.pixels,
+       "atomStatus().density: the classes and the depths each add up to the pixels");
+assert(world.setAtomView("off") === true && world.atomStatus().density == null, "the density figures go with the view");
 
 // (c) with the split shut there is no id image: a view already on paints nothing,
 // and the verb refuses to turn one on.

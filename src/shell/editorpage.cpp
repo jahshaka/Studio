@@ -144,7 +144,7 @@ void EditorPage::build(const Deps &deps)
         auto *atomGroup = new QActionGroup(atomMenu);
         atomGroup->setExclusive(true);
         const QStringList atomLabels = { tr("Off"), tr("Triangles"), tr("Levels"), tr("Buckets"),
-                                         tr("Objects") };
+                                         tr("Objects"), tr("Density") };
         for (int mode = 0; mode < atomLabels.size(); ++mode) {
             QAction *action = atomMenu->addAction(atomLabels[mode]);
             action->setCheckable(true);
@@ -606,7 +606,7 @@ int EditorPage::atomViewMode() const
 void EditorPage::setAtomViewMode(int mode)
 {
     jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
-    if (!es || mode < 0 || mode > 4) return;
+    if (!es || mode < 0 || mode > int(jahshaka::engine::AtomView::Density)) return;
     if (mode != 0 && !es->published().atomViewPaintable) return;   // world.setAtomView's refusal
     sceneView->setEngineAtomView(mode);
 }
