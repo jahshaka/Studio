@@ -1272,11 +1272,11 @@ class Selection:
             return
         d = os.path.dirname(p)
         while d:
-            self._capture = set()
+            tok = self._reach_begin()
             try:
                 r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
             finally:
-                cap, self._capture = self._capture, None
+                cap, _ = self._reach_end(tok)
             if r:
                 notes.append(f"NO RULE → its directory's subsystem: {r}")
                 self.fallback.append(f"{tag}: {why} → its directory {d}/'s rule ({r}; {len(cap)} row(s))")
@@ -1885,10 +1885,15 @@ class Selection:
             if blk is not None and name in _BLOCK_LINES:
                 # THE BLOCK'S BODY (T3): an if() whose condition changed, or an endif() a deletion
                 # took with it, reaches what the commands inside it reach — resolved one by one
-                self._var_seen, self._var_got = set(), {}
+                self._var_seen, self._var_got, self._cmake_read_at = set(), {}, set()
                 inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
                 hit = [c[0] for c in inner
                        if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1)]
+                for f_ in sorted(self._cmake_read_at):
+                    # a write of a variable CMake itself reads in the body (TOOLING-3 item 1): its scope's step 7
+                    for under in self.scope_dirs(f_):
+                        self.dir_scope_reach(f_, under, name, tag, notes)
+                    hit.append(name)
                 if hit:
                     notes.append(f"{name}() at line {first}: its block's {len(hit)} command(s)")
                     continue
@@ -1976,10 +1981,23 @@ class Selection:
         """A build target's objects changed (a flag, a property, a link): its executables' rows (once per target: a
         loop's commands, a block's body and a variable's readers name the same target again)."""
         done = self.__dict__.setdefault("_targets_done", {})
+        rows_of = self.__dict__.setdefault("_targets_rows", {})
         if t in done:
+            # once per target — but a repeat still REACHES what the first call selected: an open reach measure is told
+            # (TOOLING-3 item 3: the second directory-scope command of a hunk reached JahshakaEngine's rows again)
+            cap = self.__dict__.get("_capture")
+            if cap is not None:
+                cap.update(rows_of.get(t, ()))
             notes.append(done[t]); return
         done[t] = f"target {t}: (above)"          # in progress: a referrer's walk naming it again adds nothing
-        art = self.graph.targets[t]
+        tok = self._reach_begin()
+        try:
+            self._target_changed(t, art=self.graph.targets[t], tag=tag, notes=notes)
+        finally:
+            rows_of[t], _ = self._reach_end(tok)
+        done[t] = notes[-1]
+
+    def _target_changed(self, t, art, tag, notes):
         if self.graph.kind.get(art) == "static":
             # an archive's objects, through the link graph: where they are referenced
             mem = self.graph.members(art)
@@ -2000,7 +2018,6 @@ class Selection:
             if not refs:
                 self.expand(["*app-rows"], [], f"{tag}: target {t} is in the app")
         notes.append(f"target {t}: {len(exes)} executable(s)")
-        done[t] = notes[-1]
 
     def _enter_through(self, art, name, notes):
         """The first-party sources whose OWN code calls into vendored archive `art` (a flag or property change of the
@@ -2169,6 +2186,9 @@ class Selection:
         if name == "set_property":
             r = self.set_property_reach(p, d, args, whole, tag, notes)
             if r is not None: return r
+        if name == "set_source_files_properties":
+            r = self.qualified_source_reach(p, name, args, whole, tag, notes)
+            if r is not None: return r
         # A HELPER THAT CHANGES NO BYTE (its body is inert — jahshaka_engine_generated_deps: OBJECT_DEPENDS only): an
         # inert line of its body, or a call of it, reaches nothing compiled
         if fn and self.inert_command(name, args) and self.inert_helper(fn.lower()):
@@ -2237,6 +2257,18 @@ class Selection:
                 else:
                     notes.append(f"retired: {what}")
                 return True
+        # 1c. A DIRECTORY-SCOPE COMMAND IN A HELPER'S BODY (TOOLING-3, found probing item 2): add_compile_options() inside
+        # macro jah_vram_resource_spec() runs in tests/'s scope, inside function jah_test_boot_env() in every caller's —
+        # the helper's rows and targets say nothing about it (it read as "called on 0 target(s)": 31 rows, the lints). A
+        # DIRECTORY / GLOBAL property is one only when CMake itself reads it: a JAH_* one is a registry of our helpers
+        # (set_property(GLOBAL APPEND PROPERTY JAH_GPU_ROWS …)), read through the helper's rows below
+        prop = a_[a_.index("PROPERTY") + 1] if name == "set_property" and "PROPERTY" in a_[:-1] else ""
+        if fn and (name in gate_graph.DIRECTORY_SCOPE and name not in ("include", "set_property")
+                   or name == "set_property" and a_[:1] in (["DIRECTORY"], ["GLOBAL"]) and prop
+                   and not prop.startswith("JAH_")):
+            self.full_tier.append(f"{tag}: {name}() inside {fn}() runs at directory scope of every caller of {fn}() — "
+                                  "the reader cannot bound it")
+            notes.append(f"{name}() inside {fn}(): every caller's directory scope → the whole tier"); return True
         # 2. a helper function: its body (fn) or its own header line
         helper = fn if fn else (args.split()[0].lower() if name in ("function", "macro") and args.split() else None)
         if helper:
@@ -2312,6 +2344,7 @@ class Selection:
         if depth == 0:
             self._var_seen = set()
             self._var_got = {}
+            self._cmake_read_at = set()
         a_ = args.split()
         setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
             name == "file" and a_[:1] and a_[0] in _FILE_OUT)
@@ -2337,14 +2370,26 @@ class Selection:
                             got = True
                 notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
                 if got or not n_: return True
-        if setter and depth < _CHAIN_HOPS and not rows:
-            var = _set_var(name, _cmake_split(args))       # a quoted argument is one argument ("vendor patch applied:")
-            if "${" in var or re.match(r"^(CMAKE|CTEST|CPACK)_", var):
-                # A COMPUTED NAME, OR A VARIABLE CMAKE ITSELF READS (a compiler launcher, a standard, a flag): no command
-                # of the tree is its reader, so its readers say nothing — unresolved, the generic path decides (TOOLING-2's
-                # third reader round: the launcher's set(CMAKE_${lang}_COMPILER_LAUNCHER) resolved through a loop to itself)
-                notes.append(f"{name}() writes {var}: read by CMake itself (or a computed name) — the reader cannot resolve it")
-                return False
+        # a quoted argument is one argument ("vendor patch applied:")
+        var = _set_var(name, _cmake_split(args)) if setter and depth < _CHAIN_HOPS and not rows else ""
+        if setter and depth < _CHAIN_HOPS and not rows and ("${" in var or re.match(r"^(CMAKE|CTEST|CPACK)_", var)):
+            # A COMPUTED NAME, OR A VARIABLE CMAKE ITSELF READS (a compiler launcher, a standard, a flag): no command
+            # of the tree is its reader, so its readers say nothing (TOOLING-2's third reader round: the launcher's
+            # set(CMAKE_${lang}_COMPILER_LAUNCHER) resolved through a loop to itself). What it changes is everything
+            # CMake builds in the scope it writes (TOOLING-3 item 1): the PARENT's scope (PARENT_SCOPE: a caller, or the
+            # directory that added this one) is the whole tier; any other write is a directory-scope setting — step 7
+            # of the directory it runs in, reached directly or at the end of the chain of the command being read
+            # (never the engine's every-fixture rule, which holds no app row)
+            notes.append(f"{name}() writes {var}: read by CMake itself (or a computed name) — the reader cannot resolve it")
+            if name == "set" and "PARENT_SCOPE" in a_[1:]:
+                what = "a computed name" if "${" in var else "a variable CMake itself reads"
+                self.full_tier.append(f"{tag}: set({var} … PARENT_SCOPE) writes {what} in the scope above — the reader "
+                                      "cannot bound it")
+                return True
+            self.__dict__.setdefault("_cmake_read_at", set()).add(p)
+            if depth > 0:
+                return False                  # unresolved here: the command at the chain's head takes step 7
+        elif setter and depth < _CHAIN_HOPS and not rows:
             tip_text = getattr(self, "_cmake_tip_text", None)
             if (var and tip_text is not None and whole is not tip_text
                     and not re.search(r"\b" + re.escape(var) + r"\b", tip_text) and not self.names_anywhere(var)):
@@ -2395,36 +2440,102 @@ class Selection:
                     # ANOTHER READER OWNS THIS COMMAND only if it REACHED something (TOOLING-2, the reader's second round): a
                     # reader that resolves to nothing compiled says nothing about this command — a COMPILE_DEFINITIONS
                     # property on a computed source list beside OBJECT_DEPENDS ones narrowed to 0 rows that way
-                    before = self._reach_mark()
-                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf) \
-                            and self._reach_mark() != before:
+                    tok = self._reach_begin()
+                    ok = self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf)
+                    cap, tiered = self._reach_end(tok)
+                    if ok and (cap or tiered):
                         got = True
                 if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
-        # 7. a directory-scope setting: every target under this directory
-        if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
-                        or name in ("if", "option", "set", "list", "string")):
-            under = d or "."
-            if under in (".", "cmake", "tests", "irisgl", "irisgl/cmake") or p.startswith("cmake/"):
-                self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches every target under it")
-            elif under.startswith("tests/"):
-                dd = under.split("/")[1]
-                self.add(self.by_dir.get(dd, []), f"{tag}: {name}() at directory scope of {under}")
-                self.exes_under(under, tag)
-            else:
-                # EVERY TARGET COMPILED UNDER IT, not only its executables (TOOLING-2, the reader's third round): irisgl/engine
-                # builds a STATIC library and no executable, so add_compile_options() there read as 0 rows — its archive
-                # reaches what links it (target_changed); a setting that still reaches nothing is the whole tier, said
-                before = self._reach_mark()
-                tg = self.targets_under(under)
-                for t in tg:
-                    self.target_changed(t, f"{tag}: {name}() at directory scope of {under}", notes)
-                self.exes_under(under, tag)
-                if self._reach_mark() == before:
-                    self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches no row through its "
-                                          f"{len(tg)} target(s) — the reader cannot bound it")
-                notes.append(f"{name}() at directory scope of {under}: {len(tg)} target(s) compiled under it")
-            notes.append(f"{name}() at directory scope of {under}"); got = True
+        # 7. a directory-scope setting: every target under the directory whose scope it runs in — a CMakeLists.txt's own,
+        # an include()d module's INCLUDERS' (TOOLING-3 item 2) — and a write of a variable CMake itself reads, here or at
+        # the end of this command's chain (TOOLING-3 item 1: set(CMAKE_CXX_FLAGS …) in irisgl/engine went to the engine's
+        # every-fixture rule, which holds no app row, where add_compile_options() in the same place reached the app)
+        if depth == 0 and (self._cmake_read_at or not got and (
+                name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
+                or name in ("if", "option", "set", "list", "string"))):
+            # (a CMake-read write met down the chain takes its scope's step 7 even where another reader resolved: what the
+            # reader owns says nothing about what CMake itself reads)
+            for f_ in sorted(self._cmake_read_at | (set() if got else {p})):
+                for under in self.scope_dirs(f_):
+                    self.dir_scope_reach(f_, under, name, tag, notes)
+            got = True
         return got
+
+    def dir_scope_reach(self, p, under, name, tag, notes):
+        """A setting at directory scope of <under> (step 7): every target compiled under it; a top-level directory (the
+        root, cmake/, tests/, irisgl/) or a setting that reaches no row is the whole tier, said."""
+        under = under or "."
+        if under in (".", "cmake", "tests", "irisgl", "irisgl/cmake") or p.startswith("cmake/"):
+            self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches every target under it")
+        elif under.startswith("tests/"):
+            # a test directory's rows and the executables built under it; reaching none, the whole tier (TOOLING-3 item 2:
+            # the tests/ branch had no "reaches nothing" rule)
+            tok = self._reach_begin()
+            dd = under.split("/")[1]
+            self.add(self.by_dir.get(dd, []), f"{tag}: {name}() at directory scope of {under}")
+            self.exes_under(under, tag)
+            cap, tiered = self._reach_end(tok)
+            if not cap and not tiered:
+                self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches no row — the reader "
+                                      f"cannot bound it")
+        else:
+            # EVERY TARGET COMPILED UNDER IT, not only its executables (TOOLING-2, the reader's third round): irisgl/engine
+            # builds a STATIC library and no executable, so add_compile_options() there read as 0 rows — its archive
+            # reaches what links it (target_changed); a setting that still reaches nothing is the whole tier, said. The
+            # reach is THIS call's (a per-call measure, TOOLING-3 item 3), never the global selection's size.
+            tok = self._reach_begin()
+            tg = self.targets_under(under)
+            for t in tg:
+                self.target_changed(t, f"{tag}: {name}() at directory scope of {under}", notes)
+            self.exes_under(under, tag)
+            cap, tiered = self._reach_end(tok)
+            if not cap and not tiered:
+                self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches no row through its "
+                                      f"{len(tg)} target(s) — the reader cannot bound it")
+            notes.append(f"{name}() at directory scope of {under}: {len(tg)} target(s) compiled under it")
+        notes.append(f"{name}() at directory scope of {under}" + (f" (the scope {p} is include()d into)"
+                                                                 if not p.endswith("CMakeLists.txt") else ""))
+
+    def module_of(self, f, args):
+        """The tree's build file an include(<args>) in <f> loads (a path, or <module> on the module path), or None."""
+        a = _cmake_split(args)
+        if not a:
+            return None
+        a0, fd = a[0].strip('"'), os.path.dirname(f)
+        cands = ([a0] if a0.endswith(".cmake") else []) + [f"cmake/{a0}.cmake", f"irisgl/cmake/{a0}.cmake"]
+        for c in cands:
+            for v in ("${CMAKE_CURRENT_SOURCE_DIR}/", "${CMAKE_CURRENT_LIST_DIR}/"):
+                c = c.replace(v, fd + "/" if fd else "")
+            c = c.replace("${CMAKE_SOURCE_DIR}/", "")
+            if "${" in c: continue
+            rel = os.path.normpath(c if not os.path.isabs(c) else os.path.relpath(c, ROOT))
+            if os.path.isfile(os.path.join(ROOT, rel)) and not rel.startswith(("irisgl/thirdparty/", "thirdparty/")):
+                return rel
+        return None
+
+    def scope_dirs(self, p, _seen=None):
+        """The directories whose scope <p>'s file-scope commands run in (TOOLING-3 item 2): a CMakeLists.txt its own; an
+        include()d module its INCLUDERS' — through every include() of the tree, transitively (tests/support/
+        test_boot.cmake is include()d by tests/CMakeLists.txt before its add_subdirectory calls: tests/'s scope, every test
+        target); a module nobody includes, its own directory."""
+        memo = self.__dict__.setdefault("_scope_dirs", {})
+        if p in memo:
+            return memo[p]
+        if os.path.basename(p) == "CMakeLists.txt":
+            memo[p] = [os.path.dirname(p)]
+            return memo[p]
+        seen = _seen if _seen is not None else set()
+        seen.add(p)
+        out = set()
+        for f, text in self.tree_cmake_files():
+            if f in seen or "include" not in text: continue
+            for c in gate_graph.cmake_commands(text):
+                if c[0] == "include" and self.module_of(f, c[3]) == p:
+                    out.update(self.scope_dirs(f, seen))
+        res = sorted(out) or [os.path.dirname(p)]
+        if _seen is None:
+            memo[p] = res
+        return res
 
     def targets_under(self, d):
         """The build targets whose objects compile under a source directory (its build dir and every directory below it:
@@ -2446,9 +2557,23 @@ class Selection:
               "get_target_property", "get_property", "get_directory_property", "get_filename_component",
               "get_source_file_property", "get_test_property", "get_cmake_property"}
 
-    def _reach_mark(self):
-        """What the selection holds so far (rows, arms, whole pools, the tier's reasons): a change means something was reached."""
-        return (len(self.selected), sum(len(v) for v in self.arms.values()), len(self.whole), len(self.full_tier))
+    def _reach_begin(self):
+        """Open a REACH MEASURE (TOOLING-3 item 3): every row add() is asked for from here on is captured, whether or not
+        an earlier command already selected it. A measure nests (the outer one sees the inner one's rows)."""
+        tok = (self.__dict__.get("_capture"), len(self.full_tier))
+        self._capture = set()
+        return tok
+
+    def _reach_end(self, tok):
+        """Close a reach measure: (the rows it reached, True when it put the whole tier). The GLOBAL selection's size is
+        never the measure — a second command reaching only rows a first one selected (add_compile_options +
+        add_definitions in one hunk) read as "reaches no row" that way, and an earlier hunk tripped it the same way."""
+        outer, n_tier = tok
+        cap = self._capture
+        self._capture = outer
+        if outer is not None:
+            outer.update(cap)
+        return cap, len(self.full_tier) > n_tier
 
     def inert_command(self, name, args):
         """True when a command changes no byte of a build (see _INERT): a file() read, a function-local set(), a
@@ -2499,6 +2624,9 @@ class Selection:
             for t in tg:
                 self.target_changed(t, f"{tag}: set_property(TARGET {t} {prop})", notes)
             return True if tg else None
+        if scope == "SOURCE":
+            r = self.qualified_source_reach(p, name="set_property", args=args, whole=whole, tag=tag, notes=notes)
+            if r is not None: return r
         if scope == "SOURCE" and names:
             srcs = [os.path.normpath(os.path.join(d, n_)) for n_ in names if "$" not in n_]
             srcs = [s_ for s_ in srcs if os.path.isfile(os.path.join(ROOT, s_))]
@@ -2506,6 +2634,47 @@ class Selection:
                 self.path(s_, 1, via=f"{os.path.basename(p)} set_property(SOURCE {prop})")
             return True if srcs else None
         return None
+
+    def qualified_source_reach(self, p, name, args, whole, tag, notes):
+        """A SOURCE PROPERTY SET IN ANOTHER DIRECTORY'S SCOPE (TOOLING-3 item 1): set_source_files_properties(<srcs>
+        DIRECTORY <dirs> | TARGET_DIRECTORY <targets> …) or set_property(SOURCE <srcs> DIRECTORY|TARGET_DIRECTORY …)
+        changes how <srcs> compile in THAT directory's targets — the engine's CMake naming
+        ${CMAKE_SOURCE_DIR}/src/app/main.cpp with DIRECTORY ${CMAKE_SOURCE_DIR} changes the app's main.o, and read as
+        "the engine's build" it held no app row. The sources are resolved through the path variables (the property
+        reaches what each source's own change reaches: every target the graph compiles it into); a source list the reader
+        cannot resolve is the whole tier, said. None when the command names no other directory (the readers decide)."""
+        a_ = [x.strip('"') for x in _cmake_split(args)]
+        if not any(x in ("DIRECTORY", "TARGET_DIRECTORY") for x in a_):
+            return None
+        start, stop = (1, {"DIRECTORY", "TARGET_DIRECTORY", "APPEND", "APPEND_STRING", "PROPERTY"}) \
+            if name == "set_property" else (0, {"DIRECTORY", "TARGET_DIRECTORY", "PROPERTIES"})
+        names = []
+        for x in a_[start:]:
+            if x in stop: break
+            names.append(x)
+        if name == "set_source_files_properties" and "PROPERTIES" in a_:
+            props = a_[a_.index("PROPERTIES") + 1::2]
+            if props and all(x in self._CONFIGURE_ONLY_PROPS for x in props):
+                notes.append(f"{name}(… {' '.join(props)}): a dependency only — reaches nothing compiled")
+                return True
+        srcs, bad = [], []
+        for n_ in names:
+            ap = self.cmake_path(p, whole, n_)
+            rel = os.path.relpath(ap, ROOT) if ap else None
+            if rel and not rel.startswith("..") and os.path.isfile(os.path.join(ROOT, rel)):
+                srcs.append(rel)
+            else:
+                bad.append(n_)
+        if bad or not srcs:
+            self.full_tier.append(f"{tag}: {name}() sets a property of source(s) the reader cannot resolve "
+                                  f"({' '.join(bad)[:80] or 'none named'}) in another directory's scope — the reader "
+                                  "cannot bound it")
+            notes.append(f"{name}() in another directory's scope: unresolved sources → the whole tier")
+            return True
+        for s_ in sorted(set(srcs)):
+            self.path(s_, 1, via=f"{os.path.basename(p)} {name}() in another directory's scope")
+        notes.append(f"{name}() in another directory's scope: {len(set(srcs))} source(s), each by its own reach")
+        return True
 
     def loop_values(self, whole, args, token):
         """The values `token` (it spells `${v}`) takes inside the foreach() blocks of `whole` that hold a command with

@@ -20,7 +20,11 @@ endif()
 # Compiler cache (2026-09-11): every tree and lane worktree shares one on-disk ccache
 # (~/.config/ccache/ccache.conf: base_dir = the workspace, hash_dir = false), so a lane's
 # first build reuses what the main tree and earlier lanes already compiled. Opt out with
-# -DJAH_NO_CCACHE=ON; an explicit CMAKE_<LANG>_COMPILER_LAUNCHER always wins.
+# -DJAH_NO_CCACHE=ON; an explicit CMAKE_<LANG>_COMPILER_LAUNCHER always wins. THE OPT-OUT IS FOR A FRESH BUILD DIR
+# (TOOLING-3, measured): the launcher below is FORCE'd into the CACHE, and a cache entry outlives the option that wrote
+# it — -DJAH_NO_CCACHE=ON on a configured tree leaves every compile behind ccache. To opt out there, drop the entries
+# too: `cmake -DJAH_NO_CCACHE=ON -UCMAKE_C_COMPILER_LAUNCHER -UCMAKE_CXX_COMPILER_LAUNCHER <build dir>` (or configure
+# a new build dir with the option on).
 option(JAH_NO_CCACHE "Do not use ccache even when it is installed" OFF)
 find_program(JAH_CCACHE_PROGRAM ccache)
 # THE LAUNCHER PINS THE BUILD DIR'S SPELLING (TOOLING-2, measured): ccache's base_dir rewrites every depfile path
