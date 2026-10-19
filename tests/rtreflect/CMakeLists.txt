@@ -324,4 +324,4 @@ set_tests_properties(gi.cards_move_keep PROPERTIES JAHSHAKA_TEST_FRAMES 352)
 jah_gpu_row(gi.reflect_metal_hit CLASS engine COMMAND test_reflect_uncover --metal
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_metal_hit PROPERTIES TIMEOUT 300 LABELS "engine")
-set_tests_properties(gi.reflect_metal_hit PROPERTIES JAHSHAKA_TEST_FRAMES 2340)
+set_tests_properties(gi.reflect_metal_hit PROPERTIES JAHSHAKA_TEST_FRAMES 2344)
