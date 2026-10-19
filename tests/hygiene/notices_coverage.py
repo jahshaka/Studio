@@ -52,6 +52,9 @@ import sys
 NOT_A_COMPONENT = {
     "assimp-patches": "OUR OWN patch stack for assimp (irisgl/cmake/ApplyVendorPatches.cmake "
                       "applies it) — Jahshaka source, not a third party's",
+    "bullet-patches": "OUR OWN patch stack for the vendored bullet3 (irisgl/CMakeLists.txt applies it "
+                      "at configure through irisgl/cmake/ApplyVendorPatches.cmake, BULLET-BATCHING-1) — "
+                      "Jahshaka source, not a third party's; Bullet's notice is bullet3's",
     "meshoptimizer-clusterlod-patches": "OUR OWN patch stack for the vendored clusterlod.h "
                                         "(irisgl/CMakeLists.txt applies it at configure, "
                                         "CLUSTER-LOCK-3) — Jahshaka source, not a third party's; "
