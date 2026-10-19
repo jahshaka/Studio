@@ -213,6 +213,7 @@ gi.drag_cadence 6.04  quiet n=46
 gi.drag_mover 3.57  ASYNC-3 stage-1 read F3: + case 6 (2026-10-15, beside 3 rows)
 gi.env_cone 5.17  quiet n=42
 gi.env_one 6.95  quiet n=40
+gi.env_brdf 2.29  spec PHOTON-3 2026-10-19 (the split sum under a uniform sky; one run of the master check, 81 frames)
 gi.env_ray_match 5.21  quiet n=43
 gi.far_blas 3.86  quiet n=43
 gi.far_sun_clutter 106.29  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1

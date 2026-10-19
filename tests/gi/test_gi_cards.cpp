@@ -213,11 +213,14 @@ static int caseCapture()
     // ...and THE MOVERS' VISIBILITY (PHOTON-CARDS-4): one R8 byte.
     // ...and THE SPECULAR LOBE (ENGINE-POLISH-PHOTON-1 stage 3): the capture's F0 / kS layer (RGBA8, 4) and
     // the relight's flat term in the radiance's format.
+    // ...and PHOTON-3 stage 2: the shadow/roughness pair at 16 bits a channel (4: the read's specular lobe needs a
+    // polished alpha) and the sun's visibility at the texel (R8, 1: the read's sun lobe).
     const unsigned radBytes = c0.radianceFormat == "R11G11B10F" ? 4u : 8u;
-    CHECK_MSG(c0.bytesPerTexel == 21u + 3u * radBytes,
+    CHECK_MSG(c0.bytesPerTexel == 24u + 3u * radBytes,
               "the card texel is %u bytes (albedo 4 + normal 4 + depth 2 + emissive 4 +"
-              " shadow/rough 2 + specular 4 + radiance %u + indirect %u + flat %u, %s + movers 1), measured %u",
-              21u + 3u * radBytes, radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
+              " shadow/rough 4 + specular 4 + radiance %u + indirect %u + flat %u, %s + movers 1 + sun visibility 1),"
+              " measured %u",
+              24u + 3u * radBytes, radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
     CHECK_MSG(c0.pageSize == 128u && c0.pages == 256u,
               "the atlas is 2k square = %u pages of %u texels", c0.pages, c0.pageSize);
     CHECK_MSG(c0.instancesResident == 2u, "both crates are resident (%u)", c0.instancesResident);
