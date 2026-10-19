@@ -246,8 +246,7 @@ int main(int argc, char **argv)
     CHECK(aMs < 3 * controlMs + 10000,
           "A was not held by a nested wait inside its pump (no 30 s ceiling)");
 
-    a.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(a, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     std::printf(failures == 0 ? "scripting.e2e.pump_defer: ALL PASS\n"
                               : "scripting.e2e.pump_defer: %d FAILURES\n", failures);
     return failures == 0 ? 0 : 1;

@@ -200,8 +200,7 @@ int main(int argc, char **argv)
     CHECK(qAbs(rows - 268) <= 2,
           "the shot is letterboxed at the AUTHORED 2.39, selection and gizmo notwithstanding");
 
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
 
     std::printf(failures == 0 ? "ui.shot_aspect: ALL PASS\n" : "ui.shot_aspect: %d FAILURES\n",
                 failures);

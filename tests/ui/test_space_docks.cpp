@@ -351,10 +351,8 @@ int main(int argc, char **argv)
         // ---- quit FROM THE PLAYER: the exit that wrote "no panels" ---------
         mcp.runScript(QStringLiteral("app.space('player')"));
         settle(mcp);
-        mcp.quit();
-        const bool exited = jahshaka.waitForFinished(60000);
-        if (!exited) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
-        CHECK(exited, "run 1: the app quit from the player space (closeEvent saved the layout)");
+        CHECK(quitAndReap(mcp, jahshaka, log, 60000),
+              "run 1: the app quit cleanly from the player space (closeEvent saved the layout; exit 0, no leak under LSan)");
     }
 
     // ================= RUN 2: what that exit stored ==========================
@@ -433,8 +431,7 @@ int main(int argc, char **argv)
                   "the restart: all three tabs are in the bar");
         }
 
-        mcp.quit();
-        if (!jahshaka.waitForFinished(60000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+        CHECK(quitAndReap(mcp, jahshaka, log, 60000), "run 2: the app quit cleanly (exit 0, no leak under LSan)");
     }
 
     std::printf(failures == 0 ? "ui.space_docks: ALL PASS\n" : "ui.space_docks: %d FAILURES\n",

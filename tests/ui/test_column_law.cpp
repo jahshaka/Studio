@@ -247,8 +247,7 @@ int main(int argc, char **argv)
     const QJsonObject bogus = mcp.runScript(QStringLiteral("editor.tray({tab: 'nope'})"));
     CHECK(!bogus.value("ok").toBool(), "an unknown tab name is refused, not guessed at");
 
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
 
     std::printf(failures == 0 ? "ui.column_law: ALL PASS\n" : "ui.column_law: %d FAILURES\n",
                 failures);
