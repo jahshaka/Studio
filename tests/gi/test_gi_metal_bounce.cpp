@@ -41,8 +41,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace jahshaka::engine;
 
@@ -75,6 +77,68 @@ double lobeHemi(double m, double r)
 /// THE LAW'S RATIO, metalness m against the diffuser (m = 0), white base, kS = 1.
 double directRatio(double m, double r) { return lobeDirect(m, r) / lobeDirect(0.0, r); }
 double bounceRatio(double m, double r) { return lobeHemi(m, r) / lobeHemi(0.0, r); }
+
+/// THE PANEL'S VIEW OF THE PLATE (the route, gate and C' arms' one geometry): the mean over the read pixels (rows
+/// 80-128, columns 96-160 of the 256-square gather view from (0, 0.9, -2) looking at (0, 0.75, 1.1), 45 degrees; every
+/// second one) of 1/pi x the integral over the plate's top (2 x 2 m at y 0.1, a 64 x 64 midpoint rule) of
+/// radiance x cos_p cos_q / d^2 - the panel's face at z = 1.1 facing -z. `radiance( i, j, V )` is what plate cell
+/// ( i, j ) sends toward the panel point (V the unit direction from the plate point to it).
+double panelSeesPlate(const std::function<double(int, int, const double *)> &radiance)
+{
+    const double kPi = 3.14159265358979;
+    const int kN = 64;
+    const double camPos[3] = { 0.0, 0.9, -2.0 }, camAt[3] = { 0.0, 0.75, 1.1 };
+    const double f0x = camAt[0] - camPos[0], f0y = camAt[1] - camPos[1], f0z = camAt[2] - camPos[2];
+    const double fl = std::sqrt(f0x * f0x + f0y * f0y + f0z * f0z);
+    const double fx = f0x / fl, fy = f0y / fl, fz = f0z / fl;
+    double rx = -fz, rz = fx;
+    const double rl = std::sqrt(rx * rx + rz * rz);
+    rx /= rl;
+    rz /= rl;
+    const double ux = -rz * fy, uy = rz * fx - rx * fz, uz = rx * fy;
+    const double tanHalf = std::tan(22.5 * kPi / 180.0);
+    double acc = 0.0;
+    int nq = 0;
+    for (unsigned y = 80; y < 128; y += 2)
+        for (unsigned x = 96; x < 160; x += 2) {
+            const double nx = 2.0 * (x + 0.5) / 256.0 - 1.0, ny = 1.0 - 2.0 * (y + 0.5) / 256.0;
+            const double dx = fx + (rx * nx + ux * ny) * tanHalf, dy = fy + uy * ny * tanHalf,
+                         dz = fz + (rz * nx + uz * ny) * tanHalf;
+            const double t = (1.1 - camPos[2]) / dz;
+            const double qx = camPos[0] + dx * t, qy = camPos[1] + dy * t;
+            double sum = 0.0;
+            for (int i = 0; i < kN; ++i)
+                for (int j = 0; j < kN; ++j) {
+                    const double px = -1.0 + 2.0 * (i + 0.5) / kN, pz = -1.0 + 2.0 * (j + 0.5) / kN;
+                    const double vx = qx - px, vy = qy - 0.1, vz = 1.1 - pz, d2 = vx * vx + vy * vy + vz * vz;
+                    if (!(vy > 0.0) || !(vz > 0.0)) continue;
+                    const double d = std::sqrt(d2);
+                    const double V[3] = { vx / d, vy / d, vz / d };
+                    sum += V[1] * V[2] / d2 * (4.0 / (kN * kN)) * radiance(i, j, V);
+                }
+            acc += sum / kPi;
+            ++nq;
+        }
+    return acc / nq;
+}
+
+/// BRDF_Default's specular lobe D Vis and its Fresnel factor Fc = ( 1 - V.H )^5 at N = +Y, toward V from L
+/// (alpha = max( r^2, 0.001 )): f_s = D Vis ( F0 ( 1 - Fc ) + w Fc ).
+void ggxLobe(const double L[3], const double V[3], double r, double &dvis, double &fc)
+{
+    double H[3] = { L[0] + V[0], L[1] + V[1], L[2] + V[2] };
+    const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+    for (double &h : H) h /= hl;
+    const double nl = L[1], nv = V[1], nh = H[1], vh = V[0] * H[0] + V[1] * H[1] + V[2] * H[2];
+    dvis = 0.0;
+    fc = std::pow(1.0 - std::min(1.0, std::max(0.0, vh)), 5.0);
+    if (!(nl > 0.0) || !(nv > 0.0)) return;
+    const double a = std::max(r * r, 0.001), a2 = a * a;
+    const double f = (nh * a2 - nh) * nh + 1.0;
+    const double D = a2 / (3.14159265358979 * f * f);
+    const double lv = nl * std::sqrt((-nv * a2 + nv) * nv + a2), ll = nv * std::sqrt((-nl * a2 + nl) * nl + a2);
+    dvis = D * 0.5 / (lv + ll + 1e-6);
+}
 
 }  // namespace
 
@@ -284,25 +348,21 @@ int main(int argc, char **argv)
     if (route)
     // A TINTED metal (base 1 / 0.6 / 0.3, metalness 1, r 0.3): the lobe F0 A + w B per CHANNEL, F0 = b, w = 1 - so a
     // store or a route that swapped the two (A + b B) reads a different colour. The store against the white diffuser,
-    // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on and the SURFACE CACHE ON
-    // (ENGINE-POLISH-PHOTON-1 stage 3: the cards-off arm is deleted), a still metal's hits read its CARD first and a
-    // MOVER's go to the decode (jahHitAlwaysDecodes). The card re-emits the lobe the store does (the capture's
-    // Specular layer, the relight's flat term from the same table), and the decode the same lobe (800.Atom_piece_ps.any,
-    // atomGatherMetalLobe): (i) the card's stored flat term is the closed form E ( F0 A + w B ) per channel within
-    // 0.4 % plus the radiance format's half step (R11G11B10F: 6 / 6 / 5 mantissa bits - the card's own quantum);
-    // (ii) the panel's gathered E/pi from the still plate is the mover's times the card's stored / exact ratio, per
-    // channel within 0.4 % - the card answers what it stores. THE CARD LEG SITS UP TO 0.9 % (blue) FROM THE DECODE
-    // because of the Radiance / Flat layers' format (R11G11B10F: the stored values are the nearest representable to
-    // the closed form - the format's half step is the format's, not slack; wider formats are a later decision, not
-    // ENGINE-POLISH-PHOTON-1's). And THE STORE'S LEG: the same plate still on the uncarded cube, its hits reading
-    // the store's material and direct term, against the mover within 0.4 %. The gather's sample sequence is held
-    // (freezeFrameIndex): the two arms trace the same rays, and their difference is the route's alone.
-    // THE DIELECTRIC'S ROUTE (ENGINE-POLISH-PHOTON-1 stage 2): the same plate, a BLACK dielectric first (its
-    // re-emission is its 0.04 lobe alone; the material edited in place, the gather's view kept), then the tinted
-    // metal: the panel's gathered E/pi from the black plate is (0.04 A + B) / (A + B) of the tinted metal's RED
-    // channel (base 1 there: F0 = 1), the panel's view factor cancelling (every plate point sees the sun at cosine
-    // 1) - as a MOVER (the decode, atomGatherMetalLobe) within 0.4 %, and still (its card) by the card's stored values
-    // the same way as the metal's. The base re-emitted nothing from a dielectric on either route.
+    // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on and the SURFACE CACHE ON, a still
+    // metal's hits read its CARD first and a MOVER's go to the decode (jahHitAlwaysDecodes). SINCE PHOTON-3 stage 2 every
+    // route sends the LIGHTS' lobe toward its own ray, E mu f_s( L, V ): the card read from the ray tier's light table
+    // (jah_rq_card_lights.glsl), the decode by the BRDF itself (viewDir the reversed ray), the store's hit by
+    // jahHitDirect - so (i) the card's flat term holds the GATHERED light's lobe alone (no light's integral any more);
+    // (ii) the panel's gathered E/pi from the still plate is the mover's times the lobe at the card's own F0 (its 8-bit
+    // Specular layer) against the material's, through the panel's view of the plate (panelSeesPlate), per channel within
+    // 0.4 %; and THE STORE'S LEG: the same plate still on the uncarded cube, its hits reading the store's material and
+    // direct term, against the mover within 0.4 %. The gather's sample sequence is held (freezeFrameIndex): the two arms
+    // trace the same rays, and their difference is the route's alone.
+    // THE DIELECTRIC'S ROUTE: the same plate, a BLACK dielectric first (its re-emission is its 0.04 lobe alone; the
+    // material edited in place, the gather's view kept), then the tinted metal: the panel's gathered E/pi from the black
+    // plate is the 0.04 lobe toward the panel against the tinted metal's RED channel (base 1 there: F0 = 1), by the
+    // panel's view of the plate - as a MOVER (the decode) within 0.4 %, and still (its card) by the card's F0 the same
+    // way as the metal's.
     // (The dielectric FIRST: the gather's held history keeps ~0.1 % of the previous plate after 48 frames, which is
     // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric. Every
     // edit is made while the plate is STILL: one made while it was a mover did not reach the store when it turned
@@ -313,6 +373,7 @@ int main(int argc, char **argv)
         double gathered[2][3] = {}, dielectric[2][3] = {};
         // the card's stored flat term at the plate's top, black dielectric / tinted metal, and whether it answered
         double cardFlat[2][3] = {};
+        double cardF0[2][3] = {}, cardW[2] = {};   // the card's own F0 and w (its Specular layer)
         double storeLeg[3] = {};   // the tinted metal still on the uncarded cube: the store's route
         bool cardLit[2] = { false, false };
         bool gatherRan = false;
@@ -336,7 +397,15 @@ int main(int argc, char **argv)
             const MaterialId plateMat = s->createPbrMaterial(plate);
             s->attachMesh(plateNode, cardedMesh, plateMat);
             s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
-            PbrParams panel; panel.albedo = Colour(1, 1, 1); panel.roughness = 1.0f;
+            // THE PANEL IS BLACK (PHOTON-3 stage 2): the gather measures what reaches it whatever its albedo, and a
+            // black panel sends the plate nothing - so the plate's only light is the sun's and the routes compare its
+            // direct lobe alone. (A white panel's bounce reaches the plate's CARD as its indirect lobe - the Flat
+            // term, 0.4 - 0.8 % of the panel's share here - which the decode drops by design, SPECKLE-FIX-1's
+            // environment term: a named route residual, not this arm's subject.)
+            PbrParams panel; panel.albedo = Colour(0, 0, 0); panel.roughness = 1.0f;
+            panel.workflow = PbrParams::Workflow::Specular;
+            panel.ior = 1.0f;
+            panel.specularColour = Colour(0, 0, 0);
             const NodeId panelNode = s->createNode();
             s->attachMesh(panelNode, cube, s->createPbrMaterial(panel));
             s->setNodeTransform(panelNode, Vec3(0.0f, 0.85f, 1.15f), Quat(), Vec3(2.0f, 1.5f, 0.1f));
@@ -420,6 +489,8 @@ int main(int argc, char **argv)
                         const int k = arm ? 1 : 0;
                         cardLit[k] = s->readCardAt(Vec3(0.0f, 0.1f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), cs, plateNode) && cs.lit;
                         for (int c = 0; c < 3; ++c) cardFlat[k][c] = cs.flat[c];
+                        for (int c = 0; c < 3; ++c) cardF0[k][c] = cs.specularF0[c];
+                        cardW[k] = cs.specularWeight;
                         std::printf("the route: the %s plate's card at its top: lit %d, flat %.6f %.6f %.6f, radiance %.6f "
                                     "%.6f %.6f, F0 kS %.4f %.4f %.4f, kS %.4f\n", k ? "tinted metal" : "black dielectric",
                                     int(cardLit[k]), cs.flat[0], cs.flat[1], cs.flat[2], cs.radiance[0], cs.radiance[1],
@@ -464,21 +535,38 @@ int main(int argc, char **argv)
             const auto halfStep = [](double v, int c) {
                 return v > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(v) - (c == 2 ? 5 : 6)) : 0.0;
             };
+            // THE LIGHTS' LOBE LEFT THE FLAT TERM (PHOTON-3 stage 2): every reader evaluates it toward its own ray, so
+            // the card's flat term is the GATHERED light's lobe alone - here (no sky; the panel's face is edge-on to
+            // the sun) a few per cent of the lights' integral E ( F0 A + w B ) it held before.
             for (int k = 0; k < 2; ++k)
                 for (int c = 0; c < 3; ++c) {
-                    const double bar = 0.004 * exact[k][c] + halfStep(exact[k][c], c);
                     char msg[320];
-                    std::snprintf(msg, sizeof msg, "THE %s'S CARD HOLDS ITS LOBE, channel %d: the card's flat term %.6f, "
-                                  "the closed form E ( F0 A + w B ) %.6f (bar 0.4 %% + the format's half step: %.6f)",
-                                  k ? "TINTED METAL" : "BLACK DIELECTRIC", c, cardFlat[k][c], exact[k][c], bar);
-                    CHECK(cardLit[k] && std::fabs(cardFlat[k][c] - exact[k][c]) <= bar, msg);
+                    std::snprintf(msg, sizeof msg, "THE %s'S CARD RE-EMITS NO LIGHT LOBE BY ITS INTEGRAL, channel %d: the "
+                                  "flat term %.6f, under 5 %% of the lights' E ( F0 A + w B ) %.6f", k ? "TINTED METAL" :
+                                  "BLACK DIELECTRIC", c, cardFlat[k][c], exact[k][c]);
+                    CHECK(cardLit[k] && cardFlat[k][c] < 0.05 * exact[k][c], msg);
                 }
+            (void)halfStep;
+            // THE READ'S LOBE, toward each panel point, by the panel's own view of the plate (panelSeesPlate): the sun
+            // straight down, the lobe D Vis ( F0 ( 1 - Fc ) + w Fc ) at r 0.3 - for a given F0 and w
+            const double sunL[3] = { 0.0, 1.0, 0.0 };
+            const auto panelLobe = [&](double F0, double w) {
+                return panelSeesPlate([&](int, int, const double *V) {
+                    double dvis = 0.0, fc = 0.0;
+                    ggxLobe(sunL, V, 0.3, dvis, fc);
+                    return dvis * (F0 * (1.0 - fc) + w * fc);
+                });
+            };
+            // THE ROUTE DOES NOT MOVE THE BOUNCE: the card's read uses the card's own F0 (its 8-bit Specular layer:
+            // 0.3 x 255 = 76.5 rounds), the decode the material's - their ratio is the lobe at the one against the
+            // other, through the panel's view
             for (int c = 0; c < 3; ++c) {
-                const double want = cardLit[1] ? cardFlat[1][c] / exact[1][c] : 0.0;
+                const double want = cardLit[1] ? panelLobe(cardF0[1][c], cardW[1]) / panelLobe(tint[c], 1.0) : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE ROUTE DOES NOT MOVE THE BOUNCE, channel %d: the panel's gathered E/pi "
-                              "from the tinted metal by its card %.5f, as a mover %.5f (%.4f; the card's stored / exact "
-                              "%.4f; bar 0.4 %%)", c, gathered[0][c], gathered[1][c], gathered[0][c] / gathered[1][c], want);
+                              "from the tinted metal by its card %.5f, as a mover %.5f (%.4f; the card's F0 against the "
+                              "material's %.4f; bar 0.4 %%)", c, gathered[0][c], gathered[1][c],
+                              gathered[0][c] / gathered[1][c], want);
                 CHECK(gathered[1][c] > 0.0 && want > 0.0 &&
                       std::fabs(gathered[0][c] / gathered[1][c] / want - 1.0) <= 0.004, msg);
             }
@@ -489,20 +577,23 @@ int main(int argc, char **argv)
                               storeLeg[c], gathered[1][c], gathered[1][c] > 0.0 ? storeLeg[c] / gathered[1][c] : 0.0);
                 CHECK(gathered[1][c] > 0.0 && std::fabs(storeLeg[c] / gathered[1][c] - 1.0) <= 0.004, msg);
             }
-            const double wantD = (0.04 * A + B) / (A + B);
+            // THE LOBE TOWARD THE PANEL, not its integral (PHOTON-3 stage 2): the black dielectric's F0 0.04 against the
+            // white-red metal's 1, by the panel's view of the plate - where the integrals' ( 0.04 A + B ) / ( A + B )
+            // weighted every direction alike
+            const double wantD = panelLobe(0.04, 1.0) / panelLobe(1.0, 1.0);
             for (int c = 0; c < 3; ++c) {
                 const double ratio = gathered[1][0] > 0.0 ? dielectric[1][c] / gathered[1][0] : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY THE DECODE (a mover), channel %d: the panel's "
-                              "gathered E/pi from the black dielectric is (0.04 A + B) / (A + B) of the white-red metal's "
-                              "(%.5f; want %.5f, bar 0.4 %%)", c, ratio, wantD);
+                              "gathered E/pi from the black dielectric is its lobe toward the panel against the white-red "
+                              "metal's (%.5f; want %.5f, bar 0.4 %%)", c, ratio, wantD);
                 CHECK(dielectric[1][c] > 0.0 && std::fabs(ratio / wantD - 1.0) <= 0.004, msg);
             }
             for (int c = 0; c < 3; ++c) {
-                const double want = cardLit[0] && dielectric[1][c] > 0.0 ? cardFlat[0][c] / exact[0][c] : 0.0;
+                const double want = cardLit[0] && dielectric[1][c] > 0.0 ? panelLobe(cardF0[0][c], cardW[0]) / panelLobe(0.04, 1.0) : 0.0;
                 char msg[320];
                 std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY ITS CARD (still), channel %d: the panel's "
-                              "gathered E/pi %.6f, as a mover %.6f (%.4f; the card's stored / exact %.4f; bar 0.4 %%)", c,
+                              "gathered E/pi %.6f, as a mover %.6f (%.4f; the card's F0 against the material's %.4f; bar 0.4 %%)", c,
                               dielectric[0][c], dielectric[1][c],
                               dielectric[1][c] > 0.0 ? dielectric[0][c] / dielectric[1][c] : 0.0, want);
                 CHECK(want > 0.0 && std::fabs(dielectric[0][c] / dielectric[1][c] / want - 1.0) <= 0.004, msg);
@@ -636,6 +727,104 @@ int main(int argc, char **argv)
         e->destroyScene(s);
     }
     }
+    // ---- THE LAW: THE LOBE GOES WHERE THE SURFACE SENDS IT (PHOTON-3 stage 2) --------------------------------
+    // A hit's radiance along its ray is sum over the lights of E mu vis f_s( L, V = -ray ), f_s BRDF_Default's
+    // D Vis F; its cosine-weighted integral over V is the directional albedo mu ( F0 A + w B ) the stores re-emit
+    // (the arms above hold that integral, kept). THE FIXTURE: a POLISHED white-grey metal plate (base 0.9, metalness
+    // 1, r 0.05) on a carded cube, the sun 30 degrees off the vertical (power 3), no sky; the plate's still hits read
+    // its card first. THE READS: the ray job's own card read, TRACED (Engine::cardReadParity: the reflection's hit
+    // path whole, its `viewed` the radiance toward the ray's origin) from two PANELS of three ray origins each - one
+    // along the sun's mirror direction R from three plate points, one 10 degrees off it (over 30 lobe widths: the
+    // lobe's half-vector width is alpha = r^2 = 0.0025 rad). THE LAW: at R the read is E mu f_s( L, R ) - the closed
+    // form below, the card's own F0 (its Specular layer) - within 2 % (the R11G11B10F radiance is not on this path; the
+    // F0's 8-bit layer 0.2 %); off it, below 1 % of that. THE BASE re-emitted mu ( F0 A + w B ) E / pi the same way to
+    // both panels (0.85 of E / pi: the panels read alike, the mirror a 1/18000 of its truth).
+    if (!route && !gate && e->rayQueryAvailable() && e->rayTracing()) {
+        Scene *s = e->createScene("metallaw");
+        float sh[27] = { 0 };
+        s->setAmbientSh(sh);
+        s->setEnvironmentLight(Colour(0, 0, 0, 1));
+        const double kTheta = 30.0 * 3.14159265358979 / 180.0;
+        // the light travels (sin, -cos, 0): toward it L, its mirror R
+        const double Lw[3] = { -std::sin(kTheta), std::cos(kTheta), 0.0 }, Rw[3] = { std::sin(kTheta), std::cos(kTheta), 0.0 };
+        CHECK(enginetest::addDirectionalLight(s, Vec3(float(-Lw[0]), float(-Lw[1]), 0.0f), 3.0f) != 0,
+              "the sun, 30 degrees off the vertical");
+        MeshData cardedCube = enginetest::unitCubeMesh();
+        cardedCube.cards = enginetest::boxCards(0.5f);
+        const MeshId cardedMesh = s->createMesh(cardedCube);
+        PbrParams plate;
+        plate.albedo = Colour(0.9f, 0.9f, 0.9f);
+        plate.metalness = 1.0f;
+        plate.roughness = 0.05f;
+        const NodeId plateNode = s->createNode();
+        s->attachMesh(plateNode, cardedMesh, s->createPbrMaterial(plate));
+        s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
+        View *gv = e->createOffscreenView("metallaw", 256, 256, Colour(0, 0, 0));
+        PostFxDesc gfx;
+        gfx.allowOffscreen = true;
+        gfx.ssr = 0;
+        gv->setPostFx(gfx);
+        gv->setShadows(true);
+        gv->setOffscreenContract(OffscreenContract::StillPicture);
+        rv->setScene(nullptr);
+        CHECK(gv->setScene(s), "the law's view shows the plate");
+        enginetest::testCameraLookAt(gv, Vec3(0.0f, 2.0f, -3.0f), Vec3(0.0f, 0.1f, 0.0f));
+        GiParams g = giOn(GiToggle::Off, 1);
+        g.quality = GiQuality::High;
+        g.gather = GiToggle::On;
+        s->setGlobalIllumination(g);
+        settle(s);
+        run(24);
+        // the panels' rays: three plate points, each read from 1.5 m along R and along R turned 10 degrees about z
+        const double off = 10.0 * 3.14159265358979 / 180.0;
+        const double Vb[3] = { std::sin(kTheta + off), std::cos(kTheta + off), 0.0 };
+        const float pts[3][2] = { { -0.3f, 0.0f }, { 0.0f, 0.3f }, { 0.3f, -0.3f } };
+        std::vector<CardReadQuery> q;
+        for (int panel = 0; panel < 2; ++panel)
+            for (const auto &pt : pts) {
+                const double *V = panel ? Vb : Rw;
+                CardReadQuery cq;
+                cq.position = Vec3(float(pt[0] + 1.5 * V[0]), float(0.1 + 1.5 * V[1]), float(pt[1] + 1.5 * V[2]));
+                cq.facing = Vec3(float(-V[0]), float(-V[1]), float(-V[2]));
+                cq.trace = true;
+                q.push_back(cq);
+            }
+        std::vector<CardReadPick> got;
+        const bool ran = e->cardReadParity(s, q, got) && got.size() == q.size();
+        CHECK(ran, "the ray job's card read ran from the two panels");
+        CardSample cs;
+        const bool cardOk = s->readCardAt(Vec3(0.0f, 0.1f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), cs, plateNode) && cs.lit;
+        CHECK(cardOk, "the plate's card answers (lit)");
+        // THE CLOSED FORM: BRDF_Default's lobe at the card's own F0 / w (its Specular layer)
+        const auto lobe = [&](const double V[3], double F0, double w) {
+            double dvis = 0.0, fc = 0.0;
+            ggxLobe(Lw, V, 0.05, dvis, fc);
+            return dvis * (F0 * (1.0 - fc) + w * fc);
+        };
+        const double E = 3.0, mu = Lw[1];
+        for (int c = 0; c < 3 && ran && cardOk; ++c) {
+            const double F0 = cs.specularF0[c], w = cs.specularWeight;
+            const double want = E * mu * lobe(Rw, F0, w), offWant = E * mu * lobe(Vb, F0, w);
+            for (int k = 0; k < 3; ++k) {
+                const CardReadPick &a = got[size_t(k)], &b = got[size_t(3 + k)];
+                char msg[340];
+                std::snprintf(msg, sizeof msg, "THE LAW, channel %d, point %d: the read along the mirror direction %.2f = "
+                              "E mu f_s( L, R ) %.2f (x%.4f; bar 2 %%; card read ok %d)", c, k, double(a.viewed[c]), want,
+                              want > 0.0 ? double(a.viewed[c]) / want : 0.0, int(a.ok));
+                CHECK(a.ok && std::fabs(double(a.viewed[c]) / want - 1.0) <= 0.02, msg);
+                std::snprintf(msg, sizeof msg, "THE LAW, channel %d, point %d: 10 degrees off it the read %.6f is below "
+                              "1 %% of the mirror's (%.6f; the closed form %.3g)", c, k, double(b.viewed[c]), 0.01 * want,
+                              offWant);
+                CHECK(b.ok && double(b.viewed[c]) < 0.01 * want, msg);
+            }
+        }
+        GiParams offG; offG.mode = GiMode::Off;
+        s->setGlobalIllumination(offG);
+        gv->setScene(nullptr);
+        e->destroyView(gv);
+        e->destroyScene(s);
+    }
+    else if (!route && !gate) std::printf("ok: no ray queries on this machine - the law arm skips\n");
     // ---- THE MOVERS' GATE ON A METAL'S CARD (ENGINE-POLISH-PHOTON-1's fix round) ----------------------------
     // A ray's hit lowers its INDIRECT share by the movers above it (MOVER-OCCLUSION-1: jahHitIndirectGate, four short
     // rays against the movers): the store gates its whole bounce (jah_rq_hit_radiance.glsl), and the card read must cut
@@ -713,21 +902,35 @@ int main(int argc, char **argv)
         t.restOff = true;
         t.freezeFrameIndex = true;
         s->setGatherTuning(t);
-        // arms: 0 the card, the mover away; 1 the card, the mover over; 2 the store (uncarded), over; 3 the store,
-        // away; 4 the BLACK plate, away; 5 the black plate, over
-        double got[6][3] = {};
+        // arms: 0 the card, the mover away; 1 the card, the mover over; 2 the card under the PARTIAL roof; 3 the store
+        // (uncarded) under the partial roof; 4 the store, over; 5 the store, away; 6 the BLACK plate, away; 7 the black
+        // plate, over; 8 the black plate under the partial roof
+        enum class Roof { Away, Over, Partial };
+        struct GateArm { int plate; Roof roof; const char *what; };   // plate: 0 carded, 1 uncarded, 2 black
+        const GateArm gateArms[9] = {
+            { 0, Roof::Away, "its card, the mover away" }, { 0, Roof::Over, "its card, the mover over it" },
+            { 0, Roof::Partial, "its card, the partial roof" }, { 1, Roof::Partial, "the store (no cards), the partial roof" },
+            { 1, Roof::Over, "the store (no cards), the mover over it" }, { 1, Roof::Away, "the store, the mover away" },
+            { 2, Roof::Away, "nothing (a black plate), the mover away" },
+            { 2, Roof::Over, "nothing (a black plate), the mover over it" },
+            { 2, Roof::Partial, "nothing (a black plate), the partial roof" } };
+        // THE PARTIAL ROOF (C', PHOTON-3 stage 2's first step): 3 x 2.4 m of the same black mover at the same height,
+        // over the plate's middle
+        const Vec3 partialScale(3.0f, 0.05f, 2.4f);
+        double got[9][3] = {};
         bool cardLit = false;
         const MaterialId blackMat = s->createPbrMaterial(black);
-        for (int arm = 0; arm < 6; ++arm) {
-            if (arm == 2) {
-                CHECK(s->attachMesh(plateNode, cube, plateMat), "the plate on the uncarded cube (the store's route)");
+        for (int arm = 0; arm < 9; ++arm) {
+            const GateArm &ga = gateArms[arm];
+            if (arm > 0 && ga.plate != gateArms[arm - 1].plate) {
+                if (ga.plate == 1)
+                    CHECK(s->attachMesh(plateNode, cube, plateMat), "the plate on the uncarded cube (the store's route)");
+                else
+                    CHECK(s->attachMesh(plateNode, cube, blackMat), "the plate turns black (the sky's share alone)");
                 s->refreshGlobalIllumination();
             }
-            if (arm == 4) {
-                CHECK(s->attachMesh(plateNode, cube, blackMat), "the plate turns black (the sky's share alone)");
-                s->refreshGlobalIllumination();
-            }
-            s->setNodeTransform(moverNode, arm == 1 || arm == 2 || arm == 5 ? moverOver : moverAway, Quat(), moverScale);
+            s->setNodeTransform(moverNode, ga.roof == Roof::Away ? moverAway : moverOver, Quat(),
+                                ga.roof == Roof::Partial ? partialScale : moverScale);
             settle(s);
             run(72);   // the held history's carry-over of the previous arm (0.1 % after 48 frames) under 1e-4
             const GatherStatus st = s->published().gi.gather;
@@ -749,23 +952,110 @@ int main(int argc, char **argv)
                             int(cardLit), cs.flat[0], cs.flat[1], cs.flat[2], cs.indirectStored[0], cs.indirectStored[1],
                             cs.indirectStored[2]);
             }
-            static const char *what[6] = { "its card, the mover away", "its card, the mover over it",
-                                           "the store (no cards), the mover over it", "the store, the mover away",
-                                           "nothing (a black plate), the mover away",
-                                           "nothing (a black plate), the mover over it" };
-            std::printf("the gate: the plate by %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px)\n", what[arm],
+            std::printf("the gate: the plate by %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px)\n", ga.what,
                         got[arm][0], got[arm][1], got[arm][2], px);
         }
         CHECK(cardLit, "the plate's card answers (lit)");
         for (int c = 0; c < 3; ++c) {
-            const double cardAway = got[0][c] - got[4][c], storeAway = got[3][c] - got[4][c];
-            const double card = cardAway > 0.0 ? (got[1][c] - got[5][c]) / cardAway : 0.0;
-            const double store = storeAway > 0.0 ? (got[2][c] - got[5][c]) / storeAway : 0.0;
+            const double cardAway = got[0][c] - got[6][c], storeAway = got[5][c] - got[6][c];
+            const double card = cardAway > 0.0 ? (got[1][c] - got[7][c]) / cardAway : 0.0;
+            const double store = storeAway > 0.0 ? (got[4][c] - got[7][c]) / storeAway : 0.0;
             char msg[320];
             std::snprintf(msg, sizeof msg, "THE MOVER GATES THE METAL'S LOBE ON EVERY ROUTE, channel %d: the plate's share "
                           "under the mover / away, by its card %.4f, by the store %.4f (the shares away %.5f / %.5f; "
                           "bar 0.004)", c, card, store, cardAway, storeAway);
             CHECK(cardAway > 0.0 && storeAway > 0.0 && store < 0.5 && std::fabs(card - store) <= 0.004, msg);
+        }
+        // ---- C': THE PLATE'S SKY LOBE AGAINST ITS CLOSED FORM (PHOTON-3 stage 2's first step; a MEASUREMENT) ---------
+        // The two routes' sky lobes, judged against the truth rather than against each other. THE CLOSED FORM: a plate
+        // point p under the uniform sky L re-emits its lobe's hemispherical albedo of what reaches it (the store's and
+        // the card's convention), L ( F0 A-bar( r ) + w B-bar( r ) ) U( p ), U the cosine-weighted unoccluded fraction
+        // of its hemisphere: 1 - the black roof's form factor at p (a rectangle parallel to the plate: the corner
+        // rectangles' signed sum). The panel point q of a read pixel gathers E( q ) / pi = 1/pi x the integral over the
+        // plate's top of that radiance x cos_p cos_q / d^2 (a 64 x 64 midpoint rule), the pixels mapped onto the panel's
+        // face (z = 1.1) through the camera (45 degrees). AND THE PANEL'S OWN TERM, which the closed form leaves out:
+        // the panel fills 16 % of the plate's hemisphere on average (more near it, where it reads the plate best), so
+        // there the plate sees the panel's radiance - taken as the black-plate arm's gathered E / pi, a Lambertian's -
+        // instead of the sky. MEASURED (PHOTON-3, the base routes; spikes/photon-3/): away, the closed form reads the
+        // card at 0.94 and the store at 0.81, the panel's term 0.98 / 0.85; under the partial roof 0.96 / 0.83 and
+        // 1.14 / 0.98 - the verdict flips with a term the fixture cannot state in closed form (the panel's radiance
+        // varies over its height and under the roof). So this arm PRINTS: the 15 % gap is not judged by it until the
+        // reader stops being an occluder of what it reads (the lead's call).
+        {
+            double A = 0.0, B = 0.0;
+            enginetest::ggxSpecularAlbedoHemi(0.3, A, B, 64, 192);
+            const double kSkyL = std::pow((kSky / 255.0 + 0.055) / 1.055, 2.4);
+            const double F0[3] = { 1.0, 0.6, 0.3 };
+            const double kPi = 3.14159265358979;
+            // the form factor of the corner rectangle [ 0, a ] x [ 0, b ] at height h, parallel, from a point under
+            // its corner
+            const auto cornerFF = [&](double a, double b, double h) {
+                const double A1 = a / h, B1 = b / h;
+                const double sa = std::sqrt(1.0 + A1 * A1), sb = std::sqrt(1.0 + B1 * B1);
+                return (A1 / sa * std::atan(B1 / sa) + B1 / sb * std::atan(A1 / sb)) / (2.0 * kPi);
+            };
+            // ...and of [ x0, x1 ] x [ z0, z1 ]: G( x1, z1 ) - G( x0, z1 ) - G( x1, z0 ) + G( x0, z0 ), G odd in each
+            const auto rectFF = [&](double px, double pz, double x0, double x1, double z0, double z1, double h) {
+                const auto G = [&](double a, double b) {
+                    const double sg = (a < 0.0 ? -1.0 : 1.0) * (b < 0.0 ? -1.0 : 1.0);
+                    return sg * cornerFF(std::fabs(a), std::fabs(b), h);
+                };
+                return G(x1 - px, z1 - pz) - G(x0 - px, z1 - pz) - G(x1 - px, z0 - pz) + G(x0 - px, z0 - pz);
+            };
+            // the panel's face (x -1..1, y 0.1..1.6, z 1.1, facing -z) seen from a plate point: 16 x 12 patches
+            const auto panelFF = [&](double px, double pz) {
+                double f = 0.0;
+                for (int i = 0; i < 16; ++i)
+                    for (int j = 0; j < 12; ++j) {
+                        const double x = -1.0 + 2.0 * (i + 0.5) / 16.0, y = 0.1 + 1.5 * (j + 0.5) / 12.0;
+                        const double vx = x - px, vy = y - 0.1, vz = 1.1 - pz, d2 = vx * vx + vy * vy + vz * vz;
+                        if (!(vy > 0.0)) continue;
+                        const double d = std::sqrt(d2);
+                        f += (vy / d) * (vz / d) / (kPi * d2) * (2.0 / 16.0) * (1.5 / 12.0);
+                    }
+                return f;
+            };
+            // the roof's underside (the mover's centre 1.9 m, half thickness 0.025) above the plate's top (0.1 m)
+            const double h = 1.9 - 0.025 - 0.1;
+            const double rx0 = moverOver.x - 0.5 * partialScale.x, rx1 = moverOver.x + 0.5 * partialScale.x;
+            const double rz0 = moverOver.z - 0.5 * partialScale.z, rz1 = moverOver.z + 0.5 * partialScale.z;
+            const int kN = 64;
+            std::vector<double> ffRoof(size_t(kN) * kN), ffPanel(size_t(kN) * kN);
+            for (int i = 0; i < kN; ++i)
+                for (int j = 0; j < kN; ++j) {
+                    const double px = -1.0 + 2.0 * (i + 0.5) / kN, pz = -1.0 + 2.0 * (j + 0.5) / kN;
+                    ffRoof[size_t(i) * kN + j] = rectFF(px, pz, rx0, rx1, rz0, rz1, h);
+                    ffPanel[size_t(i) * kN + j] = panelFF(px, pz);
+                }
+            // the incident at p in units of L: the sky through the open part, the panel's radiance (lp, units of L)
+            // through the panel's part when `withPanel` - seen by the read pixels (panelSeesPlate)
+            const auto kernel = [&](bool partial, bool withPanel, double lp) {
+                return panelSeesPlate([&](int i, int j, const double *) {
+                    const double fr = partial ? ffRoof[size_t(i) * kN + j] : 0.0;
+                    const double fp = withPanel ? ffPanel[size_t(i) * kN + j] : 0.0;
+                    return 1.0 - fr - fp + lp * fp;
+                });
+            };
+            // the panel's radiance with the plate black: its gathered E / pi (white, one channel)
+            const double lpAway = got[6][1] / kSkyL, lpPartial = got[8][1] / kSkyL;
+            const double kAway = kernel(false, false, 0.0), kPartial = kernel(true, false, 0.0);
+            const double pAway = kernel(false, true, lpAway), pPartial = kernel(true, true, lpPartial);
+            std::printf("C': the plate's lobe F0 A-bar + B-bar at r 0.3 (A-bar %.4f, B-bar %.4f), sky L %.5f; the panel "
+                        "sees the plate x%.5f away, x%.5f under the partial roof (U-bar %.4f); with the panel's own term "
+                        "(its radiance %.3f / %.3f of L) x%.5f / x%.5f\n", A, B, kSkyL, kAway, kPartial,
+                        kPartial / kAway, lpAway, lpPartial, pAway, pPartial);
+            for (int c = 0; c < 3; ++c) {
+                const double lobe = kSkyL * (F0[c] * A + B);
+                const double cardAway = got[0][c] - got[6][c], storeAway = got[5][c] - got[6][c];
+                const double cardPartial = got[2][c] - got[8][c], storePartial = got[3][c] - got[8][c];
+                std::printf("C': channel %d - away: card %.5f, store %.5f; closed form %.5f (card x%.3f, store x%.3f), with "
+                            "the panel %.5f (x%.3f, x%.3f); under the partial roof: card %.5f, store %.5f; closed form "
+                            "%.5f (x%.3f, x%.3f), with the panel %.5f (x%.3f, x%.3f)\n", c, cardAway, storeAway,
+                            lobe * kAway, cardAway / (lobe * kAway), storeAway / (lobe * kAway), lobe * pAway,
+                            cardAway / (lobe * pAway), storeAway / (lobe * pAway), cardPartial, storePartial,
+                            lobe * kPartial, cardPartial / (lobe * kPartial), storePartial / (lobe * kPartial),
+                            lobe * pPartial, cardPartial / (lobe * pPartial), storePartial / (lobe * pPartial));
+            }
         }
         GiParams off; off.mode = GiMode::Off;
         s->setGlobalIllumination(off);
