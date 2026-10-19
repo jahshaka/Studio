@@ -366,6 +366,90 @@
    "require_tier": true,
    "must": [],
    "must_not": []
+  },
+  {
+   "case": "TOOLING-3 1a: set(CMAKE_CXX_FLAGS …) at directory scope of irisgl/engine is a directory-wide setting — every target compiled under it and the app that links the archive, never the engine's every-fixture rule (449 rows, no app row on 7e4ac0994)",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -ffast-math\")\nset(JAH_VR_OK OFF)\n",
+   "must": [
+    "app.engine_selftest_validation",
+    "engine.window",
+    "gi.card_capture"
+   ],
+   "must_not": [],
+   "why_has": [
+    "target JahshakaEngine"
+   ]
+  },
+  {
+   "case": "TOOLING-3 1b: set_source_files_properties(…/src/app/main.cpp DIRECTORY ${CMAKE_SOURCE_DIR} …) in the engine's CMake changes the APP's main.o — the source's own reach, never the engine's every-fixture rule (449 rows, no app row on 7e4ac0994)",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "set_source_files_properties(${CMAKE_SOURCE_DIR}/src/app/main.cpp DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTIES COMPILE_DEFINITIONS JAH_PROBE=1)\nset(JAH_VR_OK OFF)\n",
+   "must": [
+    "app.engine_selftest_validation"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-3 1c: set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE) in irisgl/engine writes the scope above — the WHOLE TIER, never the engine's every-fixture rule",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE)\nset(JAH_VR_OK OFF)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-3 2a: add_compile_options() at file scope of tests/support/test_boot.cmake runs in its INCLUDER's scope (tests/CMakeLists.txt:360, before the add_subdirectory calls) — the WHOLE TIER, never tests/support's 2 rows",
+   "file": "tests/support/test_boot.cmake",
+   "old": "set(JAH_TEST_TIERS low medium high epic document)\n",
+   "new": "set(JAH_TEST_TIERS low medium high epic document)\nadd_compile_options(-ffast-math)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-3 2b: add_compile_options() at file scope of tests/cmake/vram_rows.cmake runs in its INCLUDER's scope (tests/CMakeLists.txt:361) — the WHOLE TIER, never tests/cmake's rows",
+   "file": "tests/cmake/vram_rows.cmake",
+   "old": "set(JAH_CARD_SLOTS 8)\n",
+   "new": "set(JAH_CARD_SLOTS 8)\nadd_compile_options(-ffast-math)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-3 3: two directory-scope commands in one hunk (add_compile_options + add_definitions in irisgl/engine) are measured each by ITS OWN reach — 625 rows, never the whole tier because the second reached rows the first had selected",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "add_compile_options(-ffast-math)\nadd_definitions(-DJAH_PROBE=1)\nset(JAH_VR_OK OFF)\n",
+   "must": [
+    "app.engine_selftest_validation",
+    "engine.window"
+   ],
+   "must_not": [],
+   "why_has": [
+    "add_definitions() at directory scope of irisgl/engine"
+   ]
+  },
+  {
+   "case": "TOOLING-3 F1a: add_compile_options() inside macro jah_vram_resource_spec() runs in tests/'s scope (the macro is called at tests/CMakeLists.txt:362) — the WHOLE TIER, never 'called on 0 target(s)'",
+   "file": "tests/cmake/vram_rows.cmake",
+   "old": "macro(jah_vram_resource_spec)\n",
+   "new": "macro(jah_vram_resource_spec)\n    add_compile_options(-ffast-math)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-3 F1b: add_compile_options() inside function jah_test_boot_env() runs in every caller's directory scope — the WHOLE TIER, never 'called on 0 target(s)'",
+   "file": "tests/support/test_boot.cmake",
+   "old": "function(jah_test_boot_env _out _tier)\n    set(_needs ${ARGN})\n",
+   "new": "function(jah_test_boot_env _out _tier)\n    set(_needs ${ARGN})\n    add_compile_options(-ffast-math)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
   }
  ]
 }
