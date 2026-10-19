@@ -187,10 +187,10 @@ int main(int argc, char **argv)
         // the retired ModelTypes::Shader asset before). The hazard under test
         // — the blade's combo slot firing with a NULL library handle — is the
         // same on either type.
-        auto *asset = new AssetMaterial;
+        auto asset = std::make_unique<AssetMaterial>();
         asset->assetGuid = QString::fromLatin1(kStubResolvableMaterialGuid);
         asset->fileName = QStringLiteral("resolvable.material");
-        AssetManager::addAsset(asset);
+        AssetManager::addAsset(std::move(asset));
 
         auto node = iris::MeshNode::create();
         node->setMaterial(iris::PbrMaterial::create());

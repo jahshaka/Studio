@@ -286,7 +286,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	_assetView = new QListWidget;
 	// The page's preview viewer: engine-backed, or the headless document-only
 	// stand-in when no engine view can exist.
-	viewer = previewViewer ? previewViewer : new HeadlessAssetViewer(this);
+	if (!previewViewer) ownedViewer = std::make_unique<HeadlessAssetViewer>(this);
+	viewer = previewViewer ? previewViewer : ownedViewer.get();
     viewer->setDatabase(db);
 	// Clears the double-clicked tile's loading overlay once the preview is
 	// actually showing (ASSET_DRAWERS_SPEC §1 — big GLBs take a while).

@@ -439,12 +439,12 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     const QString mainGuid = out.mainGuid;
     const QString fileName = sourceInfo.fileName();
     out.registerSession = [mainGuid, fileName]() {
-        auto *assetObject = new AssetNodeObject;
+        auto assetObject = std::make_unique<AssetNodeObject>();
         assetObject->fileName = fileName;
         assetObject->assetGuid = mainGuid;
         assetObject->path = AssetCas::resolveSource(QSqlDatabase::database(),
                                                     AssetStorePaths::root(), mainGuid);
-        AssetManager::addAsset(assetObject);
+        AssetManager::addAsset(std::move(assetObject));
     };
 
     Q_UNUSED(projectGuid);
@@ -832,11 +832,11 @@ bool FileImporter::convert(const ImportRequest &request, const QString &stagingD
     const QString guid = out.mainGuid;
     const QString fileName = sourceInfo.fileName();
     out.registerSession = [guid, fileName]() {
-        auto *assetFile = new AssetFile;
+        auto assetFile = std::make_unique<AssetFile>();
         assetFile->assetGuid = guid;
         assetFile->fileName = fileName;
         assetFile->path = guid;
-        AssetManager::addAsset(assetFile);
+        AssetManager::addAsset(std::move(assetFile));
     };
     return true;
 }

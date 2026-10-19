@@ -658,10 +658,10 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
         fail(QStringLiteral("materials.createFromPreset: %1").arg(error));
         return QString();
     }
-    auto *asset = new AssetMaterial;
+    auto asset = std::make_unique<AssetMaterial>();
     asset->fileName = host.db->fetchAsset(copy).name;
     asset->assetGuid = copy;
-    AssetManager::addAsset(asset);
+    AssetManager::addAsset(std::move(asset));
     // (The copy's TILE is rendered inside `customise` now — one place for all
     // three Customise doors, and a refused render is logged rather than
     // discarded; PREVIEWENV-2 item c, services/materialtile.h.)
@@ -732,10 +732,10 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
                                                build.definition);
     if (!written.ok) fail(QStringLiteral("materials.createFromImage: %1").arg(written.error));
 
-    auto assetShader = new AssetMaterial;
+    auto assetShader = std::make_unique<AssetMaterial>();
     assetShader->fileName = shaderName;
     assetShader->assetGuid = assetGuid;
-    AssetManager::addAsset(assetShader);
+    AssetManager::addAsset(std::move(assetShader));
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
     // R9(a)). The graph twin of createFromImage minted its bundle with no tile
     // while its VALUES twin rendered one.
@@ -856,10 +856,10 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
         return QString();
     }
 
-    auto *asset = new AssetMaterial;
+    auto asset = std::make_unique<AssetMaterial>();
     asset->fileName = materialName;
     asset->assetGuid = assetGuid;
-    AssetManager::addAsset(asset);
+    AssetManager::addAsset(std::move(asset));
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
     // R9(a)). A minted bundle carried NO thumbnail at all, so a material made
     // this way was a grey tile until some sweep found it.
@@ -1118,10 +1118,10 @@ QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &
         fail(QStringLiteral("materials.duplicate: %1").arg(error));
         return QString();
     }
-    auto *asset = new AssetMaterial;
+    auto asset = std::make_unique<AssetMaterial>();
     asset->fileName = host.db->fetchAsset(copy).name;
     asset->assetGuid = copy;
-    AssetManager::addAsset(asset);
+    AssetManager::addAsset(std::move(asset));
     // THE COPY'S TILE IS A RENDER OF THE COPY (owner review R9(a)): a duplicate
     // inherits the SOURCE row's tile, which is the right picture only while
     // the copy is untouched and the wrong one the moment the source's was an

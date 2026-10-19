@@ -1265,10 +1265,10 @@ void EffectsPage::createMaterialFromPreset(const QString &presetGuid)
 		                     tr("The material could not be created: %1").arg(error));
 		return;
 	}
-	auto *asset = new AssetMaterial;
+	auto asset = std::make_unique<AssetMaterial>();
 	asset->fileName = dataBase->fetchAsset(copy).name;
 	asset->assetGuid = copy;
-	AssetManager::addAsset(asset);
+	AssetManager::addAsset(std::move(asset));
 	// The drawers first, then the open (duplicateShader's order, fix round F1).
 	refreshShaderGraph();
 	tabWidget->setCurrentIndex(static_cast<int>(ShaderWorkspace::MyEffects));
@@ -1610,10 +1610,10 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	// only by saying so ("Save to Assets").
 	dataBase->createAssetEntry(assetGuid, newShader, static_cast<int>(ModelTypes::Material),
 	                           QString(), assethome::materials(), assethome::Origin::Create);
-	auto assetShader = new AssetMaterial;
+	auto assetShader = std::make_unique<AssetMaterial>();
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
-	AssetManager::addAsset(assetShader);
+	AssetManager::addAsset(std::move(assetShader));
 	saveShader();
 }
 

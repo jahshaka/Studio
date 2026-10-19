@@ -157,35 +157,35 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Proj
             // of the Bistro Exterior's open on the UI thread. The model is read
             // by whoever places it (libraryasset::fromLibrary, the scene reader),
             // from its bake, when it is placed.
-            auto *asset = new AssetNodeObject;
+            auto asset = std::make_unique<AssetNodeObject>();
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
             asset->path = path;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::Texture: {
-            auto *asset = new AssetTexture;
+            auto asset = std::make_unique<AssetTexture>();
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
             asset->path = path;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::Music: {
-            auto *asset = new AssetMusic;
+            auto asset = std::make_unique<AssetMusic>();
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
             asset->path = path;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::File: {
-            auto *asset = new AssetFile;
+            auto asset = std::make_unique<AssetFile>();
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
             asset->path = path;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         // ModelTypes::Shader IS NOT HYDRATED (fix round F12). It was the
@@ -206,19 +206,19 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Proj
             // work done for exactly ONE reader, the viewport's hover preview,
             // and that reader now resolves through SceneEditService (which
             // parses the one material a gesture actually touches, once).
-            auto *asset = new AssetMaterial;
+            auto asset = std::make_unique<AssetMaterial>();
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::ParticleSystem: {
-            auto *asset = new AssetParticleSystem;
+            auto asset = std::make_unique<AssetParticleSystem>();
             asset->assetGuid = member;
             asset->fileName = QFileInfo(memberRecord.name).baseName();
             asset->setValue(QVariant::fromValue(
                 QJsonDocument::fromJson(db->fetchAssetData(member)).object()));
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::Animation:

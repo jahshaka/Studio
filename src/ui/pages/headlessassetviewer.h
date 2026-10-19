@@ -7,6 +7,7 @@
 // this class keeps only the document surface AssetView exercises headless:
 // the node cache. Nothing renders.
 #include "irisgl/core/math/vec.h"
+#include <QPointer>
 #include <QWidget>
 #include "ui/pages/iassetviewer.h"
 #include <QMap>
@@ -19,6 +20,11 @@ public:
     {
         mWidget = new QWidget(parent);
     }
+    /// The widget is the viewer's own (LEAK-1): freed with it, unless its
+    /// parent already took it down (the QPointer is then null).
+    ~HeadlessAssetViewer() override { delete mWidget.data(); }
+    HeadlessAssetViewer(const HeadlessAssetViewer &) = delete;
+    HeadlessAssetViewer &operator=(const HeadlessAssetViewer &) = delete;
 
     QWidget *asWidget() override { return mWidget; }
     void setDatabase(Database *db) override { Q_UNUSED(db); }
@@ -48,7 +54,7 @@ public:
     QImage takeScreenshot(int, int) override { return QImage(); }
 
 private:
-    QWidget *mWidget = nullptr;
+    QPointer<QWidget> mWidget;
     iris::SceneNodePtr mLastNode;
     QMap<QString, iris::SceneNodePtr> mCache;
 };

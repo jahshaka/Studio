@@ -776,14 +776,14 @@ static void testMaterialComboFollowsTheLibrary()
     // graph material USED to be; the rule under test — the combo follows the
     // library's LIST, not its item count — is untouched.
     AssetManager::clearAssetList();
-    auto *brick = new AssetMaterial;
-    brick->assetGuid = QStringLiteral("mat-brick");
-    brick->fileName  = QStringLiteral("Brick.material");
-    auto *chrome = new AssetMaterial;
-    chrome->assetGuid = QStringLiteral("mat-chrome");
-    chrome->fileName  = QStringLiteral("Chrome.material");
-    AssetManager::addAsset(brick);
-    AssetManager::addAsset(chrome);
+    auto brickAsset = std::make_unique<AssetMaterial>();
+    brickAsset->assetGuid = QStringLiteral("mat-brick");
+    brickAsset->fileName  = QStringLiteral("Brick.material");
+    auto chromeAsset = std::make_unique<AssetMaterial>();
+    chromeAsset->assetGuid = QStringLiteral("mat-chrome");
+    chromeAsset->fileName  = QStringLiteral("Chrome.material");
+    Asset *brick = AssetManager::addAsset(std::move(brickAsset));
+    AssetManager::addAsset(std::move(chromeAsset));
 
     PanelRig rig;
     auto *combo = rig.panel.materialCombo();
@@ -818,10 +818,11 @@ static void testMaterialComboFollowsTheLibrary()
           "rename: ...with the node's own material still selected");
 
     // ---- DELETE ONE, ADD ANOTHER (the count never moves) -----------------
-    auto *velvet = new AssetMaterial;
+    auto velvet = std::make_unique<AssetMaterial>();
     velvet->assetGuid = QStringLiteral("mat-velvet");
     velvet->fileName  = QStringLiteral("Velvet.material");
-    AssetManager::replaceAssets(QStringLiteral("mat-chrome"), velvet);
+    AssetManager::removeAssets(QStringLiteral("mat-chrome"));
+    AssetManager::addAsset(std::move(velvet));
 
     auto velvetMat = iris::PbrMaterial::create();
     velvetMat->setGuid(QStringLiteral("mat-velvet"));

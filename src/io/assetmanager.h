@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QPixmap>
 
+#include <memory>
+
 #include "irisgl/irisglfwd.h"
 
 #include "data/project.h"
@@ -174,24 +176,23 @@ struct AssetMusic : public Asset
 /// The session asset registry — the assets the panels, the viewport's
 /// drag-drop lookups and the scene reader see for the OPEN project.
 ///
-/// OWNERSHIP (deep audit 2026-09, area 3, critical): every pointer handed to
-/// addAsset()/replaceAssets() belongs to this list and is DELETED when it
-/// leaves it. Before that, `clearAssetList()` only called QVector::clear() —
-/// so every project open leaked its whole session (~80 allocations for the
-/// Showroom sample), and because the payload QVariant holds a SceneNodePtr,
-/// each leaked Asset pinned an entire mesh subtree for the life of the
-/// process. Nothing stores an Asset* across a clear (verified over all
-/// getAssets() consumers), so deleting here is safe.
+/// OWNERSHIP (LEAK-1 L3): the registry OWNS every asset handed to addAsset(),
+/// by std::unique_ptr, and destroys it when it leaves (removeAssets,
+/// clearAssetList) or when the application ends (a Qt post routine, so the
+/// assets go while QGuiApplication still exists — an Asset carries a QPixmap
+/// and a QVariant payload). It used to be a bare static QVector<Asset*>: the
+/// vector's buffer died with the process's statics and every asset still
+/// registered at exit leaked (each import's AssetNodeObject, every session
+/// registration). getAssets() is the raw, ordered VIEW; a pointer in it lives
+/// until its asset leaves the registry. Nothing stores one across a clear.
 class AssetManager
 {
 public:
-    static QVector<Asset*> assets;
-    static QVector<Asset*>& getAssets();
-    /// Takes ownership of `asset`.
-    static void addAsset(Asset* asset);
-    /// Takes ownership of `asset` and DESTROYS the asset previously
-    /// registered under `oldAssetGuid`, if any.
-	static void replaceAssets(QString oldAssetGuid, Asset* asset);
+    static const QVector<Asset*>& getAssets();
+    /// Takes ownership of `asset`; returns it.
+    static Asset* addAsset(std::unique_ptr<Asset> asset);
+    /// Destroys every registered asset whose guid is `guid`; returns how many.
+    static int removeAssets(const QString &guid);
     /// Destroys every registered asset and empties the list. This is the
     /// project-close / project-open boundary.
 	static void clearAssetList();
