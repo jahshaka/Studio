@@ -123,6 +123,7 @@ document.physics_writeback 1.25  quiet n=24
 document.reader_defaults 0.00  ship 3a0422b4e (2026-10-13)
 document.simulation_clock 0.00  ship 3a0422b4e (2026-10-13)
 document.sky_write 0.04  quiet n=46
+document.write_journal 0.18  quiet n=5 (SCENEGRAPH-BASELINE-2, 2026-10-19: 0.17-0.18 s solo under the lock)
 drawers.db 0.00  ship 3a0422b4e (2026-10-13)
 editor.drag_latency 15.71  decision 65's three shapes, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.atom_draw 28.50  ship 3a0422b4e (2026-10-13)
