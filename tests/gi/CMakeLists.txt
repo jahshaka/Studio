@@ -2089,6 +2089,27 @@ jah_gpu_row(gi.env_one CLASS engine COMMAND test_gi_env_one
 set_tests_properties(gi.env_one PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 set_tests_properties(gi.env_one PROPERTIES JAHSHAKA_TEST_FRAMES 382)
 
+# gi.env_brdf — THE ENVIRONMENT'S SPECULAR TERM IS THE SPLIT SUM (PHOTON-3 stage 1): under a uniform
+# sky at Sky Light 1 with GI off, a black dielectric's and a metal's top face read L kS ( F0 A + B ) at
+# r 0.2 / 0.5 / 1 and three view cosines within 1 % + 1 LSB, A and B the suite's own integral of the
+# lobe (enginetest::ggxSpecularAlbedo); the pin's ( 1, 0, 1 ) arm is refused. Its own binary.
+add_executable(test_gi_env_brdf test_gi_env_brdf.cpp)
+set_target_properties(test_gi_env_brdf PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_env_brdf PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_env_brdf PRIVATE JahshakaEngine)
+add_dependencies(test_gi_env_brdf JahshakaEngineMedia)
+jah_gpu_row(gi.env_brdf CLASS engine COMMAND test_gi_env_brdf
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_brdf PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.env_brdf PROPERTIES JAHSHAKA_TEST_FRAMES 81)
+
 # ---------------------------------------------------------------------------
 # THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design
 # section 1.1) — one binary, the mode on the command line: GA-GLASS (a blended
