@@ -712,7 +712,7 @@ scale.occlusion 38.40  ship 3a0422b4e (2026-10-13)
 scale.shadow_cut 27.18  quiet n=48
 scene.reopen_fidelity 74.07  quiet n=45
 scene.reopen_fidelity.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-scenegraph.benchmark 283.84  hand: a recorded stage-close run (spikes/) (no PASS run in the log)
+scenegraph.benchmark 52.00  quiet n=6 (SCENEGRAPH-BASELINE-2 stage 1, 2026-10-19: the full --assert --record run, start to record, 51-53 s; three base + three tip, all PASSED)
 scenegraph.smoke 9.43  quiet n=47
 scripting.e2e.animation_assets 6.50  ship 3a0422b4e (2026-10-13)
 scripting.e2e.animation_assets.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

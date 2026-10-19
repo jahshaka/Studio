@@ -1,9 +1,11 @@
 # The scene-graph BENCHMARK — a MEASURE (SPECS/SCENEGRAPH_SPEC.md; the header comment of bench_scenegraph.cpp is
 # the reference):
-#   ./bench_scenegraph --assert          the measure's own physics: every metric exists, its dispersion holds
+#   ./bench_scenegraph --assert          the measure's own physics: every metric exists, its dispersion holds;
+#                                        every median against baseline-linux.json, bar max(10 %, 3 x cv)
 #   ./bench_scenegraph --record <file>   ...and the JSON result file (the evidence)
-# It compares against no recorded file (ENGINE-UPGRADE-1 stage 2 deleted scenegraph.baseline and
-# baseline-linux.json); the reparent's law in counts is mirror.reparent_local's.
+#   ./bench_scenegraph --baseline-from baseline-linux.json <r1> <r2> <r3>   the baseline, from three quiet runs
+# baseline-linux.json is recorded by hand on a quiet box from one build (SCENEGRAPH-BASELINE-2 stage 4) and
+# rewritten only by the spec that earns an improvement; the reparent's law in counts is mirror.reparent_local's.
 #
 # It links exactly what the mirror suite links (IrisGL + JahshakaEngine + the
 # mirror TU, which is not part of either library), because "document edit ->
@@ -14,8 +16,9 @@
 #   <bench>.benchmark  --assert  LABELS "stage-close;quiet-box" STAGE-CLOSE, RUN_SERIAL, the GPU lock
 #   <bench>.smoke      --smoke   LABELS "benchmark-smoke"   MERGE, parallel
 #
-# The full `--assert` run is five minutes of scene-graph measurement, RUN_SERIAL because a parallel ctest
-# schedule turns its dispersion bars into random reds. A merge
+# The full `--assert` run is a minute of scene-graph measurement on a quiet box (52 s, 2026-10-19; five minutes
+# while a 50k reparent cost 5 s), RUN_SERIAL because a parallel ctest
+# schedule turns its dispersion and baseline bars into random reds. A merge
 # gate paid the whole of that wall time (287 s recorded, 518 s in a live -j2
 # gate) for a verdict its own comment already disowns on a loaded box. What a
 # merge gate needs is the STRUCTURAL half — every document node reached the
@@ -53,20 +56,20 @@ target_compile_definitions(bench_scenegraph PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
     BENCH_GIT_COMMIT="${JAH_BENCH_COMMIT}"
     BENCH_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
-    BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+    BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+    BENCH_BASELINE_FILE="${CMAKE_CURRENT_SOURCE_DIR}/baseline-linux.json")
 target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-# THE PHYSICS BARS (MIRROR-SETTLE-1 fix round 3): --assert asserts the dispersion bars and the settle slice's bound
-# only, and records its result file (the measure's evidence).
+# THE BARS: --assert asserts the dispersion bars, the settle slice's bound and every median against the recorded
+# baseline (bench_scenegraph.cpp, "THE RECORDED BASELINE"), and records its result file (the measure's evidence).
 jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
          --record "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
-# scale-1000/200 regress clause into random reds (2026-09-05 gate: the violating
-# metric set differed every run while the gated improve clauses held in all
-# four). Serial keeps ctest's own suites off its back; OTHER processes on the
+# baseline's regress bar into random reds (2026-09-05 gate: the violating
+# metric set differed every run). Serial keeps ctest's own suites off its back; OTHER processes on the
 # box still can — a red here under external load is retried on a quiet box
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES

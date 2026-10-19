@@ -1,8 +1,9 @@
 // The SCENE-GRAPH BENCHMARK — a MEASURE (SPECS/SCENEGRAPH_SPEC.md; DOCS/PROCESS.md: a row over its budget is a
 // `measure`, run at the sprint's close). It prints what the document -> engine scene graph costs at three scales and
-// asserts only its OWN physics: every metric exists, its dispersion holds (cv/rcv), the settle slice's worst stays
-// under kSettleSliceMaxMs. It compares against NO recorded file (ENGINE-UPGRADE-1 stage 2 deleted the §6 baseline
-// comparison and baseline-linux.json: an old-file wall-clock bar is forbidden). Its COUNTS laws live in guards:
+// asserts its OWN physics: every metric exists, its dispersion holds (cv/rcv), the settle slice's worst stays under
+// kSettleSliceMaxMs — and, a wall-clock measure by nature, every median against THE RECORDED BASELINE
+// (tests/benchmarks/baseline-linux.json, SCENEGRAPH-BASELINE-2 stage 4) with a bar wider than the metric's own
+// dispersion: max(10 %, 3 x cv) (see "THE RECORDED BASELINE" below). Its COUNTS laws live in guards:
 // mirror.reparent_local (a reparent costs the fragment, never the scene).
 //
 // WHAT IT MEASURES (§6's four metrics, plus two free ones worth having):
@@ -62,8 +63,9 @@
 //   d.anim_rig_200               a 200-node property-animation rig: one
 //                                updateAnimation(t) + sync + render per tick.
 //   e.build_doc / e.first_sync   one-shot: building the document, and the first
-//                                sync that creates every engine object. Not
-//                                gated, recorded because scene-open cost is the
+//                                sync that creates every engine object. Their
+//                                bar is the baseline's (cross-run cv: one sample
+//                                a run), recorded because scene-open cost is the
 //                                number a user feels and v1 changes it.
 //
 // THE FRAMESTATS DEVIATION, STATED. §6 says "work-per-tick via `renderStats` on
@@ -104,6 +106,11 @@
 // MODES
 //   --assert            (default) run, print, assert the physics bars.
 //   --record <file>     ...and write the JSON result file (the measure's evidence).
+//   --baseline-from <out> <result> <result> <result> [...]
+//                       no run: write the recorded baseline from three or more
+//                       result files of ONE build on a quiet box (the median of
+//                       the medians, the dispersion) — what the spec that earns
+//                       an improvement runs; a run never rewrites the file.
 //   --scales 1000,10000 override the scale list.
 //   --threads N         worker threads for each SCENE the sweep creates
 //                       (Engine::createScene). 0 = the engine default, which is
@@ -139,6 +146,7 @@
 #include <ctime>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -184,7 +192,7 @@ static int failures = 0;
 //     what several of these metrics can afford. It is kept because §6 asks for
 //     a coefficient-of-variation bound, and set loose enough that a neighbour's
 //     compile does not redden somebody else's gate.
-// Neither bounds PERFORMANCE: nothing here asserts a millisecond count. If a
+// Neither bounds PERFORMANCE (the baseline's bar does, below). If a
 // metric exceeds these, the measurement is not usable — the fix is more
 // iterations or a quieter box, never a looser bound.
 static constexpr double kCvMax  = 0.60;   // stddev/mean          (quiet-box worst 0.029)
@@ -199,6 +207,34 @@ static constexpr double kCvMaxReparent  = 1.00;
 // a bound on the walk's slice, never on the scene's steady state.
 static constexpr double kSettleSliceMaxMs = 0.5;
 static constexpr double kRcvMaxReparent = 0.35;
+
+// ---------------------------------------------------------------------------
+// THE RECORDED BASELINE (SCENEGRAPH-BASELINE-2 stage 4): tests/benchmarks/baseline-linux.json.
+//
+// Written by `--baseline-from` from THREE OR MORE --record runs of one build on a quiet box (1-min load <= 2.0, the
+// card's lock, nothing else building or measuring): per metric and scale the MEDIAN of the runs' medians and the
+// metric's own dispersion
+//   cv        = max(cv_within, cv_runs)
+//   cv_within = the median of the runs' own cv (stddev/mean of one run's samples; 0 for a one-shot e.* metric)
+//   cv_runs   = the sample stddev/mean of the runs' medians (the only dispersion a one-shot metric has)
+// and a full --assert run compares every median against it with the bar max(kBarMin, kBarCvTimes x cv):
+//   median > baseline x (1 + bar)   REGRESSED — a red
+//   median < baseline x (1 - bar)   IMPROVED  — printed, never a red: the spec that earned it re-records the file
+//                                   (--baseline-from); no run rewrites it, so an improvement is never silent
+// A metric the run produced with no entry in the file, or an entry at a scale the run measured that the run did
+// not produce, is a red: the file and the binary disagree on what is measured. A run that is not comparable says
+// NOT COMPARED with its reason (--quick budgets; a build type, sanitizer, --threads or CPU other than the file's).
+// The bar is wider than the noise BY CONSTRUCTION: a 10 % bar on a metric whose own cv is 0.085 reds on the
+// noise (SC1-SCENEGRAPH-ANIM-RIG-200-1); a median past 3 x its samples' cv is not the noise.
+static constexpr double kBarMin = 0.10;
+static constexpr double kBarCvTimes = 3.0;
+static double regressBar(double cv) { return std::max(kBarMin, kBarCvTimes * cv); }
+
+#if defined(__SANITIZE_ADDRESS__)
+static constexpr bool kAsanBuild = true;
+#else
+static constexpr bool kAsanBuild = false;
+#endif
 
 
 // ---------------------------------------------------------------------------
@@ -599,11 +635,7 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     // ASKED OF THE COMPILER, not asserted by a human: a sanitised binary's
     // numbers are not comparable with an unsanitised one's, and a baseline that
     // merely CLAIMED "asan: false" would be the easiest possible lie to tell.
-#if defined(__SANITIZE_ADDRESS__)
-    cfg["asan"] = true;
-#else
-    cfg["asan"] = false;
-#endif
+    cfg["asan"] = kAsanBuild;
     cfg["qt"] = QT_VERSION_STR;
     cfg["view"] = "offscreen 320x240, MSAA 1x";
     // 0 = the engine default (2). Recorded because a comparison across
@@ -642,6 +674,175 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     return true;
 }
 
+static bool readJsonObject(const std::string &path, QJsonObject &out)
+{
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QJsonParseError e{};
+    const QJsonDocument d = QJsonDocument::fromJson(f.readAll(), &e);
+    if (e.error != QJsonParseError::NoError || !d.isObject()) return false;
+    out = d.object();
+    return true;
+}
+
+static double round4(double v) { return std::round(v * 1e4) / 1e4; }
+
+/// `--baseline-from <out> <result>...`: the recorded baseline from three or more result files of ONE build
+/// (commit, config and CPU equal) — "THE RECORDED BASELINE" above. Returns the process's exit code.
+static int writeBaseline(const std::string &outPath, const std::vector<std::string> &resultPaths,
+                         const std::string &note)
+{
+    if (resultPaths.size() < 3) {
+        std::printf("FAIL: --baseline-from needs three or more result files (got %zu)\n", resultPaths.size());
+        return 1;
+    }
+    std::vector<QJsonObject> runs(resultPaths.size());
+    for (size_t i = 0; i < resultPaths.size(); ++i) {
+        if (!readJsonObject(resultPaths[i], runs[i])) {
+            std::printf("FAIL: cannot read the result file %s\n", resultPaths[i].c_str());
+            return 1;
+        }
+    }
+    const QJsonObject &first = runs.front();
+    for (size_t i = 1; i < runs.size(); ++i) {
+        if (runs[i].value("commit") != first["commit"] || runs[i].value("config") != first["config"]
+            || runs[i].value("host").toObject().value("cpu") != first["host"].toObject().value("cpu")) {
+            std::printf("FAIL: %s is not the build of %s (commit, config or CPU differ)\n",
+                        resultPaths[i].c_str(), resultPaths[0].c_str());
+            return 1;
+        }
+        // every run measured the same (metric, scale) set: a baseline over different sets is no baseline
+        const QJsonObject a = runs[i].value("metrics").toObject(), b = first["metrics"].toObject();
+        for (const QJsonObject *x : {&a, &b})
+            for (auto it = x->begin(); it != x->end(); ++it)
+                for (const QString &sc : it.value().toObject().keys())
+                    if (!a[it.key()].toObject().contains(sc) || !b[it.key()].toObject().contains(sc)) {
+                        std::printf("FAIL: %s@%s is not in every result file\n", qPrintable(it.key()), qPrintable(sc));
+                        return 1;
+                    }
+    }
+
+    QJsonObject metrics;
+    const QJsonObject m0 = first["metrics"].toObject();
+    for (auto it = m0.begin(); it != m0.end(); ++it) {
+        QJsonObject byScale;
+        for (const QString &sc : it.value().toObject().keys()) {
+            std::vector<double> medians, cvs;
+            QJsonArray runsMs;
+            for (const QJsonObject &r : runs) {
+                const QJsonObject o = r.value("metrics").toObject()[it.key()].toObject()[sc].toObject();
+                medians.push_back(o["median_ms"].toDouble());
+                if (o.contains("cv")) cvs.push_back(o["cv"].toDouble());
+                runsMs.append(round4(o["median_ms"].toDouble()));
+            }
+            double mean = 0; for (double v : medians) mean += v;
+            mean /= double(medians.size());
+            double acc = 0; for (double v : medians) acc += (v - mean) * (v - mean);
+            const double cvRuns = mean > 0 ? std::sqrt(acc / double(medians.size() - 1)) / mean : 0.0;
+            std::sort(cvs.begin(), cvs.end());
+            const double cvWithin = cvs.empty() ? 0.0 : percentile(cvs, 0.5);
+            std::sort(medians.begin(), medians.end());
+            const double cv = std::max(cvWithin, cvRuns);
+            QJsonObject e;
+            e["median_ms"] = round4(percentile(medians, 0.5));
+            e["cv"] = round4(cv);
+            e["cv_within"] = round4(cvWithin);
+            e["cv_runs"] = round4(cvRuns);
+            e["runs_ms"] = runsMs;
+            byScale[sc] = e;
+            std::printf("BASELINE %-28s scale=%-6s median_ms=%9.3f cv=%5.3f (within %5.3f, runs %5.3f) bar=%4.1f%%\n",
+                        qPrintable(it.key()), qPrintable(sc), percentile(medians, 0.5), cv, cvWithin, cvRuns,
+                        100.0 * regressBar(cv));
+        }
+        metrics[it.key()] = byScale;
+    }
+
+    QJsonObject root;
+    root["schema"] = 1;
+    root["what"] = "the scene-graph benchmark's recorded baseline (tests/benchmarks/bench_scenegraph.cpp, "
+                   "\"THE RECORDED BASELINE\"); written by --baseline-from, never by a run";
+    root["rule"] = "regressed (a red) iff median > median_ms x (1 + max(0.10, 3 x cv)); improved (printed) iff "
+                   "median < median_ms x (1 - max(0.10, 3 x cv)); cv = max(cv_within, cv_runs)";
+    root["commit"] = first["commit"];
+    root["note"] = QString::fromStdString(note);
+    QJsonArray from;
+    for (size_t i = 0; i < runs.size(); ++i) {
+        QJsonObject r;
+        r["recorded_utc"] = runs[i].value("recorded_utc");
+        r["note"] = runs[i].value("note");
+        from.append(r);
+    }
+    root["runs"] = from;
+    root["host"] = first["host"];
+    root["config"] = first["config"];
+    root["metrics"] = metrics;
+
+    QFile f(QString::fromStdString(outPath));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        std::printf("FAIL: cannot write %s\n", outPath.c_str());
+        return 1;
+    }
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    std::printf("baseline written: %s (%zu runs)\n", outPath.c_str(), runs.size());
+    return 0;
+}
+
+/// A full --assert run's medians against the recorded baseline: "THE RECORDED BASELINE" above.
+static void compareWithBaseline(const std::string &path, bool quick)
+{
+    std::printf("\n== the baseline (%s) ==\n", path.c_str());
+    if (quick) { std::printf("NOT COMPARED: --quick budgets are not the baseline's\n"); return; }
+    QJsonObject base;
+    CHECK(readJsonObject(path, base), "the recorded baseline file reads");
+    if (base.isEmpty()) return;
+    const QJsonObject cfg = base.value("config").toObject();
+    std::string why;
+    if (cfg["build_type"].toString() != QStringLiteral(BENCH_BUILD_TYPE))
+        why = std::string("build type ") + BENCH_BUILD_TYPE + ", the file's " + cfg["build_type"].toString().toStdString();
+    else if (cfg["asan"].toBool() != kAsanBuild)
+        why = kAsanBuild ? "an ASan build, the file's is not" : "not an ASan build, the file's is";
+    else if (cfg["scene_worker_threads"].toInt() != int(gWorkerThreads))
+        why = "--threads " + std::to_string(gWorkerThreads) + ", the file's "
+            + std::to_string(cfg["scene_worker_threads"].toInt());
+    else if (base.value("host").toObject().value("cpu").toString().toStdString() != readCpuModel())
+        why = "CPU " + readCpuModel() + ", the file's " + base.value("host").toObject().value("cpu").toString().toStdString();
+    if (!why.empty()) { std::printf("NOT COMPARED: %s\n", why.c_str()); return; }
+
+    const QJsonObject bm = base.value("metrics").toObject();
+    std::set<std::pair<std::string, int>> produced;
+    std::set<int> scalesRun;
+    char buf[320];
+    for (const Metric &m : gMetrics) {
+        produced.insert({m.id, m.scale});
+        scalesRun.insert(m.scale);
+        const QJsonObject e = bm[QString::fromStdString(m.id)].toObject()[QString::number(m.scale)].toObject();
+        if (e.isEmpty()) {
+            std::snprintf(buf, sizeof buf, "%s@%d has a baseline entry (a new metric: the spec that added it "
+                          "re-records the file)", m.id.c_str(), m.scale);
+            CHECK(false, buf);
+            continue;
+        }
+        const double now = m.single >= 0.0 ? m.single : m.stats.median;
+        const double was = e["median_ms"].toDouble();
+        const double bar = regressBar(e["cv"].toDouble());
+        const double ratio = was > 0.0 ? now / was : 0.0;
+        std::snprintf(buf, sizeof buf, "%s@%d median %.3f ms vs the baseline's %.3f: x%.3f <= x%.3f (bar %.1f%%, cv %.3f)",
+                      m.id.c_str(), m.scale, now, was, ratio, 1.0 + bar, 100.0 * bar, e["cv"].toDouble());
+        CHECK(was > 0.0 && ratio <= 1.0 + bar, buf);
+        if (was > 0.0 && ratio < 1.0 - bar)
+            std::printf("IMPROVED: %s@%d x%.3f, below the bar's x%.3f — the spec that earned it re-records "
+                        "baseline-linux.json (--baseline-from); this run does not\n",
+                        m.id.c_str(), m.scale, ratio, 1.0 - bar);
+    }
+    for (auto it = bm.begin(); it != bm.end(); ++it)
+        for (const QString &sc : it.value().toObject().keys()) {
+            const int scale = sc.toInt();
+            if (!scalesRun.count(scale) || produced.count({it.key().toStdString(), scale})) continue;
+            std::snprintf(buf, sizeof buf, "%s@%d (in the baseline) was measured by this run",
+                          qPrintable(it.key()), scale);
+            CHECK(false, buf);
+        }
+}
 
 // ---------------------------------------------------------------------------
 
@@ -653,18 +854,24 @@ int main(int argc, char **argv)
     bool quick = false;
     // --smoke: the STRUCTURAL half of this benchmark, at the smallest scale,
     // with no timing verdict of any kind (TEST_GATE_AUDIT.md §3). The full
-    // `--assert` run is five minutes and RUN_SERIAL, so a merge gate paid its
+    // `--assert` run is a wall-clock measure and RUN_SERIAL, so a merge gate paid its
     // whole wall time for it; what a merge gate actually needs from this binary
     // is the answer to "did every document node reach the engine, did the
     // static tags land, did a frame render" — which is three CHECKs that cost
     // fifteen seconds and do not care how loaded the box is. The dispersion
     // bounds stay where they belong: on a quiet box, at the close, under --assert.
     bool smoke = false;
+    std::string baselineOut;               // --baseline-from <out> <result>...: no run, write the baseline
+    std::vector<std::string> baselineFrom;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--assert") {}   // the default: run, print, assert the physics bars
         else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
+        else if (a == "--baseline-from" && i + 1 < argc) {
+            baselineOut = argv[++i];
+            while (i + 1 < argc && std::strncmp(argv[i + 1], "--", 2) != 0) baselineFrom.push_back(argv[++i]);
+        }
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
         else if (a == "--smoke") { smoke = true; quick = true; scales = {1000}; }
@@ -675,10 +882,12 @@ int main(int argc, char **argv)
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
             std::printf("bench_scenegraph [--assert] [--smoke] [--record <file>] "
-                        "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
+                        "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n"
+                        "bench_scenegraph --baseline-from <out> <result> <result> <result> [...] [--note <text>]\n");
             return 0;
         }
     }
+    if (!baselineOut.empty()) return writeBaseline(baselineOut, baselineFrom, note);
 
 
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1293,6 +1502,8 @@ int main(int argc, char **argv)
         std::snprintf(buf, sizeof buf, "%s@%d rcv %.3f <= %.2f", m.id.c_str(), m.scale, m.stats.rcv, rcvMax);
         CHECK(m.stats.rcv <= rcvMax, buf);
     }
+
+    if (!smoke) compareWithBaseline(BENCH_BASELINE_FILE, quick);
 
     if (!recordPath.empty()) {
         std::string gpu = "unknown";
