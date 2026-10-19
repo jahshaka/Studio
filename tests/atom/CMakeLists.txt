@@ -334,8 +334,9 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.caster_receivers CLASS engine COMMAND test_shadow_atom_cut --receivers
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_receivers PROPERTIES TIMEOUT 120 LABELS "engine")
-    # shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stages 2-3): two lockstep
-    # worlds (the split on / shut) with a blended and a cutout plane over a floor; the sun maps texel by texel
+    # shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2): two lockstep
+    # worlds (the split on / shut) with a blended plane (through the cut when the split is on) and a cutout plane
+    # (stock in both: an alpha-tested caster stays stock) over a floor; the sun maps texel by texel
     # (shadow.atom_parity's law over each plane's footprint: p99 <= 1 texel, flips <= 0.5 %), the blended plane's
     # caster filed under atomCaster and drawn by no stock shadow pass (test_shadow_atom_cut.cpp --caster-route).
     jah_gpu_row(shadow.caster_route CLASS engine COMMAND test_shadow_atom_cut --caster-route

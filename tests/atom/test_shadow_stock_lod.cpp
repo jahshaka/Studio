@@ -319,8 +319,9 @@ int main()
         const MeshId sphere = s->createMesh(lodSphere());
         CHECK_MSG(sphere != 0, "the eight-level sphere builds (%s)", e->lastError().c_str());
         // THE STOCK CASTER: a SCROLLING cutout (no texture: every pixel passes) - a live material is CustomPiece, a
-        // route whose caster stays on the stock pass whatever the cut learns (ENGINE-POLISH-ATOM-1: blended and
-        // alpha-tested casters go through the cut), as shadow.cutout_caster's scrolling cutout does.
+        // route whose caster stays on the stock pass whatever the cut learns (ENGINE-POLISH-ATOM-1 stage 2 moved a
+        // blended caster without an alpha test into the cut; a static alpha-tested one may follow - stage 3, held as a
+        // patch - but a live one never does), as shadow.cutout_caster's scrolling cutout does.
         PbrParams cutout;
         cutout.albedo = Colour(0.7f, 0.35f, 0.25f);
         cutout.roughness = 0.5f;

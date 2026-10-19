@@ -570,7 +570,7 @@ int main()
             const unsigned long long sphereTris = sphereGeom.idx.size() / 3u, sheetTris = sheetGeom.idx.size() / 3u;
             const unsigned kAtom = 0u, kNotWorld = 1u, kBlended = 4u, kCullFront = 5u, kAlpha = 8u, kNoRow = 10u;
             std::printf("  view routes: valid %d", int(st.viewRoutesValid));
-            for (unsigned r = 0; r < ShadowRouteShare::kRoutes; ++r)
+            for (unsigned r = 0; r < ShadowRouteShare::kAtomCaster; ++r)   // the view arrays hold the stock routes only
                 std::printf(" [%u] %u/%llu", r, st.viewRouteItems[r], st.viewRouteTriangles[r]);
             std::printf("\n");
             CHECK(st.viewRoutesValid, "(c) the camera view's routes are read (the view has a camera)");

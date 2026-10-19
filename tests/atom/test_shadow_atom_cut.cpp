@@ -1340,10 +1340,11 @@ static int lightCullMain()
 }
 
 // ---------------------------------------------------------------------------
-// shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stages 2-3). Two lockstep
+// shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2). Two lockstep
 // worlds, the same camera every frame, a lit floor under a BLENDED plane and a CUTOUT plane (an 8-texel checker of
 // holes): one world with the split on - the blended plane's caster through the caster cut (its colour stays on PBS),
-// the cutout's through the cut's MASKED ranges once stage 3 lands - the other with the split shut (every caster the
+// the cutout's on the stock PBS caster (an alpha-tested caster stays stock: stage 3's masked ranges are not
+// shipped), so the cutout compares stock against stock - the other with the split shut (every caster the
 // stock PBS caster, dense). The sun maps compared texel by texel in light space (shadow.atom_parity's metric) over
 // the whole map and over each plane's own footprint: p99 <= 1 texel, flips <= 0.5 %. And the route itself: the
 // verb files the blended plane's caster under `atomCaster` (0 blended on the PBS side), and the stock shadow scene
@@ -1623,7 +1624,7 @@ static int casterRouteMain()
             for (int q = 0; q < 4; ++q) {
                 const float dx = (q & 1) ? 1.0f : -1.0f, dz = (q & 2) ? 1.0f : -1.0f;
                 // the tilt about x: (0, -sin, cos) * dz in y/z
-                const Vec3 p(c.x + dx, c.y + std::sin(0.349f) * dz, c.z + std::cos(0.349f) * dz);
+                const Vec3 p(c.x + dx, c.y - std::sin(0.349f) * dz, c.z + std::cos(0.349f) * dz);
                 const float t = p.y / -sun.y;   // the floor point under it along the sun
                 const Vec3 g(p.x + sun.x * t, 0.0f, p.z + sun.z * t);
                 for (const Vec3 &w3 : { p, g }) {
