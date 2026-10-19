@@ -1933,6 +1933,7 @@ class Selection:
         done = self.__dict__.setdefault("_targets_done", {})
         if t in done:
             notes.append(done[t]); return
+        done[t] = f"target {t}: (above)"          # in progress: a referrer's walk naming it again adds nothing
         art = self.graph.targets[t]
         if self.graph.kind.get(art) == "static":
             # an archive's objects, through the link graph: where they are referenced
@@ -2288,18 +2289,20 @@ class Selection:
             # list operation, foreach IN LISTS) — never a command that only WRITES it (execute_process OUTPUT_VARIABLE:
             # the applier of a patch stack is not reached by the message that prints its output)
             got_memo = self.__dict__.setdefault("_var_got", {})
-            if var in self._var_seen:
+            seen = var in self._var_seen
+            if seen:
                 users = []
-                got = got or got_memo.get(var, True)      # followed already (or in progress): its reach is in
+                got = got or got_memo.get(var, True)      # followed already (or in progress: a cycle): its reach is in
             else:
                 users = [c for c in gate_graph.cmake_commands(whole) if _reads_var(c[0], c[3], var)
                          and not (c[0] == name and c[3].split()[:1] == a_[:1])]
-            self._var_seen.add(var)
-            got_memo.setdefault(var, True)
+                self._var_seen.add(var)
+                got_memo[var] = True                      # in progress
             for (un, uf, ul, ua, ufn) in users:
                 if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
-            if users:
+            if not seen:
                 got_memo[var] = got
+            if users:
                 notes.append(f"variable {var}: {len(users)} user command(s)")
             # ...and the configured scripts that substitute it (@VAR@ in a .in beside this file)
             if var and not got:

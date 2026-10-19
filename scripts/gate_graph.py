@@ -426,7 +426,13 @@ class NinjaGraph:
         says the executable reaches the object: an archive member must be extracted (closure_
         static), a shared library's object must be referenced from the executable or from the
         library's static initialisers (closure) — an archive linked INTO a shared library is
-        judged by that library's closure."""
+        judged by that library's closure. Memoised per object set (a loaded graph does not move)."""
+        key = ("reach_objects", frozenset(objs))
+        if key not in self._memo:
+            self._memo[key] = frozenset(self._reach_objects(objs))
+        return set(self._memo[key])
+
+    def _reach_objects(self, objs):
         exes = set()
         for o in objs:
             seen, stack = {o}, [o]
