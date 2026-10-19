@@ -109,6 +109,11 @@ bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
 /// group, in the 10k world), and the arm writes that group alone — a group move over a landed, standing world: the
 /// white neighbours' cards and the wide plate's stay landed, so the still casters' search is a real one.
 constexpr int kSubgroup = -4;
+/// THE ROTATING ARM (ENGINE-POLISH-PHOTON-2 fix round, engine.gpuscene_compose): every cube written each frame with
+/// its yaw alternating (0 / 0.35 rad), at its place - a transform-only move whose world columns move by an ulp, on
+/// the compose row's CHAINED cubes (a level chain: the ray feed's hand-over width is the coarsest bound times the
+/// largest axis scale, so a rotation reaches it). The Bullet bodies' case: many rotating movers a frame.
+constexpr int kRotate = -5;
 
 FrameInput stepRecord(World &w)
 {
@@ -123,7 +128,7 @@ FrameInput stepRecord(World &w)
 /// floor and the sun, GI with the card row; then frames until the GI is at rest and — where the world reaches the
 /// viewer's residency (`cards`: the 10k grid's near rows do, a 2,000-node grid's far corner does not) — the cards are
 /// resident and the capture queue is empty.
-bool build(World &w, int n, bool cards)
+bool build(World &w, int n, bool cards, bool chained = false)
 {
     Engine *e = w.e;
     w.view = e->createOffscreenView("cpumap", 256u, 256u, Colour(0, 0, 0));
@@ -148,6 +153,13 @@ bool build(World &w, int n, bool cards)
     const MaterialId mat = s->createPbrMaterial(p);
     MeshData md = enginetest::unitCubeMesh();
     md.cards = enginetest::boxCards(0.5f);
+    if (chained) {
+        // A LEVEL CHAIN (the compose row: the ray feed reads its coarsest bound): level 1 the cube's own list at a
+        // 5 cm bound - the subject is the chain's existence, not the simplification.
+        md.lodIndices.push_back(md.indices);
+        md.lodErrors.push_back(0.05f);
+        md.lodBounds.push_back(0.05f);
+    }
     const MeshId mesh = s->createMesh(md);
     {
         const NodeId floor = s->createNode();
@@ -260,12 +272,14 @@ void writeFrame(World &w, int k)
     } else {
         for (int i = 0; i < int(w.cubes.size()); ++i) {
             // (the grid's last rows face the viewer)
-            if (k == kChecker ? !black(i) : k == kMovers ? !moverCube(i, int(w.cubes.size())) : i >= k) continue;
+            if (k == kChecker ? !black(i) : k == kMovers ? !moverCube(i, int(w.cubes.size())) : k == kRotate ? false : i >= k)
+                continue;
             NodeRecord r;
             r.id = w.cubes[size_t(i)];
             r.fields = NodeRecord::Trs;
-            r.position = cubeAt(i, lift);
-            r.rotation = Quat(0, 0, 0, 1);
+            r.position = cubeAt(i, k == kRotate ? 0.0f : lift);
+            // yaw 0 / 0.35 rad: (0, sin(0.175), 0, cos(0.175))
+            r.rotation = k == kRotate && lift > 0.0f ? Quat(0.0f, 0.17410813f, 0.0f, 0.98472658f) : Quat(0, 0, 0, 1);
             r.scale = Vec3(kCube, kCube, kCube);
             part.nodes.push_back(r);
             part.changes.moved.push_back(r.id);
@@ -280,6 +294,7 @@ const char *armName(int k, char *buf, size_t n)
     if (k == kChecker) std::snprintf(buf, n, "checker");
     else if (k == kMovers) std::snprintf(buf, n, "movers%d", kMoverCount);
     else if (k == kSubgroup) std::snprintf(buf, n, "subgroup%d", kMoverCount);
+    else if (k == kRotate) std::snprintf(buf, n, "rotate");
     else if (k < 0) std::snprintf(buf, n, "group");
     else std::snprintf(buf, n, "k%d", k);
     return buf;
@@ -563,7 +578,7 @@ int composeRow(World &w, int n)
     const inspect::SceneEcho *echo = inspect::scene(w.scene);
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     const int warm = 3, measured = 15;
-    for (int k : { -1, n }) {
+    for (int k : { -1, n, kRotate }) {
         // THE NOTIFY SHARE AS A PAIRED ARM (decision 11 d): blocks of frames with the change feed's observers told and
         // muted (gpuscene.observersOff), paired A B B A in one process (the measuring rule); the observers' cost = the medians'
         // difference. The notify timer (gpuscene.walkTiming) runs in its own block only: never a clock read per
@@ -737,7 +752,7 @@ int main(int argc, char **argv)
     World w;
     w.e = engine.get();
     w.e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    if (!build(w, n, n >= 10000)) return 1;
+    if (!build(w, n, n >= 10000, mode == "--compose")) return 1;
     if (!w.e->rayQueryAvailable() || !w.e->rayTracing()) {
         std::printf("ok: no ray-query device here — the cards need the ray tier; the row skips cleanly\n");
         return 0;
