@@ -1577,6 +1577,10 @@ public:
     /// materials by a process-unique datablock name and warmed nothing in the
     /// next process, so it went — the pass shape is a different fact and feeds
     /// a warm-up that does work. No-op with no engine or no world.
+    /// THE PASS'S FLOOR BEFORE THE REVEAL (BISTRO-STREAM-IN-1 stage 4): the placeholders and the draws that can have
+    /// none (the Atom classifier, the unlit furniture) for the world's pass shape, built and waited for behind the
+    /// open — through the editor's View, or an offscreen view of its shape on a first open. Returns the shaders built.
+    virtual unsigned warmUpFloor(const std::function<void(unsigned)> & = {}) { return 0; }
     virtual void rememberPassShape() {}
 
     // ---- lifecycle ----

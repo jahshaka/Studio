@@ -327,6 +327,9 @@ public:
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
     unsigned warmUpShaders(const std::function<void(unsigned)> &onCompile = {}) override;
+    /// THE FIRST OPEN'S WARM-UP (BISTRO-STREAM-IN-1 stage 4): warmUpShaders' answer when no View exists yet.
+    unsigned warmUpFirstOpen(const std::function<void(unsigned)> &onCompile);
+    unsigned warmUpFloor(const std::function<void(unsigned)> &onCompile = {}) override;
     void rememberPassShape() override;
     /// Sentinel for mWarmUpIdleAt meaning "always run the warm-up": no real
     /// compile count can equal it.

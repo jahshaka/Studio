@@ -266,6 +266,15 @@ void ProjectRunner::open(bool playMode)
 	// silently on the very first open, when no render view exists yet.
 	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	mViewport->primeSceneSync();
+	// THE PASS'S FLOOR BEFORE THE REVEAL ON THIS ROUTE TOO (BISTRO-STREAM-IN-1 stage 4): the blocking open had no
+	// warm-up slice at all, so its first frames met a pass with nothing to draw a waiting object with (a cold
+	// Showroom 2: its sky alone for 3 s). The floor — the placeholders, the Atom classifier — is built here, through
+	// the editor's View or, on a first open, an offscreen view of its shape (IEditorViewport::warmUpFloor).
+	if (mSettings->get(settingkeys::shaderWarmupOnOpen)) {
+		LoadTimeline::mark(QStringLiteral("warmUpFloor"));
+		const unsigned built = mViewport->warmUpFloor();
+		if (built) qInfo("scene open: built %u shader(s) of the pass's floor before the reveal", built);
+	}
 	// The pass shape this machine's editor draws with, for the NEXT launch's
 	// startup gate (F1b): two settings values, written only on change.
 	mViewport->rememberPassShape();

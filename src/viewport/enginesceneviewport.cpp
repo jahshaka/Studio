@@ -4577,7 +4577,10 @@ void EngineSceneViewport::primeSceneGeometry()
     // It is also entirely optional: on the very first open no View exists yet
     // (it is created when the page is first shown), so this returns and the
     // loading cover carries the wait instead.
-    if (!mScene || !view() || !ensureEngineScene()) return;
+    // ...AND ON A FIRST OPEN TOO (BISTRO-STREAM-IN-1 stage 4): no View exists yet (it is born at the reveal), but the
+    // scene and its share of the geometry need none — the first open's warm-up (warmUpFirstOpen) draws this share
+    // through an offscreen view of the editor's shape before the reveal.
+    if (!mScene || !ensureEngineScene()) return;
     if (!mMirror) return;
     const bool helpers = !mGameView;
     // ...and this second, smaller push states it too (PLAYER-FLOOR-1): it is a
@@ -4627,7 +4630,8 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
     // geometry and environment pushes and BEFORE the page is revealed — the
     // loading cover is up, so the frame the engine renders to build its shaders
     // is invisible.
-    if (!mEngine || !view() || !mEngineScene) return 0;
+    if (!mEngine || !mEngineScene) return 0;
+    if (!view()) return warmUpFirstOpen(onCompile);
 
     unsigned before = 0, cached = 0, expected = 0;
     mEngine->shaderBuildProgress(before, cached, expected);
@@ -4672,6 +4676,94 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
     unsigned after = 0;
     mEngine->shaderBuildProgress(after, cached, expected);
     mWarmUpIdleAt = (after == before) ? before : kWarmUpAlwaysRun;
+    return after - before;
+}
+
+// THE FIRST OPEN'S WARM-UP (BISTRO-STREAM-IN-1 stage 4). An open in place warms the world's shaders behind the cover
+// through the editor's own View; on the session's FIRST open that View does not exist (it is born at the reveal, in
+// showEvent), so the warm-up never ran and the first frames met a pass whose placeholders — and the Atom classifier,
+// which can have none — were all in the background compiler's queue: a cold Showroom 2 drew its sky alone for 200+
+// frames. So the FLOOR is warmed here, before the reveal: an offscreen view of the editor's pass shape (the shadows and
+// samples the editor last drew with, EngineHost::warmUpShape — the startup gate's own shape; the world's chain and GI
+// configuration from the mirror's environment push, the pass shape fixed from the first frame since stage 3) is bound
+// to the scene with the geometry slice's share attached, and drawn asynchronously with the compiler in its
+// placeholders-only mode until nothing more is asked for: every pass's placeholders and every draw that can have none
+// (the classifier, the unlit furniture). The objects' own permutations stay the background compiler's — the stream.
+unsigned EngineSceneViewport::warmUpFirstOpen(const std::function<void(unsigned)> &onCompile)
+{
+    if (!mEngine || !mEngineScene || !mMirror) return 0;
+    using jahshaka::engine::Engine;
+    unsigned before = 0, cached = 0, expected = 0;
+    mEngine->shaderBuildProgress(before, cached, expected);
+    const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
+    const unsigned w = width() > 64 ? unsigned(width()) : 1280u, h = height() > 64 ? unsigned(height()) : 720u;
+    View *wv = mEngine->createOffscreenView("first-open-warmup-" + std::to_string(reinterpret_cast<uintptr_t>(this)), w,
+                                            h, Colour(0.10f, 0.11f, 0.14f));
+    if (!wv) return 0;
+    LoadTimeline::Accumulate warm(QStringLiteral("engine:warmUpFloor"));
+    unsigned seen = 0;
+    struct ClearObserver {
+        jahshaka::engine::Engine *engine = nullptr;
+        ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
+    } clear;
+    if (onCompile) {
+        mEngine->setCompileObserver([&]() { onCompile(++seen); });
+        clear.engine = mEngine.get();
+    }
+    wv->setScene(mEngineScene);
+    wv->setShadows(shape.shadows);
+    if (shape.samples > 1) wv->setSampleCount(shape.samples);
+    wv->setVrHelpersVisible(true);
+    {
+        // THE WORLD'S ENVIRONMENT AND ITS WHOLE CHAIN on this offscreen view (the gate's opt-in: an offscreen view
+        // ignores the post chain unless the description says so), the editor's camera.
+        SceneMirror::FrameView ev;
+        ev.view = wv;
+        ev.environment = true;
+        ev.sky = true;
+        ev.camera = viewCamera();
+        ev.framingAspect = freeCameraFramingAspect();
+        ev.finish = [](jahshaka::engine::FrameInputView &part, View *v) {
+            jahshaka::engine::PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
+            secondaryfx::applyScene(fx, 0.0f);
+            part.postFx = fx;
+        };
+        mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);   // no more than one share
+        mMirror->sync(SceneMirror::FrameViews{ { ev } });
+    }
+    wv->warmUpFloor();   // a REQUEST: the floor of this pass shape, built and waited for (View::warmUpFloor)
+    wv->setScene(nullptr);
+    mEngine->destroyView(wv);
+    // The mirror's latches for that view go with it; the editor's View re-asserts its own at its bind.
+    mMirror->invalidateEnvironment();
+    unsigned after = 0;
+    mEngine->shaderBuildProgress(after, cached, expected);
+    qInfo("scene open: the first open's warm-up built %u shader(s) for the pass's floor (placeholders, the classifier)",
+          after - before);
+    return after - before;
+}
+
+unsigned EngineSceneViewport::warmUpFloor(const std::function<void(unsigned)> &onCompile)
+{
+    if (!mEngine || !mEngineScene) return 0;
+    if (!view()) return warmUpFirstOpen(onCompile);
+    // THE EDITOR'S OWN VIEW (a blocking open with the View alive, BISTRO-STREAM-IN-1 stage 4): the same floor, through
+    // the view the world's first frames will be drawn by, its environment already pushed by primeSceneEnvironment.
+    unsigned before = 0, cached = 0, expected = 0;
+    mEngine->shaderBuildProgress(before, cached, expected);
+    LoadTimeline::Accumulate warm(QStringLiteral("engine:warmUpFloor"));
+    unsigned seen = 0;
+    struct ClearObserver {
+        jahshaka::engine::Engine *engine = nullptr;
+        ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
+    } clear;
+    if (onCompile) {
+        mEngine->setCompileObserver([&]() { onCompile(++seen); });
+        clear.engine = mEngine.get();
+    }
+    view()->warmUpFloor();
+    unsigned after = 0;
+    mEngine->shaderBuildProgress(after, cached, expected);
     return after - before;
 }
 
