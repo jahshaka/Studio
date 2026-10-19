@@ -107,6 +107,33 @@ public:
     // them reachable despite the QWidget override above.
     using oclero::qlementine::QlementineStyle::polish;
 
+    // NO FAKED VISIBILITY ANYWHERE IN THE APP (ATOM-MENU-POPUP-1, gdb trace 2026-10-19).
+    // Qlementine's polish(QApplication*) switches UI_AnimateMenu + UI_FadeMenu +
+    // UI_AnimateCombo on app-wide. Qt's fade (off Windows) and its roll effect (every
+    // platform) do not show the popup: they FAKE it shown (WA_WState_ExplicitShowHide
+    // set, WA_WState_Hidden cleared) and call show() only when the animation ends. A
+    // second popup of the same submenu while it fades — a click on a submenu row before
+    // it opened pops it from the press, then again from the 20 ms timer the press
+    // starts — takes QMenu::popup's "kill any running effect" branch: the effect dies
+    // before its show(), and the menu's own show() is a no-op because the menu already
+    // reads "not hidden". The submenu is left stranded — never on screen, never hidden —
+    // and every later hover of its row asks show() again for nothing, until hovering
+    // another submenu row hides it (View Options > Atom View, the owner's smoke
+    // 2026-10-19). QMenu's keyboard path kills any running effect app-wide too, so a
+    // combo popup rolling open (the same faked roll) can strand the same way. The rule:
+    // none of these effects is on, so a popup is shown at once and the strand cannot
+    // exist. ONE look on every platform (the lead, 2026-10-19): the cost is the 150 ms
+    // fade-in / roll of menus and combo popups, gone on Windows too, where the fade had
+    // no bug. (The tooltip fade, also Qlementine's, stays on: it fakes visibility the
+    // same way, but no strand of a tooltip is seen or measured — a finding, not a fix.)
+    void polish(QApplication *app) override
+    {
+        oclero::qlementine::QlementineStyle::polish(app);
+        QApplication::setEffectEnabled(Qt::UI_AnimateMenu, false);
+        QApplication::setEffectEnabled(Qt::UI_FadeMenu, false);
+        QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
+    }
+
     // Focus-visible semantics, app-wide: Qlementine rings every focused
     // control (buttons included), so plain window activation showed a blue
     // ring on whichever chrome button happened to hold initial focus (top

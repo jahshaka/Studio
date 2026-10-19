@@ -88,6 +88,8 @@ public:
     Q_INVOKABLE QVariantList dialogs();
     Q_INVOKABLE QVariantMap dialog(const QString &name,
                                    const QVariant &openOrOptions = QVariant(true));
+    Q_INVOKABLE QVariantList menus();
+    Q_INVOKABLE QVariantMap widget(const QString &name);
 };
 
 #endif // SCRIPTING_APPAPI_H
