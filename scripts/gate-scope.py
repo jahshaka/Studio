@@ -387,6 +387,9 @@ AREA_RULES = [
     # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what every engine shader
     # SEES: every engine fixture and the picture set (never the whole tier).
     (r"^irisgl/cmake/WrapHlmsPiece", ["*engine-fixtures", "*picture"], []),
+    # THE BUILD'S STAMP (cmake/BuiltFrom.cmake: <build>/BUILT_FROM, what the records' `tip.built` reads): the tools that
+    # read it — the serving, the records, the fork-stamp lint — never a product row (TOOLING-2)
+    (r"^cmake/BuiltFrom\.cmake$", ["hygiene", "tooling"], []),
     # THE PRESENT PATH ON THE STUDIO SIDE (TESTING-SPEED-A): the engine host creates the window and drives the frame —
     # with OgreEngine.cpp's frame loop, src/viewport/** and src/app/** the only paths that reach every app row
     (r"^src/bridge/enginehost\.", ["*vulkan-scripts", "player", "thumbnails", "materialpreview"], ["player"]),
@@ -1768,7 +1771,7 @@ class Selection:
         invokers = self.p_script_invokers(p)
         if invokers:
             hit = 0
-            self._var_seen = set()
+            self._var_seen, self._var_got = set(), {}
             for f, text, c in invokers:
                 if self.cmake_command(f, os.path.dirname(f), c[0], c[3], c[4], c[3], text, tag, notes, depth=1):
                     hit += 1
@@ -1863,7 +1866,7 @@ class Selection:
             if blk is not None and name in _BLOCK_LINES:
                 # THE BLOCK'S BODY (T3): an if() whose condition changed, or an endif() a deletion
                 # took with it, reaches what the commands inside it reach — resolved one by one
-                self._var_seen = set()
+                self._var_seen, self._var_got = set(), {}
                 inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
                 hit = [c[0] for c in inner
                        if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1)]
@@ -2113,6 +2116,14 @@ class Selection:
         if name == "set_property":
             r = self.set_property_reach(p, d, args, whole, tag, notes)
             if r is not None: return r
+        # A HELPER THAT CHANGES NO BYTE (its body is inert — jahshaka_engine_generated_deps: OBJECT_DEPENDS only): an
+        # inert line of its body, or a call of it, reaches nothing compiled
+        if fn and self.inert_command(name, args) and self.inert_helper(fn.lower()):
+            notes.append(f"{fn}(): an inert helper (its body changes no byte of a build)"); return True
+        if not fn and name not in self._INERT and self.graph is not None and self.inert_helper(name.lower()):
+            notes.append(f"{name}(): a call of an inert helper — reaches nothing compiled"); return True
+        if name in ("function", "macro") and args.split() and self.inert_helper(args.split()[0].lower()):
+            notes.append(f"{args.split()[0]}(): an inert helper's header"); return True
         if name == "execute_process" and "-DPATCHES=" in args and re.search(r"-P\s", args):
             pd = self.cmake_path(p, whole, re.search(r"-DPATCHES=(\S+)", args).group(1))
             if pd and os.path.isdir(pd):
@@ -2238,16 +2249,17 @@ class Selection:
             n_exe = self.exes_under(sub, f"{tag}: add_subdirectory({sd})")
             notes.append(f"add_subdirectory({sd}): {len(reg)} row(s), {n_exe} executable(s)"); got = True
         # 6. a variable: follow its users in the same file (not when the change only listed rows: a
-        # suite list's change is the rows it adds or drops) — THROUGH CHAINS, three hops deep
+        # suite list's change is the rows it adds or drops) — THROUGH CHAINS, _CHAIN_HOPS deep
         # (TEST-SELECTOR-1: a staged header's path set -> file(COPY_FILE) -> the include directory
         # of the target that compiles it), each variable once. file(GLOB|READ|STRINGS <var>) sets
         # one too.
         if depth == 0:
             self._var_seen = set()
+            self._var_got = {}
         a_ = args.split()
         setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
-            name == "file" and a_[:1] and a_[0] in ("GLOB", "GLOB_RECURSE", "READ", "STRINGS"))
-        if setter and depth < 3 and not rows and name == "set" and "PARENT_SCOPE" in a_[1:]:
+            name == "file" and a_[:1] and a_[0] in _FILE_OUT)
+        if setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:]:
             # set(<var> … PARENT_SCOPE) changes the variable of the PARENT directory's scope, not this file's: its
             # readers are in the other build files (a parent and the directories it adds after); this file's own
             # readers keep their value
@@ -2264,21 +2276,31 @@ class Selection:
                             got = True
                 notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
                 if got or not n_: return True
-        if setter and depth < 3 and not rows:
-            var = _set_var(name, a_)
+        if setter and depth < _CHAIN_HOPS and not rows:
+            var = _set_var(name, _cmake_split(args))       # a quoted argument is one argument ("vendor patch applied:")
             tip_text = getattr(self, "_cmake_tip_text", None)
             if (var and tip_text is not None and whole is not tip_text
                     and not re.search(r"\b" + re.escape(var) + r"\b", tip_text) and not self.names_anywhere(var)):
                 # A VARIABLE DELETED WITH ITS USERS (an option() and the if() that read it): whatever
                 # it reached is in this diff as its users' own deleted lines
                 notes.append(f"variable {var} deleted with its users"); return True
-            users = [c for c in gate_graph.cmake_commands(whole)
-                     if re.search(r"\$\{" + re.escape(var) + r"\}|\b" + re.escape(var) + r"\b", c[3])
-                     and not (c[0] == name and c[3].split()[:1] == a_[:1])] if var not in self._var_seen else []
+            # its READERS (TOOLING-2): a ${var} anywhere, or the bare name where a command reads one (a condition, a
+            # list operation, foreach IN LISTS) — never a command that only WRITES it (execute_process OUTPUT_VARIABLE:
+            # the applier of a patch stack is not reached by the message that prints its output)
+            got_memo = self.__dict__.setdefault("_var_got", {})
+            if var in self._var_seen:
+                users = []
+                got = got or got_memo.get(var, True)      # followed already (or in progress): its reach is in
+            else:
+                users = [c for c in gate_graph.cmake_commands(whole) if _reads_var(c[0], c[3], var)
+                         and not (c[0] == name and c[3].split()[:1] == a_[:1])]
             self._var_seen.add(var)
+            got_memo.setdefault(var, True)
             for (un, uf, ul, ua, ufn) in users:
                 if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
-            if users: notes.append(f"variable {var}: {len(users)} user command(s)")
+            if users:
+                got_memo[var] = got
+                notes.append(f"variable {var}: {len(users)} user command(s)")
             # ...and the configured scripts that substitute it (@VAR@ in a .in beside this file)
             if var and not got:
                 for dp, _, fs in os.walk(os.path.join(ROOT, d or ".")):
@@ -2295,7 +2317,7 @@ class Selection:
                     if d in ("", "."): break
         # 6b. a local variable the command reads (${_home} in a file(MAKE_DIRECTORY)): the
         # commands that read it too — the row whose ENVIRONMENT names that home
-        if not got and depth < 3:
+        if not got and depth < _CHAIN_HOPS:
             for var in sorted(set(re.findall(r"\$\{(_\w+)\}", args)) - self._var_seen):
                 self._var_seen.add(var)
                 users = [c for c in gate_graph.cmake_commands(whole)
@@ -2318,10 +2340,43 @@ class Selection:
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
 
-    # set_property(<scope> … PROPERTY <name> …) by its NAME: a property that only says when CMake re-runs, or how an IDE
-    # files a target, compiles nothing
-    _CONFIGURE_ONLY_PROPS = {"CMAKE_CONFIGURE_DEPENDS", "ADDITIONAL_CLEAN_FILES", "ADDITIONAL_MAKE_CLEAN_FILES", "FOLDER",
-                             "USE_FOLDERS", "PREDEFINED_TARGETS_FOLDER"}
+    # set_property(<scope> … PROPERTY <name> …) by its NAME: a property that only says WHEN something is rebuilt or CMake
+    # re-runs (CMAKE_CONFIGURE_DEPENDS, OBJECT_DEPENDS), or how an IDE files a target, changes no byte of a build
+    _CONFIGURE_ONLY_PROPS = {"CMAKE_CONFIGURE_DEPENDS", "OBJECT_DEPENDS", "ADDITIONAL_CLEAN_FILES",
+                             "ADDITIONAL_MAKE_CLEAN_FILES", "FOLDER", "USE_FOLDERS", "PREDEFINED_TARGETS_FOLDER"}
+    # THE COMMANDS THAT CHANGE NO BYTE OF A BUILD: control flow, a function-local variable, a read of a file, a message —
+    # a helper whose body is only these (and dependency-only properties) reaches nothing compiled where it is called
+    _INERT = {"function", "endfunction", "foreach", "endforeach", "while", "endwhile", "if", "elseif", "else", "endif",
+              "continue", "break", "return", "list", "string", "math", "message", "unset", "cmake_path",
+              "get_target_property", "get_property", "get_directory_property", "get_filename_component",
+              "get_source_file_property", "get_test_property", "get_cmake_property"}
+
+    def inert_command(self, name, args):
+        """True when a command changes no byte of a build (see _INERT): a file() read, a function-local set(), a
+        dependency-only property."""
+        a_ = args.split()
+        if name in self._INERT:
+            return True
+        if name == "set":
+            return "PARENT_SCOPE" not in a_ and "CACHE" not in a_
+        if name == "file":
+            return bool(a_) and a_[0] in _FILE_OUT
+        if name == "set_property" and "PROPERTY" in a_ and a_.index("PROPERTY") + 1 < len(a_):
+            return a_[a_.index("PROPERTY") + 1] in self._CONFIGURE_ONLY_PROPS
+        return False
+
+    def inert_helper(self, fn):
+        """True when the tree defines function/macro `fn` and every command of its body is inert (inert_command). The
+        tree's helpers are read once per process (one parse of its build files, shared by every selection)."""
+        key = (ROOT, "helpers")
+        if key not in _TREE_MEMO:
+            bodies = collections.defaultdict(list)
+            for _, text in self.tree_cmake_files():
+                if "function" not in text and "macro" not in text: continue
+                for c in gate_graph.cmake_commands(text):
+                    if c[4]: bodies[c[4].lower()].append((c[0], c[3]))
+            _TREE_MEMO[key] = ({f: all(self.inert_command(n_, a_) for n_, a_ in b) for f, b in bodies.items()})
+        return _TREE_MEMO[key].get(fn, False)
 
     def set_property_reach(self, p, d, args, whole, tag, notes):
         """set_property() by its scope and property name: True when resolved, None when the generic readers decide (a
@@ -2333,7 +2388,7 @@ class Selection:
         scope, prop = a_[0], a_[k + 1]
         names = [x for x in a_[1:k] if x not in ("APPEND", "APPEND_STRING")]
         if prop in self._CONFIGURE_ONLY_PROPS:
-            notes.append(f"set_property({scope} … {prop}): a configure input only — reaches nothing compiled")
+            notes.append(f"set_property({scope} … {prop}): a dependency only — reaches nothing compiled")
             return True
         if scope == "TARGET" and self.graph is not None and names:
             tg = []
@@ -2435,9 +2490,43 @@ _STRING_OUT = {"APPEND": 1, "PREPEND": 1, "CONCAT": 1, "JOIN": 2, "SHA256": 1, "
                "LENGTH": 2, "SUBSTRING": 4, "FIND": 3, "TIMESTAMP": 1, "CONFIGURE": 2, "GENEX_STRIP": 2,
                "MAKE_C_IDENTIFIER": 2, "REPEAT": 3, "HEX": 2, "ASCII": -1}
 _STRING_REGEX_OUT = {"REPLACE": 4, "MATCH": 3, "MATCHALL": 3}
+# file(<SUB> …)'s OUTPUT variable, by argument index (the sub-command is index 0): file(GLOB <var> …), file(READ <file>
+# <var>), file(SHA256 <file> <var>), file(RELATIVE_PATH <var> <dir> <file>) — a sub-command not here writes no variable
+_FILE_OUT = {"GLOB": 1, "GLOB_RECURSE": 1, "RELATIVE_PATH": 1, "TO_CMAKE_PATH": 2, "TO_NATIVE_PATH": 2, "READ": 2,
+             "STRINGS": 2, "SIZE": 2, "TIMESTAMP": 2, "REAL_PATH": 2, "READ_SYMLINK": 2, "MD5": 2, "SHA1": 2, "SHA224": 2,
+             "SHA256": 2, "SHA384": 2, "SHA512": 2, "SHA3_224": 2, "SHA3_256": 2, "SHA3_384": 2, "SHA3_512": 2}
+# HOW DEEP A VARIABLE IS FOLLOWED (a setter -> its readers -> theirs): five hops (TOOLING-2; three before) — a hash read
+# into a variable, the if() comparing it, the string() its body rewrites, the message() that prints it is four
+_CHAIN_HOPS = 5
 # the commands that write their FIRST argument as a variable (followed to its readers like a set())
 _GETTERS = {"get_directory_property", "get_property", "get_target_property", "get_filename_component",
             "get_cmake_property", "get_source_file_property", "get_test_property"}
+
+
+_TREE_MEMO = {}     # per process and tree root: what one parse of the tree's build files says (inert_helper)
+
+
+def _reads_var(name, args, var):
+    """Whether a command READS variable `var`: `${var}` in its arguments, or the bare name where CMake reads one — a
+    condition (if/elseif/while), a list operation (list(<op> var …)), foreach(… IN LISTS var), string(APPEND|PREPEND)."""
+    if "${" + var + "}" in args:
+        return True
+    a_ = args.split()
+    if var not in a_:
+        return False
+    if name in ("if", "elseif", "while"):
+        return True
+    if name == "list" and a_[1:2] == [var]:
+        return True
+    if name == "foreach" and "LISTS" in a_ and var in a_[a_.index("LISTS") + 1:]:
+        return True
+    return name == "string" and a_[:1] in (["APPEND"], ["PREPEND"]) and a_[1:2] == [var]
+
+
+def _cmake_split(args):
+    """A command's arguments as CMake reads them: whitespace-separated, a double-quoted run one argument (quotes kept off)."""
+    return [m.group(1) if m.group(1) is not None else m.group(2)
+            for m in re.finditer(r'"((?:\\.|[^"\\])*)"|(\S+)', args)]
 
 
 def _set_var(name, a_):
@@ -2449,7 +2538,10 @@ def _set_var(name, a_):
         else:
             k = _STRING_OUT.get(a_[0], 1)
         return a_[k] if -len(a_) <= k < len(a_) else ""
-    if name in ("list", "file"):
+    if name == "file":
+        k = _FILE_OUT.get(a_[0])
+        return a_[k] if k is not None and k < len(a_) else ""
+    if name == "list":
         return a_[1] if len(a_) > 1 else ""
     return a_[0]
 

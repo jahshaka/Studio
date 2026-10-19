@@ -232,6 +232,18 @@
     "ui.toast",
     "theme.sheets"
    ]
+  },
+  {
+   "case": "TOOLING-2 a line of an inert helper (OBJECT_DEPENDS only: jahshaka_engine_generated_deps) reaches nothing compiled",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_deps})\n",
+   "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} PROPERTY OBJECT_DEPENDS ${_deps})\n",
+   "must": [],
+   "must_not": [
+    "engine.window",
+    "gi.card_capture",
+    "app.engine_selftest_validation"
+   ]
   }
  ]
 }
