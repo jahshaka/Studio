@@ -454,7 +454,7 @@ perf.offscreen_isolation 21.27  quiet n=42
 perf.offscreen_isolation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 perf.pacing 0.00  ship 3a0422b4e (2026-10-13)
 photon.tiers 0.05  quiet n=45
-physics.many_movers 3.52  solo, the card lock held, :76, box ~50 % CPU-idle (THREADING-1 stage 2, 2026-10-19)
+physics.many_movers 1.58  solo, the card lock held, :76, box 95 % CPU-idle (THREADING-1 corrected law, 7 threads, 2026-10-19)
 physics.mt_determinism 0.71  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 picking.document 0.07  quiet n=45
 picking.fov_cap 1.54  quiet n=44

@@ -14,12 +14,14 @@ assert(b && b.hardware >= 1 && b.live, "app.threadBudget() reports the tiers and
 assert(b.bulletThreads === b.game + b.foreground && b.foreground >= 1,
        "Bullet's threads are the game thread + the foreground share (" + b.bulletThreads + ")");
 assert(b.dedicated === b.writer + b.streaming + b.multiload, "the dedicated tier is the writer + streaming + multiload");
-assert(b.normalPriority === b.game + b.foreground + b.render + b.ogrePool + b.dedicated,
-       "normalPriority sums the normal-priority tiers (" + b.normalPriority + ")");
-assert(b.background >= 2 && b.total === b.normalPriority + b.background, "the background holds its floor of 2");
-var floors = b.game + 1 + b.render + b.ogrePool + b.dedicated;
-assert(b.hardware < floors || b.normalPriority <= b.hardware,
-       "THE LAW: the normal-priority tiers fit the box (" + b.normalPriority + " of " + b.hardware + ")");
+assert(b.activeSet === b.game + b.foreground + b.render + b.ogrePool,
+       "activeSet sums the per-frame set: game + Bullet's workers + render + Ogre's pool (" + b.activeSet + ")");
+assert(b.background >= 2 && b.total === b.activeSet + b.background, "the background holds its floor of 2");
+var floors = b.game + 1 + b.render + b.ogrePool;
+assert(b.hardware < floors || b.activeSet <= b.hardware,
+       "THE LAW: the per-frame active set fits the box (" + b.activeSet + " of " + b.hardware + ")");
+assert(b.background === 2 || b.total === b.hardware,
+       "the background is what the active set leaves (" + b.background + ")");
 assert(b.live.bulletThreads === b.bulletThreads,
        "the app bound Bullet at the budget's threads (" + b.live.bulletThreads + ")");
 assert(b.live.qtPoolMax === b.background,

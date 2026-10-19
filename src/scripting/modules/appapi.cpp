@@ -518,7 +518,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, dedicated, background, normalPriority, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
+        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
           "THE ONE CORE BUDGET (THREADING-1; irisgl/core/threadbudget.h): the tiers every "
           "thread pool of the process is sized from. `foreground` is Bullet's workers beside "
           "the game thread (`bulletThreads` = game + foreground, the physics step's "
@@ -526,9 +526,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "SceneManager pool; `dedicated` = `writer` (the shader cache's) + `streaming` "
           "(Ogre's texture thread) + `multiload` (the texture multiload pool); `background` "
           "the width of each below-normal pool (Qt's global pool, the bake pool's workers). "
-          "THE LAW: `normalPriority` (foreground + render + dedicated) never exceeds "
-          "`hardware` once the box holds the floors; only the background's floor of 2 runs "
-          "past it. `live` is what the process applied: Bullet's bound scheduler, Qt's "
+          "THE LAW: the per-frame `activeSet` (game + foreground + render + ogrePool) never "
+          "exceeds `hardware` once the box holds the floors, and `background` is what it "
+          "leaves (at least 2); the dedicated set is bursty and not subtracted. `total` = "
+          "activeSet + background. `live` is what the process applied: Bullet's bound scheduler, Qt's "
           "global pool's maximum and the bake pool's started workers (asking starts the "
           "pool if no bake has). No engine needed; cheap.",
           Needs::Document },
@@ -2003,7 +2004,7 @@ QVariantMap AppApi::threadBudget()
     out.insert("multiload", b.multiload);
     out.insert("dedicated", b.dedicated());
     out.insert("background", b.background);
-    out.insert("normalPriority", b.normalPriority());
+    out.insert("activeSet", b.activeSet());
     out.insert("total", b.total());
     QVariantMap live;
     live.insert("bulletThreads", iris::Environment::taskThreads());

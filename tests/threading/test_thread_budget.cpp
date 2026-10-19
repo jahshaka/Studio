@@ -4,13 +4,14 @@
 // numbers on the box it runs on, and that the process applies them — the same call main.cpp makes
 // (processbudget::apply), then what each pool actually holds:
 //
-//   1. THE LAW, swept over 1..256 hardware threads: the foreground share at least 1 and at most its cap, the background
-//      at least its floor; once the box holds the floors the normal-priority tiers (foreground + render + dedicated)
-//      never exceed it, only the below-normal background's floor runs past it, and a background above its floor means
-//      the tiers sum to the box exactly. The overrides (JAHSHAKA_SCENE_THREADS, JAH_TEXTURE_MULTILOAD,
-//      JAHSHAKA_PHYSICS_THREADS) move their own tier and the remainder only.
-//   2. THE 20-THREAD BOX in numbers (the owner's 10-core i9): 1 game + 2 Bullet workers, 1 render + 8 Ogre workers,
-//      1 writer + 1 streaming + 6 multiload, background 2 — normal priority 20 of 20.
+//   1. THE LAW, swept over 1..256 hardware threads: Bullet's workers at least 1 and at most their cap, the background
+//      at least its floor; once the box holds the floors the per-frame ACTIVE set (game + render + Ogre's pool +
+//      Bullet's workers) never exceeds it; a background above its floor means the active set + the background are the
+//      box exactly; Bullet's workers below their cap take everything the frame's other threads leave. The dedicated set
+//      (writer, streaming, multiload) is bursty and never subtracted. The overrides (JAHSHAKA_SCENE_THREADS,
+//      JAH_TEXTURE_MULTILOAD, JAHSHAKA_PHYSICS_THREADS) move their own tier and the remainder only.
+//   2. THE 20-THREAD BOX in numbers (the owner's 10-core i9): 1 game + 6 Bullet workers (7, the measured best), 1 render
+//      + 8 Ogre workers — the active set 16 —, background 4; the dedicated 8 (writer, streaming, multiload 6) beside.
 //   3. THE PROCESS: after processbudget::apply, Bullet's bound scheduler runs bulletThreads (= the foreground share +
 //      the game thread), Qt's global pool's maximum is the background width, and the bake pool — created by the first
 //      ask — started exactly the background width's threads (counted in /proc/self/task), and the scene workers' primary
@@ -49,20 +50,20 @@ int lawViolations(const je::ThreadBudget &b, const char *what)
     int bad = 0;
     const auto fail = [&](const char *rule) {
         if (bad++ < 3)
-            std::printf("  %s hardware=%d: %s (fg %d bg %d ogre %d multiload %d normal %d total %d)\n", what, b.hardware,
-                        rule, b.foreground, b.background, b.ogrePool, b.multiload, b.normalPriority(), b.total());
+            std::printf("  %s hardware=%d: %s (fg %d bg %d ogre %d multiload %d active %d total %d)\n", what, b.hardware,
+                        rule, b.foreground, b.background, b.ogrePool, b.multiload, b.activeSet(), b.total());
     };
-    // The floors: the normal-priority tiers with Bullet's share at its floor of 1.
-    const int floors = b.game + 1 + b.render + b.ogrePool + b.dedicated();
-    if (b.foreground < 1 || b.foreground > je::kBudgetForegroundCap) fail("the foreground share is in [1, cap]");
+    // The floors of the active set: Bullet's share at its floor of 1.
+    const int floors = b.game + 1 + b.render + b.ogrePool;
+    if (b.foreground < 1 || b.foreground > je::kBudgetForegroundCap) fail("Bullet's workers are in [1, cap]");
     if (b.background < je::kBudgetBackgroundFloor) fail("the background holds its floor");
-    if (b.hardware >= floors && b.normalPriority() > b.hardware) fail("the normal-priority tiers fit a box that holds the floors");
-    if (b.hardware >= floors && b.total() > b.hardware + je::kBudgetBackgroundFloor)
-        fail("only the background's floor runs past the box");
+    if (b.hardware >= floors && b.activeSet() > b.hardware) fail("the per-frame active set fits a box that holds its floors");
     if (b.background > je::kBudgetBackgroundFloor && b.total() != b.hardware)
-        fail("a background above its floor is exactly what the box leaves");
-    if (b.foreground < je::kBudgetForegroundCap && b.foreground > 1 && b.normalPriority() != b.hardware)
-        fail("a foreground share between its floor and its cap takes exactly what the box leaves");
+        fail("a background above its floor is exactly what the active set leaves");
+    if (b.foreground < je::kBudgetForegroundCap && b.foreground > 1 && b.activeSet() != b.hardware)
+        fail("Bullet's workers below their cap take everything the frame's other threads leave");
+    if (b.multiload != std::min(6, std::max(2, b.hardware / 2)) && b.multiload != 0)
+        fail("the multiload is min(6, max(2, hardware / 2)), sized and never subtracted");
     return bad;
 }
 
@@ -86,25 +87,25 @@ int main(int argc, char **argv)
           "JAHSHAKA_PHYSICS_THREADS=7 sets Bullet's threads (the game thread included) and nothing else (%d, ogre %d, "
           "multiload %d)", forced.bulletThreads(), forced.ogrePool, forced.multiload);
     const je::ThreadBudget big = je::threadBudgetFor(64);
-    CHECK(big.foreground == je::kBudgetForegroundCap && big.background == 64 - big.normalPriority(),
+    CHECK(big.foreground == je::kBudgetForegroundCap && big.background == 64 - big.activeSet(),
           "a 64-thread box: Bullet at its cap of %d workers, the rest (%d) is the background's", big.foreground,
           big.background);
 
     // 2. THE 20-THREAD BOX.
     const je::ThreadBudget box20 = je::threadBudgetFor(20);
-    CHECK(box20.game == 1 && box20.foreground == 2 && box20.bulletThreads() == 3 && box20.render == 1 &&
+    CHECK(box20.game == 1 && box20.foreground == 6 && box20.bulletThreads() == 7 && box20.render == 1 &&
           box20.ogrePool == 8 && box20.writer == 1 && box20.streaming == 1 && box20.multiload == 6 &&
-          box20.background == 2 && box20.normalPriority() == 20 && box20.total() == 22,
-          "the 20-thread box: game 1 + Bullet %d, render 1 + Ogre %d, dedicated %d (writer, streaming, multiload %d), "
-          "background %d; normal priority %d of 20", box20.foreground, box20.ogrePool, box20.dedicated(), box20.multiload,
-          box20.background, box20.normalPriority());
+          box20.background == 4 && box20.activeSet() == 16 && box20.total() == 20,
+          "the 20-thread box: game 1 + Bullet %d (%d threads), render 1 + Ogre %d — active %d —, background %d (active + "
+          "background %d of 20); dedicated %d beside (multiload %d)", box20.foreground, box20.bulletThreads(),
+          box20.ogrePool, box20.activeSet(), box20.background, box20.total(), box20.dedicated(), box20.multiload);
 
     // 3. THIS PROCESS.
     const je::ThreadBudget &b = je::threadBudget();
     std::printf("THREAD_BUDGET hardware=%d game=%d foreground=%d bullet=%d render=%d ogre_pool=%d writer=%d streaming=%d "
-                "multiload=%d dedicated=%d background=%d normal_priority=%d total=%d\n", b.hardware, b.game, b.foreground,
+                "multiload=%d dedicated=%d background=%d active_set=%d total=%d\n", b.hardware, b.game, b.foreground,
                 b.bulletThreads(), b.render, b.ogrePool, b.writer, b.streaming, b.multiload, b.dedicated(), b.background,
-                b.normalPriority(), b.total());
+                b.activeSet(), b.total());
     CHECK(lawViolations(b, "this box") == 0, "the law holds on this box (%d threads)", b.hardware);
     processbudget::apply();
     CHECK(iris::Environment::taskThreads() == b.foreground + 1,
