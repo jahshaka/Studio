@@ -1,8 +1,11 @@
 #pragma once
 #include <QUndoStack>
+#include <memory>
+#include <vector>
 #include <QPoint>
 #include <QVBoxLayout>
 #include "../graph/graphnode.h"
+#include "../models/nodemodel.h"
 #include "../graph/graphnodescene.h"
 #include "../widgets/materialsettingswidget.h"
 
@@ -17,6 +20,13 @@ public:
 	static int count;
 };
 
+/// ONE OWNER PER NODE ACROSS THE UNDO STACK (LEAK-1 L4): while the add is
+/// undone the COMMAND owns the node — its model and its canvas item, both
+/// detached (GraphNodeScene::detachNode) — and the redo hands the same two
+/// back; while it is done the graph and the canvas own them. An undone add
+/// whose command dies takes the node with it. (The undo used to remove the
+/// node and keep neither half: every undo leaked a GraphNode and, with the
+/// stack cleared, the model.)
 class AddNodeCommand : public UndoRedo
 {
 public:
@@ -28,8 +38,9 @@ public:
 private :
 	QPointF initialPosition;
 	GraphNodeScene* scene;
-	NodeModel * nodeModel;
-	GraphNode *node = nullptr;
+	NodeModel * nodeModel;   // identity (its id); owned per the note above
+	std::unique_ptr<NodeModel> heldModel;   // declared before heldItem: the item dies first
+	std::unique_ptr<GraphNode> heldItem;
 };
 
 class AddConnectionCommand : public UndoRedo
@@ -78,6 +89,10 @@ private:
 
 };
 
+/// The deleted nodes are the COMMAND's while the delete is done (LEAK-1 L4):
+/// each one's model and canvas item, detached; the undo hands them back. The
+/// connections the delete took are kept BY VALUE (the graph frees a removed
+/// connection), and rebuilt on the undo.
 class DeleteNodeCommand : public UndoRedo
 {
 public:
@@ -86,11 +101,12 @@ public:
 	void undo() override;
 	void redo() override;
 private:
+	struct Held { std::unique_ptr<NodeModel> model; std::unique_ptr<GraphNode> item; };   // item dies first
+	struct Wire { QString leftNodeId; int leftIndex = -1; QString rightNodeId; int rightIndex = -1; };
 	GraphNodeScene* scene;
 	QList<GraphNode*> list;
-	GraphNode* node = nullptr;
-	//QVector<ConnectionModel*> connections;
-	QMap<QString, ConnectionModel*> connections;
+	std::vector<Held> held;
+	QMap<QString, Wire> wires;   // by the connection's id: a wire between two deleted nodes is kept once
 };
 
 class MaterialSettingsChangeCommand : public UndoRedo

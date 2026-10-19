@@ -5,6 +5,8 @@
 #include <QVector>
 #include <QIcon>
 #include <functional>
+#include <memory>
+#include <vector>
 
 class NodeModel;
 enum class NodeCategory;
@@ -27,10 +29,15 @@ struct NodeLibraryItem
 	bool hidden = false;
 };
 
+/// THE NODE TYPES' REGISTRY, AND THE OWNER OF ITS ENTRIES (LEAK-1 L4): every
+/// NodeLibraryItem is held by unique_ptr and freed with the library. It used to
+/// be a bare QVector<NodeLibraryItem*> under an empty destructor — 250 entries
+/// (26 KB) leaked per library built. allItems() is the raw, ordered view, every
+/// entry hidden aliases included; getItems()/filter() are the palette's.
 class NodeLibrary
 {
 public:
-	QVector<NodeLibraryItem*> items;
+	const QVector<NodeLibraryItem*> &allItems() const { return mView; }
 
 	QVector<NodeLibraryItem*> getItems();
 
@@ -49,7 +56,14 @@ public:
 	NodeModel* createNode(QString name);
 
 	NodeLibrary();
-	~NodeLibrary();
+	virtual ~NodeLibrary();
+	NodeLibrary(const NodeLibrary &) = delete;
+	NodeLibrary &operator=(const NodeLibrary &) = delete;
+
+private:
+	void add(std::unique_ptr<NodeLibraryItem> item);
+	std::vector<std::unique_ptr<NodeLibraryItem>> mOwned;
+	QVector<NodeLibraryItem*> mView;   // mOwned's pointers, same order
 };
 
 #endif// LIBRARY_H

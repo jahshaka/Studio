@@ -34,6 +34,15 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -88,7 +97,8 @@ int main(int argc, char** argv)
     // ---- graph 1: constants into the PBR master ------------------------------
     // color -> Base Color, float -> Roughness, float -> Alpha Cutoff
     {
-        auto graph = new NodeGraph();
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -123,7 +133,8 @@ int main(int argc, char** argv)
     // ---- graph 1b: evaluator numeric contract (audit D5 + D6) ----------------
     // vector2 folds like its siblings; FloatSlot landings clamp to [0,1].
     {
-        auto graph = new NodeGraph();
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -158,7 +169,8 @@ int main(int argc, char** argv)
     // ---- graph 2: texture nodes into the PBR master --------------------------
     // texture node -> Base Color (becomes baseColorMap), texture node -> Normal
     {
-        auto graph = new NodeGraph();
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -201,7 +213,8 @@ int main(int argc, char** argv)
     // to sin(0*speed)*0.5+0.5 = 0.5 and the node is named in approximatedNodes
     // (it used to be honest-unsupported; the bake seam now evaluates it).
     {
-        auto graph = new NodeGraph();
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -266,8 +279,8 @@ int main(int argc, char** argv)
                                node("g", "float", 0.15, "Float Property") };
             QJsonArray cons  { con("g", 0, "m", 2) };
             QString reason;
-            auto* graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
-                                                 new LibraryV1(), &reason);
+            auto graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
+                                                 suiteLibrary(), &reason);
             CHECK(graph == nullptr, "refuse: a legacy \"Surface Material\" graph does NOT load");
             CHECK(!reason.isEmpty(), "refuse: ... and the caller is given a reason to show");
             CHECK(reason.contains(QStringLiteral("Surface Material")),
@@ -281,8 +294,8 @@ int main(int argc, char** argv)
         {
             QJsonArray nodes { node("m", "SomeFutureMaster", QString(), "") };
             QString reason;
-            auto* graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
-                                                 new LibraryV1(), &reason);
+            auto graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
+                                                 suiteLibrary(), &reason);
             CHECK(graph == nullptr, "refuse: an unknown master type does not load either");
             CHECK(reason.contains(QStringLiteral("SomeFutureMaster")),
                   "refuse: ... and the reason names it");
@@ -295,13 +308,13 @@ int main(int argc, char** argv)
                                node("r", "float", 0.35, "Roughness") };
             QJsonArray cons  { con("r", 0, "m", 2) };
             QString reason = QStringLiteral("stale");
-            auto* graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
-                                                 new LibraryV1(), &reason);
+            auto graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
+                                                 suiteLibrary(), &reason);
             CHECK(graph && graph->getMasterNode()
                       && graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
                   "refuse: a PBR graph loads exactly as before");
             CHECK(reason.isEmpty(), "refuse: ... with no reason set");
-            const auto result = PbrGraphEvaluator::evaluate(graph);
+            const auto result = PbrGraphEvaluator::evaluate(graph.get());
             CHECK(near(float(result.values["roughness"].toDouble(-1)), 0.35f),
                   "refuse: ... and its values are untouched by the guard");
         }
@@ -322,7 +335,7 @@ int main(int argc, char** argv)
             int refusedCount = 0, named = 0;
             for (const auto& c : cases) {
                 QString reason;
-                auto* graph = NodeGraph::deserialize(c.g, new LibraryV1(), &reason);
+                auto graph = NodeGraph::deserialize(c.g, suiteLibrary(), &reason);
                 if (graph == nullptr) ++refusedCount;
                 else std::printf("      loaded with no master: %s\n", c.what);
                 if (reason.contains(QStringLiteral("no master node"))) ++named;
@@ -338,8 +351,8 @@ int main(int argc, char** argv)
             QJsonArray nodes { node("m", "PbrMaterial", QString(), ""),
                                node("x", "no-such-node", QString(), "") };
             QString reason;
-            auto* graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
-                                                 new LibraryV1(), &reason);
+            auto graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
+                                                 suiteLibrary(), &reason);
             CHECK(graph != nullptr && graph->nodes.size() == 1,
                   "refuse: an unknown ORDINARY node is skipped, not refused");
             CHECK(reason.isEmpty(), "refuse: ... and sets no reason");
@@ -364,7 +377,7 @@ int main(int argc, char** argv)
     // it and saves, which is exactly the drift the old "stored block agrees"
     // check existed to catch, asked of the pair that actually ships.
     {
-        auto lib = new LibraryV1();
+        auto lib = suiteLibrary();
 
         // The graphs name their images RELATIVE to the preset file that owns
         // them — the same spelling as the map slot beside them — so
@@ -408,14 +421,14 @@ int main(int argc, char** argv)
                 continue;
             }
             const QJsonObject effect = QJsonDocument::fromJson(gf.readAll()).object();
-            NodeGraph *graph = NodeGraph::deserialize(effect["shadergraph"].toObject(), lib);
+            auto graph = NodeGraph::deserialize(effect["shadergraph"].toObject(), lib);
             if (!graph || !graph->getMasterNode()
                 || graph->getMasterNode()->typeName != QLatin1String("PbrMaterial")) {
                 std::printf("      NOT a PBR graph: %s\n", qPrintable(name));
                 ++notPbr;
                 continue;
             }
-            const auto result = PbrGraphEvaluator::evaluate(graph);
+            const auto result = PbrGraphEvaluator::evaluate(graph.get());
             if (!result.unsupportedNodes.isEmpty()) {
                 std::printf("      unsupported in %s: %s\n", qPrintable(name),
                             qPrintable(result.unsupportedNodes.join(", ")));
@@ -470,7 +483,7 @@ int main(int argc, char** argv)
             // PASSES THROUGH: a preset that resampled its own image into a
             // baked map would look the same at a glance and be permanently
             // lower resolution.
-            const auto info = PbrGraphEvaluator::bakeInfo(graph, nullptr)["perSocket"].toObject();
+            const auto info = PbrGraphEvaluator::bakeInfo(graph.get(), nullptr)["perSocket"].toObject();
             for (auto s = info.begin(); s != info.end(); ++s) {
                 if (s.value().toString() == "passthrough") ++texturedSockets;
                 if (s.value().toString() != "baked") continue;
@@ -524,14 +537,15 @@ int main(int argc, char** argv)
     // rules, and the setting round-trips serialization under the new names.
     {
         auto makeGraph = []() {
-            auto graph = new NodeGraph();
+            auto graph = std::make_unique<NodeGraph>();   // the caller owns it (LEAK-1)
             auto master = new PbrMasterNode();
             graph->addNode(master);
             graph->setMasterNode(master);
             return graph;
         };
 
-        auto graph = makeGraph();
+        const auto graphOwned = makeGraph();
+        NodeGraph *graph = graphOwned.get();
         auto color = makeColor(graph, 1.0, 0.5, 0.25);
         graph->addConnection(color, 0, graph->masterNode, 0);
 

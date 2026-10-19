@@ -688,7 +688,8 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     // CALL — a registry of every node type, with its icons — and nothing
     // ever freed one, so a script that opened ten materials left ten behind.
     auto *lib = MaterialHelper::sharedNodeLibrary();
-    auto *graph = new NodeGraph;
+    auto ownedGraph = std::make_unique<NodeGraph>();
+    NodeGraph *graph = ownedGraph.get();
     graph->setNodeLibrary(lib);
     auto *master = new PbrMasterNode();
     graph->addNode(master);
@@ -719,7 +720,6 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     const QString assetGuid = MaterialBundle::create(host.db, shaderName, seed,
                                                      assethome::materials(), QByteArray(), &error);
     if (assetGuid.isEmpty()) {
-        delete graph;
         fail(QStringLiteral("materials.createFromImage: %1").arg(error));
         return QString();
     }
@@ -741,7 +741,7 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     // while its VALUES twin rendered one.
     materialtile::mint(host.db, host.project, assetGuid, "materials.createImageGraph");
 
-    if (mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
+    if (mGraphApi) mGraphApi->setCurrent(std::move(ownedGraph), assetGuid);
     return assetGuid;
 }
 
@@ -757,9 +757,9 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
         return fail("materials.regenerate: the asset has no 'shadergraph' object");
 
     QString refusedGraph;
-    NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(),
-                                              MaterialHelper::sharedNodeLibrary(),
-                                              &refusedGraph);
+    const std::unique_ptr<NodeGraph> ownedGraph = NodeGraph::deserialize(
+        definition["shadergraph"].toObject(), MaterialHelper::sharedNodeLibrary(), &refusedGraph);
+    NodeGraph *graph = ownedGraph.get();
     if (!graph)
         return fail(QStringLiteral("materials.regenerate: %1")
                         .arg(refusedGraph.isEmpty()
@@ -823,6 +823,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     }
     const assethome::Home home = inProject ? assethome::project(host.project->getProjectGuid())
                                            : assethome::materials();
+    std::unique_ptr<NodeGraph> ownedGraph;
     NodeGraph *graph = nullptr;
     QJsonObject definition;
     definition["materialType"] = "pbr";
@@ -833,7 +834,8 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
         // format (the old ShaderTemplate.shader predates the graph and cannot
         // be reopened by the graph loader; the .effect presets are the live
         // shape).
-        graph = new NodeGraph;
+        ownedGraph = std::make_unique<NodeGraph>();
+        graph = ownedGraph.get();
         graph->setNodeLibrary(MaterialHelper::sharedNodeLibrary());
         auto *master = new PbrMasterNode();
         graph->addNode(master);
@@ -851,7 +853,6 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     const QString assetGuid = MaterialBundle::create(host.db, materialName, definition, home,
                                                      QByteArray(), &error);
     if (assetGuid.isEmpty()) {
-        delete graph;
         fail(QStringLiteral("materials.create: %1").arg(error));
         return QString();
     }
@@ -893,7 +894,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     }
 
     // Adopt the freshly built graph as the current one directly.
-    if (graph && mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
+    if (ownedGraph && mGraphApi) mGraphApi->setCurrent(std::move(ownedGraph), assetGuid);
     return assetGuid;
 }
 
@@ -1218,9 +1219,10 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     }
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
     QString refused;
-    NodeGraph *graph =
+    std::unique_ptr<NodeGraph> ownedGraph =
         NodeGraph::deserialize(definition["shadergraph"].toObject(),
                                MaterialHelper::sharedNodeLibrary(), &refused);
+    NodeGraph *graph = ownedGraph.get();
     // A REFUSED GRAPH IS AN ERROR, NOT A CRASH (LEGACY-MASTER-CRUD): this used
     // to dereference the result three lines down. A material written on the
     // deleted "Surface Material" master has nothing to load.
@@ -1261,7 +1263,7 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
                       : MaterialHelper::TextureBinding::Import,
         assethome::of(host.db, assetGuid));
     out["texturesImported"] = preset ? 0 : out["texturesResolved"];
-    mGraphApi->setCurrent(graph, assetGuid);
+    mGraphApi->setCurrent(std::move(ownedGraph), assetGuid);   // `graph` stays valid: the API holds it
 
     out["nodes"] = graph->nodes.size();
     out["master"] = graph->masterNode ? graph->masterNode->typeName : QString();
@@ -2066,15 +2068,13 @@ QVector<VerbInfo> GraphApi::verbs() const
     };
 }
 
-void GraphApi::setCurrent(NodeGraph *graph, const QString &assetGuid)
+void GraphApi::setCurrent(std::unique_ptr<NodeGraph> graph, const QString &assetGuid)
 {
-    // THE OLD GRAPH IS FREED (MATERIALS_TABS_SPEC §2.8). This used to read
-    // "NodeGraph has no proper deep-delete; dropping the old pointer leaks a
-    // little" — it has one now, so a script that opens ten materials no
-    // longer leaves nine whole graphs behind. A script graph is never in a
-    // canvas, so nothing else points into it.
-    if (mGraph != graph) delete mGraph;
-    mGraph = graph;
+    // THE OLD GRAPH IS FREED (MATERIALS_TABS_SPEC §2.8), and the current one is
+    // the API's to the end of the session: it was a raw member nobody freed
+    // at exit (materials.createFromImage's graph led the app's leak list).
+    // A script graph is never in a canvas, so nothing else points into it.
+    mGraph = std::move(graph);
     mAssetGuid = assetGuid;
     mSelectedNodeId.clear();
 }
@@ -2082,7 +2082,7 @@ void GraphApi::setCurrent(NodeGraph *graph, const QString &assetGuid)
 NodeGraph *GraphApi::graphOrFail(const QString &verb)
 {
     if (!mGraph) fail(QStringLiteral("%1: no graph is open — materials.loadGraph()/createGraph() first").arg(verb));
-    return mGraph;
+    return mGraph.get();
 }
 
 NodeGraph *GraphApi::editableGraphOrFail(const QString &verb)

@@ -180,8 +180,8 @@ NodeLibrary* MaterialHelper::sharedNodeLibrary()
 	return library;
 }
 
-NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
-                                                                  QString* refusalReason)
+std::unique_ptr<NodeGraph> MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
+                                                                                  QString* refusalReason)
 {
 	auto graphObj = matObj["shadergraph"].toObject();
 	// May be NULL: a graph whose master is not the PBR one is refused whole,

@@ -24,6 +24,15 @@
 #include "modules/materials/nodes/test.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -139,7 +148,7 @@ int main(int argc, char** argv)
         // FORWARD-ONLY-1: the §3b migration is DELETED. A pre-§3b file carries
         // no socket layout, so it is refused whole, with a reason.
         QString reason;
-        auto graph = NodeGraph::deserialize(graphObj, new LibraryV1(), &reason);
+        auto graph = NodeGraph::deserialize(graphObj, suiteLibrary(), &reason);
         CHECK(graph == nullptr, "old format: a pre-§3b graph is REFUSED, not migrated");
         CHECK(reason.contains(QStringLiteral("older version")), "old format: the refusal says why");
 
@@ -147,7 +156,7 @@ int main(int argc, char** argv)
         // 'property' and 'texCoords' are unknown types and are skipped, and the
         // graph-global 'properties' array is neither read nor written.
         graphObj["socketLayout"] = NodeGraph::kSocketLayoutVersion;
-        graph = NodeGraph::deserialize(graphObj, new LibraryV1(), &reason);
+        graph = NodeGraph::deserialize(graphObj, suiteLibrary(), &reason);
         CHECK(graph && graph->getMasterNode() && graph->nodes.size() == 1,
               "retired shapes: only the master loads (no PropertyNode / texCoords conversion)");
         CHECK(graph && !graph->serialize().contains("properties"),
@@ -159,12 +168,12 @@ int main(int argc, char** argv)
     //    presets): every one is written on the DELETED master, so every one
     //    is refused
     // ------------------------------------------------------------------
-    auto loadEffect = [](const QString& path, QString* reason = nullptr) -> NodeGraph* {
+    auto loadEffect = [](const QString& path, QString* reason = nullptr) -> std::unique_ptr<NodeGraph> {
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return nullptr;
         auto obj = QJsonDocument::fromJson(f.readAll()).object();
         if (!obj.contains("shadergraph")) return nullptr;
-        return NodeGraph::deserialize(obj["shadergraph"].toObject(), new LibraryV1(), reason);
+        return NodeGraph::deserialize(obj["shadergraph"].toObject(), suiteLibrary(), reason);
     };
 
     {
@@ -181,7 +190,7 @@ int main(int argc, char** argv)
         int refused = 0, named = 0;
         for (const char* name : kFixtures) {
             QString reason;
-            auto* graph = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + name, &reason);
+            auto graph = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + name, &reason);
             if (graph == nullptr) ++refused; else std::printf("      loaded: %s\n", name);
             if (reason.contains(QStringLiteral("Surface Material"))
                 && reason.contains(QStringLiteral("PBR Material")))
@@ -245,7 +254,7 @@ int main(int argc, char** argv)
         // the drawer-synced constants still evaluate to their known values
         auto glass = loadEffect(graphDir + "Glass-pbr.effect");
         if (glass) {
-            auto result = PbrGraphEvaluator::evaluate(glass, nullptr);
+            auto result = PbrGraphEvaluator::evaluate(glass.get(), nullptr);
             CHECK(near(result.values["roughness"].toDouble(), 0.05, 1e-3)
                   && near(result.values["alpha"].toDouble(), 0.3, 1e-3),
                   "shipped: Glass PBR's graph still folds to the drawer's values after re-save");

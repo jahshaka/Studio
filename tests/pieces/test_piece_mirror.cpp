@@ -36,6 +36,15 @@
 #include "modules/materials/nodes/pbrmasternode.h"
 #include "../support/testmesh.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 using namespace jahshaka::engine;
 
 static int failures = 0;
@@ -47,7 +56,7 @@ namespace {
 /// A pulsating-colour graph, and the material it emits to.
 iris::PbrMaterialPtr pulsingMaterial(const QString &dir, QString *pathOut)
 {
-    auto lib = new LibraryV1();
+    auto lib = suiteLibrary();
     auto graph = new NodeGraph();
     graph->setNodeLibrary(lib);
     auto master = new PbrMasterNode();

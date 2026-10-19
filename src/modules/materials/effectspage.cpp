@@ -997,7 +997,8 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	}
 	progressDialog->setValueAndText(2, "Fetch graph");
 
-	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused);
+	// The page's document takes the graph (adoptGraph below); nothing returns between.
+	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused).release();
 
 	// THE FILE CAN BE REFUSED (LEGACY-MASTER-CRUD): a material written on the
 	// deleted "Surface Material" master has no graph this build can draw. The
@@ -1634,7 +1635,7 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	NodeGraph *graph = nullptr;
 	QString refused;
 	if (found && !shipped.graph.isEmpty())
-		graph = NodeGraph::deserialize(shipped.graph, mNodeLibrary, &refused);
+		graph = NodeGraph::deserialize(shipped.graph, mNodeLibrary, &refused).release();   // -> setNodeGraph
 	// A SHIPPED PRESET THAT REFUSES IS A SHIPPING DEFECT, not a user's old
 	// file (fix round), and substituting a blank canvas for it silently is how
 	// "New from Gold" would quietly make an empty material. Say it, then fall
@@ -1998,7 +1999,7 @@ void EffectsPage::generateTileNode()
 {
 	QSize currentSize(90, 90);
 
-	for (NodeLibraryItem *tile : mNodeLibrary->items) {
+	for (NodeLibraryItem *tile : mNodeLibrary->allItems()) {
 		if (tile->hidden) continue; // load aliases are not palette entries
 		auto item = new QListWidgetItem;
 		item->setText(tile->displayName);

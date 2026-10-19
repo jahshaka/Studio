@@ -27,6 +27,15 @@
 #include "modules/materials/nodes/test.h"
 #include "modules/materials/widgets/nodepropertiespanel.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -49,7 +58,7 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
 
     auto graph = new NodeGraph;
-    graph->setNodeLibrary(new LibraryV1());
+    graph->setNodeLibrary(suiteLibrary());
     auto master = new PbrMasterNode();
     graph->addNode(master);
     graph->setMasterNode(master);
@@ -360,7 +369,7 @@ int main(int argc, char** argv)
     // Both are asserted here against the real handler, with real sockets.
     {
         auto roGraph = new NodeGraph;
-        roGraph->setNodeLibrary(new LibraryV1());
+        roGraph->setNodeLibrary(suiteLibrary());
         auto roMaster = new PbrMasterNode();
         roGraph->addNode(roMaster);
         roGraph->setMasterNode(roMaster);
@@ -471,7 +480,15 @@ int main(int argc, char** argv)
         }
 
         delete roView;
+        delete roScene;   // a view does not own its scene
+        delete roGraph;
     }
+
+    // The suite owns what it built (LEAK-1): the panel and the canvas first —
+    // they point into the graph — then the graph, which frees its nodes.
+    delete panel;
+    delete scene;
+    delete graph;
 
     if (failures == 0) std::printf("ALL OK\n");
     else std::printf("%d FAILURES\n", failures);

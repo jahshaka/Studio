@@ -101,7 +101,7 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 
 		// fuzzy match + rank (best first), so Enter creates the best hit
 		QList<QPair<int, NodeLibraryItem*>> ranked;
-		for (auto item : graph->library->items) {
+		for (auto item : graph->library->allItems()) {
 			if (item->hidden) continue; // load aliases are not palette entries
 			int score = 0;
 			if (FuzzySearch::match(str, item->displayName, &score))
@@ -214,7 +214,7 @@ void SearchDialog::generateTileNode(NodeGraph *graph)
 
 	QSize currentSize(20, 20);
 
-	for (NodeLibraryItem *tile : graph->library->items) {
+	for (NodeLibraryItem *tile : graph->library->allItems()) {
 		if (tile->hidden) continue; // load aliases are not palette entries
 		auto item = new QTreeWidgetItem;
 		item->setText(0, tile->displayName);

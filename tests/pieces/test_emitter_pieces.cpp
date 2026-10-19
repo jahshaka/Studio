@@ -51,7 +51,7 @@ struct Rig
         graph->addNode(master);
         graph->setMasterNode(master);
     }
-    ~Rig() { delete graph; }
+    ~Rig() { delete graph; delete lib; }
     NodeModel *add(const QString &type)
     {
         auto node = lib->createNode(type);
