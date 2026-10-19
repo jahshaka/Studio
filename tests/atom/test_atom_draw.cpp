@@ -560,6 +560,29 @@ int main()
                   "(d) the grid's and the ground's %u materials need %u decode draws (buckets)", st.materials,
                   st.buckets);
         CHECK_MSG(st.screenDraws == st.buckets, "(d) one screen decode draw per bucket (%u)", st.screenDraws);
+        // THE CAMERA VIEW BY ROUTE (ENGINE-POLISH-ATOM-1 stage 1): every item the camera's frustum reaches, under
+        // its route, with its level-0 triangles — the fixture's own index counts, exactly.
+        {
+            const unsigned long long sphereTris = sphereGeom.idx.size() / 3u, sheetTris = sheetGeom.idx.size() / 3u;
+            const unsigned kAtom = 0u, kNotWorld = 1u, kBlended = 4u, kCullFront = 5u, kAlpha = 8u, kNoRow = 10u;
+            std::printf("  view routes: valid %d", int(st.viewRoutesValid));
+            for (unsigned r = 0; r < ShadowRouteShare::kRoutes; ++r)
+                std::printf(" [%u] %u/%llu", r, st.viewRouteItems[r], st.viewRouteTriangles[r]);
+            std::printf("\n");
+            CHECK(st.viewRoutesValid, "(c) the camera view's routes are read (the view has a camera)");
+            CHECK_MSG(st.viewRouteItems[kAtom] == cells.size() + 1u &&
+                          st.viewRouteTriangles[kAtom] == 10u * sphereTris + sheetTris + 2u,
+                      "(c) the view's atom route: the grid's and the ground's %zu items and their level-0 triangles "
+                      "(%u items %llu triangles, want %llu)", cells.size() + 1u, st.viewRouteItems[kAtom],
+                      st.viewRouteTriangles[kAtom], 10u * sphereTris + sheetTris + 2u);
+            bool spheres = true;
+            for (unsigned r : { kNotWorld, kBlended, kCullFront, kAlpha })
+                spheres = spheres && st.viewRouteItems[r] <= 1u &&
+                          st.viewRouteTriangles[r] == st.viewRouteItems[r] * sphereTris;
+            CHECK_MSG(spheres && st.viewRouteTriangles[kNoRow] == 0ull,
+                      "(c) each PBS route in view carries its spheres' level-0 triangles (%llu each) and the line none",
+                      sphereTris);
+        }
         std::printf("  (c) multi-submesh item: HOLE — no mesh this engine builds has more than one submesh "
                     "(buildMeshV2), so none can be constructed; the route folds it into noRow\n");
     }
