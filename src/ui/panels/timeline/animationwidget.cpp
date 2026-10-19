@@ -92,7 +92,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     //timer
     timer = new QTimer(this);
     connect(timer,SIGNAL(timeout()),this,SLOT(updateAnim()));
-    elapsedTimer = new QElapsedTimer();
 
     ui->sceneNodeName->setText("");
 
@@ -135,6 +134,9 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 AnimationWidget::~AnimationWidget()
 {
     delete ui;
+    // The child panels hold it by raw pointer and are destroyed after this
+    // body, by ~QWidget — none of their destructors reads it.
+    delete animWidgetData;
 }
 
 KeyFrameCurveWidget* AnimationWidget::getCurveWidget()
@@ -167,8 +169,8 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     ui->keylabelView->update();
     this->node = node;
 
+    nodeProperties = node ? node->getProperties() : iris::PropertyRows();
     if (!!node) {
-        nodeProperties = node->getProperties();
         scene = node->getScene();
         ui->sceneNodeName->setText(node->name);
 
@@ -200,7 +202,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         ui->animList->setEnabled(true);
     }
     else {
-        ui->insertFrame->setMenu(new QMenu());
+        clearPropertiesMenu();
         animation.clear();
         ui->sceneNodeName->setText("");
 
@@ -214,10 +216,13 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 
 void AnimationWidget::buildPropertiesMenu()
 {
-    // rebuild menu
-    auto menu = new QMenu();
+    // rebuild menu — the button does not own the menu it shows (QToolButton::
+    // setMenu), so the old one is retired here and the new one is ours; its
+    // actions are its children. Every selection used to leak a menu.
+    clearPropertiesMenu();
+    auto menu = new QMenu(this);
     int index = 0;
-    for (auto prop : nodeProperties) {
+    for (auto prop : nodeProperties.view()) {
         const int propIndex = index++;
         // Only the types the timeline can build a keyframe track for. The
         // document nodes reflect bool/int/string fields too (name, visible,
@@ -230,7 +235,7 @@ void AnimationWidget::buildPropertiesMenu()
         if (!animedits::isAnimatablePropertyType(prop->type))
             continue;
 
-        auto action = new QAction();
+        auto action = new QAction(menu);
         action->setText(prop->name);
         action->setData(propIndex);
 
@@ -244,13 +249,14 @@ void AnimationWidget::buildPropertiesMenu()
 
 void AnimationWidget::clearPropertiesMenu()
 {
+    if (QMenu *old = ui->insertFrame->menu()) old->deleteLater();
     ui->insertFrame->setMenu(nullptr);
 }
 
 void AnimationWidget::updateAnim()
 {
-    animWidgetData->cursorPosInSeconds += elapsedTimer->nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
-    elapsedTimer->restart();
+    animWidgetData->cursorPosInSeconds += elapsedTimer.nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
+    elapsedTimer.restart();
     animWidgetData->refreshWidgets();
 
     onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
@@ -263,7 +269,7 @@ void AnimationWidget::startTimer()
         startedTime = animWidgetData->cursorPosInSeconds;
 
         timer->start(timerSpeed);
-        elapsedTimer->start();
+        elapsedTimer.start();
         ui->playBtn->setIcon(pauseIcon);
     } else
     {
@@ -456,10 +462,10 @@ void AnimationWidget::addPropertyKey(QAction *action)
         return;
 
     auto index = action->data().toInt();
-    if (index < 0 || index >= nodeProperties.count())
+    if (index < 0 || index >= nodeProperties.view().count())
         return;
 
-    auto animProp = nodeProperties[index];
+    auto animProp = nodeProperties.view()[index];
     if (!animProp)
         return;
 

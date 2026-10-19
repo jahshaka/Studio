@@ -103,7 +103,7 @@ For more information see the LICENSE file
 // otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
-                                      EditorData **editorData)
+                                      std::unique_ptr<EditorData> *editorData)
 {
     dir = projectPath;
 	useAlternativeLocation = false;
@@ -143,7 +143,7 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     return scene;
 }
 
-EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
+std::unique_ptr<EditorData> SceneReader::readEditorData(QJsonObject& projectObj)
 {
     if (projectObj["editor"].isNull()) return nullptr;
 
@@ -157,7 +157,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     // existed came back with a 1 m near and a 100 m FAR clip against
     // CameraNode's own 0.1 / 500, so the explorer camera could not see past
     // 100 m in a scene whose ground is 4 km wide.
-    auto editorData = new EditorData();
+    auto editorData = std::make_unique<EditorData>();
 
     // @todo: check if camera object is null
     auto camObj = editorObj.value("camera").toObject();

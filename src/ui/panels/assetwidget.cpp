@@ -158,7 +158,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// dependee filter that hid every asset a scene used, and the tray has one
 	// rule now — services/assettray.h — with nothing left to switch.)
 
-    ui->assetView->setItemDelegate(new ListViewDelegate());
+    ui->assetView->setItemDelegate(new ListViewDelegate(ui->assetView));
     ui->assetView->setTextElideMode(Qt::ElideRight);
 
 	connect(ui->assetView,  SIGNAL(itemClicked(QListWidgetItem*)),
@@ -252,7 +252,9 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		ui->assetView->setSpacing(4);
 		currentSize = iconSize;
 		ui->assetView->setIconSize(currentSize);
-		ui->assetView->setItemDelegate(new ListViewDelegate());
+		// the view's delegate is replaced: the old one (its child) goes with it
+		if (QAbstractItemDelegate *old = ui->assetView->itemDelegate()) old->deleteLater();
+		ui->assetView->setItemDelegate(new ListViewDelegate(ui->assetView));
 		updateAssetView(assetItem.selectedGuid, activeFilter);
 	});
 
@@ -262,7 +264,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		ui->assetView->setSpacing(0);
 		currentSize = listSize;
 		ui->assetView->setIconSize(currentSize);
-		ui->assetView->setItemDelegate(new QStyledItemDelegate());
+		if (QAbstractItemDelegate *old = ui->assetView->itemDelegate()) old->deleteLater();
+		ui->assetView->setItemDelegate(new QStyledItemDelegate(ui->assetView));
 		updateAssetView(assetItem.selectedGuid, activeFilter);
 	});
 

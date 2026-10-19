@@ -198,6 +198,9 @@ struct GizmoPickView
 
 class Gizmo
 {
+public:
+	/// Polymorphic, and each kind owns its handles (LEAK-1).
+	virtual ~Gizmo() = default;
 protected:
 	/// Undo pushes and transform-refresh notifications go through the
 	/// services (Phase 4: was UiManager's statics). Nullable in tests.

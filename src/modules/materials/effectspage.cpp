@@ -147,7 +147,7 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 
 	// The handle is stored WHATEVER it is (lane DBPTR-1): the member used to be
 	// assigned only inside this `if`, so a page built without a library kept an
-	// uninitialised pointer that renameShader/saveShader dereference. A null
+	// uninitialised pointer that saveShader dereferences. A null
 	// library is a real state (headless hosts, the module suites) and the
 	// member must say so.
 	dataBase = database;
@@ -1374,11 +1374,7 @@ void EffectsPage::configureStyleSheet()
 
 	nodePropertiesPanel->setStyleSheet(StyleSheet::EffectsNodePropertiesPanel());
 
-	nodeContainer->setStyleSheet(StyleSheet::EffectsNodeTiles());
 
-	nodeContainer->verticalScrollBar()->setStyleSheet(StyleSheet::EffectsNodeTilesScrollBar());
-
-	nodeTray->setStyleSheet(StyleSheet::EffectsDock());
 
 	displayWidget->setStyleSheet(StyleSheet::EffectsDock());
 	propertyWidget->setStyleSheet(StyleSheet::EffectsDock());
@@ -1393,12 +1389,6 @@ void EffectsPage::configureStyleSheet()
 
 void EffectsPage::configureAssetsDock()
 {
-	auto holder = new QWidget;
-	auto layout = new QVBoxLayout;
-	holder->setLayout(layout);
-	layout->setContentsMargins(0, 0, 0, 0);
-	layout->setSpacing(0);
-
 	tabWidget = new QTabWidget;
 	presets = new ListWidget;
 	effects = new ListWidget;
@@ -1699,11 +1689,8 @@ QByteArray EffectsPage::fetchAsset(const QString &guid, shaderInfo::Origin origi
 
 void EffectsPage::configureUI()
 {
-	nodeTray = new QDockWidget("Library");
-	centralWidget = new QWidget();
 	displayWidget = new QDockWidget("Display");
     assetsDock = new QDockWidget("");
-    projectDock = new QDockWidget("Project");
 
 	propertyWidget = new QDockWidget("Properties");
 	materialSettingsDock = new QDockWidget("Material Settings");
@@ -1735,11 +1722,8 @@ void EffectsPage::configureUI()
 			chosen(item->data(MODEL_GUID_ROLE).toString());
 		});
 	});
-	nodeContainer = new QListWidget;
 	splitView = new QSplitter;
-	projectName = new QLineEdit;
 
-	nodeTray->setAllowedAreas(Qt::AllDockWidgetAreas);
 	displayWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	propertyWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	materialSettingsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
@@ -1862,43 +1846,10 @@ void EffectsPage::configureUI()
 	propertyWidget->setWidget(nodePropertiesPanel);
 	nodePropertiesPanel->setMinimumHeight(400);
 	
-	QSize currentSize(100, 100);
+	// (The "Display: Icon / List" toggle — a QButtonGroup, two buttons, a label
+	// and a layout no widget ever took — and the node-tile list it switched,
+	// which nothing showed, are DELETED: LEAK-1 CRUD, all of them leaked per page.)
 
-	auto assetViewToggleButtonGroup = new QButtonGroup;
-	auto toggleIconView = new QPushButton(tr("Icon"));
-	toggleIconView->setCheckable(true);
-	toggleIconView->setCursor(Qt::PointingHandCursor);
-	toggleIconView->setChecked(true);
-	toggleIconView->setFont(font);
-
-	auto toggleListView = new QPushButton(tr("List"));
-	toggleListView->setCheckable(true);
-	toggleListView->setCursor(Qt::PointingHandCursor);
-	toggleListView->setFont(font);
-
-	auto label = new QLabel("Display:");
-	label->setFont(font);
-
-	assetViewToggleButtonGroup->addButton(toggleIconView);
-	assetViewToggleButtonGroup->addButton(toggleListView);
-
-	QHBoxLayout *toggleLayout = new QHBoxLayout;
-	toggleLayout->setSpacing(0);
-	toggleLayout->addWidget(label);
-	toggleLayout->addStretch();
-	toggleLayout->addWidget(toggleIconView);
-	toggleLayout->addWidget(toggleListView);
-
-	connect(toggleIconView, &QPushButton::pressed, [this]() {
-		nodeContainer->setViewMode(QListWidget::IconMode);
-	});
-
-	connect(toggleListView, &QPushButton::pressed, [this]() {
-		nodeContainer->setViewMode(QListWidget::ListMode);
-	});
-
-	connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged, [=](MaterialSettings value) {
-	});
 	materialSettingsDock->setWidget(materialSettingsWidget);
 
 	addTabs();
@@ -1914,30 +1865,13 @@ void EffectsPage::configureToolbar()
 	toolBar = new QToolBar("Tool Bar");
 	toolBar->setIconSize(QSize(15, 15));	
 	
-	projectName->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Expanding);
-	projectName->setMinimumWidth(250);
-	projectName->setText("Untitled Shader");
-	projectName->setStyleSheet(StyleSheet::EffectsProjectName());
-
-	connect(projectName, &QLineEdit::textEdited, [=](const QString text) {
-		if (!currentProjectShader) return;   // no material open, nothing to rename
-		currentProjectShader->setData(Qt::DisplayRole, text);
-		currentProjectShader->setData(Qt::UserRole, text);
-		newName = text;
-	});
-
-	connect(projectName, &QLineEdit::editingFinished, [=]() {
-		saveShader();
-		renameShader();
-	});
-
-	QAction *actionUndo = new QAction;
+	QAction *actionUndo = new QAction(toolBar);
 	actionUndo->setToolTip("Undo | Undo last action");
 	actionUndo->setObjectName(QStringLiteral("actionUndo"));
 	actionUndo->setIcon(fontIcons->icon(fa::reply, options));
 	toolBar->addAction(actionUndo);
 
-	QAction *actionRedo = new QAction;
+	QAction *actionRedo = new QAction(toolBar);
 	actionRedo->setToolTip("Redo | Redo last action");
 	actionRedo->setObjectName(QStringLiteral("actionRedo"));
 	actionRedo->setIcon(fontIcons->icon(fa::share, options));
@@ -1951,8 +1885,8 @@ void EffectsPage::configureToolbar()
 
 	toolBar->addSeparator();
 
-	auto importBtn = new QAction;
-	auto addBtn = new QAction;
+	auto importBtn = new QAction(toolBar);
+	auto addBtn = new QAction(toolBar);
 
 	importBtn->setIcon(fontIcons->icon(fa::download, options));
 	importBtn->setToolTip("Import shader");
@@ -1967,7 +1901,7 @@ void EffectsPage::configureToolbar()
 	empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	toolBar->addWidget(empty);
 
-	QAction *actionSave = new QAction;
+	QAction *actionSave = new QAction(toolBar);
 	actionSave->setObjectName(QStringLiteral("actionSave"));
 	actionSave->setCheckable(false);
 	actionSave->setToolTip("Export | Export the current scene");
@@ -2510,21 +2444,6 @@ void EffectsPage::setAssetWidgetDatabase(Database * db)
 	if (membersPanel) membersPanel->setDatabase(db);
 }
 
-void EffectsPage::renameShader()
-{
-	// No open material, no tile, nothing to rename (fix round F1's family:
-	// the page's item pointer is null whenever no material is open, and a
-	// drawer refill can clear it).
-	if (!currentProjectShader) return;
-	// THROUGH THE ONE NAME WRITER (PRESET-UNIFY-1 fix round 2), which is where
-	// both name laws live: a shipped preset cannot be renamed, and nothing
-	// else may take a shipped preset's name. `Database::renameAsset` knows
-	// neither, and this door went straight to it.
-	assettags::rename(dataBase, currentProjectShader->data(MODEL_GUID_ROLE).toString(),
-	                  currentProjectShader->data(Qt::DisplayRole).toString());
-	oldName = currentProjectShader->data(Qt::DisplayRole).toString();
-}
-
 bool EffectsPage::eventFilter(QObject * watched, QEvent * event)
 {
 	// (the graph-global property list and its drag-to-canvas flow died with
@@ -3019,11 +2938,11 @@ void EffectsPage::addMenuToSceneWidget()
 	// mirrored reflections"). There is ONE studio environment now, and a menu
 	// that could replace it with a grey ball would be that defect wearing a
 	// menu item.)
-	QMenu *modelMenu = new QMenu("Model");
-	modelMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
-
 	QMainWindow *window = new QMainWindow;
-	QToolBar *bar = new QToolBar;
+	// A menu bar does not own the menu it shows, nor a menu its actions: the
+	// window owns the menu and the menu its actions (LEAK-1).
+	QMenu *modelMenu = new QMenu("Model", window);
+	modelMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
 
 	window->menuBar()->addMenu(modelMenu);
 	displayWidget->setWidget(window);
@@ -3031,27 +2950,27 @@ void EffectsPage::addMenuToSceneWidget()
 	// The central slot stays empty until Studio hands in the engine-rendered
 	// preview (setEnginePreview).
 
-	auto cubeAction = new QAction("Cube");
+	auto cubeAction = new QAction("Cube", modelMenu);
 	connect(cubeAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Cube);
 	});
-	auto planeAction = new QAction("Plane");
+	auto planeAction = new QAction("Plane", modelMenu);
 	connect(planeAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Plane);
 	});
-	auto sphereAction = new QAction("Sphere");
+	auto sphereAction = new QAction("Sphere", modelMenu);
 	connect(sphereAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Sphere);
 	});
-	auto cylinderAction = new QAction("Cylinder");
+	auto cylinderAction = new QAction("Cylinder", modelMenu);
 	connect(cylinderAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Cylinder);
 	});
-	auto capsuleAction = new QAction("Capsule");
+	auto capsuleAction = new QAction("Capsule", modelMenu);
 	connect(capsuleAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Capsule);
 	});
-	auto torusAction = new QAction("Torus");
+	auto torusAction = new QAction("Torus", modelMenu);
 	connect(torusAction, &QAction::triggered, [=]() {
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Torus);
 	});
@@ -3073,11 +2992,8 @@ void EffectsPage::addMenuToSceneWidget()
 
 	sphereAction->setChecked(true);
 
-	auto screenShotBtn = new QPushButton("screenshot");
-	bar->addWidget(screenShotBtn);
-	connect(screenShotBtn, &QPushButton::clicked, [=]() {
-		
-	});
+	// (The "screenshot" button on a tool bar nothing ever showed, wired to an
+	// empty lambda, is DELETED — LEAK-1 CRUD: both leaked per page.)
 
 	// model group
 	auto modelGroup = new QActionGroup(this);

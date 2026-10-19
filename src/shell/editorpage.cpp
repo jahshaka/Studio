@@ -85,24 +85,24 @@ void EditorPage::build(const Deps &deps)
     wireFramesButton = new QToolButton;
     wireFramesButton->setObjectName(QStringLiteral("viewOptionsButton"));   // app.widget's name for it
     wireFramesButton->setStyleSheet(StyleSheet::ViewportMenuButton());
-    wireFramesMenu = new QMenu;
+    wireFramesMenu = new QMenu(wireFramesButton);   // a tool button does not own its menu
 	wireFramesMenu->setStyleSheet(StyleSheet::QMenuFlat());
 
-    wireCheckAction = new QAction(QIcon(), "Light Bounds");
+    wireCheckAction = new QAction(QIcon(), "Light Bounds", wireFramesMenu);
     wireCheckAction->setCheckable(true);
     connect(wireCheckAction, &QAction::toggled, this, [this](bool on) { sceneView->setShowLightWires(on); });
     wireFramesMenu->addAction(wireCheckAction);
 
     // Ground grid (EDITOR_SHORTCUTS_SPEC §3): default ON, per-scene persisted
     // beside the light-wires flag; hidden in Game View (G) and while playing.
-    gridCheckAction = new QAction(QIcon(), "Ground Grid");
+    gridCheckAction = new QAction(QIcon(), "Ground Grid", wireFramesMenu);
     gridCheckAction->setCheckable(true);
     connect(gridCheckAction, &QAction::toggled, this, [this](bool on) { if (sceneView) sceneView->setShowGrid(on); });
     wireFramesMenu->addAction(gridCheckAction);
 
     // Ground plane (WORLD-MODEL-1): the editor's infinite matte ground, beside
     // the grid; per-scene persisted, default OFF (EditorData::showGroundPlane).
-    groundPlaneCheckAction = new QAction(QIcon(), "Ground Plane");
+    groundPlaneCheckAction = new QAction(QIcon(), "Ground Plane", wireFramesMenu);
     groundPlaneCheckAction->setObjectName(QStringLiteral("groundPlaneCheckAction"));
     groundPlaneCheckAction->setCheckable(true);
     connect(groundPlaneCheckAction, &QAction::toggled, this, [this](bool on) {
@@ -110,14 +110,14 @@ void EditorPage::build(const Deps &deps)
     });
     wireFramesMenu->addAction(groundPlaneCheckAction);
 
-    physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
+    physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay", wireFramesMenu);
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, &QAction::toggled, this, [this](bool on) { sceneView->setShowDebugDrawFlags(on); });
     wireFramesMenu->addAction(physicsCheckAction);
 
     // Selection highlight: silhouette outline by default; this shows the polygon
     // wireframe instead (engine viewport only — legacy keeps its single style).
-    auto selectionWireAction = new QAction(QIcon(), "Selection Wireframe");
+    auto selectionWireAction = new QAction(QIcon(), "Selection Wireframe", wireFramesMenu);
     selectionWireAction->setCheckable(true);
     connect(selectionWireAction, &QAction::toggled, this, [this](bool on) {
         if (sceneView) sceneView->setSelectionWireframe(on);
@@ -128,7 +128,7 @@ void EditorPage::build(const Deps &deps)
     // this is where a user looks for viewport toggles — but it is NOT one of
     // the helpers Game View hides, and it is the only row here that persists
     // (as the `show_fps` preference, shared with the Preferences checkbox).
-    statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
+    statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)", wireFramesMenu);
     statsCheckAction->setCheckable(true);
     statsCheckAction->setChecked(
         SettingsManager::getDefaultManager()->get(settingkeys::showFps));

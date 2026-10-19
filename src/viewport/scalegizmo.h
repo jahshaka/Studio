@@ -60,6 +60,10 @@ class ScaleGizmo : public Gizmo
 	bool dragging;
 public:
 	ScaleGizmo();
+	/// The gizmo OWNS its handles (LEAK-1).
+	~ScaleGizmo() override { qDeleteAll(handles); }
+	ScaleGizmo(const ScaleGizmo &) = delete;
+	ScaleGizmo &operator=(const ScaleGizmo &) = delete;
 
 	void loadAssets();
 

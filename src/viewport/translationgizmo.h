@@ -122,6 +122,10 @@ class TranslationGizmo : public Gizmo
 
 public:
 	TranslationGizmo();
+	/// The gizmo OWNS its handles (LEAK-1: seven handles leaked per gizmo).
+	~TranslationGizmo() override { qDeleteAll(handles); }
+	TranslationGizmo(const TranslationGizmo &) = delete;
+	TranslationGizmo &operator=(const TranslationGizmo &) = delete;
 
 	void loadAssets();
 

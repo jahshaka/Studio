@@ -327,7 +327,7 @@ int main(int argc, char **argv)
         auto names = [](iris::SceneNodePtr n) {
             QSet<QString> out;
             const auto props = n->getProperties();
-            for (auto *p : props) { out.insert(p->name); delete p; }
+            for (auto *p : props.view()) out.insert(p->name);   // the list owns its rows
             return out;
         };
         auto advertises = [&](iris::SceneNodePtr n, const QStringList &keys, const QString &what) {

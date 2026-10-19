@@ -299,7 +299,6 @@ private:
 
     QSplitter *split;
 
-	QListWidget *_assetView;
 
 	QByteArray downloadedImage;
 	QVector<QByteArray> iconList;

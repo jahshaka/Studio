@@ -149,7 +149,6 @@ public:
 
 	void refreshShaderGraph();
 	void setAssetWidgetDatabase(Database *db);
-	void renameShader();
 
 	/// Open a material bundle in the graph editor. `origin` is WHICH DRAWER
 	/// it came from, and therefore whose version is read and written — see
@@ -519,8 +518,6 @@ private:
 	int indexForRef(const QVariant &tabOrGuid) const;
 	QSplitter *splitView = nullptr;
 
-	QDockWidget* nodeTray = nullptr;
-	QWidget *centralWidget = nullptr;
 	QDockWidget* displayWidget = nullptr;
 	MaterialSettingsWidget *materialSettingsWidget = nullptr;
 
@@ -530,13 +527,11 @@ private:
 
 	QDockWidget *propertyWidget = nullptr;
 	QDockWidget *materialSettingsDock = nullptr;
-	QDockWidget *projectDock = nullptr;
 	QDockWidget *assetsDock = nullptr;
 	QTabWidget *tabbedWidget = nullptr;
 	QTabWidget *tabWidget = nullptr;
 	GraphicsView* graphicsView = nullptr;
 	NodePropertiesPanel* nodePropertiesPanel = nullptr;
-	QListWidget *nodeContainer = nullptr;
 	QMenuBar *bar = nullptr;  
 	QToolBar *toolBar = nullptr;
 	QMenu *file = nullptr;
@@ -556,9 +551,7 @@ private:
 	QSize defaultGridSize = QSize(70, 70);
 	QSize defaultItemSize = QSize(90, 90);
 	QString oldName;
-	QString newName;
 
-	QLineEdit *projectName = nullptr;
 	ShaderAssetWidget *assetWidget = nullptr;
 	Database *dataBase = nullptr;
 };

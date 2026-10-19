@@ -90,11 +90,10 @@ QList<PropertyInfo> animatableProperties(const iris::SceneNodePtr &node)
     QList<PropertyInfo> out;
     if (!node) return out;
 
-    // getProperties() hands back freshly allocated Property objects every call
-    // and the caller owns them.
-    const auto props = node->getProperties();
+    // getProperties() hands back a fresh list that owns its rows.
+    const iris::PropertyRows props = node->getProperties();
     int index = 0;
-    for (auto *prop : props) {
+    for (auto *prop : props.view()) {
         const int propIndex = index++;
         if (!prop || !isAnimatablePropertyType(prop->type))
             continue;
@@ -106,7 +105,6 @@ QList<PropertyInfo> animatableProperties(const iris::SceneNodePtr &node)
         info.index = propIndex;
         out.append(info);
     }
-    qDeleteAll(props);
     return out;
 }
 

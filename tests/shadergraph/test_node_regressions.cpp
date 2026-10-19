@@ -113,6 +113,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
 
         auto v2 = library.createNode("vector2");
+        const std::unique_ptr<NodeModel> v2Owned(v2);   // the test owns it (no graph takes it)
         QJsonObject o2; o2["x"] = 0.5; o2["y"] = -1.25;
         v2->deserializeWidgetValue(o2);
         auto r2 = v2->serializeWidgetValue().toObject();
@@ -126,6 +127,7 @@ int main(int argc, char** argv)
         CHECK(near(r3["z"].toDouble(), 0.5), "D4: vector3 z=0.5 survives the round-trip");
 
         auto v4node = library.createNode("vector4");
+        const std::unique_ptr<NodeModel> v4nodeOwned(v4node);   // the test owns it (no graph takes it)
         QJsonObject o4; o4["x"] = 0.1; o4["y"] = 0.2; o4["z"] = 0.3; o4["w"] = 0.4;
         v4node->deserializeWidgetValue(o4);
         auto r4 = v4node->serializeWidgetValue().toObject();
@@ -160,7 +162,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
         int mismatches = 0;
         for (auto item : library.getItems()) {
-            auto node = library.createNode(item->name);
+            const std::unique_ptr<NodeModel> node(library.createNode(item->name));   // the test owns it
             if (node == nullptr || node->title != item->displayName) {
                 std::printf("      title mismatch: key '%s' drawer '%s' title '%s'\n",
                             qPrintable(item->name), qPrintable(item->displayName),
@@ -170,14 +172,14 @@ int main(int argc, char** argv)
         }
         CHECK(mismatches == 0, "titles: every library node carries its drawer name verbatim");
 
-        auto f = library.createNode("float");
+        const std::unique_ptr<NodeModel> f(library.createNode("float"));
         CHECK(f->title == "Float", "titles: the Float node is titled 'Float'");
     }
 
     // --------------------------------------------- float value round-trip
     {
         LibraryV1 library;
-        auto f = library.createNode("float");
+        const std::unique_ptr<NodeModel> f(library.createNode("float"));
         f->deserializeWidgetValue(QJsonValue(0.7));
         CHECK(near(f->serializeWidgetValue().toDouble(), 0.7),
               "float: inline editor value round-trips through (de)serialize");
@@ -190,7 +192,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
         CHECK(library.createNode("texCoords") == nullptr && library.createNode("uvTransform") == nullptr,
               "uv merge: the retired typeNames construct nothing");
-        CHECK(library.createNode("uv") != nullptr, "uv merge: the `uv` node constructs");
+        CHECK(std::unique_ptr<NodeModel>(library.createNode("uv")) != nullptr, "uv merge: the `uv` node constructs");
     }
 
     // ------------------------------ the shipped presets keep Passthrough

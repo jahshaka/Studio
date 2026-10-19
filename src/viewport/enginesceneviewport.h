@@ -110,7 +110,7 @@ public:
     QString gridPlane() const override { return mGridPlanePushed; }
     bool setCameraPose(const EditorCameraPose &pose) override;
     bool frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing) override;
-    void setEditorData(EditorData *data) override;
+    void setEditorData(std::unique_ptr<EditorData> data) override;
     EditorData *getEditorData() override;
 
     // ---- Pilot mode + the selection PiP (CAMERAS_SPEC D3/D8) --------------
@@ -822,7 +822,7 @@ private:
     /// under a third of the width, bottom-right.
     bool   mPipEnabled = true;
     double mPipSize = 0.28;
-    EditorData *mEditorData = nullptr;
+    std::unique_ptr<EditorData> mEditorData;
     bool mShowLightWires = true;
     // Per-scene (EditorData). Default OFF (owner, 2026-09-06): scenes ship a
     // tiled floor, so the perspective grid is noise — and it was baking into

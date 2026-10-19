@@ -52,8 +52,8 @@ class PlayBack
 	IEditorViewport* editorViewport = nullptr;
 
 	iris::Mat4 savedCameraMatrix;
-	CameraControllerBase* camController;
-	PlayerMouseController* mouseController;
+	CameraControllerBase* camController;   // observer: whichever controller drives the run
+	PlayerMouseController* mouseController;   // OWNED (LEAK-1): made in the ctor, freed in the dtor
 
 
 	iris::ScenePtr scene;
@@ -79,6 +79,9 @@ public:
 	void setEditorViewport(IEditorViewport* viewport) { editorViewport = viewport; }
 
 	PlayBack();
+	~PlayBack();
+	PlayBack(const PlayBack &) = delete;
+	PlayBack &operator=(const PlayBack &) = delete;
 	/// Physics, animation and the camera controllers run here; the engine's
 	/// SceneMirror does the drawing.
 	void init();

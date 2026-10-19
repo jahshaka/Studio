@@ -7,7 +7,7 @@
 // duplicate() starts from a member-wise copy, which handed the SAME row pointers to the second material, so freeing
 // them in ~Material would have double-freed the first time a duplicated node was deleted.
 //
-// WHAT IS ASSERTED (the law: the owner is the type whose copy IS the deep copy — iris::MaterialRows, each row cloned
+// WHAT IS ASSERTED (the law: the owner is the type whose copy IS the deep copy — iris::PropertyRows, each row cloned
 // by Property::clone):
 //   1. every row type clones to its own type with every field (value, range, labels, a texture row's asset guid);
 //   2. a duplicate's rows are DISTINCT objects with EQUAL names, order and values;

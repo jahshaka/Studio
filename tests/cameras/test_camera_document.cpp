@@ -194,8 +194,7 @@ int main(int argc, char **argv)
         auto cam = iris::CameraNode::create();
         auto props = cam->getProperties();
         QStringList names;
-        for (auto *p : props) names << p->name;
-        for (auto *p : props) delete p;
+        for (auto *p : props.view()) names << p->name;   // the list owns its rows
         for (const char *want : { "angle", "focalLength", "sensorWidth", "sensorHeight",
                                   "authorMode", "constrainAspect", "dofEnabled", "focusMode",
                                   "focusDistance", "fStop", "outputHeight", "bodyVisible",

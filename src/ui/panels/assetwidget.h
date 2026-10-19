@@ -67,6 +67,8 @@ class IShellView;
 
 class ListViewDelegate : public QStyledItemDelegate
 {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;   // parented to its view (a view does not own its delegate)
 protected:
 	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 	{

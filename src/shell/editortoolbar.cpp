@@ -66,21 +66,21 @@ void EditorToolbar::build(const Deps &deps)
 	toolBar->addSeparator();
 
 
-    actionTranslate = new QAction;
+    actionTranslate = new QAction(toolBar);
     actionTranslate->setObjectName(QStringLiteral("actionTranslate"));
     actionTranslate->setCheckable(true);
 	actionTranslate->setToolTip("Translate | Manipulator for translating objects | Translates the object along a given axis");
 	actionTranslate->setIcon(fontIcons->icon(fa::arrows, options));
 	toolBar->addAction(actionTranslate);
 
-    actionRotate = new QAction;
+    actionRotate = new QAction(toolBar);
     actionRotate->setObjectName(QStringLiteral("actionRotate"));
     actionRotate->setCheckable(true);
 	actionRotate->setToolTip("Rptate | Manipulator for rotating objects | Rotates the object along a given axis");
 	actionRotate->setIcon(fontIcons->icon(fa::rotateright, options));
 	toolBar->addAction(actionRotate);
 
-    actionScale = new QAction;
+    actionScale = new QAction(toolBar);
     actionScale->setObjectName(QStringLiteral("actionScale"));
     actionScale->setCheckable(true);
 	actionScale->setToolTip("Scale | Manipulator for scaling objects | Scales the object along a given axis");
@@ -89,14 +89,14 @@ void EditorToolbar::build(const Deps &deps)
 
     toolBar->addSeparator();
 
-    actionGlobalSpace = new QAction;
+    actionGlobalSpace = new QAction(toolBar);
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setIcon(fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
-    actionLocalSpace = new QAction;
+    actionLocalSpace = new QAction(toolBar);
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
@@ -105,14 +105,14 @@ void EditorToolbar::build(const Deps &deps)
 
     toolBar->addSeparator();
 
-    QAction *actionFreeCamera = new QAction;
+    QAction *actionFreeCamera = new QAction(toolBar);
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
 	actionFreeCamera->setIcon(fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
-	QAction *actionArcballCam = new QAction;
+	QAction *actionArcballCam = new QAction(toolBar);
 	actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
 	actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
@@ -261,14 +261,14 @@ void EditorToolbar::build(const Deps &deps)
         }
     }
 
-	QAction *actionExport = new QAction;
+	QAction *actionExport = new QAction(toolBar);
 	actionExport->setObjectName(QStringLiteral("actionExport"));
 	actionExport->setCheckable(false);
 	actionExport->setToolTip("Export | Export the current scene");
 	actionExport->setIcon(fontIcons->icon(fa::upload, options));
 	toolBar->addAction(actionExport);
 
-	actionSaveScene = new QAction;
+	actionSaveScene = new QAction(toolBar);
 	actionSaveScene->setObjectName(QStringLiteral("actionSaveScene"));
 	// ALWAYS THERE (owner, 2026-09-18: "show it even with auto save, as I may
 	// want a force save"). Its visibility used to be `!auto_save`, which — with
@@ -282,7 +282,7 @@ void EditorToolbar::build(const Deps &deps)
 	actionSaveScene->setIcon(fontIcons->icon(fa::floppyo, options));
 	toolBar->addAction(actionSaveScene);
 
-	QAction *viewDocks = new QAction;
+	QAction *viewDocks = new QAction(toolBar);
 	viewDocks->setObjectName(QStringLiteral("viewDocks"));
 	viewDocks->setCheckable(false);
 	viewDocks->setToolTip("Toggle Widgets | Toggle the dock widgets");

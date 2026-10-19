@@ -171,7 +171,7 @@ public:
     /// scene. editorData is an output parameter exactly as SceneReader hands
     /// it over. `prewarm` (optional) carries the BAKES a worker thread already
     /// read (irisgl/import/meshprewarm.h); the reader never parses a model.
-    iris::ScenePtr readProjectScene(EditorData **editorData,
+    iris::ScenePtr readProjectScene(std::unique_ptr<EditorData> *editorData,
                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
 
     /// The open PLAN for the threaded path: every model file the project's

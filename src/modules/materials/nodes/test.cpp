@@ -191,9 +191,7 @@ TextureNode::TextureNode()
 	texture = new QPushButton();
 	texture->setIconSize(QSize(145, 145));
 	texture->setMinimumSize(160, 146);
-	
 
-	auto label = new QLabel;
 
 	auto pushLayout = new QVBoxLayout;
 	texture->setLayout(pushLayout);

@@ -55,20 +55,21 @@ public:
     }
     void setFreeCameraMode() override {}
     void setArcBallCameraMode() override {}
-    void setEditorData(EditorData *data) override
+    void setEditorData(std::unique_ptr<EditorData> owned) override
     {
-        mEditorData = data;
+        mEditorData = std::move(owned);
+        EditorData *data = mEditorData.get();
         if (data && data->editorCamera) mEditorCam = data->editorCamera;
         if (mScene && mEditorCam) mScene->setCamera(mEditorCam);
     }
     EditorData *getEditorData() override
     {
-        if (!mEditorData) mEditorData = new EditorData();
+        if (!mEditorData) mEditorData = std::make_unique<EditorData>();
         mEditorData->editorCamera = mEditorCam;
         mEditorData->showLightWires = true;   // matches the editor default —
         // a scene saved from a headless run must not bake light wires OFF
         mEditorData->showDebugDrawFlags = false;
-        return mEditorData;
+        return mEditorData.get();
     }
 
     // ---- modes ----
@@ -112,7 +113,7 @@ private:
     EditorViewportEvents *mEvents = nullptr;
     iris::ScenePtr mScene;
     iris::CameraNodePtr mEditorCam;
-    EditorData *mEditorData = nullptr;
+    std::unique_ptr<EditorData> mEditorData;
 };
 
 #endif // HEADLESSEDITORVIEWPORT_H

@@ -283,7 +283,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 {
 	setParent(parent);
 	this->parent = parent;
-	_assetView = new QListWidget;
 	// The page's preview viewer: engine-backed, or the headless document-only
 	// stand-in when no engine view can exist.
 	if (!previewViewer) ownedViewer = std::make_unique<HeadlessAssetViewer>(this);
