@@ -1346,8 +1346,7 @@ QVariant NodeApi::lightProfile(const QString &id)
     if (!light) return QVariant();
     // The renderer's own rule, reported rather than hidden: shadow-casting
     // point lights lose their profile, and only spot/point carry one at all.
-    const bool shadows = light->shadowMap &&
-                         light->shadowMap->shadowType != iris::ShadowMapType::None;
+    const bool shadows = light->shadowMap.shadowType != iris::ShadowMapType::None;
     const bool applies = !light->iesProfileGuid.isEmpty() &&
                          (light->lightType == iris::LightType::Spot ||
                           (light->lightType == iris::LightType::Point && !shadows));

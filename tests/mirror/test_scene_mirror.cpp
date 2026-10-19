@@ -770,16 +770,16 @@ int main(int argc, char **argv)
 
         // Point-light shadow controls (the panel unhides Type/Size in engine
         // mode): the Shadow Type combo drives castShadows through toLightDesc.
-        point->shadowMap->shadowType = iris::ShadowMapType::Soft;
+        point->shadowMap.shadowType = iris::ShadowMapType::Soft;
         CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=Soft casts shadows");
-        point->shadowMap->shadowType = iris::ShadowMapType::None;
+        point->shadowMap.shadowType = iris::ShadowMapType::None;
         CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
 
         // (The STATIC SHADOW flag and the transform-write counter the mirror
         // watched for it are gone — ENGINE_CACHE_POLICY_SPEC P2/P3: every
         // point/spot map is cached and the ENGINE detects its inputs, per light.
         // What the mirror still carries is world.refreshShadows()'s serial.)
-        point->shadowMap->shadowType = iris::ShadowMapType::Soft;
+        point->shadowMap.shadowType = iris::ShadowMapType::Soft;
 
         // world.refreshShadows()'s serial: monotonic, and the document's
         // default is zero so a fresh scene never looks like a pending refresh.
@@ -805,7 +805,7 @@ int main(int argc, char **argv)
         fromJson->rectHeight = (float)j["rectHeight"].toDouble(1.0f);
         fromJson->doubleSided = j["doubleSided"].toBool(false);
         fromJson->accurate = j["accurate"].toBool(false);
-        fromJson->shadowMap->shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
+        fromJson->shadowMap.shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
         const LightDesc ad = SceneMirror::toLightDesc(fromJson.data());
         CHECK(ad.type == LightType::Area, "document area light maps to LightType::Area");
         CHECK(std::abs(ad.rectWidth - 2.0f) < 1e-5f && std::abs(ad.rectHeight - 0.5f) < 1e-5f,

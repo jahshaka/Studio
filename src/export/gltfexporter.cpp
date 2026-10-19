@@ -919,19 +919,17 @@ void writeTrs(QJsonObject &n, const iris::SceneNodePtr &node)
 QJsonObject shadowExtras(iris::LightNode *light)
 {
     QJsonObject sh;
-    const iris::ShadowMap *sm = light->shadowMap;
+    const iris::ShadowMap &sm = light->shadowMap;
     QString filter = "none";
-    if (sm) {
-        switch (sm->shadowType) {
-        case iris::ShadowMapType::Hard:     filter = "hard"; break;
-        case iris::ShadowMapType::Soft:     filter = "soft"; break;
-        case iris::ShadowMapType::VerySoft: filter = "verysoft"; break;
-        default: break;
-        }
+    switch (sm.shadowType) {
+    case iris::ShadowMapType::Hard:     filter = "hard"; break;
+    case iris::ShadowMapType::Soft:     filter = "soft"; break;
+    case iris::ShadowMapType::VerySoft: filter = "verysoft"; break;
+    default: break;
     }
     sh["castShadow"] = light->lightType != iris::LightType::Area && filter != "none";
     sh["filter"] = filter;
-    sh["mapSize"] = sm ? sm->resolution : 1024;
+    sh["mapSize"] = sm.resolution;
     // (NO `bias` KEY. The document's per-light shadow bias is deleted — the
     // renderer never read it, render audit I-6 — and the depth bias three.js
     // needs is the VIEWER's own constant, which is where it now lives.)

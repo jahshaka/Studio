@@ -583,13 +583,13 @@ int main(int argc, char **argv)
         CHECK(shadow != nullptr, "light: the shadow-type row is on the blade");
         const int steps = stack.index();
         // Whatever a fresh light's filter is (Soft, today), Hard is a change.
-        const iris::ShadowMapType bornWith = light->shadowMap->shadowType;
+        const iris::ShadowMapType bornWith = light->shadowMap.shadowType;
         if (shadow && shadow->getWidget()) shadow->getWidget()->setCurrentIndex(1);   // Hard
-        CHECK(light->shadowMap->shadowType == iris::ShadowMapType::Hard,
+        CHECK(light->shadowMap.shadowType == iris::ShadowMapType::Hard,
               "light: picking a shadow type wrote it through");
         CHECK(stack.index() == steps + 1, "light: as ONE step");
         stack.undo();
-        CHECK(light->shadowMap->shadowType == bornWith, "light: undone");
+        CHECK(light->shadowMap.shadowType == bornWith, "light: undone");
     }
 
     // ---- 6b. THE MOVEMENT ROW (REALTIME_REFLECTIONS_SPEC §3.3) -------------

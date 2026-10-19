@@ -677,7 +677,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             if (light->lightType != iris::LightType::Point &&
                 light->lightType != iris::LightType::Spot)
                 continue;
-            if (light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None)
+            if (light->shadowMap.shadowType != iris::ShadowMapType::None)
                 continue;
             leakers.append(light);
         }

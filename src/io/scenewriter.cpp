@@ -1020,9 +1020,8 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     // the three fields are gone from the document, CRUD law: the renderer never
     // read any of them.)
     //shadow data
-    auto shadowMap = lightNode->shadowMap;
-    sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
-    sceneNodeObject["shadowSize"] = shadowMap->resolution;
+    sceneNodeObject["shadowType"] = evalShadowTypeName(lightNode->shadowMap.shadowType);
+    sceneNodeObject["shadowSize"] = lightNode->shadowMap.resolution;
 }
 
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)

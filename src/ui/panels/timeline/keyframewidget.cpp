@@ -52,9 +52,10 @@ void KeyFrameWidget::deleteContextKey()
         } else if (contextKey.keyType == DopeKeyType::SummaryKey) {
             // loop through all keys and try to remove them from all each property
             // n^2, but its the best we can do right now
+            // A key lives in ONE track, which frees it as it removes it.
             for( auto key : contextKey.summaryKey.keys) {
                 for( auto frame : propAnim->getKeyFrames()) {
-                    frame.keyFrame->removeKey(key);
+                    if (frame.keyFrame->removeKey(key)) break;
                 }
             }
 

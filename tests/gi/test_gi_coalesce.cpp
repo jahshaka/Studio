@@ -150,7 +150,7 @@ int main(int argc, char **argv)
     sun->setName("sun");
     sun->lightType = iris::LightType::Directional;
     sun->intensity = 2.0f;
-    sun->shadowMap->shadowType = iris::ShadowMapType::None;
+    sun->shadowMap.shadowType = iris::ShadowMapType::None;
     sun->setLocalPos(iris::Vec3(0.0f, 6.0f, 6.0f));
     sun->setLocalRot(iris::Quat::fromEulerAngles(80.0f, 0.0f, 0.0f));   // at the wall
     doc->getRootNode()->addChild(sun);

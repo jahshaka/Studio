@@ -704,7 +704,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         l->setPropertyValue(QStringLiteral("distance"), 15.0f);
         l->setPropertyValue(QStringLiteral("lightColor"),
                             QColor(255, 200 + (i * 7) % 55, 160 + (i * 13) % 95));
-        l->shadowMap->shadowType = iris::ShadowMapType::None;
+        l->shadowMap.shadowType = iris::ShadowMapType::None;
         world.lights.push_back(l);
     }
     doc->getRootNode()->applyStaticDefaults();

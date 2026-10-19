@@ -349,8 +349,8 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
         refreshBindingRows();
 
-        shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
-        shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
+        shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap.resolution));
+        shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap.shadowType));
         refreshSunRows();
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
@@ -430,8 +430,7 @@ void LightPropertyWidget::refreshBindingRows()
         // removes its profile, because a shadow-casting point light is shaded
         // from a code path that has no profile term. There is no engine signal
         // for it, so the panel is the only place this can be said.
-        const bool shadows = lightNode->shadowMap &&
-                             lightNode->shadowMap->shadowType != iris::ShadowMapType::None;
+        const bool shadows = lightNode->shadowMap.shadowType != iris::ShadowMapType::None;
         const bool lost = type == iris::LightType::Point && shadows;
         PropertyRows::setPanelVisible(profileNote, lost);
         if (lost)

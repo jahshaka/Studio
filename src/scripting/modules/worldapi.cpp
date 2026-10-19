@@ -2532,7 +2532,7 @@ QVariantMap WorldApi::sun()
     out[QStringLiteral("reason")] = scene->sunReason();
     out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
     out[QStringLiteral("castsShadows")] =
-        sun && sun->shadowMap && sun->shadowMap->shadowType != iris::ShadowMapType::None;
+        sun && sun->shadowMap.shadowType != iris::ShadowMapType::None;
     // The direction the sun TRAVELS, in world space — what the realistic sky's
     // bake and the sun disc are both placed from (D15).
     if (sun) {

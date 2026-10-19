@@ -188,7 +188,7 @@ int main(int argc, char **argv)
     sun->intensity = 1.0f;
     sun->color = QColor(255, 255, 255);
     sun->followsAtmosphere = true;
-    sun->shadowMap->shadowType = iris::ShadowMapType::Soft;
+    sun->shadowMap.shadowType = iris::ShadowMapType::Soft;
     sun->setLocalRot(iris::Quat::fromEulerAngles(pitchFor(30.0f), 0.0f, 0.0f));
     doc->getRootNode()->addChild(sun);
 

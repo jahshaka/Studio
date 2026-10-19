@@ -90,8 +90,7 @@ int main(int argc, char **argv)
     // --- LightNode: previously created a ShadowMap -> QOpenGLTexture in its ctor
     auto light = iris::LightNode::create();
     CHECK(!!light, "iris::LightNode constructed without GL");
-    CHECK(light->shadowMap != nullptr, "light has a ShadowMap object");
-    CHECK(light->shadowMap->resolution == 2048, "shadow map settings carry a resolution (document data)");
+    CHECK(light->shadowMap.resolution == 2048, "shadow map settings carry a resolution (document data)");
     scene->getRootNode()->addChild(light);
 
     // --- MeshNode + mesh from a bundled OBJ: previously fine on CPU, buffers upload at draw

@@ -91,7 +91,7 @@ int main(int argc, char **argv)
     lamp->lightType = iris::LightType::Spot;
     lamp->intensity = 4.0f;
     lamp->distance = 30.0f;
-    lamp->shadowMap->shadowType = iris::ShadowMapType::Soft;
+    lamp->shadowMap.shadowType = iris::ShadowMapType::Soft;
     lamp->setLocalPos(iris::Vec3(0.0f, 8.0f, 2.0f));
     lamp->setLocalRot(iris::Quat::fromEulerAngles(-60.0f, 0.0f, 0.0f));
     doc->getRootNode()->addChild(lamp, false);

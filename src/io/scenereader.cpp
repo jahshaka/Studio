@@ -1388,16 +1388,16 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 	// they could hold ever changed a pixel.)
 
     //shadow data
-    auto shadowMap = lightNode->shadowMap;
+    iris::ShadowMap &shadowMap = lightNode->shadowMap;
     // THE RESOLUTION'S DEFAULT IS ShadowMap's OWN (the reader-defaults law):
     // it read 1024 here against the constructor's 2048, so every light in
     // every document written before the key existed came back at half the
     // shadow resolution a light made in the editor gets.
-    auto res = qBound(512, nodeObj["shadowSize"].toInt(shadowMap->resolution), 4096);
-    shadowMap->setResolution(res);
+    auto res = qBound(512, nodeObj["shadowSize"].toInt(shadowMap.resolution), 4096);
+    shadowMap.setResolution(res);
     // value(), not operator[]: a read through operator[] on a NON-CONST
     // QJsonObject INSERTS a null member.
-    shadowMap->shadowType = evalShadowMapType(nodeObj.value("shadowType").toString());
+    shadowMap.shadowType = evalShadowMapType(nodeObj.value("shadowType").toString());
     // FORWARD SHADING PRIORITY (directional lights only) — absent means the
     // default, which is what the writer relies on (it writes the key only when
     // it is non-zero).

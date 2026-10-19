@@ -211,9 +211,8 @@ int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, doub
     for (const auto &info : track->getKeyFrames()) {
         auto *frame = info.keyFrame;
         if (!frame) continue;
-        // Collect first: removeKey() mutates the vector being walked. And it
-        // only unlinks — the Key is ours to delete or it leaks (the KeyFrame
-        // destructor only frees what is still in the list).
+        // Collect first: removeKey() mutates the vector being walked (and frees
+        // the key: the track owns it).
         QVector<iris::Key<float> *> doomed;
         for (auto *key : frame->keys) {
             if (std::abs(key->time - time) <= kKeyEpsilon)
@@ -221,7 +220,6 @@ int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, doub
         }
         for (auto *key : doomed) {
             frame->removeKey(key);
-            delete key;
             ++removed;
         }
         if (!doomed.isEmpty())

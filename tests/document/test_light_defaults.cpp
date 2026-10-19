@@ -89,10 +89,10 @@ int main(int argc, char **argv)
             char msg[128];
             std::snprintf(msg, sizeof msg, "a fresh %s light is born casting SOFT shadows",
                           typeName(t));
-            CHECK(light->shadowMap && light->shadowMap->shadowType == iris::ShadowMapType::Soft,
+            CHECK(light->shadowMap.shadowType == iris::ShadowMapType::Soft,
                   msg);
             std::snprintf(msg, sizeof msg, "...at 2048 (a fresh %s light)", typeName(t));
-            CHECK(light->shadowMap && light->shadowMap->resolution == 2048, msg);
+            CHECK(light->shadowMap.resolution == 2048, msg);
         }
     }
 
