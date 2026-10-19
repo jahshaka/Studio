@@ -1964,6 +1964,10 @@ jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 2236)
+# `test_gi_march_underread --sun-arms` (ENGINE-POLISH-PHOTON-1 stage 4, a MEASURE run by hand, no row):
+# SUN-INJECTION-RES-2's three arms on the slab block's sun-lit wall - lobe / face at 32 / 64 / 128 cells with one of
+# the junction voxels' terms removed at a time (the plate a non-caster; a black dielectric; the wall's roughness the
+# plate's). Measured at the stage-3 tip: base 2.44 %, non-caster 1.35 %, black dielectric 2.51 %, roughness 2.43 %.
 # gi.march_inside — THE SHADOW MARCH'S INSIDE FRACTION (ENGINE-UPGRADE-U5 decision 22.2): two one-sided quads of opacity
 # 0.6 facing away from each other along the ray transmit (1 - c1)(1 - c2) = 0.16, one solid of the same opacity 1 - c = 0.4,
 # each against the store's own coverage, at 32 / 64 / 128 cells (the old max of the entries and the exits read both 0.4).
