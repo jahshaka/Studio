@@ -97,12 +97,9 @@ jah_tsan_blocked(import.shutdown)
 
 # The leak lane (scripts/sanitize.sh lsan): in-process, no Vulkan, and it
 # allocates the whole import closure (assimp scene, CAS blobs, thumbnails).
-# import.shutdown is NOT eligible at all — it spawns the app, which loads a
-# driver. import.async is eligible but QUARANTINED (L3 — every imported asset
-# leaks its AssetNodeObject and the mesh subtree under it: 21 KB in 248
-# allocations here, from two imports).
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES, LSAN-L3-IMPORT-ASSET-NODE (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(import.async)
+# (import.shutdown spawns the app and is not in this lane: its harness does not
+# read the child's exit through mcpharness::quitAndReap.)
+jah_lsan_lane(import.async)
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

@@ -191,12 +191,7 @@ endif()
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
 # and dialog ownership (a missing parent is the classic Qt leak). The on-screen
 # ui.engine_view_winid suite links the engine and stays out.
-# ui.material_panel is QUARANTINED (L1 iris::Material properties — 54
-# materials' worth). Its other leak, one QProxyStyle per slider row, was
-# this lane's first fix (hfloatsliderwidget.cpp).
-jah_lsan_lane(ui.property_anim ui.media_lazy)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(ui.material_panel)
+jah_lsan_lane(ui.property_anim ui.media_lazy ui.material_panel)
 
 # ui.light_channels — the lighting-channel checkbox row. Eight boxes over a
 # 32-bit field: the test is about the 24 bits the row does NOT show (they must
@@ -1510,8 +1505,9 @@ set_tests_properties(ui.column_law PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
+# LSan (LEAK-1, 2026-10-19): the app still leaks ~13 KB at exit under this row's script (the preferences page's
+# world-settings widgets, ThemeManager::applyAtStartup and qlementine polish allocations — spikes/leak-1/RESUME.md);
+# its harness reads the child's exit (quitAndReap), so the row moves to jah_lsan_lane when those have owners.
 jah_lsan_blocked(ui.column_law)   # spawns the app
 
 # ui.harness_child_log — ENGINE-UPGRADE-U3 decision 26: a child that dies of a device loss keeps its WHOLE log
@@ -1555,8 +1551,9 @@ set_tests_properties(ui.space_docks PROPERTIES
     TIMEOUT 480 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.space_docks)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
+# LSan (LEAK-1, 2026-10-19): the app still leaks ~13 KB at exit under this row's script (the preferences page's
+# world-settings widgets, ThemeManager::applyAtStartup and qlementine polish allocations — spikes/leak-1/RESUME.md);
+# its harness reads the child's exit (quitAndReap), so the row moves to jah_lsan_lane when those have owners.
 jah_lsan_blocked(ui.space_docks)   # spawns the app
 
 # ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
@@ -1582,8 +1579,9 @@ set_tests_properties(ui.window_minimum PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
+# LSan (LEAK-1, 2026-10-19): the app still leaks ~13 KB at exit under this row's script (the preferences page's
+# world-settings widgets, ThemeManager::applyAtStartup and qlementine polish allocations — spikes/leak-1/RESUME.md);
+# its harness reads the child's exit (quitAndReap), so the row moves to jah_lsan_lane when those have owners.
 jah_lsan_blocked(ui.window_minimum)   # spawns the app
 
 # ui.shot_aspect — plan item 15 / platform audit C2b.2: an offscreen shot is a
@@ -1614,8 +1612,9 @@ set_tests_properties(ui.material_drag PROPERTIES
     TIMEOUT 240 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.material_drag)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
+# LSan (LEAK-1, 2026-10-19): the app still leaks ~13 KB at exit under this row's script (the preferences page's
+# world-settings widgets, ThemeManager::applyAtStartup and qlementine polish allocations — spikes/leak-1/RESUME.md);
+# its harness reads the child's exit (quitAndReap), so the row moves to jah_lsan_lane when those have owners.
 jah_lsan_blocked(ui.material_drag)   # spawns the app
 
 add_executable(test_shot_aspect test_shot_aspect.cpp)
@@ -1636,8 +1635,9 @@ set_tests_properties(ui.shot_aspect PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
+# LSan (LEAK-1, 2026-10-19): the app still leaks ~13 KB at exit under this row's script (the preferences page's
+# world-settings widgets, ThemeManager::applyAtStartup and qlementine polish allocations — spikes/leak-1/RESUME.md);
+# its harness reads the child's exit (quitAndReap), so the row moves to jah_lsan_lane when those have owners.
 jah_lsan_blocked(ui.shot_aspect)   # spawns the app
 
 # ui.view_options_submenu — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the

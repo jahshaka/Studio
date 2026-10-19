@@ -176,11 +176,7 @@ jah_no_display(services.ogre_samples)
 #         AssetManager/ThumbnailManager fail to free shows up here first, and
 #         neither one loads a driver.
 jah_tsan_lane(services.memory)
-# services.memory is QUARANTINED (L2 LightNode::shadowMap — 24 bytes, its
-# only leak; the registry ownership it actually tests is clean).
-jah_lsan_lane(services.core)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L2-LIGHTNODE-SHADOWMAP (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(services.memory)
+jah_lsan_lane(services.core services.memory)
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

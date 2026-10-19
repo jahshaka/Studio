@@ -20,11 +20,10 @@
 # process the lane starts.
 #
 # Membership is the ctest label `lsan`, set next to each suite's add_test (see
-# tests/CMakeLists.txt): the document/service suites that never initialise
-# Vulkan and never spawn the app. That is deliberate — the four ASan-built
-# engine suites run with detect_leaks=0 because the Vulkan loader's Mesa
-# device-select layer leaks ~6 dbus allocations we do not own, and that
-# justification does not extend to code that never loads a driver.
+# tests/CMakeLists.txt): the document/service suites; the app-spawning suites
+# are eligible (their harness reads the child's exit, tests/support/
+# mcpharness.h quitAndReap: a green app row means the APP leaked nothing).
+# The four ASan-built engine fixtures stay out (detect_leaks=0 there).
 #
 # ---------------------------------------------------------------- tsan --------
 # ThreadSanitizer cannot coexist with AddressSanitizer and instruments every
@@ -72,10 +71,10 @@ Environment:
   JAH_SAN_BUILD_JOBS  the build width, an explicit override. Default: THE MEMORY
                       LAW — 12 compile jobs box-wide divided by
                       1 + the other live ninja processes, never below 2
-  DISPLAY             not needed by either lane as it stands (both run only
-                      offscreen suites). It becomes required the moment a suite
-                      that starts Jahshaka rejoins a lane — and then it must be
-                      your own Xvfb, never a shared session.
+  DISPLAY             needed by the lsan lane's app-spawning rows (they boot
+                      Jahshaka; quarantined today, `ctest -L '^lsan-blocked$'`):
+                      your own Xvfb, never a shared session, under the card
+                      lock (scripts/gpu-exclusive.sh).
 EOF
 }
 
@@ -146,12 +145,16 @@ run_lsan() {
     #                a suppression file nobody audits is a lie with a filename.
     export LD_PRELOAD="$lsan_lib"
     export LSAN_OPTIONS="suppressions=$REPO_ROOT/scripts/lsan.supp:print_suppressions=1:exitcode=23"
+    # THE DRIVER STAYS NAMED (LEAK-1). The app-spawning rows boot the real app, and the Vulkan loader dlclose()s the
+    # ICD at vkDestroyInstance: every allocation the driver keeps then prints as `<unknown module>`, which no
+    # suppression can name and no reader can attribute. Kept loaded, its frames say libnvidia-glcore (lsan.supp).
+    export VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=1
     echo "sanitize: LSAN_OPTIONS=$LSAN_OPTIONS"
 
     # -L takes a REGEX: anchor it, or `lsan` also selects `lsan-blocked`.
     ( cd "$BUILD_DIR" && ctest -L '^lsan$' --output-on-failure "$@" )
     local rc=$?
-    unset LD_PRELOAD LSAN_OPTIONS
+    unset LD_PRELOAD LSAN_OPTIONS VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING
 
     # The quarantine is part of the result, not a footnote: these suites are
     # eligible for the lane and fail it today because of a known leak

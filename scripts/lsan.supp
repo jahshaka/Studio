@@ -53,3 +53,22 @@ leak:__pthread_cond_broadcast_2_0
 # tests/support/fresh_home.sh failed its FIXTURE before the row ever started. A module we do not compile;
 # matched by its path, so it can never hide an allocation of ours.
 leak:/usr/lib/cargo/bin/coreutils
+
+# ---------------------------------------------------------------------------
+# THE APP'S THIRD-PARTY FLOOR (LEAK-1, 2026-10-19): what is left when the app's own allocations all have an owner — a
+# bare `Jahshaka --script` run and the nine app-spawning rows, measured at LEAK-1's tip (spikes/leak-1/). Each is a
+# library we do not compile, allocating for itself, once per process; none can match a frame of ours.
+#
+# The NVIDIA Vulkan driver — 49-60 KB in 14-18 allocations per app process, every app run (driver 595.91.07): the
+# ICD's own instance/device state it does not free at vkDestroyInstance. Readable only because sanitize.sh runs the
+# lane with VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=1: once the loader dlclose()s the ICD its frames print as
+# `<unknown module>`, which no suppression can name (and which would also hide whose they were).
+leak:libnvidia-glcore.so
+# Qt's xcb event reader thread (libQt6XcbQpa -> libxcb's xcb_wait_for_event): the X events read off the socket and
+# not yet consumed when the app exits — 32 B each, 27-158 per run, the queue's tail at exit. Qt's QXcbEventQueue
+# owns them; it is torn down with the connection without draining.
+leak:xcb_wait_for_event
+# fontconfig's pattern cache (FcFontRenderPrepare / FcFontMatch, reached from Qt's font fallback while text is
+# shaped; and its config parse, XML_ParseBuffer): 0.3-62 KB per process, bounded by the fonts the UI resolves.
+# fontconfig keeps these for the process lifetime; Qt never calls FcFini.
+leak:libfontconfig.so

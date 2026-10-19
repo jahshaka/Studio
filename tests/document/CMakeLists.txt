@@ -135,11 +135,7 @@ jah_no_display(document.mobility)
 # The leak lane (scripts/sanitize.sh lsan): the document model itself — every
 # node, mesh, material and animation type constructed and dropped. No Vulkan,
 # no app process, so LeakSanitizer runs with detect_leaks=1 here.
-# QUARANTINED (L2 LightNode::shadowMap, L5 KeyFrame keys) plus one leak of
-# the suite's own (test_document_characterisation.cpp:386 news a Vector3DPropertyAnim
-# it never deletes). Move to jah_lsan_lane once L2/L5 are fixed.
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(document.characterisation)
+jah_lsan_lane(document.characterisation)
 
 # ENGINEERING_DEBT_SPEC A4.2: the ONE fixed-step simulation clock
 # (irisgl/document/scenegraph/simulationclock.h). Header-only arithmetic —
