@@ -663,17 +663,29 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
               "AN IN-PLACE METALNESS EDIT REACHES THE TRACE: gold (%.0f, %.0f, %.0f), not black, with nothing moving",
               eR, eG, eB);
 
-    // ...AND FROM A GLOSSY REFLECTOR (the voxel route, kReflectMetalDecodeRoughness): the
-    // sphere at roughness 0.35 takes the metal hit from the voxel store, not a decode.
+    // ...AND FROM A GLOSSY REFLECTOR (above kReflectMetalDecodeRoughness): the sphere at
+    // roughness 0.35 takes the metal hit by THE ONE RULE every hit takes (BUGS-1 item 2) —
+    // its card where the card answers the footprint, else the store's bounce part beside the
+    // hit's own direct light (FAR-SUN-2) — never a decode and never the store whole.
     PbrParams glossySphere; glossySphere.albedo = Colour(0.95f, 0.95f, 0.95f); glossySphere.metalness = 1.0f;
     glossySphere.roughness = 0.35f;
     s->attachMesh(room.sphere, s->createMesh(sphereMesh()), s->createPbrMaterial(glossySphere));
     // The glossy lobe spreads the crate's image (and it darkens the sky it hides), so the
-    // route is judged against the FULL DECODE of the same frame (the arm at 1): the voxel
-    // store must give what the decode gives, within the measured 2-6 codes at r >= 0.3.
-    Image glossyShot, glossyDecode, glossyNone;
+    // route is judged against the FULL DECODE of the same frame (the arm at 1): the card
+    // must give what the decode gives (bar 8 codes, REFLECT-FIX-1's).
+    Image glossyShot, glossyDecode, glossyNone, glossyHits;
     render(e, 240);
     view->readPixels(glossyShot);
+    // WHAT SHADED THOSE RAYS: the Hits view paints every traced texel with its ray's
+    // source — the card green (0.1, 0.9, 0.2), the store blue (0.15, 0.35, 1.0), the sky
+    // cyan, a decode record magenta (1.0, 0.2, 1.0). Over the crate's image: the rule's two
+    // sources, no record. (Which of the two is the card's footprint gate's call: at this
+    // reflector and distance the footprint is wider than JAH_CARD_FOOTPRINT_TEXELS of the
+    // crate's card texels and the store answers - measured, BUGS-1 batch 2.)
+    s->setPhotonView(PhotonView::Hits);
+    render(e, 4);
+    view->readPixels(glossyHits);
+    s->setPhotonView(PhotonView::Off);
     e->setArm("reflect.metalDecode", 1.0);
     render(e, 240);
     view->readPixels(glossyDecode);
@@ -683,7 +695,7 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     view->readPixels(glossyNone);
     s->setNodeVisible(crate, true);
     double err = 0.0;
-    int vn = 0;
+    int vn = 0, byCard = 0, byStore = 0, bySky = 0, byRecord = 0;
     for (unsigned i : disk) {
         const unsigned char *g = &glossyShot.rgba[size_t(i) * 4u], *dd = &glossyDecode.rgba[size_t(i) * 4u];
         const unsigned char *z = &glossyNone.rgba[size_t(i) * 4u];
@@ -691,11 +703,22 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
             continue;
         for (int k = 0; k < 3; ++k) err += std::abs(int(g[k]) - int(dd[k]));
         ++vn;
+        const unsigned char *h = &glossyHits.rgba[size_t(i) * 4u];
+        const bool r = h[0] > 127, gg = h[1] > 127, b = h[2] > 127;
+        if (gg && !r && !b) ++byCard;
+        else if (b && !gg && !r) ++byStore;
+        else if (gg && b && !r) ++bySky;
+        else if (r && b && !gg) ++byRecord;
     }
     err = vn ? err / (3.0 * vn) : 1e9;
-    std::printf("   from a glossy sphere (r 0.35, the voxel route): %.2f codes from the full decode over %d px\n", err, vn);
+    std::printf("   from a glossy sphere (r 0.35, the one rule): %.2f codes from the full decode over %d px; the "
+                "Hits view there: %d card, %d store, %d sky, %d decode records\n", err, vn, byCard, byStore, bySky, byRecord);
     CHECK_MSG(vn > 50 && err <= 8.0,
-              "...and from a GLOSSY reflector the voxel route gives the decode's metal (%.2f codes, bar 8)", err);
+              "...and from a GLOSSY reflector the one rule gives the decode's metal (%.2f codes, bar 8)", err);
+    CHECK_MSG(byRecord == 0 && byCard + byStore >= ((vn - bySky) * 9) / 10 && byCard + byStore > 50,
+              "...and THE ONE RULE answers those hits: %d card + %d store of the %d px the crate's traced rays "
+              "reach (%d sky at its edge), %d decode records (a metal is no exception: no record, no decode)",
+              byCard, byStore, vn - bySky, bySky, byRecord);
 
     // A SPECULAR-WORKFLOW DIELECTRIC IS NOT A METAL (the fix round's gpuIsMetal defect):
     // SpecularAsFresnel, F0 0.04, a white specular colour kS — the shape of every
