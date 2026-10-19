@@ -18,10 +18,14 @@
 //  * the photographed viewport draws the scene (the driver: its luminance spread above the plate's);
 //  * while the background compiler had work, the toolbar's indicator was VISIBLE with a count > 0;
 //  * the final materials within kFinalFrames: nothing pending in the compiler and no material drawing a fallback
-//    (editor.viewportState().pending.textures), within kFinalFrames frames of the open.
+//    (editor.viewportState().pending.textures), within kFinalFrames frames of the open;
+//  * THE PASS SHAPE HOLDS (stage 3): the GI-reading passes' declared shape (world.giStatus().passShape — the
+//    configuration's cascades and field, from the first frame, on stand-ins until the arm lands) at the open equals the
+//    shape kShapeFrames frames later, and its change count did not move: the arm's arrival recompiled nothing.
 function J(x) { return JSON.stringify(x); }
 var SCENES = "@CMAKE_SOURCE_DIR@/scenes";
 var kFinalFrames = 600;
+var kShapeFrames = 300;
 var failures = 0;
 function ok(cond, msg) { if (cond) console.log("ok:   " + msg); else { console.log("FAIL: " + msg); ++failures; } }
 
@@ -36,6 +40,7 @@ var vs = editor.viewportState();
 console.log("OPEN_STREAMS opened " + Date.now() + " " + f0 + " " + vs.windowX + " " + vs.windowY + " " + vs.windowW + " " +
             vs.windowH);
 
+var shape0 = world.giStatus().passShape, shapeLater = null;
 var timeline = [], last = -1, indicatorSeen = null, pendingSeen = 0, finalAt = -1, guard = 0;
 while (app.frameStats().rendered < f0 + kFinalFrames && ++guard < 50000000) {
     var fs = app.frameStats();
@@ -50,9 +55,10 @@ while (app.frameStats().rendered < f0 + kFinalFrames && ++guard < 50000000) {
     var m = ind && ind.visible ? /Compiling shaders \((\d+)\)/.exec(String(ind.tooltip)) : null;
     if (!indicatorSeen && a.pending > 0 && m && Number(m[1]) > 0)
         indicatorSeen = { frame: fs.rendered - f0, tooltip: ind.tooltip, pending: a.pending };
+    if (!shapeLater && fs.rendered - f0 >= kShapeFrames) shapeLater = world.giStatus().passShape;
     if (a.pending === 0 && p && p.textures === 0 && p.meshes === 0) {
         if (finalAt < 0) finalAt = fs.rendered - f0;
-        if (fs.rendered - f0 >= finalAt + 30) break;   // and stays so for 30 frames
+        if (fs.rendered - f0 >= finalAt + 30 && shapeLater) break;   // and stays so for 30 frames
     } else {
         finalAt = -1;
     }
@@ -62,5 +68,9 @@ ok(pendingSeen > 0, "the background compiler had work after the open (" + pendin
 ok(!!indicatorSeen, "the toolbar's indicator was visible with a count > 0 while shaders were pending (" + J(indicatorSeen) + ")");
 ok(finalAt >= 0 && finalAt <= kFinalFrames,
    "the final materials within " + kFinalFrames + " frames of the open (" + finalAt + ")");
+ok(shape0 && shape0.cascades > 0, "the sample's passes declare its voxel arm at the open (" + J(shape0) + ")");
+ok(shapeLater && shapeLater.cascades === shape0.cascades && shapeLater.field === shape0.field &&
+       shapeLater.changes === shape0.changes && !shapeLater.standIn,
+   "the pass shape " + kShapeFrames + " frames later is the open's, unchanged, the arm landed (" + J(shapeLater) + ")");
 console.log(failures ? "OPEN_STREAMS script FAILED" : "OPEN_STREAMS script PASS");
 app.quit();

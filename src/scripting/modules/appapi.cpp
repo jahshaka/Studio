@@ -324,7 +324,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "true to clear the record after reading it.",
           Needs::Document },
         { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, submitted, handOvers, requests, presentAlpha, presentFree}}",
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, submitted, handOvers, requests, presentAlpha, presentFree}, drain:{messagesTotal, messagesCarried, drainsCut}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -355,7 +355,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "`presentAlpha` / "
           "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
           "free-running frame; `requests` — the engine requests the host made (each waits up to a frame in "
-          "free-running: none belongs on a per-tick path).",
+          "free-running: none belongs on a per-tick path). `drain` is the render side's drain of the record, off the "
+          "snapshot (BISTRO-STREAM-IN-1): `messagesTotal` the structural messages ever applied, `messagesCarried` the ones "
+          "the last drain left to the next frame and `drainsCut` the drains cut, ever — a FREE frame applies the record "
+          "under its budget (about the rest of its last frame's work) and carries the remainder in order; a lockstep "
+          "frame, a join and a request drain whole, so both read 0 in a script that steps editor.frame.",
           Needs::Document },
         { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
           "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
@@ -1615,6 +1619,14 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
         submit.insert("presentFree", engine->published().presentFree);
     }
     out.insert("submit", submit);
+    QVariantMap drain;
+    if (engine) {
+        const jahshaka::engine::FrameInputStatus &in = engine->published().input;
+        drain.insert("messagesTotal", double(in.messagesTotal));
+        drain.insert("messagesCarried", double(in.messagesCarried));
+        drain.insert("drainsCut", double(in.drainsCut));
+    }
+    out.insert("drain", drain);
     if (reset && driver) driver->resetWorst();
     return out;
 }

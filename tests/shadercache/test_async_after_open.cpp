@@ -28,6 +28,10 @@ static int failures = 0;
 /// THE SETTLED PICTURE'S TOLERANCE against the warm launch's (mean |difference| per channel,
 /// codes 0-255). Measured: see the evidence file named in the lane report.
 static constexpr double kSettledMeanTolerance = 0.5;
+/// THE FIRST PRESENTED FRAME'S BOUND, in frames after the open returns (BISTRO-STREAM-IN-1): the reveal binds the world and
+/// its first frame presents at once — no frame is held for a shader. Measured 0 cold and 0 warm (2026-10-19); the bar allows
+/// the record a frame to land and one to present.
+static constexpr int kFirstPresentedFrames = 2;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -195,6 +199,23 @@ int main(int argc, char **argv)
     report("warm", warm);
 
     CHECK(cold.value("ready").toObject().value("running").toBool(), "the background compiler runs");
+    // THE STREAMING LAW AT THE OPEN (BISTRO-STREAM-IN-1; the held frame it replaced is deleted): the new world's first
+    // frame is PRESENTED within kFirstPresentedFrames frames of the create's return, and a lockstep run's drains are
+    // whole — the counters the render side keeps (app.frameStats().drain), never a clock.
+    for (const QJsonObject *run : { &cold, &warm }) {
+        const char *tag = run == &cold ? "cold" : "warm";
+        const int first = run->value("firstPresented").toInt(-1);
+        std::printf("    %s: the first presented frame %d frame(s) after the create; %d drains cut, %d carried, %d applied\n",
+                    tag, first, run->value("drainsCut").toInt(-1), run->value("messagesCarried").toInt(-1),
+                    run->value("messagesApplied").toInt(-1));
+        CHECK(first >= 0 && first <= kFirstPresentedFrames,
+              (QByteArray(tag) + ": the world's first frame was presented within kFirstPresentedFrames frames of the open")
+                  .constData());
+        CHECK(run->value("drainsCut").toInt(-1) == 0 && run->value("messagesCarried").toInt(-1) == 0 &&
+                  run->value("messagesApplied").toInt(0) > 0,
+              (QByteArray(tag) + ": the lockstep drains applied the record whole (no drain cut, nothing carried)")
+                  .constData());
+    }
     for (const char *name : { "material", "tier" }) {
         const QJsonObject c = phaseOf(cold, name), w = phaseOf(warm, name);
         const QByteArray n(name);

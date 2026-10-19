@@ -740,6 +740,11 @@ public:
         /// convergence schedule (engine Types.h), and `giAtRest` is THE settle
         /// predicate: nothing the scene's GI owes will change the picture.
         bool ifdBound = false;
+        /// The GI-reading passes' declared shape and its changes (engine GiStatus::passShape*, BISTRO-STREAM-IN-1).
+        int  passShapeCascades = 0;
+        bool passShapeField = false;
+        bool passShapeStandIn = false;
+        unsigned long long passShapeChanges = 0;
         int  ifdProbes = 0;
         int  ifdProbesPerFrame = 0;
         unsigned ifdTargetSamples = 0;

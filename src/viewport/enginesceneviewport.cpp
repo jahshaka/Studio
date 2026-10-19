@@ -2970,6 +2970,10 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.worstProbeShapeCellRatio = st.worstProbeShapeCellRatio;
     out.reusedLastRefresh    = st.reusedLastRefresh;
     out.ifdBound             = st.ifdBound;
+    out.passShapeCascades    = st.passShapeCascades;
+    out.passShapeField       = st.passShapeField;
+    out.passShapeStandIn     = st.passShapeStandIn;
+    out.passShapeChanges     = st.passShapeChanges;
     out.ifdProbes            = st.ifdProbes;
     out.ifdTargetSamples     = st.ifdTargetSamples;
     out.ifdRefinesOwed       = st.ifdRefinesOwed;

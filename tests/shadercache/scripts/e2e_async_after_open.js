@@ -12,7 +12,16 @@ app.setAsyncShaders(true);
 // ONE NAME PER LAUNCH: the warm launch shares the cold one's home (that is its shader cache) and so its
 // library, and a library refuses a second project of the same name — the fixed name made the warm
 // launch die at this line, "both launches reported" red 3/3 (A2-defect-shader.async_after_open).
+var d0 = app.frameStats().drain;
 project.create("async after open " + (OUTDIR.indexOf("/warm") >= 0 ? "warm" : "cold"), { template: "basic" });
+// THE STREAMING LAW AT THE OPEN (BISTRO-STREAM-IN-1): no frame is held — the world's first presented frame comes within
+// a frame or two of the create's return, counted in frames (editor.viewportState().framesPresented: frames of THIS world
+// drawn and presented), and a lockstep script's drains are whole (app.frameStats().drain: no drain cut, nothing carried).
+r.firstPresented = -1;
+for (var k = 0; k <= 10 && r.firstPresented < 0; ++k) {
+    if (editor.viewportState().framesPresented > 0) { r.firstPresented = k; break; }
+    editor.frame(1);
+}
 // COUNTED (TESTING-SPEED-B3): the open's own compiles are waited out by app.waitForAsyncShaders() and the
 // 60 frames after it — the two fixed 120-frame waits before them are 10 frames each now (the sphere's
 // add needs a frame to reach the engine; the waiter does the rest). Both launches run the same frames.
@@ -66,5 +75,9 @@ phase("material", function () {
 phase("tier", function () { world.gi({ tier: "low" }); });
 r.live = live();
 r.final = st();
+var d1 = app.frameStats().drain;
+r.drainsCut = (d1.drainsCut || 0) - (d0.drainsCut || 0);
+r.messagesCarried = d1.messagesCarried || 0;
+r.messagesApplied = (d1.messagesTotal || 0) - (d0.messagesTotal || 0);
 console.log("ASYNCAFTEROPEN " + JSON.stringify(r));
 app.quit();
