@@ -176,6 +176,9 @@ def hunk_cases(gs, graph, build, inv0, cases):
         finally:
             gs.Revs = real
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
+        # a hunk is read by what it names: never the whole inventory unless the case says so (TOOLING-2: a `must` list
+        # passed by a whole-inventory reach proved nothing)
+        check(not S.full_tier or c.get("whole_tier"), "%s: no whole-inventory reach (%s)" % (c["case"][:60], S.full_tier[:1]))
         miss = [m for m in c["must"] if m not in S.selected and not S.full_tier]
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
         extra = [m for m in c.get("must_not", []) if m in S.selected]

@@ -1303,7 +1303,15 @@ class Selection:
                 except OSError: text = ""
             names = sorted({os.path.basename(x) for x in re.findall(r"^\+\+\+ b/(\S+)", text, re.M)})
             comp = m_patch.group(2)
-            roots = [os.path.join(ROOT, "irisgl", "thirdparty", comp)]
+            # THE TREE IT PATCHES is the one its applier names (TOOLING-2 stage 1): the configure-time command that runs
+            # the stack (`-DPATCHES=<this dir> -DSRC=<tree>`) says which tree — bullet-patches/ patches bullet3/, which no
+            # name guess finds; an applier whose SRC is a stage in the build (clusterlod.h's) reaches its vendor-patched/
+            # copy, below
+            srcs = [s_ for pd, s_ in self.patch_appliers() if pd == os.path.join(ROOT, m_patch.group(1)) and s_]
+            roots = list(dict.fromkeys(
+                [s_ for s_ in srcs if s_.startswith(ROOT + "/") and os.path.isdir(s_)
+                 and not (self.graph is not None and s_.startswith(self.graph.build + "/"))]
+                + [os.path.join(ROOT, "irisgl", "thirdparty", comp)]))
             if self.graph is not None:
                 roots += [os.path.join(dp, comp) for dp, dns, _ in os.walk(self.graph.build)
                           if os.path.basename(dp) == "vendor-patched"]
@@ -1316,7 +1324,12 @@ class Selection:
                             g = self.graph_rows(rel, f"{tag} (patches {rel})")
                             if g is not None:
                                 hit += 1
-                                if g[1]: self.expand(["*app-rows"], [], f"{tag}: patches {f}, compiled into the app")
+                                if g[1]:
+                                    # compiled into the app: a VENDORED ARCHIVE's object enters our code through the
+                                    # first-party objects that call that archive (target_changed's law) — their families
+                                    refs = self.vendored_entry(os.path.join(ROOT, rel), f"{tag} (patches {f})", notes)
+                                    if not refs:
+                                        self.expand(["*app-rows"], [], f"{tag}: patches {f}, compiled into the app")
                                 for inc in sorted({os.path.relpath(self.graph.obj_src[o], ROOT)
                                                    for o in self.graph.includers(os.path.join(ROOT, rel))
                                                    if o in self.graph.obj_src}):
@@ -1325,7 +1338,8 @@ class Selection:
             self.expand(["hygiene"], [], f"{tag}: a vendored patch")
             if not hit:
                 self.full_tier.append(f"{p}: a patch whose patched file ({names}) no build graph node owns")
-            if depth == 0: self.rationale.append((p, f"a vendored patch of {names}: {hit} compiled copy(ies)"))
+            if depth == 0: self.rationale.append((p, f"a vendored patch of {names}: {hit} compiled copy(ies)"
+                                                  + ("".join("; " + n_ for n_ in dict.fromkeys(notes)))))
             return
         if re.match(r"^(irisgl/)?thirdparty/[^/]+/(PROVENANCE|README|LICENSE|NOTICE|COPYING)[^/]*$", p) or (
                 (p.startswith(("irisgl/thirdparty/", "thirdparty/"))) and p.endswith(".md") and
@@ -1885,18 +1899,9 @@ class Selection:
         """[(build file, its text, command)] of every command that runs <p> with `-P`."""
         base = os.path.basename(p)
         if not base.endswith(".cmake"): return []
-        if not hasattr(self, "_cmake_files"):
-            self._cmake_files = []
-            for dp, dns, fs in os.walk(ROOT):
-                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
-                for f in fs:
-                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
-                        try: self._cmake_files.append((os.path.relpath(os.path.join(dp, f), ROOT),
-                                                       open(os.path.join(dp, f), errors="replace").read()))
-                        except OSError: pass
         out = []
         pat = re.compile(r"-P\s+\S*" + re.escape(base) + r"\b")
-        for f, text in self._cmake_files:
+        for f, text in self.tree_cmake_files():
             if base not in text: continue
             for c in gate_graph.cmake_commands(text):
                 if pat.search(c[3]): out.append((f, text, c))
@@ -1920,7 +1925,11 @@ class Selection:
         return len(exes)
 
     def target_changed(self, t, tag, notes):
-        """A build target's objects changed (a flag, a property, a link): its executables' rows."""
+        """A build target's objects changed (a flag, a property, a link): its executables' rows (once per target: a
+        loop's commands, a block's body and a variable's readers name the same target again)."""
+        done = self.__dict__.setdefault("_targets_done", {})
+        if t in done:
+            notes.append(done[t]); return
         art = self.graph.targets[t]
         if self.graph.kind.get(art) == "static":
             # an archive's objects, through the link graph: where they are referenced
@@ -1938,15 +1947,86 @@ class Selection:
             if vendored:
                 # a vendored archive enters our code through the objects that call it: the
                 # app rows are those objects' families (the mesh simplifier -> the bake's)
-                refs = sorted({self.graph.obj_src[o] for o in
-                               self.graph.first_party_referrers(art, ("/thirdparty/",)) if o in self.graph.obj_src})
-                for r_ in refs:
-                    self.path(os.path.relpath(r_, ROOT), 1, via=f"calls into {t}")
-                notes.append(f"target {t} (vendored) enters our code through "
-                             f"{[os.path.relpath(r_, ROOT) for r_ in refs]}")
+                refs = self._enter_through(art, t, notes)
             if not refs:
                 self.expand(["*app-rows"], [], f"{tag}: target {t} is in the app")
         notes.append(f"target {t}: {len(exes)} executable(s)")
+        done[t] = notes[-1]
+
+    def _enter_through(self, art, name, notes):
+        """The first-party sources that call into vendored archive `art` — each reached as a path (its families)."""
+        memo = self.__dict__.setdefault("_entered", {})
+        if art not in memo:
+            memo[art] = sorted({self.graph.obj_src[o] for o in
+                                self.graph.first_party_referrers(art, ("/thirdparty/",)) if o in self.graph.obj_src})
+        refs = memo[art]
+        for r_ in refs:
+            self.path(os.path.relpath(r_, ROOT), 1, via=f"calls into {name}")
+        notes.append(f"{name} (vendored) enters our code through {len(refs)} first-party source(s)"
+                     + (f": {', '.join(os.path.relpath(r_, ROOT) for r_ in refs[:4])}{' …' if len(refs) > 4 else ''}"
+                        if refs else ""))
+        return refs
+
+    def vendored_entry(self, src_abs, tag, notes):
+        """A vendored SOURCE compiled into the app: the static archives its objects are members of enter our code through
+        their first-party callers (target_changed's law). [] when no archive holds it (a vendored object linked
+        straight into a first-party target: the caller decides)."""
+        objs = {o for o in self.graph.rev.get(src_abs, ()) if self.graph.kind.get(o) == "object"}
+        archives = sorted({x for o in objs for x in self.graph.rev.get(o, ()) if self.graph.kind.get(x) == "static"})
+        refs = []
+        for a in archives:
+            name = next((t for t, art in self.graph.targets.items() if art == a), os.path.basename(a))
+            refs += self._enter_through(a, name, notes)
+        return refs
+
+    def patch_appliers(self):
+        """[(patch dir, patched tree)] (absolute; the tree None when its path cannot be read): every configure-time
+        command of the tree's build files that applies a patch stack — `execute_process(… -DPATCHES=<dir> -DSRC=<tree>
+        … -P <script>)` — its directories resolved in the file that runs it."""
+        if not hasattr(self, "_patch_appliers"):
+            out = []
+            for f, text in self.tree_cmake_files():
+                if "-DPATCHES=" not in text: continue
+                for c in gate_graph.cmake_commands(text):
+                    if c[0] != "execute_process" or "-DPATCHES=" not in c[3] or not re.search(r"-P\s", c[3]): continue
+                    pm, sm = re.search(r"-DPATCHES=(\S+)", c[3]), re.search(r"-DSRC=(\S+)", c[3])
+                    pd = self.cmake_path(f, text, pm.group(1))
+                    if pd: out.append((pd, self.cmake_path(f, text, sm.group(1)) if sm else None))
+            self._patch_appliers = out
+        return self._patch_appliers
+
+    def cmake_path(self, f, text, value):
+        """An absolute path a build file spells (`${CMAKE_CURRENT_SOURCE_DIR}/…`, a variable it set), or None."""
+        d = os.path.join(ROOT, os.path.dirname(f))
+        bdir = os.path.join(self.graph.build, os.path.dirname(f)) if self.graph is not None else None
+        known = {"CMAKE_CURRENT_SOURCE_DIR": d, "CMAKE_CURRENT_LIST_DIR": d, "CMAKE_SOURCE_DIR": ROOT,
+                 "PROJECT_SOURCE_DIR": d, "CMAKE_CURRENT_BINARY_DIR": bdir}
+        sets = {}
+        for c in gate_graph.cmake_commands(text):
+            a_ = c[3].split()
+            if c[0] == "set" and len(a_) == 2: sets.setdefault(a_[0], a_[1].strip('"'))
+        v = value.strip('"')
+        for _ in range(4):
+            m = re.search(r"\$\{(\w+)\}", v)
+            if not m: break
+            rep = known.get(m.group(1)) if m.group(1) in known else sets.get(m.group(1))
+            if rep is None: return None
+            v = v[:m.start()] + rep + v[m.end():]
+        if "${" in v: return None
+        return os.path.normpath(v if os.path.isabs(v) else os.path.join(d, v))
+
+    def tree_cmake_files(self):
+        """[(path relative to ROOT, text)] of every build file of the tree (vendored and build dirs aside)."""
+        if not hasattr(self, "_cmake_files"):
+            self._cmake_files = []
+            for dp, dns, fs in os.walk(ROOT):
+                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
+                for f in fs:
+                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
+                        try: self._cmake_files.append((os.path.relpath(os.path.join(dp, f), ROOT),
+                                                       open(os.path.join(dp, f), errors="replace").read()))
+                        except OSError: pass
+        return self._cmake_files
 
     _STRUCTURAL = {"endfunction", "endmacro", "else", "elseif", "endif", "foreach", "endforeach",
                    "while", "endwhile", "return", "break", "continue"}
@@ -2026,6 +2106,29 @@ class Selection:
         """Resolve one changed CMake command to what it names. True when something owned it."""
         if name in ("message",):
             notes.append("message() only"); return True
+        # THE COMMANDS READ BY THEIR KIND (TOOLING-2 stage 1; BULLET-BATCHING-1's merge ran the whole inventory twice
+        # on irisgl/CMakeLists.txt's Bullet block — a set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) read as a
+        # directory-wide compile setting, a patch stack's applier unread): a property by its scope and its name, a
+        # configure-time patch apply by its stack, a loop's target by its values
+        if name == "set_property":
+            r = self.set_property_reach(p, d, args, whole, tag, notes)
+            if r is not None: return r
+        if name == "execute_process" and "-DPATCHES=" in args and re.search(r"-P\s", args):
+            pd = self.cmake_path(p, whole, re.search(r"-DPATCHES=(\S+)", args).group(1))
+            if pd and os.path.isdir(pd):
+                pf = sorted(os.path.relpath(os.path.join(pd, f), ROOT) for f in os.listdir(pd) if f.endswith(".patch"))
+                for f in pf:
+                    self.path(f, 1, via=f"{os.path.basename(p)} execute_process() applies it")
+                notes.append(f"execute_process() applies the patch stack {os.path.relpath(pd, ROOT)}: {len(pf)} patch(es), "
+                             "each by what it patches")
+                return True
+        if name in ("if", "elseif", "while") and depth > 0:
+            # a condition reached as a variable's READER: its block's body is what it reaches
+            body = self.block_body(whole, name, args)
+            hit = [c[0] for c in body if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes,
+                                                             depth=depth + 1)]
+            if hit:
+                notes.append(f"{name}() reading it: its block's {len(hit)} command(s)"); return True
         # the whole command for anything but a list: an add_test's NAME sits on another line than
         # its changed COMMAND; a suite list's change is only the names it adds or drops
         full = changed_text if name in ("set", "list") else changed_text + "\n" + args
@@ -2092,6 +2195,16 @@ class Selection:
         if (self.graph and a0 and a0[0] in self.graph.targets and not rows
                 and name not in ("add_test", "set_tests_properties", "add_custom_command")):
             self.target_changed(a0[0], tag, notes); got = True
+        elif (self.graph and a0 and "${" in a0[0] and not rows
+                and (name.startswith("target_") or name in ("set_target_properties", "add_dependencies"))):
+            # A TARGET NAMED THROUGH A LOOP VARIABLE (foreach(_bt BulletDynamics …) target_compile_options(${_bt} …)):
+            # the values the enclosing foreach() gives it, each a target of the graph
+            vals = self.loop_values(whole, args, a0[0])
+            tg = [v for v in vals or [] if v in self.graph.targets]
+            for t in tg:
+                self.target_changed(t, f"{tag}: {name}({a0[0]}={t})", notes)
+            if tg:
+                notes.append(f"{name}({a0[0]}) over its foreach(): {', '.join(tg)}"); got = True
         # 4. source files named (set_source_files_properties, a list outside a target)
         srcs = []
         for t in toks:
@@ -2132,8 +2245,25 @@ class Selection:
         if depth == 0:
             self._var_seen = set()
         a_ = args.split()
-        setter = name in ("set", "list", "option", "string") or (
+        setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
             name == "file" and a_[:1] and a_[0] in ("GLOB", "GLOB_RECURSE", "READ", "STRINGS"))
+        if setter and depth < 3 and not rows and name == "set" and "PARENT_SCOPE" in a_[1:]:
+            # set(<var> … PARENT_SCOPE) changes the variable of the PARENT directory's scope, not this file's: its
+            # readers are in the other build files (a parent and the directories it adds after); this file's own
+            # readers keep their value
+            var = a_[0]
+            if var not in self._var_seen:
+                self._var_seen.add(var)
+                n_ = 0
+                for f, text in self.tree_cmake_files():
+                    if f == p or "${" + var + "}" not in text: continue
+                    for (un, uf, ul, ua, ufn) in gate_graph.cmake_commands(text):
+                        if "${" + var + "}" not in ua or (un == "set" and ua.split()[:1] == [var]): continue
+                        n_ += 1
+                        if self.cmake_command(f, os.path.dirname(f), un, ua, ufn, ua, text, tag, notes, depth=depth + 1):
+                            got = True
+                notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
+                if got or not n_: return True
         if setter and depth < 3 and not rows:
             var = _set_var(name, a_)
             tip_text = getattr(self, "_cmake_tip_text", None)
@@ -2188,6 +2318,85 @@ class Selection:
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
 
+    # set_property(<scope> … PROPERTY <name> …) by its NAME: a property that only says when CMake re-runs, or how an IDE
+    # files a target, compiles nothing
+    _CONFIGURE_ONLY_PROPS = {"CMAKE_CONFIGURE_DEPENDS", "ADDITIONAL_CLEAN_FILES", "ADDITIONAL_MAKE_CLEAN_FILES", "FOLDER",
+                             "USE_FOLDERS", "PREDEFINED_TARGETS_FOLDER"}
+
+    def set_property_reach(self, p, d, args, whole, tag, notes):
+        """set_property() by its scope and property name: True when resolved, None when the generic readers decide (a
+        directory's compile setting stays every target under it)."""
+        a_ = args.split()
+        if "PROPERTY" not in a_ or a_.index("PROPERTY") + 1 >= len(a_):
+            return None
+        k = a_.index("PROPERTY")
+        scope, prop = a_[0], a_[k + 1]
+        names = [x for x in a_[1:k] if x not in ("APPEND", "APPEND_STRING")]
+        if prop in self._CONFIGURE_ONLY_PROPS:
+            notes.append(f"set_property({scope} … {prop}): a configure input only — reaches nothing compiled")
+            return True
+        if scope == "TARGET" and self.graph is not None and names:
+            tg = []
+            for n_ in names:
+                vals = self.loop_values(whole, args, n_) if "${" in n_ else [n_]
+                tg += [v for v in vals or [] if v in self.graph.targets]
+            for t in tg:
+                self.target_changed(t, f"{tag}: set_property(TARGET {t} {prop})", notes)
+            return True if tg else None
+        if scope == "SOURCE" and names:
+            srcs = [os.path.normpath(os.path.join(d, n_)) for n_ in names if "$" not in n_]
+            srcs = [s_ for s_ in srcs if os.path.isfile(os.path.join(ROOT, s_))]
+            for s_ in srcs:
+                self.path(s_, 1, via=f"{os.path.basename(p)} set_property(SOURCE {prop})")
+            return True if srcs else None
+        return None
+
+    def loop_values(self, whole, args, token):
+        """The values `token` (it spells `${v}`) takes inside the foreach() blocks of `whole` that hold a command with
+        exactly these arguments — foreach(v a b c) / foreach(v IN ITEMS a b) / foreach(v IN LISTS L) with L set() in the
+        same file; None when a value cannot be read (a RANGE, a list built elsewhere)."""
+        parsed = gate_graph.cmake_commands(whole or "")
+        spans = _block_spans(parsed)
+        at = [c[1] for c in parsed if c[3] == args]
+        if not at:
+            return None
+        sets = {}
+        for c in parsed:
+            ca = c[3].split()
+            if c[0] == "set" and ca: sets.setdefault(ca[0], ca[1:])
+        vals = []
+        for k, (b0, b1) in spans.items():
+            c = parsed[k]
+            if c[0] != "foreach" or not any(b0 < ln <= b1 for ln in at): continue
+            fa = c[3].split()
+            if not fa or "${" + fa[0] + "}" not in token: continue
+            if fa[1:2] == ["RANGE"]: return None
+            items = fa[1:]
+            if items[:2] == ["IN", "ITEMS"]: items = items[2:]
+            elif items[:1] == ["IN"]:
+                out, mode = [], None
+                for x in items[1:]:
+                    if x in ("LISTS", "ITEMS"): mode = x; continue
+                    if mode == "ITEMS": out.append(x)
+                    elif mode == "LISTS":
+                        if x not in sets: return None
+                        out += sets[x]
+                items = out
+            if any("${" in x for x in items): return None
+            vals += [token.replace("${" + fa[0] + "}", x.strip('"')) for x in items]
+        return vals or None
+
+    def block_body(self, whole, name, args):
+        """The commands inside the block that the first `<name>(<args>)` of `whole` opens (an if/while reached as a
+        reader)."""
+        parsed = gate_graph.cmake_commands(whole or "")
+        spans = _block_spans(parsed)
+        for k, c in enumerate(parsed):
+            if c[0] == name and c[3] == args and k in spans:
+                b0, b1 = spans[k]
+                return [x for x in parsed if b0 < x[1] and x[2] < b1 and x[0] not in _BLOCK_LINES]
+        return []
+
     def deferring_functions(self, helper):
         """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree)."""
         self.cmake_calls(helper)            # fills _cmake_texts
@@ -2226,6 +2435,9 @@ _STRING_OUT = {"APPEND": 1, "PREPEND": 1, "CONCAT": 1, "JOIN": 2, "SHA256": 1, "
                "LENGTH": 2, "SUBSTRING": 4, "FIND": 3, "TIMESTAMP": 1, "CONFIGURE": 2, "GENEX_STRIP": 2,
                "MAKE_C_IDENTIFIER": 2, "REPEAT": 3, "HEX": 2, "ASCII": -1}
 _STRING_REGEX_OUT = {"REPLACE": 4, "MATCH": 3, "MATCHALL": 3}
+# the commands that write their FIRST argument as a variable (followed to its readers like a set())
+_GETTERS = {"get_directory_property", "get_property", "get_target_property", "get_filename_component",
+            "get_cmake_property", "get_source_file_property", "get_test_property"}
 
 
 def _set_var(name, a_):

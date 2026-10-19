@@ -98,6 +98,30 @@
    "none_of": [],
    "rows_at_tip_only": true,
    "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component"
+  },
+  {
+   "lane": "BULLET-BATCHING-1 (TOOLING-2 stage 1)",
+   "range": "be5a84225..001b7ec96",
+   "ledger": "§2561",
+   "evidence": "spikes/bullet-batching-1/merge.log; spikes/tooling-2/s1-before.txt, s1-after.txt",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "document.physics_writeback",
+    "document.characterisation",
+    "export.walkers",
+    "export.web",
+    "avatar.locomotion"
+   ],
+   "env": [],
+   "none_of": [
+    "theme",
+    "hdr",
+    "ssr",
+    "looks"
+   ],
+   "max_rows": 400,
+   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set"
   }
  ],
  "hunks": [
@@ -178,6 +202,35 @@
    "must": [
     "scale.lights",
     "scale.levels"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a compile flag on Bullet's four targets (a foreach'd target_compile_options) reaches the physics world's rows, not the picture set",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O2> ${_jah_bake_fp})\n",
+   "new": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O3> ${_jah_bake_fp})\n",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "export.walkers"
+   ],
+   "must_not": [
+    "theme.sheets",
+    "hdr.bloom_amount",
+    "ssr.engine",
+    "looks.engine"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a configure dependency (set_property DIRECTORY CMAKE_CONFIGURE_DEPENDS) reaches nothing compiled",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_bullet_patch_files}\n",
+   "new": "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_bullet_patch_files} ${_bullet_patch_files}\n",
+   "must": [],
+   "must_not": [
+    "physics.mt_determinism",
+    "ui.toast",
+    "theme.sheets"
    ]
   }
  ]
