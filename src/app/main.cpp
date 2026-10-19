@@ -10,8 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "bridge/enginehost.h"
-#include "bridge/sceneworkerthreads.h"
-#include "irisgl/document/physics/environment.h"
+#include "bridge/processbudget.h"
 #include "viewport/ieditorviewport.h"
 #include <QImage>
 #include <QColor>
@@ -207,9 +206,9 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
-    // THE GAME THREAD IS THIS ONE (ENGINE-UPGRADE-U4 stage 6): Bullet's scheduler bound here, before any scene exists,
-    // so this thread is Bullet's index 0 and the physics step's share of the core budget is fixed for the run.
-    iris::Environment::bindGameThread(sceneworkers::physicsThreads());
+    // THE ONE CORE BUDGET (THREADING-1): this thread becomes the game thread (Bullet's index 0, its foreground share
+    // fixed for the run) and Qt's global pool is capped at the background tier — before any scene or QtConcurrent job.
+    processbudget::apply();
 
     // WHERE THIS RUN KEEPS ITS DATA (services/apppaths.h), resolved BEFORE
     // anything reads a path. Everything downstream — the session log's release

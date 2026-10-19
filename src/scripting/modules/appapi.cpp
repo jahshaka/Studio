@@ -32,6 +32,10 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
 #include "irisgl/import/parsecensus.h"
+#include "irisgl/import/meshbake.h"
+#include "irisgl/document/physics/environment.h"
+#include "irisgl/core/threadbudget.h"
+#include <QThreadPool>
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
 #include <QElapsedTimer>
@@ -514,6 +518,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
+        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
+          "THE ONE CORE BUDGET (THREADING-1; irisgl/core/threadbudget.h): the tiers every "
+          "thread pool of the process is sized from. `foreground` is Bullet's workers beside "
+          "the game thread (`bulletThreads` = game + foreground, the physics step's "
+          "scheduler); `render` + `ogrePool` the render thread and the primary scene's "
+          "SceneManager pool; `dedicated` = `writer` (the shader cache's) + `streaming` "
+          "(Ogre's texture thread) + `multiload` (the texture multiload pool); `background` "
+          "the width of each below-normal pool (Qt's global pool, the bake pool's workers). "
+          "THE LAW: the per-frame `activeSet` (game + foreground + render + ogrePool) never "
+          "exceeds `hardware` once the box holds the floors, and `background` is what it "
+          "leaves (at least 2); the dedicated set is bursty and not subtracted. `total` = "
+          "activeSet + background. `live` is what the process applied: Bullet's bound scheduler, Qt's "
+          "global pool's maximum and the bake pool's started workers (asking starts the "
+          "pool if no bake has). No engine needed; cheap.",
+          Needs::Document },
         { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs, waitAdvances}",
           "WHAT THE TEXTURE LOADER IS DOING (SPECS/THREADING_ADOPTION_SPEC.md P2). Since the "
           "batched-loading phase, loading a texture SCHEDULES it and the frame edge waits once "
@@ -1967,6 +1986,31 @@ QVariantMap AppApi::threading()
         scenes.insert(QString::fromStdString(s.first), s.second);
     out.insert("sceneWorkerThreads", scenes);
     out.insert("hlmsThreads", t.hlmsThreads);
+    return out;
+}
+
+QVariantMap AppApi::threadBudget()
+{
+    const iris::ThreadBudget &b = iris::threadBudget();
+    QVariantMap out;
+    out.insert("hardware", b.hardware);
+    out.insert("game", b.game);
+    out.insert("foreground", b.foreground);
+    out.insert("bulletThreads", b.bulletThreads());
+    out.insert("render", b.render);
+    out.insert("ogrePool", b.ogrePool);
+    out.insert("writer", b.writer);
+    out.insert("streaming", b.streaming);
+    out.insert("multiload", b.multiload);
+    out.insert("dedicated", b.dedicated());
+    out.insert("background", b.background);
+    out.insert("activeSet", b.activeSet());
+    out.insert("total", b.total());
+    QVariantMap live;
+    live.insert("bulletThreads", iris::Environment::taskThreads());
+    live.insert("qtPoolMax", QThreadPool::globalInstance()->maxThreadCount());
+    live.insert("bakePoolThreads", iris::MeshBake::bakePoolThreads());
+    out.insert("live", live);
     return out;
 }
 

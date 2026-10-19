@@ -551,7 +551,8 @@ if(JAHSHAKA_ASAN)
     add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES})
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
-        PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR})
+        PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR}
+                ${CMAKE_SOURCE_DIR}/irisgl)   # core/threadbudget.h, as the real library (THREADING-1)
     target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})
     # Same shader-cache fingerprint terms as the real library (irisgl/engine/
     # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them. The

@@ -110,6 +110,19 @@ jah_gpu_exclusive_test(NAME physics.step_overlap CLASS engine RUN_TIMEOUT 600 CO
          --frames 120 --threads 7 --overlap WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
     JAHSHAKA_TEST_FRAMES 3470)   # metered 2026-10-18: the free-running render thread at 60 Hz for the run (120 frames of warm-up first)
+# physics.many_movers — THE OWNER'S REAL CASE, MANY MOVERS PER FRAME (THREADING-1 stage 2): 1,000 bodies in play,
+# stepped on the threads the ONE core budget gives the step (--threads budget: the game thread + the foreground share,
+# what the app binds) with the mirror syncing every moved body, the bar on the step + the sync per frame, median past
+# a 20-frame warm-up, at most a 60 Hz frame (16.7 ms) in Debug. The arithmetic before the row (the preflight): ~3.9 ms
+# step (3.9 us/body, spikes/bullet-batching-1/s3-arms.txt) + 1.0-1.7 ms sync = 5-6.5 ms. Red by construction when the
+# budget's foreground share starves Bullet. The step and the sync are printed apart (PHYSICS_MANY_MOVERS).
+# A GUARD, not a measure: the bar is a whole 60 Hz frame against ~5 ms, a margin no parallel row on the card's lock
+# closes — so it runs at every merge it is reached by, not only at the ship.
+jah_gpu_row(physics.many_movers CLASS engine COMMAND test_physics_step_cost --bodies 1000
+         --frames 120 --warmup 20 --threads budget --mirror --mt-only --bar 16.7
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
+    TIMEOUT 60 JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (physics.step_cost's metering)
 
 # document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
 # §3.3.2): which objects the renderer may bake into the room's lighting and
