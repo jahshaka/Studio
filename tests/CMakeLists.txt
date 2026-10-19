@@ -1175,6 +1175,7 @@ set(JAH_MEASURE_ROWS
     gi.gather_reference_target
     gi.gather_stable
     gi.hit_shade
+    gi.metal_bounce_gate
     gi.probe_inputs
     gi.reflect_fog
     gi.reflect_mover

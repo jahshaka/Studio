@@ -992,6 +992,7 @@ shadow.caster_cull 5.29  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.4: the s
 shadow.caster_receivers 5.10  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.3/22.4: the gap, the out-of-view blockers, the negative control; no dragon bake; n=1, 77 frames)
 engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.5: the host drain reset on a throw; n=1, 11 frames)
 gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
+gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round: the movers' gate on a metal's card; 573 frames, the gate arms settle 72 — the lowest of three runs beside ATOM-1's gate; over the fixture budget, labelled measure until the row is rewritten to it)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
 shadow.caster_route 5.21  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 2: three worlds - the cut, the stock, the bare - a floor, a pole, a blended and a cutout plane; n=3)
 atom.view_colour 1.08  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 6: three spheres under the triangles view, one delete; n=2)
