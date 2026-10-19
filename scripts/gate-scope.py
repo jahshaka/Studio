@@ -853,12 +853,20 @@ def api_modules():
     return out
 
 
+_SCRIPT_MODS = {}     # path -> (mtime, modules): one read per script per process (every Selection asks for every row's)
+
+
 def script_modules(path):
     """The `<module>.` prefixes a JS script calls (a shell wrapper's text is not JS)."""
     if not path or not path.endswith((".js", ".js.in")): return set()
-    try: txt = open(path).read()
+    try: mt = os.path.getmtime(path)
     except OSError: return set()
-    return set(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", txt))
+    c = _SCRIPT_MODS.get(path)
+    if c is None or c[0] != mt:
+        try: txt = open(path).read()
+        except OSError: return set()
+        c = _SCRIPT_MODS[path] = (mt, frozenset(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", txt)))
+    return set(c[1])
 
 
 # A build-registration edit that only adds or removes SOURCE FILES from a list (a new
@@ -1763,8 +1771,8 @@ class Selection:
                 self.full_tier.append(f"{tag}: the top-level build file with no diff to read (--files)")
                 if depth == 0: self.rationale.append((p, "the top-level build file without a range → the MERGE tier"))
                 return
-            self._fallback(p, tag, notes, "a build file with no diff to read (--files)")
-            if depth == 0: self.rationale.append((p, "; ".join(notes)))
+            self.full_tier.append(f"{tag}: a build file with no diff to read (--files) — the reader cannot resolve it")
+            if depth == 0: self.rationale.append((p, "a build file without a range → the whole tier"))
             return
         a, b = self.revs.texts(p)
         # A CMAKE SCRIPT RUN WITH -P (irisgl/cmake/ApplyVendorPatches.cmake, run by an
@@ -1891,11 +1899,15 @@ class Selection:
                          + (f"the subsystems of {len(got)} named file(s)" if got else "every engine fixture"))
             unresolved = []
         if unresolved:
-            if p == "CMakeLists.txt":
-                self.full_tier.append(f"{tag}: a top-level CMake command that names nothing a suite owns: "
-                                      f"{', '.join(unresolved)}")
-            else:
+            parts = p.split("/")
+            if parts[0] == "tests" and len(parts) == 3 and parts[1] in self.by_dir:
+                # a test directory's own build file: its commands build and register that directory's rows only
                 self._fallback(p, tag, notes, f"CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
+            else:
+                # ANY OTHER BUILD FILE (TOOLING-2 fix round, the reader's must-fix): a command the reader cannot resolve
+                # stays THE WHOLE TIER with its reason printed — a fallback to "its directory" gave irisgl/CMakeLists.txt
+                # (the Bullet block's file) a new execute_process() reaching nothing at all
+                self.full_tier.append(f"{tag}: CMake command(s) the reader cannot resolve: {', '.join(unresolved)}")
             notes.append("unresolved: " + ", ".join(unresolved))
         if depth == 0: self.rationale.append((p, "; ".join(dict.fromkeys(notes)) or "CMake"))
 
@@ -1959,7 +1971,9 @@ class Selection:
         done[t] = notes[-1]
 
     def _enter_through(self, art, name, notes):
-        """The first-party sources that call into vendored archive `art` — each reached as a path (its families)."""
+        """The first-party sources whose OWN code calls into vendored archive `art` (a flag or property change of the
+        archive, target_changed) — each reached as a path (its families). A change INSIDE one of its sources is
+        vendored_entry's: every source whose references reach it."""
         memo = self.__dict__.setdefault("_entered", {})
         if art not in memo:
             memo[art] = sorted({self.graph.obj_src[o] for o in
@@ -1973,15 +1987,20 @@ class Selection:
         return refs
 
     def vendored_entry(self, src_abs, tag, notes):
-        """A vendored SOURCE compiled into the app: the static archives its objects are members of enter our code through
-        their first-party callers (target_changed's law). [] when no archive holds it (a vendored object linked
+        """A vendored SOURCE compiled into the app (its objects members of vendored archives): the first-party sources
+        whose references reach those objects through the archives' own call graph, a copy of inline code included. [] when no archive holds it (a vendored object linked
         straight into a first-party target: the caller decides)."""
         objs = {o for o in self.graph.rev.get(src_abs, ()) if self.graph.kind.get(o) == "object"}
-        archives = sorted({x for o in objs for x in self.graph.rev.get(o, ()) if self.graph.kind.get(x) == "static"})
-        refs = []
-        for a in archives:
-            name = next((t for t, art in self.graph.targets.items() if art == a), os.path.basename(a))
-            refs += self._enter_through(a, name, notes)
+        if not any(self.graph.kind.get(x) == "static" for o in objs for x in self.graph.rev.get(o, ())):
+            return []
+        refs = sorted({self.graph.obj_src[o] for o in self.graph.referrers_reaching(objs, ("/thirdparty/",))
+                       if o in self.graph.obj_src})
+        for r_ in refs:
+            self.path(os.path.relpath(r_, ROOT), 1, via=f"reaches {os.path.basename(src_abs)}")
+        notes.append(f"{os.path.basename(src_abs)} (vendored) is reached from {len(refs)} first-party source(s), a copy "
+                     f"of its archives' inline code included"
+                     + (f": {', '.join(os.path.relpath(r_, ROOT) for r_ in refs[:4])}{' …' if len(refs) > 4 else ''}"
+                        if refs else ""))
         return refs
 
     def patch_appliers(self):
@@ -2107,7 +2126,7 @@ class Selection:
             self._all_cmake = "\n".join(texts)
         return re.search(r"(?<![\w.\-])" + re.escape(token) + r"(?![\w.\-])", self._all_cmake) is not None
 
-    def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0):
+    def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0, line=None):
         """Resolve one changed CMake command to what it names. True when something owned it."""
         if name in ("message",):
             notes.append("message() only"); return True
@@ -2135,9 +2154,12 @@ class Selection:
                 notes.append(f"execute_process() applies the patch stack {os.path.relpath(pd, ROOT)}: {len(pf)} patch(es), "
                              "each by what it patches")
                 return True
-        if name in ("if", "elseif", "while") and depth > 0:
-            # a condition reached as a variable's READER: its block's body is what it reaches
-            body = self.block_body(whole, name, args)
+        if name == "include" and args.split() and depth < _CHAIN_HOPS:
+            r = self.include_reach(p, d, args, tag, notes, depth)
+            if r is not None: return r
+        if name in ("if", "elseif", "while", "foreach") and depth > 0:
+            # a condition (or a loop's list) reached as a variable's READER: its block's body is what it reaches
+            body = self.block_body(whole, name, args, line)
             hit = [c[0] for c in body if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes,
                                                              depth=depth + 1)]
             if hit:
@@ -2261,20 +2283,23 @@ class Selection:
         a_ = args.split()
         setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
             name == "file" and a_[:1] and a_[0] in _FILE_OUT)
-        if setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:]:
-            # set(<var> … PARENT_SCOPE) changes the variable of the PARENT directory's scope, not this file's: its
-            # readers are in the other build files (a parent and the directories it adds after); this file's own
-            # readers keep their value
+        if (setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:] and not fn
+                and "${" not in a_[0]):
+            # set(<var> … PARENT_SCOPE) AT DIRECTORY SCOPE changes the variable of the PARENT directory's scope, not this
+            # file's: its readers are in the other build files (a parent and the directories it adds after); this file's
+            # own readers keep their value. Inside a function the parent scope is its CALLER (and `${out}` an output
+            # parameter): the generic reader below keeps its conservative path (the reader's fix round)
             var = a_[0]
             if var not in self._var_seen:
                 self._var_seen.add(var)
                 n_ = 0
                 for f, text in self.tree_cmake_files():
-                    if f == p or "${" + var + "}" not in text: continue
+                    if f == p or var not in text: continue
                     for (un, uf, ul, ua, ufn) in gate_graph.cmake_commands(text):
-                        if "${" + var + "}" not in ua or (un == "set" and ua.split()[:1] == [var]): continue
+                        if not _reads_var(un, ua, var) or (un == "set" and ua.split()[:1] == [var]): continue
                         n_ += 1
-                        if self.cmake_command(f, os.path.dirname(f), un, ua, ufn, ua, text, tag, notes, depth=depth + 1):
+                        if self.cmake_command(f, os.path.dirname(f), un, ua, ufn, ua, text, tag, notes, depth=depth + 1,
+                                              line=uf):
                             got = True
                 notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
                 if got or not n_: return True
@@ -2300,7 +2325,7 @@ class Selection:
                 self._var_seen.add(var)
                 got_memo[var] = True                      # in progress
             for (un, uf, ul, ua, ufn) in users:
-                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
+                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf): got = True
             if not seen:
                 got_memo[var] = got
             if users:
@@ -2327,7 +2352,7 @@ class Selection:
                 users = [c for c in gate_graph.cmake_commands(whole)
                          if "${" + var + "}" in c[3] and c[3] != args and c[0] != "set"]
                 for (un, uf, ul, ua, ufn) in users:
-                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
+                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf): got = True
                 if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
         # 7. a directory-scope setting: every target under this directory
         if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
@@ -2357,7 +2382,9 @@ class Selection:
 
     def inert_command(self, name, args):
         """True when a command changes no byte of a build (see _INERT): a file() read, a function-local set(), a
-        dependency-only property."""
+        dependency-only property. set()/list() are LOCAL only inside a function: inside a MACRO they write the caller's
+        scope — no macro of the tree is inert today (every one registers or decorates rows); a future one that only
+        sets variables would need its callers' readers followed, not this rule."""
         a_ = args.split()
         if name in self._INERT:
             return True
@@ -2445,13 +2472,47 @@ class Selection:
             vals += [token.replace("${" + fa[0] + "}", x.strip('"')) for x in items]
         return vals or None
 
-    def block_body(self, whole, name, args):
-        """The commands inside the block that the first `<name>(<args>)` of `whole` opens (an if/while reached as a
-        reader)."""
+    def include_reach(self, p, d, args, tag, notes, depth):
+        """include(<module>) of a build file of THIS tree (cmake/<module>.cmake on the module path, or a path): what its
+        top-level commands reach, each resolved as a changed command of that file (its blocks through their bodies);
+        True when every one resolves, None when the module is not the tree's or one does not (the generic path then
+        decides: a directory-scope include stays the whole tier)."""
+        a0 = _cmake_split(args)[0]
+        cands = ([a0] if a0.endswith(".cmake") else []) + [f"cmake/{a0}.cmake", f"irisgl/cmake/{a0}.cmake"]
+        mod = None
+        for c in cands:
+            c = c.replace("${CMAKE_CURRENT_SOURCE_DIR}/", d + "/" if d else "").replace("${CMAKE_SOURCE_DIR}/", "")
+            if "${" in c: continue
+            rel = os.path.normpath(c if not os.path.isabs(c) else os.path.relpath(c, ROOT))
+            if os.path.isfile(os.path.join(ROOT, rel)) and not rel.startswith(("irisgl/thirdparty/", "thirdparty/")):
+                mod = rel; break
+        if mod is None:
+            return None
+        try:
+            text = open(os.path.join(ROOT, mod), errors="replace").read()
+        except OSError:
+            return None
+        if depth == 0:
+            self._var_seen, self._var_got = set(), {}
+        top = [c for c in gate_graph.cmake_commands(text) if not c[4] and c[0] not in _BLOCK_LINES
+               and c[0] not in ("function", "endfunction", "macro", "endmacro")]
+        sub = []
+        ok = all(self.cmake_command(mod, os.path.dirname(mod), c[0], c[3], None, c[3], text, tag, sub, depth=depth + 1,
+                                    line=c[1]) for c in top)
+        notes.extend(sub)
+        if ok:
+            notes.append(f"include({a0}): its {len(top)} top-level command(s), each by what it reaches ({mod})")
+            return True
+        return None
+
+    def block_body(self, whole, name, args, line=None):
+        """The commands inside the block that `<name>(<args>)` opens AT ITS OWN LINE (an if/while reached as a reader;
+        irisgl/engine/CMakeLists.txt has two `if(JAH_RAY_QUERY_OK)` — the first one's body is not the second's), the
+        first such command only when the line is not known."""
         parsed = gate_graph.cmake_commands(whole or "")
         spans = _block_spans(parsed)
         for k, c in enumerate(parsed):
-            if c[0] == name and c[3] == args and k in spans:
+            if c[0] == name and c[3] == args and k in spans and (line is None or c[1] == line):
                 b0, b1 = spans[k]
                 return [x for x in parsed if b0 < x[1] and x[2] < b1 and x[0] not in _BLOCK_LINES]
         return []
@@ -2516,10 +2577,10 @@ def _reads_var(name, args, var):
     if "${" + var + "}" in args:
         return True
     a_ = args.split()
+    if name in ("if", "elseif", "while"):
+        return var in {x.strip("()") for x in a_}      # a parenthesised condition reads it too: if((VAR AND …))
     if var not in a_:
         return False
-    if name in ("if", "elseif", "while"):
-        return True
     if name == "list" and a_[1:2] == [var]:
         return True
     if name == "foreach" and "LISTS" in a_ and var in a_[a_.index("LISTS") + 1:]:

@@ -1,0 +1,63 @@
+# UicObjectDepends.cmake — A .ui FORM IS AN INPUT OF THE OBJECTS THAT INCLUDE ITS ui_*.h (TOOLING-2 fix round, measured).
+#
+# AUTOUIC writes ui_<name>.h into <target>_autogen/include/ when a source includes it and the form is found on the
+# AUTOUIC search path, but the Ninja graph declares the header as a byproduct under include/<source dir>/ — a file that
+# is never written. So the includer's only dependency on the header was ninja's deps log, a node no rule produces: a
+# .ui edit regenerated the header inside "Automatic MOC and UIC" and the same build compiled and linked the OLD form
+# (measured on projectmanager.ui: the header changed, projectmanager.cpp.o did not recompile until the next build). The
+# form itself is a source file ninja stats before the build starts: made an OBJECT_DEPENDS of exactly the objects whose
+# source includes its header, an edit recompiles them in the same build, after autogen (their order-only dependency)
+# regenerated the header. Read at configure, for every AUTOUIC target of the tree.
+function(jah_uic_object_depends target)
+    get_target_property(_srcs ${target} SOURCES)
+    get_target_property(_sdir ${target} SOURCE_DIR)
+    get_target_property(_search ${target} AUTOUIC_SEARCH_PATHS)
+    if(NOT _search)
+        set(_search "")
+    endif()
+    foreach(_s IN LISTS _srcs)
+        if(_s MATCHES "\\$<" OR NOT _s MATCHES "\\.(cpp|cc|cxx|h)$")
+            continue()
+        endif()
+        if(NOT IS_ABSOLUTE "${_s}")
+            set(_s "${_sdir}/${_s}")
+        endif()
+        if(NOT EXISTS "${_s}")
+            continue()
+        endif()
+        file(STRINGS "${_s}" _incs REGEX "^[ \t]*#[ \t]*include[ \t]*[\"<]ui_[A-Za-z0-9_]+\\.h[\">]")
+        set(_forms "")
+        foreach(_l IN LISTS _incs)
+            string(REGEX REPLACE "^.*ui_([A-Za-z0-9_]+)\\.h.*$" "\\1" _n "${_l}")
+            get_filename_component(_here "${_s}" DIRECTORY)
+            foreach(_d IN ITEMS "${_here}" ${_search})
+                if(NOT IS_ABSOLUTE "${_d}")
+                    set(_d "${_sdir}/${_d}")
+                endif()
+                if(EXISTS "${_d}/${_n}.ui")
+                    list(APPEND _forms "${_d}/${_n}.ui")
+                    break()
+                endif()
+            endforeach()
+        endforeach()
+        if(_forms)
+            set_property(SOURCE "${_s}" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_forms})
+        endif()
+    endforeach()
+endfunction()
+
+# every directory of the tree, breadth first, and its AUTOUIC targets
+set(_jah_uic_dirs "${CMAKE_SOURCE_DIR}")
+while(_jah_uic_dirs)
+    list(POP_FRONT _jah_uic_dirs _jah_uic_dir)
+    get_property(_jah_uic_subs DIRECTORY "${_jah_uic_dir}" PROPERTY SUBDIRECTORIES)
+    list(APPEND _jah_uic_dirs ${_jah_uic_subs})
+    get_property(_jah_uic_ts DIRECTORY "${_jah_uic_dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_jah_uic_t IN LISTS _jah_uic_ts)
+        get_target_property(_jah_uic_type ${_jah_uic_t} TYPE)
+        get_target_property(_jah_uic_on ${_jah_uic_t} AUTOUIC)
+        if(_jah_uic_on AND NOT _jah_uic_type STREQUAL "INTERFACE_LIBRARY" AND NOT _jah_uic_type STREQUAL "UTILITY")
+            jah_uic_object_depends(${_jah_uic_t})
+        endif()
+    endforeach()
+endwhile()

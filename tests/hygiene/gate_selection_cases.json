@@ -120,8 +120,8 @@
     "ssr",
     "looks"
    ],
-   "max_rows": 400,
-   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set"
+   "max_rows": 378,
+   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set — max_rows 378 is the selection exactly (gate.selection counts every selected row, the measure rows reached included): 311 selectable rows, the 29 source.* lints among them (TOOLING-2 fix round)"
   }
  ],
  "hunks": [
@@ -254,6 +254,51 @@
     "gi.cliff",
     "source.testing_rules",
     "source.row_budget"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 file(SHA256 <file> <var>) writes its THIRD argument: the clusterlod hash follows its reader (the if), never the stage dir's readers (IrisGL's include path)",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "    file(SHA256 \"${_clod_stage}/clusterlod.h\" _clod_staged_sha)\n",
+   "new": "    file(SHA256 \"${_clod_stage}/clusterlod.h\"  _clod_staged_sha)\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a quoted argument is ONE argument: string(REPLACE \"vendor patch applied:\" … <out> …) writes _clod_patch_output (read by a message), not 'applied:\"'",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "        string(REPLACE \"vendor patch applied:\" \"vendor patch already applied:\" _clod_patch_output \"${_clod_patch_output}\")\n",
+   "new": "        string(REPLACE \"vendor patch applied:\" \"vendor patch  already applied:\" _clod_patch_output \"${_clod_patch_output}\")\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 the chain is followed five hops: the clusterlod if() -> its file(SHA256) -> the if() comparing -> the string() -> the message() reaches nothing compiled",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "if(_clod_patch_result EQUAL 0 AND EXISTS \"${_clod_patched_root}/meshoptimizer-clusterlod/clusterlod.h\")\n",
+   "new": "if(_clod_patch_result EQUAL 0 AND  EXISTS \"${_clod_patched_root}/meshoptimizer-clusterlod/clusterlod.h\")\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a patched Bullet SOURCE reached only through copies of its inline code (btAlignedAllocInternal from btAlignedObjectArray) reaches the physics rows AND every referrer's family (scene.cpp's: theme)",
+   "file": "irisgl/thirdparty/bullet-patches/0001-batched-constraints-grid-cell-epsilon.patch",
+   "old": "+++ b/src/BulletDynamics/ConstraintSolver/btBatchedConstraints.cpp\n",
+   "new": "+++ b/src/LinearMath/btAlignedAllocator.cpp\n",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "theme.sheets"
    ],
    "must_not": []
   }

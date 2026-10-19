@@ -534,6 +534,39 @@ class NinjaGraph:
             self._syms_dirty = True
         return any(v in c[1][owner] for v in vendored_prefixes)
 
+    def referrers_reaching(self, objs, vendored_prefixes):
+        """The first-party objects whose references REACH one of these vendored objects: every vendored archive member
+        that can call into them (the archives' own reference graph, walked backwards from them), and then every first-party
+        object that takes a symbol from one of those members — a copy of their inline code included (sound for a change
+        INSIDE the source: btAlignedAllocInternal is called from btAlignedObjectArray's copies in every TU that holds
+        one). A member nothing of theirs reaches (btBatchedConstraints.cpp, called only from the MT solver) is not
+        reached through the vtable copy of btTypedConstraint a viewport TU carries (the reader's fix round)."""
+        vmem = set()
+        for a, kind in self.kind.items():
+            if kind != "static" or a not in self.link_inputs: continue
+            mem = self.members(a)
+            if mem and all(any(v in self.obj_src.get(o, "") for v in vendored_prefixes) for o in mem):
+                vmem |= mem
+        defs = {m: self._nm(m, member=True)[0] for m in vmem}
+        und = {m: self._nm(m, member=True)[1] for m in vmem}
+        reached, frontier = set(o for o in objs if o in vmem), set(o for o in objs if o in vmem)
+        while frontier:
+            ds = set().union(*(defs[m] for m in frontier))
+            frontier = {m for m in vmem - reached if und[m] & ds}
+            reached |= frontier
+        syms = set().union(*(defs[m] for m in reached)) if reached else set()
+        out = set()
+        if not syms:
+            return out
+        consumers = {x for m in reached for x in self.rev.get(m, ()) if self.kind.get(x) == "static"}
+        consumers = {c for a in consumers for c in self.rev.get(a, ()) if self.kind.get(c) in ("shared", "exe")}
+        for consumer in consumers:
+            for o in self.members(consumer):
+                src = self.obj_src.get(o, "")
+                if not src or any(v in src for v in vendored_prefixes): continue
+                if self._nm(o)[1] & syms: out.add(o)
+        return out
+
     def vendored_defs(self, vendored_prefixes):
         """Every symbol a member of a VENDORED archive defines (an archive whose members all compile vendored sources)."""
         k = ("vendored_defs", tuple(vendored_prefixes))
