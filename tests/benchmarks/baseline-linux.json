@@ -1,0 +1,625 @@
+{
+    "commit": "d3fe4159",
+    "config": {
+        "asan": false,
+        "build_type": "Debug",
+        "compiler": "GNU 15.2.0",
+        "mix": "80% static-intent / 20% dynamic-intent (index % 5 == 0 is dynamic)",
+        "qt": "6.10.2",
+        "scene_worker_threads": 0,
+        "static_tag": "node name prefix: 's' = static-intent (never moved), 'd' = dynamic-intent (moved every iteration). APPLIED since the consumer-conversion lane: every 's' node whose whole ancestor chain is also 's' really sits in Ogre's SCENE_STATIC memory manager (static must be downward-closed — see applyStaticTags). The realised count is in counters static.nodes.<scale>.",
+        "view": "offscreen 320x240, MSAA 1x"
+    },
+    "host": {
+        "cores": 20,
+        "cpu": "Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz",
+        "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+        "os": "Linux"
+    },
+    "metrics": {
+        "a.sync_all": {
+            "1000": {
+                "cv": 0.0419,
+                "cv_runs": 6e-04,
+                "cv_within": 0.0419,
+                "median_ms": 1.2458,
+                "runs_ms": [
+                    1.2458,
+                    1.247,
+                    1.2454
+                ]
+            },
+            "10000": {
+                "cv": 0.0297,
+                "cv_runs": 0.0138,
+                "cv_within": 0.0297,
+                "median_ms": 18.0857,
+                "runs_ms": [
+                    18.3291,
+                    18.0857,
+                    17.8294
+                ]
+            },
+            "50000": {
+                "cv": 0.0291,
+                "cv_runs": 0.0185,
+                "cv_within": 0.0291,
+                "median_ms": 98.0702,
+                "runs_ms": [
+                    98.8855,
+                    95.4416,
+                    98.0702
+                ]
+            }
+        },
+        "a.sync_dynamic": {
+            "1000": {
+                "cv": 0.0757,
+                "cv_runs": 0.0031,
+                "cv_within": 0.0757,
+                "median_ms": 0.3086,
+                "runs_ms": [
+                    0.3102,
+                    0.3086,
+                    0.3085
+                ]
+            },
+            "10000": {
+                "cv": 0.0519,
+                "cv_runs": 0.0128,
+                "cv_within": 0.0519,
+                "median_ms": 3.3263,
+                "runs_ms": [
+                    3.3372,
+                    3.3263,
+                    3.259
+                ]
+            },
+            "50000": {
+                "cv": 0.0479,
+                "cv_runs": 0.0059,
+                "cv_within": 0.0479,
+                "median_ms": 21.39,
+                "runs_ms": [
+                    21.37,
+                    21.39,
+                    21.5977
+                ]
+            }
+        },
+        "a.transform_update_all": {
+            "1000": {
+                "cv": 0.0434,
+                "cv_runs": 0.0304,
+                "cv_within": 0.0434,
+                "median_ms": 3.4159,
+                "runs_ms": [
+                    3.3887,
+                    3.5834,
+                    3.4159
+                ]
+            },
+            "10000": {
+                "cv": 0.0262,
+                "cv_runs": 0.0144,
+                "cv_within": 0.0262,
+                "median_ms": 41.1546,
+                "runs_ms": [
+                    41.8369,
+                    41.1546,
+                    40.6572
+                ]
+            },
+            "50000": {
+                "cv": 0.0144,
+                "cv_runs": 0.0144,
+                "cv_within": 0.0131,
+                "median_ms": 224.0019,
+                "runs_ms": [
+                    226.8022,
+                    220.3966,
+                    224.0019
+                ]
+            }
+        },
+        "a.transform_update_dynamic": {
+            "1000": {
+                "cv": 0.0482,
+                "cv_runs": 0.0482,
+                "cv_within": 0.0359,
+                "median_ms": 2.0608,
+                "runs_ms": [
+                    2.0544,
+                    2.2344,
+                    2.0608
+                ]
+            },
+            "10000": {
+                "cv": 0.0336,
+                "cv_runs": 0.0038,
+                "cv_within": 0.0336,
+                "median_ms": 18.5729,
+                "runs_ms": [
+                    18.6113,
+                    18.5729,
+                    18.4743
+                ]
+            },
+            "50000": {
+                "cv": 0.0239,
+                "cv_runs": 0.0063,
+                "cv_within": 0.0239,
+                "median_ms": 102.2259,
+                "runs_ms": [
+                    102.2259,
+                    101.7052,
+                    102.9814
+                ]
+            }
+        },
+        "b.idle_sync": {
+            "1000": {
+                "cv": 0.0824,
+                "cv_runs": 0.0164,
+                "cv_within": 0.0824,
+                "median_ms": 0.0527,
+                "runs_ms": [
+                    0.0518,
+                    0.0535,
+                    0.0527
+                ]
+            },
+            "10000": {
+                "cv": 0.0525,
+                "cv_runs": 0.0076,
+                "cv_within": 0.0525,
+                "median_ms": 0.0642,
+                "runs_ms": [
+                    0.0639,
+                    0.0648,
+                    0.0642
+                ]
+            },
+            "50000": {
+                "cv": 0.0602,
+                "cv_runs": 0.0257,
+                "cv_within": 0.0602,
+                "median_ms": 0.0761,
+                "runs_ms": [
+                    0.0766,
+                    0.073,
+                    0.0761
+                ]
+            }
+        },
+        "b.idle_tick": {
+            "1000": {
+                "cv": 0.0935,
+                "cv_runs": 0.0171,
+                "cv_within": 0.0935,
+                "median_ms": 0.7413,
+                "runs_ms": [
+                    0.7271,
+                    0.7523,
+                    0.7413
+                ]
+            },
+            "10000": {
+                "cv": 0.0662,
+                "cv_runs": 0.0223,
+                "cv_within": 0.0662,
+                "median_ms": 1.0013,
+                "runs_ms": [
+                    1.0282,
+                    1.0013,
+                    0.9838
+                ]
+            },
+            "50000": {
+                "cv": 0.0837,
+                "cv_runs": 0.0314,
+                "cv_within": 0.0837,
+                "median_ms": 3.395,
+                "runs_ms": [
+                    3.5427,
+                    3.3334,
+                    3.395
+                ]
+            }
+        },
+        "c.reparent_500": {
+            "1000": {
+                "cv": 0.0268,
+                "cv_runs": 0.0052,
+                "cv_within": 0.0268,
+                "median_ms": 30.2583,
+                "runs_ms": [
+                    30.2583,
+                    30.1156,
+                    30.4324
+                ]
+            },
+            "10000": {
+                "cv": 0.0324,
+                "cv_runs": 0.014,
+                "cv_within": 0.0324,
+                "median_ms": 35.0743,
+                "runs_ms": [
+                    34.9574,
+                    35.8683,
+                    35.0743
+                ]
+            },
+            "50000": {
+                "cv": 0.0485,
+                "cv_runs": 0.0109,
+                "cv_within": 0.0485,
+                "median_ms": 59.9439,
+                "runs_ms": [
+                    61.031,
+                    59.8538,
+                    59.9439
+                ]
+            }
+        },
+        "c.reparent_500_add": {
+            "1000": {
+                "cv": 0.0443,
+                "cv_runs": 0.0059,
+                "cv_within": 0.0443,
+                "median_ms": 0.5425,
+                "runs_ms": [
+                    0.5425,
+                    0.5394,
+                    0.5458
+                ]
+            },
+            "10000": {
+                "cv": 0.0465,
+                "cv_runs": 0.0058,
+                "cv_within": 0.0465,
+                "median_ms": 0.5795,
+                "runs_ms": [
+                    0.5772,
+                    0.5838,
+                    0.5795
+                ]
+            },
+            "50000": {
+                "cv": 0.0319,
+                "cv_runs": 0.0186,
+                "cv_within": 0.0319,
+                "median_ms": 0.6715,
+                "runs_ms": [
+                    0.6757,
+                    0.6524,
+                    0.6715
+                ]
+            }
+        },
+        "c.reparent_500_mirror": {
+            "1000": {
+                "cv": 0.0209,
+                "cv_runs": 0.0063,
+                "cv_within": 0.0209,
+                "median_ms": 6.7443,
+                "runs_ms": [
+                    6.7566,
+                    6.7443,
+                    6.6774
+                ]
+            },
+            "10000": {
+                "cv": 0.0273,
+                "cv_runs": 0.0079,
+                "cv_within": 0.0273,
+                "median_ms": 7.2764,
+                "runs_ms": [
+                    7.2764,
+                    7.2971,
+                    7.1896
+                ]
+            },
+            "50000": {
+                "cv": 0.0136,
+                "cv_runs": 0.0104,
+                "cv_within": 0.0136,
+                "median_ms": 8.2097,
+                "runs_ms": [
+                    8.3351,
+                    8.2097,
+                    8.1717
+                ]
+            }
+        },
+        "c.reparent_500_remove": {
+            "1000": {
+                "cv": 0.051,
+                "cv_runs": 0.0137,
+                "cv_within": 0.051,
+                "median_ms": 0.7672,
+                "runs_ms": [
+                    0.7696,
+                    0.7672,
+                    0.7505
+                ]
+            },
+            "10000": {
+                "cv": 0.0638,
+                "cv_runs": 0.0137,
+                "cv_within": 0.0638,
+                "median_ms": 0.9086,
+                "runs_ms": [
+                    0.9086,
+                    0.9294,
+                    0.907
+                ]
+            },
+            "50000": {
+                "cv": 0.0239,
+                "cv_runs": 0.0034,
+                "cv_within": 0.0239,
+                "median_ms": 1.2104,
+                "runs_ms": [
+                    1.2104,
+                    1.2063,
+                    1.2145
+                ]
+            }
+        },
+        "c.reparent_500_sync": {
+            "1000": {
+                "cv": 0.021,
+                "cv_runs": 0.0055,
+                "cv_within": 0.021,
+                "median_ms": 8.0535,
+                "runs_ms": [
+                    8.0739,
+                    8.0535,
+                    7.9889
+                ]
+            },
+            "10000": {
+                "cv": 0.0295,
+                "cv_runs": 0.0082,
+                "cv_within": 0.0295,
+                "median_ms": 8.7626,
+                "runs_ms": [
+                    8.7626,
+                    8.8116,
+                    8.6707
+                ]
+            },
+            "50000": {
+                "cv": 0.0149,
+                "cv_runs": 0.009,
+                "cv_within": 0.0149,
+                "median_ms": 10.0724,
+                "runs_ms": [
+                    10.2238,
+                    10.0724,
+                    10.0606
+                ]
+            }
+        },
+        "d.anim_rig_200": {
+            "200": {
+                "cv": 0.0721,
+                "cv_runs": 0.0053,
+                "cv_within": 0.0721,
+                "median_ms": 2.8535,
+                "runs_ms": [
+                    2.8535,
+                    2.8765,
+                    2.848
+                ]
+            }
+        },
+        "d.anim_rig_200_sync": {
+            "200": {
+                "cv": 0.163,
+                "cv_runs": 0.0068,
+                "cv_within": 0.163,
+                "median_ms": 0.7312,
+                "runs_ms": [
+                    0.7312,
+                    0.7316,
+                    0.7229
+                ]
+            }
+        },
+        "d.extract_1": {
+            "1000": {
+                "cv": 0.4047,
+                "cv_runs": 0.0083,
+                "cv_within": 0.4047,
+                "median_ms": 0.0599,
+                "runs_ms": [
+                    0.0603,
+                    0.0599,
+                    0.0594
+                ]
+            },
+            "10000": {
+                "cv": 0.4004,
+                "cv_runs": 0.0128,
+                "cv_within": 0.4004,
+                "median_ms": 0.076,
+                "runs_ms": [
+                    0.0773,
+                    0.0754,
+                    0.076
+                ]
+            },
+            "50000": {
+                "cv": 0.0646,
+                "cv_runs": 0.0037,
+                "cv_within": 0.0646,
+                "median_ms": 0.0987,
+                "runs_ms": [
+                    0.0985,
+                    0.0992,
+                    0.0987
+                ]
+            }
+        },
+        "d.extract_100": {
+            "1000": {
+                "cv": 0.1182,
+                "cv_runs": 0.0181,
+                "cv_within": 0.1182,
+                "median_ms": 0.1598,
+                "runs_ms": [
+                    0.1636,
+                    0.1598,
+                    0.158
+                ]
+            },
+            "10000": {
+                "cv": 0.1092,
+                "cv_runs": 0.0747,
+                "cv_within": 0.1092,
+                "median_ms": 0.2777,
+                "runs_ms": [
+                    0.2999,
+                    0.2583,
+                    0.2777
+                ]
+            },
+            "50000": {
+                "cv": 0.0272,
+                "cv_runs": 0.0082,
+                "cv_within": 0.0272,
+                "median_ms": 0.2616,
+                "runs_ms": [
+                    0.2616,
+                    0.2608,
+                    0.2649
+                ]
+            }
+        },
+        "d.extract_n": {
+            "1000": {
+                "cv": 0.0443,
+                "cv_runs": 0.0011,
+                "cv_within": 0.0443,
+                "median_ms": 1.0046,
+                "runs_ms": [
+                    1.0046,
+                    1.0059,
+                    1.0037
+                ]
+            },
+            "10000": {
+                "cv": 0.0233,
+                "cv_runs": 0.0151,
+                "cv_within": 0.0233,
+                "median_ms": 13.8268,
+                "runs_ms": [
+                    13.4801,
+                    13.8482,
+                    13.8268
+                ]
+            },
+            "50000": {
+                "cv": 0.0109,
+                "cv_runs": 0.0067,
+                "cv_within": 0.0109,
+                "median_ms": 76.2325,
+                "runs_ms": [
+                    76.3799,
+                    75.4283,
+                    76.2325
+                ]
+            }
+        },
+        "e.build_doc": {
+            "1000": {
+                "cv": 0.0079,
+                "cv_runs": 0.0079,
+                "cv_within": 0,
+                "median_ms": 7.704,
+                "runs_ms": [
+                    7.6287,
+                    7.7485,
+                    7.704
+                ]
+            },
+            "10000": {
+                "cv": 0.0076,
+                "cv_runs": 0.0076,
+                "cv_within": 0,
+                "median_ms": 55.5644,
+                "runs_ms": [
+                    55.0535,
+                    55.5644,
+                    55.8872
+                ]
+            },
+            "50000": {
+                "cv": 0.007,
+                "cv_runs": 0.007,
+                "cv_within": 0,
+                "median_ms": 270.5386,
+                "runs_ms": [
+                    270.5386,
+                    273.2647,
+                    269.5901
+                ]
+            }
+        },
+        "e.first_sync": {
+            "1000": {
+                "cv": 0.0169,
+                "cv_runs": 0.0169,
+                "cv_within": 0,
+                "median_ms": 13.297,
+                "runs_ms": [
+                    13.297,
+                    13.6389,
+                    13.2112
+                ]
+            },
+            "10000": {
+                "cv": 0.003,
+                "cv_runs": 0.003,
+                "cv_within": 0,
+                "median_ms": 103.1486,
+                "runs_ms": [
+                    102.7692,
+                    103.1486,
+                    103.3906
+                ]
+            },
+            "50000": {
+                "cv": 0.0079,
+                "cv_runs": 0.0079,
+                "cv_within": 0,
+                "median_ms": 522.6835,
+                "runs_ms": [
+                    522.6835,
+                    529.511,
+                    522.0528
+                ]
+            }
+        }
+    },
+    "note": "SCENEGRAPH-BASELINE-2 stage 4: three quiet runs of the tip (Studio 4e028e0a1 / irisgl 5dbb7816; the configure-time fingerprint reads d3fe4159), 2026-10-19 14:37-14:49 CEST, 1-min load at start 1.96 / 1.97 / 1.95 (CPU ~99 % idle; the box's load floor ~1.8 is adb's USB poll in D state), alternated with three base runs, Xvfb 1920x1080x24, the card's lock, nice 19, no ionice",
+    "rule": "regressed (a red) iff median > median_ms x (1 + max(0.10, 3 x cv)); improved (printed) iff median < median_ms x (1 - max(0.10, 3 x cv)); cv = max(cv_within, cv_runs)",
+    "runs": [
+        {
+            "note": "recorded by tests/benchmarks/bench_scenegraph.cpp",
+            "recorded_utc": "2026-10-19T12:38:16Z"
+        },
+        {
+            "note": "recorded by tests/benchmarks/bench_scenegraph.cpp",
+            "recorded_utc": "2026-10-19T12:45:30Z"
+        },
+        {
+            "note": "recorded by tests/benchmarks/bench_scenegraph.cpp",
+            "recorded_utc": "2026-10-19T12:49:30Z"
+        }
+    ],
+    "schema": 1,
+    "what": "the scene-graph benchmark's recorded baseline (tests/benchmarks/bench_scenegraph.cpp, \"THE RECORDED BASELINE\"); written by --baseline-from, never by a run"
+}
