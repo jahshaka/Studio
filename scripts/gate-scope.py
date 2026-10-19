@@ -2308,6 +2308,12 @@ class Selection:
                 if got or not n_: return True
         if setter and depth < _CHAIN_HOPS and not rows:
             var = _set_var(name, _cmake_split(args))       # a quoted argument is one argument ("vendor patch applied:")
+            if "${" in var or re.match(r"^(CMAKE|CTEST|CPACK)_", var):
+                # A COMPUTED NAME, OR A VARIABLE CMAKE ITSELF READS (a compiler launcher, a standard, a flag): no command
+                # of the tree is its reader, so its readers say nothing — unresolved, the generic path decides (TOOLING-2's
+                # third reader round: the launcher's set(CMAKE_${lang}_COMPILER_LAUNCHER) resolved through a loop to itself)
+                notes.append(f"{name}() writes {var}: read by CMake itself (or a computed name) — the reader cannot resolve it")
+                return False
             tip_text = getattr(self, "_cmake_tip_text", None)
             if (var and tip_text is not None and whole is not tip_text
                     and not re.search(r"\b" + re.escape(var) + r"\b", tip_text) and not self.names_anywhere(var)):
@@ -2321,12 +2327,12 @@ class Selection:
             seen = var in self._var_seen
             if seen:
                 users = []
-                got = got or got_memo.get(var, True)      # followed already (or in progress: a cycle): its reach is in
+                got = got or got_memo.get(var, False)     # followed already: its result; in progress (a cycle): nothing new
             else:
                 users = [c for c in gate_graph.cmake_commands(whole) if _reads_var(c[0], c[3], var)
                          and not (c[0] == name and c[3].split()[:1] == a_[:1])]
                 self._var_seen.add(var)
-                got_memo[var] = True                      # in progress
+                got_memo[var] = False                     # in progress: a cycle back to it owns nothing
             for (un, uf, ul, ua, ufn) in users:
                 if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf): got = True
             if not seen:
