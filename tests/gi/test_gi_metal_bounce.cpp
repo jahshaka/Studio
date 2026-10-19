@@ -82,6 +82,8 @@ int main(int argc, char **argv)
 {
     // `--route`: THE TINTED METAL AND THE MOVER (gi.metal_bounce_route); the rest is gi.metal_bounce
     const bool route = argc > 1 && std::string(argv[1]) == "--route";
+    // `--gate`: THE MOVERS' GATE ON A METAL'S CARD (gi.metal_bounce_gate, ENGINE-POLISH-PHOTON-1's fix round)
+    const bool gate = argc > 1 && std::string(argv[1]) == "--gate";
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-metal-bounce-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -154,7 +156,7 @@ int main(int argc, char **argv)
     struct Case { float rough, metal; };
     const std::pair<GiToggle, const char *> arms[2] = { { GiToggle::Off, "field off" }, { GiToggle::On, "field on" } };
 
-    if (!route) {
+    if (!route && !gate) {
     // ---- THE DIRECT ARM -------------------------------------------------------------------------
     const Case direct[5] = { { 0.3f, 0.0f }, { 0.3f, 0.5f }, { 0.3f, 1.0f }, { 0.9f, 0.0f }, { 0.9f, 1.0f } };
     double store[5][2] = {}, bounce[5][2] = {};
@@ -289,7 +291,11 @@ int main(int argc, char **argv)
     // atomGatherMetalLobe): (i) the card's stored flat term is the closed form E ( F0 A + w B ) per channel within
     // 0.4 % plus the radiance format's half step (R11G11B10F: 6 / 6 / 5 mantissa bits - the card's own quantum);
     // (ii) the panel's gathered E/pi from the still plate is the mover's times the card's stored / exact ratio, per
-    // channel within 0.4 % - the card answers what it stores. The gather's sample sequence is held
+    // channel within 0.4 % - the card answers what it stores. THE CARD LEG SITS UP TO 0.9 % (blue) FROM THE DECODE
+    // because of the Radiance / Flat layers' format (R11G11B10F: the stored values are the nearest representable to
+    // the closed form - the format's half step is the format's, not slack; wider formats are a later decision, not
+    // ENGINE-POLISH-PHOTON-1's). And THE STORE'S LEG: the same plate still on the uncarded cube, its hits reading
+    // the store's material and direct term, against the mover within 0.4 %. The gather's sample sequence is held
     // (freezeFrameIndex): the two arms trace the same rays, and their difference is the route's alone.
     // THE DIELECTRIC'S ROUTE (ENGINE-POLISH-PHOTON-1 stage 2): the same plate, a BLACK dielectric first (its
     // re-emission is its 0.04 lobe alone; the material edited in place, the gather's view kept), then the tinted
@@ -307,6 +313,7 @@ int main(int argc, char **argv)
         double gathered[2][3] = {}, dielectric[2][3] = {};
         // the card's stored flat term at the plate's top, black dielectric / tinted metal, and whether it answered
         double cardFlat[2][3] = {};
+        double storeLeg[3] = {};   // the tinted metal still on the uncarded cube: the store's route
         bool cardLit[2] = { false, false };
         bool gatherRan = false;
         for (int pass = 0; pass < 2; ++pass) {
@@ -373,17 +380,24 @@ int main(int argc, char **argv)
                 t.restOff = true;
                 t.freezeFrameIndex = true;
                 s->setGatherTuning(t);
-                // arms 0 / 1 the black dielectric still / a mover; 2 / 3 the tinted metal still / a mover
+                // arms 0 / 1 the black dielectric still / a mover; 2 / 3 the tinted metal still / a mover; 4 THE STORE'S
+                // LEG: the tinted metal still on the UNCARDED cube - its hits read the store's material and direct
+                // term (jahHitDirect) on purpose, the route the cards answer ahead of
                 PbrParams black = plate;
                 black.albedo = Colour(0.0f, 0.0f, 0.0f);
                 black.metalness = 0.0f;
                 CHECK(s->setPbrMaterial(plateMat, black), "the plate turns a black dielectric");
                 s->refreshGlobalIllumination();
-                for (int arm = 0; arm < 4; ++arm) {
+                for (int arm = 0; arm < 5; ++arm) {
                     if (arm == 1 || arm == 3) s->setNodeMovable(plateNode, true);
                     if (arm == 2) {
                         s->setNodeMovable(plateNode, false);
                         CHECK(s->setPbrMaterial(plateMat, plate), "the plate turns the tinted metal again");
+                        s->refreshGlobalIllumination();
+                    }
+                    if (arm == 4) {
+                        s->setNodeMovable(plateNode, false);
+                        CHECK(s->attachMesh(plateNode, cube, plateMat), "the plate on the uncarded cube (the store's leg)");
                         s->refreshGlobalIllumination();
                     }
                     settle(s);
@@ -399,7 +413,7 @@ int main(int argc, char **argv)
                                 for (int c = 0; c < 3; ++c) sum[c] += q[c];
                                 ++px;
                             }
-                    double *got = arm >= 2 ? gathered[arm - 2] : dielectric[arm];
+                    double *got = arm == 4 ? storeLeg : arm >= 2 ? gathered[arm - 2] : dielectric[arm];
                     for (int c = 0; c < 3; ++c) got[c] = px ? sum[c] / px : -1.0;
                     if (arm == 0 || arm == 2) {   // a still arm: what the plate's card holds at its top
                         CardSample cs;
@@ -413,7 +427,9 @@ int main(int argc, char **argv)
                     }
                     std::printf("the route: the %s plate %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px; readback "
                                 "%ux%u, %zu floats, gather running %d)\n", arm < 2 ? "black dielectric" : "tinted metal",
-                                arm == 1 || arm == 3 ? "a MOVER (the decode)" : "still (its card)", got[0], got[1], got[2], px,
+                                arm == 1 || arm == 3 ? "a MOVER (the decode)" : arm == 4 ? "still, NO CARDS (the store)"
+                                                                                        : "still (its card)",
+                                got[0], got[1], got[2], px,
                                 st.irradianceW, st.irradianceH, st.irradiance.size(), int(st.running));
                 }
                 gatherRan = true;
@@ -466,6 +482,13 @@ int main(int argc, char **argv)
                 CHECK(gathered[1][c] > 0.0 && want > 0.0 &&
                       std::fabs(gathered[0][c] / gathered[1][c] / want - 1.0) <= 0.004, msg);
             }
+            for (int c = 0; c < 3; ++c) {
+                char msg[320];
+                std::snprintf(msg, sizeof msg, "THE STORE'S LEG, channel %d: the panel's gathered E/pi from the tinted metal "
+                              "still on the uncarded cube (the store's route) %.5f, as a mover %.5f (%.4f; bar 0.4 %%)", c,
+                              storeLeg[c], gathered[1][c], gathered[1][c] > 0.0 ? storeLeg[c] / gathered[1][c] : 0.0);
+                CHECK(gathered[1][c] > 0.0 && std::fabs(storeLeg[c] / gathered[1][c] - 1.0) <= 0.004, msg);
+            }
             const double wantD = (0.04 * A + B) / (A + B);
             for (int c = 0; c < 3; ++c) {
                 const double ratio = gathered[1][0] > 0.0 ? dielectric[1][c] / gathered[1][0] : 0.0;
@@ -488,7 +511,7 @@ int main(int argc, char **argv)
         else std::printf("ok: no ray queries on this machine - the route arm skips\n");
     }
 
-    if (!route) {
+    if (!route && !gate) {
     // ---- THE BOUNCE ARM (the furnace's answer) --------------------------------------------------
     const Case furnace[4] = { { 0.3f, 0.0f }, { 0.3f, 1.0f }, { 0.9f, 0.0f }, { 0.9f, 1.0f } };
     double reemit[4] = {};
@@ -613,6 +636,144 @@ int main(int argc, char **argv)
         e->destroyScene(s);
     }
     }
+    // ---- THE MOVERS' GATE ON A METAL'S CARD (ENGINE-POLISH-PHOTON-1's fix round) ----------------------------
+    // A ray's hit lowers its INDIRECT share by the movers above it (MOVER-OCCLUSION-1: jahHitIndirectGate, four short
+    // rays against the movers): the store gates its whole bounce (jah_rq_hit_radiance.glsl), and the card read must cut
+    // the same share - for a metal that share is the specular LOBE's (the Flat term), not the diffuse half's. THE
+    // FIXTURE: the tinted metal plate (r 0.3) on a carded cube under a uniform sky, NO sun (its indirect is the whole
+    // answer), the white panel, the screen-probe gather with its sequence held; a black non-reflecting MOVER slab
+    // roofing the plate 1.8 m up (above the panel's top) or parked 40 m away. THE LAW: the gate is a factor on the
+    // indirect whichever route answers - under the roof every gate ray is blocked, so the plate's whole sky lobe goes on
+    // BOTH routes. The panel's gathered E/pi is the sky it sees PLUS the plate's share, so the plate's share is
+    // isolated by the same geometry with a BLACK plate (no lobe, no diffuse: what the panel gathers then is the sky
+    // and the roof alone, route-free): per channel ( route under - black under ) / ( route away - black away ) is the
+    // same on the card and the store, within 0.004 (0.4 % of the share away). The base's card read cut the diffuse
+    // half only: a metal's card kept its whole lobe under the roof (its ratio 1).
+    if (gate && e->rayQueryAvailable() && e->rayTracing()) {
+        Scene *s = e->createScene("metalgate");
+        const unsigned char kSky = 160;
+        const unsigned char skyPx[4] = { kSky, kSky, kSky, 255 };
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(1, 1, skyPx, true);
+        CHECK(sky.equirect && s->setSky(sky), "the uniform sky binds");
+        float sh[27] = { 0 };
+        run(1);
+        for (int f = 0; f < 20 && !s->published().copySkyAmbientSh(sh); ++f) run(1);
+        s->setAmbientSh(sh);
+        s->setEnvironmentLight(Colour(1, 1, 1, 1));
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+        MeshData cardedCube = enginetest::unitCubeMesh();
+        cardedCube.cards = enginetest::boxCards(0.5f);
+        const MeshId cardedMesh = s->createMesh(cardedCube);
+        PbrParams plate;
+        plate.albedo = Colour(1.0f, 0.6f, 0.3f);
+        plate.roughness = 0.3f;
+        plate.metalness = 1.0f;
+        const MaterialId plateMat = s->createPbrMaterial(plate);
+        const NodeId plateNode = s->createNode();
+        s->attachMesh(plateNode, cardedMesh, plateMat);
+        s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
+        PbrParams panel; panel.albedo = Colour(1, 1, 1); panel.roughness = 1.0f;
+        const NodeId panelNode = s->createNode();
+        s->attachMesh(panelNode, cube, s->createPbrMaterial(panel));
+        s->setNodeTransform(panelNode, Vec3(0.0f, 0.85f, 1.15f), Quat(), Vec3(2.0f, 1.5f, 0.1f));
+        // the mover: black, no specular (it sends the panel nothing of its own), a slab over the plate's middle
+        PbrParams black;
+        black.albedo = Colour(0, 0, 0);
+        black.roughness = 1.0f;
+        black.workflow = PbrParams::Workflow::Specular;
+        black.ior = 1.0f;
+        black.specularColour = Colour(0, 0, 0);
+        const NodeId moverNode = s->createNode();
+        s->attachMesh(moverNode, cube, s->createPbrMaterial(black));
+        s->setNodeMovable(moverNode, true);
+        // a 20 m roof over the plate ABOVE the panel's top (1.6 m): every one of the gate's four rays from every plate
+        // point meets it (they reach 4 m; 60 degrees off the normal is 3.1 m out at its height), none of the plate is
+        // hidden from the panel. A PARTIAL roof (3 x 2.4 m) reads card 0.664 / store 0.657 - the two routes' sky lobes
+        // differ in level and in spread across the plate (~15 % here), so a partial gate weights them differently.
+        const Vec3 moverAway(40.0f, 1.9f, 0.0f), moverOver(0.0f, 1.9f, -0.3f);
+        const Vec3 moverScale(20.0f, 0.05f, 20.0f);
+        s->setNodeTransform(moverNode, moverAway, Quat(), moverScale);
+        View *gv = e->createOffscreenView("metalgate", 256, 256, Colour(0, 0, 0));
+        PostFxDesc gfx;
+        gfx.allowOffscreen = true;
+        gfx.ssr = 0;
+        gv->setPostFx(gfx);
+        gv->setShadows(true);
+        gv->setOffscreenContract(OffscreenContract::StillPicture);
+        CHECK(gv->setScene(s), "the gather's view shows the gate's scene");
+        enginetest::testCameraLookAt(gv, Vec3(0.0f, 0.9f, -2.0f), Vec3(0.0f, 0.75f, 1.1f));
+        GiParams g = giOn(GiToggle::Off, 1);
+        g.quality = GiQuality::High;
+        g.gather = GiToggle::On;
+        s->setGlobalIllumination(g);
+        GatherTuning t;
+        t.readback = true;
+        t.restOff = true;
+        t.freezeFrameIndex = true;
+        s->setGatherTuning(t);
+        // arms: 0 the card, the mover away; 1 the card, the mover over; 2 the store (uncarded), over; 3 the store,
+        // away; 4 the BLACK plate, away; 5 the black plate, over
+        double got[6][3] = {};
+        bool cardLit = false;
+        const MaterialId blackMat = s->createPbrMaterial(black);
+        for (int arm = 0; arm < 6; ++arm) {
+            if (arm == 2) {
+                CHECK(s->attachMesh(plateNode, cube, plateMat), "the plate on the uncarded cube (the store's route)");
+                s->refreshGlobalIllumination();
+            }
+            if (arm == 4) {
+                CHECK(s->attachMesh(plateNode, cube, blackMat), "the plate turns black (the sky's share alone)");
+                s->refreshGlobalIllumination();
+            }
+            s->setNodeTransform(moverNode, arm == 1 || arm == 2 || arm == 5 ? moverOver : moverAway, Quat(), moverScale);
+            settle(s);
+            run(72);   // the held history's carry-over of the previous arm (0.1 % after 48 frames) under 1e-4
+            const GatherStatus st = s->published().gi.gather;
+            double sum[3] = {};
+            unsigned px = 0;
+            if (!st.irradiance.empty())
+                for (unsigned y = 80; y < 128; ++y)
+                    for (unsigned x = 96; x < 160; ++x) {
+                        const float *q = &st.irradiance[(size_t(y) * st.irradianceW + x) * 4u];
+                        if (q[3] <= 0.0f) continue;
+                        for (int c = 0; c < 3; ++c) sum[c] += q[c];
+                        ++px;
+                    }
+            for (int c = 0; c < 3; ++c) got[arm][c] = px ? sum[c] / px : -1.0;
+            if (arm == 0) {
+                CardSample cs;
+                cardLit = s->readCardAt(Vec3(0.0f, 0.1f, 0.6f), Vec3(0.0f, 1.0f, 0.0f), cs, plateNode) && cs.lit;
+                std::printf("the gate: the plate's card lit %d, flat %.6f %.6f %.6f, stored indirect %.6f %.6f %.6f\n",
+                            int(cardLit), cs.flat[0], cs.flat[1], cs.flat[2], cs.indirectStored[0], cs.indirectStored[1],
+                            cs.indirectStored[2]);
+            }
+            static const char *what[6] = { "its card, the mover away", "its card, the mover over it",
+                                           "the store (no cards), the mover over it", "the store, the mover away",
+                                           "nothing (a black plate), the mover away",
+                                           "nothing (a black plate), the mover over it" };
+            std::printf("the gate: the plate by %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px)\n", what[arm],
+                        got[arm][0], got[arm][1], got[arm][2], px);
+        }
+        CHECK(cardLit, "the plate's card answers (lit)");
+        for (int c = 0; c < 3; ++c) {
+            const double cardAway = got[0][c] - got[4][c], storeAway = got[3][c] - got[4][c];
+            const double card = cardAway > 0.0 ? (got[1][c] - got[5][c]) / cardAway : 0.0;
+            const double store = storeAway > 0.0 ? (got[2][c] - got[5][c]) / storeAway : 0.0;
+            char msg[320];
+            std::snprintf(msg, sizeof msg, "THE MOVER GATES THE METAL'S LOBE ON EVERY ROUTE, channel %d: the plate's share "
+                          "under the mover / away, by its card %.4f, by the store %.4f (the shares away %.5f / %.5f; "
+                          "bar 0.004)", c, card, store, cardAway, storeAway);
+            CHECK(cardAway > 0.0 && storeAway > 0.0 && store < 0.5 && std::fabs(card - store) <= 0.004, msg);
+        }
+        GiParams off; off.mode = GiMode::Off;
+        s->setGlobalIllumination(off);
+        gv->setScene(nullptr);
+        e->destroyView(gv);
+        e->destroyScene(s);
+    }
+    else if (gate) std::printf("ok: no ray queries on this machine - the gate arm skips\n");
     e->destroyView(rv);
     std::printf("frames rendered: %llu\n", rendered);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

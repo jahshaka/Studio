@@ -2008,7 +2008,14 @@ set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1470)
 jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 312)
+set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 380)
+# gi.metal_bounce_gate — THE MOVERS' GATE ON A METAL'S CARD (ENGINE-POLISH-PHOTON-1's fix round): a sky-lit tinted metal
+# plate with cards, no sun, a black mover slab over it or away: the gathered E/pi under / away is the same factor by its
+# card as by the store (the plate on the uncarded cube), bar 0.4 % - the card read cuts the lobe's indirect share too.
+jah_gpu_row(gi.metal_bounce_gate CLASS engine COMMAND test_gi_metal_bounce --gate
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.metal_bounce_gate PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.metal_bounce_gate PROPERTIES JAHSHAKA_TEST_FRAMES 573)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.
