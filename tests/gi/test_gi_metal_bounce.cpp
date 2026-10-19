@@ -3,19 +3,26 @@
 // diffuser - was the DIFFUSE-ONLY store's: a white rough metal re-emitted 0).
 //
 // THE LAW. HlmsPbs splits a base colour b at metalness m into a diffuse lobe b (1 - m) and a specular
-// lobe of F0 = b m (kS = 1 here), and a surface lit from one direction at cosine mu reflects
-//     b (1 - m) Dd( mu, r )  +  m ( b A( mu, r ) + B( mu, r ) )
+// lobe of F0 = lerp( 0.04, b, m ) (kS = 1 here) - EVERY surface's, a dielectric's 0.04 included
+// (ENGINE-POLISH-PHOTON-1 stage 2) - and a surface lit from one direction at cosine mu reflects
+//     b (1 - m) Dd( mu, r )  +  F0 A( mu, r ) + B( mu, r )
 // of what a Lambertian of albedo 1 would - Dd the normalised Disney diffuse's directional albedo, A and B
 // the GGX lobe's two Fresnel parts (enginetesthelpers.h, both by direct integration of the lobes). Under
 // a UNIFORM incoming hemisphere the same with the hemispherical means Dd-bar, A-bar, B-bar. So against a
-// diffuser of the same b and r (m = 0):
+// diffuser of the same b and r (m = 0, whose own 0.04 lobe is in the reference):
 //   THE DIRECT ARM (a sun straight down, mu = 1): the plate's stored radiance is
-//       [ (1 - m) Dd( 1, r ) + m ( A( 1, r ) + B( 1, r ) ) ] / Dd( 1, r )
-//     of the diffuser's (b = 1: a WHITE metal), and a white panel facing the plate, lit by nothing else,
-//     takes the same share of the diffuser's bounce (field off and on);
+//       [ (1 - m) Dd( 1, r ) + F0 A( 1, r ) + B( 1, r ) ] / [ Dd( 1, r ) + 0.04 A( 1, r ) + B( 1, r ) ]
+//     of the diffuser's (b = 1: a WHITE metal at m = 1), and a white panel facing the plate, lit by nothing
+//     else, takes the same share of the diffuser's bounce (field off and on);
+//   THE DIELECTRIC ARM (the same sun, r 9/31 and 23/31 - the table's own roughness rows): a BLACK dielectric's
+//     store is its specular lobe alone, 0.04 A + B of the incident (0.040 / 0.026), measured against a white
+//     metal's A + B; a b 0.6 dielectric's TOTAL holds the same lobe beside its diffuse one, against a b 1
+//     dielectric's: ( 0.6 Dd + 0.04 A + B ) / ( Dd + 0.04 A + B ); bar 0.4 % (b 0.6, not the brief's 0.5:
+//     153 / 255 is exact in the RGBA8 albedo volume, 0.5 is 128 / 255 = +0.39 %, the whole bar). The base's
+//     diffuse-only dielectric read 0 and 0.6 (the gate on w = metalness x kS);
 //   THE BOUNCE ARM (no lamp: an emitter of albedo 0 above the plate, the store's one bounce pass): the plate's stored
 //     radiance is its re-emission of what it gathers,
-//       [ (1 - m) Dd-bar( r ) + m ( A-bar( r ) + B-bar( r ) ) ] / Dd-bar( r )
+//       [ (1 - m) Dd-bar( r ) + F0 A-bar( r ) + B-bar( r ) ] / [ Dd-bar( r ) + 0.04 A-bar( r ) + B-bar( r ) ]
 //     of the diffuser's - the furnace's answer: a white rough metal re-emits ~ its lobe's reflectance.
 // THE BARS: 1.5 % on every store ratio - the store's diffuse lobe is a fit (JahDiffuseAlbedo, worst
 // 0.0096 against the integral this test takes), the lobe's table is bilinear (0.22 % worst at mu >= 0.2,
@@ -48,21 +55,26 @@ static int failures = 0;
 
 namespace {
 
-/// THE LAW'S RATIO, metal of metalness m against the diffuser, white base, kS = 1.
-double directRatio(double m, double r)
+/// THE LOBES' RE-EMISSION of a white base (b = 1) at metalness m, kS = 1, in units of a Lambertian of albedo 1:
+/// the diffuse lobe b (1 - m) Dd plus the specular lobe F0 A + B, F0 = lerp( 0.04, 1, m ) - at the sun's cosine 1...
+double lobeDirect(double m, double r)
 {
     double A = 0.0, B = 0.0;
     enginetest::ggxSpecularAlbedo(1.0, r, A, B, 512);
     const double dd = enginetest::disneyDiffuseAlbedo(1.0, r, 256);
-    return ((1.0 - m) * dd + m * (A + B)) / dd;
+    return (1.0 - m) * dd + (0.04 * (1.0 - m) + m) * A + B;
 }
-double bounceRatio(double m, double r)
+/// ...and of a uniform hemisphere.
+double lobeHemi(double m, double r)
 {
     double A = 0.0, B = 0.0;
     enginetest::ggxSpecularAlbedoHemi(r, A, B, 64, 192);
     const double dd = enginetest::disneyDiffuseAlbedoHemi(r, 64, 64);
-    return ((1.0 - m) * dd + m * (A + B)) / dd;
+    return (1.0 - m) * dd + (0.04 * (1.0 - m) + m) * A + B;
 }
+/// THE LAW'S RATIO, metalness m against the diffuser (m = 0), white base, kS = 1.
+double directRatio(double m, double r) { return lobeDirect(m, r) / lobeDirect(0.0, r); }
+double bounceRatio(double m, double r) { return lobeHemi(m, r) / lobeHemi(0.0, r); }
 
 }  // namespace
 
@@ -208,6 +220,63 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- THE DIELECTRIC ARM (ENGINE-POLISH-PHOTON-1 stage 2) --------------------------------------------
+    // The plate alone under the sun (no panel: its bounce would be the plate's second term), the store's direct
+    // term only (one bounce = the pixel's gather, none in the store): a white METAL (F0 = 1: A + B), a BLACK
+    // dielectric (its lobe alone: 0.04 A + B), a b 0.6 and a b 1 dielectric (their ratio holds the lobe beside the
+    // diffuse one) - at the table's rows 9/31 and 23/31.
+    {
+        const float rough[2] = { 9.0f / 31.0f, 23.0f / 31.0f };
+        struct Plate { float base, metal; };
+        const Plate plates[4] = { { 1.0f, 1.0f }, { 0.0f, 0.0f }, { 0.6f, 0.0f }, { 1.0f, 0.0f } };
+        for (int k = 0; k < 2; ++k) {
+            double rad[4] = {};
+            for (int c = 0; c < 4; ++c) {
+                Scene *s = e->createScene("dielectric");
+                CHECK(rv->setScene(s), "the view shows the dielectric scene");
+                float sh[27] = { 0 };
+                s->setAmbientSh(sh);
+                s->setEnvironmentLight(Colour(0, 0, 0, 1));
+                CHECK(enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), 3.0f) != 0, "the sun straight down");
+                const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+                PbrParams plate;
+                plate.albedo = Colour(plates[c].base, plates[c].base, plates[c].base);
+                plate.roughness = rough[k];
+                plate.metalness = plates[c].metal;
+                const NodeId nd = s->createNode();
+                s->attachMesh(nd, cube, s->createPbrMaterial(plate));
+                s->setNodeTransform(nd, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
+                enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.9f, -2.0f), Vec3(0.0f, 0.1f, 0.0f));
+                s->setGlobalIllumination(giOn(GiToggle::Off, 1));
+                settle(s);
+                int n = 0;
+                rad[c] = plateRadiance(s, n);
+                std::printf("dielectric arm: roughness %.4f, base %.1f metalness %.1f: the plate's voxel radiance %.6f "
+                            "(%d voxels)\n", rough[k], plates[c].base, plates[c].metal, rad[c], n);
+                GiParams off; off.mode = GiMode::Off;
+                s->setGlobalIllumination(off);
+                rv->setScene(nullptr);
+                e->destroyScene(s);
+            }
+            double A = 0.0, B = 0.0;
+            enginetest::ggxSpecularAlbedo(1.0, rough[k], A, B, 512);
+            // the incident, in the store's units: the white metal re-emits A + B of it
+            const double incident = rad[0] / (A + B);
+            const double want = 0.04 * A + B;
+            const double black = rad[1] / incident;
+            const double dd = enginetest::disneyDiffuseAlbedo(1.0, rough[k], 256);
+            const double wantTotal = (0.6 * dd + want) / (dd + want), total = rad[2] / rad[3];
+            char msg[320];
+            std::snprintf(msg, sizeof msg, "dielectric, roughness %.4f: a BLACK dielectric re-emits its lobe, 0.04 A + B "
+                          "of the incident (%.5f; want %.5f, bar 0.4 %%)", rough[k], black, want);
+            CHECK(rad[0] > 0.0 && std::fabs(black / want - 1.0) <= 0.004, msg);
+            std::snprintf(msg, sizeof msg, "dielectric, roughness %.4f: a b 0.6 dielectric's total holds the lobe beside "
+                          "the diffuse one, against b 1 (%.5f; want %.5f, the diffuse lobe alone 0.6; bar 0.4 %%)",
+                          rough[k], total, wantTotal);
+            CHECK(rad[3] > 0.0 && std::fabs(total / wantTotal - 1.0) <= 0.004, msg);
+        }
+    }
+
     }
     // ---- THE TINTED METAL AND THE MOVER (decision 22.1) ----------------------------------------------
     if (route)
@@ -218,10 +287,20 @@ int main(int argc, char **argv)
     // from the same table (800.Atom_piece_ps.any, atomGatherMetalLobe), so the panel's gathered E/pi is the same within
     // 0.4 % per channel when the plate becomes a mover. The gather's sample sequence is held (freezeFrameIndex): the
     // two arms trace the same rays, and their difference is the route's alone.
+    // THE DIELECTRIC'S ROUTE (ENGINE-POLISH-PHOTON-1 stage 2): the same plate, a BLACK dielectric first (its
+    // re-emission is its 0.04 lobe alone; the material edited in place, the gather's view kept), then the tinted
+    // metal: the panel's gathered E/pi from the black plate is (0.04 A + B) / (A + B) of the tinted metal's RED
+    // channel (base 1 there: F0 = 1), the panel's view factor cancelling (every plate point sees the sun at cosine
+    // 1) - still (its hits read the store's material and its direct term, jahHitDirect) and as a MOVER (the decode,
+    // atomGatherMetalLobe) alike, each within 0.4 %. The base re-emitted nothing from a dielectric on either route.
+    // (The dielectric FIRST: the gather's held history keeps ~0.1 % of the previous plate after 48 frames, which is
+    // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric. Every
+    // edit is made while the plate is STILL: one made while it was a mover did not reach the store when it turned
+    // still again - the finding in ENGINE-POLISH-PHOTON-1's report.)
     {
         const float tint[3] = { 1.0f, 0.6f, 0.3f };
         double diffuserRgb[3] = {}, metalRgb[3] = {};
-        double gathered[2][3] = {};
+        double gathered[2][3] = {}, dielectric[2][3] = {};
         bool gatherRan = false;
         for (int pass = 0; pass < 2; ++pass) {
             Scene *s = e->createScene("metaltint");
@@ -236,7 +315,8 @@ int main(int argc, char **argv)
             plate.roughness = 0.3f;
             plate.metalness = pass ? 1.0f : 0.0f;
             const NodeId plateNode = s->createNode();
-            s->attachMesh(plateNode, cube, s->createPbrMaterial(plate));
+            const MaterialId plateMat = s->createPbrMaterial(plate);
+            s->attachMesh(plateNode, cube, plateMat);
             s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
             PbrParams panel; panel.albedo = Colour(1, 1, 1); panel.roughness = 1.0f;
             const NodeId panelNode = s->createNode();
@@ -283,8 +363,19 @@ int main(int argc, char **argv)
                 t.restOff = true;
                 t.freezeFrameIndex = true;
                 s->setGatherTuning(t);
-                for (int arm = 0; arm < 2; ++arm) {
-                    if (arm == 1) s->setNodeMovable(plateNode, true);
+                // arms 0 / 1 the black dielectric still / a mover; 2 / 3 the tinted metal still / a mover
+                PbrParams black = plate;
+                black.albedo = Colour(0.0f, 0.0f, 0.0f);
+                black.metalness = 0.0f;
+                CHECK(s->setPbrMaterial(plateMat, black), "the plate turns a black dielectric");
+                s->refreshGlobalIllumination();
+                for (int arm = 0; arm < 4; ++arm) {
+                    if (arm == 1 || arm == 3) s->setNodeMovable(plateNode, true);
+                    if (arm == 2) {
+                        s->setNodeMovable(plateNode, false);
+                        CHECK(s->setPbrMaterial(plateMat, plate), "the plate turns the tinted metal again");
+                        s->refreshGlobalIllumination();
+                    }
                     settle(s);
                     run(48);   // the held sequence's history converged on the arm's route
                     const GatherStatus st = s->published().gi.gather;
@@ -298,11 +389,12 @@ int main(int argc, char **argv)
                                 for (int c = 0; c < 3; ++c) sum[c] += q[c];
                                 ++px;
                             }
-                    for (int c = 0; c < 3; ++c) gathered[arm][c] = px ? sum[c] / px : -1.0;
-                    std::printf("the route: the plate %s, the panel's gathered E/pi %.5f %.5f %.5f (%u px; readback %ux%u, "
-                                "%zu floats, gather running %d)\n", arm ? "a MOVER (the decode)" : "still (the store)",
-                                gathered[arm][0], gathered[arm][1], gathered[arm][2], px, st.irradianceW, st.irradianceH,
-                                st.irradiance.size(), int(st.running));
+                    double *got = arm >= 2 ? gathered[arm - 2] : dielectric[arm];
+                    for (int c = 0; c < 3; ++c) got[c] = px ? sum[c] / px : -1.0;
+                    std::printf("the route: the %s plate %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px; readback "
+                                "%ux%u, %zu floats, gather running %d)\n", arm < 2 ? "black dielectric" : "tinted metal",
+                                arm == 1 || arm == 3 ? "a MOVER (the decode)" : "still (the store)", got[0], got[1], got[2], px,
+                                st.irradianceW, st.irradianceH, st.irradiance.size(), int(st.running));
                 }
                 gatherRan = true;
                 gv->setScene(nullptr);
@@ -316,15 +408,17 @@ int main(int argc, char **argv)
         double A = 0.0, B = 0.0;
         enginetest::ggxSpecularAlbedo(1.0, 0.3, A, B, 512);
         const double dd = enginetest::disneyDiffuseAlbedo(1.0, 0.3, 256);
+        // (the white diffuser's own 0.04 lobe in the reference: ENGINE-POLISH-PHOTON-1 stage 2)
+        const double ref = dd + 0.04 * A + B;
         for (int c = 0; c < 3; ++c) {
-            const double want = (tint[c] * A + B) / dd, swapped = (A + tint[c] * B) / dd;
+            const double want = (tint[c] * A + B) / ref, swapped = (A + tint[c] * B) / ref;
             char msg[300];
             std::snprintf(msg, sizeof msg, "tinted metal, channel %d: the store holds F0 A + w B of the diffuser's "
                           "(%.4f; want %.4f, the two swapped %.4f; bar 1.5 %%)", c, metalRgb[c] / diffuserRgb[c], want,
                           swapped);
             CHECK(diffuserRgb[c] > 0.0 && std::fabs(metalRgb[c] / diffuserRgb[c] / want - 1.0) <= 0.015, msg);
         }
-        if (gatherRan)
+        if (gatherRan) {
             for (int c = 0; c < 3; ++c) {
                 char msg[300];
                 std::snprintf(msg, sizeof msg, "THE ROUTE DOES NOT MOVE THE BOUNCE, channel %d: the panel's gathered E/pi "
@@ -332,6 +426,17 @@ int main(int argc, char **argv)
                               gathered[1][c], gathered[1][c] / gathered[0][c]);
                 CHECK(gathered[0][c] > 0.0 && std::fabs(gathered[1][c] / gathered[0][c] - 1.0) <= 0.004, msg);
             }
+            const double wantD = (0.04 * A + B) / (A + B);
+            for (int arm = 0; arm < 2; ++arm)
+                for (int c = 0; c < 3; ++c) {
+                    const double ratio = gathered[0][0] > 0.0 ? dielectric[arm][c] / gathered[0][0] : 0.0;
+                    char msg[320];
+                    std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY THE %s, channel %d: the panel's gathered E/pi "
+                                  "from the black dielectric is (0.04 A + B) / (A + B) of the white-red metal's (%.5f; want "
+                                  "%.5f, bar 0.4 %%)", arm ? "DECODE (a mover)" : "STORE (still)", c, ratio, wantD);
+                    CHECK(dielectric[arm][c] > 0.0 && std::fabs(ratio / wantD - 1.0) <= 0.004, msg);
+                }
+        }
         else std::printf("ok: no ray queries on this machine - the route arm skips\n");
     }
 
@@ -428,16 +533,12 @@ int main(int argc, char **argv)
             // term times the lobe's directional albedo at the sun's cosine (1 here: the sun straight down on the plate's
             // top), the bounce's re-emission times its hemispherical mean. Both rise from r 0.6 to 0.3 (the lobe's energy
             // factor, lerp(1, 1/1.51, r), grows as r falls), so the stored radiance rises, by a ratio between the two
-            // factors' - computed from the lobe (enginetest::disneyDiffuseAlbedo), within the 1 % the store's ratios
+            // factors' - computed from the lobes (lobeDirect / lobeHemi), within the 1 % the store's ratios
             // carry (the renderer's jahDiffuseAlbedo is a fit to the DFG table, the quantum 0.1 %).
-            const double direct = enginetest::disneyDiffuseAlbedo(1.0, 0.3) / enginetest::disneyDiffuseAlbedo(1.0, 0.6);
-            double h3 = 0.0, h6 = 0.0;
-            for (int k = 0; k < 32; ++k) {   // the hemispherical mean, cosine-weighted views
-                const double v = std::sqrt((k + 0.5) / 32.0);
-                h3 += enginetest::disneyDiffuseAlbedo(v, 0.3);
-                h6 += enginetest::disneyDiffuseAlbedo(v, 0.6);
-            }
-            const double hemi = h3 / h6, lo = std::min(direct, hemi), hi = std::max(direct, hemi);
+            // (ENGINE-POLISH-PHOTON-1 stage 2: the diffuser's own 0.04 specular lobe is in both factors.)
+            const double direct = lobeDirect(0.0, 0.3) / lobeDirect(0.0, 0.6);
+            const double hemi = lobeHemi(0.0, 0.3) / lobeHemi(0.0, 0.6), lo = std::min(direct, hemi),
+                         hi = std::max(direct, hemi);
             const double got = before > 0.0 ? mid / before : 0.0;
             char rmsg[260];
             std::snprintf(rmsg, sizeof rmsg, "...and the STORE follows the roughness: the plate's radiance x%.4f, "
