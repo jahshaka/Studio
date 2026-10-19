@@ -47,7 +47,7 @@ for (var i = 0; i < ns.length; ++i)
 // lamp and 0.70 of the bounce at roughness 1 - and at roughness 1 this room's fixed
 // point (peak 0.78) no longer reaches the ceiling the float store exists to exceed.
 // At roughness 0 the lobe is 0.95 / 0.905 of Lambertian and the claim below is
-// exercised again (peak 1.24, 6,647 voxels above 1, measured).
+// exercised again (peak 1.24, 52 voxels above 1 by the direct term alone, 2026-10-19).
 var S = 5.0, T = 0.2;
 function box(px, py, pz, sx, sy, sz) {
     var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz }, scale: { x: sx, y: sy, z: sz } });
@@ -104,9 +104,17 @@ assert(b.peakDirect > 0.5 && b.peakDirect <= DIRECT_MAX * (1 + 1e-3),
 // (IMAGE-1: the direct PEAK is now the inverse square law's hot spot on the ceiling 0.8 m over
 // the lamp, which the bounce barely adds to — the fixed point's excess is where the room fills,
 // so it is counted there: more voxels above 1 with the bounce than with the direct term alone.)
-assert(b.voxelsAboveOne > d.voxelsAboveOne,
-       "the fixed point stands above the ceiling: " + b.voxelsAboveOne + " voxels above 1 against " +
-       d.voxelsAboveOne + " direct (an 8-bit store reads 1.0 here)");
+// THE CLAIM IS THE PEAK, NOT A COUNT (2026-10-19): which voxel CENTRES sit in the thin band under 1 that
+// three bounces (+1.7 % here) lift over it is grid luck - the count-based claim passed by +6 voxels and
+// failed at 3 of 8 lamp heights in a sweep (spikes/engine-polish-atom-1/voxel-store-red/); PHOTON-1's
+// dielectric lobe raised the direct peak 5 % and moved the 1.0 contour off a ring, so the count stood
+// still at 52/52 while the bounce added +0.0244 at the hot spot (25 half-float steps at 1.2). The physics
+// the float store exists for: the bounced peak stands ABOVE the ceiling and ABOVE the direct peak; the
+// count never falls.
+assert(b.peak > 1.0 && b.peak > d.peak && b.voxelsAboveOne >= d.voxelsAboveOne,
+       "the fixed point stands above the ceiling and the direct: peak " + b.peak + " over the direct's " +
+       d.peak + ", " + b.voxelsAboveOne + " voxels above 1 against " + d.voxelsAboveOne +
+       " direct (an 8-bit store reads 1.0 here)");
 // THE BOUNCE'S MAGNITUDE (IMAGE-1 fix round): the room's light summed over the store (mean x count),
 // the bounced total over the direct alone. A closed room of albedo rho returns rho + rho^2 + rho^3
 // of its direct light in three bounces; the voxels hold the surface's lobe-weighted radiance, so
@@ -123,7 +131,7 @@ assert(share >= 0.716 * 0.8 && share <= 1.596 * 1.05,
        "the bounce returns between 80 % of one bounce and the closed room's three-bounce share of the " +
        "direct light: " + share.toFixed(3) + " (0.573 .. 1.676; rho 0.791 x lobe 0.905 = 0.716)");
 // ...and HELD: voxels stand above the ceiling (an 8-bit store has none). The count itself is no
-// geometric prediction - it is the tail of the fixed point over the ceiling (781 here, 5,115 on
+// geometric prediction - it is the tail of the fixed point over the ceiling (52 here since the lamp's inverse-square law, 5,115 on
 // the leaky store whose hidden faces glowed) - so the claim is that the tail exists.
 assert(b.voxelsAboveOne > 0,
        "the energy an 8-bit store clips is held: " + b.voxelsAboveOne + " voxels above 1");
