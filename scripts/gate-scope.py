@@ -1887,9 +1887,19 @@ class Selection:
                 # took with it, reaches what the commands inside it reach — resolved one by one
                 self._var_seen, self._var_got, self._cmake_read_at = set(), {}, set()
                 inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
-                hit = [c[0] for c in inner
-                       if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1)]
-                for f_ in sorted(self._cmake_read_at):
+                hit, stepped = [], set()
+                for c in inner:
+                    if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1):
+                        hit.append(c[0])
+                        continue
+                    # AN INNER COMMAND THE READER LEAVES UNRESOLVED IS NEVER DROPPED (TOOLING-4 item 1): at depth 1 step 7
+                    # never runs, so add_compile_options(-fsanitize=thread) inside if(JAHSHAKA_TSAN) returned False and was
+                    # lost the moment a sibling message() resolved (29 rows, the lints only) — it takes its scope's step 7
+                    for under in self.scope_dirs(p):
+                        self.dir_scope_reach(p, under, c[0], tag, notes)
+                    stepped.add(p)
+                    hit.append(c[0])
+                for f_ in sorted(self._cmake_read_at - stepped):
                     # a write of a variable CMake itself reads in the body (TOOLING-3 item 1): its scope's step 7
                     for under in self.scope_dirs(f_):
                         self.dir_scope_reach(f_, under, name, tag, notes)
@@ -2070,6 +2080,11 @@ class Selection:
 
     def cmake_path(self, f, text, value):
         """An absolute path a build file spells (`${CMAKE_CURRENT_SOURCE_DIR}/…`, a variable it set), or None."""
+        # THE HAZARD (TOOLING-3's read; TOOLING-4 note): a relative name — and ${CMAKE_CURRENT_SOURCE_DIR} — is resolved here
+        # against <f>'s OWN directory. For a CMakeLists.txt that is what CMake does; inside an include()d module CMake
+        # resolves both against the INCLUDER's directory (only ${CMAKE_CURRENT_LIST_DIR} is the module's). No module of the
+        # tree passes such a path here today (the -DPATCHES= appliers sit in CMakeLists.txt files); one that does would be
+        # read against the wrong directory — resolve it through scope_dirs(f) then.
         d = os.path.join(ROOT, os.path.dirname(f))
         bdir = os.path.join(self.graph.build, os.path.dirname(f)) if self.graph is not None else None
         known = {"CMAKE_CURRENT_SOURCE_DIR": d, "CMAKE_CURRENT_LIST_DIR": d, "CMAKE_SOURCE_DIR": ROOT,
@@ -2212,8 +2227,15 @@ class Selection:
         if name in ("if", "elseif", "while", "foreach") and depth > 0:
             # a condition (or a loop's list) reached as a variable's READER: its block's body is what it reaches
             body = self.block_body(whole, name, args, line)
-            hit = [c[0] for c in body if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes,
-                                                             depth=depth + 1)]
+            hit = []
+            for c in body:
+                if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=depth + 1):
+                    hit.append(c[0])
+                else:
+                    # an unresolved command of the body is never dropped (TOOLING-4 item 1, the same drop one level down:
+                    # option(JAHSHAKA_TSAN … ON) reached if(JAHSHAKA_TSAN) whose message() resolved — 29 rows): its file's
+                    # scope takes step 7 at the head of the chain (_cmake_read_at is the set of files whose scope does)
+                    self.__dict__.setdefault("_cmake_read_at", set()).add(p)
             if hit:
                 notes.append(f"{name}() reading it: its block's {len(hit)} command(s)"); return True
         # the whole command for anything but a list: an add_test's NAME sits on another line than
@@ -2347,7 +2369,10 @@ class Selection:
             self._cmake_read_at = set()
         a_ = args.split()
         setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
-            name == "file" and a_[:1] and a_[0] in _FILE_OUT)
+            name == "file" and a_[:1] and a_[0] in _FILE_OUT) or (
+            # unset() of a variable CMake itself reads (or a computed name) is a write of it (TOOLING-4: unset(CMAKE_CXX_FLAGS)
+            # in irisgl/engine read as unresolved — the engine's every-fixture rule, 449 rows, no app row)
+            name == "unset" and a_[:1] and ("${" in a_[0] or re.match(r"^(CMAKE|CTEST|CPACK)_", a_[0])))
         if (setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:] and not fn
                 and "${" not in a_[0] and not re.match(r"^(CMAKE|CTEST|CPACK)_", a_[0])):
             # (a variable CMake itself reads — set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE) — has no reader in any build file:
@@ -2381,10 +2406,17 @@ class Selection:
             # of the directory it runs in, reached directly or at the end of the chain of the command being read
             # (never the engine's every-fixture rule, which holds no app row)
             notes.append(f"{name}() writes {var}: read by CMake itself (or a computed name) — the reader cannot resolve it")
-            if name == "set" and "PARENT_SCOPE" in a_[1:]:
-                what = "a computed name" if "${" in var else "a variable CMake itself reads"
-                self.full_tier.append(f"{tag}: set({var} … PARENT_SCOPE) writes {what} in the scope above — the reader "
+            what = "a computed name" if "${" in var else "a variable CMake itself reads"
+            if name in ("set", "unset") and "PARENT_SCOPE" in a_[1:]:
+                self.full_tier.append(f"{tag}: {name}({var} … PARENT_SCOPE) writes {what} in the scope above — the reader "
                                       "cannot bound it")
+                return True
+            if (name in ("set", "unset") and "CACHE" in _cmake_split(args)[1:]) or name == "option":
+                # A CACHE WRITE IS GLOBAL (TOOLING-4 item 2; measured, spikes/tooling-3/reader/mini3/): set(CMAKE_CXX_FLAGS
+                # "…" CACHE STRING "" FORCE) in a subdirectory reaches the root's targets and a sibling directory's, not only
+                # its own directory's — step 7 of irisgl/engine (623 rows) narrowed it; an option() writes the cache too
+                self.full_tier.append(f"{tag}: {name}({var} … CACHE) writes {what} into the cache, read by every directory "
+                                      "— the reader cannot bound it")
                 return True
             self.__dict__.setdefault("_cmake_read_at", set()).add(p)
             if depth > 0:
@@ -2498,6 +2530,11 @@ class Selection:
 
     def module_of(self, f, args):
         """The tree's build file an include(<args>) in <f> loads (a path, or <module> on the module path), or None."""
+        # THE HAZARD (TOOLING-3's read; TOOLING-4 note): a bare relative path — include(foo/x.cmake) — is resolved below
+        # against ROOT, where CMake resolves it against the including directory (CMAKE_CURRENT_SOURCE_DIR: for <f> a module,
+        # ITS includer's); ${CMAKE_CURRENT_SOURCE_DIR} is replaced by <f>'s own directory, right for a CMakeLists.txt and
+        # wrong for a module. Every include() of the tree today is a module name or ${CMAKE_CURRENT_LIST_DIR}/… — a new
+        # one spelled the other way would map to the wrong file (or none: the include then reads as unresolved).
         a = _cmake_split(args)
         if not a:
             return None
@@ -2716,7 +2753,7 @@ class Selection:
         top-level commands reach, each resolved as a changed command of that file (its blocks through their bodies);
         True when every one resolves, None when the module is not the tree's or one does not (the generic path then
         decides: a directory-scope include stays the whole tier)."""
-        a0 = _cmake_split(args)[0]
+        a0 = _cmake_split(args)[0]          # (resolved as module_of resolves it — its hazard note holds here)
         cands = ([a0] if a0.endswith(".cmake") else []) + [f"cmake/{a0}.cmake", f"irisgl/cmake/{a0}.cmake"]
         mod = None
         for c in cands:
