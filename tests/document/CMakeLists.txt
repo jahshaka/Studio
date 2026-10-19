@@ -34,6 +34,23 @@ set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
 
+# document.write_journal — THE WRITE JOURNAL'S DEDUPE AT ITS THREE EDGES (SCENEGRAPH-BASELINE-2): an id replay (the
+# undo of a delete: re-id'd and attached in one frame, the attach logs), several readers (a take between two writes),
+# the cap (a take behind the drop is incomplete). Counts only. Document only: NULL render system, no display.
+add_executable(test_write_journal test_write_journal.cpp)
+set_target_properties(test_write_journal PROPERTIES AUTOMOC OFF)
+target_include_directories(test_write_journal PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_write_journal PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_write_journal)
+add_test(NAME document.write_journal COMMAND test_write_journal
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.write_journal PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.write_journal)
+
 # document.physics_writeback — THE PHYSICS WRITE-BACK WRITES ONLY WHAT MOVED
 # (SPEED-CPU item 1, perf audit 2026-10-03 D1): a 146-body pile (a group, a
 # nested body) played to sleep; after every checked frame the old
