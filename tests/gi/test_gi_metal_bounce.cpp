@@ -304,9 +304,10 @@ int main(int argc, char **argv)
     // 1) - as a MOVER (the decode, atomGatherMetalLobe) within 0.4 %, and still (its card) by the card's stored values
     // the same way as the metal's. The base re-emitted nothing from a dielectric on either route.
     // (The dielectric FIRST: the gather's held history keeps ~0.1 % of the previous plate after 48 frames, which is
-    // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric. Every
-    // edit is made while the plate is STILL: one made while it was a mover did not reach the store when it turned
-    // still again - the finding in ENGINE-POLISH-PHOTON-1's report.)
+    // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric.) THE
+    // METAL EDIT IS MADE WHILE THE PLATE IS A MOVER (BUGS-1 item 3): a mover is in no voxel, so the edit re-voxelises
+    // nothing, but the store's row of that material must be the edited one when the plate turns still and is
+    // voxelised again - ENGINE-POLISH-PHOTON-1's finding (the still arm read the old row: .198 for .008).
     {
         const float tint[3] = { 1.0f, 0.6f, 0.3f };
         double diffuserRgb[3] = {}, metalRgb[3] = {};
@@ -391,8 +392,8 @@ int main(int argc, char **argv)
                 for (int arm = 0; arm < 5; ++arm) {
                     if (arm == 1 || arm == 3) s->setNodeMovable(plateNode, true);
                     if (arm == 2) {
+                        CHECK(s->setPbrMaterial(plateMat, plate), "the plate turns the tinted metal WHILE A MOVER");
                         s->setNodeMovable(plateNode, false);
-                        CHECK(s->setPbrMaterial(plateMat, plate), "the plate turns the tinted metal again");
                         s->refreshGlobalIllumination();
                     }
                     if (arm == 4) {
