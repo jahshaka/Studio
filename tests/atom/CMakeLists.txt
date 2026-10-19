@@ -469,6 +469,7 @@ foreach(_row_frames
         "atom.lod_switch=27651"
         "atom.occlusion_exact=348"
         "atom.two_sided=378"
+        "atom.view_colour=38"
         "atom.words_still=223"
         "engine.atom_draw=624"
         "engine.atom_negative_control_validation=123"
@@ -481,6 +482,7 @@ foreach(_row_frames
         "shadow.caster_cull=147"
         "shadow.caster_receivers=82"
         "shadow.caster_first_frame=12"
+        "shadow.caster_route=59"
         "shadow.stock_lod=71"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
