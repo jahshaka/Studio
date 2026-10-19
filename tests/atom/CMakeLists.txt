@@ -257,6 +257,14 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
+    # atom.view_colour — THE TRIANGLES VIEW'S COLOUR IS THE STRUCTURE'S (ENGINE-POLISH-ATOM-1 stage 6): three Atom
+    # spheres (two copies of one mesh) under the 'triangles' view, the first deleted - every kept object's pixels keep
+    # their colours although a slot was renumbered; the copies of one mesh share colours.
+    add_executable(test_atom_view_colour test_atom_view_colour.cpp)
+    jah_atom_engine_target(test_atom_view_colour)
+    jah_gpu_row(atom.view_colour CLASS engine COMMAND test_atom_view_colour
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.view_colour PROPERTIES TIMEOUT 60 LABELS "engine")
     # atom.component — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3,
     # atom/AtomComponent.h): two scenes with shadows, each through its own view — the id pass
     # once and before the screen decode, each caster pass after its map's shadow pass, the
@@ -326,13 +334,21 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.caster_receivers CLASS engine COMMAND test_shadow_atom_cut --receivers
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_receivers PROPERTIES TIMEOUT 120 LABELS "engine")
+    # shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2): two lockstep
+    # worlds (the split on / shut) with a blended plane (through the cut when the split is on) and a cutout plane
+    # (stock in both: an alpha-tested caster stays stock) over a floor; the sun maps texel by texel
+    # (shadow.atom_parity's law over each plane's footprint: p99 <= 1 texel, flips <= 0.5 %), the blended plane's
+    # caster filed under atomCaster and drawn by no stock shadow pass (test_shadow_atom_cut.cpp --caster-route).
+    jah_gpu_row(shadow.caster_route CLASS engine COMMAND test_shadow_atom_cut --caster-route
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.caster_route PROPERTIES TIMEOUT 60 LABELS "engine")
     # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
     # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
     jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_first_frame PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.stock_lod — A SHADOW MAP DRAWS ITS STOCK CASTERS AT THE LIGHT'S LEVEL (SHADOW-LOD-1, the
-    # fork's caster-pass LOD walk): every caster pass's level for the alpha-tested stock casters is the
+    # fork's caster-pass LOD walk): every caster pass's level for the scrolling-cutout stock casters is the
     # rule's at the pass's own camera and the map's texels (PSSM splits, a spot, a point's six faces), the
     # view's levels survive the shadow node's update (the save/restore), and no view pass walks the Atom
     # queue. Frames counted: never the GPU lock.
@@ -454,6 +470,7 @@ foreach(_row_frames
         "atom.lod_switch=27651"
         "atom.occlusion_exact=348"
         "atom.two_sided=378"
+        "atom.view_colour=38"
         "atom.words_still=223"
         "engine.atom_draw=624"
         "engine.atom_negative_control_validation=123"
@@ -466,6 +483,7 @@ foreach(_row_frames
         "shadow.caster_cull=147"
         "shadow.caster_receivers=82"
         "shadow.caster_first_frame=12"
+        "shadow.caster_route=59"
         "shadow.stock_lod=71"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
