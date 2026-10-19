@@ -109,6 +109,11 @@ bool moverCube(int i, int n) { return i >= n - 2 * kMoverCount && black(i); }
 /// group, in the 10k world), and the arm writes that group alone — a group move over a landed, standing world: the
 /// white neighbours' cards and the wide plate's stay landed, so the still casters' search is a real one.
 constexpr int kSubgroup = -4;
+/// THE ROTATING ARM (ENGINE-POLISH-PHOTON-2 fix round, engine.gpuscene_compose): every cube written each frame with
+/// its rotation alternating (0 / 0.35 rad about a tilted axis), at its place - a transform-only move whose world columns move by an ulp, on
+/// the compose row's CHAINED cubes (a level chain: the ray feed's hand-over width is the coarsest bound times the
+/// largest axis scale, so a rotation reaches it). The Bullet bodies' case: many rotating movers a frame.
+constexpr int kRotate = -5;
 
 FrameInput stepRecord(World &w)
 {
@@ -123,7 +128,7 @@ FrameInput stepRecord(World &w)
 /// floor and the sun, GI with the card row; then frames until the GI is at rest and — where the world reaches the
 /// viewer's residency (`cards`: the 10k grid's near rows do, a 2,000-node grid's far corner does not) — the cards are
 /// resident and the capture queue is empty.
-bool build(World &w, int n, bool cards)
+bool build(World &w, int n, bool cards, bool chained = false)
 {
     Engine *e = w.e;
     w.view = e->createOffscreenView("cpumap", 256u, 256u, Colour(0, 0, 0));
@@ -148,6 +153,13 @@ bool build(World &w, int n, bool cards)
     const MaterialId mat = s->createPbrMaterial(p);
     MeshData md = enginetest::unitCubeMesh();
     md.cards = enginetest::boxCards(0.5f);
+    if (chained) {
+        // A LEVEL CHAIN (the compose row: the ray feed reads its coarsest bound): level 1 the cube's own list at a
+        // 5 cm bound - the subject is the chain's existence, not the simplification.
+        md.lodIndices.push_back(md.indices);
+        md.lodErrors.push_back(0.05f);
+        md.lodBounds.push_back(0.05f);
+    }
     const MeshId mesh = s->createMesh(md);
     {
         const NodeId floor = s->createNode();
@@ -260,12 +272,16 @@ void writeFrame(World &w, int k)
     } else {
         for (int i = 0; i < int(w.cubes.size()); ++i) {
             // (the grid's last rows face the viewer)
-            if (k == kChecker ? !black(i) : k == kMovers ? !moverCube(i, int(w.cubes.size())) : i >= k) continue;
+            if (k == kChecker ? !black(i) : k == kMovers ? !moverCube(i, int(w.cubes.size())) : k == kRotate ? false : i >= k)
+                continue;
             NodeRecord r;
             r.id = w.cubes[size_t(i)];
             r.fields = NodeRecord::Trs;
-            r.position = cubeAt(i, lift);
-            r.rotation = Quat(0, 0, 0, 1);
+            r.position = cubeAt(i, k == kRotate ? 0.0f : lift);
+            // 0 / 0.35 rad about the tilted axis (1, 1, 1) / sqrt(3): every world column rotates (a yaw keeps the
+            // y column exact, and the largest axis scale with it): (s, s, s, cos(0.175)), s = sin(0.175) / sqrt(3)
+            r.rotation = k == kRotate && lift > 0.0f ? Quat(0.10052109f, 0.10052109f, 0.10052109f, 0.98472658f)
+                                                     : Quat(0, 0, 0, 1);
             r.scale = Vec3(kCube, kCube, kCube);
             part.nodes.push_back(r);
             part.changes.moved.push_back(r.id);
@@ -280,6 +296,7 @@ const char *armName(int k, char *buf, size_t n)
     if (k == kChecker) std::snprintf(buf, n, "checker");
     else if (k == kMovers) std::snprintf(buf, n, "movers%d", kMoverCount);
     else if (k == kSubgroup) std::snprintf(buf, n, "subgroup%d", kMoverCount);
+    else if (k == kRotate) std::snprintf(buf, n, "rotate");
     else if (k < 0) std::snprintf(buf, n, "group");
     else std::snprintf(buf, n, "k%d", k);
     return buf;
@@ -563,7 +580,7 @@ int composeRow(World &w, int n)
     const inspect::SceneEcho *echo = inspect::scene(w.scene);
     if (!echo) { std::printf("FAIL: the scene's probes\n"); return 1; }
     const int warm = 3, measured = 15;
-    for (int k : { -1, n }) {
+    for (int k : { -1, n, kRotate }) {
         // THE NOTIFY SHARE AS A PAIRED ARM (decision 11 d): blocks of frames with the change feed's observers told and
         // muted (gpuscene.observersOff), paired A B B A in one process (the measuring rule); the observers' cost = the medians'
         // difference. The notify timer (gpuscene.walkTiming) runs in its own block only: never a clock read per
@@ -595,23 +612,42 @@ int composeRow(World &w, int n)
         }
         w.e->setArm("gpuscene.observersOff", 0.0);
         w.e->setArm("gpuscene.walkTiming", 1.0);
-        std::vector<double> laneObs, otherObs;   // the observers' replay time, per frame: the lane-split one / the rest
+        // THE OBSERVERS IN THE REPLAY, per observer and per frame (RAY-FEED-OBSERVER-1): its time there (the ordered
+        // half of a lane-split observer, the whole notify of the rest) and its owed fraction (the slots it was told in
+        // the replay over the composed slots handed to it).
+        std::vector<std::vector<double>> obsMs, obsOwed;
+        std::vector<std::string> obsName;
+        std::vector<bool> obsLane;
         inspect::SceneEcho::GpuWalk prev = echo->gpuWalk();
         for (int f = 0; f < perBlock + 1; ++f) {
             writeFrame(w, k);
             const inspect::SceneEcho::GpuWalk g = echo->gpuWalk();
             if (f) {
                 notify.push_back(g.notifyMicros);
-                laneObs.push_back(g.observerLaneMicros - prev.observerLaneMicros);
-                otherObs.push_back(g.observerOtherMicros - prev.observerOtherMicros);
+                for (size_t o = 0; o < g.observers.size(); ++o) {
+                    if (obsMs.size() <= o) {
+                        obsMs.emplace_back();
+                        obsOwed.emplace_back();
+                        obsName.push_back(g.observers[o].name);
+                        obsLane.push_back(g.observers[o].laneHalf);
+                    }
+                    const bool had = o < prev.observers.size();
+                    const double us = g.observers[o].micros - (had ? prev.observers[o].micros : 0.0);
+                    const unsigned long long told = g.observers[o].told - (had ? prev.observers[o].told : 0ull);
+                    const unsigned long long owed = g.observers[o].owed - (had ? prev.observers[o].owed : 0ull);
+                    obsMs[o].push_back(us / 1000.0);
+                    obsOwed[o].push_back(told ? double(owed) / double(told) : 0.0);
+                }
             }
             prev = g;
         }
-        {
-            const Stats lo = stats(laneObs), oo = stats(otherObs);
-            std::printf("CPU_MAP engine.gpuscene_compose arm=%d the observers in the replay (decision 17.1): the card "
-                        "feed's ordered half %.3f ms, the ray feed (whole; U5's) %.3f ms\n", k, lo.median / 1000.0,
-                        oo.median / 1000.0);
+        double raysMs = -1.0, raysOwed = -1.0;
+        for (size_t o = 0; o < obsMs.size(); ++o) {
+            const Stats ms = stats(obsMs[o]), ow = stats(obsOwed[o]);
+            std::printf("CPU_MAP engine.gpuscene_compose arm=%d the observers in the replay: '%s' (%s) %.3f ms, owed "
+                        "fraction %.4f (max %.4f)\n", k, obsName[o].c_str(), obsLane[o] ? "lane-split: its ordered half"
+                        : "told whole", ms.median, ow.median, ow.max);
+            if (obsName[o] == "rays") { raysMs = ms.median; raysOwed = ow.max; }
         }
         w.e->setArm("gpuscene.walkTiming", 0.0);
         writeFrame(w, k);
@@ -638,6 +674,13 @@ int composeRow(World &w, int n)
         // floor) -> 8.6 + (15.1 - 8.6) / 8 + 2 = 11.4 ms for the walk's compare + compose, at the group move and k10000.
         CHECK(wk.median / 1000.0 <= 11.4, "engine.gpuscene_compose arm %s: the walk's compare + compose %.3f ms <= 11.4",
               armName(k, b, sizeof b), wk.median / 1000.0);
+        // RAY-FEED-OBSERVER-1'S BAR: the ray feed's share of the replay at 10k movers 5.0-5.1 ms (U4's measure; 2.5 on a
+        // quieter box) -> <= 1.0 ms, its per-slot work lane-local; the pattern fits only where a mover owes nothing (a
+        // transform-only move changes none of the feed's facts): at most 10 % of the slots owe the ordered body.
+        CHECK(raysMs >= 0.0 && raysMs <= 1.0, "engine.gpuscene_compose arm %s: the ray feed's ordered half %.3f ms <= 1.0",
+              armName(k, b, sizeof b), raysMs);
+        CHECK(raysOwed >= 0.0 && raysOwed <= 0.10, "engine.gpuscene_compose arm %s: the ray feed's owed fraction %.4f <= "
+              "0.10 (the movers owe nothing)", armName(k, b, sizeof b), raysOwed);
         CHECK(composed >= unsigned(n), "engine.gpuscene_compose arm %s: every cube's slot composed (%u of %d)",
               armName(k, b, sizeof b), composed, n);
         CHECK(shares == kWorkers + 1u, "engine.gpuscene_compose arm %s: the compare ran on the pool's %u shares",
@@ -711,7 +754,7 @@ int main(int argc, char **argv)
     World w;
     w.e = engine.get();
     w.e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    if (!build(w, n, n >= 10000)) return 1;
+    if (!build(w, n, n >= 10000, mode == "--compose")) return 1;
     if (!w.e->rayQueryAvailable() || !w.e->rayTracing()) {
         std::printf("ok: no ray-query device here — the cards need the ray tier; the row skips cleanly\n");
         return 0;

@@ -219,11 +219,6 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
     // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still view
     // holds one N-sample rest mean; the rest door keeps every frame live.
     t.restOff = true;
-    // MEASURE (decision 21, by hand): the age at which the filter has fallen to none (the rows run the shipped one)
-    if (const char *age = std::getenv("JAH_GATHER_FILTER_AGE")) {
-        t.filterByAge = true;
-        t.filterAgeFrames = unsigned(std::atoi(age));
-    }
     s->setGatherTuning(t);
     render(e, 40);
 
@@ -238,24 +233,19 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
         const float zs[3] = { kFront + strideM, kFront + 2.0f * strideM, kFront + 3.0f * strideM };
         double closedM[3];
         for (int i = 0; i < 3; ++i) { double fo = 0.0; closedM[i] = panelClosedForm(zs[i], strideM, kLe, kHalfW, kY0, kH, kFront, fo); }
-        // decision 21: the shipped reconstruction against the filter's width by the probe's age (none from 12 or 24
-        // frames, the measuring door GatherTuning::filterByAge) and the filter and the jitter off.
-        struct Arm { const char *name; bool jitterOff, filterOff, common; unsigned byAge; };
-        const Arm armsM[6] = { { "shipped", false, false, false, 0u },
-                               { "filter by age, 12", false, false, false, 12u },
-                               { "filter by age, 24", false, false, false, 24u },
-                               { "filter off", false, true, false, 0u },
-                               { "jitter off", true, false, false, 0u },
-                               { "jitter + filter off", true, true, false, 0u } };
+        // the shipped reconstruction (ENGINE-POLISH-PHOTON-2: the parallax filter, the grid's jitter) against the
+        // filter and the jitter off.
+        struct Arm { const char *name; bool jitterOff, filterOff; };
+        const Arm armsM[4] = { { "shipped", false, false },
+                               { "filter off", false, true },
+                               { "jitter off", true, false },
+                               { "jitter + filter off", true, true } };
         for (const Arm &arm : armsM) {
             GatherTuning ta;
             ta.readback = true;
             ta.restOff = true;
             ta.jitterOff = arm.jitterOff;
             ta.filterOff = arm.filterOff;
-            ta.jitterCommon = arm.common;
-            ta.filterByAge = arm.byAge > 0u;
-            ta.filterAgeFrames = arm.byAge;
             s->setGatherTuning(ta);
             std::vector<double> series[3];
             unsigned last = ~0u;
@@ -362,6 +352,9 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
                     p.platform ? ", a plane 1 m up" : "");
     }
     const double r2 = closed[1] > 0.0 ? got[1] / closed[1] : 0.0;
+    // ...AND THREE STRIDES OUT (ENGINE-POLISH-PHOTON-2 stage 3: the parallax filter and the grid's jitter, both
+    // strides inside the brief's 5 %; before them 1.060 / 1.086 at two / three strides).
+    const double r3 = closed[2] > 0.0 ? got[2] / closed[2] : 0.0;
     // THE BARS FROM THE ARITHMETIC (fix round, audit F1), against the COMPLETE
     // form (front face + the floating panel's bottom): at 1 / 2 / 3 strides the
     // base (GATHER-1a's single-probe read) reads 0.738 / 0.807 / 0.762 and this
@@ -374,16 +367,20 @@ static int planeMain(Engine *e, bool targetRow, bool kernelArms = false)
     // mean's noise, less 2 % for the sequence), the ceiling 1.05; the brief's
     // 5 % is the target row (gi.gather_plane_target; green, gating since D6B-GATE-SHAPE).
     if (targetRow) {
-        std::printf("target: %.3f (bar 1.00 +- 0.05)\n", r2);
+        std::printf("target: %.3f / %.3f at two / three strides (bar 1.00 +- 0.05)\n", r2, r3);
         CHECK_MSG(std::fabs(r2 - 1.0) <= 0.05,
                   "TARGET — THE FLOOR TWO STRIDES OUT READS THE COMPLETE CLOSED FORM: %.5f against "
                   "%.5f (%.3f; bar 1.00 +- 0.05)", got[1], closed[1], r2);
+        CHECK_MSG(std::fabs(r3 - 1.0) <= 0.05,
+                  "TARGET — AND THREE STRIDES OUT: %.5f against %.5f (%.3f; bar 1.00 +- 0.05)", got[2], closed[2], r3);
         std::printf("%s\n", failures ? "FAILED" : "PASSED");
         return failures ? 1 : 0;
     }
     CHECK_MSG(r2 >= 0.85 && r2 <= 1.05,
               "THE FLOOR TWO STRIDES OUT READS THE COMPLETE CLOSED FORM: %.5f against %.5f (%.3f; "
               "bar 0.85..1.05, the 5 %% row is gi.gather_plane_target)", got[1], closed[1], r2);
+    CHECK_MSG(r3 >= 0.85 && r3 <= 1.05, "...AND THREE STRIDES OUT: %.5f against %.5f (%.3f; bar 0.85..1.05)", got[2],
+              closed[2], r3);
     // The edge's own pixels (inside the first stride) may take the lower floor's
     // probe through the bilinear's weight where the plane test's ramp still
     // grants some — past one stride, nothing.
