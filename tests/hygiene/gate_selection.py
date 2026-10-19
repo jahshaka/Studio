@@ -30,6 +30,19 @@ import time
 FAILURES = []
 
 
+_INV_BLOB = {}
+
+
+def fresh_inv(inv0):
+    """A private copy of the inventory for one selection (select() classifies its rows in place): unpickled from one
+    pickle of it — copy.deepcopy of the 830-row inventory cost ~0.08 s a selection, 2.5 s of this row's price."""
+    import pickle
+    k = id(inv0)
+    if k not in _INV_BLOB:
+        _INV_BLOB[k] = pickle.dumps(inv0, protocol=pickle.HIGHEST_PROTOCOL)
+    return pickle.loads(_INV_BLOB[k])
+
+
 def check(ok, what):
     print(("  ok: " if ok else "  FAIL: ") + what)
     if not ok:
@@ -81,7 +94,7 @@ def arm_cases(gs, graph, build, inv0):
     check(bool(world) and bool(plain), "the build has a world-calling and a world-free --script row")
     if not (world and plain): return
     a_s, b_s = inv0[world[0]]["script"], inv0[plain[0]]["script"]
-    inv = copy.deepcopy(inv0)
+    inv = fresh_inv(inv0)
     inv["pool.synth"] = dict(copy.deepcopy(inv0[world[0]]), pool="synth", arms={"w": a_s, "p": b_s},
                              script=None, argv_files=set(), dir="synthpool", reldir="tests/synthpool",
                              cmd=["run_pool.py", "--pool", "synth", "--arm", "w", a_s, "30", "--arm", "p", b_s, "30"])
@@ -100,7 +113,7 @@ def gone_cases(gs, graph, build, inv0):
     resolves to that ARM; one naming a suite or test target that exists nowhere any more resolves
     to NOTHING with a `retired:` reason — and neither rule may fire on a LIVE row or target."""
     print("\ngone rows (a row that became an arm; a retired one):")
-    inv = copy.deepcopy(inv0)
+    inv = fresh_inv(inv0)
     app_exe = gs.classify_rows(inv, graph, build)
     sel = gs.Selection(inv, graph, app_exe, gs.Revs(None))
     pools = [(n, a, s_) for n, t in inv.items() for a, s_ in t["arms"].items()]
@@ -172,12 +185,24 @@ def hunk_cases(gs, graph, build, inv0, cases):
         real = gs.Revs
         gs.Revs = FakeRevs
         try:
-            S = gs.select([path], "BASE..TIP", build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+            S = gs.select([path], "BASE..TIP", build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
         finally:
             gs.Revs = real
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
+        # a hunk is read by what it names: never the whole inventory unless the case says so (TOOLING-2: a `must` list
+        # passed by a whole-inventory reach proved nothing)
+        if c.get("require_tier"):
+            # a change the reader CANNOT resolve stays the whole tier with its reason (TOOLING-2's reader rounds: a fallback
+            # to "its directory" reached nothing for irisgl/CMakeLists.txt; PARENT_SCOPE inside a function read as nothing)
+            check(bool(S.full_tier), "%s: the WHOLE TIER, its reason printed (%s)" % (c["case"][:60], S.full_tier[:1]))
+        else:
+            check(not S.full_tier or c.get("whole_tier"), "%s: no whole-inventory reach (%s)" % (c["case"][:60], S.full_tier[:1]))
         miss = [m for m in c["must"] if m not in S.selected and not S.full_tier]
         check(not miss, "%s: selects %s (%d rows; missing %s)" % (c["case"][:60], c["must"], len(S.selected), miss))
+        if c.get("why_has"):
+            # what the reach was READ through, when the rows cannot tell (a reach the engine target already spans)
+            why = " ".join(r for _, r in S.rationale)
+            check(all(w in why for w in c["why_has"]), "%s: read through %s" % (c["case"][:60], c["why_has"]))
         extra = [m for m in c.get("must_not", []) if m in S.selected]
         check(not extra, "%s: does NOT select %s (%s)" % (c["case"][:60], c.get("must_not", []), extra))
 
@@ -191,7 +216,7 @@ def tooling_cases(gs, graph, build, inv0):
     the product smoke pair."""
     print("\ntooling-only diffs (TESTING_V3 §1.3.4):")
     def sel(files):
-        return gs.select(files, None, build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+        return gs.select(files, None, build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
     def product(S):
         return sorted(n for n in S.selected if S.inv[n]["kind"] in ("app", "compiled")
                       and not (S.inv[n]["labels"] & {"hygiene", "tooling"}))
@@ -200,9 +225,15 @@ def tooling_cases(gs, graph, build, inv0):
     check(S.tooling_only and not product(S) and hyg <= set(S.selected) and not S.fallback and not S.full_tier,
           "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
           % (len(hyg), product(S)[:6]))
+    lints = {n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)}
     S = sel(["tests/gi/test_gi_cliff.cpp"])
-    check(S.tooling_only and set(S.selected) == {"gi.cliff"},
-          "a test source alone selects its row and nothing else — no smoke pair, no tooling row (%s)" % sorted(S.selected)[:6])
+    check(S.tooling_only and set(S.selected) - lints == {"gi.cliff"},
+          "a test source alone selects its row and the lints, nothing else — no smoke pair, no other tooling row (%s)"
+          % sorted(set(S.selected) - lints)[:6])
+    # THE LINTS RIDE EVERY DIFF (TOOLING-2): R2 and the row budget among them, for a one-line test change too
+    check(lints and lints <= set(S.selected) and {"source.testing_rules", "source.row_budget"} <= set(S.selected),
+          "a one-line test change selects every source.* lint (%d), source.testing_rules and source.row_budget among them"
+          % len(lints))
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
     check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,
@@ -212,7 +243,7 @@ def tooling_cases(gs, graph, build, inv0):
     S = sel(["scripts/gate-scope.py", "src/services/vrworld.cpp"])
     check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" not in alone
           and "ui.vr_panel" in S.selected and "source.gate_scope_rules" in S.selected
-          and not any("hygiene" in S.inv[n]["labels"] for n in alone),
+          and not any("hygiene" in S.inv[n]["labels"] for n in alone if not n.startswith("source.")),
           "ONE product path makes it a product diff: the union (vrworld.cpp's %d rows + the tool's hygiene/tooling rows); "
           "the product path alone selects no tools' row and no smoke pair (TESTING-SPEED-A item 5)" % len(alone))
     S = sel(["tests/support/fresh_home.sh"])
@@ -280,7 +311,7 @@ def main(source, build):
             continue
         t0 = time.time()
         paths = gs.touched_paths(c["range"])
-        S = gs.select(paths, c["range"], build, graph=graph, inv=copy.deepcopy(inv0), quiet_graph=True)
+        S = gs.select(paths, c["range"], build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
         # a replay's own new registrations fall to their test directory here (rows_at_tip_only): that is no tier
         whole = bool(S.full_tier or (S.fallback and not c.get("rows_at_tip_only")))
         sel = set(S.selected)

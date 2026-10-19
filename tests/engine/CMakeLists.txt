@@ -559,6 +559,8 @@ if(JAHSHAKA_ASAN)
     # (LIGHTING_FIX fix 10), so this copy depends on the same custom target
     # rather than baking a second, configure-time value.
     add_dependencies(JahshakaEngineAsan JahshakaEngineBuildId)
+    # ...and the generated headers are its objects' inputs, as the real library's (TOOLING-2 stage 3).
+    jahshaka_engine_generated_deps(JahshakaEngineAsan)
     # The ray-query tier is NEW code, so the sanitised twin must carry it too
     # (PHOTON_SPEC §7 R1's gate: test_engine and test_engine_asan both green).
     jahshaka_engine_ray_query(JahshakaEngineAsan)

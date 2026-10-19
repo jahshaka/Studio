@@ -98,6 +98,30 @@
    "none_of": [],
    "rows_at_tip_only": true,
    "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component"
+  },
+  {
+   "lane": "BULLET-BATCHING-1 (TOOLING-2 stage 1)",
+   "range": "be5a84225..001b7ec96",
+   "ledger": "§2561",
+   "evidence": "spikes/bullet-batching-1/merge.log; spikes/tooling-2/s1-before.txt, s1-after.txt",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "document.physics_writeback",
+    "document.characterisation",
+    "export.walkers",
+    "export.web",
+    "avatar.locomotion"
+   ],
+   "env": [],
+   "none_of": [
+    "theme",
+    "hdr",
+    "ssr",
+    "looks"
+   ],
+   "max_rows": 379,
+   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set — max_rows 378 is the selection exactly (gate.selection counts every selected row, the measure rows reached included): 311 selectable rows, the 29 source.* lints among them (TOOLING-2 fix round) 379 since main's SCENEGRAPH-BASELINE-2 (792323d5e) registered document.write_journal: a new executable that links IrisGL and so the physics world (the graph) — the selection exactly, one row more."
   }
  ],
  "hunks": [
@@ -179,6 +203,169 @@
     "scale.lights",
     "scale.levels"
    ]
+  },
+  {
+   "case": "TOOLING-2 a compile flag on Bullet's four targets (a foreach'd target_compile_options) reaches the physics world's rows, not the picture set",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O2> ${_jah_bake_fp})\n",
+   "new": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O3> ${_jah_bake_fp})\n",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "export.walkers"
+   ],
+   "must_not": [
+    "theme.sheets",
+    "hdr.bloom_amount",
+    "ssr.engine",
+    "looks.engine"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a configure dependency (set_property DIRECTORY CMAKE_CONFIGURE_DEPENDS) reaches nothing compiled",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_bullet_patch_files}\n",
+   "new": "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_bullet_patch_files} ${_bullet_patch_files}\n",
+   "must": [],
+   "must_not": [
+    "physics.mt_determinism",
+    "ui.toast",
+    "theme.sheets"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a line of an inert helper (OBJECT_DEPENDS only: jahshaka_engine_generated_deps) reaches nothing compiled",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_deps})\n",
+   "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} PROPERTY OBJECT_DEPENDS ${_deps})\n",
+   "must": [],
+   "must_not": [
+    "engine.window",
+    "gi.card_capture",
+    "app.engine_selftest_validation"
+   ]
+  },
+  {
+   "case": "TOOLING-2 THE LINTS RIDE EVERY DIFF: a one-line test change selects its row AND source.testing_rules / source.row_budget (PHOTON-1's unpriced row passed a merge gate that ran no source.* row, §2573)",
+   "file": "tests/gi/test_gi_cliff.cpp",
+   "old": "static const float kGroundSpan = 200.0f;\n",
+   "new": "static const float kGroundSpan = 201.0f;\n",
+   "must": [
+    "gi.cliff",
+    "source.testing_rules",
+    "source.row_budget"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 file(SHA256 <file> <var>) writes its THIRD argument: the clusterlod hash follows its reader (the if), never the stage dir's readers (IrisGL's include path)",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "    file(SHA256 \"${_clod_stage}/clusterlod.h\" _clod_staged_sha)\n",
+   "new": "    file(SHA256 \"${_clod_stage}/clusterlod.h\"  _clod_staged_sha)\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a quoted argument is ONE argument: string(REPLACE \"vendor patch applied:\" … <out> …) writes _clod_patch_output (read by a message), not 'applied:\"'",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "        string(REPLACE \"vendor patch applied:\" \"vendor patch already applied:\" _clod_patch_output \"${_clod_patch_output}\")\n",
+   "new": "        string(REPLACE \"vendor patch applied:\" \"vendor patch  already applied:\" _clod_patch_output \"${_clod_patch_output}\")\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 the chain is followed five hops: the clusterlod if() -> its file(SHA256) -> the if() comparing -> the string() -> the message() reaches nothing compiled",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "if(_clod_patch_result EQUAL 0 AND EXISTS \"${_clod_patched_root}/meshoptimizer-clusterlod/clusterlod.h\")\n",
+   "new": "if(_clod_patch_result EQUAL 0 AND  EXISTS \"${_clod_patched_root}/meshoptimizer-clusterlod/clusterlod.h\")\n",
+   "must": [],
+   "must_not": [
+    "api.contract",
+    "app.startup_quiet"
+   ]
+  },
+  {
+   "case": "TOOLING-2 a patched Bullet SOURCE reached only through copies of its inline code (btAlignedAllocInternal from btAlignedObjectArray) reaches the physics rows AND every referrer's family (scene.cpp's: theme)",
+   "file": "irisgl/thirdparty/bullet-patches/0001-batched-constraints-grid-cell-epsilon.patch",
+   "old": "+++ b/src/BulletDynamics/ConstraintSolver/btBatchedConstraints.cpp\n",
+   "new": "+++ b/src/LinearMath/btAlignedAllocator.cpp\n",
+   "must": [
+    "physics.mt_determinism",
+    "document.physics_restart",
+    "theme.sheets"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 A: a command the reader cannot resolve in irisgl/CMakeLists.txt (a new execute_process) is the WHOLE TIER, never its directory",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "set(BULLET2_MULTITHREADING ON)\n",
+   "new": "set(BULLET2_MULTITHREADING ON)\nexecute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different a b)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 B: set(${out} … PARENT_SCOPE) inside a function writes its CALLER's variable — the whole tier, never nothing",
+   "file": "cmake/OgreInstallStamp.cmake",
+   "old": "    set(${out} \"${_files}\" PARENT_SCOPE)\n",
+   "new": "    set(${out} \"${_files}\" PARENT_SCOPE)\n    set(${out} \"${_files}\" PARENT_SCOPE)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 3 C: a reader resolves the block at ITS OWN line — set(JAH_RAY_QUERY_OK ON) reaches the second if(JAH_RAY_QUERY_OK)'s ray jobs",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "        set(JAH_RAY_QUERY_OK ON)\n",
+   "new": "        set(JAH_RAY_QUERY_OK  ON)\n",
+   "must": [],
+   "must_not": [],
+   "why_has": [
+    "variable JAH_RQ_GEN_DIR",
+    "variable JAH_RQ_HEADERS",
+    "target JahshakaRayQuerySpv"
+   ],
+   "note": "the rows are the same either way (jahshaka_engine_ray_query(JahshakaEngine) already spans every engine fixture, so no `must` row can tell — 12d8158d1 selects the same 640): the case pins the READ by its why — the second if()'s body (the SPIR-V rules' variables), which the first if()'s two message() calls never named"
+  },
+  {
+   "case": "TOOLING-2 round 3 D: a COMPILE property beside the inert helper's OBJECT_DEPENDS (a computed source list) is the WHOLE TIER — another reader that reaches nothing never owns it",
+   "file": "cmake/UicObjectDepends.cmake",
+   "old": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_forms})\n",
+   "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY OBJECT_DEPENDS ${_forms})\n            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} APPEND PROPERTY COMPILE_DEFINITIONS JAH_UI_FORM=1)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-2 round 4 E: a directory-wide compile flag in the engine's CMake (add_compile_options at directory scope of irisgl/engine, a STATIC library's directory that builds no executable) reaches the archive's users, never 0 rows",
+   "file": "irisgl/engine/CMakeLists.txt",
+   "old": "set(JAH_VR_OK OFF)\n",
+   "new": "add_compile_options(-ffast-math)\nset(JAH_VR_OK OFF)\n",
+   "must": [
+    "engine.window",
+    "gi.card_capture",
+    "app.engine_selftest_validation"
+   ],
+   "must_not": [],
+   "why_has": [
+    "target JahshakaEngine"
+   ]
+  },
+  {
+   "case": "TOOLING-2 round 4 F: set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE) at directory scope of irisgl/CMakeLists.txt is read by CMake itself — the WHOLE TIER, never '0 readers in the parent scope'",
+   "file": "irisgl/CMakeLists.txt",
+   "old": "set(BULLET2_MULTITHREADING ON)\n",
+   "new": "set(BULLET2_MULTITHREADING ON)\nset(CMAKE_CXX_STANDARD 20 PARENT_SCOPE)\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
   }
  ]
 }

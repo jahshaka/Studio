@@ -349,7 +349,14 @@ class NinjaGraph:
 
     def members(self, lib):
         """The objects a library is linked from, archive members included (an archive linked into
-        a shared library contributes the members something references — the closure decides)."""
+        a shared library contributes the members something references — the closure decides). Memoised: the link graph
+        does not move under a loaded graph, and reach_objects asks it once per node it walks."""
+        k = ("members", lib)
+        if k not in self._memo:
+            self._memo[k] = frozenset(self._members(lib))
+        return self._memo[k]
+
+    def _members(self, lib):
         out, stack, seen = set(), [lib], set()
         while stack:
             a = stack.pop()
@@ -419,7 +426,13 @@ class NinjaGraph:
         says the executable reaches the object: an archive member must be extracted (closure_
         static), a shared library's object must be referenced from the executable or from the
         library's static initialisers (closure) — an archive linked INTO a shared library is
-        judged by that library's closure."""
+        judged by that library's closure. Memoised per object set (a loaded graph does not move)."""
+        key = ("reach_objects", frozenset(objs))
+        if key not in self._memo:
+            self._memo[key] = frozenset(self._reach_objects(objs))
+        return set(self._memo[key])
+
+    def _reach_objects(self, objs):
         exes = set()
         for o in objs:
             seen, stack = {o}, [o]
@@ -468,18 +481,148 @@ class NinjaGraph:
         return self._memo[k]
 
     def first_party_referrers(self, lib_static, vendored_prefixes):
-        """The first-party objects that take a symbol from a (vendored) static library's members
-        — the way its code enters ours."""
+        """The first-party objects whose OWN code takes a symbol from a (vendored) static library's members — the way
+        its code enters ours. A reference made only from a COPY OF VENDORED INLINE CODE the object carries (a COMDAT
+        section of a symbol some vendored archive defines too: btTypedConstraint's vtable, btAlignedObjectArray's
+        deallocate, emitted into every TU that includes the header) is the vendored code's, not ours (TOOLING-2 stage 1:
+        28 Studio sources "called" Bullet that way and dragged the picture set and the VR rows into a flag change)."""
         mem = self.members(lib_static)
         dset = set()
         for o in mem: dset |= self._nm(o)[0]
-        out = set()
+        cands = []
         for consumer in (x for x in self.rev.get(lib_static, ()) if self.kind.get(x) in ("shared", "exe")):
             for o in self.members(consumer):
                 src = self.obj_src.get(o, "")
                 if not src or any(v in src for v in vendored_prefixes): continue
-                if self._nm(o)[1] & dset: out.add(o)
+                hit = self._nm(o)[1] & dset
+                if hit: cands.append((o, hit))
+        if not cands:
+            return set()
+        vdefs = self.vendored_defs(vendored_prefixes)
+        todo = sorted({o for o, _ in cands if self._owned_cached(o) is None})
+        if todo:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(4) as ex:
+                list(ex.map(self.owned_refs, todo))
+        out = set()
+        for o, hit in cands:
+            own = self.owned_refs(o)
+            ws = {w for s_ in hit for w in own.get(s_, ("",))}
+            # an owner no vendored archive defines (btAlignedAllocator<btTriangleInfo>::deallocate: a template of a
+            # vendored header no vendored TU instantiates) is vendored when its code's first line is a vendored file
+            if "" in ws or any(w not in vdefs and not self.comdat_vendored(o, w, vendored_prefixes) for w in ws):
+                out.add(o)
         return out
+
+    def comdat_vendored(self, obj, owner, vendored_prefixes):
+        """Whether the COMDAT copy of `owner` in `obj` is VENDORED code: the line its section starts at (addr2line, the
+        object's debug info) is in a vendored file. Unknown (no line: a data section, no debug info) is ours."""
+        try:
+            mt = os.path.getmtime(obj)
+        except OSError:
+            return False
+        c = (self._syms or {}).get((obj, "origin"))
+        if not c or c[0] != mt:
+            c = (mt, {})
+            if self._syms is None: self._syms = {}
+            self._syms[(obj, "origin")] = c
+        if owner not in c[1]:
+            r = subprocess.run(["addr2line", "-e", obj, "-j", ".text." + owner, "0"], capture_output=True, text=True,
+                               errors="replace")
+            line = r.stdout.strip() if r.returncode == 0 else ""
+            c[1][owner] = line.rsplit(":", 1)[0] if line and not line.startswith("??") else ""
+            self._syms_dirty = True
+        return any(v in c[1][owner] for v in vendored_prefixes)
+
+    def referrers_reaching(self, objs, vendored_prefixes):
+        """The first-party objects whose references REACH one of these vendored objects: every vendored archive member
+        that can call into them (the archives' own reference graph, walked backwards from them), and then every first-party
+        object that takes a symbol from one of those members — a copy of their inline code included (sound for a change
+        INSIDE the source: btAlignedAllocInternal is called from btAlignedObjectArray's copies in every TU that holds
+        one). A member nothing of theirs reaches (btBatchedConstraints.cpp, called only from the MT solver) is not
+        reached through the vtable copy of btTypedConstraint a viewport TU carries (the reader's fix round)."""
+        vmem = set()
+        for a, kind in self.kind.items():
+            if kind != "static" or a not in self.link_inputs: continue
+            mem = self.members(a)
+            if mem and all(any(v in self.obj_src.get(o, "") for v in vendored_prefixes) for o in mem):
+                vmem |= mem
+        defs = {m: self._nm(m, member=True)[0] for m in vmem}
+        und = {m: self._nm(m, member=True)[1] for m in vmem}
+        reached, frontier = set(o for o in objs if o in vmem), set(o for o in objs if o in vmem)
+        while frontier:
+            ds = set().union(*(defs[m] for m in frontier))
+            frontier = {m for m in vmem - reached if und[m] & ds}
+            reached |= frontier
+        syms = set().union(*(defs[m] for m in reached)) if reached else set()
+        out = set()
+        if not syms:
+            return out
+        consumers = {x for m in reached for x in self.rev.get(m, ()) if self.kind.get(x) == "static"}
+        consumers = {c for a in consumers for c in self.rev.get(a, ()) if self.kind.get(c) in ("shared", "exe")}
+        for consumer in consumers:
+            for o in self.members(consumer):
+                src = self.obj_src.get(o, "")
+                if not src or any(v in src for v in vendored_prefixes): continue
+                if self._nm(o)[1] & syms: out.add(o)
+        return out
+
+    def vendored_defs(self, vendored_prefixes):
+        """Every symbol a member of a VENDORED archive defines (an archive whose members all compile vendored sources)."""
+        k = ("vendored_defs", tuple(vendored_prefixes))
+        if k not in self._memo:
+            ds = set()
+            for a, kind in self.kind.items():
+                if kind != "static" or a not in self.link_inputs: continue
+                mem = self.members(a)
+                if mem and all(any(v in self.obj_src.get(o, "") for v in vendored_prefixes) for o in mem):
+                    for o in mem: ds |= self._nm(o, member=True)[0]
+            self._memo[k] = frozenset(ds)
+        return self._memo[k]
+
+    # the section-name prefixes GCC/Clang give a COMDAT copy of one symbol (`.text.<sym>`, `.data.rel.ro.<sym>`, …)
+    _COMDAT_PREFIXES = (".text.", ".data.rel.ro.local.", ".data.rel.ro.", ".data.rel.local.", ".data.rel.", ".rodata.",
+                        ".data.", ".bss.", ".tbss.", ".tdata.", ".gcc_except_table.")
+
+    def _owned_cached(self, obj):
+        try:
+            mt = os.path.getmtime(obj)
+        except OSError:
+            return {}
+        c = (self._syms or {}).get((obj, "owned"))
+        return c[1] if c and c[0] == mt else None
+
+    def owned_refs(self, obj):
+        """{undefined symbol (of `_nm`'s references): (the owners of the sections that reference it)} — an owner is the
+        symbol a COMDAT section is a copy of, or '' for the object's own code (`.text`, `.data`); debug and unwind
+        sections are not references. Read with `readelf -r`, cached beside nm's answers (per file, on its mtime)."""
+        c = self._owned_cached(obj)
+        if c is not None:
+            return c
+        if self._syms is None: self._syms = {}
+        want = self._nm(obj)[1]
+        try:
+            r = subprocess.run(["readelf", "-rW", obj], capture_output=True, text=True, errors="replace")
+        except OSError as e:
+            raise GraphError(f"`readelf` could not run ({e}): the link graph cannot be read")
+        if r.returncode != 0:
+            raise GraphError(f"`readelf -r` failed on {obj} ({r.returncode}): {r.stderr.strip()[:200]}")
+        out, owner = collections.defaultdict(set), None
+        for line in r.stdout.splitlines():
+            if line.startswith("Relocation section '.rela"):
+                s = line.split("'")[1][len(".rela"):]
+                owner = None if s.startswith((".debug", ".eh_frame", ".note", ".comment")) else \
+                    next((s[len(p_):] for p_ in self._COMDAT_PREFIXES if s.startswith(p_)), "")
+                continue
+            if owner is None: continue
+            f = line.split()
+            if len(f) >= 5:
+                sym = f[4].split("@")[0]
+                if sym in want: out[sym].add(owner)
+        v = {s_: tuple(sorted(w)) for s_, w in out.items()}
+        self._syms[(obj, "owned")] = (os.path.getmtime(obj), v)
+        self._syms_dirty = True
+        return v
 
     def target_reach(self, name):
         a = self.targets.get(name)

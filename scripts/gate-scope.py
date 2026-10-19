@@ -21,6 +21,7 @@ Build files are read by what their changed commands name. A path with no rule, n
 to its directory's subsystem. A fork pin bump selects by the FORK DIFF'S reach (FORK_COMPONENTS). A row labelled
 `measure` is never selected (it runs at the sprint's ship). A reach that is wrong is corrected in the tables here,
 never by a special case elsewhere; tests/hygiene/gate_selection_cases.json replays the cases that taught them.
+EVERY source.* LINT ROW rides every non-empty diff (lint_rows): the reach adds rows, it never drops the lints.
 """
 import argparse, json, os, re, subprocess, sys, collections, time
 
@@ -387,6 +388,9 @@ AREA_RULES = [
     # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what every engine shader
     # SEES: every engine fixture and the picture set (never the whole tier).
     (r"^irisgl/cmake/WrapHlmsPiece", ["*engine-fixtures", "*picture"], []),
+    # THE BUILD'S STAMP (cmake/BuiltFrom.cmake: <build>/BUILT_FROM, what the records' `tip.built` reads): the tools that
+    # read it — the serving, the records, the fork-stamp lint — never a product row (TOOLING-2)
+    (r"^cmake/BuiltFrom\.cmake$", ["hygiene", "tooling"], []),
     # THE PRESENT PATH ON THE STUDIO SIDE (TESTING-SPEED-A): the engine host creates the window and drives the frame —
     # with OgreEngine.cpp's frame loop, src/viewport/** and src/app/** the only paths that reach every app row
     (r"^src/bridge/enginehost\.", ["*vulkan-scripts", "player", "thumbnails", "materialpreview"], ["player"]),
@@ -849,12 +853,20 @@ def api_modules():
     return out
 
 
+_SCRIPT_MODS = {}     # path -> (mtime, modules): one read per script per process (every Selection asks for every row's)
+
+
 def script_modules(path):
     """The `<module>.` prefixes a JS script calls (a shell wrapper's text is not JS)."""
     if not path or not path.endswith((".js", ".js.in")): return set()
-    try: txt = open(path).read()
+    try: mt = os.path.getmtime(path)
     except OSError: return set()
-    return set(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", txt))
+    c = _SCRIPT_MODS.get(path)
+    if c is None or c[0] != mt:
+        try: txt = open(path).read()
+        except OSError: return set()
+        c = _SCRIPT_MODS[path] = (mt, frozenset(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", txt)))
+    return set(c[1])
 
 
 # A build-registration edit that only adds or removes SOURCE FILES from a list (a new
@@ -1034,6 +1046,9 @@ class Selection:
             self.rationale.append((sorted(set(hit.values()))[0], f"DATA EDGES: {len(hit)} row(s) read the touched data"))
 
     def add(self, suites, why):
+        cap = self.__dict__.get("_capture")
+        if cap is not None:
+            cap.update(s.split("::", 1)[0] for s in suites if s.split("::", 1)[0] in self.inv)
         for s in suites:
             r0 = s.split("::", 1)[0]
             if "::" in s:
@@ -1245,7 +1260,7 @@ class Selection:
         """A PATH NOBODY OWNS (TESTING-SPEED-A item 1): recorded as a fallback (printed, and gate.selection refuses a lane
         that has one) — and it selects THE SUBSYSTEM OF ITS DIRECTORY by AREA_RULES (the nearest parent directory a rule
         matches), NEVER the whole tier."""
-        self.fallback.append(f"{tag}: {why}")
+        # the reason is recorded WITH ITS OUTCOME (TOOLING-2: master_check prints it — "its directory's rows" or NOTHING)
         parts = p.split("/")
         if parts[:2] == ["tests", "lanes"] and len(parts) > 3:
             parts = ["tests"] + parts[2:]      # tests/lanes/<LANE>/: the lane's own directory
@@ -1253,15 +1268,22 @@ class Selection:
             # a tests/<dir>/ path: that directory's rows ARE its subsystem
             self.add(self.by_dir[parts[1]], f"{tag}: its directory tests/{parts[1]}")
             notes.append(f"NO RULE → its directory's rows: tests/{parts[1]}")
+            self.fallback.append(f"{tag}: {why} → its directory tests/{parts[1]} ({len(self.by_dir[parts[1]])} row(s))")
             return
         d = os.path.dirname(p)
         while d:
-            r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
+            self._capture = set()
+            try:
+                r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
+            finally:
+                cap, self._capture = self._capture, None
             if r:
                 notes.append(f"NO RULE → its directory's subsystem: {r}")
+                self.fallback.append(f"{tag}: {why} → its directory {d}/'s rule ({r}; {len(cap)} row(s))")
                 return
             d = os.path.dirname(d)
         notes.append("NO RULE and no rule for any parent directory → nothing more (never the whole tier)")
+        self.fallback.append(f"{tag}: {why} → NOTHING (no rule owns it or any parent directory)")
 
     def argv_rows(self, p, why):
         """Rows whose command line or script IS this file (a wrapper, a lint, a configured .js)."""
@@ -1303,7 +1325,15 @@ class Selection:
                 except OSError: text = ""
             names = sorted({os.path.basename(x) for x in re.findall(r"^\+\+\+ b/(\S+)", text, re.M)})
             comp = m_patch.group(2)
-            roots = [os.path.join(ROOT, "irisgl", "thirdparty", comp)]
+            # THE TREE IT PATCHES is the one its applier names (TOOLING-2 stage 1): the configure-time command that runs
+            # the stack (`-DPATCHES=<this dir> -DSRC=<tree>`) says which tree — bullet-patches/ patches bullet3/, which no
+            # name guess finds; an applier whose SRC is a stage in the build (clusterlod.h's) reaches its vendor-patched/
+            # copy, below
+            srcs = [s_ for pd, s_ in self.patch_appliers() if pd == os.path.join(ROOT, m_patch.group(1)) and s_]
+            roots = list(dict.fromkeys(
+                [s_ for s_ in srcs if s_.startswith(ROOT + "/") and os.path.isdir(s_)
+                 and not (self.graph is not None and s_.startswith(self.graph.build + "/"))]
+                + [os.path.join(ROOT, "irisgl", "thirdparty", comp)]))
             if self.graph is not None:
                 roots += [os.path.join(dp, comp) for dp, dns, _ in os.walk(self.graph.build)
                           if os.path.basename(dp) == "vendor-patched"]
@@ -1316,7 +1346,12 @@ class Selection:
                             g = self.graph_rows(rel, f"{tag} (patches {rel})")
                             if g is not None:
                                 hit += 1
-                                if g[1]: self.expand(["*app-rows"], [], f"{tag}: patches {f}, compiled into the app")
+                                if g[1]:
+                                    # compiled into the app: a VENDORED ARCHIVE's object enters our code through the
+                                    # first-party objects that call that archive (target_changed's law) — their families
+                                    refs = self.vendored_entry(os.path.join(ROOT, rel), f"{tag} (patches {f})", notes)
+                                    if not refs:
+                                        self.expand(["*app-rows"], [], f"{tag}: patches {f}, compiled into the app")
                                 for inc in sorted({os.path.relpath(self.graph.obj_src[o], ROOT)
                                                    for o in self.graph.includers(os.path.join(ROOT, rel))
                                                    if o in self.graph.obj_src}):
@@ -1325,7 +1360,8 @@ class Selection:
             self.expand(["hygiene"], [], f"{tag}: a vendored patch")
             if not hit:
                 self.full_tier.append(f"{p}: a patch whose patched file ({names}) no build graph node owns")
-            if depth == 0: self.rationale.append((p, f"a vendored patch of {names}: {hit} compiled copy(ies)"))
+            if depth == 0: self.rationale.append((p, f"a vendored patch of {names}: {hit} compiled copy(ies)"
+                                                  + ("".join("; " + n_ for n_ in dict.fromkeys(notes)))))
             return
         if re.match(r"^(irisgl/)?thirdparty/[^/]+/(PROVENANCE|README|LICENSE|NOTICE|COPYING)[^/]*$", p) or (
                 (p.startswith(("irisgl/thirdparty/", "thirdparty/"))) and p.endswith(".md") and
@@ -1745,8 +1781,8 @@ class Selection:
                 self.full_tier.append(f"{tag}: the top-level build file with no diff to read (--files)")
                 if depth == 0: self.rationale.append((p, "the top-level build file without a range → the MERGE tier"))
                 return
-            self._fallback(p, tag, notes, "a build file with no diff to read (--files)")
-            if depth == 0: self.rationale.append((p, "; ".join(notes)))
+            self.full_tier.append(f"{tag}: a build file with no diff to read (--files) — the reader cannot resolve it")
+            if depth == 0: self.rationale.append((p, "a build file without a range → the whole tier"))
             return
         a, b = self.revs.texts(p)
         # A CMAKE SCRIPT RUN WITH -P (irisgl/cmake/ApplyVendorPatches.cmake, run by an
@@ -1754,7 +1790,7 @@ class Selection:
         invokers = self.p_script_invokers(p)
         if invokers:
             hit = 0
-            self._var_seen = set()
+            self._var_seen, self._var_got = set(), {}
             for f, text, c in invokers:
                 if self.cmake_command(f, os.path.dirname(f), c[0], c[3], c[4], c[3], text, tag, notes, depth=1):
                     hit += 1
@@ -1849,7 +1885,7 @@ class Selection:
             if blk is not None and name in _BLOCK_LINES:
                 # THE BLOCK'S BODY (T3): an if() whose condition changed, or an endif() a deletion
                 # took with it, reaches what the commands inside it reach — resolved one by one
-                self._var_seen = set()
+                self._var_seen, self._var_got = set(), {}
                 inner = [c for c in parsed if blk[0] < c[1] and c[2] < blk[1] and c[0] not in _BLOCK_LINES]
                 hit = [c[0] for c in inner
                        if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes, depth=1)]
@@ -1873,11 +1909,15 @@ class Selection:
                          + (f"the subsystems of {len(got)} named file(s)" if got else "every engine fixture"))
             unresolved = []
         if unresolved:
-            if p == "CMakeLists.txt":
-                self.full_tier.append(f"{tag}: a top-level CMake command that names nothing a suite owns: "
-                                      f"{', '.join(unresolved)}")
-            else:
+            parts = p.split("/")
+            if parts[0] == "tests" and len(parts) == 3 and parts[1] in self.by_dir and parts[2] == "CMakeLists.txt":
+                # a test directory's own build file: its commands build and register that directory's rows only
                 self._fallback(p, tag, notes, f"CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
+            else:
+                # ANY OTHER BUILD FILE (TOOLING-2 fix round, the reader's must-fix): a command the reader cannot resolve
+                # stays THE WHOLE TIER with its reason printed — a fallback to "its directory" gave irisgl/CMakeLists.txt
+                # (the Bullet block's file) a new execute_process() reaching nothing at all
+                self.full_tier.append(f"{tag}: CMake command(s) the reader cannot resolve: {', '.join(unresolved)}")
             notes.append("unresolved: " + ", ".join(unresolved))
         if depth == 0: self.rationale.append((p, "; ".join(dict.fromkeys(notes)) or "CMake"))
 
@@ -1885,18 +1925,9 @@ class Selection:
         """[(build file, its text, command)] of every command that runs <p> with `-P`."""
         base = os.path.basename(p)
         if not base.endswith(".cmake"): return []
-        if not hasattr(self, "_cmake_files"):
-            self._cmake_files = []
-            for dp, dns, fs in os.walk(ROOT):
-                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
-                for f in fs:
-                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
-                        try: self._cmake_files.append((os.path.relpath(os.path.join(dp, f), ROOT),
-                                                       open(os.path.join(dp, f), errors="replace").read()))
-                        except OSError: pass
         out = []
         pat = re.compile(r"-P\s+\S*" + re.escape(base) + r"\b")
-        for f, text in self._cmake_files:
+        for f, text in self.tree_cmake_files():
             if base not in text: continue
             for c in gate_graph.cmake_commands(text):
                 if pat.search(c[3]): out.append((f, text, c))
@@ -1908,11 +1939,33 @@ class Selection:
         return sorted(n for n, t in self.inv.items()
                       if any(f == ap and first <= ln <= last for f, ln in t.get("sites", ())))
 
+    def binary_dirs(self, d):
+        """The build directories of a source directory and of every source directory below it. Not the same path under
+        the build dir: Studio adds irisgl/engine as `engine` (add_subdirectory(… ${CMAKE_CURRENT_BINARY_DIR}/engine)) — read
+        from each build directory's cmake_install.cmake ("# Install script for directory: <source dir>")."""
+        if not self.graph: return []
+        m = self.__dict__.get("_bin_dirs")
+        if m is None:
+            m = self._bin_dirs = []
+            for dp, dn, fs in os.walk(self.graph.build):
+                dn[:] = [x for x in dn if x != "CMakeFiles"]
+                if "cmake_install.cmake" not in fs: continue
+                try:
+                    first = open(os.path.join(dp, "cmake_install.cmake"), errors="replace").readline()
+                except OSError:
+                    continue
+                mm = re.match(r"# Install script for directory: (.+)$", first.strip())
+                if not mm: continue
+                src = os.path.relpath(os.path.realpath(mm.group(1)), os.path.realpath(ROOT))
+                m.append(("" if src == "." else src, os.path.normpath(dp)))
+        d = "" if d in ("", ".") else os.path.normpath(d)
+        return sorted({b for src, b in m if not d or src == d or src.startswith(d + "/")})
+
     def exes_under(self, d, tag):
-        """Every executable built under a source directory (its build dir), and its rows."""
+        """Every executable built under a source directory (its build dirs: binary_dirs), and its rows."""
         if not self.graph: return 0
-        bsub = os.path.join(self.graph.build, d) if d else self.graph.build
-        exes = {e for e in self.graph.exes if e.startswith(bsub + "/")}
+        bdirs = self.binary_dirs(d) or [os.path.join(self.graph.build, d) if d else self.graph.build]
+        exes = {e for e in self.graph.exes if any(e.startswith(b + "/") for b in bdirs)}
         for e in exes:
             if e != self.app_exe: self.add(self.exe_rows.get(e, []), f"{tag}: built under {d}")
         if self.app_exe in exes:
@@ -1920,7 +1973,12 @@ class Selection:
         return len(exes)
 
     def target_changed(self, t, tag, notes):
-        """A build target's objects changed (a flag, a property, a link): its executables' rows."""
+        """A build target's objects changed (a flag, a property, a link): its executables' rows (once per target: a
+        loop's commands, a block's body and a variable's readers name the same target again)."""
+        done = self.__dict__.setdefault("_targets_done", {})
+        if t in done:
+            notes.append(done[t]); return
+        done[t] = f"target {t}: (above)"          # in progress: a referrer's walk naming it again adds nothing
         art = self.graph.targets[t]
         if self.graph.kind.get(art) == "static":
             # an archive's objects, through the link graph: where they are referenced
@@ -1938,15 +1996,93 @@ class Selection:
             if vendored:
                 # a vendored archive enters our code through the objects that call it: the
                 # app rows are those objects' families (the mesh simplifier -> the bake's)
-                refs = sorted({self.graph.obj_src[o] for o in
-                               self.graph.first_party_referrers(art, ("/thirdparty/",)) if o in self.graph.obj_src})
-                for r_ in refs:
-                    self.path(os.path.relpath(r_, ROOT), 1, via=f"calls into {t}")
-                notes.append(f"target {t} (vendored) enters our code through "
-                             f"{[os.path.relpath(r_, ROOT) for r_ in refs]}")
+                refs = self._enter_through(art, t, notes)
             if not refs:
                 self.expand(["*app-rows"], [], f"{tag}: target {t} is in the app")
         notes.append(f"target {t}: {len(exes)} executable(s)")
+        done[t] = notes[-1]
+
+    def _enter_through(self, art, name, notes):
+        """The first-party sources whose OWN code calls into vendored archive `art` (a flag or property change of the
+        archive, target_changed) — each reached as a path (its families). A change INSIDE one of its sources is
+        vendored_entry's: every source whose references reach it."""
+        memo = self.__dict__.setdefault("_entered", {})
+        if art not in memo:
+            memo[art] = sorted({self.graph.obj_src[o] for o in
+                                self.graph.first_party_referrers(art, ("/thirdparty/",)) if o in self.graph.obj_src})
+        refs = memo[art]
+        for r_ in refs:
+            self.path(os.path.relpath(r_, ROOT), 1, via=f"calls into {name}")
+        notes.append(f"{name} (vendored) enters our code through {len(refs)} first-party source(s)"
+                     + (f": {', '.join(os.path.relpath(r_, ROOT) for r_ in refs[:4])}{' …' if len(refs) > 4 else ''}"
+                        if refs else ""))
+        return refs
+
+    def vendored_entry(self, src_abs, tag, notes):
+        """A vendored SOURCE compiled into the app (its objects members of vendored archives): the first-party sources
+        whose references reach those objects through the archives' own call graph, a copy of inline code included. [] when no archive holds it (a vendored object linked
+        straight into a first-party target: the caller decides)."""
+        objs = {o for o in self.graph.rev.get(src_abs, ()) if self.graph.kind.get(o) == "object"}
+        if not any(self.graph.kind.get(x) == "static" for o in objs for x in self.graph.rev.get(o, ())):
+            return []
+        refs = sorted({self.graph.obj_src[o] for o in self.graph.referrers_reaching(objs, ("/thirdparty/",))
+                       if o in self.graph.obj_src})
+        for r_ in refs:
+            self.path(os.path.relpath(r_, ROOT), 1, via=f"reaches {os.path.basename(src_abs)}")
+        notes.append(f"{os.path.basename(src_abs)} (vendored) is reached from {len(refs)} first-party source(s), a copy "
+                     f"of its archives' inline code included"
+                     + (f": {', '.join(os.path.relpath(r_, ROOT) for r_ in refs[:4])}{' …' if len(refs) > 4 else ''}"
+                        if refs else ""))
+        return refs
+
+    def patch_appliers(self):
+        """[(patch dir, patched tree)] (absolute; the tree None when its path cannot be read): every configure-time
+        command of the tree's build files that applies a patch stack — `execute_process(… -DPATCHES=<dir> -DSRC=<tree>
+        … -P <script>)` — its directories resolved in the file that runs it."""
+        if not hasattr(self, "_patch_appliers"):
+            out = []
+            for f, text in self.tree_cmake_files():
+                if "-DPATCHES=" not in text: continue
+                for c in gate_graph.cmake_commands(text):
+                    if c[0] != "execute_process" or "-DPATCHES=" not in c[3] or not re.search(r"-P\s", c[3]): continue
+                    pm, sm = re.search(r"-DPATCHES=(\S+)", c[3]), re.search(r"-DSRC=(\S+)", c[3])
+                    pd = self.cmake_path(f, text, pm.group(1))
+                    if pd: out.append((pd, self.cmake_path(f, text, sm.group(1)) if sm else None))
+            self._patch_appliers = out
+        return self._patch_appliers
+
+    def cmake_path(self, f, text, value):
+        """An absolute path a build file spells (`${CMAKE_CURRENT_SOURCE_DIR}/…`, a variable it set), or None."""
+        d = os.path.join(ROOT, os.path.dirname(f))
+        bdir = os.path.join(self.graph.build, os.path.dirname(f)) if self.graph is not None else None
+        known = {"CMAKE_CURRENT_SOURCE_DIR": d, "CMAKE_CURRENT_LIST_DIR": d, "CMAKE_SOURCE_DIR": ROOT,
+                 "PROJECT_SOURCE_DIR": d, "CMAKE_CURRENT_BINARY_DIR": bdir}
+        sets = {}
+        for c in gate_graph.cmake_commands(text):
+            a_ = c[3].split()
+            if c[0] == "set" and len(a_) == 2: sets.setdefault(a_[0], a_[1].strip('"'))
+        v = value.strip('"')
+        for _ in range(4):
+            m = re.search(r"\$\{(\w+)\}", v)
+            if not m: break
+            rep = known.get(m.group(1)) if m.group(1) in known else sets.get(m.group(1))
+            if rep is None: return None
+            v = v[:m.start()] + rep + v[m.end():]
+        if "${" in v: return None
+        return os.path.normpath(v if os.path.isabs(v) else os.path.join(d, v))
+
+    def tree_cmake_files(self):
+        """[(path relative to ROOT, text)] of every build file of the tree (vendored and build dirs aside)."""
+        if not hasattr(self, "_cmake_files"):
+            self._cmake_files = []
+            for dp, dns, fs in os.walk(ROOT):
+                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
+                for f in fs:
+                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
+                        try: self._cmake_files.append((os.path.relpath(os.path.join(dp, f), ROOT),
+                                                       open(os.path.join(dp, f), errors="replace").read()))
+                        except OSError: pass
+        return self._cmake_files
 
     _STRUCTURAL = {"endfunction", "endmacro", "else", "elseif", "endif", "foreach", "endforeach",
                    "while", "endwhile", "return", "break", "continue"}
@@ -2022,10 +2158,44 @@ class Selection:
             self._all_cmake = "\n".join(texts)
         return re.search(r"(?<![\w.\-])" + re.escape(token) + r"(?![\w.\-])", self._all_cmake) is not None
 
-    def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0):
+    def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0, line=None):
         """Resolve one changed CMake command to what it names. True when something owned it."""
         if name in ("message",):
             notes.append("message() only"); return True
+        # THE COMMANDS READ BY THEIR KIND (TOOLING-2 stage 1; BULLET-BATCHING-1's merge ran the whole inventory twice
+        # on irisgl/CMakeLists.txt's Bullet block — a set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) read as a
+        # directory-wide compile setting, a patch stack's applier unread): a property by its scope and its name, a
+        # configure-time patch apply by its stack, a loop's target by its values
+        if name == "set_property":
+            r = self.set_property_reach(p, d, args, whole, tag, notes)
+            if r is not None: return r
+        # A HELPER THAT CHANGES NO BYTE (its body is inert — jahshaka_engine_generated_deps: OBJECT_DEPENDS only): an
+        # inert line of its body, or a call of it, reaches nothing compiled
+        if fn and self.inert_command(name, args) and self.inert_helper(fn.lower()):
+            notes.append(f"{fn}(): an inert helper (its body changes no byte of a build)"); return True
+        if not fn and name not in self._INERT and self.graph is not None and self.inert_helper(name.lower()):
+            notes.append(f"{name}(): a call of an inert helper — reaches nothing compiled"); return True
+        if name in ("function", "macro") and args.split() and self.inert_helper(args.split()[0].lower()):
+            notes.append(f"{args.split()[0]}(): an inert helper's header"); return True
+        if name == "execute_process" and "-DPATCHES=" in args and re.search(r"-P\s", args):
+            pd = self.cmake_path(p, whole, re.search(r"-DPATCHES=(\S+)", args).group(1))
+            if pd and os.path.isdir(pd):
+                pf = sorted(os.path.relpath(os.path.join(pd, f), ROOT) for f in os.listdir(pd) if f.endswith(".patch"))
+                for f in pf:
+                    self.path(f, 1, via=f"{os.path.basename(p)} execute_process() applies it")
+                notes.append(f"execute_process() applies the patch stack {os.path.relpath(pd, ROOT)}: {len(pf)} patch(es), "
+                             "each by what it patches")
+                return True
+        if name == "include" and args.split() and depth < _CHAIN_HOPS:
+            r = self.include_reach(p, d, args, tag, notes, depth)
+            if r is not None: return r
+        if name in ("if", "elseif", "while", "foreach") and depth > 0:
+            # a condition (or a loop's list) reached as a variable's READER: its block's body is what it reaches
+            body = self.block_body(whole, name, args, line)
+            hit = [c[0] for c in body if self.cmake_command(p, d, c[0], c[3], c[4], c[3], whole, tag, notes,
+                                                             depth=depth + 1)]
+            if hit:
+                notes.append(f"{name}() reading it: its block's {len(hit)} command(s)"); return True
         # the whole command for anything but a list: an add_test's NAME sits on another line than
         # its changed COMMAND; a suite list's change is only the names it adds or drops
         full = changed_text if name in ("set", "list") else changed_text + "\n" + args
@@ -2092,6 +2262,16 @@ class Selection:
         if (self.graph and a0 and a0[0] in self.graph.targets and not rows
                 and name not in ("add_test", "set_tests_properties", "add_custom_command")):
             self.target_changed(a0[0], tag, notes); got = True
+        elif (self.graph and a0 and "${" in a0[0] and not rows
+                and (name.startswith("target_") or name in ("set_target_properties", "add_dependencies"))):
+            # A TARGET NAMED THROUGH A LOOP VARIABLE (foreach(_bt BulletDynamics …) target_compile_options(${_bt} …)):
+            # the values the enclosing foreach() gives it, each a target of the graph
+            vals = self.loop_values(whole, args, a0[0])
+            tg = [v for v in vals or [] if v in self.graph.targets]
+            for t in tg:
+                self.target_changed(t, f"{tag}: {name}({a0[0]}={t})", notes)
+            if tg:
+                notes.append(f"{name}({a0[0]}) over its foreach(): {', '.join(tg)}"); got = True
         # 4. source files named (set_source_files_properties, a list outside a target)
         srcs = []
         for t in toks:
@@ -2125,30 +2305,71 @@ class Selection:
             n_exe = self.exes_under(sub, f"{tag}: add_subdirectory({sd})")
             notes.append(f"add_subdirectory({sd}): {len(reg)} row(s), {n_exe} executable(s)"); got = True
         # 6. a variable: follow its users in the same file (not when the change only listed rows: a
-        # suite list's change is the rows it adds or drops) — THROUGH CHAINS, three hops deep
+        # suite list's change is the rows it adds or drops) — THROUGH CHAINS, _CHAIN_HOPS deep
         # (TEST-SELECTOR-1: a staged header's path set -> file(COPY_FILE) -> the include directory
         # of the target that compiles it), each variable once. file(GLOB|READ|STRINGS <var>) sets
         # one too.
         if depth == 0:
             self._var_seen = set()
+            self._var_got = {}
         a_ = args.split()
-        setter = name in ("set", "list", "option", "string") or (
-            name == "file" and a_[:1] and a_[0] in ("GLOB", "GLOB_RECURSE", "READ", "STRINGS"))
-        if setter and depth < 3 and not rows:
-            var = _set_var(name, a_)
+        setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
+            name == "file" and a_[:1] and a_[0] in _FILE_OUT)
+        if (setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:] and not fn
+                and "${" not in a_[0] and not re.match(r"^(CMAKE|CTEST|CPACK)_", a_[0])):
+            # (a variable CMake itself reads — set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE) — has no reader in any build file:
+            # it falls to the rule below, unresolved, never "0 readers in the parent scope")
+            # set(<var> … PARENT_SCOPE) AT DIRECTORY SCOPE changes the variable of the PARENT directory's scope, not this
+            # file's: its readers are in the other build files (a parent and the directories it adds after); this file's
+            # own readers keep their value. Inside a function the parent scope is its CALLER (and `${out}` an output
+            # parameter): the generic reader below keeps its conservative path (the reader's fix round)
+            var = a_[0]
+            if var not in self._var_seen:
+                self._var_seen.add(var)
+                n_ = 0
+                for f, text in self.tree_cmake_files():
+                    if f == p or var not in text: continue
+                    for (un, uf, ul, ua, ufn) in gate_graph.cmake_commands(text):
+                        if not _reads_var(un, ua, var) or (un == "set" and ua.split()[:1] == [var]): continue
+                        n_ += 1
+                        if self.cmake_command(f, os.path.dirname(f), un, ua, ufn, ua, text, tag, notes, depth=depth + 1,
+                                              line=uf):
+                            got = True
+                notes.append(f"set({var} PARENT_SCOPE): {n_} reader(s) in the parent scope's build files")
+                if got or not n_: return True
+        if setter and depth < _CHAIN_HOPS and not rows:
+            var = _set_var(name, _cmake_split(args))       # a quoted argument is one argument ("vendor patch applied:")
+            if "${" in var or re.match(r"^(CMAKE|CTEST|CPACK)_", var):
+                # A COMPUTED NAME, OR A VARIABLE CMAKE ITSELF READS (a compiler launcher, a standard, a flag): no command
+                # of the tree is its reader, so its readers say nothing — unresolved, the generic path decides (TOOLING-2's
+                # third reader round: the launcher's set(CMAKE_${lang}_COMPILER_LAUNCHER) resolved through a loop to itself)
+                notes.append(f"{name}() writes {var}: read by CMake itself (or a computed name) — the reader cannot resolve it")
+                return False
             tip_text = getattr(self, "_cmake_tip_text", None)
             if (var and tip_text is not None and whole is not tip_text
                     and not re.search(r"\b" + re.escape(var) + r"\b", tip_text) and not self.names_anywhere(var)):
                 # A VARIABLE DELETED WITH ITS USERS (an option() and the if() that read it): whatever
                 # it reached is in this diff as its users' own deleted lines
                 notes.append(f"variable {var} deleted with its users"); return True
-            users = [c for c in gate_graph.cmake_commands(whole)
-                     if re.search(r"\$\{" + re.escape(var) + r"\}|\b" + re.escape(var) + r"\b", c[3])
-                     and not (c[0] == name and c[3].split()[:1] == a_[:1])] if var not in self._var_seen else []
-            self._var_seen.add(var)
+            # its READERS (TOOLING-2): a ${var} anywhere, or the bare name where a command reads one (a condition, a
+            # list operation, foreach IN LISTS) — never a command that only WRITES it (execute_process OUTPUT_VARIABLE:
+            # the applier of a patch stack is not reached by the message that prints its output)
+            got_memo = self.__dict__.setdefault("_var_got", {})
+            seen = var in self._var_seen
+            if seen:
+                users = []
+                got = got or got_memo.get(var, False)     # followed already: its result; in progress (a cycle): nothing new
+            else:
+                users = [c for c in gate_graph.cmake_commands(whole) if _reads_var(c[0], c[3], var)
+                         and not (c[0] == name and c[3].split()[:1] == a_[:1])]
+                self._var_seen.add(var)
+                got_memo[var] = False                     # in progress: a cycle back to it owns nothing
             for (un, uf, ul, ua, ufn) in users:
-                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
-            if users: notes.append(f"variable {var}: {len(users)} user command(s)")
+                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf): got = True
+            if not seen:
+                got_memo[var] = got
+            if users:
+                notes.append(f"variable {var}: {len(users)} user command(s)")
             # ...and the configured scripts that substitute it (@VAR@ in a .in beside this file)
             if var and not got:
                 for dp, _, fs in os.walk(os.path.join(ROOT, d or ".")):
@@ -2165,13 +2386,19 @@ class Selection:
                     if d in ("", "."): break
         # 6b. a local variable the command reads (${_home} in a file(MAKE_DIRECTORY)): the
         # commands that read it too — the row whose ENVIRONMENT names that home
-        if not got and depth < 3:
+        if not got and depth < _CHAIN_HOPS:
             for var in sorted(set(re.findall(r"\$\{(_\w+)\}", args)) - self._var_seen):
                 self._var_seen.add(var)
                 users = [c for c in gate_graph.cmake_commands(whole)
                          if "${" + var + "}" in c[3] and c[3] != args and c[0] != "set"]
                 for (un, uf, ul, ua, ufn) in users:
-                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1): got = True
+                    # ANOTHER READER OWNS THIS COMMAND only if it REACHED something (TOOLING-2, the reader's second round): a
+                    # reader that resolves to nothing compiled says nothing about this command — a COMPILE_DEFINITIONS
+                    # property on a computed source list beside OBJECT_DEPENDS ones narrowed to 0 rows that way
+                    before = self._reach_mark()
+                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=depth + 1, line=uf) \
+                            and self._reach_mark() != before:
+                        got = True
                 if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
         # 7. a directory-scope setting: every target under this directory
         if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
@@ -2184,9 +2411,181 @@ class Selection:
                 self.add(self.by_dir.get(dd, []), f"{tag}: {name}() at directory scope of {under}")
                 self.exes_under(under, tag)
             else:
+                # EVERY TARGET COMPILED UNDER IT, not only its executables (TOOLING-2, the reader's third round): irisgl/engine
+                # builds a STATIC library and no executable, so add_compile_options() there read as 0 rows — its archive
+                # reaches what links it (target_changed); a setting that still reaches nothing is the whole tier, said
+                before = self._reach_mark()
+                tg = self.targets_under(under)
+                for t in tg:
+                    self.target_changed(t, f"{tag}: {name}() at directory scope of {under}", notes)
                 self.exes_under(under, tag)
+                if self._reach_mark() == before:
+                    self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches no row through its "
+                                          f"{len(tg)} target(s) — the reader cannot bound it")
+                notes.append(f"{name}() at directory scope of {under}: {len(tg)} target(s) compiled under it")
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
+
+    def targets_under(self, d):
+        """The build targets whose objects compile under a source directory (its build dir and every directory below it:
+        a directory-scope setting is inherited by the subdirectories it adds)."""
+        if not self.graph: return []
+        bdirs = self.binary_dirs(d) or [os.path.join(self.graph.build, d) if d else self.graph.build]
+        rx = re.compile("(?:" + "|".join(re.escape(b) for b in bdirs) + r")/CMakeFiles/([^/]+)\.dir/")
+        names = {m.group(1) for o in self.graph.obj_src for m in [rx.match(o)] if m}
+        return sorted(n for n in names if n in self.graph.targets)
+
+    # set_property(<scope> … PROPERTY <name> …) by its NAME: a property that only says WHEN something is rebuilt or CMake
+    # re-runs (CMAKE_CONFIGURE_DEPENDS, OBJECT_DEPENDS), or how an IDE files a target, changes no byte of a build
+    _CONFIGURE_ONLY_PROPS = {"CMAKE_CONFIGURE_DEPENDS", "OBJECT_DEPENDS", "ADDITIONAL_CLEAN_FILES",
+                             "ADDITIONAL_MAKE_CLEAN_FILES", "FOLDER", "USE_FOLDERS", "PREDEFINED_TARGETS_FOLDER"}
+    # THE COMMANDS THAT CHANGE NO BYTE OF A BUILD: control flow, a function-local variable, a read of a file, a message —
+    # a helper whose body is only these (and dependency-only properties) reaches nothing compiled where it is called
+    _INERT = {"function", "endfunction", "foreach", "endforeach", "while", "endwhile", "if", "elseif", "else", "endif",
+              "continue", "break", "return", "list", "string", "math", "message", "unset", "cmake_path",
+              "get_target_property", "get_property", "get_directory_property", "get_filename_component",
+              "get_source_file_property", "get_test_property", "get_cmake_property"}
+
+    def _reach_mark(self):
+        """What the selection holds so far (rows, arms, whole pools, the tier's reasons): a change means something was reached."""
+        return (len(self.selected), sum(len(v) for v in self.arms.values()), len(self.whole), len(self.full_tier))
+
+    def inert_command(self, name, args):
+        """True when a command changes no byte of a build (see _INERT): a file() read, a function-local set(), a
+        dependency-only property. set()/list() are LOCAL only inside a function: inside a MACRO they write the caller's
+        scope — no macro of the tree is inert today (every one registers or decorates rows); a future one that only
+        sets variables would need its callers' readers followed, not this rule."""
+        a_ = args.split()
+        if name in self._INERT:
+            return True
+        if name == "set":
+            return "PARENT_SCOPE" not in a_ and "CACHE" not in a_
+        if name == "file":
+            return bool(a_) and a_[0] in _FILE_OUT
+        if name == "set_property" and "PROPERTY" in a_ and a_.index("PROPERTY") + 1 < len(a_):
+            return a_[a_.index("PROPERTY") + 1] in self._CONFIGURE_ONLY_PROPS
+        return False
+
+    def inert_helper(self, fn):
+        """True when the tree defines function/macro `fn` and every command of its body is inert (inert_command). The
+        tree's helpers are read once per process (one parse of its build files, shared by every selection)."""
+        key = (ROOT, "helpers")
+        if key not in _TREE_MEMO:
+            bodies = collections.defaultdict(list)
+            for _, text in self.tree_cmake_files():
+                if "function" not in text and "macro" not in text: continue
+                for c in gate_graph.cmake_commands(text):
+                    if c[4]: bodies[c[4].lower()].append((c[0], c[3]))
+            _TREE_MEMO[key] = ({f: all(self.inert_command(n_, a_) for n_, a_ in b) for f, b in bodies.items()})
+        return _TREE_MEMO[key].get(fn, False)
+
+    def set_property_reach(self, p, d, args, whole, tag, notes):
+        """set_property() by its scope and property name: True when resolved, None when the generic readers decide (a
+        directory's compile setting stays every target under it)."""
+        a_ = args.split()
+        if "PROPERTY" not in a_ or a_.index("PROPERTY") + 1 >= len(a_):
+            return None
+        k = a_.index("PROPERTY")
+        scope, prop = a_[0], a_[k + 1]
+        names = [x for x in a_[1:k] if x not in ("APPEND", "APPEND_STRING")]
+        if prop in self._CONFIGURE_ONLY_PROPS:
+            notes.append(f"set_property({scope} … {prop}): a dependency only — reaches nothing compiled")
+            return True
+        if scope == "TARGET" and self.graph is not None and names:
+            tg = []
+            for n_ in names:
+                vals = self.loop_values(whole, args, n_) if "${" in n_ else [n_]
+                tg += [v for v in vals or [] if v in self.graph.targets]
+            for t in tg:
+                self.target_changed(t, f"{tag}: set_property(TARGET {t} {prop})", notes)
+            return True if tg else None
+        if scope == "SOURCE" and names:
+            srcs = [os.path.normpath(os.path.join(d, n_)) for n_ in names if "$" not in n_]
+            srcs = [s_ for s_ in srcs if os.path.isfile(os.path.join(ROOT, s_))]
+            for s_ in srcs:
+                self.path(s_, 1, via=f"{os.path.basename(p)} set_property(SOURCE {prop})")
+            return True if srcs else None
+        return None
+
+    def loop_values(self, whole, args, token):
+        """The values `token` (it spells `${v}`) takes inside the foreach() blocks of `whole` that hold a command with
+        exactly these arguments — foreach(v a b c) / foreach(v IN ITEMS a b) / foreach(v IN LISTS L) with L set() in the
+        same file; None when a value cannot be read (a RANGE, a list built elsewhere)."""
+        parsed = gate_graph.cmake_commands(whole or "")
+        spans = _block_spans(parsed)
+        at = [c[1] for c in parsed if c[3] == args]
+        if not at:
+            return None
+        sets = {}
+        for c in parsed:
+            ca = c[3].split()
+            if c[0] == "set" and ca: sets.setdefault(ca[0], ca[1:])
+        vals = []
+        for k, (b0, b1) in spans.items():
+            c = parsed[k]
+            if c[0] != "foreach" or not any(b0 < ln <= b1 for ln in at): continue
+            fa = c[3].split()
+            if not fa or "${" + fa[0] + "}" not in token: continue
+            if fa[1:2] == ["RANGE"]: return None
+            items = fa[1:]
+            if items[:2] == ["IN", "ITEMS"]: items = items[2:]
+            elif items[:1] == ["IN"]:
+                out, mode = [], None
+                for x in items[1:]:
+                    if x in ("LISTS", "ITEMS"): mode = x; continue
+                    if mode == "ITEMS": out.append(x)
+                    elif mode == "LISTS":
+                        if x not in sets: return None
+                        out += sets[x]
+                items = out
+            if any("${" in x for x in items): return None
+            vals += [token.replace("${" + fa[0] + "}", x.strip('"')) for x in items]
+        return vals or None
+
+    def include_reach(self, p, d, args, tag, notes, depth):
+        """include(<module>) of a build file of THIS tree (cmake/<module>.cmake on the module path, or a path): what its
+        top-level commands reach, each resolved as a changed command of that file (its blocks through their bodies);
+        True when every one resolves, None when the module is not the tree's or one does not (the generic path then
+        decides: a directory-scope include stays the whole tier)."""
+        a0 = _cmake_split(args)[0]
+        cands = ([a0] if a0.endswith(".cmake") else []) + [f"cmake/{a0}.cmake", f"irisgl/cmake/{a0}.cmake"]
+        mod = None
+        for c in cands:
+            c = c.replace("${CMAKE_CURRENT_SOURCE_DIR}/", d + "/" if d else "").replace("${CMAKE_SOURCE_DIR}/", "")
+            if "${" in c: continue
+            rel = os.path.normpath(c if not os.path.isabs(c) else os.path.relpath(c, ROOT))
+            if os.path.isfile(os.path.join(ROOT, rel)) and not rel.startswith(("irisgl/thirdparty/", "thirdparty/")):
+                mod = rel; break
+        if mod is None:
+            return None
+        try:
+            text = open(os.path.join(ROOT, mod), errors="replace").read()
+        except OSError:
+            return None
+        if depth == 0:
+            self._var_seen, self._var_got = set(), {}
+        top = [c for c in gate_graph.cmake_commands(text) if not c[4] and c[0] not in _BLOCK_LINES
+               and c[0] not in ("function", "endfunction", "macro", "endmacro")]
+        sub = []
+        ok = all(self.cmake_command(mod, os.path.dirname(mod), c[0], c[3], None, c[3], text, tag, sub, depth=depth + 1,
+                                    line=c[1]) for c in top)
+        notes.extend(sub)
+        if ok:
+            notes.append(f"include({a0}): its {len(top)} top-level command(s), each by what it reaches ({mod})")
+            return True
+        return None
+
+    def block_body(self, whole, name, args, line=None):
+        """The commands inside the block that `<name>(<args>)` opens AT ITS OWN LINE (an if/while reached as a reader;
+        irisgl/engine/CMakeLists.txt has two `if(JAH_RAY_QUERY_OK)` — the first one's body is not the second's), the
+        first such command only when the line is not known."""
+        parsed = gate_graph.cmake_commands(whole or "")
+        spans = _block_spans(parsed)
+        for k, c in enumerate(parsed):
+            if c[0] == name and c[3] == args and k in spans and (line is None or c[1] == line):
+                b0, b1 = spans[k]
+                return [x for x in parsed if b0 < x[1] and x[2] < b1 and x[0] not in _BLOCK_LINES]
+        return []
 
     def deferring_functions(self, helper):
         """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree)."""
@@ -2226,6 +2625,43 @@ _STRING_OUT = {"APPEND": 1, "PREPEND": 1, "CONCAT": 1, "JOIN": 2, "SHA256": 1, "
                "LENGTH": 2, "SUBSTRING": 4, "FIND": 3, "TIMESTAMP": 1, "CONFIGURE": 2, "GENEX_STRIP": 2,
                "MAKE_C_IDENTIFIER": 2, "REPEAT": 3, "HEX": 2, "ASCII": -1}
 _STRING_REGEX_OUT = {"REPLACE": 4, "MATCH": 3, "MATCHALL": 3}
+# file(<SUB> …)'s OUTPUT variable, by argument index (the sub-command is index 0): file(GLOB <var> …), file(READ <file>
+# <var>), file(SHA256 <file> <var>), file(RELATIVE_PATH <var> <dir> <file>) — a sub-command not here writes no variable
+_FILE_OUT = {"GLOB": 1, "GLOB_RECURSE": 1, "RELATIVE_PATH": 1, "TO_CMAKE_PATH": 2, "TO_NATIVE_PATH": 2, "READ": 2,
+             "STRINGS": 2, "SIZE": 2, "TIMESTAMP": 2, "REAL_PATH": 2, "READ_SYMLINK": 2, "MD5": 2, "SHA1": 2, "SHA224": 2,
+             "SHA256": 2, "SHA384": 2, "SHA512": 2, "SHA3_224": 2, "SHA3_256": 2, "SHA3_384": 2, "SHA3_512": 2}
+# HOW DEEP A VARIABLE IS FOLLOWED (a setter -> its readers -> theirs): five hops (TOOLING-2; three before) — a hash read
+# into a variable, the if() comparing it, the string() its body rewrites, the message() that prints it is four
+_CHAIN_HOPS = 5
+# the commands that write their FIRST argument as a variable (followed to its readers like a set())
+_GETTERS = {"get_directory_property", "get_property", "get_target_property", "get_filename_component",
+            "get_cmake_property", "get_source_file_property", "get_test_property"}
+
+
+_TREE_MEMO = {}     # per process and tree root: what one parse of the tree's build files says (inert_helper)
+
+
+def _reads_var(name, args, var):
+    """Whether a command READS variable `var`: `${var}` in its arguments, or the bare name where CMake reads one — a
+    condition (if/elseif/while), a list operation (list(<op> var …)), foreach(… IN LISTS var), string(APPEND|PREPEND)."""
+    if "${" + var + "}" in args:
+        return True
+    a_ = args.split()
+    if name in ("if", "elseif", "while"):
+        return var in {x.strip("()") for x in a_}      # a parenthesised condition reads it too: if((VAR AND …))
+    if var not in a_:
+        return False
+    if name == "list" and a_[1:2] == [var]:
+        return True
+    if name == "foreach" and "LISTS" in a_ and var in a_[a_.index("LISTS") + 1:]:
+        return True
+    return name == "string" and a_[:1] in (["APPEND"], ["PREPEND"]) and a_[1:2] == [var]
+
+
+def _cmake_split(args):
+    """A command's arguments as CMake reads them: whitespace-separated, a double-quoted run one argument (quotes kept off)."""
+    return [m.group(1) if m.group(1) is not None else m.group(2)
+            for m in re.finditer(r'"((?:\\.|[^"\\])*)"|(\S+)', args)]
 
 
 def _set_var(name, a_):
@@ -2237,7 +2673,10 @@ def _set_var(name, a_):
         else:
             k = _STRING_OUT.get(a_[0], 1)
         return a_[k] if -len(a_) <= k < len(a_) else ""
-    if name in ("list", "file"):
+    if name == "file":
+        k = _FILE_OUT.get(a_[0])
+        return a_[k] if k is not None and k < len(a_) else ""
+    if name == "list":
         return a_[1] if len(a_) > 1 else ""
     return a_[0]
 
@@ -2338,8 +2777,23 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
             S.path(p)
     S.data_edges(paths, data_facts(build))
     tooling_paths(S, paths)
+    lint_rows(S, paths)
     if graph is not None: graph.save_syms()
     return S
+
+
+def lint_rows(S, paths):
+    """THE LINTS RIDE EVERY DIFF (TOOLING-2): every `source.*` row is selected for any non-empty diff — they read the
+    whole tree and cost seconds, and the reach may add rows but never drops them. Dropped as "the tools' rows", no spec
+    selection ran source.testing_rules: ENGINE-POLISH-PHOTON-1's merge gate ran its new gi.metal_bounce_gate (443 records,
+    not one source.* row), R2 never saw the row unpriced, and the NEXT spec's gate went red on it (ledger §2573)."""
+    if not paths:
+        return
+    lints = sorted(n for n, t in S.inv.items() if n.startswith("source.") and not (t["labels"] & NEVER_SELECTED))
+    S.add(lints, "a lint: every source.* row rides every diff (it reads the whole tree)")
+    S.tools_dropped -= set(lints)
+    if lints:
+        S.rationale.append(("(the lints)", f"{len(lints)} source.* row(s): selected for every non-empty diff"))
 
 
 def tooling_paths(S, paths):
