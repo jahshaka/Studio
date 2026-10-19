@@ -210,7 +210,7 @@ run_tsan() {
     if [ "$label" = "tsan-render" ]; then
         targets=(Jahshaka test_engine_record_determinism test_window_render_thread test_engine_message_order
                  test_engine_drag_latency test_engine_interpolation test_engine_error_door
-                 test_engine_monitor_pop)
+                 test_engine_monitor_pop test_engine_gpu_walk_parity)   # ...and engine.gpuscene_identity's (U4 stage 4)
     fi
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]} at -j$(build_jobs)"
