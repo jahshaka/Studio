@@ -21,6 +21,7 @@ Build files are read by what their changed commands name. A path with no rule, n
 to its directory's subsystem. A fork pin bump selects by the FORK DIFF'S reach (FORK_COMPONENTS). A row labelled
 `measure` is never selected (it runs at the sprint's ship). A reach that is wrong is corrected in the tables here,
 never by a special case elsewhere; tests/hygiene/gate_selection_cases.json replays the cases that taught them.
+EVERY source.* LINT ROW rides every non-empty diff (lint_rows): the reach adds rows, it never drops the lints.
 """
 import argparse, json, os, re, subprocess, sys, collections, time
 
@@ -2645,8 +2646,23 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
             S.path(p)
     S.data_edges(paths, data_facts(build))
     tooling_paths(S, paths)
+    lint_rows(S, paths)
     if graph is not None: graph.save_syms()
     return S
+
+
+def lint_rows(S, paths):
+    """THE LINTS RIDE EVERY DIFF (TOOLING-2): every `source.*` row is selected for any non-empty diff — they read the
+    whole tree and cost seconds, and the reach may add rows but never drops them. Dropped as "the tools' rows", no spec
+    selection ran source.testing_rules: ENGINE-POLISH-PHOTON-1's merge gate ran its new gi.metal_bounce_gate (443 records,
+    not one source.* row), R2 never saw the row unpriced, and the NEXT spec's gate went red on it (ledger §2573)."""
+    if not paths:
+        return
+    lints = sorted(n for n, t in S.inv.items() if n.startswith("source.") and not (t["labels"] & NEVER_SELECTED))
+    S.add(lints, "a lint: every source.* row rides every diff (it reads the whole tree)")
+    S.tools_dropped -= set(lints)
+    if lints:
+        S.rationale.append(("(the lints)", f"{len(lints)} source.* row(s): selected for every non-empty diff"))
 
 
 def tooling_paths(S, paths):

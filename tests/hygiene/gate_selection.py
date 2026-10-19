@@ -203,9 +203,15 @@ def tooling_cases(gs, graph, build, inv0):
     check(S.tooling_only and not product(S) and hyg <= set(S.selected) and not S.fallback and not S.full_tier,
           "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
           % (len(hyg), product(S)[:6]))
+    lints = {n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)}
     S = sel(["tests/gi/test_gi_cliff.cpp"])
-    check(S.tooling_only and set(S.selected) == {"gi.cliff"},
-          "a test source alone selects its row and nothing else — no smoke pair, no tooling row (%s)" % sorted(S.selected)[:6])
+    check(S.tooling_only and set(S.selected) - lints == {"gi.cliff"},
+          "a test source alone selects its row and the lints, nothing else — no smoke pair, no other tooling row (%s)"
+          % sorted(set(S.selected) - lints)[:6])
+    # THE LINTS RIDE EVERY DIFF (TOOLING-2): R2 and the row budget among them, for a one-line test change too
+    check(lints and lints <= set(S.selected) and {"source.testing_rules", "source.row_budget"} <= set(S.selected),
+          "a one-line test change selects every source.* lint (%d), source.testing_rules and source.row_budget among them"
+          % len(lints))
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
     check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,
@@ -215,7 +221,7 @@ def tooling_cases(gs, graph, build, inv0):
     S = sel(["scripts/gate-scope.py", "src/services/vrworld.cpp"])
     check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" not in alone
           and "ui.vr_panel" in S.selected and "source.gate_scope_rules" in S.selected
-          and not any("hygiene" in S.inv[n]["labels"] for n in alone),
+          and not any("hygiene" in S.inv[n]["labels"] for n in alone if not n.startswith("source.")),
           "ONE product path makes it a product diff: the union (vrworld.cpp's %d rows + the tool's hygiene/tooling rows); "
           "the product path alone selects no tools' row and no smoke pair (TESTING-SPEED-A item 5)" % len(alone))
     S = sel(["tests/support/fresh_home.sh"])

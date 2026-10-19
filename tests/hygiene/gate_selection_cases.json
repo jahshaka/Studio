@@ -244,6 +244,18 @@
     "gi.card_capture",
     "app.engine_selftest_validation"
    ]
+  },
+  {
+   "case": "TOOLING-2 THE LINTS RIDE EVERY DIFF: a one-line test change selects its row AND source.testing_rules / source.row_budget (PHOTON-1's unpriced row passed a merge gate that ran no source.* row, §2573)",
+   "file": "tests/gi/test_gi_cliff.cpp",
+   "old": "static const float kGroundSpan = 200.0f;\n",
+   "new": "static const float kGroundSpan = 201.0f;\n",
+   "must": [
+    "gi.cliff",
+    "source.testing_rules",
+    "source.row_budget"
+   ],
+   "must_not": []
   }
  ]
 }

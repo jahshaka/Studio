@@ -82,15 +82,25 @@ def speed_cases(source, build):
         graph = None
     fam = lambda n: {inv0[n]["dir"], n.split(".", 1)[0]}
 
+    lints = {n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)}
+
     def sel(files, revs=None):
+        """The selection of `files` WITHOUT the source.* lints, which ride every non-empty diff (TOOLING-2, lint_rows:
+        asserted here once, below) — the cases read what the change itself reaches."""
         real = gs.Revs
         if revs is not None:
             gs.Revs = revs
         try:
-            return gs.select(files, "BASE..TIP" if revs is not None else None, build, graph=graph,
-                             inv=copy.deepcopy(inv0), quiet_graph=True)
+            S = gs.select(files, "BASE..TIP" if revs is not None else None, build, graph=graph,
+                          inv=copy.deepcopy(inv0), quiet_graph=True)
         finally:
             gs.Revs = real
+        S.lints_selected = lints <= set(S.selected) if files else not (lints & set(S.selected))
+        for n in lints:
+            if not S.inv[n]["labels"] & {"hygiene", "tooling"} or n not in S.selected: continue
+            if not str(S.selected[n]).startswith("a lint:"): continue      # a path that names the lint keeps it
+            S.selected.pop(n, None)
+        return S
 
     def of(S, f):
         return sorted(n for n in S.selected if f in fam(n))
@@ -276,7 +286,9 @@ def speed_cases(source, build):
           "26. the fork's Hlms Pbs/Common lines reach atom + engine.atom_")
     # 4. the honest empty selection (docs only); 5. a source file with no precise rule still reaches rows
     S = sel(["docs/BUILDING_LINUX.md"])
-    check(not S.selected and not S.fallback, "4. a docs-only change selects nothing (%s)" % sorted(S.selected)[:3])
+    check(not S.selected and not S.fallback, "4. a docs-only change selects nothing but the lints (%s)" % sorted(S.selected)[:3])
+    check(S.lints_selected and lints, "4. ...and every source.* lint rides it (%d: the lints ride every non-empty diff)"
+          % len(lints))
     check(bool(sel(["src/io/scenereader.cpp"]).selected), "5. src/io/scenereader.cpp (no precise rule) still reaches rows")
     # 8. the Atom media and HlmsAtom reach the decode's own rows; the fork pin with no diff to read reaches every row
     for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any", "irisgl/engine/src/HlmsAtom.cpp"):
