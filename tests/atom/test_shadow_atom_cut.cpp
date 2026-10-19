@@ -1349,9 +1349,9 @@ static int lightCullMain()
 // shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2). Two lockstep
 // worlds, the same camera every frame, a lit floor under a BLENDED plane and a CUTOUT plane (an 8-texel checker of
 // holes): one world with the split on - the blended plane's caster through the caster cut (its colour stays on PBS),
-// the cutout's on the stock PBS caster (an alpha-tested caster stays stock: stage 3's masked ranges are not
-// shipped), so the cutout compares stock against stock - the other with the split shut (every caster the
-// stock PBS caster, dense). The sun maps compared texel by texel in light space (shadow.atom_parity's metric) over
+// the cutout's through the cut's MASKED range (ATOM-3 stage 2: the mask's pyramid, at the level the map texel's
+// footprint asks for) - the other with the split shut (every caster the stock PBS caster, dense). The cut-out is
+// held to its stock twin AND to its own level-0 reference (the arm atom.maskPyramid 0): p99 <= 1 texel. The sun maps compared texel by texel in light space (shadow.atom_parity's metric) over
 // the whole map and over each plane's own footprint: p99 <= 1 texel, flips <= 0.5 %. And the route itself: the
 // verb files the blended plane's caster under `atomCaster` (0 blended on the PBS side), and the stock shadow scene
 // passes' masks no longer reach its Ogre item (Ogre's any-bit cull: the item's flags against every pass's mask).
@@ -1542,12 +1542,16 @@ static int casterRouteMain()
     c.view->setCamera(cam);
     enginetest::frames(gE, 40);
     const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
-    std::printf("   cut world: atom %u, blended %u (its caster through the cut: atomCaster %u), alphaTested %u | "
-                "stock world: on %d\n", sa.atomItems, sa.blended, sa.atomCaster, sa.alphaTested, int(sb.on));
+    std::printf("   cut world: atom %u (masked %u), blended %u (its caster through the cut: atomCaster %u), alphaTested %u | "
+                "stock world: on %d\n", sa.atomItems, sa.atomMasked, sa.blended, sa.atomCaster, sa.alphaTested,
+                int(sb.on));
     CHECK(sa.on && !sb.on, "one world through the split, the other all stock PBS (split off)");
     CHECK_MSG(sa.blended == 1u && sa.atomCaster == 1u,
               "the blended plane's MAIN pass stays PBS (blended %u) and its caster goes through the cut (atomCaster %u)",
               sa.blended, sa.atomCaster);
+    CHECK_MSG(sa.atomMasked == 1u && sa.alphaTested == 0u,
+              "the cut-out plane is an Atom item through the masked ranges (atomMasked %u, alphaTested %u)",
+              sa.atomMasked, sa.alphaTested);
     Ogre::CompositorShadowNode *na = shadowNodeOf(a.ov), *nb = shadowNodeOf(b.ov), *nc = shadowNodeOf(c.ov);
     if (!na || !nb || !nc) { std::printf("FAIL: shadow nodes\n"); return 1; }
     {
@@ -1579,8 +1583,17 @@ static int casterRouteMain()
     Atlas A, B, C;
     CHECK(readAtlas(na, A) && readAtlas(nb, B) && A.w == B.w && A.h == B.h, "both atlases read back");
     if (A.d.empty() || A.w != B.w || A.h != B.h) return 1;
+    // THE CUT-OUT'S LEVEL-0 REFERENCE (ATOM-3 stage 2, the spec's bar): the cut world's maps with the masks sampled
+    // at level 0 alone (the arm atom.maskPyramid 0: the base's one-level nearest mask), against which the shipped
+    // pyramid's cut-out caster is held to one texel over the plane's footprint below.
+    Atlas Z;
+    gE->setArm("atom.maskPyramid", 0.0);
+    enginetest::frames(gE, 4);
+    CHECK(readAtlas(na, Z) && Z.w == A.w && Z.h == A.h, "the level-0 reference's atlas reads back");
+    gE->setArm("atom.maskPyramid", 1.0);
+    enginetest::frames(gE, 2);
     const Ogre::CompositorShadowNodeDef *def = na->getDefinition();
-    unsigned planeMaps[2] = { 0u, 0u };
+    unsigned planeMaps[2] = { 0u, 0u }, levelZeroMaps = 0u;
     for (const auto &m : activeMaps(na)) {
         if (m.second != Ogre::Light::LT_DIRECTIONAL) continue;
         const unsigned idx = m.first;
@@ -1656,10 +1669,23 @@ static int casterRouteMain()
             CHECK_MSG(own > 50u && pr2.p99 <= 1.0f && double(pr2.flips) <= 0.005 * double(pr2.covered),
                       "map %u, the %s plane's footprint (%u texels its own): p99 <= 1 texel (%.3f), flips <= 0.5 %% "
                       "(%u of %u)", idx, nm, own, double(pr2.p99), pr2.flips, pr2.covered);
+            if (k == 1 && Z.w == A.w && Z.h == A.h) {
+                // ...AND THE CUT-OUT'S MASKED CASTER AGAINST ITS LEVEL 0 (the pyramid's level by the map texel's
+                // footprint against the one-level nearest mask; ENGINE-POLISH-ATOM-1 stage 3's STOP 2 measured the
+                // one-level mask against the stock cut-out at 3-19 texels on Bistro).
+                const RectParity z = orthoParity(A, Z, ma, td, unsigned(rx0), unsigned(ry0), unsigned(rx1),
+                                                 unsigned(ry1), empty, bias);
+                ++levelZeroMaps;
+                std::printf("     cutout vs its level 0: covered %6u | p99 %.3f max %.3f texels | silhouette %u | flips "
+                            "%u\n", z.covered, double(z.p99), double(z.mx), z.silhouette, z.flips);
+                CHECK_MSG(z.p99 <= 1.0f, "map %u, the cut-out's masked caster against its level-0 reference: p99 <= 1 "
+                          "texel (%.3f)", idx, double(z.p99));
+            }
         }
     }
-    CHECK_MSG(planeMaps[0] > 0u && planeMaps[1] > 0u, "both planes are compared in some sun map (%u, %u)",
-              planeMaps[0], planeMaps[1]);
+    CHECK_MSG(planeMaps[0] > 0u && planeMaps[1] > 0u && levelZeroMaps > 0u,
+              "both planes are compared in some sun map (%u, %u), the cut-out against its level 0 too (%u)",
+              planeMaps[0], planeMaps[1], levelZeroMaps);
     for (RouteWorld *w : { &a, &b, &c }) {
         gE->destroyView(w->view);
         gE->destroyScene(w->scene);

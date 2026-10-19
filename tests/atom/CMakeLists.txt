@@ -275,6 +275,24 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
+    # atom.masked_id — A CUT-OUT IS AN ATOM ITEM (ENGINE-POLISH-ATOM-1 stage 3, shipped by ATOM-3 stage 2): an
+    # orthographic view, a cut-out plane on whole pixels with an 8-texel checker mask; the id pass's coverage = the
+    # mask's pass fraction x the opaque twin's pixels (within 0.5 %), every hole the floor's id, no hole in the
+    # decode; minified 10x, the view's and the sun maps' silhouettes within 1 px / 1 texel (p99) of the level-0
+    # reference (the arm atom.maskPyramid 0).
+    add_executable(test_atom_masked_id test_atom_masked_id.cpp)
+    jah_atom_engine_target(test_atom_masked_id)
+    jah_gpu_row(atom.masked_id CLASS engine COMMAND test_atom_masked_id
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.masked_id PROPERTIES TIMEOUT 60 LABELS "engine")
+    # atom.masked_coverage — THE MASK'S PYRAMID KEEPS LEVEL 0'S COVERAGE (ATOM-3 stage 2): the device's pyramid read
+    # back against the coverage law level by level (a 1-texel checker bit for bit; a non-power-of-two hash pattern),
+    # and the id pass's coverage of the checker at 1x / 2x / 4x / 8x minification = level 0's 1/2 within one texel.
+    add_executable(test_atom_masked_coverage test_atom_masked_coverage.cpp)
+    jah_atom_engine_target(test_atom_masked_coverage)
+    jah_gpu_row(atom.masked_coverage CLASS engine COMMAND test_atom_masked_coverage
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.masked_coverage PROPERTIES TIMEOUT 60 LABELS "engine")
     # atom.view_colour — THE TRIANGLES VIEW'S COLOUR IS THE STRUCTURE'S (ENGINE-POLISH-ATOM-1 stage 6): three Atom
     # spheres (two copies of one mesh) under the 'triangles' view, the first deleted - every kept object's pixels keep
     # their colours although a slot was renumbered; the copies of one mesh share colours.
@@ -354,7 +372,8 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     set_tests_properties(shadow.caster_receivers PROPERTIES TIMEOUT 120 LABELS "engine")
     # shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2): two lockstep
     # worlds (the split on / shut) with a blended plane (through the cut when the split is on) and a cutout plane
-    # (stock in both: an alpha-tested caster stays stock) over a floor; the sun maps texel by texel
+    # (through the cut's masked range when the split is on, ATOM-3 stage 2; also held to its own level-0 reference,
+    # the arm atom.maskPyramid 0) over a floor; the sun maps texel by texel
     # (shadow.atom_parity's law over each plane's footprint: p99 <= 1 texel, flips <= 0.5 %), the blended plane's
     # caster filed under atomCaster and drawn by no stock shadow pass (test_shadow_atom_cut.cpp --caster-route).
     jah_gpu_row(shadow.caster_route CLASS engine COMMAND test_shadow_atom_cut --caster-route
@@ -516,6 +535,8 @@ foreach(_row_frames
         "atom.lod_switch=27651"
         "atom.occlusion_exact=348"
         "atom.two_sided=378"
+        "atom.masked_coverage=64"
+        "atom.masked_id=82"
         "atom.view_colour=38"
         "atom.words_still=223"
         "engine.atom_draw=624"
@@ -529,7 +550,7 @@ foreach(_row_frames
         "shadow.caster_cull=147"
         "shadow.caster_receivers=82"
         "shadow.caster_first_frame=12"
-        "shadow.caster_route=59"
+        "shadow.caster_route=65"
         "shadow.stock_lod=71"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

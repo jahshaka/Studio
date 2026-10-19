@@ -14,8 +14,8 @@
 //       under the direct, VCT + field and VCT + field + gather arms — the gather arm
 //       is the PREPASS chain (the decode drawn in the prepass for the G-buffer and in
 //       the opaque pass for colour), the direct arm the PASSTHROUGH shape;
-//   (c) the split's stat: every grid cell atom, and a blended, an alpha-tested, a
-//       two-sided, a row-less (line) and a backdrop item each counted where it belongs;
+//   (c) the split's stat: every grid cell atom, a cut-out atom too (masked), and a blended,
+//       a front-culled, a row-less (line) and a backdrop item each counted where it belongs;
 //   (d) buckets against materials over the grid;
 //   (e) at Medium, the closed room's probe grid reaches the glossy metal cell through
 //       the decode exactly as through PBS (the parity audit's PCC blocker, closed by
@@ -467,7 +467,8 @@ int main()
         c.geom = &sheetGeom;
         cells.push_back(c);
     }
-    // ---- (c)'s four stay-on-PBS items, off the grid (behind the camera's frame) --
+    // ---- (c)'s off-grid items: a blended, a cut-out (an Atom item since its masked ranges), a front-culled, a
+    //      line and a backdrop (behind the camera's frame) --
     auto extra = [&](const PbrParams &p, const Vec3 &pos, MeshId mesh) {
         const NodeId n = scene->createNode();
         scene->setNodeTransform(n, pos, Quat(), Vec3(0.3f, 0.3f, 0.3f));
@@ -550,18 +551,21 @@ int main()
                     st.alphaTested, st.skinned, st.noRow, st.stockItems, st.materials, st.buckets, st.twins,
                     st.screenDraws);
         CHECK(st.on, "(c) the split is live on this device (the id pass runs)");
-        CHECK_MSG(st.atomItems == cells.size() + 1u, "(c) every grid cell and the ground are Atom items (%u of %zu)",
-                  st.atomItems, cells.size() + 1u);
-        CHECK_MSG(st.blended == 1 && st.alphaTested == 1 && st.cullFront == 1 && st.noRow == 1 && st.notWorld == 1 &&
-                      st.pbsItems == 5,
-                  "(c) the blended, alpha-tested, front-culled, row-less (line) and backdrop items stay on PBS, each "
-                  "under its reason (pbs %u)", st.pbsItems);
+        // THE CUT-OUT IS AN ATOM ITEM (ENGINE-POLISH-ATOM-1 stage 3): masked, its mask the material's constant alpha
+        // (no texture) — the id pass's masked ranges draw it.
+        CHECK_MSG(st.atomItems == cells.size() + 2u && st.atomMasked == 1u,
+                  "(c) every grid cell, the ground and the cut-out are Atom items (%u of %zu), the cut-out masked (%u)",
+                  st.atomItems, cells.size() + 2u, st.atomMasked);
+        CHECK_MSG(st.blended == 1 && st.alphaTested == 0 && st.cullFront == 1 && st.noRow == 1 && st.notWorld == 1 &&
+                      st.pbsItems == 4,
+                  "(c) the blended, front-culled, row-less (line) and backdrop items stay on PBS, each under its reason, "
+                  "and no cut-out does (pbs %u, alphaTested %u)", st.pbsItems, st.alphaTested);
         // THE CASTER-ONLY ROUTE (ENGINE-POLISH-ATOM-1 stage 2): the blended item's MAIN pass stays PBS (blended above),
         // its caster goes through the caster cut.
         CHECK_MSG(st.atomCaster == 1, "(c) the blended item's caster goes through the caster cut (atomCaster %u)",
                   st.atomCaster);
-        CHECK_MSG(st.materials == cells.size() + 1u && st.buckets < st.materials && st.buckets > 0,
-                  "(d) the grid's and the ground's %u materials need %u decode draws (buckets)", st.materials,
+        CHECK_MSG(st.materials == cells.size() + 2u && st.buckets < st.materials && st.buckets > 0,
+                  "(d) the grid's, the ground's and the cut-out's %u materials need %u decode draws (buckets)", st.materials,
                   st.buckets);
         CHECK_MSG(st.screenDraws == st.buckets, "(d) one screen decode draw per bucket (%u)", st.screenDraws);
         // THE CAMERA VIEW BY ROUTE (ENGINE-POLISH-ATOM-1 stage 1): every item the camera's frustum reaches, under
@@ -574,15 +578,16 @@ int main()
                 std::printf(" [%u] %u/%llu", r, st.viewRouteItems[r], st.viewRouteTriangles[r]);
             std::printf("\n");
             CHECK(st.viewRoutesValid, "(c) the camera view's routes are read (the view has a camera)");
-            CHECK_MSG(st.viewRouteItems[kAtom] == cells.size() + 1u &&
-                          st.viewRouteTriangles[kAtom] == 10u * sphereTris + sheetTris + 2u,
-                      "(c) the view's atom route: the grid's and the ground's %zu items and their level-0 triangles "
-                      "(%u items %llu triangles, want %llu)", cells.size() + 1u, st.viewRouteItems[kAtom],
-                      st.viewRouteTriangles[kAtom], 10u * sphereTris + sheetTris + 2u);
+            CHECK_MSG(st.viewRouteItems[kAtom] == cells.size() + 2u &&
+                          st.viewRouteTriangles[kAtom] == 11u * sphereTris + sheetTris + 2u,
+                      "(c) the view's atom route: the grid's, the ground's and the cut-out's %zu items and their level-0 "
+                      "triangles (%u items %llu triangles, want %llu)", cells.size() + 2u, st.viewRouteItems[kAtom],
+                      st.viewRouteTriangles[kAtom], 11u * sphereTris + sheetTris + 2u);
             bool spheres = true;
-            for (unsigned r : { kNotWorld, kBlended, kCullFront, kAlpha })
+            for (unsigned r : { kNotWorld, kBlended, kCullFront })
                 spheres = spheres && st.viewRouteItems[r] <= 1u &&
                           st.viewRouteTriangles[r] == st.viewRouteItems[r] * sphereTris;
+            spheres = spheres && st.viewRouteItems[kAlpha] == 0u;
             CHECK_MSG(spheres && st.viewRouteTriangles[kNoRow] == 0ull,
                       "(c) each PBS route in view carries its spheres' level-0 triangles (%llu each) and the line none",
                       sphereTris);
