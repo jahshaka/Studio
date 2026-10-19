@@ -1982,6 +1982,9 @@ set_tests_properties(gi.march_inside PROPERTIES JAHSHAKA_TEST_FRAMES 600)
 # furnace's answer); a live roughness edit and a live metalness edit each re-voxelise once. THE DIELECTRIC ARM
 # (ENGINE-POLISH-PHOTON-1 stage 2): every surface carries its F0 = lerp(0.04, b, m) lobe - a black dielectric's store
 # is 0.04 A + B of the incident (0.040 / 0.026 at r 9/31 / 23/31, bar 0.4 %), a b 0.6 dielectric's total holds it.
+# THE LAW (PHOTON-3 stage 2): a polished metal plate (r 0.05) under a sun 30 degrees off the vertical, read by the ray
+# job's own card read from two panels of rays: along the mirror direction E mu f_s( L, R ) within 2 %, 10 degrees off
+# it below 1 % of that - the lobe goes where the surface sends it.
 add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)
 set_target_properties(test_gi_metal_bounce PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1997,14 +2000,15 @@ add_dependencies(test_gi_metal_bounce JahshakaEngineMedia)
 jah_gpu_row(gi.metal_bounce CLASS engine COMMAND test_gi_metal_bounce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1470)
+set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1514)
 # gi.metal_bounce_route — THE TINTED METAL AND THE MOVER (ENGINE-UPGRADE-U5 decision 22.1): the store holds F0 A + w B per
 # channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
-# it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %);
-# a BLACK dielectric's bounce is (0.04 A + B) / (A + B) of the metal's, still and as a mover (ENGINE-POLISH-PHOTON-1).
-# THE SURFACE CACHE IS ON (ENGINE-POLISH-PHOTON-1 stage 3; the cards-off arm deleted): the plate carries cards, a still
-# plate's hits read its card first, and the card holds the lobe (its flat term = E (F0 A + w B) within 0.4 % plus the
-# radiance format's half step) and answers what it holds (still / mover = the card's stored / exact, bar 0.4 %).
+# it becomes a mover - its hits then go to the decode (bar 0.4 %); a BLACK dielectric's bounce is its 0.04 lobe toward
+# the panel against the metal's, still and as a mover. THE SURFACE CACHE IS ON: a still plate's hits read its card
+# first. SINCE PHOTON-3 every route sends the lights' lobe toward its own ray (the card read from the ray tier's light
+# table, the decode by the BRDF, the store's hit by jahHitDirect): the card's flat term holds no light's lobe, and
+# still / mover = the lobe at the card's own F0 against the material's through the panel's view (bar 0.4 %). The
+# panel is black, so the plate's only light is the sun's.
 jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
@@ -2012,10 +2016,12 @@ set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 380)
 # gi.metal_bounce_gate — THE MOVERS' GATE ON A METAL'S CARD (ENGINE-POLISH-PHOTON-1's fix round): a sky-lit tinted metal
 # plate with cards, no sun, a black mover slab over it or away: the gathered E/pi under / away is the same factor by its
 # card as by the store (the plate on the uncarded cube), bar 0.4 % - the card read cuts the lobe's indirect share too.
+# C' (PHOTON-3, a MEASUREMENT that prints): both routes' sky lobes under a partial 3 x 2.4 m roof and away, against the
+# closed form (the roof's form factor) and with the panel's own occlusion of the plate's hemisphere.
 jah_gpu_row(gi.metal_bounce_gate CLASS engine COMMAND test_gi_metal_bounce --gate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_gate PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.metal_bounce_gate PROPERTIES JAHSHAKA_TEST_FRAMES 573)
+set_tests_properties(gi.metal_bounce_gate PROPERTIES JAHSHAKA_TEST_FRAMES 849)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.
