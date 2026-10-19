@@ -209,6 +209,10 @@ class RotationGizmo : public Gizmo
 	void updateRingArcs(const iris::Vec3 &toCamera);
 public:
 	RotationGizmo();
+	/// The gizmo OWNS its handles (LEAK-1).
+	~RotationGizmo() override { for (RotationHandle *h : handles) delete h; }
+	RotationGizmo(const RotationGizmo &) = delete;
+	RotationGizmo &operator=(const RotationGizmo &) = delete;
 
 	void loadAssets();
 

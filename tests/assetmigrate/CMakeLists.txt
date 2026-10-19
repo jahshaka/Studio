@@ -41,9 +41,7 @@ add_test(NAME assets.cas COMMAND test_asset_migrate
 set_tests_properties(assets.cas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
 
 # The leak lane (scripts/sanitize.sh lsan): CAS + database, no driver.
-# QUARANTINED (L1 iris::Material properties — the suite's only leak).
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(assets.cas)
+jah_lsan_lane(assets.cas)
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

@@ -549,6 +549,38 @@ inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArra
     return false;
 }
 
+/// THE CHILD'S END IS PART OF THE ROW'S VERDICT (LEAK-1 stage 0). The suites that quit the app used to wait for it,
+/// kill it if it lingered, and never read HOW it ended — so a crash at shutdown, a watchdog abort and, under the leak
+/// lane, a LeakSanitizer report all passed: `scripts/sanitize.sh lsan` preloads the runtime into every process ctest
+/// starts, the child included, and LSAN_OPTIONS' exitcode=23 is the child's verdict, which nobody read. This quits
+/// through `mcp`, waits `budgetMs`, drains the rest of the child's output into `log`, and answers true ONLY for a
+/// NormalExit with code 0. Anything else prints how the child ended and, when its output carries a LeakSanitizer
+/// report, that report's SUMMARY line and its first stacks — the row's red names the leak.
+inline bool quitAndReap(McpClient &mcp, QProcess &app, QByteArray &log, int budgetMs = 30000)
+{
+    mcp.quit();
+    const bool exited = app.waitForFinished(budgetMs);
+    if (!exited) { app.kill(); app.waitForFinished(5000); }
+    log += app.readAll();
+    if (exited && app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0) return true;
+    if (!exited)
+        std::printf("info: ---- the app was still running %d ms after app.quit(): killed ----\n", budgetMs);
+    else
+        std::printf("info: ---- the app ended with exitCode=%d exitStatus=%s%s ----\n", app.exitCode(),
+                    app.exitStatus() == QProcess::CrashExit ? "CrashExit" : "NormalExit",
+                    app.exitCode() == 23 ? " (23 = the leak lane's LeakSanitizer exit code)" : "");
+    const int at = log.indexOf("ERROR: LeakSanitizer");
+    if (at >= 0) {
+        const QList<QByteArray> lines = log.mid(at).split('\n');
+        for (int i = 0; i < qMin(int(lines.size()), 60); ++i) std::printf("info: | %s\n", lines[i].constData());
+        const int summary = log.indexOf("SUMMARY: LeakSanitizer", at);
+        if (summary >= 0)
+            std::printf("info: | ...\ninfo: | %s\n", log.mid(summary, log.indexOf('\n', summary) - summary).constData());
+    }
+    std::fflush(stdout);
+    return false;
+}
+
 }   // namespace mcpharness
 
 #endif   // TESTS_SUPPORT_MCPHARNESS_H

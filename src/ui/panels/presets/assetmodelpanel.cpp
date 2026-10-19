@@ -50,7 +50,7 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     // survives the drag. LAST, because setDragDropMode arms dragEnabled.
     singledrag::disarmViewDrag(listView);
     listView->setTextElideMode(Qt::ElideRight);
-    listView->setItemDelegate(new FMListViewDelegate);
+    listView->setItemDelegate(new FMListViewDelegate(listView));
 
     QVBoxLayout *layout = new QVBoxLayout;
     layout->addWidget(listView);

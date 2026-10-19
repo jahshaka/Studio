@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QIcon>
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/properties/property.h"
+#include <QElapsedTimer>
 
 class QWidget;
 class QElapsedTimer;
@@ -47,7 +49,7 @@ class AnimationWidget : public QWidget
     iris::SceneNodePtr node;
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
-    QElapsedTimer* elapsedTimer;
+    QElapsedTimer elapsedTimer;
 
     QIcon playIcon;
     QIcon pauseIcon;
@@ -62,11 +64,13 @@ class AnimationWidget : public QWidget
 
     QMenu* addMenu = nullptr;
 
-    QList<iris::Property*> nodeProperties;
-    QList<iris::Property*> matProperties;
+    /// The selected node's reflected rows, OWNED here (LEAK-1): the property
+    /// menu's indices point into them. A bare list of `new`'d rows that leaked
+    /// at every selection.
+    iris::PropertyRows nodeProperties;
     iris::AnimationPtr animation;
 
-    AnimationWidgetData* animWidgetData;
+    AnimationWidgetData* animWidgetData;   // owned: freed in the destructor
 public:
     explicit AnimationWidget(QWidget *parent = 0);
     ~AnimationWidget();

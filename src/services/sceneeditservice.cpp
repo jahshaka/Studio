@@ -1906,7 +1906,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
 
         // Add all its textures as dependencies too
         auto values = materialDefOriginal["values"].toObject();
-        for (const auto &prop : material->properties) {
+        for (const auto &prop : material->properties()) {
             if (prop->type == iris::PropertyType::Texture) {
                 if (!values.value(prop->name).toString().isEmpty()) {
                     db->createDependency(

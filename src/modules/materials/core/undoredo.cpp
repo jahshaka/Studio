@@ -47,7 +47,8 @@ void AddNodeCommand::undo()
 {
 	auto node = scene->getNodeById(nodeModel->id);
 	node->setVisible(false);
-	scene->deleteNode(node);
+	heldModel = scene->detachNode(node);
+	heldItem.reset(node);
 	scene->update(scene->itemsBoundingRect());
 	scene->views()[0]->update();
 	UndoRedo::undo();
@@ -55,7 +56,8 @@ void AddNodeCommand::undo()
 
 void AddNodeCommand::redo()
 {
-	scene->addNodeModel(nodeModel, nodeModel->getX(), nodeModel->getY());
+	if (heldItem) scene->reattachNode(heldItem.release(), std::move(heldModel));   // the node the undo took
+	else scene->addNodeModel(nodeModel, nodeModel->getX(), nodeModel->getY());   // the first redo: the push
 	UndoRedo::redo();
 
 }
@@ -74,9 +76,7 @@ AddConnectionCommand::AddConnectionCommand(const QString &leftNodeId, const QStr
 void AddConnectionCommand::undo()
 {
 
-	scene->removeConnection(connectionID, true, true);
-	scene->removeItem(scene->getConnection(connectionID));
-	//remind nick to remove connections from models!
+	scene->removeConnection(connectionID, true);
 	UndoRedo::undo();
 
 }
@@ -124,7 +124,7 @@ DeleteConnectionCommand::DeleteConnectionCommand(SocketConnection *con, GraphNod
 
 void DeleteConnectionCommand::redo()
 {
-	scene->removeConnection(connectionID, true, true);
+	scene->removeConnection(connectionID, true);
 	UndoRedo::redo();
 }
 
@@ -147,32 +147,16 @@ DeleteNodeCommand::DeleteNodeCommand(QList<GraphNode*> & list, GraphNodeScene *s
 
 void DeleteNodeCommand::undo()
 {
-	for (auto node : list) {
-		scene->nodeGraph->addNode(node->model);
-		scene->addItem(node);
+	for (Held &h : held)
+		scene->reattachNode(h.item.release(), std::move(h.model));
+	held.clear();
+
+	for (const Wire &w : wires) {
+		auto conModel = scene->nodeGraph->addConnection(w.leftNodeId, w.leftIndex, w.rightNodeId, w.rightIndex);
+		auto newCon = scene->addConnection(w.leftNodeId, w.leftIndex, w.rightNodeId, w.rightIndex);
+		if (conModel && newCon) newCon->connectionId = conModel->id;
 	}
-
-	QMap<QString, ConnectionModel*> newConnections;
-	for (auto con : connections) {
-		auto leftNode = con->leftSocket->node;
-		auto rightNode = con->rightSocket->node;
-
-		auto conModel = scene->nodeGraph->addConnection(leftNode->id,
-			leftNode->outSockets.indexOf(con->leftSocket),
-			rightNode->id,
-			rightNode->inSockets.indexOf(con->rightSocket));
-
-		auto newCon = scene->addConnection(leftNode->id,
-			leftNode->outSockets.indexOf(con->leftSocket),
-			rightNode->id,
-			rightNode->inSockets.indexOf(con->rightSocket));
-		newCon->connectionId = conModel->id;
-
-		
-		newConnections[conModel->id] = conModel;
-		delete con;
-	}
-	connections = newConnections;
+	wires.clear();
 
 	scene->emitGraphInvalidated();
 	scene->update();
@@ -181,15 +165,18 @@ void DeleteNodeCommand::undo()
 
 void DeleteNodeCommand::redo()
 {
-	// extract connections
+	// the wires first, by value, while both ends are still in the graph
 	for (auto node : list) {
-		auto conModels = scene->nodeGraph->getNodeConnections(node->nodeId);
-		for (auto conModel : conModels) {
-			auto con = scene->getConnection(conModel->id);
-			connections.insert(conModel->id, conModel);
+		for (auto conModel : scene->nodeGraph->getNodeConnections(node->nodeId)) {
+			auto leftNode = conModel->leftSocket->node;
+			auto rightNode = conModel->rightSocket->node;
+			wires.insert(conModel->id, Wire{ leftNode->id, int(leftNode->outSockets.indexOf(conModel->leftSocket)),
+			                                 rightNode->id, int(rightNode->inSockets.indexOf(conModel->rightSocket)) });
 		}
-
-		scene->deleteNode(node);
+		Held h;
+		h.model = scene->detachNode(node);
+		h.item.reset(node);
+		held.push_back(std::move(h));
 	}
 	scene->emitGraphInvalidated();
 	scene->update();

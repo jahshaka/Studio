@@ -326,14 +326,10 @@ jah_pool_arm(doc_assets blend_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settin
 # The leak lane (scripts/sanitize.sh lsan): the CPU evaluator allocates a
 # BakeProgram, per-texel buffers and a QImage per baked map — all pure document
 # work, no driver anywhere near it.
-# The five suites that build a NodeLibrary are QUARANTINED (L4 — the node
-# library/graph own raw pointers and nothing has a destructor; 88 KB in one
-# run of baker_parity — plus L1 underneath).
-jah_lsan_lane(shadergraph.fuzzy_search shadergraph.selection)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES, LSAN-L4-MATERIAL-NODE-LIBRARY (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(shadergraph.pbr_evaluator shadergraph.node_regressions
-                 shadergraph.baker_parity shadergraph.bake_output
-                 shadergraph.panel_migration)
+jah_lsan_lane(shadergraph.fuzzy_search shadergraph.selection
+              shadergraph.pbr_evaluator shadergraph.node_regressions
+              shadergraph.baker_parity shadergraph.bake_output
+              shadergraph.panel_migration)
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

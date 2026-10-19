@@ -44,7 +44,7 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
     // PbrMaterial keeps both in step through setValue, so this is normally a
     // no-op; it was the only route a CustomMaterial's maps could be found by
     // (HLMS_ADOPTION P4b) and it stays as the belt to that brace.
-    for (iris::Property *prop : material->properties) {
+    for (iris::Property *prop : material->properties()) {
         if (!prop || prop->type != iris::PropertyType::Texture) continue;
         const QString path = prop->getValue().toString();
         if (path.isEmpty() || seen(path) || iris::LiveTextures::isLiveRef(path)) continue;

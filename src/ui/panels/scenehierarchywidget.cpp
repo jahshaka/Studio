@@ -120,7 +120,7 @@ void SceneHierarchyWidget::setShell(IShellView *shellView)
 {
     shell = shellView;
 
-    QMenu* addMenu = new QMenu();
+    QMenu* addMenu = new QMenu(ui->addBtn);   // a tool button does not own its menu
 	addMenu->setStyleSheet(StyleSheet::QMenuDark());
 
 	// Primitives

@@ -2267,9 +2267,10 @@ void EngineSceneViewport::resetEditorCam()
     if (mCamController) mCamController->setCamera(mEditorCam);
 }
 
-void EngineSceneViewport::setEditorData(EditorData *data)
+void EngineSceneViewport::setEditorData(std::unique_ptr<EditorData> owned)
 {
-    mEditorData = data;
+    mEditorData = std::move(owned);
+    EditorData *data = mEditorData.get();
     if (data) {
         if (data->editorCamera) {
             // Project open: another scene's camera — its remembered view
@@ -2471,13 +2472,13 @@ void EngineSceneViewport::syncPip()
 
 EditorData *EngineSceneViewport::getEditorData()
 {
-    if (!mEditorData) mEditorData = new EditorData();
+    if (!mEditorData) mEditorData = std::make_unique<EditorData>();
     mEditorData->editorCamera = mEditorCam;
     mEditorData->showLightWires = mShowLightWires;
     mEditorData->showGrid = mShowGrid;
     mEditorData->showGroundPlane = mShowGroundPlane;
     mEditorData->showDebugDrawFlags = mShowDebugDraw;
-    return mEditorData;
+    return mEditorData.get();
 }
 
 void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)

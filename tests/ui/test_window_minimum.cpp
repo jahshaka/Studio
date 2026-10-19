@@ -155,8 +155,7 @@ int main(int argc, char **argv)
           "the editor viewport keeps at least 400 px of width at 1366x680");
     CHECK(vp.value("height").toInt() > 0, "…and a visible height");
 
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
 
     std::printf(failures == 0 ? "ui.window_minimum: ALL PASS\n"
                               : "ui.window_minimum: %d FAILURES\n", failures);

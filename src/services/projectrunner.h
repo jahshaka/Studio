@@ -74,8 +74,9 @@ public:
         virtual void teardownWorld() = 0;
         /// The world read from the project row, bound to the viewports and the
         /// panels that follow the scene; `editorData` is the scene's saved
-        /// editor state (null for none).
-        virtual void bindWorld(const iris::ScenePtr &scene, EditorData *editorData, bool playMode) = 0;
+        /// editor state (null for none), handed over: the editor viewport owns it.
+        virtual void bindWorld(const iris::ScenePtr &scene, std::unique_ptr<EditorData> editorData,
+                               bool playMode) = 0;
         /// A brand-new world (a create), bound the same way at the defaults.
         virtual void bindNewWorld(const iris::ScenePtr &scene) = 0;
         /// The new world of a create: the template's document.
@@ -218,7 +219,7 @@ private:
     /// viewport knows whether it drew.
     unsigned mSliceBoundaryFrames = 0;
     iris::ScenePtr mPendingScene;
-    EditorData *mPendingEditorData = nullptr;
+    std::unique_ptr<EditorData> mPendingEditorData;
     /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
     /// Created on first use; the shutdown order's step 2 cancels and joins it
     /// (ProjectArchiver::shutdownArchives).

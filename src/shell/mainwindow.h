@@ -433,7 +433,7 @@ private:
 
     // ---- ProjectRunner::Host: the stage bodies only the window can run ----
     void teardownWorld() override;
-    void bindWorld(const iris::ScenePtr &scene, EditorData *editorData, bool playMode) override;
+    void bindWorld(const iris::ScenePtr &scene, std::unique_ptr<EditorData> editorData, bool playMode) override;
     void bindNewWorld(const iris::ScenePtr &scene) override;
     iris::ScenePtr createWorld(SceneTemplate kind) override;
     void buildPanels(bool fresh) override;

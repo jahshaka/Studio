@@ -24,6 +24,11 @@ PlayBack::PlayBack()
 	mouseController = new PlayerMouseController();
 }
 
+PlayBack::~PlayBack()
+{
+	delete mouseController;
+}
+
 void PlayBack::init()
 {
 }

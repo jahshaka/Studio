@@ -278,7 +278,7 @@ static void testPropertyWidgetForgetsOnRetirement()
 
     auto material = iris::PbrMaterial::create();
     QList<iris::Property *> props;
-    for (auto *prop : material->properties)
+    for (auto *prop : material->properties())
         if (prop) props.append(prop);
     CHECK(!props.isEmpty(), "properties: the fixture material declares rows");
 

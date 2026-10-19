@@ -20,11 +20,10 @@
 # process the lane starts.
 #
 # Membership is the ctest label `lsan`, set next to each suite's add_test (see
-# tests/CMakeLists.txt): the document/service suites that never initialise
-# Vulkan and never spawn the app. That is deliberate — the four ASan-built
-# engine suites run with detect_leaks=0 because the Vulkan loader's Mesa
-# device-select layer leaks ~6 dbus allocations we do not own, and that
-# justification does not extend to code that never loads a driver.
+# tests/CMakeLists.txt): the document/service suites; the app-spawning suites
+# are eligible (their harness reads the child's exit, tests/support/
+# mcpharness.h quitAndReap: a green app row means the APP leaked nothing).
+# The four ASan-built engine fixtures stay out (detect_leaks=0 there).
 #
 # ---------------------------------------------------------------- tsan --------
 # ThreadSanitizer cannot coexist with AddressSanitizer and instruments every
@@ -72,10 +71,9 @@ Environment:
   JAH_SAN_BUILD_JOBS  the build width, an explicit override. Default: THE MEMORY
                       LAW — 12 compile jobs box-wide divided by
                       1 + the other live ninja processes, never below 2
-  DISPLAY             not needed by either lane as it stands (both run only
-                      offscreen suites). It becomes required the moment a suite
-                      that starts Jahshaka rejoins a lane — and then it must be
-                      your own Xvfb, never a shared session.
+  DISPLAY             REQUIRED by the lsan lane: its app-spawning rows boot
+                      Jahshaka — your own Xvfb, never a shared session, under
+                      the card lock (scripts/gpu-exclusive.sh).
 EOF
 }
 
@@ -132,6 +130,8 @@ run_lsan() {
     echo "sanitize: LeakSanitizer runtime $lsan_lib (canary ok)"
 
     [ -f "$BUILD_DIR/CMakeCache.txt" ] || die "$BUILD_DIR is not configured (see docs/BUILDING_LINUX.md)"
+    [ -n "${DISPLAY:-}" ] || [ -n "${JAH_SAN_BUILD_ONLY:-}" ] \
+        || die "no DISPLAY: the lane's app-spawning rows boot Jahshaka (your own Xvfb, under scripts/gpu-exclusive.sh)"
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building $BUILD_DIR at -j$(build_jobs)"
         cmake --build "$BUILD_DIR" -j"$(build_jobs)" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \
@@ -146,26 +146,17 @@ run_lsan() {
     #                a suppression file nobody audits is a lie with a filename.
     export LD_PRELOAD="$lsan_lib"
     export LSAN_OPTIONS="suppressions=$REPO_ROOT/scripts/lsan.supp:print_suppressions=1:exitcode=23"
+    # THE DRIVER STAYS NAMED (LEAK-1). The app-spawning rows boot the real app, and the Vulkan loader dlclose()s the
+    # ICD at vkDestroyInstance: every allocation the driver keeps then prints as `<unknown module>`, which no
+    # suppression can name and no reader can attribute. Kept loaded, its frames say libnvidia-glcore (lsan.supp).
+    export VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING=1
     echo "sanitize: LSAN_OPTIONS=$LSAN_OPTIONS"
 
-    # -L takes a REGEX: anchor it, or `lsan` also selects `lsan-blocked`.
+    # -L takes a REGEX: anchor it (an unanchored `lsan` matches every label that contains it).
     ( cd "$BUILD_DIR" && ctest -L '^lsan$' --output-on-failure "$@" )
     local rc=$?
-    unset LD_PRELOAD LSAN_OPTIONS
+    unset LD_PRELOAD LSAN_OPTIONS VK_LOADER_DISABLE_DYNAMIC_LIBRARY_UNLOADING
 
-    # The quarantine is part of the result, not a footnote: these suites are
-    # eligible for the lane and fail it today because of a known leak
-    # underneath them (each one names its blocker beside its add_test).
-    local blocked
-    blocked="$( cd "$BUILD_DIR" && ctest -N -L '^lsan-blocked$' 2>/dev/null \
-                | sed -n 's/^ *Test *#[0-9]*: //p' )"
-    if [ -n "$blocked" ]; then
-        echo
-        echo "=== quarantined suites (label lsan-blocked) — known leaks, NOT in the gate ==="
-        echo "$blocked" | sed 's/^/  /'
-        echo "  reproduce: (cd $BUILD_DIR && ctest -L '^lsan-blocked$') with the same env"
-        echo "  blockers:  tests/CMakeLists.txt, above jah_lsan_blocked()"
-    fi
     return $rc
 }
 

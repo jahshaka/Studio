@@ -300,7 +300,7 @@ int main(int argc, char **argv)
         // PbrMaterial's rows are OWNED by the material (Material::properties,
         // built at construction and rewritten by setValue) — copied by pointer
         // here and never deleted.
-        const QList<iris::Property *> rows = probeMat->properties;
+        const QList<iris::Property *> rows = probeMat->properties();
         int covered = 0, skipped = 0, missed = 0;
         for (iris::Property *row : rows) {
             if (!row) continue;

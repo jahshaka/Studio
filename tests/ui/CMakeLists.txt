@@ -191,12 +191,7 @@ endif()
 # The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
 # and dialog ownership (a missing parent is the classic Qt leak). The on-screen
 # ui.engine_view_winid suite links the engine and stays out.
-# ui.material_panel is QUARANTINED (L1 iris::Material properties — 54
-# materials' worth). Its other leak, one QProxyStyle per slider row, was
-# this lane's first fix (hfloatsliderwidget.cpp).
-jah_lsan_lane(ui.property_anim ui.media_lazy)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(ui.material_panel)
+jah_lsan_lane(ui.property_anim ui.media_lazy ui.material_panel)
 
 # ui.light_channels — the lighting-channel checkbox row. Eight boxes over a
 # 32-bit field: the test is about the 24 bits the row does NOT show (they must
@@ -1510,9 +1505,7 @@ set_tests_properties(ui.column_law PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.column_law)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(ui.column_law)   # spawns the app
+jah_lsan_lane(ui.column_law)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # ui.harness_child_log — ENGINE-UPGRADE-U3 decision 26: a child that dies of a device loss keeps its WHOLE log
 # (tests/support/mcpharness.h keepDeviceLostLog, through childReport). A real child process (a shell) writes a
@@ -1555,9 +1548,7 @@ set_tests_properties(ui.space_docks PROPERTIES
     TIMEOUT 480 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.space_docks)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(ui.space_docks)   # spawns the app
+jah_lsan_lane(ui.space_docks)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # ui.window_minimum — plan item 15: the main window fits a 1366x768 laptop in
 # every space (its floor <= 1366x640) and, put at 1366x680, keeps both columns
@@ -1582,9 +1573,7 @@ set_tests_properties(ui.window_minimum PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.window_minimum)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(ui.window_minimum)   # spawns the app
+jah_lsan_lane(ui.window_minimum)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # ui.shot_aspect — plan item 15 / platform audit C2b.2: an offscreen shot is a
 # function of the camera's pose and the SHOT's size, never the window's (same
@@ -1614,9 +1603,7 @@ set_tests_properties(ui.material_drag PROPERTIES
     TIMEOUT 240 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.material_drag)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(ui.material_drag)   # spawns the app
+jah_lsan_lane(ui.material_drag)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 add_executable(test_shot_aspect test_shot_aspect.cpp)
 set_target_properties(test_shot_aspect PROPERTIES CXX_STANDARD 17
@@ -1636,9 +1623,7 @@ set_tests_properties(ui.shot_aspect PROPERTIES
     TIMEOUT 300 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.shot_aspect)   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(ui.shot_aspect)   # spawns the app
+jah_lsan_lane(ui.shot_aspect)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # ui.view_options_submenu — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the
 # owner's smoke 2026-10-19). Real pointer input at the editor's View Options button and its Atom
@@ -1669,7 +1654,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ENVIRONMENT "HOME=${_vos_home};JAHSHAKA_DATA_ROOT=${_vos_home}/.local/share/Jahshaka"
             TIMEOUT 260 LABELS "ui")
         jah_tsan_blocked(ui.view_options_submenu)   # spawns the app (TSAN-BOOT-TOO-SLOW, as its neighbours)
-        jah_lsan_blocked(ui.view_options_submenu)   # spawns the app (LSAN-L1-MATERIAL-PROPERTIES, as its neighbours)
+        # NOT in the leak lane (LEAK-1): its script ignores how the app ended (no exit-code read), so a green there
+        # would not mean the app leaked nothing — tests/CMakeLists.txt's membership rule. (LSAN-L1 is closed.)
     else()
         message(STATUS "ui.view_options_submenu skipped: needs xdotool, curl, jq, Xvfb and xdpyinfo")
     endif()

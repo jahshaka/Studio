@@ -51,7 +51,7 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
     // ONE DRAG OWNER (ui/panels/singledragowner.h) — see assetmodelpanel.cpp.
     singledrag::disarmViewDrag(listView);
     listView->setTextElideMode(Qt::ElideRight);
-    listView->setItemDelegate(new FMListViewDelegate);
+    listView->setItemDelegate(new FMListViewDelegate(listView));
 
     QVBoxLayout *layout = new QVBoxLayout;
     layout->addWidget(listView);

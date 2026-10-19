@@ -178,8 +178,7 @@ int main(int argc, char **argv)
     CHECK(gone >= 0 && settleFrom >= 0 && gone - settleFrom <= 3,
           "...within 3 driver frames of the reveal or the last frame that owed anything");
 
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     std::printf(failures == 0 ? "scripting.e2e.arriving_line: ALL PASS\n"
                               : "scripting.e2e.arriving_line: %d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;

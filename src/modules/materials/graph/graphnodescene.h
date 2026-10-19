@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDropEvent>
+#include <memory>
 #include <QGraphicsSceneDragDropEvent>
 #include <QGraphicsScene>
 #include <QGraphicsRectItem>
@@ -69,8 +70,11 @@ public:
 	}
 
 	SocketConnection* addConnection(QString leftNodeId, int leftSockIndex, QString rightNodeId, int rightSockIndex);
-	SocketConnection* removeConnection(SocketConnection* connection, bool removeFromNodeGraph = true, bool emitSignal = true);
-	void removeConnection(const QString& conId, bool removeFromNodeGraph = true, bool emitSignal = true);
+	/// Takes a wire off the canvas (and, by default, out of the graph) and
+	/// DESTROYS its canvas item (LEAK-1: the scene hands a removed item to its
+	/// caller, and every caller dropped it — one leaked item per removed wire).
+	void removeConnection(SocketConnection* connection, bool removeFromNodeGraph = true);
+	void removeConnection(const QString& conId, bool removeFromNodeGraph = true);
 	SocketConnection* addConnection(Socket* leftCon, Socket* rightCon);
 	void setUndoRedoStack(QUndoStack *);
 
@@ -117,6 +121,15 @@ public:
 	void addNodeFromSearchDialog(QTreeWidgetItem* item, const QPoint& point);
 
 	void deleteSelectedNodes();
+	/// THE ONE OWNER OF A DELETED NODE (LEAK-1 L4). detachNode takes `node`
+	/// off the canvas and its model out of the graph (its connections removed,
+	/// and freed by the graph) and hands BOTH to the caller — the returned
+	/// model and the item (QGraphicsScene::removeItem passes the item's
+	/// ownership to the caller). The canvas's undo commands hold a deleted node
+	/// that way until they put it back (reattachNode) or die. Null on a
+	/// read-only scene. deleteNode = detach + destroy both.
+	std::unique_ptr<NodeModel> detachNode(GraphNode* node);
+	void reattachNode(GraphNode* node, std::unique_ptr<NodeModel> model);
 	void deleteNode(GraphNode* node);
 
 	// Delete BY ID, through the same undo commands deleteSelectedNodes pushes
@@ -176,9 +189,7 @@ public:
 signals:
 	// a node's position changed (drags fire it repeatedly - debounce)
 	void nodeMoved();
-	void newConnection(SocketConnection* connection);
 	// not emitted when a node is deleted
-	void connectionRemoved(SocketConnection* connection);
 	void nodeRemoved(GraphNode* connection);
 	void nodeValueChanged(NodeModel* nodeModel, int socketIndex);
 	// exactly one node selected -> its model; empty or multi selection -> null

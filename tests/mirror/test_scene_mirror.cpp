@@ -444,7 +444,7 @@ int main(int argc, char **argv)
         CHECK(saved->textures.contains("u_baseColorMap"), "setValue bound the base colour map");
 
         // Serialise exactly as SceneWriter::writeSceneNodeMaterial does: a values
-        // object built from mat->properties by PropertyType, textures as
+        // object built from mat->properties() by PropertyType, textures as
         // scene-relative paths (the writer's non-database branch). SceneReader
         // itself links half the app (Database, Globals, AssetManager), so this
         // suite replicates the writer/reader JSON contract instead of linking
@@ -453,7 +453,7 @@ int main(int argc, char **argv)
         QJsonObject matObj; matObj["materialType"] = "pbr"; matObj["version"] = 2;
         QJsonObject values;
         const QDir sceneDir(dir);
-        for (auto *prop : saved->properties) {
+        for (auto *prop : saved->properties()) {
             switch (prop->type) {
             case iris::PropertyType::Bool:  values[prop->name] = prop->getValue().toBool(); break;
             // List is the ENUM row (alphaMode, brdf) and serializes as the
@@ -479,7 +479,7 @@ int main(int argc, char **argv)
         // resolved back to absolute paths against the scene folder).
         auto reloaded = iris::PbrMaterial::create();
         const QJsonObject rvalues = matObj["values"].toObject();
-        for (auto *prop : reloaded->properties) {
+        for (auto *prop : reloaded->properties()) {
             if (!rvalues.contains(prop->name)) continue;
             const auto val = rvalues.value(prop->name);
             switch (prop->type) {
@@ -770,16 +770,16 @@ int main(int argc, char **argv)
 
         // Point-light shadow controls (the panel unhides Type/Size in engine
         // mode): the Shadow Type combo drives castShadows through toLightDesc.
-        point->shadowMap->shadowType = iris::ShadowMapType::Soft;
+        point->shadowMap.shadowType = iris::ShadowMapType::Soft;
         CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=Soft casts shadows");
-        point->shadowMap->shadowType = iris::ShadowMapType::None;
+        point->shadowMap.shadowType = iris::ShadowMapType::None;
         CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
 
         // (The STATIC SHADOW flag and the transform-write counter the mirror
         // watched for it are gone — ENGINE_CACHE_POLICY_SPEC P2/P3: every
         // point/spot map is cached and the ENGINE detects its inputs, per light.
         // What the mirror still carries is world.refreshShadows()'s serial.)
-        point->shadowMap->shadowType = iris::ShadowMapType::Soft;
+        point->shadowMap.shadowType = iris::ShadowMapType::Soft;
 
         // world.refreshShadows()'s serial: monotonic, and the document's
         // default is zero so a fresh scene never looks like a pending refresh.
@@ -805,7 +805,7 @@ int main(int argc, char **argv)
         fromJson->rectHeight = (float)j["rectHeight"].toDouble(1.0f);
         fromJson->doubleSided = j["doubleSided"].toBool(false);
         fromJson->accurate = j["accurate"].toBool(false);
-        fromJson->shadowMap->shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
+        fromJson->shadowMap.shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
         const LightDesc ad = SceneMirror::toLightDesc(fromJson.data());
         CHECK(ad.type == LightType::Area, "document area light maps to LightType::Area");
         CHECK(std::abs(ad.rectWidth - 2.0f) < 1e-5f && std::abs(ad.rectHeight - 0.5f) < 1e-5f,

@@ -90,11 +90,10 @@ QList<PropertyInfo> animatableProperties(const iris::SceneNodePtr &node)
     QList<PropertyInfo> out;
     if (!node) return out;
 
-    // getProperties() hands back freshly allocated Property objects every call
-    // and the caller owns them.
-    const auto props = node->getProperties();
+    // getProperties() hands back a fresh list that owns its rows.
+    const iris::PropertyRows props = node->getProperties();
     int index = 0;
-    for (auto *prop : props) {
+    for (auto *prop : props.view()) {
         const int propIndex = index++;
         if (!prop || !isAnimatablePropertyType(prop->type))
             continue;
@@ -106,7 +105,6 @@ QList<PropertyInfo> animatableProperties(const iris::SceneNodePtr &node)
         info.index = propIndex;
         out.append(info);
     }
-    qDeleteAll(props);
     return out;
 }
 
@@ -211,9 +209,8 @@ int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, doub
     for (const auto &info : track->getKeyFrames()) {
         auto *frame = info.keyFrame;
         if (!frame) continue;
-        // Collect first: removeKey() mutates the vector being walked. And it
-        // only unlinks — the Key is ours to delete or it leaks (the KeyFrame
-        // destructor only frees what is still in the list).
+        // Collect first: removeKey() mutates the vector being walked (and frees
+        // the key: the track owns it).
         QVector<iris::Key<float> *> doomed;
         for (auto *key : frame->keys) {
             if (std::abs(key->time - time) <= kKeyEpsilon)
@@ -221,7 +218,6 @@ int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, doub
         }
         for (auto *key : doomed) {
             frame->removeKey(key);
-            delete key;
             ++removed;
         }
         if (!doomed.isEmpty())

@@ -103,7 +103,7 @@ For more information see the LICENSE file
 // otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
-                                      EditorData **editorData)
+                                      std::unique_ptr<EditorData> *editorData)
 {
     dir = projectPath;
 	useAlternativeLocation = false;
@@ -143,7 +143,7 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     return scene;
 }
 
-EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
+std::unique_ptr<EditorData> SceneReader::readEditorData(QJsonObject& projectObj)
 {
     if (projectObj["editor"].isNull()) return nullptr;
 
@@ -157,7 +157,7 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     // existed came back with a 1 m near and a 100 m FAR clip against
     // CameraNode's own 0.1 / 500, so the explorer camera could not see past
     // 100 m in a scene whose ground is 4 km wide.
-    auto editorData = new EditorData();
+    auto editorData = std::make_unique<EditorData>();
 
     // @todo: check if camera object is null
     auto camObj = editorObj.value("camera").toObject();
@@ -1388,16 +1388,16 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 	// they could hold ever changed a pixel.)
 
     //shadow data
-    auto shadowMap = lightNode->shadowMap;
+    iris::ShadowMap &shadowMap = lightNode->shadowMap;
     // THE RESOLUTION'S DEFAULT IS ShadowMap's OWN (the reader-defaults law):
     // it read 1024 here against the constructor's 2048, so every light in
     // every document written before the key existed came back at half the
     // shadow resolution a light made in the editor gets.
-    auto res = qBound(512, nodeObj["shadowSize"].toInt(shadowMap->resolution), 4096);
-    shadowMap->setResolution(res);
+    auto res = qBound(512, nodeObj["shadowSize"].toInt(shadowMap.resolution), 4096);
+    shadowMap.setResolution(res);
     // value(), not operator[]: a read through operator[] on a NON-CONST
     // QJsonObject INSERTS a null member.
-    shadowMap->shadowType = evalShadowMapType(nodeObj.value("shadowType").toString());
+    shadowMap.shadowType = evalShadowMapType(nodeObj.value("shadowType").toString());
     // FORWARD SHADING PRIORITY (directional lights only) — absent means the
     // default, which is what the writer relies on (it writes the key only when
     // it is non-zero).
@@ -1731,7 +1731,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 
 	// Drive the material through setValue so the field the shader reads and the
 	// Property object the panel shows are both updated from one place.
-	for (auto prop : mat->properties) {
+	for (auto prop : mat->properties()) {
 		if (!values.contains(prop->name)) continue;
 		const auto val = values.value(prop->name);
 

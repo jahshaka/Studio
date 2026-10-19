@@ -215,12 +215,7 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         ++out.pinCount;
         // Session records belong to the OPEN project only, so a scrub is
         // never wrong here (the library delete scrubs the same way).
-        auto &assets = AssetManager::getAssets();
-        for (int i = assets.count() - 1; i >= 0; --i) {
-            if (assets[i]->assetGuid != member) continue;
-            delete assets[i];
-            assets.remove(i);
-        }
+        AssetManager::removeAssets(member);
         // An UNLISTED row that just lost its last pin exists for nobody: reap
         // it the way deleteProject reaps its orphans.
         // So does a PROJECT'S OWN row (ASSETS-SCOPE-1: a material made in the

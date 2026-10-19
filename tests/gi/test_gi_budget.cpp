@@ -178,7 +178,7 @@ int main(int argc, char **argv)
     sun->setName("sun");
     sun->lightType = iris::LightType::Directional;
     sun->intensity = 6.0f;
-    sun->shadowMap->shadowType = iris::ShadowMapType::None;
+    sun->shadowMap.shadowType = iris::ShadowMapType::None;
     sun->setLocalPos(iris::Vec3(0.0f, 4.0f, -4.0f));
     // Down -Y by convention; pitched so it travels towards +Z and lights the red
     // wall's inner face (and the mover's -Z face) head-on, as in gi.pcc_mirror.

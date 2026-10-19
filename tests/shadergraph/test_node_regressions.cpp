@@ -28,6 +28,15 @@
 #include "modules/materials/nodes/test.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -42,8 +51,9 @@ int main(int argc, char** argv)
     {
         // build a graph with a master and a Truncate node, serialize it,
         // then rewrite the type to the legacy "truncate" spelling
-        auto graph = new NodeGraph();
-        graph->setNodeLibrary(new LibraryV1());
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
+        graph->setNodeLibrary(suiteLibrary());
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -67,7 +77,7 @@ int main(int argc, char** argv)
         json["nodes"] = nodes;
 
         // used to SIGSEGV (nullptr from createNode, immediate deref)
-        auto loaded = NodeGraph::deserialize(json, new LibraryV1());
+        auto loaded = NodeGraph::deserialize(json, suiteLibrary());
         CHECK(loaded != nullptr, "D1: a graph naming the retired 'truncate' still loads");
         CHECK(loaded->nodes.size() == 1 && loaded->connections.isEmpty(),
               "D1: ...WITHOUT it: 'truncate' is not renamed to 'trunc' (FORWARD-ONLY-1)");
@@ -84,7 +94,7 @@ int main(int argc, char** argv)
             bogusNodes.append(obj);
         }
         bogus["nodes"] = bogusNodes;
-        auto loaded2 = NodeGraph::deserialize(bogus, new LibraryV1());
+        auto loaded2 = NodeGraph::deserialize(bogus, suiteLibrary());
         CHECK(loaded2 != nullptr && loaded2->nodes.size() == 2,
               "D1: unknown node type is skipped instead of crashing the load");
     }
@@ -103,6 +113,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
 
         auto v2 = library.createNode("vector2");
+        const std::unique_ptr<NodeModel> v2Owned(v2);   // the test owns it (no graph takes it)
         QJsonObject o2; o2["x"] = 0.5; o2["y"] = -1.25;
         v2->deserializeWidgetValue(o2);
         auto r2 = v2->serializeWidgetValue().toObject();
@@ -116,6 +127,7 @@ int main(int argc, char** argv)
         CHECK(near(r3["z"].toDouble(), 0.5), "D4: vector3 z=0.5 survives the round-trip");
 
         auto v4node = library.createNode("vector4");
+        const std::unique_ptr<NodeModel> v4nodeOwned(v4node);   // the test owns it (no graph takes it)
         QJsonObject o4; o4["x"] = 0.1; o4["y"] = 0.2; o4["z"] = 0.3; o4["w"] = 0.4;
         v4node->deserializeWidgetValue(o4);
         auto r4 = v4node->serializeWidgetValue().toObject();
@@ -131,8 +143,9 @@ int main(int argc, char** argv)
               "D13: W spinbox writes w and leaves z alone");
 
         // and the evaluator sees the un-truncated values
-        auto graph = new NodeGraph();
-        graph->setNodeLibrary(new LibraryV1());
+        auto graphOwned = std::make_unique<NodeGraph>();   // the scope owns it (LEAK-1)
+        auto graph = graphOwned.get();
+        graph->setNodeLibrary(suiteLibrary());
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -149,7 +162,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
         int mismatches = 0;
         for (auto item : library.getItems()) {
-            auto node = library.createNode(item->name);
+            const std::unique_ptr<NodeModel> node(library.createNode(item->name));   // the test owns it
             if (node == nullptr || node->title != item->displayName) {
                 std::printf("      title mismatch: key '%s' drawer '%s' title '%s'\n",
                             qPrintable(item->name), qPrintable(item->displayName),
@@ -159,14 +172,14 @@ int main(int argc, char** argv)
         }
         CHECK(mismatches == 0, "titles: every library node carries its drawer name verbatim");
 
-        auto f = library.createNode("float");
+        const std::unique_ptr<NodeModel> f(library.createNode("float"));
         CHECK(f->title == "Float", "titles: the Float node is titled 'Float'");
     }
 
     // --------------------------------------------- float value round-trip
     {
         LibraryV1 library;
-        auto f = library.createNode("float");
+        const std::unique_ptr<NodeModel> f(library.createNode("float"));
         f->deserializeWidgetValue(QJsonValue(0.7));
         CHECK(near(f->serializeWidgetValue().toDouble(), 0.7),
               "float: inline editor value round-trips through (de)serialize");
@@ -179,7 +192,7 @@ int main(int argc, char** argv)
         LibraryV1 library;
         CHECK(library.createNode("texCoords") == nullptr && library.createNode("uvTransform") == nullptr,
               "uv merge: the retired typeNames construct nothing");
-        CHECK(library.createNode("uv") != nullptr, "uv merge: the `uv` node constructs");
+        CHECK(std::unique_ptr<NodeModel>(library.createNode("uv")) != nullptr, "uv merge: the `uv` node constructs");
     }
 
     // ------------------------------ the shipped presets keep Passthrough
@@ -208,7 +221,7 @@ int main(int argc, char** argv)
             f.close();
             auto obj = doc.object();
             if (obj.contains("shadergraph")) obj = obj["shadergraph"].toObject();
-            auto graph = NodeGraph::deserialize(obj, new LibraryV1());
+            auto graph = NodeGraph::deserialize(obj, suiteLibrary());
             if (!graph || !graph->getMasterNode()) continue;
             ++loadedCount;
             // The presets store their images as names beside the .effect, and
@@ -226,7 +239,7 @@ int main(int argc, char** argv)
                 if (QFileInfo::exists(abs))
                     static_cast<TextureNode*>(node)->setTexturePath(abs);
             }
-            const auto info = PbrGraphEvaluator::bakeInfo(graph, nullptr)["perSocket"].toObject();
+            const auto info = PbrGraphEvaluator::bakeInfo(graph.get(), nullptr)["perSocket"].toObject();
             for (auto s = info.begin(); s != info.end(); ++s) {
                 if (s.value().toString() == "baked") {
                     std::printf("      %s: %s baked\n", qPrintable(QFileInfo(file).fileName()),

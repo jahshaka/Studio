@@ -91,12 +91,12 @@ static QVector<QWeakPointer<iris::SceneNode>> openSession(int count)
         root->addChild(part.staticCast<iris::SceneNode>());
         watches.append(part.toWeakRef());
 
-        auto *asset = new CountedAsset;
+        auto asset = std::make_unique<CountedAsset>();
         asset->assetGuid = QStringLiteral("guid-%1").arg(i);
         asset->fileName = QStringLiteral("asset%1.obj").arg(i);
         asset->path = QStringLiteral("/nowhere/asset%1.obj").arg(i);
         asset->setValue(QVariant::fromValue(root.staticCast<iris::SceneNode>()));
-        AssetManager::addAsset(asset);
+        AssetManager::addAsset(std::move(asset));
 
         watches.append(root.toWeakRef());
     }
@@ -139,43 +139,30 @@ static void testAssetListOwnership()
     CHECK(allExpired(secondOpen), "close #2 released every pinned SceneNodePtr");
 }
 
-static void testReplaceAssets()
+static void testRemoveAssets()
 {
-    std::printf("\n-- replaceAssets destroys the asset it replaces --\n");
+    std::printf("\n-- removeAssets destroys the guid's entries and nothing else --\n");
     AssetManager::clearAssetList();
 
     sDestroyed = 0;
-    auto *original = new CountedAsset;
-    original->assetGuid = QStringLiteral("mat-1");
-    AssetManager::addAsset(original);
+    for (const char *guid : { "mat-1", "mat-1", "mat-2" }) {
+        auto asset = std::make_unique<CountedAsset>();
+        asset->assetGuid = QString::fromLatin1(guid);
+        AssetManager::addAsset(std::move(asset));
+    }
+    CHECK(AssetManager::removeAssets(QStringLiteral("mat-1")) == 2, "both entries of the guid were removed");
+    CHECK(sDestroyed == 2, "...and DESTROYED, not just unlinked");
+    CHECK(AssetManager::getAssets().count() == 1 &&
+          AssetManager::getAssedByGuid(QStringLiteral("mat-2")) != nullptr,
+          "the other guid's entry is untouched");
 
-    auto *replacement = new CountedAsset;
-    replacement->assetGuid = QStringLiteral("mat-1");
-    AssetManager::replaceAssets(QStringLiteral("mat-1"), replacement);
-
-    CHECK(AssetManager::getAssets().count() == 1, "the registry still holds exactly one entry");
-    CHECK(sDestroyed == 1, "the replaced asset was destroyed, not just unlinked");
-    CHECK(AssetManager::getAssedByGuid(QStringLiteral("mat-1")) == replacement,
-          "the guid resolves to the replacement");
-
-    // Re-registering the SAME pointer must be a no-op, not a self-destruct.
     sDestroyed = 0;
-    AssetManager::replaceAssets(QStringLiteral("mat-1"), replacement);
-    CHECK(sDestroyed == 0, "re-registering the same object does not destroy it");
-    CHECK(AssetManager::getAssedByGuid(QStringLiteral("mat-1")) == replacement,
-          "...and it is still the registered asset");
-
-    // An unknown guid is an add, not a replace.
-    auto *extra = new CountedAsset;
-    extra->assetGuid = QStringLiteral("mat-2");
-    sDestroyed = 0;
-    AssetManager::replaceAssets(QStringLiteral("no-such-guid"), extra);
-    CHECK(AssetManager::getAssets().count() == 2 && sDestroyed == 0,
-          "replacing an unknown guid appends and destroys nothing");
+    CHECK(AssetManager::removeAssets(QStringLiteral("no-such-guid")) == 0 && sDestroyed == 0,
+          "a guid nobody registered removes and destroys nothing");
 
     sDestroyed = 0;
     AssetManager::clearAssetList();
-    CHECK(sDestroyed == 2 && AssetManager::getAssets().isEmpty(), "the registry cleans up after itself");
+    CHECK(sDestroyed == 1 && AssetManager::getAssets().isEmpty(), "the registry cleans up after itself");
 }
 
 // ---------------------------------------------------------------------------
@@ -420,7 +407,7 @@ int main(int argc, char **argv)
     enginetest::DocumentGraph graph("services-memory-ogre.log");
     if (!graph.require()) return 1;
     testAssetListOwnership();
-    testReplaceAssets();
+    testRemoveAssets();
     testSceneGraphOwnership();
     testThumbnailCache();
 

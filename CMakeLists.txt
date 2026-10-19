@@ -213,7 +213,6 @@ set(SRCS
     src/ui/panels/timeline/animationwidget.cpp 
     src/ui/panels/timeline/keyframewidget.cpp 
     src/ui/panels/timeline/timelinewidget.cpp 
-    src/ui/panels/timeline/nodekeyframeanimation.cpp 
     src/data/project.cpp 
     src/data/settingsmanager.cpp
     src/data/settingsstore.cpp
@@ -576,9 +575,6 @@ set(HEADERS
     src/ui/panels/timeline/animationwidget.h 
     src/ui/panels/timeline/keyframewidget.h
     src/ui/panels/timeline/timelinewidget.h 
-    src/ui/panels/timeline/timelinekeys.h 
-    src/ui/panels/timeline/nodekeyframe.h 
-    src/ui/panels/timeline/nodekeyframeanimation.h 
     src/data/project.h 
     src/data/settingsmanager.h 
     src/data/settingsstore.h

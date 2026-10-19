@@ -89,6 +89,10 @@ struct Rig
         graph->addNode(master);
         graph->setMasterNode(master);
     }
+    // The rig owns its graph and library (LEAK-1 L4).
+    ~Rig() { delete graph; delete lib; }
+    Rig(const Rig &) = delete;
+    Rig &operator=(const Rig &) = delete;
     NodeModel *add(const QString &type)
     {
         auto node = lib->createNode(type);
@@ -258,7 +262,6 @@ void oracle(const QString &name, const QStringList &ops, const std::function<voi
         if (!gCoveredOps.contains(op)) gCoveredOps << op;
 
     gEmitted.scene->setMaterialCustomPiece(gEmitted.material, "", CustomPieceStage::PixelPreLights);
-    delete rig.graph;
 }
 
 // ============================================================================
@@ -377,7 +380,6 @@ void oracleAnalytic(const QString &name, const QStringList &ops, const std::func
             if (!gCoveredOps.contains(op)) gCoveredOps << op;
         gEmitted.scene->setMaterialCustomPiece(gEmitted.material, "", CustomPieceStage::PixelPreLights);
     }
-    delete rig.graph;
     enginetest::testCameraLookAt(gEmitted.view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
     enginetest::testCameraLookAt(gReference.view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
@@ -460,7 +462,6 @@ void vertexNormalOracle(const QString &name, bool local)
         ++gFailures;
         std::printf("    FAIL %s: the emitter refused — %s\n", qPrintable(name),
                     qPrintable(emitted.fallbackReasons.value(QStringLiteral("Vertex Offset"))));
-        delete rig.graph;
         return;
     }
     Probe live, want, other;
@@ -501,7 +502,6 @@ void vertexNormalOracle(const QString &name, bool local)
         gEngine->destroyView(p->view);
         gEngine->destroyScene(p->scene);
     }
-    delete rig.graph;
 }
 
 /// The sensitivity control: the same comparison against a reference that is
@@ -533,7 +533,6 @@ void control_detects_a_wrong_reference()
               worst);
     std::printf("    control: a deliberate 0.05 error reads as %d/255\n", worst);
     gEmitted.scene->setMaterialCustomPiece(gEmitted.material, "", CustomPieceStage::PixelPreLights);
-    delete rig.graph;
 }
 
 void report_op_coverage()

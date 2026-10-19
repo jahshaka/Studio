@@ -32,6 +32,15 @@
 #include "modules/materials/core/pbrgraphevaluator.h"
 #include "modules/materials/core/bakeprogram.h"
 
+/// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
+/// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
+static LibraryV1 *suiteLibrary()
+{
+    static LibraryV1 library;
+    return &library;
+}
+
+
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -56,6 +65,10 @@ struct Rig
         graph->addNode(master);
         graph->setMasterNode(master);
     }
+    // The rig owns its graph and library (LEAK-1 L4: both leaked per rig).
+    ~Rig() { delete graph; delete lib; }
+    Rig(const Rig &) = delete;
+    Rig &operator=(const Rig &) = delete;
 
     NodeModel* add(const QString& type)
     {
@@ -473,8 +486,8 @@ int main(int argc, char** argv)
         r.graph->addConnection(r.addVec(2, 0.25, 0.25), 0, op, 0);
         r.toMaster(op, 0, 0);
         const QJsonObject saved = r.graph->serialize();
-        NodeGraph* loaded = NodeGraph::deserialize(saved, new LibraryV1());
-        auto res = PbrGraphEvaluator::evaluate(loaded);
+        const auto loaded = NodeGraph::deserialize(saved, suiteLibrary());
+        auto res = PbrGraphEvaluator::evaluate(loaded.get());
         auto c = res.values["baseColor"].toObject();
         CHECK(near(c["r"].toDouble(), 0.6, 1e-5) && near(c["g"].toDouble(), 0.8, 1e-5),
               "op: uvTransform widget values survive serialize/deserialize");
@@ -542,7 +555,7 @@ int main(int argc, char** argv)
               "op: uv rotation + UV set serialize (texCoords' combo never did)");
         r.toMaster(op, 0, 0);
         const QJsonObject saved = r.graph->serialize();
-        NodeGraph* loaded = NodeGraph::deserialize(saved, new LibraryV1());
+        const auto loaded = NodeGraph::deserialize(saved, suiteLibrary());
         NodeModel* reloaded = nullptr;
         for (auto node : loaded->nodes.values())
             if (node->typeName == "uv") reloaded = node;

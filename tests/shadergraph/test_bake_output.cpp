@@ -51,6 +51,10 @@ struct Rig
         graph->addNode(master);
         graph->setMasterNode(master);
     }
+    // The rig owns its graph and library (LEAK-1 L4: both leaked per rig).
+    ~Rig() { delete graph; delete lib; }
+    Rig(const Rig &) = delete;
+    Rig &operator=(const Rig &) = delete;
     NodeModel* add(const QString& type)
     {
         auto node = lib->createNode(type);

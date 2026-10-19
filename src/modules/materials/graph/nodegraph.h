@@ -1,6 +1,7 @@
 #ifndef NODEGRAPH2_H
 #define NODEGRAPH2_H
 
+#include <memory>
 #include <QObject>
 #include <QVector>
 #include <QString>
@@ -87,9 +88,17 @@ public:
 	NodeLibrary* library = nullptr;
 	void setNodeLibrary(NodeLibrary* lib);
 
+	/// THE GRAPH OWNS ITS NODES AND CONNECTIONS (LEAK-1 L4): addNode takes
+	/// `model`; a node leaves only through takeNode (the caller owns it from
+	/// there — the canvas's undo commands hold a deleted node that way) or
+	/// removeNode (destroyed). A connection is freed when it is removed.
 	void addNode(NodeModel* model);
 	NodeModel* getNode(const QString& nodeId);
 	QVector<ConnectionModel*> getNodeConnections(const QString& nodeId);
+	/// Unlinks `nodeId` — its connections removed and FREED — and hands the
+	/// node to the caller. Null when the graph has no such node.
+	std::unique_ptr<NodeModel> takeNode(const QString& nodeId);
+	/// takeNode, and the node destroyed.
 	void removeNode(const QString& nodeId);
 
 	// master node must already be added as a node
@@ -99,6 +108,7 @@ public:
 	ConnectionModel* addConnection(NodeModel* leftNode, int leftSockIndex, NodeModel* rightNode, int rightSockIndex);
 	ConnectionModel* addConnection(QString leftNodeId, int leftSockIndex, QString rightNodeId, int rightSockIndex);
 
+	/// Unlinks the connection from its two sockets and FREES it.
 	void removeConnection(QString connectionId);
 
 	QJsonObject serialize();
@@ -120,8 +130,8 @@ public:
 	/// refused the same way (FORWARD-ONLY-1: no load-time renames or index
 	/// shifts exist). Every caller must handle null. An unknown NODE type is
 	/// skipped.
-	static NodeGraph* deserialize(QJsonObject obj, NodeLibrary* lib,
-	                              QString* refusalReason = nullptr);
+	static std::unique_ptr<NodeGraph> deserialize(QJsonObject obj, NodeLibrary* lib,
+	                                              QString* refusalReason = nullptr);
 	QJsonObject serializeMaterialSettings();
 	static MaterialSettings deserializeMaterialSettings(QJsonObject obj);
 

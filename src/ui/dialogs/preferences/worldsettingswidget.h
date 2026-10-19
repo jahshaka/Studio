@@ -61,8 +61,6 @@ private:
 	QPushButton * viewport;
 	QPushButton * editor;
 	QPushButton * content;
-	QPushButton * mining;
-	QPushButton * help;
 	QPushButton * about;
 	QPushButton * shortcuts;
 	QPushButton * database;
@@ -71,8 +69,6 @@ private:
 	QWidget *viewportWidget;
 	QWidget *editorWidget;
 	QWidget *contentWidget;
-	QWidget *miningWidget;
-	QWidget *helpWidget;
 	QWidget *aboutWidget;
 	QWidget *shortcutsWidget;
 	QWidget *databaseWidget;

@@ -228,7 +228,7 @@ touching ownership or threading, and before a release — not on every build.
 ```
 
 Membership is a ctest label (`lsan`, `tsan`) set next to each suite's `add_test`; the reason a
-suite is in or out — or quarantined as `lsan-blocked` / `tsan-blocked` — is written there.
+suite is in or out — or quarantined as `tsan-blocked` — is written there.
 `scripts/sanitize.sh` builds what the lane needs, runs `ctest -L <lane>`, and passes any extra
 arguments straight to ctest
 (`./scripts/sanitize.sh lsan -R document`).
@@ -236,7 +236,7 @@ arguments straight to ctest
 **lsan — leaks, under a minute, no rebuild.** LeakSanitizer's runtime is `LD_PRELOAD`ed over the
 ordinary Debug binaries: it intercepts `malloc`/`free` process-wide whether or not the code was
 compiled with `-fsanitize=address`, so the binaries under test are the same ones the normal gate
-runs. The lane covers the suites that never initialise Vulkan and never spawn the app — the four
+runs. The lane covers the suites that never initialise Vulkan and the app-spawning rows — the four
 ASan-built engine suites keep `detect_leaks=0` because the Vulkan loader's Mesa device-select
 layer leaks ~6 dbus allocations we do not own, and that excuse does not extend to code that never
 loads a driver. Suppressions live in `scripts/lsan.supp`, one commented entry per verified
@@ -244,12 +244,12 @@ external allocation; the lane runs with `print_suppressions=1` so every run stat
 The script refuses to run if a deliberate-leak canary does not trip, because a preload that
 silently failed would leave the lane green while checking nothing.
 
-Suites that are eligible for the lane but fail it today because of a known leak underneath them
-carry the label `lsan-blocked` instead — the quarantine. Every one of them names the defect that
-blocks it beside its `add_test`, `sanitize.sh lsan` lists them at the end of every run, and
-`ctest -L '^lsan-blocked$'` (with the same environment) reproduces them. They are not hidden and
-they are not suppressed; they are simply not allowed to hold the gate red. When a blocker is
-fixed, move the suite from `jah_lsan_blocked()` to `jah_lsan_lane()` — one word.
+The lane has no quarantine (LEAK-1): every allocation the app and its suites make has an owner, and
+the app-spawning rows are members too — their harness reads how the child ended, so a green app row
+means the app leaked nothing (the lane then needs your own Xvfb in `DISPLAY`, under
+`scripts/gpu-exclusive.sh`). A row that leaks is a red: find the allocation's owner (a parent, a smart
+pointer, a destructor). Only a third party's own allocation — the driver's, Qt's, fontconfig's — may
+be suppressed, with its library frame and the reason in `scripts/lsan.supp`.
 
 **tsan — data races, its own build dir, slow.** ThreadSanitizer cannot share a process with
 AddressSanitizer and has to instrument every translation unit, so it gets `build-tsan/`

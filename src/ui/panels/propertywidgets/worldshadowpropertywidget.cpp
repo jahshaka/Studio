@@ -100,8 +100,8 @@ int WorldShadowPropertyWidget::derivedFromLights() const
         // A Sky Light cannot cast either — it has no place to cast FROM.
         if (l.isNull() || l->lightType == iris::LightType::Area ||
             l->lightType == iris::LightType::Sky) continue;
-        if (!l->shadowMap || l->shadowMap->shadowType == iris::ShadowMapType::None) continue;
-        best = std::max(best, l->shadowMap->resolution);
+        if (l->shadowMap.shadowType == iris::ShadowMapType::None) continue;
+        best = std::max(best, l->shadowMap.resolution);
     }
     return best;
 }

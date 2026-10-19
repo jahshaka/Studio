@@ -248,8 +248,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	});
 	shellView = std::make_unique<ShellView>(this);
 
-    prefsDialog = new PreferencesDialog(nullptr, db, settings);
-    aboutDialog = new AboutDialog();
+    prefsDialog = new PreferencesDialog(this, db, settings);   // the window owns it (LEAK-1: it was never freed)
+    aboutDialog = new AboutDialog(this);   // the window owns it (LEAK-1: it was never freed)
 
 
     setupFileMenu();
@@ -1011,7 +1011,7 @@ void MainWindow::teardownWorld()
 	updateWindowTitle();
 }
 
-void MainWindow::bindWorld(const iris::ScenePtr &scene, EditorData *editorData, bool playMode)
+void MainWindow::bindWorld(const iris::ScenePtr &scene, std::unique_ptr<EditorData> editorData, bool playMode)
 {
 	playbackService->setPlayerMode(playMode);
 	projectService->setSceneOpen(true);
@@ -1029,13 +1029,14 @@ void MainWindow::bindWorld(const iris::ScenePtr &scene, EditorData *editorData, 
 	moduleHub->projectChanged(project);
 
 	if (editorData != Q_NULLPTR) {
-		sceneView->setEditorData(editorData);
+		const bool physicsDebug = editorData->showDebugDrawFlags;
+		sceneView->setEditorData(std::move(editorData));   // the viewport owns it
 		// needs to be done so controllers can have the correct
 		// camera
 		playerView->setScene(scene);
 		// (The grid and light-wire checkmarks follow setEditorData's
 		// overlaysChanged — syncOverlayChecks.)
-		page->setPhysicsDebugChecked(editorData->showDebugDrawFlags);
+		page->setPhysicsDebugChecked(physicsDebug);
 	}
 
 	// THE SCENE IS OPEN (AVATAR_ASSET_SPEC §4 D4, the load-time half). Fired

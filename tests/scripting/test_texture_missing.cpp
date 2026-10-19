@@ -242,8 +242,7 @@ int main(int argc, char **argv)
         if (v.toObject().value("node").toString() == plain) plainEver = true;
     CHECK(!plainEver, "a material with no texture files raises nothing");
 
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    CHECK(quitAndReap(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     QDir(dir).removeRecursively();
 
     std::printf(failures == 0 ? "scripting.e2e.texture_missing: ALL PASS\n"

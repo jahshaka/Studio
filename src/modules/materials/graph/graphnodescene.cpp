@@ -314,31 +314,48 @@ bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
 	if (stack) {
 		stack->push(new DeleteConnectionCommand(con, this));
 	} else {
-		removeConnection(connectionId, true, true);
+		removeConnection(connectionId, true);
 	}
 	emit graphInvalidated();
 	return true;
 }
 
-void GraphNodeScene::deleteNode(GraphNode* node)
+std::unique_ptr<NodeModel> GraphNodeScene::detachNode(GraphNode* node)
 {
-	if (readOnly) return;
-	// remove in and out connections
-	auto conns = nodeGraph->getNodeConnections(node->nodeId);
+	if (readOnly || !node) return nullptr;
+	// The canvas twins are joined on the MODEL's connection ids: read them
+	// before the graph frees those models (takeNode).
+	QStringList conIds;
+	for (auto con : nodeGraph->getNodeConnections(node->nodeId))
+		conIds << con->id;
 
-	// remove node from scenegraph
-	nodeGraph->removeNode(node->nodeId);
+	std::unique_ptr<NodeModel> model = nodeGraph->takeNode(node->nodeId);
 
-	// remove them from scene
-	for (auto con : conns) {
-		// false, because the connection has already been removed
-		// in nodeGraph->removeNode(node->nodeId);
-		this->removeConnection(con->id, false, true);
-	}
+	// false: the graph has already removed (and freed) them
+	for (const QString &id : conIds)
+		this->removeConnection(id, false);
 
 	this->removeItem(node);
 
 	emit nodeRemoved(node);
+	return model;
+}
+
+void GraphNodeScene::reattachNode(GraphNode* node, std::unique_ptr<NodeModel> model)
+{
+	if (!node || !model) return;
+	nodeGraph->addNode(model.release());
+	node->setVisible(true);
+	addItem(node);
+}
+
+void GraphNodeScene::deleteNode(GraphNode* node)
+{
+	if (readOnly || !node) return;
+	std::unique_ptr<NodeModel> model = detachNode(node);
+	// The item first: its proxy owns the model's widget, which the model's
+	// destructor then finds gone (nodemodel.cpp).
+	delete node;
 }
 
 bool GraphNodeScene::areSocketsComptible(Socket* sock1, Socket* sock2)
@@ -557,7 +574,7 @@ GraphNodeScene::GraphNodeScene(QWidget* parent) :
 	this->installEventFilter(this);
 	conGroup = new QGraphicsItemGroup;
 	addItem(conGroup);
-	stack = new QUndoStack;
+	stack = new QUndoStack(this);   // the scene's own until a page hands it one (setUndoRedoStack)
 
 	selectedNode = nullptr;
 
@@ -635,39 +652,35 @@ SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSock
 	return con;
 }
 
-SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connection, bool removeFromNodeGraph, bool emitSignal)
+void GraphNodeScene::removeConnection(SocketConnection * connection, bool removeFromNodeGraph)
 {
-	if (readOnly) return nullptr;
+	if (readOnly) return;
 	// NULL-GUARDED (F2, 2026-09-06). The QString overload below hands whatever
 	// getConnection() found straight in, and getConnection answers null for any
 	// id the CANVAS does not carry — which includes every model-side id that
 	// has drifted from its canvas twin. deleteNode() walks the model's
 	// connections and removes each by MODEL id, so one such drift crashed the
 	// whole delete path rather than skipping a pipe.
-	if (!connection) return nullptr;
+	if (!connection) return;
 	auto socket1 = connection->socket1;
 	auto socket2 = connection->socket2;
 	socket1->removeConnection(connection);
-	socket2->removeConnection(connection);
+	if (socket2) socket2->removeConnection(connection);
 	this->removeItem(connection);
 
 	if (removeFromNodeGraph)
 		this->nodeGraph->removeConnection(connection->connectionId);
 
-	if (emitSignal)
-		emit connectionRemoved(connection);
-
-	connection->updatePath();
+	// The item is off the scene and nothing else holds it (the sockets let go
+	// above; the undo commands keep wires by id): it is destroyed here.
+	delete connection;
 	emit graphInvalidated();
-
-	return connection;
 }
 
-void GraphNodeScene::removeConnection(const QString& conId, bool removeFromNodeGraph, bool emitSignal)
+void GraphNodeScene::removeConnection(const QString& conId, bool removeFromNodeGraph)
 {
 	if (readOnly) return;
-	auto con = getConnection(conId);
-	removeConnection(con, removeFromNodeGraph, emitSignal);
+	removeConnection(getConnection(conId), removeFromNodeGraph);
 }
 
 void GraphNodeScene::setUndoRedoStack(QUndoStack *stack)
@@ -715,9 +728,6 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 					// should be socket2 of the connection
 					con->socket1->removeConnection(con);
 					con->socket2->removeConnection(con);
-
-					// emit event before modifying the nodes
-					emit connectionRemoved(con);
 
 					con->socket2 = nullptr;
 					con->status = SocketConnectionStatus::Started;
@@ -871,10 +881,12 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 					stack->push(addConnectionCommand);
 				}
 
-				this->removeConnection(con->connectionId, false, false);
-
-				emit newConnection(con);
+				// THE DRAG LINE IS DONE: the command drew the wire's own canvas
+				// item; this one goes (it used to be looked up by its never-set
+				// id, unlinked, and leaked — and handed to a signal nobody heard).
+				SocketConnection *dragLine = con;
 				con = nullptr;
+				this->removeConnection(dragLine, false);
 				emit graphInvalidated();
 
 				return true;

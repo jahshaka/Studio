@@ -131,15 +131,14 @@ int main(int argc, char** argv)
         l1 = toLayout1(l1, emissiveId, alphaId, QStringLiteral("legacy-occlusion-source"));
 
         QString reason;
-        NodeGraph* loaded = NodeGraph::deserialize(l1, &lib, &reason);
+        const auto loaded = NodeGraph::deserialize(l1, &lib, &reason);
         CHECK(loaded == nullptr, "a layout-1 graph is REFUSED, not shifted");
         CHECK(!reason.isEmpty(), "...with a reason the caller can show");
-        delete loaded;
     }
 
     // ---- 3. a layout-2 file loads as written, with nothing occlusion-shaped ----
     {
-        NodeGraph* loaded = NodeGraph::deserialize(saved, &lib);
+        const auto loaded = NodeGraph::deserialize(saved, &lib);
         CHECK(loaded != nullptr, "the layout-2 graph loads");
         if (!loaded) { std::printf("FAILED (%d)\n", failures); return 1; }
         auto* master = loaded->getMasterNode();
@@ -147,11 +146,11 @@ int main(int argc, char** argv)
                   master->inSockets[4]->getConnection()->leftSocket->node->id == emissiveId,
               "Emissive stays on index 4");
 
-        const QJsonObject info = materials::GraphBaker::classify(loaded, nullptr);
+        const QJsonObject info = materials::GraphBaker::classify(loaded.get(), nullptr);
         CHECK(!info["perSocket"].toObject().contains(QStringLiteral("Occlusion")),
               "bakeInfo has no Occlusion socket to classify");
 
-        const auto result = PbrGraphEvaluator::evaluate(loaded);
+        const auto result = PbrGraphEvaluator::evaluate(loaded.get());
         bool sawOcclusionValue = false;
         for (auto it = result.values.begin(); it != result.values.end(); ++it)
             if (it.key().startsWith(QStringLiteral("occlusion"))) sawOcclusionValue = true;
@@ -159,10 +158,9 @@ int main(int argc, char** argv)
 
         auto material = PbrGraphEvaluator::materialFromValues(result.values);
         bool declaresOcclusion = false;
-        for (auto* prop : material->properties)
+        for (auto* prop : material->properties())
             if (prop->name.startsWith(QStringLiteral("occlusion"))) declaresOcclusion = true;
         CHECK(!declaresOcclusion, "PbrMaterial declares no occlusion row");
-        delete loaded;
     }
 
     std::printf(failures ? "FAILED (%d)\n" : "PASSED\n", failures);

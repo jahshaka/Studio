@@ -20,6 +20,7 @@ For more information see the LICENSE file
 // design) — the bridge here is glue. graph.* operates on ONE current graph,
 // opened by materials.loadGraph or created by materials.createGraph.
 
+#include <memory>
 #include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
@@ -202,9 +203,11 @@ public:
     QString jsName() const override { return QStringLiteral("graph"); }
     QVector<VerbInfo> verbs() const override;
 
-    /// Adopts a graph (called by MaterialsApi); takes ownership of the old one.
-    void setCurrent(NodeGraph *graph, const QString &assetGuid);
-    NodeGraph *current() const { return mGraph; }
+    /// Adopts `graph` as the current one (called by MaterialsApi); the old one
+    /// is destroyed. The API owns its current graph for as long as it is
+    /// current, and to the end of the session (LEAK-1 L4).
+    void setCurrent(std::unique_ptr<NodeGraph> graph, const QString &assetGuid);
+    NodeGraph *current() const { return mGraph.get(); }
 
     /// §3a: when the Effects page is alive its scene owns selection — the
     /// module wires these to EffectsPage::selectGraphNode & co. Verbs fall
@@ -291,7 +294,7 @@ private:
     /// (GraphNodeScene::setReadOnly); this is the same answer for a caller.
     NodeGraph *editableGraphOrFail(const QString &verb);
 
-    NodeGraph *mGraph = nullptr;
+    std::unique_ptr<NodeGraph> mGraph;
     QString mAssetGuid;
     QString mSelectedNodeId;      // API-local selection (headless fallback)
     SelectionDelegate mSelection; // the Effects page, when wired

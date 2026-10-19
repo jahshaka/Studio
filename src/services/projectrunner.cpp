@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/projectrunner.h"
+#include "viewport/editordata.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -78,7 +79,7 @@ void ProjectRunner::stageBegin()
 void ProjectRunner::stageRead(const iris::MeshPrewarmPtr &prewarm)
 {
 	LoadTimeline::mark(QStringLiteral("readProjectScene"));
-	mPendingEditorData = Q_NULLPTR;
+	mPendingEditorData.reset();
 	mPendingScene = mProjectService->readProjectScene(&mPendingEditorData, prewarm);
 }
 
@@ -86,10 +87,8 @@ void ProjectRunner::stageBind(bool playMode)
 {
 	LoadTimeline::mark(QStringLiteral("setScene"));
 	auto scene = mPendingScene;
-	EditorData *editorData = mPendingEditorData;
 	mPendingScene.clear();
-	mPendingEditorData = Q_NULLPTR;
-	mHost->bindWorld(scene, editorData, playMode);
+	mHost->bindWorld(scene, std::move(mPendingEditorData), playMode);
 }
 
 void ProjectRunner::stageReveal(bool playMode)

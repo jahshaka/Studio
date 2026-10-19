@@ -273,7 +273,7 @@ int main(int argc, char **argv)
         sun->setName("Directional Light");
         sun->lightType = iris::LightType::Directional;
         sun->intensity = 1.0f;
-        sun->shadowMap->shadowType = iris::ShadowMapType::None;
+        sun->shadowMap.shadowType = iris::ShadowMapType::None;
         // A document light travels down its local -Y. Pitching -90 about X turns
         // that onto +Z — the light travels AWAY from the camera, so the sun
         // itself is at -Z, dead ahead in the frame (measured, not assumed: the

@@ -68,11 +68,9 @@ bool runOk(McpClient &mcp, const QString &script)
     return reply.value("ok").toBool();
 }
 
-void shutdown(McpClient &mcp, QProcess &jahshaka)
+bool shutdown(McpClient &mcp, QProcess &jahshaka, QByteArray &log)
 {
-    mcp.quit();
-    jahshaka.waitForFinished(15000);
-    if (jahshaka.state() != QProcess::NotRunning) jahshaka.kill();
+    return quitAndReap(mcp, jahshaka, log, 15000);
 }
 
 } // namespace
@@ -127,7 +125,7 @@ int main(int argc, char **argv)
     CHECK(probe.contains("\"a\"") && probe.contains("\"b\""),
           "both cubes are on screen and pickable at known pixels");
     if (!probe.contains("\"a\"") || !probe.contains("\"b\"")) {
-        shutdown(mcp, jahshaka);
+        shutdown(mcp, jahshaka, log);
         return 1;
     }
 
@@ -248,7 +246,7 @@ int main(int argc, char **argv)
                                  .arg(what)));
     }
 
-    shutdown(mcp, jahshaka);
+    CHECK(shutdown(mcp, jahshaka, log), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     if (failures) std::printf("\nRESULT: %d FAILURE(S)\n", failures);
     else std::printf("\nRESULT: all ok\n");
     return failures ? 1 : 0;

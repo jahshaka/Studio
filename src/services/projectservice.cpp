@@ -330,7 +330,7 @@ bool ProjectService::removeProject(const QString &guid)
     return true;
 }
 
-iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
+iris::ScenePtr ProjectService::readProjectScene(std::unique_ptr<EditorData> *editorData,
                                                 const iris::MeshPrewarmPtr &prewarm)
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);

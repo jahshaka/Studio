@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef ASSETVIEW_H
 #define ASSETVIEW_H
 
+#include <memory>
 #include <QWidget>
 
 #include "ui/style/columnedpage.h"
@@ -298,7 +299,6 @@ private:
 
     QSplitter *split;
 
-	QListWidget *_assetView;
 
 	QByteArray downloadedImage;
 	QVector<QByteArray> iconList;
@@ -391,6 +391,9 @@ private:
 
     SettingsManager* settings;
 	IAssetViewer *viewer;
+	/// The headless stand-in this view made for itself (no preview viewer was
+	/// handed in) — OWNED here (LEAK-1); the page's own viewer is the page's.
+	std::unique_ptr<IAssetViewer> ownedViewer;
 	QString selectedGuid;              // the current asset ('' = none)
 	QJsonObject selectedProperties;    // its row's properties, read on selection
 	QTimer *searchTimer;

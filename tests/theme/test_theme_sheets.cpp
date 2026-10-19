@@ -124,10 +124,9 @@ bool bootApp(QProcess &jahshaka, McpClient &mcp)
     return true;
 }
 
-void quitApp(QProcess &jahshaka, McpClient &mcp)
+bool quitApp(QProcess &jahshaka, McpClient &mcp)
 {
-    mcp.quit();
-    if (!jahshaka.waitForFinished(30000)) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
+    return quitAndReap(mcp, jahshaka, mcp.ownLog);
 }
 
 void setTheme(const QString &id)
@@ -230,7 +229,7 @@ int main(int argc, char **argv)
                                 ".filter(function(s){ return s.path === 'MainWindow'; })[0] || {}"));
         CHECK(mainSheet.isEmpty(),
               "the main window itself carries no sheet (the 5 KB mainwindow.ui root sheet is Classic-only)");
-        quitApp(jahshaka, mcp);
+        CHECK(quitApp(jahshaka, mcp), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     }
 
     // ======================= 2. Classic: still bit-for-bit =====================
@@ -276,7 +275,7 @@ int main(int argc, char **argv)
             CHECK(!spot.expected.isEmpty() && found && identical,
                   QStringLiteral("classic: %1 carries its archived sheet byte-for-byte").arg(spot.name));
         }
-        quitApp(jahshaka, mcp);
+        CHECK(quitApp(jahshaka, mcp), "the app quit cleanly (exit 0: no crash, no watchdog, no leak under LSan)");
     }
     setTheme(QString());
 

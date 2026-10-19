@@ -38,7 +38,7 @@ LabelWidget::LabelWidget(QWidget* parent) : QWidget(parent), ui(new Ui::LabelWid
 
 LabelWidget::~LabelWidget()
 {
-
+    delete ui;   // the generated form struct is ours (LEAK-1: one leaked per row)
 }
 
 void LabelWidget::setLabel(const QString& label)

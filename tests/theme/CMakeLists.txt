@@ -89,9 +89,7 @@ set_tests_properties(theme.sheets PROPERTIES
     TIMEOUT 430 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(theme.sheets)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(theme.sheets)   # spawns the app
+jah_lsan_lane(theme.sheets)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # The leak lane (scripts/sanitize.sh lsan): ThemeManager installs a QStyle and
 # palettes — ownership hand-offs Qt does not warn about.

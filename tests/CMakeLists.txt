@@ -82,12 +82,13 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #       adds to the inherited environment rather than replacing it, so the
 #       preload reaches every test process). The binaries under test are
 #       therefore bit-identical to the ones the normal gate runs.
-#       MEMBERSHIP RULE: only suites that never initialise Vulkan and never
-#       spawn the app binary. The four ASan-built engine suites run with
-#       detect_leaks=0 because the Vulkan loader's Mesa device-select layer
-#       leaks ~6 dbus allocations that are not ours; that justification does not
-#       extend to code which never loads a driver, and this lane is what makes
-#       the difference visible.
+#       MEMBERSHIP RULE: the suites that never initialise Vulkan, and (eligible)
+#       the app-spawning suites whose harness reads how the child ended
+#       (tests/support/mcpharness.h quitAndReap: the preload reaches the child,
+#       and a green row under this lane means the APP leaked nothing — LEAK-1).
+#       The four ASan-built engine fixtures run with detect_leaks=0 and stay
+#       out. The app's third-party floor (the NVIDIA driver, Qt's xcb event
+#       queue, fontconfig) is named in scripts/lsan.supp, each with its reason.
 #
 #   jah_tsan_lane(<test>...)   ThreadSanitizer, in its OWN build directory
 #       (TSan cannot combine with ASan and instruments every TU):
@@ -95,49 +96,17 @@ set(JAH_ASAN_ENGINE_OPTIONS "ASAN_OPTIONS=detect_leaks=0:protect_shadow_gap=0")
 #       whose subject is an async contract — a runner, a heartbeat, a watchdog,
 #       a shutdown order.
 #
-#   jah_lsan_blocked(<test>...) / jah_tsan_blocked(<test>...)   the quarantine.
-#       A suite that is eligible for a lane and does NOT pass it today, for a
-#       reason that is not the suite's fault and is too structural to fix in
-#       passing. These get the label `lsan-blocked` / `tsan-blocked` instead:
-#       they stay one command away (`ctest -L '^lsan-blocked$'`, and
-#       sanitize.sh names them at the end of every run) but they do not hold the
-#       gate permanently red. Every call says WHAT blocks it. Moving a suite
-#       back into its lane is then a one-word edit. Nothing here is suppressed
-#       and nothing is hidden — a quarantined suite is a defect with a name.
-#
-#       Every lsan-blocked row was run once more 2026-10-11 (RUNNER-A7A): all red for these blockers, now
-#       registered (LSAN-L1..L4 — the registry file testing/defects.json went with TESTING-SIMPLE; each call names its ids). The app-spawning rows' harnesses
-#       ignore the app's exit code and its report, so a green there proves nothing about the app.
-#       The leak blockers as of 2026-09-04, all found by this lane's first run:
-#         L1  iris::Material never frees its QList<Property*> — every material
-#             ever constructed leaks its ~19 properties (irisgl/document/
-#             materials/material.h:53 + the empty ~Material at :74). NOT a
-#             one-liner: duplicate() hands the same raw pointers to a second
-#             material, so a qDeleteAll in the destructor double-frees.
-#         L2  iris::LightNode::shadowMap is `new ShadowMap()` with no
-#             destructor (irisgl/document/scenegraph/lightnode.cpp:243) —
-#             12 bytes per light node, forever.
-#         L3  every imported asset leaks its AssetNodeObject and the whole
-#             mesh subtree hanging off it (src/services/import/
-#             assetimporters.cpp:319 into AssetManager::addAsset) — the deep
-#             audit's "clearAssetList() deletes nothing", independently
-#             confirmed here.
-#         L4  the materials module's node library owns raw NodeModel/
-#             SocketModel/Connection pointers with no destructors anywhere
-#             (src/modules/materials/models/library.cpp:38, graph/
-#             nodegraph.cpp:74 and :140) — the whole library leaks per build.
-#         L5  iris::KeyFrame<T>::addKey's Key<T>* and the KeyFrames a
-#             PropertyAnim news up are never freed (irisgl/document/animation/
-#             keyframeanimation.h:120, propertyanim.cpp:42-44).
+#   The LEAK lane has NO quarantine (LEAK-1, 2026-10-19): the five blockers it
+#   held — the material's rows, the light's shadow map, the session asset
+#   registry, the materials module's library / graph / undo nodes, the
+#   keyframes — and the app's own exit-time allocations each have one owner,
+#   and every row it held is in jah_lsan_lane. A row that leaks under the lane
+#   is a red: an owner is found for the allocation (a parent, a smart pointer,
+#   a destructor), or — a third party's own, never ours — its library frame and
+#   reason go in scripts/lsan.supp.
 function(jah_lsan_lane)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY LABELS lsan)
-    endforeach()
-endfunction()
-
-function(jah_lsan_blocked)
-    foreach(_t IN LISTS ARGV)
-        set_property(TEST ${_t} APPEND PROPERTY LABELS lsan-blocked)
     endforeach()
 endfunction()
 
@@ -154,8 +123,11 @@ function(jah_tsan_render)   # called in the directory that registers the row (a 
     endforeach()
 endfunction()
 
-#   jah_tsan_blocked(<test>...)   the race lane's quarantine, same idea as
-#       jah_lsan_blocked. As of 2026-09-04 it holds every suite that drives the
+#   jah_tsan_blocked(<test>...)   the race lane's quarantine: a suite eligible
+#       for the TSan lane that cannot run under it today, for a reason that is
+#       not the suite's fault; label `tsan-blocked`, one command away
+#       (`ctest -L '^tsan-blocked$'`), named at the end of every sanitize.sh tsan
+#       run, and each call says WHAT blocks it. As of 2026-09-04 it holds every suite that drives the
 #       REAL Jahshaka binary, for a reason that is not ours: GCC 15's libtsan
 #       aborts the app during startup with
 #           ThreadSanitizer: CHECK failed: sanitizer_thread_registry.cpp:186

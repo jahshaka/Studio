@@ -81,8 +81,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	desktopBtn = new QPushButton("Desktop");
 	editor = new QPushButton("Editor");
 	content = new QPushButton("Content");
-	mining = new QPushButton("Mining");
-	help = new QPushButton("Help");
 	about = new QPushButton("About");
 	shortcuts = new QPushButton("Shortcuts");
 	database = new QPushButton("Database");
@@ -91,19 +89,17 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	desktopBtn->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	editor->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	content->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
-	mining->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
-	help->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	about->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	shortcuts->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	database->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 
-	auto buttonGroup = new QButtonGroup;
+	// Owned by the page (LEAK-1): parentless, it and the two buttons no layout held (the dead Mining / Help)
+	// outlived the dialog as a cycle.
+	auto buttonGroup = new QButtonGroup(this);
 	buttonGroup->addButton(viewport);
 	buttonGroup->addButton(desktopBtn);
 	buttonGroup->addButton(editor);
 	buttonGroup->addButton(content);
-	buttonGroup->addButton(mining);
-	buttonGroup->addButton(help);
 	buttonGroup->addButton(about);
 	buttonGroup->addButton(shortcuts);
 	buttonGroup->addButton(database);
@@ -114,8 +110,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	desktopWidget	= new QWidget;
 	editorWidget 	= new QWidget;
 	contentWidget	= new QWidget;
-	miningWidget	= new QWidget;
-	helpWidget		= new QWidget;
 	aboutWidget		= new QWidget;
 	shortcutsWidget	= new QWidget;
 	databaseWidget	= new QWidget;
@@ -149,12 +143,10 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	stack->addWidget(viewportWidget);
 	stack->addWidget(editorWidget);
 	stack->addWidget(contentWidget);
-	stack->addWidget(miningWidget);
-	stack->addWidget(helpWidget);
 	stack->addWidget(aboutWidget);
 	stack->addWidget(shortcutsWidget);
 	stack->addWidget(databaseWidget);
-	stack->addWidget(desktopWidget);    // appended: existing indexes 0-7 are wired below
+	stack->addWidget(desktopWidget);
 
 	configureViewport();
 	configureEditor();
@@ -164,15 +156,13 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	configureDatabaseWidget();
 	configureDesktop();
 
-	connect(viewport, &QPushButton::clicked, [=]() { stack->setCurrentIndex(0); });
-	connect(editor, &QPushButton::clicked, [=]() { stack->setCurrentIndex(1); });
-	connect(content, &QPushButton::clicked, [=]() { stack->setCurrentIndex(2); });
-	connect(mining, &QPushButton::clicked, [=]() { stack->setCurrentIndex(3); });
-	connect(help, &QPushButton::clicked, [=]() { stack->setCurrentIndex(4); });
-	connect(about, &QPushButton::clicked, [=]() { stack->setCurrentIndex(5); });
-	connect(shortcuts, &QPushButton::clicked, [=]() { stack->setCurrentIndex(6); });
-	connect(database, &QPushButton::clicked, [=]() { stack->setCurrentIndex(7); });
-	connect(desktopBtn, &QPushButton::clicked, [=]() { stack->setCurrentIndex(8); });
+	// Each button shows ITS page (no index arithmetic: the dead Mining / Help pages, never on screen and never
+	// parented, are deleted — LEAK-1).
+	const std::pair<QPushButton *, QWidget *> pages[] = {
+		{viewport, viewportWidget}, {editor, editorWidget}, {content, contentWidget}, {about, aboutWidget},
+		{shortcuts, shortcutsWidget}, {database, databaseWidget}, {desktopBtn, desktopWidget}};
+	for (const auto &[button, page] : pages)
+		connect(button, &QPushButton::clicked, this, [this, page = page]() { stack->setCurrentWidget(page); });
 
 }
 

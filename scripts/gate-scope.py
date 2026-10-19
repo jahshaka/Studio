@@ -2131,7 +2131,7 @@ class Selection:
 
     # the commands that register or decorate a TEST (their first arguments are row names)
     _TEST_REGISTRATION = {"add_test", "set_tests_properties", "jah_fresh_home_fixture",
-                          "jah_no_display", "jah_tsan_blocked", "jah_lsan_blocked", "jah_tsan_lane",
+                          "jah_no_display", "jah_tsan_blocked", "jah_tsan_lane",
                           "jah_gpu_exclusive_test", "jah_gpu_row", "jah_scale_row"}
     # what a retired suite's check became, printed with its `retired:` reason
     RETIRED = {

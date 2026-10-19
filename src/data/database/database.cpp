@@ -1897,16 +1897,8 @@ int Database::flushPendingAssetDeletes()
 void Database::applyAssetScrubs(const QVector<PendingAssetScrub> &pending)
 {
     for (const PendingAssetScrub &item : pending) {
-        // The registry OWNS its Assets (io/assetmanager.h, since the memory
-        // lane): dropping the pointer without deleting it leaks the Asset.
-        // Backwards, because removing at
-        // i and then advancing skips the next element.
-        auto &assets = AssetManager::getAssets();
-        for (int i = assets.count() - 1; i >= 0; --i) {
-            if (assets[i]->assetGuid != item.guid) continue;
-            delete assets[i];
-            assets.remove(i);
-        }
+        // The registry OWNS its Assets (io/assetmanager.h): it destroys them.
+        AssetManager::removeAssets(item.guid);
         // Invariant I2: the sidecar is the rebuild record, so it must not
         // outlive its asset — 41 of the owner's 86 sidecars named deleted
         // assets, and rebuildCatalog would have resurrected every one of them

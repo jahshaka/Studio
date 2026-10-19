@@ -135,11 +135,7 @@ jah_no_display(document.mobility)
 # The leak lane (scripts/sanitize.sh lsan): the document model itself — every
 # node, mesh, material and animation type constructed and dropped. No Vulkan,
 # no app process, so LeakSanitizer runs with detect_leaks=1 here.
-# QUARANTINED (L2 LightNode::shadowMap, L5 KeyFrame keys) plus one leak of
-# the suite's own (test_document_characterisation.cpp:386 news a Vector3DPropertyAnim
-# it never deletes). Move to jah_lsan_lane once L2/L5 are fixed.
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15)
-jah_lsan_blocked(document.characterisation)
+jah_lsan_lane(document.characterisation)
 
 # ENGINEERING_DEBT_SPEC A4.2: the ONE fixed-step simulation clock
 # (irisgl/document/scenegraph/simulationclock.h). Header-only arithmetic —
@@ -216,6 +212,24 @@ add_test(NAME document.material_defaults COMMAND test_material_defaults
 set_tests_properties(document.material_defaults PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.material_defaults)
+
+# document.material_duplicate — A MATERIAL OWNS ITS ROWS, AND A DUPLICATE OWNS ITS OWN (LEAK-1 stage 1): every row
+# type clones whole (Property::clone), a duplicate's rows are distinct objects with equal values, and destroying
+# either material leaves the other whole. In the leak lane it also proves the rows are freed. Document only.
+add_executable(test_material_duplicate test_material_duplicate.cpp)
+set_target_properties(test_material_duplicate PROPERTIES AUTOMOC OFF)
+target_include_directories(test_material_duplicate PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_material_duplicate PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_material_duplicate)
+add_test(NAME document.material_duplicate COMMAND test_material_duplicate
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.material_duplicate PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.material_duplicate)
+jah_lsan_lane(document.material_duplicate)
 
 # document.dirty_list — THE DOCUMENT'S HALF of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.3): dedupe, the three kinds that cascade

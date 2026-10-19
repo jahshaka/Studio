@@ -69,7 +69,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                         .arg(node->getName()));
 
         auto pbr = iris::PbrMaterial::create();
-        for (const iris::Property* property : pbr->properties) {
+        for (const iris::Property* property : pbr->properties()) {
             if (!values.contains(property->name)) continue;
             if (property->type == iris::PropertyType::Color)
                 pbr->setValue(property->name,
@@ -298,7 +298,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             // and the material may now be a PbrMaterial (imported GLB) as well
             // as the legacy CustomMaterial.
             auto mat = n->getMaterial();
-            if (mat) for (auto prop : mat->properties) {
+            if (mat) for (auto prop : mat->properties()) {
                 if (prop->type != iris::PropertyType::Texture) {
                     continue;
                 }

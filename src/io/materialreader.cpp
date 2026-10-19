@@ -113,7 +113,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	// Drive everything through setValue so both the shader-facing field and the
 	// editor-facing Property object update (same contract as
 	// SceneReader::readPbrMaterial, which reads these out of the scene blob).
-	for (auto prop : mat->properties) {
+	for (auto prop : mat->properties()) {
 		if (!values.contains(prop->name)) continue;
 		const auto val = values.value(prop->name);
 
@@ -176,14 +176,13 @@ void MaterialReader::restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJso
 	const QJsonArray emitted = matObject.value(QStringLiteral("bake")).toObject()
 	                               .value(QStringLiteral("emittedSockets")).toArray();
 	if (emitted.isEmpty() || !matObject.contains(QStringLiteral("shadergraph"))) return;
-	NodeGraph* graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(matObject);
+	const std::unique_ptr<NodeGraph> graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(matObject);
 	if (!graph) return;
 	// BUILDING a material is a read: PathOnly, never an import.
-	MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::PathOnly,
+	MaterialHelper::resolveAppRelativeTextures(graph.get(), MaterialHelper::TextureBinding::PathOnly,
 	                                           assethome::materials());
-	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, MaterialHelper::textureResolver());
+	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph.get(), MaterialHelper::textureResolver());
 	mat->setCustomPiecePixel(pieces.value(QStringLiteral("customPiecePixel")).toString());
 	mat->setCustomPieceVertex(pieces.value(QStringLiteral("customPieceVertex")).toString());
-	delete graph;
 }
 

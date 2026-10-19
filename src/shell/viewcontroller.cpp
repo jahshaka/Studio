@@ -76,7 +76,7 @@ ViewController::CameraControls ViewController::createCameraControls()
     controls.views = new QToolButton;
     mViewsButton = controls.views;
     controls.views->setStyleSheet(StyleSheet::ViewportMenuButton());
-    mViewsMenu = new QMenu;
+    mViewsMenu = new QMenu(controls.views);   // a tool button does not own its menu
     mViewsMenu->setStyleSheet(StyleSheet::QMenuFlat());
     auto viewsGroup = new QActionGroup(mViewsMenu);
     viewsGroup->setExclusive(true);
@@ -119,7 +119,7 @@ ViewController::CameraControls ViewController::createCameraControls()
     controls.cameras = new QToolButton;
     mCamerasButton = controls.cameras;
     controls.cameras->setStyleSheet(StyleSheet::ViewportMenuButton());
-    mCamerasMenu = new QMenu;
+    mCamerasMenu = new QMenu(controls.cameras);
     mCamerasMenu->setStyleSheet(StyleSheet::QMenuFlat());
     connect(mCamerasMenu, &QMenu::aboutToShow, this, &ViewController::rebuildCamerasMenu);
     controls.cameras->setMenu(mCamerasMenu);

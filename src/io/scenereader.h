@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef SCENEREADER_H
 #define SCENEREADER_H
 
+#include <memory>
 #include <QSharedPointer>
 #include "io/assetiobase.h"
 #include "io/sceneformat.h"
@@ -146,9 +147,11 @@ public:
 
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,
-                             EditorData **editorData = nullptr);
+                             std::unique_ptr<EditorData> *editorData = nullptr);
     iris::ScenePtr readScene(QJsonObject &projectObj);
-    EditorData* readEditorData(QJsonObject &projectObj);
+    /// The scene's saved editor state, OWNED by the caller (LEAK-1: a bare
+    /// `new` handed down to the viewport, which never freed it); null for none.
+    std::unique_ptr<EditorData> readEditorData(QJsonObject &projectObj);
 
     /**
      * Creates scene node from json data

@@ -983,17 +983,14 @@ QVariantMap NodeApi::size(const QString &id)
 // second copy here — a hand-maintained list is exactly how an error message
 // starts lying about the surface it describes.
 //
-// OWNERSHIP (AI_SURFACE_PROGRAM_SPEC §3.A): getProperties() hands back freshly
-// `new`'d Property objects with a virtual destructor and no owner. Every caller
-// must delete them; animationwidget.cpp:149 does not, and is not this lane's
-// problem, but nothing here copies that.
+// OWNERSHIP: getProperties() hands back a fresh iris::PropertyRows that owns
+// its rows (LEAK-1); they live as long as the list.
 QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
 {
     QStringList keys;
     if (!node) return keys;
-    const auto props = node->getProperties();
-    for (auto *prop : props) keys << prop->name;
-    qDeleteAll(props);
+    const iris::PropertyRows props = node->getProperties();
+    for (auto *prop : props.view()) keys << prop->name;
     return keys;
 }
 
@@ -1066,8 +1063,8 @@ QVariant NodeApi::properties(const QString &id)
     if (!node) return QVariant();
 
     QVariantList out;
-    const auto props = node->getProperties();
-    for (auto *prop : props) {
+    const iris::PropertyRows props = node->getProperties();
+    for (auto *prop : props.view()) {
         QVariantMap row = propertyRowToJs(prop);
         // `writable` is the Property's own declaration (property.h), set at the
         // getProperties() site that knows why the row is refused. It is NOT
@@ -1089,7 +1086,6 @@ QVariant NodeApi::properties(const QString &id)
         }
         out.append(row);
     }
-    qDeleteAll(props);
     return out;
 }
 
@@ -1346,8 +1342,7 @@ QVariant NodeApi::lightProfile(const QString &id)
     if (!light) return QVariant();
     // The renderer's own rule, reported rather than hidden: shadow-casting
     // point lights lose their profile, and only spot/point carry one at all.
-    const bool shadows = light->shadowMap &&
-                         light->shadowMap->shadowType != iris::ShadowMapType::None;
+    const bool shadows = light->shadowMap.shadowType != iris::ShadowMapType::None;
     const bool applies = !light->iesProfileGuid.isEmpty() &&
                          (light->lightType == iris::LightType::Spot ||
                           (light->lightType == iris::LightType::Point && !shadows));

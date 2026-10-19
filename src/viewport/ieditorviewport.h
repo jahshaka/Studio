@@ -12,6 +12,7 @@
 // is not a wish list. Legacy-only operations (GL context juggling around resource
 // loads, the IrisGL renderer) are kept as explicit, nullable calls so the callers
 // can be found and retired.
+#include <memory>
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QList>
@@ -303,7 +304,9 @@ public:
     /// and tells the shell so the toolbar's speed button follows. CameraSpeed
     /// already holds the new value; this only announces it.
     virtual void onCameraSpeedChanged() {}
-    virtual void setEditorData(EditorData *data) = 0;
+    /// The viewport OWNS its editor data (LEAK-1): handed over here, or made on
+    /// the first getEditorData(); the raw pointer lives as long as the viewport.
+    virtual void setEditorData(std::unique_ptr<EditorData> data) = 0;
     virtual EditorData *getEditorData() = 0;
 
     // ---- modes ----

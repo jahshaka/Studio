@@ -100,10 +100,7 @@ bool LiveTextureCatalog::destroy(const QString &guid)
     // The AssetManager mirror row, if this session still has one. Nothing else
     // owns it, so it is deleted here rather than left as a name pointing at
     // pixels that no longer exist.
-    if (Asset *asset = AssetManager::getAssedByGuid(guid)) {
-        AssetManager::getAssets().removeOne(asset);
-        delete asset;
-    }
+    AssetManager::removeAssets(guid);
     return true;
 }
 

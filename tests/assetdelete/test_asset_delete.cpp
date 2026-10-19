@@ -299,10 +299,10 @@ int main(int argc, char **argv)
     // Mirror what the AssetManager cache holds, so we can prove the cache is
     // NOT scrubbed by a failed delete.
     {
-        auto *asset = new AssetVariant;
+        auto asset = std::make_unique<AssetVariant>();
         asset->assetGuid = survivorGuid;
         asset->type = ModelTypes::Texture;
-        AssetManager::addAsset(asset);
+        AssetManager::addAsset(std::move(asset));
     }
     CHECK(AssetManager::getAssets().count() == 1, "asset cached in AssetManager");
 
@@ -744,10 +744,10 @@ int main(int argc, char **argv)
         // The session registration of the first orphan — the other thing the
         // scrub used to take before the rows were durable.
         {
-            auto *asset = new AssetVariant;
+            auto asset = std::make_unique<AssetVariant>();
             asset->assetGuid = firstGuid;
             asset->type = ModelTypes::Texture;
-            AssetManager::addAsset(asset);
+            AssetManager::addAsset(std::move(asset));
         }
 
         // The SECOND reap fails, the first has already succeeded: a trigger

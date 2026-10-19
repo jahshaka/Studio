@@ -554,9 +554,7 @@ set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     TIMEOUT 300 LABELS "scripting")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+jah_lsan_lane(scripting.e2e.texture_missing)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 # scripting.e2e.arriving_line — BISTRO-ENGINE-1 stage 5 (findings 9, 11): an open
 # of 120 distinct meshes streams them on the DRIVER's frames (pending.meshes > 0
 # after the reveal, the line names them) and the arriving line ends within 3
@@ -578,7 +576,7 @@ set_tests_properties(scripting.e2e.arriving_line PROPERTIES
     ENVIRONMENT "HOME=${_arriving_home};JAHSHAKA_DATA_ROOT=${_arriving_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "scripting")
 jah_tsan_blocked(scripting.e2e.arriving_line)   # spawns the app
-jah_lsan_blocked(scripting.e2e.arriving_line)   # spawns the app
+jah_lsan_lane(scripting.e2e.arriving_line)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 # scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
 # (STUDIO-D1 fix round; services/uithreadwait.h). Arm 1, in-process: an MCP
 # request landing in a real operation's pump with no MCP dispatch running is
@@ -613,9 +611,7 @@ set_tests_properties(scripting.e2e.pump_defer PROPERTIES
     TIMEOUT 300 LABELS "scripting")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(scripting.e2e.pump_defer)   # spawns the app
-# LSan, run 2026-10-11 (RUNNER-A7A): red — LSAN-L1-MATERIAL-PROPERTIES (testing/defects.json, recheck 2026-11-15).
-# The row's harness ignores the app's exit code and LSan report: the app's own leak (L1) is what blocks it.
-jah_lsan_blocked(scripting.e2e.pump_defer)   # spawns the app
+jah_lsan_lane(scripting.e2e.pump_defer)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 # THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
 # World panel's VR section as a verb: `world.vr` reads and writes six document
 # fields (the fly speed in m/s, the fly direction, the turn and its step or

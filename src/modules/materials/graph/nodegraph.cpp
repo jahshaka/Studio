@@ -52,7 +52,9 @@ void NodeGraph::addNode(NodeModel *model)
 
 NodeModel* NodeGraph::getNode(const QString& nodeId)
 {
-	return nodes[nodeId];
+	// value(), not operator[]: a miss through operator[] INSERTS a null entry
+	// into the map that owns the nodes (serialize() then dereferences it).
+	return nodes.value(nodeId, nullptr);
 }
 
 QVector<ConnectionModel*> NodeGraph::getNodeConnections(const QString& nodeId)
@@ -69,15 +71,19 @@ QVector<ConnectionModel*> NodeGraph::getNodeConnections(const QString& nodeId)
 	return conns;
 }
 
+std::unique_ptr<NodeModel> NodeGraph::takeNode(const QString& nodeId)
+{
+	NodeModel *node = nodes.value(nodeId, nullptr);
+	if (!node) return nullptr;
+	for (auto con : getNodeConnections(nodeId))
+		removeConnection(con->id);
+	nodes.remove(nodeId);
+	return std::unique_ptr<NodeModel>(node);
+}
+
 void NodeGraph::removeNode(const QString& nodeId)
 {
-	auto conns = getNodeConnections(nodeId);
-
-	for (auto con : conns) {
-		removeConnection(con->id);
-	}
-
-	nodes.remove(nodeId);
+	takeNode(nodeId);
 }
 
 void NodeGraph::setMasterNode(NodeModel *masterNode)
@@ -142,6 +148,9 @@ void NodeGraph::removeConnection(QString connectionId)
 	con->leftSocket->connection = nullptr;
 	con->rightSocket->connection = nullptr;
 	connections.remove(connectionId);
+	// THE GRAPH OWNED IT (LEAK-1 L4): unlinking alone leaked every removed
+	// wire, a re-wired input's old one included (shadergraph.bake_output).
+	delete con;
 }
 
 QJsonObject NodeGraph::serialize()
@@ -189,8 +198,8 @@ QJsonObject NodeGraph::serialize()
 	return graph;
 }
 
-NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
-                                  QString* refusalReason)
+std::unique_ptr<NodeGraph> NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
+                                                  QString* refusalReason)
 {
 	if (refusalReason) refusalReason->clear();
 
@@ -213,9 +222,6 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 	//
 	// Refusing costs ONE pre-pass over the node array, before a single node is
 	// built, so a refused file allocates no graph and leaves nothing behind.
-	// (The `new LibraryV1()` every CALLER hands in is still leaked on a
-	// refusal, exactly as it is leaked on every successful load — NodeGraph
-	// has no destructor. Recorded as debt, not changed here.)
 	{
 		const QString masterId = graphObj["masternode"].toString();
 		const QJsonArray nodesForMaster = graphObj["nodes"].toArray();
@@ -270,7 +276,7 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 		}
 	}
 
-	auto graph = new NodeGraph();
+	auto graph = std::make_unique<NodeGraph>();
 	graph->setNodeLibrary(library);
 
 	// read nodes
