@@ -57,7 +57,7 @@ atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same 
 atom.dag_bound_bar 18.70  quiet n=30
 atom.dag_chain_validate 12.07  quiet n=44
 atom.decode_exact 22.44  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
-atom.dolly_gate 27.89  quiet n=40
+atom.dolly_gate 43.49  solo 2026-10-19 (ATOM-3 stage 1: the 1 px walk, its control, the 2 and 3 px walks and the 10x arm; 920 frames, a measure row; n=1)
 atom.lod_bound_bar 11.36  quiet n=30
 atom.lod_switch 237.65  quiet n=43
 atom.lod_switch.fixture 0.05  quiet n=52
@@ -152,7 +152,7 @@ engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGR
 engine.readd_named 3.10  spec EU-2B stage 5 (2026-10-15)
 engine.headless 0.00  ship 3a0422b4e (2026-10-13)
 engine.lod_hysteresis 1.61  quiet n=44
-engine.lod_rule_parity 5.19  quiet n=44
+engine.lod_rule_parity 5.38  solo 2026-10-19 (ATOM-3 stage 1: copies 4 and 5 at 2 and 3 px too, the strategy at 1 and 3 px; n=1)
 engine.media_check 2.01  quiet n=41
 engine.oom_is_not_loss 2.64  quiet n=45
 engine.particles_pfx2 1.94  quiet n=42
@@ -1002,6 +1002,8 @@ engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.
 gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
 gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round: the movers' gate on a metal's card; 573 frames, the gate arms settle 72 — the lowest of three runs beside ATOM-1's gate; over the fixture budget, labelled measure until the row is rewritten to it)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
-shadow.caster_route 5.21  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 2: three worlds - the cut, the stock, the bare - a floor, a pole, a blended and a cutout plane; n=3)
+shadow.caster_route 6.10  solo 2026-10-19 (ATOM-3 stage 2: the cutout through the masked range, + its level-0 reference; n=1, 65 frames)
 atom.view_colour 1.08  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 6: three spheres under the triangles view, one delete; n=2)
-atom.cut_probe 2.05  solo 2026-10-19 (ATOM-2 stage 1: a baked sphere in metres and its centimetre twin, two probes, the density view; n=3, 24 frames)
+atom.cut_probe 1.21  solo 2026-10-19 (ATOM-3 stage 1: + (h), three probes at 1/2/3 px; n=1, 33 frames)
+atom.masked_id 2.77  solo 2026-10-19 (ATOM-3 stage 2: a cut-out plane, its opaque twin, minified against its level 0; n=1, 82 frames)
+atom.masked_coverage 3.64  solo 2026-10-19 (ATOM-3 stage 2: the 1-texel checker at 1/2/4/8x, two pyramids read back; n=1, 64 frames)

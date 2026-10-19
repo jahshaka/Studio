@@ -58,6 +58,10 @@ ENGINE_SUBSYSTEMS = [
     (r"^media/Photon/|^src/photon/|Photon|Voxel|Cascade|Gather|Card|Probe|Irradiance|Ifd|Vct|EnvironmentCones|"
      r"^src/OgreGi\.cpp$|SurfaceCache|JahshakaIbl|JahshakaPcc", ["gi", "*screenshots"],
      "Photon (voxels, cascades, gather, cards, probes)"),
+    # THE CUT-OUTS' MASKS (ATOM-3 stage 2: AlphaMasks.h / OgreAlphaMasks.cpp, the mask jobs, the GLSL reader): the
+    # id pass's and the caster cut's masked ranges (atom, shadow) and the rays' cut-out test (rtreflect, gi)
+    (r"AlphaMask|jah_alpha_mask", ["atom", "scale", "shadow", "engine.atom_", "rtreflect", "gi"],
+     "the cut-outs' masks (the Atom passes' masked ranges and the rays' cut-out test)"),
     # Atom: the visibility buffer, the GPU scene, the atom passes and their media
     (r"Atom|GpuScene|^media/Hlms/Atom/|^src/atomdraw/", ["atom", "scale", "shadow", "engine.atom_"],
      "Atom (the visibility buffer; engine.atom_* are its decode's own fixtures)"),
@@ -240,6 +244,8 @@ OGRE_VIEW_FUNCTIONS = {
                            "applyLensShift", "applyLetterbox", "readChainTexture", "chainLocal", "chainTexture")},
     **{f: ["atom", "engine", "scale"] for f in ("hzbLevelsFor", "finishAtomOcclusion", "setLodHysteresisOffscreen",
                                                 "incompleteDraws", "sceneShapeMoved")},
+    # ATOM-3 stage 1: the view's pixel-error threshold on its cameras (the stock chain's level walk)
+    "syncLodTolerance": ["atom", "engine", "scale", "compute"],
     **{f: ["engine", "gizmo"] for f in ("overlaysAllowed", "setOverlay", "overlay", "setHelpersVisible")},
     **{f: ["vr"] for f in ("setVrHelpersVisible", "setStereo", "setHiddenAreaMask")},
     "setVrSsrOverride": ["vr"] + _REFL,

@@ -64,6 +64,8 @@ public:
     Q_INVOKABLE QVariantList shadowMapDigests();
     /// THE SUN MAPS' CASTERS BY ROUTE (decision 15.1's measurement; ATOM-ROUTE-COVERAGE-1).
     Q_INVOKABLE QVariantList shadowCasterRoutes();
+    Q_INVOKABLE bool coverageSnapshot(int slot);
+    Q_INVOKABLE QVariantMap coverageCompare(const QVariantMap &opts = QVariantMap());
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
     /// THE SUN MAPS' RECEIVER TEST'S MEASURING DOOR (ENGINE-UPGRADE-U5 stage 4b).
@@ -71,6 +73,7 @@ public:
     Q_INVOKABLE bool setAtomOcclusion(bool on);
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
+    Q_INVOKABLE double atomPixelError();
     /// THE SHADER CLOCK (TORNADO-1, G7): pin it for a reproducible frame of an
     /// animated material, or hand it back to the free (frame-counted) clock.
     Q_INVOKABLE QVariantMap shaderTime(const QVariantMap &params = QVariantMap());

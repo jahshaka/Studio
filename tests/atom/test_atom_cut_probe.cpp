@@ -15,7 +15,8 @@
 //   (f) THE DENSITY VIEW: every pixel of each sphere is painted the class of its BASE mesh's level-0 triangles per
 //       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes;
 //   (g) THE PROBE IS ONE FRAME: the cut job's probe permutation is gone the frame after (no group is recorded twice
-//       and a second read without an arming answers "not armed").
+//       and a second read without an arming answers "not armed");
+//   (h) THE TIER'S THRESHOLD (ATOM-3 stage 1): at the World Mode's 1 / 2 / 3 px the drawn triangles fall strictly.
 // FRAMES, NEVER TIME: every reading follows a counted frame.
 // The engine's private headers BEFORE the document's (Qt's keyword macros - emit, slots - would rewrite them).
 #include "EnginePrivate.h"
@@ -392,6 +393,33 @@ int main(int argc, char **argv)
     enginetest::frames(e, 2);
     AtomDrawStatus off = scene->atomDrawStatus();
     CHECK(!off.densityValid, "(f) the density figures are gone with the view");
+
+    // (h) THE TIER'S THRESHOLD (ATOM-3 stage 1): the World Mode's pixel-error row reaches the cut
+    // (Scene::setPixelTolerance -> the id pass's request = row x lodBias) and the drawn triangles fall
+    // STRICTLY with it — Epic 1, High 2, Medium 3 px at the same pose. At the base every tier drew the
+    // 1 px count (the threshold was the constant kLodBudgetPixels).
+    {
+        unsigned long long drawnAt[3] = { 0ull, 0ull, 0ull };
+        bool readAllH = true, tolOk = true;
+        for (int t = 0; t < 3; ++t) {
+            const float tol = float(t + 1);
+            scene->setPixelTolerance(tol);
+            enginetest::frames(e, 2);
+            AtomCutProbe h;
+            if (!probeFrame(e, scene, h) || !h.valid) { readAllH = false; continue; }
+            if (h.tolerance != tol) tolOk = false;
+            for (const AtomCutProbeObject &o : h.objects)
+                if (o.slot == sA || o.slot == sB) drawnAt[t] += o.drawnTriangles;
+        }
+        scene->setPixelTolerance(kLodBudgetPixels);
+        std::printf("   (h) drawn triangles (A + B) at 1 / 2 / 3 px: %llu / %llu / %llu (level 0 %zu)\n", drawnAt[0],
+                    drawnAt[1], drawnAt[2], 2u * metres.triangleCount());
+        CHECK_MSG(readAllH && tolOk, "(h) the three probes are valid and their request carries the row (%d, %d)",
+                  int(readAllH), int(tolOk));
+        CHECK_MSG(drawnAt[0] > drawnAt[1] && drawnAt[1] > drawnAt[2] && drawnAt[2] > 0ull,
+                  "(h) THE DRAWN TRIANGLES FALL STRICTLY WITH THE THRESHOLD: %llu > %llu > %llu", drawnAt[0],
+                  drawnAt[1], drawnAt[2]);
+    }
 
     e->destroyView(view);
     e->destroyScene(scene);

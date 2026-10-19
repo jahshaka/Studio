@@ -613,6 +613,32 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->playerHidesFloor = v != 0; };
         out.append(r);
     }
+    {
+        // THE VIEW'S PIXEL-ERROR THRESHOLD (ATOM-3 stage 1): the one lever of the level rule
+        // that is taste rather than arithmetic (the rule itself is measured — ATOM-2 stage 2
+        // matched Unreal's to five digits). At 1 px nothing a cut drops can be seen; at 2-4 px
+        // the small parts of a far object drop the way a classic LOD does, and the drawn
+        // triangles fall with the tier. The numbers are the lead's (2026-10-19); whether 2 px
+        // shows on a moving silhouette is the owner's visual call at the smoke (atom.dolly_gate
+        // prints the per-step delta at 2 and 3). Every view takes it (the Atom cut and the
+        // stock chain alike); shadow maps keep their texel. The selftest scenes run Epic = 1.
+        Row r;
+        r.id = QStringLiteral("atomPixelError");
+        r.label = QStringLiteral("Geometry Detail (pixel error)");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Int;
+        r.minValue = 1; r.maxValue = 8;
+        r.tier[0] = 4; r.tier[1] = 3; r.tier[2] = 2; r.tier[3] = 1;
+        r.cost = QStringLiteral("How many pixels of geometric error a view may show before it "
+                                "draws a finer level of a mesh: 1 is the most detail (no "
+                                "simplification can be seen), 2-4 let far objects drop small "
+                                "parts sooner and draw fewer triangles. Shadow maps are not "
+                                "affected (their resolution is their own setting). Costs "
+                                "nothing to change: no shader rebuilds.");
+        r.get = [](const iris::ScenePtr &s) { return s->atomPixelError; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->atomPixelError = qBound(1, v, 8); };
+        out.append(r);
+    }
 
     // ---- Shadows -----------------------------------------------------------
     {

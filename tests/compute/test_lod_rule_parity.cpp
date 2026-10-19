@@ -140,7 +140,8 @@ static void clusterCutParity(Engine *e)
     const float cy = std::cos(0.5236f), sy = std::sin(0.5236f), cx = std::cos(0.3491f), sx = std::sin(0.3491f);
     const float R[3][3] = { { cy, 0.0f, sy }, { sx * sy, cx, -sx * cy }, { -cx * sy, sx, cx * cy } };
     const float axis[3] = { 1.0f, 0.6f, 1.3f };
-    const float tols[3] = { 0.5f, 1.0f, 4.0f };
+    // The tiers' 1 / 2 / 3 / 4 px (the World Mode's atomPixelError row, ATOM-3) and half a pixel.
+    const float tols[5] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f };
     const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
     unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
     size_t meshesRun = 0;
@@ -229,7 +230,7 @@ static void clusterCutParity(Engine *e)
 // arm drives the real thing: each shipped mesh's baked DAG attached to eight
 // instances (inside its bounds out to 500 radii, scaled 0.5-4, one rotated and
 // scaled non-uniformly), the cull asked in mode 3 through the public gpuCull door
-// at five parameter sets (tolerance, lens, height; one orthographic), and the drawn
+// at seven parameter sets (tolerance, lens, height; one orthographic), and the drawn
 // set read back per instance. It must be CELL-IDENTICAL to Types.h's clusterCut on
 // the same rows; disagreements at a threshold (within 1e-4 of a group's error) are
 // reported apart and still fail. Nothing may overflow the stream's budget here.
@@ -247,9 +248,11 @@ static void productCutParity(Engine *e, View *view)
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
 
     struct Set { float tol, fovDeg, height; bool ortho; };
-    const Set sets[5] = { { 0.5f, 45.0f, 1080.0f, false }, { 1.0f, 45.0f, 1080.0f, false },
+    // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows).
+    const Set sets[7] = { { 0.5f, 45.0f, 1080.0f, false }, { 1.0f, 45.0f, 1080.0f, false },
                           { 4.0f, 90.0f, 720.0f, false },  { 1.0f, 110.0f, 2376.0f, false },
-                          { 1.0f, 45.0f, 1080.0f, true } };
+                          { 1.0f, 45.0f, 1080.0f, true },  { 2.0f, 45.0f, 1080.0f, false },
+                          { 3.0f, 60.0f, 1080.0f, false } };
     unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
     unsigned long long coverageBad = 0, overlapBad = 0;
     unsigned depthHist[16] = {};
@@ -580,15 +583,18 @@ int main(int argc, char **argv)
     //
     // ITS PARAMETERS ARE THE VIEW'S, not a sweep's: the strategy reads the
     // pass's own projection and render-target height, which is exactly what
-    // `fillCullView` reports for this view, and its tolerance is the shipped
-    // `kLodBudgetPixels` (the tier column is not wired into the draw path —
-    // GiQualityFacts::pixelTolerance, scripting.e2e.tier_table_atom). So this
-    // arm holds the SAME (distance x scale) fixture to the same rule at one
-    // parameter set, read through `objectLods()` — the byte the render queue
-    // indexes the VAO list with.
-    {
+    // `fillCullView` reports for this view, and its tolerance is the VIEW's
+    // pixel-error threshold (Scene::setPixelTolerance, the World Mode's
+    // `atomPixelError` row — ATOM-3 stage 1), which reaches the strategy through
+    // the view camera's own LOD factor (OgreView::syncLodTolerance). So this arm
+    // holds the SAME (distance x scale) fixture to the same rule at Epic's 1 px
+    // AND at Medium's 3 px — the second is the wiring's proof: a camera that did
+    // not carry the row would draw the 1 px levels there — read through
+    // `objectLods()`, the byte the render queue indexes the VAO list with.
+    for (const float stratTol : { kLodBudgetPixels, 3.0f }) {
         // The level is written by the LOD walk of a rendered frame; the cull
         // sweep above renders none, so the reading is taken from a fresh one.
+        scene->setPixelTolerance(stratTol);
         enginetest::frames(e, 2);
         GpuCullRequest vr;
         if (!e->fillCullView(view, vr)) { std::printf("FAIL: fillCullView (view)\n"); return 1; }
@@ -616,7 +622,7 @@ int main(int argc, char **argv)
             const float dist = std::max(0.0f, it->second.dist - radius);
             const float footprint = sampleFootprintPerspective(dist, vr.projScaleY,
                                                                vr.viewportHeight);
-            const float allowed = allowedWorldError(kLodBudgetPixels, footprint, s);
+            const float allowed = allowedWorldError(stratTol, footprint, s);
             const unsigned rule =
                 unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
             ++sEvaluated;
@@ -639,7 +645,7 @@ int main(int argc, char **argv)
         }
         std::printf("\n== the strategy (the DRAWN level), at this view's own "
                     "%.0f px / proj11 %.4f / %.1f px tolerance ==\n",
-                    vr.viewportHeight, vr.projScaleY, kLodBudgetPixels);
+                    vr.viewportHeight, vr.projScaleY, double(stratTol));
         std::printf("   %-8s %-6s %-14s %s\n", "scale", "count", "levels drawn", "disagreements");
         std::vector<int> octaves;
         for (const auto &kv : byScale) octaves.push_back(kv.first);
@@ -655,7 +661,8 @@ int main(int argc, char **argv)
                     sNearThreshold);
         char smsg[192];
         std::snprintf(smsg, sizeof(smsg),
-                      "the STRATEGY agrees with the currency on all %u drawn instances", sEvaluated);
+                      "the STRATEGY agrees with the currency on all %u drawn instances at %.0f px",
+                      sEvaluated, double(stratTol));
         CHECK(sMismatched == 0u, smsg);
         // THE FIXTURE MUST EXERCISE THE SCALE TERM, or this is an equality over
         // one octave: five octaves of scale, each of which must reach the walk.

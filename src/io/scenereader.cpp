@@ -575,6 +575,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sb = sceneObj.value("shadowMapBudget").toInt(scene->shadowMapBudget);
         scene->shadowMapBudget = sb <= 0 ? 0 : qBound(2, sb, 16);
     }
+    // The view's pixel-error threshold: absent = the ctor's 1 px (trap 10); 1..8.
+    scene->atomPixelError = qBound(1, sceneObj.value("atomPixelError").toInt(scene->atomPixelError), 8);
     // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
     {
         const int sf = sceneObj.value("shadowFilterTier").toInt(scene->shadowFilterTier);

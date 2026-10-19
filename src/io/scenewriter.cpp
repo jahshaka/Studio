@@ -169,6 +169,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
     // How many point/spot lights may hold a shadow map; 0 = Auto (the tier's).
     sceneObj["shadowMapBudget"] = scene->shadowMapBudget;
+    // The view's pixel-error threshold, in pixels (the World Mode's atomPixelError row).
+    sceneObj["atomPixelError"] = scene->atomPixelError;
     sceneObj["particleTimeScale"] = scene->particleTimeScale;
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Engine-viewport settings,
     // so they live beside antiAliasing rather than anywhere near the materials.

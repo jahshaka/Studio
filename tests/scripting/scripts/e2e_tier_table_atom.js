@@ -1,6 +1,6 @@
-// scripting.e2e.tier_table_atom — WHAT EACH PHOTON TIER PHYSICALLY IS, and what
-// the ATOM column of that table means (A4 §3's tolerance table; ATOM P3's
-// SUB-ERROR).
+// scripting.e2e.tier_table_atom — WHAT EACH PHOTON TIER PHYSICALLY IS, and the
+// view's PIXEL-ERROR THRESHOLD each World Mode runs (ATOM-3 stage 1: one World-Mode
+// row, `atomPixelError`).
 //
 // IT LIVED INSIDE scripting.e2e.world_modes, which is a suite about the World
 // Mode REGISTRY — resolution, pins, write-through, undo, the save/open
@@ -98,31 +98,6 @@ assert(byTier.high.description.indexOf("in a headset too, per eye") >= 0,
 assert(byTier.high.description.indexOf("screen-probe gather") >= 0 &&
        byTier.low.description.indexOf("screen-probe gather") < 0,
        "the generated tier sentence names the gather where the table has it and nowhere else");
-
-// ---- THE ATOM COLUMN (ATOM P3's SUB-ERROR) ---------------------------------
-//
-// The tier's GEOMETRIC TOLERANCE, in samples: the one input of the level rule
-// that is a matter of taste (the rest is the quality currency's arithmetic —
-// jahshaka/engine/Types.h). It is reported here from the engine's own
-// giQualityFacts, like every other derived column, so a tooltip and a suite read
-// one number.
-//
-// WHAT IT DOES AND DOES NOT DO TODAY, asserted so nobody has to guess: its only
-// consumer is a GPU cull request's level output. The SHIPPED draw path stays on
-// one pixel at every tier, because wiring the tier into it would move the
-// picture of every Low-tier scene — a lane with a pixel gate of its own.
-for (var tn2 in byTier)
-    assert(typeof byTier[tn2].pixelTolerance === "number" && byTier[tn2].pixelTolerance > 0,
-           tn2 + " declares a positive Atom tolerance");
-assert(Math.abs(byTier.low.pixelTolerance - 2.0) < 1e-6, "Low tolerates 2 px of deviation");
-assert(Math.abs(byTier.medium.pixelTolerance - 1.0) < 1e-6,
-       "Medium tolerates 1 px — the shipped kLodBudgetPixels, which is why it is the middle row");
-assert(Math.abs(byTier.high.pixelTolerance - 0.5) < 1e-6, "High halves it to 0.5 px");
-assert(byTier.epic.pixelTolerance === byTier.high.pixelTolerance,
-       "Epic shares High's tolerance: GiQuality is the RESOLUTION dial and Epic changes no resolution");
-assert(byTier.low.pixelTolerance > byTier.medium.pixelTolerance &&
-       byTier.medium.pixelTolerance > byTier.high.pixelTolerance,
-       "the column is monotone: a higher tier tolerates less geometric error");
 
 // ---- THE SAME TABLE'S VR COLUMN (lane V1-RIG item 4) ------------------------
 //
@@ -227,38 +202,53 @@ assert(worldMap.low === "low" && worldMap.medium === "medium" &&
        worldMap.high === "high" && worldMap.epic === "epic",
        "each World Mode runs Photon at the same name (WORLD-MODE-1, owner 2026-10-09)");
 
-// ---- THE ATOM COLUMN NAMES THE CURRENCY IT FEEDS ----------------------------
+// ---- THE VIEW'S PIXEL-ERROR THRESHOLD: ONE WORLD-MODE ROW (ATOM-3 stage 1) ----
 //
-// `pixelTolerance` is the `tolerance` argument of the quality currency
-// (jahshaka/engine/Types.h: `allowedWorldError(tolerance, footprint,
-// meshToWorldScale)`) — the one input of the level rule that is taste and not
-// arithmetic — and the verb reports it from `GiQualityFacts::pixelTolerance`
-// like every other derived column, so the name is asserted BY NAME here: a
-// second spelling of the same dial on this row would be exactly the drift this
-// suite exists to prevent.
-var atomKeys = [];
-Object.keys(byTier.high).forEach(function (k) {
-    if (/toleran|budget|pixelerr|suberr/i.test(k)) atomKeys.push(k);
-});
-assert(atomKeys.length === 1 && atomKeys[0] === "pixelTolerance",
-       "the tier row carries exactly ONE tolerance column and it is named pixelTolerance: [" +
-       atomKeys.join(", ") + "]");
-// The currency's units: SAMPLES. Medium's cell is the shipped draw budget
-// (engine kLodBudgetPixels = 1 px), which is why Medium is the middle row, and
-// every tier's value is a small positive number of samples rather than a
-// distance or a triangle count.
+// The tolerance of the level rule — the one input that is taste and not
+// arithmetic (`allowedWorldError(tolerance, footprint, meshToWorldScale)`,
+// jahshaka/engine/Types.h) — is ONE World-Mode row, `atomPixelError`, and the
+// Photon tier rows carry NO tolerance column any more (the dead
+// GiQualityFacts::pixelTolerance, keyed on the Photon quality with Epic sharing
+// High's case and no product consumer, is deleted). Low 4, Medium 3, High 2,
+// Epic 1 px: the lead's numbers, 2026-10-19.
 Object.keys(byTier).forEach(function (tn) {
-    var t = byTier[tn].pixelTolerance;
-    assert(t > 0.0 && t <= 8.0,
-           tn + "'s tolerance is a sample count, not a length or a count of triangles: " + t);
+    Object.keys(byTier[tn]).forEach(function (k) {
+        assert(!/toleran|pixelerr|suberr/i.test(k),
+               tn + "'s Photon row carries no tolerance column (" + k + ")");
+    });
 });
-// AND WHAT IT DOES NOT DO YET, asserted so nobody has to guess: its only
-// consumer is a GPU cull request's level output; the shipped DRAW path stays on
-// one pixel at every tier (the tier-aware draw path would move the picture of
-// every Low scene and is a lane with a pixel gate of its own). That is why
-// Medium's 1.0 is the number the renderer actually draws with, and it is the
-// assertion above that pins it.
-console.log("tier table (Atom column): low " + byTier.low.pixelTolerance + ", medium " +
-            byTier.medium.pixelTolerance + ", high " + byTier.high.pixelTolerance + ", epic " +
-            byTier.epic.pixelTolerance + " samples");
+var wantPx = { low: 4, medium: 3, high: 2, epic: 1 };
+assert(worldMap.low !== undefined, "the world list is keyed by mode");
+for (var wj = 0; wj < tiers.world.length; ++wj) {
+    var wm = tiers.world[wj];
+    assert(wm.atomPixelError === wantPx[wm.mode],
+           wm.mode + " runs the view at " + wantPx[wm.mode] + " px of geometric error (" +
+           wm.atomPixelError + ")");
+}
+// THE ROW IS THE REGISTRY'S: world.settings() carries it, a mode writes it, and
+// world.atomPixelError() reads the threshold in force (row x the LOD bias: 1 with
+// no viewport, which is how this suite runs).
+var modes = ["low", "medium", "high", "epic"];
+for (var mi = 0; mi < modes.length; ++mi) {
+    world.mode({ mode: modes[mi] });
+    var st = world.settings();
+    assert(st.atomPixelError && st.atomPixelError.value === wantPx[modes[mi]] &&
+           st.atomPixelError.tierValue === wantPx[modes[mi]],
+           "world.mode('" + modes[mi] + "') writes the row: " + JSON.stringify(st.atomPixelError));
+    assert(world.atomPixelError() === wantPx[modes[mi]],
+           "world.atomPixelError() at " + modes[mi] + " = " + world.atomPixelError());
+}
+for (var mk = 0; mk + 1 < modes.length; ++mk)
+    assert(wantPx[modes[mk]] > wantPx[modes[mk + 1]],
+           "the row is monotone: " + modes[mk] + " affords more error than " + modes[mk + 1]);
+// AN OVERRIDE PINS IT, like every other row.
+world.override({ id: "atomPixelError", value: 3 });
+assert(world.atomPixelError() === 3 && world.settings().atomPixelError.source === "override",
+       "an override pins the row at 3 px (" + world.atomPixelError() + ", " +
+       world.settings().atomPixelError.source + ")");
+world.clearOverride({ id: "atomPixelError" });
+world.mode({ mode: "epic" });
+assert(world.atomPixelError() === 1, "back on Epic: 1 px");
+console.log("pixel-error row: low " + wantPx.low + ", medium " + wantPx.medium + ", high " +
+            wantPx.high + ", epic " + wantPx.epic + " px");
 console.log("PASSED");
