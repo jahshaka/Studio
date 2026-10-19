@@ -211,11 +211,13 @@ static int caseCapture()
     // the device stores R11G11B10F from a compute job (RGBA16F's eight else).
     // ...and the cached INDIRECT half beside it, in the same format.
     // ...and THE MOVERS' VISIBILITY (PHOTON-CARDS-4): one R8 byte.
+    // ...and THE SPECULAR LOBE (ENGINE-POLISH-PHOTON-1 stage 3): the capture's F0 / kS layer (RGBA8, 4) and
+    // the relight's flat term in the radiance's format.
     const unsigned radBytes = c0.radianceFormat == "R11G11B10F" ? 4u : 8u;
-    CHECK_MSG(c0.bytesPerTexel == 17u + 2u * radBytes,
+    CHECK_MSG(c0.bytesPerTexel == 21u + 3u * radBytes,
               "the card texel is %u bytes (albedo 4 + normal 4 + depth 2 + emissive 4 +"
-              " shadow/rough 2 + radiance %u + indirect %u, %s + movers 1), measured %u",
-              17u + 2u * radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
+              " shadow/rough 2 + specular 4 + radiance %u + indirect %u + flat %u, %s + movers 1), measured %u",
+              21u + 3u * radBytes, radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
     CHECK_MSG(c0.pageSize == 128u && c0.pages == 256u,
               "the atlas is 2k square = %u pages of %u texels", c0.pages, c0.pageSize);
     CHECK_MSG(c0.instancesResident == 2u, "both crates are resident (%u)", c0.instancesResident);
@@ -927,6 +929,12 @@ static int caseBudget()
 // free), times a light's irradiance E. A cached texel stores the
 // view-INDEPENDENT diffuse, V = N (JahCardLight_cs.glsl says why), and kD is
 // the datablock's diffuse already divided by pi.
+/// THE SPECULAR LOBE'S SHARE OF A CARD TEXEL (ENGINE-POLISH-PHOTON-1 stage 3): the relight's flat term less the
+/// captured emissive - what a metallic-workflow surface re-emits by its lobe's integral (F0 A + w B a light, the
+/// hemispherical F0 A-bar + w B-bar of its indirect), held by gi.metal_bounce_route; the DIFFUSE halves these rows
+/// hold to the pixel are the radiance less it.
+static double specShare(const CardSample &t, int k) { return double(t.flat[k]) - double(t.emissive[k]); }
+
 static double pbsDiffuse(double kD, double E, double perceptualRoughness, const double N[3],
                          const double L[3], const double V[3])
 {
@@ -1057,9 +1065,10 @@ static int caseLighting()
             const double want = pbsDiffuse(t.albedo[k], curE, kRough, N, L, N) * double(t.shadow);
             // THE DIRECT HALF: the radiance less its cached indirect half (the
             // floor's bounce is real here; gi.card_lighting_indirect holds it to
-            // the pixel).
-            const double got = double(t.radiance[k]) - double(t.indirect[k]);
-            const double quantum = storeQuantum(t.radiance[k], k) + storeQuantum(t.indirect[k], k);
+            // the pixel) and the specular lobe's flat share (a third stored term).
+            const double got = double(t.radiance[k]) - double(t.indirect[k]) - specShare(t, k);
+            const double quantum = storeQuantum(t.radiance[k], k) + storeQuantum(t.indirect[k], k) +
+                                   storeQuantum(t.flat[k], k);
             const double tol = 0.02 * want + quantum;
             const double rel = want > 1e-6 ? std::fabs(got - want) / want : std::fabs(got);
             CHECK_MSG(want > 1e-6 ? std::fabs(got - want) <= tol : std::fabs(got) < 2e-3,
@@ -1104,7 +1113,7 @@ static int caseLighting()
         if (s->readCardAt(Vec3(-4.0f, 4.0f, 0.3f), Vec3(0, 1, 0), t) && t.ok) {
             const double N[3] = { 0.0, 1.0, 0.0 };
             const double want = pbsDiffuse(t.albedo[1], 2.0 * E, kRough, N, down, N) * t.shadow;
-            const double got = double(t.radiance[1]) - double(t.indirect[1]);
+            const double got = double(t.radiance[1]) - double(t.indirect[1]) - specShare(t, 1);
             CHECK_MSG(std::fabs(got - want) <= 0.02 * want,
                       "the crate top's direct half doubled with the light (%.5f, want %.5f)", got, want);
         }
@@ -1177,7 +1186,7 @@ static int caseLighting()
         double L[3], E;
         lampDirect(t, L, E);
         const double want = pbsDiffuse(t.albedo[1], E, kRough, Nback, L, Nback);
-        const double got = double(t.radiance[1]) - double(t.indirect[1]);
+        const double got = double(t.radiance[1]) - double(t.indirect[1]) - specShare(t, 1);
         outDirect = got;
         const double rel = want > 1e-6 ? std::fabs(got - want) / want : 1.0;
         CHECK_MSG(want > 0.02 && rel <= 0.05,
@@ -1366,9 +1375,9 @@ static int caseLightingIndirect()
             }
             // ...and the card's radiance is that indirect and nothing else (no
             // direct: the sun is perpendicular; no emissive).
-            CHECK_MSG(std::fabs(t.radiance[0] - t.indirect[0]) <= 0.02 * t.indirect[0] + 1e-3,
-                      "the wall's radiance is its indirect half (%.4f vs %.4f)", t.radiance[0],
-                      t.indirect[0]);
+            CHECK_MSG(std::fabs(t.radiance[0] - specShare(t, 0) - t.indirect[0]) <= 0.02 * t.indirect[0] + 1e-3,
+                      "the wall's radiance less its lobe's share is its indirect half (%.4f - %.4f vs %.4f)",
+                      t.radiance[0], specShare(t, 0), t.indirect[0]);
         }
 
     // THE COMPARISON, as a function: the card's indirect against the pixel at
@@ -1537,10 +1546,10 @@ static int caseLightingIndirect()
                 return v > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(v) - (k == 2 ? 5 : 6)) : 0.0;
             };
             for (int k = 0; k < 3; ++k) {
-                const double em = double(t.radiance[k]) - double(t.indirect[k]);
+                const double em = double(t.radiance[k]) - double(t.indirect[k]) - specShare(t, k);
                 const double rel = std::fabs(em - want[k]) / want[k];
                 const double bar = (halfStep(want[k], k) + halfStep(t.radiance[k], k) +
-                                    halfStep(t.indirect[k], k)) / want[k] + 0.005;
+                                    halfStep(t.indirect[k], k) + halfStep(t.flat[k], k)) / want[k] + 0.005;
                 CHECK_MSG(rel <= bar,
                           "the emissive tile, channel %d: radiance %.4f - indirect %.4f = %.4f,"
                           " the authored emissive %.3f (%.2f %%, bar %.2f %% = the three stores'"
@@ -2131,9 +2140,9 @@ static int caseClouds()
             CHECK_MSG(false, "%s: the cache answers on the crate top", what);
             return -1.0;
         }
-        const double d = double(t.radiance[1]) - double(t.indirect[1]);
-        std::printf("    %s: direct half %.5f (radiance %.5f - indirect %.5f), shadow %.3f\n", what, d,
-                    t.radiance[1], t.indirect[1], double(t.shadow));
+        const double d = double(t.radiance[1]) - double(t.indirect[1]) - specShare(t, 1);
+        std::printf("    %s: direct half %.5f (radiance %.5f - indirect %.5f - the lobe's %.5f), shadow %.3f\n", what,
+                    d, t.radiance[1], t.indirect[1], specShare(t, 1), double(t.shadow));
         return d;
     };
     const double clear = directTop("no layer");

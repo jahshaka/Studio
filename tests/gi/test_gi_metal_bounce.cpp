@@ -282,17 +282,21 @@ int main(int argc, char **argv)
     if (route)
     // A TINTED metal (base 1 / 0.6 / 0.3, metalness 1, r 0.3): the lobe F0 A + w B per CHANNEL, F0 = b, w = 1 - so a
     // store or a route that swapped the two (A + b B) reads a different colour. The store against the white diffuser,
-    // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on, a still metal's hits read the
-    // store (no cards here) and a MOVER's go to the decode (jahHitAlwaysDecodes) - the decode re-emits the same lobe
-    // from the same table (800.Atom_piece_ps.any, atomGatherMetalLobe), so the panel's gathered E/pi is the same within
-    // 0.4 % per channel when the plate becomes a mover. The gather's sample sequence is held (freezeFrameIndex): the
-    // two arms trace the same rays, and their difference is the route's alone.
+    // channel by channel, bar 1.5 %. THEN THE ROUTE: with the screen-probe gather on and the SURFACE CACHE ON
+    // (ENGINE-POLISH-PHOTON-1 stage 3: the cards-off arm is deleted), a still metal's hits read its CARD first and a
+    // MOVER's go to the decode (jahHitAlwaysDecodes). The card re-emits the lobe the store does (the capture's
+    // Specular layer, the relight's flat term from the same table), and the decode the same lobe (800.Atom_piece_ps.any,
+    // atomGatherMetalLobe): (i) the card's stored flat term is the closed form E ( F0 A + w B ) per channel within
+    // 0.4 % plus the radiance format's half step (R11G11B10F: 6 / 6 / 5 mantissa bits - the card's own quantum);
+    // (ii) the panel's gathered E/pi from the still plate is the mover's times the card's stored / exact ratio, per
+    // channel within 0.4 % - the card answers what it stores. The gather's sample sequence is held
+    // (freezeFrameIndex): the two arms trace the same rays, and their difference is the route's alone.
     // THE DIELECTRIC'S ROUTE (ENGINE-POLISH-PHOTON-1 stage 2): the same plate, a BLACK dielectric first (its
     // re-emission is its 0.04 lobe alone; the material edited in place, the gather's view kept), then the tinted
     // metal: the panel's gathered E/pi from the black plate is (0.04 A + B) / (A + B) of the tinted metal's RED
     // channel (base 1 there: F0 = 1), the panel's view factor cancelling (every plate point sees the sun at cosine
-    // 1) - still (its hits read the store's material and its direct term, jahHitDirect) and as a MOVER (the decode,
-    // atomGatherMetalLobe) alike, each within 0.4 %. The base re-emitted nothing from a dielectric on either route.
+    // 1) - as a MOVER (the decode, atomGatherMetalLobe) within 0.4 %, and still (its card) by the card's stored values
+    // the same way as the metal's. The base re-emitted nothing from a dielectric on either route.
     // (The dielectric FIRST: the gather's held history keeps ~0.1 % of the previous plate after 48 frames, which is
     // 2.5 % of the dielectric's small answer after the metal and nothing of the metal's after the dielectric. Every
     // edit is made while the plate is STILL: one made while it was a mover did not reach the store when it turned
@@ -301,6 +305,9 @@ int main(int argc, char **argv)
         const float tint[3] = { 1.0f, 0.6f, 0.3f };
         double diffuserRgb[3] = {}, metalRgb[3] = {};
         double gathered[2][3] = {}, dielectric[2][3] = {};
+        // the card's stored flat term at the plate's top, black dielectric / tinted metal, and whether it answered
+        double cardFlat[2][3] = {};
+        bool cardLit[2] = { false, false };
         bool gatherRan = false;
         for (int pass = 0; pass < 2; ++pass) {
             Scene *s = e->createScene("metaltint");
@@ -310,13 +317,17 @@ int main(int argc, char **argv)
             s->setEnvironmentLight(Colour(0, 0, 0, 1));
             CHECK(enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), 3.0f) != 0, "the sun straight down");
             const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+            // the plate's mesh CARRIES CARDS (its six faces; the surface cache builds them where rays run)
+            MeshData cardedCube = enginetest::unitCubeMesh();
+            cardedCube.cards = enginetest::boxCards(0.5f);
+            const MeshId cardedMesh = s->createMesh(cardedCube);
             PbrParams plate;
             plate.albedo = pass ? Colour(tint[0], tint[1], tint[2]) : Colour(1.0f, 1.0f, 1.0f);
             plate.roughness = 0.3f;
             plate.metalness = pass ? 1.0f : 0.0f;
             const NodeId plateNode = s->createNode();
             const MaterialId plateMat = s->createPbrMaterial(plate);
-            s->attachMesh(plateNode, cube, plateMat);
+            s->attachMesh(plateNode, cardedMesh, plateMat);
             s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(2.0f, 0.1f, 2.0f));
             PbrParams panel; panel.albedo = Colour(1, 1, 1); panel.roughness = 1.0f;
             const NodeId panelNode = s->createNode();
@@ -356,7 +367,6 @@ int main(int argc, char **argv)
                 GiParams g = giOn(GiToggle::Off, 1);
                 g.quality = GiQuality::High;
                 g.gather = GiToggle::On;
-                g.cards = false;
                 s->setGlobalIllumination(g);
                 GatherTuning t;
                 t.readback = true;
@@ -391,9 +401,19 @@ int main(int argc, char **argv)
                             }
                     double *got = arm >= 2 ? gathered[arm - 2] : dielectric[arm];
                     for (int c = 0; c < 3; ++c) got[c] = px ? sum[c] / px : -1.0;
+                    if (arm == 0 || arm == 2) {   // a still arm: what the plate's card holds at its top
+                        CardSample cs;
+                        const int k = arm ? 1 : 0;
+                        cardLit[k] = s->readCardAt(Vec3(0.0f, 0.1f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), cs, plateNode) && cs.lit;
+                        for (int c = 0; c < 3; ++c) cardFlat[k][c] = cs.flat[c];
+                        std::printf("the route: the %s plate's card at its top: lit %d, flat %.6f %.6f %.6f, radiance %.6f "
+                                    "%.6f %.6f, F0 kS %.4f %.4f %.4f, kS %.4f\n", k ? "tinted metal" : "black dielectric",
+                                    int(cardLit[k]), cs.flat[0], cs.flat[1], cs.flat[2], cs.radiance[0], cs.radiance[1],
+                                    cs.radiance[2], cs.specularF0[0], cs.specularF0[1], cs.specularF0[2], cs.specularWeight);
+                    }
                     std::printf("the route: the %s plate %s, the panel's gathered E/pi %.6f %.6f %.6f (%u px; readback "
                                 "%ux%u, %zu floats, gather running %d)\n", arm < 2 ? "black dielectric" : "tinted metal",
-                                arm == 1 || arm == 3 ? "a MOVER (the decode)" : "still (the store)", got[0], got[1], got[2], px,
+                                arm == 1 || arm == 3 ? "a MOVER (the decode)" : "still (its card)", got[0], got[1], got[2], px,
                                 st.irradianceW, st.irradianceH, st.irradiance.size(), int(st.running));
                 }
                 gatherRan = true;
@@ -419,23 +439,51 @@ int main(int argc, char **argv)
             CHECK(diffuserRgb[c] > 0.0 && std::fabs(metalRgb[c] / diffuserRgb[c] / want - 1.0) <= 0.015, msg);
         }
         if (gatherRan) {
+            // THE SUN'S IRRADIANCE / pi ON THE PLATE (addDirectionalLight's power 3 is pi x the intensity: a facing
+            // Lambertian of albedo a sends a x 3 / pi; IMAGE-1's units) and the lobes' closed forms
+            const double sun = 3.0 / 3.14159265358979323846;
+            const double exact[2][3] = { { sun * (0.04 * A + B), sun * (0.04 * A + B), sun * (0.04 * A + B) },
+                                         { sun * (tint[0] * A + B), sun * (tint[1] * A + B), sun * (tint[2] * A + B) } };
+            // the radiance layer's half step at a value (R11G11B10F: 6 mantissa bits on red and green, 5 on blue)
+            const auto halfStep = [](double v, int c) {
+                return v > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(v) - (c == 2 ? 5 : 6)) : 0.0;
+            };
+            for (int k = 0; k < 2; ++k)
+                for (int c = 0; c < 3; ++c) {
+                    const double bar = 0.004 * exact[k][c] + halfStep(exact[k][c], c);
+                    char msg[320];
+                    std::snprintf(msg, sizeof msg, "THE %s'S CARD HOLDS ITS LOBE, channel %d: the card's flat term %.6f, "
+                                  "the closed form E ( F0 A + w B ) %.6f (bar 0.4 %% + the format's half step: %.6f)",
+                                  k ? "TINTED METAL" : "BLACK DIELECTRIC", c, cardFlat[k][c], exact[k][c], bar);
+                    CHECK(cardLit[k] && std::fabs(cardFlat[k][c] - exact[k][c]) <= bar, msg);
+                }
             for (int c = 0; c < 3; ++c) {
-                char msg[300];
+                const double want = cardLit[1] ? cardFlat[1][c] / exact[1][c] : 0.0;
+                char msg[320];
                 std::snprintf(msg, sizeof msg, "THE ROUTE DOES NOT MOVE THE BOUNCE, channel %d: the panel's gathered E/pi "
-                              "from the tinted metal still %.5f, as a mover %.5f (%.4f; bar 0.4 %%)", c, gathered[0][c],
-                              gathered[1][c], gathered[1][c] / gathered[0][c]);
-                CHECK(gathered[0][c] > 0.0 && std::fabs(gathered[1][c] / gathered[0][c] - 1.0) <= 0.004, msg);
+                              "from the tinted metal by its card %.5f, as a mover %.5f (%.4f; the card's stored / exact "
+                              "%.4f; bar 0.4 %%)", c, gathered[0][c], gathered[1][c], gathered[0][c] / gathered[1][c], want);
+                CHECK(gathered[1][c] > 0.0 && want > 0.0 &&
+                      std::fabs(gathered[0][c] / gathered[1][c] / want - 1.0) <= 0.004, msg);
             }
             const double wantD = (0.04 * A + B) / (A + B);
-            for (int arm = 0; arm < 2; ++arm)
-                for (int c = 0; c < 3; ++c) {
-                    const double ratio = gathered[0][0] > 0.0 ? dielectric[arm][c] / gathered[0][0] : 0.0;
-                    char msg[320];
-                    std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY THE %s, channel %d: the panel's gathered E/pi "
-                                  "from the black dielectric is (0.04 A + B) / (A + B) of the white-red metal's (%.5f; want "
-                                  "%.5f, bar 0.4 %%)", arm ? "DECODE (a mover)" : "STORE (still)", c, ratio, wantD);
-                    CHECK(dielectric[arm][c] > 0.0 && std::fabs(ratio / wantD - 1.0) <= 0.004, msg);
-                }
+            for (int c = 0; c < 3; ++c) {
+                const double ratio = gathered[1][0] > 0.0 ? dielectric[1][c] / gathered[1][0] : 0.0;
+                char msg[320];
+                std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY THE DECODE (a mover), channel %d: the panel's "
+                              "gathered E/pi from the black dielectric is (0.04 A + B) / (A + B) of the white-red metal's "
+                              "(%.5f; want %.5f, bar 0.4 %%)", c, ratio, wantD);
+                CHECK(dielectric[1][c] > 0.0 && std::fabs(ratio / wantD - 1.0) <= 0.004, msg);
+            }
+            for (int c = 0; c < 3; ++c) {
+                const double want = cardLit[0] && dielectric[1][c] > 0.0 ? cardFlat[0][c] / exact[0][c] : 0.0;
+                char msg[320];
+                std::snprintf(msg, sizeof msg, "THE DIELECTRIC'S LOBE BY ITS CARD (still), channel %d: the panel's "
+                              "gathered E/pi %.6f, as a mover %.6f (%.4f; the card's stored / exact %.4f; bar 0.4 %%)", c,
+                              dielectric[0][c], dielectric[1][c],
+                              dielectric[1][c] > 0.0 ? dielectric[0][c] / dielectric[1][c] : 0.0, want);
+                CHECK(want > 0.0 && std::fabs(dielectric[0][c] / dielectric[1][c] / want - 1.0) <= 0.004, msg);
+            }
         }
         else std::printf("ok: no ray queries on this machine - the route arm skips\n");
     }

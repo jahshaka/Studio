@@ -1998,6 +1998,9 @@ set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1470)
 # channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
 # it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %);
 # a BLACK dielectric's bounce is (0.04 A + B) / (A + B) of the metal's, still and as a mover (ENGINE-POLISH-PHOTON-1).
+# THE SURFACE CACHE IS ON (ENGINE-POLISH-PHOTON-1 stage 3; the cards-off arm deleted): the plate carries cards, a still
+# plate's hits read its card first, and the card holds the lobe (its flat term = E (F0 A + w B) within 0.4 % plus the
+# radiance format's half step) and answers what it holds (still / mover = the card's stored / exact, bar 0.4 %).
 jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
