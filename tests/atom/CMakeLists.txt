@@ -138,6 +138,23 @@ set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 600 LABELS "engine")
 
+# atom.cut_probe — THE CUT PROBE AND THE DENSITY VIEW READ WHAT THE CUT DID (ATOM-2 stage 1): a baked sphere's DAG
+# twice, in metres at scale 1 and in centimetres at scale 0.01 - every group recorded once, the device's verdicts and
+# 'allowed' the C++ rule's, the centimetre twin cut exactly as the metre one, the drawn clusters the rule's over the
+# probe's verdicts, the counted pixels the id image's, and the density view painting each object's level-0 triangles
+# per visible pixel class (atomStatus' figures the same).
+add_executable(test_atom_cut_probe test_atom_cut_probe.cpp ${_cluster_fixture_sources})
+jah_cluster_target(test_atom_cut_probe)
+target_include_directories(test_atom_cut_probe PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_link_libraries(test_atom_cut_probe PRIVATE OgreNext)
+add_dependencies(test_atom_cut_probe JahshakaEngineMedia)
+jah_gpu_row(atom.cut_probe CLASS engine FRAMES 24 COMMAND test_atom_cut_probe
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.cut_probe PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 60 LABELS "engine")
+
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
 # SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public

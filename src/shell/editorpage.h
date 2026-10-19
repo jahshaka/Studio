@@ -158,7 +158,7 @@ private:
     QAction *groundPlaneCheckAction = nullptr;   ///< View Options "Ground Plane" (WORLD-MODEL-1)
     QAction *statsCheckAction = nullptr;         // F3 frame-stats readout (persisted)
     /// THE ATOM VIEW sub-menu of View Options (D0-ATOM-VIEW): Off, Triangles,
-    /// Levels, Buckets, Objects — exclusive, in AtomView's order; F6 cycles it.
+    /// Levels, Buckets, Objects, Density — exclusive, in AtomView's order; F6 cycles it.
     /// Both call the scene's setAtomView, the one path world.setAtomView takes.
     QVector<QAction *> atomViewActions;
     /// View Options -> Photon View (PHOTON-VIEW-1): Off, Voxels, Probes, Cards,
