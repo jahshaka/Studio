@@ -77,6 +77,8 @@ target_compile_definitions(test_physics_step_cost PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_physics_step_cost PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+# It inlines Bullet's header math: never contract, as Bullet and the physics TUs (irisgl/CMakeLists.txt, BULLET-BATCHING-1).
+target_compile_options(test_physics_step_cost PRIVATE ${_jah_bake_fp})
 add_dependencies(test_physics_step_cost JahshakaEngineMedia)
 add_test(NAME physics.mt_determinism COMMAND test_physics_step_cost --bodies 500 --frames 32 --threads 7 --runs 3
          --bound 16 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
