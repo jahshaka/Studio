@@ -1525,6 +1525,82 @@ int modeCost(Fixture &f)
     return 0;
 }
 
+// ---------------------------------------------------------------------------------------------
+// mode "injectleak" (BUGS-1 item 5; a MEASURE, prints, never a row): WHICH TERM OF THE INJECTION'S VISIBILITY LEAKS
+// on the clean canyon (DEBTS VOXEL-STORE-SHADOW-LEAK: c3 up|shade store .104 vs the exact cell half-mean .032).
+// A half's visibility should be the area-mean visibility of its surfaces from THEIR positions; the injection
+// marches ONCE per half (LightInjection_piece_cs.any jahInjectVisibility) from the half's face (s[a] = p_a) at the
+// voxel's lateral CENTRE, through the coverage-per-face model. Per floor-top voxel of a cascade (the up half of the
+// floor inside the canyon, bounces 0: the store is the direct light alone), with L = the fully lit top's radiance:
+//   Vstore = the up side's stored radiance / L        (what the store holds)
+//   Vstart = the analytic sun test at the march's START (the voxel's lateral centre, the face's stored position)
+//   Vmean  = the exact half-mean over the faces in the cell / L   (the physics)
+// Vstore = Vstart where Vstart <> Vmean: the leak is the SAMPLING (one lateral point). Vstore > Vstart where the
+// start is shaded: the march passes light through the casters (the coverage model's transmission).
+int modeInjectLeak(Fixture &f)
+{
+    using namespace diag;
+    if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
+    f.s->setGlobalIllumination(highGi(0u));
+    const Vec3 cam = poseCam("c3");
+    f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
+    settled(f);
+    for (int i = 0; i < 400 && !f.s->published().gi.giAtRest; ++i) render(f.e, 1);
+    const Box &floorBox = f.boxes[0];
+    const double L = faceRad(floorBox, double(kToSun.y));
+    std::printf("   INJECTLEAK the clean canyon %.0f m, camera (%.0f, %.0f, %.0f); the lit floor's radiance %.5f\n",
+                double(gLength), double(cam.x), double(cam.y), double(cam.z), L);
+    for (int c : { 1, 2, 3 }) {
+        GiVoxelVolume v;
+        if (!f.s->giVoxelVolume(c, v) || !v.available) { std::printf("   cascade %d: no store\n", c); continue; }
+        const size_t nvox = size_t(v.width) * size_t(v.height) * size_t(v.depth) * 4u;
+        if (v.light.size() != nvox || v.lightBack.size() != nvox || v.normal.size() != nvox ||
+            v.coverageP.size() != nvox || v.positionP.size() != nvox) { std::printf("   cascade %d: arrays missing\n", c); continue; }
+        const double k = v.multiplier > 0 ? v.multiplier : 1.0;
+        const double ext[3] = { double(v.cell[0]) * v.width, double(v.cell[1]) * v.height, double(v.cell[2]) * v.depth };
+        // [all, Vmean<1 (any shade), Vstart=0, Vstart=1 & Vmean<1]
+        double n[4] = {}, sStore[4] = {}, sStart[4] = {}, sMean[4] = {};
+        for (int z = 0; z < v.depth; ++z)
+            for (int x = 0; x < v.width; ++x) {
+                const double lo[3] = { v.origin[0] + x * double(v.cell[0]), 0.0, v.origin[2] + z * double(v.cell[2]) };
+                if (lo[0] < 0.0 || lo[0] + v.cell[0] > 12.0) continue;                       // inside the canyon
+                if (std::fabs(lo[2]) > 0.5 * gLength - v.cell[2] || std::fabs(lo[2] + v.cell[2]) > 0.5 * gLength - v.cell[2]) continue;
+                const int y = int(std::floor((0.0 - v.origin[1]) / v.cell[1]));            // the voxel holding y = 0
+                if (y < 0 || y >= v.height) continue;
+                const size_t i = (size_t(z) * size_t(v.height) + size_t(y)) * size_t(v.width) + size_t(x);
+                const double cov = v.coverageP[i * 4 + 1];
+                const double cc = v.light[i * 4 + 3];
+                if (!(cov > 0.5) || !(cc > 0.0)) continue;
+                const double mean = lumOf(&v.light[i * 4]) / cc / k, back = lumOf(&v.lightBack[i * 4]) / cc / k;
+                const double vny = v.normal[i * 4 + 1] * 2.0 - 1.0;
+                const double up = std::max(vny >= 0.0 ? 2.0 * mean - back : back, 0.0);
+                const double py = double(v.origin[1]) + double(v.positionP[i * 4 + 1]) / cov * ext[1];
+                const Vec3 start(float(lo[0] + 0.5 * v.cell[0]), float(py + 1e-3), float(lo[2] + 0.5 * v.cell[2]));
+                const double vStart = sunlit(start, f.boxes) ? 1.0 : 0.0;
+                double c0[3], c1[3];
+                for (int a = 0; a < 3; ++a) {
+                    const int ix = a == 0 ? x : a == 1 ? y : z;
+                    c0[a] = v.origin[a] + ix * double(v.cell[a]);
+                    c1[a] = c0[a] + double(v.cell[a]);
+                }
+                const CellMean cm = cellMean(c0, c1, f.boxes);
+                const double vMean = cm.halfA[1] > 0.0 ? cm.half[1] / cm.halfA[1] / L : 0.0;
+                const double vStore = up / L;
+                const bool cls[4] = { true, vMean < 0.999, vStart < 0.5, vStart > 0.5 && vMean < 0.999 };
+                for (int q = 0; q < 4; ++q)
+                    if (cls[q]) { n[q] += 1; sStore[q] += vStore; sStart[q] += vStart; sMean[q] += vMean; }
+            }
+        const char *nm[4] = { "every floor-top voxel", "any shade (Vmean < 1)", "start SHADED (Vstart 0)",
+                              "start lit, cell partly shaded" };
+        std::printf("   cascade %d (cell %.3f m):\n", c, double(v.cell[0]));
+        for (int q = 0; q < 4; ++q)
+            std::printf("     %-30s n %5.0f  Vstore %.4f  Vstart %.4f  Vmean %.4f  store/mean %.3f  store/start %.3f\n", nm[q],
+                        n[q], n[q] ? sStore[q] / n[q] : -1.0, n[q] ? sStart[q] / n[q] : -1.0, n[q] ? sMean[q] / n[q] : -1.0,
+                        sMean[q] > 0 ? sStore[q] / sMean[q] : -1.0, sStart[q] > 0 ? sStore[q] / sStart[q] : -1.0);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "share";
@@ -1557,6 +1633,7 @@ int main(int argc, char **argv)
     else if (mode == "cost") rc = modeCost(f);
     else if (mode == "cshare") rc = modeCascade(f, false);
     else if (mode == "cclutter") rc = modeCascade(f, true);
+    else if (mode == "injectleak") rc = modeInjectLeak(f);
     else { std::printf("FAIL: unknown mode %s\n", mode.c_str()); return 1; }
     if (mode == "cshare" || mode == "cclutter") std::printf("   frames rendered by the settles: %u\n", gFrames);
     const auto stamp = [](const char *what) {
