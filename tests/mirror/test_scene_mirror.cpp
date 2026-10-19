@@ -444,7 +444,7 @@ int main(int argc, char **argv)
         CHECK(saved->textures.contains("u_baseColorMap"), "setValue bound the base colour map");
 
         // Serialise exactly as SceneWriter::writeSceneNodeMaterial does: a values
-        // object built from mat->properties by PropertyType, textures as
+        // object built from mat->properties() by PropertyType, textures as
         // scene-relative paths (the writer's non-database branch). SceneReader
         // itself links half the app (Database, Globals, AssetManager), so this
         // suite replicates the writer/reader JSON contract instead of linking
@@ -453,7 +453,7 @@ int main(int argc, char **argv)
         QJsonObject matObj; matObj["materialType"] = "pbr"; matObj["version"] = 2;
         QJsonObject values;
         const QDir sceneDir(dir);
-        for (auto *prop : saved->properties) {
+        for (auto *prop : saved->properties()) {
             switch (prop->type) {
             case iris::PropertyType::Bool:  values[prop->name] = prop->getValue().toBool(); break;
             // List is the ENUM row (alphaMode, brdf) and serializes as the
@@ -479,7 +479,7 @@ int main(int argc, char **argv)
         // resolved back to absolute paths against the scene folder).
         auto reloaded = iris::PbrMaterial::create();
         const QJsonObject rvalues = matObj["values"].toObject();
-        for (auto *prop : reloaded->properties) {
+        for (auto *prop : reloaded->properties()) {
             if (!rvalues.contains(prop->name)) continue;
             const auto val = rvalues.value(prop->name);
             switch (prop->type) {

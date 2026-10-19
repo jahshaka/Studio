@@ -217,6 +217,24 @@ set_tests_properties(document.material_defaults PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.material_defaults)
 
+# document.material_duplicate — A MATERIAL OWNS ITS ROWS, AND A DUPLICATE OWNS ITS OWN (LEAK-1 stage 1): every row
+# type clones whole (Property::clone), a duplicate's rows are distinct objects with equal values, and destroying
+# either material leaves the other whole. In the leak lane it also proves the rows are freed. Document only.
+add_executable(test_material_duplicate test_material_duplicate.cpp)
+set_target_properties(test_material_duplicate PROPERTIES AUTOMOC OFF)
+target_include_directories(test_material_duplicate PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_material_duplicate PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_material_duplicate)
+add_test(NAME document.material_duplicate COMMAND test_material_duplicate
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.material_duplicate PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
+jah_no_display(document.material_duplicate)
+jah_lsan_lane(document.material_duplicate)
+
 # document.dirty_list — THE DOCUMENT'S HALF of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.3): dedupe, the three kinds that cascade
 # over a subtree, eviction (including a node marked and then freed before the

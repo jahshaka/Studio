@@ -113,7 +113,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	// Drive everything through setValue so both the shader-facing field and the
 	// editor-facing Property object update (same contract as
 	// SceneReader::readPbrMaterial, which reads these out of the scene blob).
-	for (auto prop : mat->properties) {
+	for (auto prop : mat->properties()) {
 		if (!values.contains(prop->name)) continue;
 		const auto val = values.value(prop->name);
 

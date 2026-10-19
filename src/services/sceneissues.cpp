@@ -426,7 +426,7 @@ void SceneIssues::checkNode(iris::SceneNode *node)
             // the reader keeps the guid with no file bound, so the next save
             // writes the same reference back — and this says so, by the asset
             // the scene names (there is no file name to show: there is no file).
-            for (iris::Property *prop : material->properties) {
+            for (iris::Property *prop : material->properties()) {
                 if (!prop || prop->type != iris::PropertyType::Texture) continue;
                 const QString guid = material->textureGuid(prop->name);
                 if (guid.isEmpty() || material->textures.value(QStringLiteral("u_") + prop->name))

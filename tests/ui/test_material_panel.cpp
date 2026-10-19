@@ -61,7 +61,7 @@ namespace {
 
 iris::Property *findProp(const iris::MaterialPtr &mat, const QString &name)
 {
-    for (auto *p : mat->properties)
+    for (auto *p : mat->properties())
         if (p->name == name) return p;
     return nullptr;
 }
@@ -257,7 +257,7 @@ static void testTextureRow()
         // The A-5 row is DECLARED, and empty by default — the "this feature
         // moves no existing pixel" claim as an assertion.
         iris::Property *reflection = nullptr;
-        for (auto *prop : rig.pbr->properties)
+        for (auto *prop : rig.pbr->properties())
             if (prop && prop->name == QStringLiteral("reflectionMap")) reflection = prop;
         CHECK(reflection != nullptr, "texture: the reflectionMap row is declared");
         CHECK(reflection && reflection->type == iris::PropertyType::Texture,
@@ -268,7 +268,7 @@ static void testTextureRow()
     {
         // The Occlusion row must stay GONE, whatever the detail count is.
         bool occlusion = false;
-        for (auto *prop : rig.pbr->properties)
+        for (auto *prop : rig.pbr->properties())
             if (prop && prop->name.contains(QStringLiteral("occlusion"), Qt::CaseInsensitive))
                 occlusion = true;
         CHECK(!occlusion, "texture: there is still no Occlusion Map row");

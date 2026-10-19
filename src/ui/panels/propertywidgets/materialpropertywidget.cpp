@@ -75,7 +75,7 @@ void MaterialPropertyWidget::snapshotTextures()
     if (!material) return;
     // The ASSET each row names (TEX-REF-1), not its path: a dependency is a
     // row-to-row edge, and the row carries its guid.
-    for (auto prop : material->properties)
+    for (auto prop : material->properties())
         if (prop->type == iris::PropertyType::Texture)
             existingTextures.insert(prop->name, material->textureGuid(prop->name));
 }
@@ -157,7 +157,7 @@ void MaterialPropertyWidget::splitRows(const iris::MaterialPtr &mat,
                                        QList<iris::Property *> &details)
 {
     if (!mat) return;
-    for (auto *prop : mat->properties) {
+    for (auto *prop : mat->properties()) {
         if (!prop) continue;
         (prop->name.startsWith(QStringLiteral("detail")) ? details : base).append(prop);
     }

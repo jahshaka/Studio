@@ -929,7 +929,7 @@ int main(int argc, char **argv)
     {
         auto pbr = iris::PbrMaterial::create();
         auto row = [&](const char *name) {
-            for (auto prop : pbr->properties)
+            for (auto prop : pbr->properties())
                 if (prop->name == QLatin1String(name)) return prop->getValue().toFloat();
             return -1.0f;
         };
@@ -1025,10 +1025,10 @@ int main(int argc, char **argv)
                   "dup: the base colour map travels (the same file)");
             // THE ROWS: what the panel shows and what SceneWriter saves. Equal
             // in name, order and value — and distinct objects.
-            bool rowsEqual = dupMat->properties.size() == pbr->properties.size();
+            bool rowsEqual = dupMat->properties().size() == pbr->properties().size();
             bool rowsShared = false;
-            for (int i = 0; rowsEqual && i < pbr->properties.size(); ++i) {
-                iris::Property *a = pbr->properties[i], *b = dupMat->properties[i];
+            for (int i = 0; rowsEqual && i < pbr->properties().size(); ++i) {
+                iris::Property *a = pbr->properties()[i], *b = dupMat->properties()[i];
                 if (a == b) rowsShared = true;
                 if (a->name != b->name || a->getValue() != b->getValue()) {
                     printf("    row %s: %s vs %s %s\n", qPrintable(a->name),
@@ -1045,7 +1045,7 @@ int main(int argc, char **argv)
             dupMat->setValue(QStringLiteral("baseColor"), QColor(20, 20, 200));
             dupMat->setValue(QStringLiteral("roughness"), 0.1f);
             QVariant origRow;
-            for (auto prop : pbr->properties)
+            for (auto prop : pbr->properties())
                 if (prop->name == QLatin1String("baseColor")) origRow = prop->getValue();
             CHECK(pbr->baseColor == QColor(200, 20, 20) && std::fabs(pbr->roughnessFactor - 0.7f) < 1e-6f &&
                   origRow.value<QColor>() == QColor(200, 20, 20),

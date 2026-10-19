@@ -116,7 +116,7 @@ const QStringList kPbrMapKeys = makePbrMapKeys();
 /// CustomMaterial first, then PbrMaterial, and return nothing for anything else).
 QList<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
 {
-    return material ? material->properties : QList<iris::Property *>();
+    return material ? material->properties() : QList<iris::Property *>();
 }
 
 /// The keys material.set will accept on this material — the declared rows plus,

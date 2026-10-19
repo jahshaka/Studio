@@ -839,7 +839,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 	matObj["version"] = 2;
 
 	QJsonObject valuesObj;
-    for (auto prop : mat->properties) {
+    for (auto prop : mat->properties()) {
         if (prop->type == iris::PropertyType::Bool) {
 			valuesObj[prop->name] = prop->getValue().toBool();
         }

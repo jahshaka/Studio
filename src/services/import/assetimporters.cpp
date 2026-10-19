@@ -120,7 +120,7 @@ static QJsonObject importSummaryOf(const iris::SceneNodePtr &root, const QString
                 ++meshes;
                 ++scales[QString::number(double(s), 'g', 4)];
                 if (auto m = n.staticCast<iris::MeshNode>()->getMaterial()) {
-                    for (auto *prop : m->properties) {
+                    for (auto *prop : m->properties()) {
                         if (!prop || prop->name != QLatin1String("alphaMode")) continue;
                         const int mode = prop->getValue().toInt();
                         if (mode == 1) ++cutouts;
@@ -382,7 +382,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
             // row's guid (the member list is unique by file name), so the blob
             // below is written with guids by the writer itself.
             if (auto material = meshNode->getMaterial()) {
-                for (auto *prop : material->properties) {
+                for (auto *prop : material->properties()) {
                     if (!prop || prop->type != iris::PropertyType::Texture) continue;
                     const QString path = prop->getValue().toString();
                     const QString fileName = QFileInfo(path).fileName();
@@ -736,7 +736,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
 
     struct TexEntry { QString fileName, guid, path; };
     QVector<TexEntry> textures;
-    for (const auto &prop : material->properties) {
+    for (const auto &prop : material->properties()) {
         if (!normalised.contains(prop->name)) continue;
         if (prop->type == iris::PropertyType::Texture) {
             const QString textureStr = normalised[prop->name].toString();

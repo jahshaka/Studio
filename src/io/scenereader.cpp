@@ -1731,7 +1731,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 
 	// Drive the material through setValue so the field the shader reads and the
 	// Property object the panel shows are both updated from one place.
-	for (auto prop : mat->properties) {
+	for (auto prop : mat->properties()) {
 		if (!values.contains(prop->name)) continue;
 		const auto val = values.value(prop->name);
 

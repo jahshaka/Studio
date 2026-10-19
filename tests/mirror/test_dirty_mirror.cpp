@@ -324,7 +324,7 @@ int main(int argc, char **argv)
         CHECK(!pbr.isNull(), "the cube carries a PbrMaterial to drive");
         if (pbr) {
             int covered = 0, bad = 0;
-            for (iris::Property *row : pbr->properties) {
+            for (iris::Property *row : pbr->properties()) {
                 if (!row) continue;
                 const QVariant before = row->getValue();
                 QVariant after;

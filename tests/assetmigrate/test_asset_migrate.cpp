@@ -456,7 +456,7 @@ int main(int argc, char **argv)
         CHECK(!pbr.isNull(), "pbr definition rebuilds a PbrMaterial");
         if (pbr) {
             QString stored;
-            for (auto prop : pbr->properties)
+            for (auto prop : pbr->properties())
                 if (prop->name == "baseColorMap") stored = prop->getValue().toString();
             CHECK(stored != texGuid, "texture property is NOT the raw guid");
             CHECK(stored.contains("/objects/") && QFileInfo::exists(stored),

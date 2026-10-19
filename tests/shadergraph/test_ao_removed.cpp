@@ -159,7 +159,7 @@ int main(int argc, char** argv)
 
         auto material = PbrGraphEvaluator::materialFromValues(result.values);
         bool declaresOcclusion = false;
-        for (auto* prop : material->properties)
+        for (auto* prop : material->properties())
             if (prop->name.startsWith(QStringLiteral("occlusion"))) declaresOcclusion = true;
         CHECK(!declaresOcclusion, "PbrMaterial declares no occlusion row");
         delete loaded;
