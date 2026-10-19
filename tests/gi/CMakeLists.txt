@@ -1964,6 +1964,10 @@ jah_gpu_row(gi.march_underread CLASS engine COMMAND test_gi_march_underread
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.march_underread PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(gi.march_underread PROPERTIES JAHSHAKA_TEST_FRAMES 2236)
+# `test_gi_march_underread --sun-arms` (ENGINE-POLISH-PHOTON-1 stage 4, a MEASURE run by hand, no row):
+# SUN-INJECTION-RES-2's three arms on the slab block's sun-lit wall - lobe / face at 32 / 64 / 128 cells with one of
+# the junction voxels' terms removed at a time (the plate a non-caster; a black dielectric; the wall's roughness the
+# plate's). Measured at the stage-3 tip: base 2.44 %, non-caster 1.35 %, black dielectric 2.51 %, roughness 2.43 %.
 # gi.march_inside — THE SHADOW MARCH'S INSIDE FRACTION (ENGINE-UPGRADE-U5 decision 22.2): two one-sided quads of opacity
 # 0.6 facing away from each other along the ray transmit (1 - c1)(1 - c2) = 0.16, one solid of the same opacity 1 - c = 0.4,
 # each against the store's own coverage, at 32 / 64 / 128 cells (the old max of the entries and the exits read both 0.4).
@@ -1975,7 +1979,9 @@ set_tests_properties(gi.march_inside PROPERTIES JAHSHAKA_TEST_FRAMES 600)
 # METAL-BOUNCE-1; it replaces gi.voxel_metal_albedo's diffuse-only law): a white plate at metalness 0 / 0.5 / 1,
 # roughness 0.3 and 0.9, under a sun (the store and a facing panel's bounce in the lobes' directional ratio,
 # field off and on) and under an emitter of albedo 0 (the store in the lobes' hemispherical ratio - the
-# furnace's answer); a live roughness edit and a live metalness edit each re-voxelise once.
+# furnace's answer); a live roughness edit and a live metalness edit each re-voxelise once. THE DIELECTRIC ARM
+# (ENGINE-POLISH-PHOTON-1 stage 2): every surface carries its F0 = lerp(0.04, b, m) lobe - a black dielectric's store
+# is 0.04 A + B of the incident (0.040 / 0.026 at r 9/31 / 23/31, bar 0.4 %), a b 0.6 dielectric's total holds it.
 add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)
 set_target_properties(test_gi_metal_bounce PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1991,14 +1997,25 @@ add_dependencies(test_gi_metal_bounce JahshakaEngineMedia)
 jah_gpu_row(gi.metal_bounce CLASS engine COMMAND test_gi_metal_bounce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1310)
+set_tests_properties(gi.metal_bounce PROPERTIES JAHSHAKA_TEST_FRAMES 1470)
 # gi.metal_bounce_route — THE TINTED METAL AND THE MOVER (ENGINE-UPGRADE-U5 decision 22.1): the store holds F0 A + w B per
 # channel (a swap of the two reads another colour), and the screen-probe gather's bounce off the metal is the same when
-# it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %).
+# it becomes a mover - its hits then go to the decode, which re-emits the same lobe from the same table (bar 0.4 %);
+# a BLACK dielectric's bounce is (0.04 A + B) / (A + B) of the metal's, still and as a mover (ENGINE-POLISH-PHOTON-1).
+# THE SURFACE CACHE IS ON (ENGINE-POLISH-PHOTON-1 stage 3; the cards-off arm deleted): the plate carries cards, a still
+# plate's hits read its card first, and the card holds the lobe (its flat term = E (F0 A + w B) within 0.4 % plus the
+# radiance format's half step) and answers what it holds (still / mover = the card's stored / exact, bar 0.4 %).
 jah_gpu_row(gi.metal_bounce_route CLASS engine COMMAND test_gi_metal_bounce --route
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.metal_bounce_route PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 176)
+set_tests_properties(gi.metal_bounce_route PROPERTIES JAHSHAKA_TEST_FRAMES 380)
+# gi.metal_bounce_gate — THE MOVERS' GATE ON A METAL'S CARD (ENGINE-POLISH-PHOTON-1's fix round): a sky-lit tinted metal
+# plate with cards, no sun, a black mover slab over it or away: the gathered E/pi under / away is the same factor by its
+# card as by the store (the plate on the uncarded cube), bar 0.4 % - the card read cuts the lobe's indirect share too.
+jah_gpu_row(gi.metal_bounce_gate CLASS engine COMMAND test_gi_metal_bounce --gate
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.metal_bounce_gate PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.metal_bounce_gate PROPERTIES JAHSHAKA_TEST_FRAMES 573)
 # gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
 # THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
 # perfect mirror against its raster from the reflected camera.

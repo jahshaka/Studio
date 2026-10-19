@@ -100,11 +100,18 @@ int main(int argc, char **argv)
     const bool junction = argc > 1 && std::string(argv[1]) == "--junction-256";
     // `--veils`: THE INSIDE FRACTION'S OWN CASES (gi.march_inside, ENGINE-UPGRADE-U5 decision 22.2), alone
     const bool veils = argc > 1 && std::string(argv[1]) == "--veils";
+    // `--sun-arms`: SUN-INJECTION-RES-2's THREE ARMS (ENGINE-POLISH-PHOTON-1 stage 4), a MEASURE and not a row: the
+    // sun-lit wall's lobe / its face at 32 / 64 / 128 cells (the slab block's reference, below) with ONE of the
+    // voxel's area means removed at a time - the plate a NON-CASTER (its caster coverage off the junction voxels),
+    // the plate a BLACK DIELECTRIC (its metal lobe off their metal mean), the wall's roughness = the plate's (0.74:
+    // their roughness mean one value) - beside the base arm. The arm that flattens the spread across the three
+    // resolutions names the term; printed, never asserted.
+    const bool sunArms = argc > 1 && std::string(argv[1]) == "--sun-arms";
     std::vector<std::pair<GiQuality, const char *>> tiers = { { GiQuality::Low, "Low" }, { GiQuality::Medium, "Medium" } };
     if (argc > 1 && std::string(argv[1]) == "--all-tiers")
         tiers.insert(tiers.end(), { { GiQuality::High, "High" }, { GiQuality::Epic, "Epic" } });
     if (junction) tiers = { { GiQuality::Medium, "Medium" } };
-    if (veils) tiers.clear();
+    if (veils || sunArms) tiers.clear();
     const std::vector<int> resolutions = junction ? std::vector<int>{ 128, 256 } : std::vector<int>{ 32, 64, 128 };
     std::vector<double> readings[2];   // Low, Medium: per (res, wall, field) arm, in order
     for (const auto &tier : tiers)
@@ -222,7 +229,7 @@ int main(int argc, char **argv)
             e->destroyScene(s);
         }
     for (int res : { 32, 64, 128 }) {
-        if (junction) break;
+        if (junction || sunArms) break;
         // THE LAW'S OWN PROOF (PHOTON-MARCH-1 stage 3): ONE VOXEL HOLDING TWO OPPOSITE FACES OF
         // DIFFERENT RADIANCE. A 0.02 m white slab (thinner than every cell here), lit by two suns, one per
         // face, 1 : 0.25, beyond the free plate; the plate's grazing rough lobe fills with the face it looks
@@ -451,7 +458,66 @@ int main(int argc, char **argv)
         rv->setScene(nullptr);
         e->destroyScene(s);
     }
-    if (!junction && !veils) {
+    if (sunArms) {
+        // SUN-INJECTION-RES-2's ARMS: the slab block's reference geometry (the plate free, 0.15 m short of the wall's
+        // lit face at z 1.5; the near sun travelling +z at 3, the far one -z at 0.75, no sky), one fresh scene per arm and
+        // resolution so every voxel is built from the arm's own surfaces.
+        const char *names[4] = { "base", "the plate a non-caster", "the plate a black dielectric",
+                                 "the wall's roughness = the plate's (0.74)" };
+        for (int a = 0; a < 4; ++a) {
+            double ratio[3] = {};
+            int k = 0;
+            for (int res : { 32, 64, 128 }) {
+                Scene *s = e->createScene("underread-sunarms");
+                CHECK(rv->setScene(s), "the view shows the arm's scene");
+                float sh[27] = { 0 };
+                s->setAmbientSh(sh);
+                s->setEnvironmentLight(Colour(0, 0, 0, 1));
+                enginetest::addDirectionalLight(s, Vec3(0.0f, 0.0f, 1.0f), 3.0f);
+                enginetest::addDirectionalLight(s, Vec3(0.0f, 0.0f, -1.0f), 0.75f);
+                const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+                PbrParams white; white.albedo = Colour(1, 1, 1); white.roughness = a == 3 ? 0.74f : 1.0f;
+                const NodeId wallNode = s->createNode();
+                s->attachMesh(wallNode, cube, s->createPbrMaterial(white));
+                s->setNodeTransform(wallNode, Vec3(0.0f, 4.05f, 1.75f), Quat(), Vec3(12.0f, 7.9f, 0.5f));
+                PbrParams plateP = metal;
+                if (a == 2) { plateP.albedo = Colour(0, 0, 0); plateP.metalness = 0.0f; }
+                const NodeId plateNode = s->createNode();
+                s->attachMesh(plateNode, cube, s->createPbrMaterial(plateP));
+                s->setNodeTransform(plateNode, Vec3(0.0f, 0.05f, -0.325f), Quat(), Vec3(4.0f, 0.1f, 3.35f));
+                if (a == 1) s->setNodeCastShadow(plateNode, false);
+                GiParams off; off.mode = GiMode::Off;
+                GiParams gi;
+                gi.mode = GiMode::Vct;
+                gi.quality = GiQuality::Medium;
+                gi.numBounces = 1;
+                gi.ddgi = GiToggle::Off;
+                gi.gather = GiToggle::Off;
+                gi.cascadeCount = 1;
+                gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 4.5f, res, 0.0f };
+                s->setGlobalIllumination(off);
+                enginetest::testCameraLookAt(rv, Vec3(0.0f, 2.0f, 0.5f), Vec3(0.0f, 2.0f, 1.5f));
+                enginetest::frames(e, 6);
+                const double face = readHdr();
+                enginetest::testCameraLookAt(rv, Vec3(0.0f, 0.55f, -2.5f), Vec3(0.0f, 0.1f, 0.0f));
+                s->setGlobalIllumination(gi);
+                enginetest::frames(e, 20);
+                for (int f = 0; f < 4000 && !s->published().gi.giAtRest; ++f) enginetest::frames(e, 1);
+                const double lobe = readHdr();
+                ratio[k++] = face > 0.0 ? lobe / face : 0.0;
+                std::printf("MEASURE (SUN-INJECTION-RES-2): %s, %d cells, the sun-lit wall's lobe / its face %.5f / %.5f "
+                            "= %.5f\n", names[a], res, lobe, face, ratio[k - 1]);
+                s->setGlobalIllumination(off);
+                rv->setScene(nullptr);
+                e->destroyScene(s);
+            }
+            const double hi = std::max(ratio[0], std::max(ratio[1], ratio[2]));
+            const double lo = std::min(ratio[0], std::min(ratio[1], ratio[2]));
+            std::printf("MEASURE (SUN-INJECTION-RES-2): %s: the spread over 32 / 64 / 128 cells %.5f / %.5f / %.5f, "
+                        "max / min - 1 = %.2f %%\n", names[a], ratio[0], ratio[1], ratio[2], 100.0 * (hi / lo - 1.0));
+        }
+    }
+    if (!junction && !veils && !sunArms) {
         // THE LOW TIER'S OWN CHAIN (two 64^3 cascades): its light store and the mip dispatches its
         // build and settle make. The total's chain exists only for the specular SDF skip, which
         // runs on a one-cascade chain only; a shipped chain allocates and regenerates none.
@@ -488,7 +554,7 @@ int main(int argc, char **argv)
         e->destroyScene(s);
     }
     e->destroyView(rv);
-    if (!junction && !veils) {
+    if (!junction && !veils && !sunArms) {
         // ONE READER AT EVERY TIER: Low reads Medium's value on every arm (the same store, the same law)
         double worst = 0.0;
         for (size_t k = 0; k < readings[0].size() && k < readings[1].size(); ++k)
