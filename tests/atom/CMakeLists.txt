@@ -463,6 +463,34 @@ set_tests_properties(atom.lod_switch PROPERTIES
     TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
 
+# atom.pass_table — THE FULLEST PASS FITS THE PASS-TEXTURE TABLE (BUGS-1 item 1; preflight-atom-3 §A): an Epic world on
+# the Basic template with sun contact, the 2D clouds and the World fog (+ one area light created and removed: the LTC
+# array then holds a slot in every PBS-family pass) — no engine error, Atom pixels > 0, and every pixel shader the run
+# generates (JAHSHAKA_HLMS_DEBUG_DIR, latched at boot: a row of its own) numbers its last texture under the fork's
+# NUM_BIND_TEXTURES, read here from the fork's own header. RED at the base (fork fdb715461's 64: the HlmsAtom passes
+# asked for 65/66 and VulkanRootLayout refused them). TIER document: the script picks the Epic World Mode itself, the
+# measured reproducer exactly (spikes/engine-polish-photon-1/stage1/).
+set(_pt_header "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/RenderSystems/Vulkan/include/OgreVulkanGlobalBindingTable.h")
+file(STRINGS "${_pt_header}" _pt_line REGEX "^#define NUM_BIND_TEXTURES [0-9]+u?$")
+string(REGEX REPLACE "^#define NUM_BIND_TEXTURES ([0-9]+)u?$" "\\1" _pt_table "${_pt_line}")
+if(NOT _pt_table MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "atom.pass_table: no NUM_BIND_TEXTURES in ${_pt_header}")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_pt_header}")
+set(_pt_home ${CMAKE_CURRENT_BINARY_DIR}/pass-table-home)
+file(MAKE_DIRECTORY ${_pt_home}/run)
+jah_gpu_row(atom.pass_table CLASS app TIER document FRAMES 552
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pass_table.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_pass_table.js" "${_pt_table}"
+         WORKING_DIRECTORY ${_pt_home}/run)
+# TIMEOUT = 6x the measured 42.9 s (solo, the cold shader cache of a fresh fork pin: the boot's compile is most of it).
+set_tests_properties(atom.pass_table PROPERTIES
+    TIMEOUT 258 LABELS "scripting"
+    ENVIRONMENT "HOME=${_pt_home};JAHSHAKA_DATA_ROOT=${_pt_home}/.local/share/Jahshaka")
+jah_fresh_home_fixture(atom.pass_table.fresh_home atomPassTableHome "${_pt_home}" WARM LABELS "scripting")
+set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTableHome)
+
 # atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh
 # REFUSES a card that names a LOD level past the chain (a baked mesh with its chain stripped
 # crashed Ogre's caster queue) and ACCEPTS every mesh the product's bake makes (the 20k

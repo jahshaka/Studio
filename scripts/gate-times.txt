@@ -62,6 +62,8 @@ atom.lod_bound_bar 11.36  quiet n=30
 atom.lod_switch 237.65  quiet n=43
 atom.lod_switch.fixture 0.05  quiet n=52
 atom.occlusion_exact 11.19  quiet n=45
+atom.pass_table 42.85  solo, the card lock held, :77, cold shader cache after the fork pin bump (BUGS-1 item 1, 2026-10-19)
+atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
 atom.removechild_leak 13.70  ship 3a0422b4e (2026-10-13)
 atom.two_sided 3.22  quiet n=44
 atom.words_still 2.04  quiet n=42

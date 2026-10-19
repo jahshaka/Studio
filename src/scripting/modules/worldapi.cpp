@@ -957,7 +957,7 @@ bool WorldApi::gi(const QVariantMap &params)
         const QVariantList rows = params.value("cascadeSet").toList();
         // THE CAP IS THE ENGINE'S ONE CONSTANT (CASCADE-CAP-1): the PBS pass-texture
         // table is sized on the longest chain a tier builds, and a longer scripted
-        // chain would claim more set-0 slots than the 64-slot table holds.
+        // chain would claim more set-0 slots than the budget (OgreFog.cpp) holds.
         if (rows.size() > jahshaka::engine::kGiTierMaxCascades)
             return fail(QStringLiteral(
                             "world.gi: cascadeSet takes at most %1 cascades (the longest chain "
