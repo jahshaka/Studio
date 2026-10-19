@@ -29,7 +29,9 @@ find_program(JAH_CCACHE_PROGRAM ccache)
 # it, `ninja -C`, `cmake --build` from the tree). Then ninja's deps log spelled every header
 # `../../../../../../../../home/…`, a node no rule produces: a generated header (ui_*.h, the ray jobs' SPIR-V) was no
 # input of its includers and went stale for one build. `env PWD=<the build dir as configured>` holds on every route
-# (ninja always runs the compile there); an older cache's bare ccache launcher is upgraded.
+# (ninja always runs the compile there); an older cache's bare ccache launcher is upgraded. It must be the ONLY ccache
+# call: irisgl/CMakeLists.txt turns assimp's GLOBAL RULE_LAUNCH_COMPILE ccache off (a second ccache in front of
+# this one sees `env` as the compiler and caches nothing).
 if(JAH_CCACHE_PROGRAM AND NOT JAH_NO_CCACHE)
     set(_jah_launcher /usr/bin/env "PWD=${CMAKE_BINARY_DIR}" "${JAH_CCACHE_PROGRAM}")
     foreach(_jah_lang C CXX)

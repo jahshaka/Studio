@@ -1046,6 +1046,9 @@ class Selection:
             self.rationale.append((sorted(set(hit.values()))[0], f"DATA EDGES: {len(hit)} row(s) read the touched data"))
 
     def add(self, suites, why):
+        cap = self.__dict__.get("_capture")
+        if cap is not None:
+            cap.update(s.split("::", 1)[0] for s in suites if s.split("::", 1)[0] in self.inv)
         for s in suites:
             r0 = s.split("::", 1)[0]
             if "::" in s:
@@ -1269,10 +1272,14 @@ class Selection:
             return
         d = os.path.dirname(p)
         while d:
-            r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
+            self._capture = set()
+            try:
+                r = self.rules_for(d + "/", f"{tag} (its directory {d}/)")
+            finally:
+                cap, self._capture = self._capture, None
             if r:
                 notes.append(f"NO RULE → its directory's subsystem: {r}")
-                self.fallback.append(f"{tag}: {why} → its directory {d}/'s rule ({r})")
+                self.fallback.append(f"{tag}: {why} → its directory {d}/'s rule ({r}; {len(cap)} row(s))")
                 return
             d = os.path.dirname(d)
         notes.append("NO RULE and no rule for any parent directory → nothing more (never the whole tier)")
@@ -1932,11 +1939,33 @@ class Selection:
         return sorted(n for n, t in self.inv.items()
                       if any(f == ap and first <= ln <= last for f, ln in t.get("sites", ())))
 
+    def binary_dirs(self, d):
+        """The build directories of a source directory and of every source directory below it. Not the same path under
+        the build dir: Studio adds irisgl/engine as `engine` (add_subdirectory(… ${CMAKE_CURRENT_BINARY_DIR}/engine)) — read
+        from each build directory's cmake_install.cmake ("# Install script for directory: <source dir>")."""
+        if not self.graph: return []
+        m = self.__dict__.get("_bin_dirs")
+        if m is None:
+            m = self._bin_dirs = []
+            for dp, dn, fs in os.walk(self.graph.build):
+                dn[:] = [x for x in dn if x != "CMakeFiles"]
+                if "cmake_install.cmake" not in fs: continue
+                try:
+                    first = open(os.path.join(dp, "cmake_install.cmake"), errors="replace").readline()
+                except OSError:
+                    continue
+                mm = re.match(r"# Install script for directory: (.+)$", first.strip())
+                if not mm: continue
+                src = os.path.relpath(os.path.realpath(mm.group(1)), os.path.realpath(ROOT))
+                m.append(("" if src == "." else src, os.path.normpath(dp)))
+        d = "" if d in ("", ".") else os.path.normpath(d)
+        return sorted({b for src, b in m if not d or src == d or src.startswith(d + "/")})
+
     def exes_under(self, d, tag):
-        """Every executable built under a source directory (its build dir), and its rows."""
+        """Every executable built under a source directory (its build dirs: binary_dirs), and its rows."""
         if not self.graph: return 0
-        bsub = os.path.join(self.graph.build, d) if d else self.graph.build
-        exes = {e for e in self.graph.exes if e.startswith(bsub + "/")}
+        bdirs = self.binary_dirs(d) or [os.path.join(self.graph.build, d) if d else self.graph.build]
+        exes = {e for e in self.graph.exes if any(e.startswith(b + "/") for b in bdirs)}
         for e in exes:
             if e != self.app_exe: self.add(self.exe_rows.get(e, []), f"{tag}: built under {d}")
         if self.app_exe in exes:
@@ -2287,7 +2316,9 @@ class Selection:
         setter = name in ("set", "list", "option", "string") or name in _GETTERS or (
             name == "file" and a_[:1] and a_[0] in _FILE_OUT)
         if (setter and depth < _CHAIN_HOPS and not rows and name == "set" and "PARENT_SCOPE" in a_[1:] and not fn
-                and "${" not in a_[0]):
+                and "${" not in a_[0] and not re.match(r"^(CMAKE|CTEST|CPACK)_", a_[0])):
+            # (a variable CMake itself reads — set(CMAKE_CXX_STANDARD 20 PARENT_SCOPE) — has no reader in any build file:
+            # it falls to the rule below, unresolved, never "0 readers in the parent scope")
             # set(<var> … PARENT_SCOPE) AT DIRECTORY SCOPE changes the variable of the PARENT directory's scope, not this
             # file's: its readers are in the other build files (a parent and the directories it adds after); this file's
             # own readers keep their value. Inside a function the parent scope is its CALLER (and `${out}` an output
@@ -2380,9 +2411,29 @@ class Selection:
                 self.add(self.by_dir.get(dd, []), f"{tag}: {name}() at directory scope of {under}")
                 self.exes_under(under, tag)
             else:
+                # EVERY TARGET COMPILED UNDER IT, not only its executables (TOOLING-2, the reader's third round): irisgl/engine
+                # builds a STATIC library and no executable, so add_compile_options() there read as 0 rows — its archive
+                # reaches what links it (target_changed); a setting that still reaches nothing is the whole tier, said
+                before = self._reach_mark()
+                tg = self.targets_under(under)
+                for t in tg:
+                    self.target_changed(t, f"{tag}: {name}() at directory scope of {under}", notes)
                 self.exes_under(under, tag)
+                if self._reach_mark() == before:
+                    self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches no row through its "
+                                          f"{len(tg)} target(s) — the reader cannot bound it")
+                notes.append(f"{name}() at directory scope of {under}: {len(tg)} target(s) compiled under it")
             notes.append(f"{name}() at directory scope of {under}"); got = True
         return got
+
+    def targets_under(self, d):
+        """The build targets whose objects compile under a source directory (its build dir and every directory below it:
+        a directory-scope setting is inherited by the subdirectories it adds)."""
+        if not self.graph: return []
+        bdirs = self.binary_dirs(d) or [os.path.join(self.graph.build, d) if d else self.graph.build]
+        rx = re.compile("(?:" + "|".join(re.escape(b) for b in bdirs) + r")/CMakeFiles/([^/]+)\.dir/")
+        names = {m.group(1) for o in self.graph.obj_src for m in [rx.match(o)] if m}
+        return sorted(n for n in names if n in self.graph.targets)
 
     # set_property(<scope> … PROPERTY <name> …) by its NAME: a property that only says WHEN something is rebuilt or CMake
     # re-runs (CMAKE_CONFIGURE_DEPENDS, OBJECT_DEPENDS), or how an IDE files a target, changes no byte of a build
