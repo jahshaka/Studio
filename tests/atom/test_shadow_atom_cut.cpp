@@ -1301,8 +1301,9 @@ static int lightCullMain()
         step();
     }
     // THE PAN'S FIRST TWO FRAMES, the cull off: the maps the first frame after the camera moved draws are the
-    // second's (nothing else moved) - a split computed before the camera's record was applied drew the first from
-    // the previous pose.
+    // second's (nothing else moved). On the base pin they were not: Ogre's Focused setup texel-snapped the split
+    // with the texture camera's PREVIOUS ortho window, so the pan's first frame sat on the old texel grid and the
+    // map stepped a frame later (the fork's fix sets the window before the snap).
     for (int i = 0; i < 3; ++i) {
         const CameraDesc c3 = enginetest::testCameraDescLookAt(Vec3(-1.4f * float(i + 1), 2.4f, 3.0f - 1.7f * float(i + 1)),
                                                             Vec3(0.5f, 0.8f, -30.0f));
