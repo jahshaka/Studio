@@ -1802,14 +1802,15 @@ class Selection:
             for f, text, c in invokers:
                 if self.cmake_command(f, os.path.dirname(f), c[0], c[3], c[4], c[3], text, tag, notes, depth=1):
                     hit += 1
-            # EVERY INVOKER RESOLVED, or the script is read as a build file below (TOOLING-5 item 5): one invoker resolved
-            # and another not read as "the 1 command(s) that run it" — the unresolved one dropped. No case is possible
-            # today: every -P invoker of the tree resolves (an execute_process applying a patch stack, an
-            # add_custom_command naming its outputs' users), and a one-file hunk cannot add an invoker to the script it
-            # edits. A file the invokers' chains marked takes its scope's step 7 here, at the chain's head.
+            # A file the invokers' chains marked — an invoker the reader leaves unresolved marks its own (TOOLING-6 item
+            # 10) — takes its scope's step 7 HERE, at the chain's head, whether or not every invoker resolved: the
+            # fall-through below reads the script as a build file and its head resets the marks (TOOLING-5's read: an
+            # execute_process at tests/gi's configure beside the two threading rows that run the script lost tests/gi)
+            self._step7_marked(sorted(self._cmake_read_at), "/".join(dict.fromkeys(c[0] for _, _, c in invokers)),
+                               tag, notes)
+            # EVERY INVOKER RESOLVED, or the script is ALSO read as a build file below (TOOLING-5 item 5): one invoker
+            # resolved and another not read as "the 1 command(s) that run it" — the unresolved one dropped
             if hit == len(invokers):
-                self._step7_marked(sorted(self._cmake_read_at), "/".join(dict.fromkeys(c[0] for _, _, c in invokers)),
-                                   tag, notes)
                 if depth == 0: self.rationale.append((p, f"a -P script: the {hit} command(s) that run it; "
                                                          + "; ".join(dict.fromkeys(notes))))
                 return
@@ -2512,6 +2513,16 @@ class Selection:
             # reader owns says nothing about what CMake itself reads)
             self._step7_marked(sorted(self._cmake_read_at | (set() if got else {p})), name, tag, notes)
             got = True
+        if depth > 0 and not got and not setter and name not in ("if", "elseif", "while", "foreach"):
+            # A USER THE READER LEAVES UNRESOLVED IS NEVER DROPPED (TOOLING-6 item 10, TOOLING-5's read P3): a variable's
+            # user that is not a block (include_directories(${JAH_GENERATED_DIR}) beside a message() of the same variable)
+            # returned False here and a resolving sibling turned the chain's `got` True — the head took no step 7 and the
+            # directory-scope setting was lost (29 rows, no tier). It marks its file as an unresolved block body does: the
+            # chain's head takes that file's step 7 (the PARENT_SCOPE readers' files the same). A SETTER is not such a
+            # user — its reach is its own variable's users, which the chain follows (string(STRIP v v) re-writing the
+            # variable being followed answers False as a cycle, nothing unread) — nor a block's head, whose body's
+            # unresolved commands mark their file themselves
+            self.__dict__.setdefault("_cmake_read_at", set()).add(p)
         return got
 
     def _step7_marked(self, files, name, tag, notes):

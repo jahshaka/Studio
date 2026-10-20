@@ -540,6 +540,36 @@
    "require_tier": true,
    "must": [],
    "must_not": []
+  },
+  {
+   "case": "TOOLING-6 10a: a variable's user that is NOT a block and that the reader cannot resolve is never dropped beside a sibling that resolves — the root's include_directories(${JAH_GENERATED_DIR}) with a message() reading the same variable beside it (TOOLING-5's read, probe P3: 29 rows, no tier), then the set() changed: the WHOLE TIER",
+   "file": "CMakeLists.txt",
+   "context": {
+    "old": "include_directories(${JAH_GENERATED_DIR})\n",
+    "new": "include_directories(${JAH_GENERATED_DIR})\nmessage(STATUS \"generated: ${JAH_GENERATED_DIR}\")\n"
+   },
+   "old": "set(JAH_GENERATED_DIR \"${CMAKE_BINARY_DIR}/generated\")\n",
+   "new": "set(JAH_GENERATED_DIR \"${CMAKE_BINARY_DIR}/generated2\")\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-6 10b: a -P script whose invokers resolve only in part keeps every invoker's reach — a third invoker the reader cannot resolve (an execute_process at tests/gi's configure) beside the two threading rows that run it (TOOLING-5's read: the fall-through to the script's own reading dropped the invokers' marks): tests/gi's scope (gi.metal_bounce) AND the two threading rows",
+   "file": "tests/threading/nogrouplesstexture.cmake",
+   "context": {
+    "file": "tests/gi/CMakeLists.txt",
+    "old": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\n",
+    "new": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\nexecute_process(COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)\n"
+   },
+   "old": "    file(STRINGS ${_log} _hits REGEX \"valid resourceGroup\")\n",
+   "new": "    file(STRINGS ${_log} _hits REGEX \"a valid resourceGroup\")\n",
+   "must": [
+    "gi.metal_bounce",
+    "threading.import_soak.no_groupless_texture",
+    "threading.newproject_stall.no_groupless_texture"
+   ],
+   "must_not": []
   }
  ]
 }
