@@ -707,7 +707,7 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
     view->readPixels(glossyNone);
     s->setNodeVisible(crate, true);
     double err = 0.0;
-    int vn = 0, byCard = 0, byStore = 0, bySky = 0, byRecord = 0;
+    int vn = 0, byCard = 0, byStore = 0, bySky = 0, byRecord = 0, bySilhouetteRecord = 0;
     for (unsigned i : disk) {
         const unsigned char *g = &glossyShot.rgba[size_t(i) * 4u], *dd = &glossyDecode.rgba[size_t(i) * 4u];
         const unsigned char *z = &glossyNone.rgba[size_t(i) * 4u];
@@ -717,20 +717,34 @@ static int metalMain(Engine *e, Scene *s, View *view, const char *dumpDir)
         ++vn;
         const unsigned char *h = &glossyHits.rgba[size_t(i) * 4u];
         const bool r = h[0] > 127, gg = h[1] > 127, b = h[2] > 127;
+        // THE CRATE'S SILHOUETTE IS NOT THE RULE'S CLAIM (PHOTON-3's merge, one px of 123): a traced
+        // ray whose cone straddles the crate's edge against the sky takes a decode record (its 8
+        // neighbours in the Hits view are sky and store); the rule's claim — a metal hit answered by
+        // the card or the store, never a record — is read over the reflection's INTERIOR: a footprint
+        // pixel with a sky neighbour is the silhouette and is counted apart.
+        bool silhouette = false;
+        for (int dy = -1; dy <= 1 && !silhouette; ++dy)
+            for (int dx = -1; dx <= 1 && !silhouette; ++dx) {
+                const unsigned j = i + unsigned(dy) * kWidth + unsigned(dx);
+                const unsigned char *hh = &glossyHits.rgba[size_t(j) * 4u];
+                if (hh[1] > 127 && hh[2] > 127 && hh[0] <= 127) silhouette = true;   // a sky neighbour
+            }
         if (gg && !r && !b) ++byCard;
         else if (b && !gg && !r) ++byStore;
         else if (gg && b && !r) ++bySky;
-        else if (r && b && !gg) ++byRecord;
+        else if (r && b && !gg) { if (silhouette) ++bySilhouetteRecord; else ++byRecord; }
     }
     err = vn ? err / (3.0 * vn) : 1e9;
     std::printf("   from a glossy sphere (r 0.35, the one rule): %.2f codes from the full decode over %d px; the "
-                "Hits view there: %d card, %d store, %d sky, %d decode records\n", err, vn, byCard, byStore, bySky, byRecord);
+                "Hits view there: %d card, %d store, %d sky, %d decode records (+%d at the silhouette, a straddling cone)\n",
+                err, vn, byCard, byStore, bySky, byRecord, bySilhouetteRecord);
     CHECK_MSG(vn > 50 && err <= 8.0,
               "...and from a GLOSSY reflector the one rule gives the decode's metal (%.2f codes, bar 8)", err);
     CHECK_MSG(byRecord == 0 && byCard + byStore >= ((vn - bySky) * 9) / 10 && byCard + byStore > 50,
               "...and THE ONE RULE answers those hits: %d card + %d store of the %d px the crate's traced rays "
-              "reach (%d sky at its edge), %d decode records (a metal is no exception: no record, no decode)",
-              byCard, byStore, vn - bySky, bySky, byRecord);
+              "reach (%d sky at its edge), %d decode records in the reflection's interior (a metal is no exception: "
+              "no record, no decode; %d at the silhouette counted apart)",
+              byCard, byStore, vn - bySky, bySky, byRecord, bySilhouetteRecord);
 
     // A SPECULAR-WORKFLOW DIELECTRIC IS NOT A METAL (the fix round's gpuIsMetal defect):
     // SpecularAsFresnel, F0 0.04, a white specular colour kS — the shape of every
