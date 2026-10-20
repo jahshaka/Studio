@@ -1609,13 +1609,62 @@ int modeInjectLeak(Fixture &f)
 //       store whole, which is what the no-ray readers (the cones, the field) read; the wall's share / closed form is
 //       PRINTED (read / truth; no bar: the store's dilution is a known debt, measured here on a fixture).
 //   e24 (the clean canyon): THE DECODE PAST THE CASCADES - every decode-answered ray (a record, or a far one) whose hit
-//       lies past cascade 3's box, against its exact direct (rho I cos DA(cos) x its sun ray; the canyon has no sky):
-//       BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
-//   e25 (the terrace): THE MIP READ - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
+//       lies past cascade 3's box, against its exact direct TOWARD THE RAY'S VIEWER (rho I cos_l x the Disney diffuse
+//       at (sun, hit -> probe), x its sun ray; the canyon has no sky; the probe placed by probePoint with the jitter
+//       off): BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
+//       (BUGS-1 item 15: the row first held the decode to the VIEW-AVERAGED direct the store re-emits, rho I cos DA,
+//       and read 1.111 - 1.06 / 1.20 at 60-80 / 80-100 m, the grazing views' Disney term; toward the viewer 0.999.)
+//   e25 (the terrace): THE MIP READ (BUGS-1 item 16: barred on the uniform regions, where the mean is exact) - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
 //       level >= 2 (lod from the ray's distance and the probe's solid angle, the reader's jahVoxelFootprintLod), their
 //       read against the level-0 store of the texel at the hit (the side facing the hit): PRINTED (the canyon read
 //       0.98-1.02; a mip read is the coverage-weighted mean, so the ratio's physics is 1.0 over a uniform region and
 //       the dilution elsewhere).
+/// THE PROBE'S PLACE (BUGS-1 item 15): the gather's uniform probe of cell (cx, cy) sits on the surface the camera sees at
+/// its block's centre pixel (the jitter off: the arm gather.jitter 1) - the camera ray through it against the analytic
+/// boxes. False where it meets none.
+bool probePoint(const Fixture &f, const Vec3 &cam, unsigned cx, unsigned cy, unsigned stride, Vec3 &out)
+{
+    Vec3 fw(kTarget.x - cam.x, kTarget.y - cam.y, kTarget.z - cam.z);
+    float l = std::sqrt(fw.x * fw.x + fw.y * fw.y + fw.z * fw.z);
+    fw = Vec3(fw.x / l, fw.y / l, fw.z / l);
+    Vec3 r(-fw.z, 0.0f, fw.x);
+    l = std::sqrt(r.x * r.x + r.z * r.z);
+    r = Vec3(r.x / l, 0.0f, r.z / l);
+    const Vec3 u(r.y * fw.z - r.z * fw.y, r.z * fw.x - r.x * fw.z, r.x * fw.y - r.y * fw.x);
+    const double t = std::tan(kFov * 0.5 * kPi / 180.0);
+    const double px = double(cx) * stride + 0.5 * double(stride), py = double(cy) * stride + 0.5 * double(stride);
+    const double x = (px + 0.5) / (0.5 * kSize) - 1.0, y = 1.0 - (py + 0.5) / (0.5 * kSize);
+    Vec3 d(float(fw.x + (r.x * x + u.x * y) * t), float(fw.y + (r.y * x + u.y * y) * t), float(fw.z + (r.z * x + u.z * y) * t));
+    l = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    d = Vec3(d.x / l, d.y / l, d.z / l);
+    float best = 1e30f;
+    for (const Box &b : f.boxes) {
+        float t0 = 0.0f;
+        if (slabEntry(cam, d, b.b, t0) && t0 > 0.0f && t0 < best) best = t0;
+    }
+    if (!(best < 1e29f)) return false;
+    out = Vec3(cam.x + d.x * best, cam.y + d.y * best, cam.z + d.z * best);
+    return true;
+}
+
+/// THE FLOOR'S RADIANCE TOWARD A VIEWER (the BRDF's own view term, BUGS-1 item 15): rho I cos_l x the renormalised
+/// Disney diffuse at (l, v) - the integrand disneyDiffuseAlbedo averages over v (enginetesthelpers.h), roughness 1.
+/// The store and the hit's direct hold that average (a view-independent re-emission); a DECODE shades the BRDF
+/// toward the ray's viewer, and at a grazing view it is brighter.
+double floorRadianceToward(const double n[3], const double toSun[3], const double v[3], double albedo)
+{
+    const double cl = n[0] * toSun[0] + n[1] * toSun[1] + n[2] * toSun[2];
+    const double cv = n[0] * v[0] + n[1] * v[1] + n[2] * v[2];
+    if (!(cl > 0.0) || !(cv > 0.0)) return 0.0;
+    double H[3] = { toSun[0] + v[0], toSun[1] + v[1], toSun[2] + v[2] };
+    const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+    const double vdh = hl > 0.0 ? std::max(0.0, (v[0] * H[0] + v[1] * H[1] + v[2] * H[2]) / hl) : 0.0;
+    const double r = 1.0, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+    const double fd90 = 0.5 * r + 2.0 * vdh * vdh * r;
+    const double ls = 1.0 + (fd90 - 1.0) * std::pow(1.0 - cl, 5.0), vs = 1.0 + (fd90 - 1.0) * std::pow(1.0 - cv, 5.0);
+    return albedo * double(kSunIntensity) * cl * ls * vs * ef;
+}
+
 int modeFarMeasure(Fixture &f, const std::string &which)
 {
     using namespace diag;
@@ -1626,7 +1675,7 @@ int modeFarMeasure(Fixture &f, const std::string &which)
     GatherTuning t;
     t.readback = true;
     f.s->setGatherTuning(t);
-    const Vec3 cam = poseCam("c3");
+    const Vec3 cam = poseCam(gPose);   // the rows run c3 (--pose c3); a measure may name another
     gTraceWall = wallPoints();
     gTraceCam = cam;
     gSettleMin = 0u;
@@ -1635,11 +1684,78 @@ int modeFarMeasure(Fixture &f, const std::string &which)
                 double(gLength), clutter ? "the terrace" : "clean", f.boxes.size(), double(cam.x), double(cam.y),
                 double(cam.z), which != "e24" ? ", gi.hitDirect 0" : "");
     if (which == "e21") {
-        const double ratio = shareRatio(f, cam, "STORE  ", false, false);
-        std::printf("   E-21 THE WHOLE STORE'S READ on the terrace: the wall's share / closed form %.3f (read / truth; "
-                    "FAR-SUN-2's direct at the hit reads ~1.06 here)\n", ratio);
-        CHECK_MSG(ratio > 0.0, "e21: the share reads (%.3f)", ratio);
+        // THE STORE'S OVER-COUNT AT TWO CELLS (BUGS-1 item 17): the wall's share read from the store whole and with the
+        // hit's own direct (the gather's own error) at the c3 pose - its rays answered in cascade 3, 1.875 m cells - and
+        // at the c2 pose - cascade 2, 0.469 m - on the same terrace; the quotient is the store's own over-count. Its bar
+        // is CONVERGENCE (the store is a cell mean: it must fall with the cell), never a fixed bar on a discretisation.
+        double over[2] = { -1.0, -1.0 };
+        const char *poses[2] = { "c3", "c2" };
+        for (int k = 0; k < 2; ++k) {
+            const Vec3 pc = poseCam(poses[k]);
+            f.e->setArm("gi.hitDirect", 0.0);
+            const double ratio = shareRatio(f, pc, "STORE  ", false, false);
+            f.e->setArm("gi.hitDirect", 1.0);
+            const double exact = shareRatio(f, pc, "DIRECT ", false, false);
+            over[k] = exact > 0.0 ? ratio / exact : -1.0;
+            std::printf("   E-21 THE WHOLE STORE'S READ on the terrace, pose %s: the wall's share / closed form %.3f from the "
+                        "store, %.3f with the hit's direct - the store's own over-count %.3f\n", poses[k], ratio, exact,
+                        over[k]);
+        }
+        CHECK_MSG(over[0] > 0.0 && over[1] > 0.0 && over[1] < over[0],
+                  "e21: THE STORE'S OVER-COUNT CONVERGES WITH THE CELL: %.3f at 1.875 m cells (c3), %.3f at 0.469 m (c2)",
+                  over[0], over[1]);
+        if (!std::getenv("FARSUN_E21_CLASSES")) return 0;
+        // BY THE CELL AND THE SURFACE (a measure, FARSUN_E21_CLASSES=1; BUGS-1 item 17's cause): at the c2 pose, every
+        // voxel-answered ray read from the store whole against its hit's exact direct (rho I cos DA x its sun ray -
+        // the store's own model, bounces 0), per answering cascade and surface class.
+        f.e->setArm("gi.hitDirect", 0.0);
+        settled(f);
+        f.e->setArm("gather.hitsReadback", 1.0);
+        double cr[4] = {}, ct[4] = {};
+        unsigned cn[4] = {}, last = 0u, frames = 0u;
+        // [cascade][class: 0 floor lit, 1 floor shaded, 2 clutter lit, 3 clutter shaded, 4 black]
+        double kr[4][5] = {}, kt[4][5] = {}, kn[4][5] = {};
+        for (int i = 0; i < 6; ++i) {
+            render(f.e, 1);
+            ++frames;
+            const GatherStatus gs = f.s->published().gi.gather;
+            if (gs.rays.empty() || gs.raysFrame == last) continue;
+            last = gs.raysFrame;
+            for (const GatherRay &r : gs.rays) {
+                if (r.source != GatherRay::Voxel || !(r.distance > 0.0f) || r.cascade > 3u || cn[r.cascade] >= 2000u) continue;
+                double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+                const double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+                if (nl < 0.5) continue;
+                const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+                const int bi = boxAt(p, f.boxes);
+                if (bi < 0) continue;
+                const double cosL = (nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z) / nl;
+                const Box &bx = f.boxes[size_t(bi)];
+                const double tr = faceRad(bx, cosL) * double(r.sunVisibility);
+                cr[r.cascade] += lumOf(r.radiance);
+                ct[r.cascade] += tr;
+                ++cn[r.cascade];
+                const bool litHit = r.sunVisibility > 0.5f && cosL > 0.0;
+                const int k = !bx.floor ? 4 : (bi == 0 ? (litHit ? 0 : 1) : (litHit ? 2 : 3));
+                kr[r.cascade][k] += lumOf(r.radiance);
+                kt[r.cascade][k] += tr;
+                kn[r.cascade][k] += 1.0;
+            }
+        }
+        f.e->setArm("gather.hitsReadback", 0.0);
         f.e->setArm("gi.hitDirect", 1.0);
+        gFrames += frames;
+        const GiStatus g = f.s->published().gi;
+        for (int c = 0; c < 4; ++c)
+            std::printf("   E-21 BY THE CELL: cascade %d (cell %.3f m): %u voxel rays, the store read / the exact direct %.3f\n",
+                        c, c < int(g.cascades.size()) ? double(g.cascades[size_t(c)].cell) : -1.0, cn[c],
+                        ct[c] > 0 ? cr[c] / ct[c] : -1.0);
+        const char *kname[5] = { "floor lit", "floor shaded", "clutter lit", "clutter shaded", "black" };
+        for (int c = 0; c < 4; ++c)
+            for (int k = 0; k < 5; ++k)
+                if (kn[c][k] > 0)
+                    std::printf("     c%d %-15s n %5.0f  read %.4f  exact %.4f\n", c, kname[k], kn[c][k], kr[c][k] / kn[c][k],
+                                kt[c][k] / kn[c][k]);
         return 0;
     }
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
@@ -1651,9 +1767,22 @@ int modeFarMeasure(Fixture &f, const std::string &which)
     // the far cascades only (2 and 3: 64^3 at High - a 128^3 cascade's whole readback is seconds); a ray answered
     // finer is counted apart (e25 measures the far read)
     unsigned finer = 0u;
-    if (which == "e25")
+    if (which == "e25") {
+        const auto t0 = std::chrono::steady_clock::now();
         for (int c = 2; c < 4; ++c) f.s->giVoxelVolume(c, vols[size_t(c)]);
+        // THE COST (BUGS-1 item 16): printed, never a bar (the engine has no wall clock; this is the host's)
+        std::printf("   e25: the two cascades' store read back in %.2f s\n",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    }
+    // THE UNIFORM-REGION ARM (BUGS-1 item 16): rays whose read's whole block holds ONE surface kind and one light
+    double uRead = 0.0, uRef = 0.0;
+    unsigned uN = 0u, uDark = 0u, uDarkLit = 0u;
     f.e->setArm("gather.hitsReadback", 1.0);
+    if (which == "e24") f.e->setArm("gather.jitter", 1.0);   // the probes at their blocks' centres (probePoint)
+    double sView = 0.0;
+    unsigned nView = 0u;
+    struct SplitAcc { double n = 0, read = 0, truth = 0, view = 0; };
+    SplitAcc split[2][2][4];
     unsigned lastFrame = 0u, raysPer = 64u;
     double sRead = 0.0, sRef = 0.0;
     unsigned n = 0, frames = 0;
@@ -1673,11 +1802,18 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             if (which == "e25" && r.cascade < 2) { ++finer; continue; }
             const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
             if (which == "e24" && cascadeOf(g, p) >= 0) continue;   // past cascade 3's box only
-            const int bi = boxAt(p, f.boxes);
-            if (bi < 0) continue;
-            const Box &bx = f.boxes[size_t(bi)];
             double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
             double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+            // THE COST (BUGS-1 item 16: 22.6 s): boxAt walks every box (2,579 on the terrace) and e25 needs no box -
+            // a voxel ray names its triangle's normal - so the lod filter goes first and the walk is e24's alone
+            if (which == "e25") {
+                if (nl < 0.5) continue;
+                const double cell0 = cells[r.cascade];
+                if (std::log2(std::max(double(r.distance) * std::sqrt(2.0 / raysPer), cell0) / cell0) < 2.0) continue;
+            }
+            const int bi = which == "e24" ? boxAt(p, f.boxes) : 0;
+            if (bi < 0) continue;
+            const Box &bx = f.boxes[size_t(bi)];
             if (nl < 0.5) {   // a FAR hit names no triangle: the face of its box the point lies on
                 const double P[3] = { p.x, p.y, p.z }, A[3] = { bx.b.mn.x, bx.b.mn.y, bx.b.mn.z },
                              B[3] = { bx.b.mx.x, bx.b.mx.y, bx.b.mx.z };
@@ -1693,9 +1829,32 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             const double cosL = nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z;
             const double read = lumOf(r.radiance);
             if (which == "e24") {
+                const double truth = faceRad(bx, cosL) * double(r.sunVisibility);
                 sRead += read;
-                sRef += faceRad(bx, cosL) * double(r.sunVisibility);
+                sRef += truth;
                 ++n;
+                // THE EXACT DIRECT TOWARD THE RAY'S VIEWER: the BRDF at (sun, hit -> probe)
+                double view = 0.0;
+                Vec3 probe;
+                if (bx.floor && probePoint(f, cam, unsigned(r.cellX), unsigned(r.cellY),
+                                           gs.stride ? gs.stride : 16u, probe)) {
+                    double v[3] = { double(probe.x - p.x), double(probe.y - p.y), double(probe.z - p.z) };
+                    const double vl = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                    for (double &x : v) x /= vl;
+                    const double ts[3] = { kToSun.x, kToSun.y, kToSun.z };
+                    view = floorRadianceToward(nn, ts, v, double(kFloorAlbedo)) * double(r.sunVisibility);
+                }
+                sView += view;
+                ++nView;
+                // THE SPLIT (BUGS-1 item 15's cause): the record kind, lit / shaded, and the hit's distance from the
+                // camera (20 m bins from 60 m)
+                const double dc = std::sqrt(double(p.x - cam.x) * (p.x - cam.x) + double(p.y - cam.y) * (p.y - cam.y) +
+                                            double(p.z - cam.z) * (p.z - cam.z));
+                const int kind = r.source == GatherRay::DecodeFar ? 1 : 0;
+                const int lit = (r.sunVisibility > 0.5f && cosL > 0.0 && bx.floor) ? 1 : 0;
+                const int bin = std::min(3, std::max(0, int((dc - 60.0) / 20.0)));
+                SplitAcc &a = split[kind][lit][bin];
+                a.n += 1; a.read += read; a.truth += truth; a.view += view;
                 continue;
             }
             // e25: a voxel-answered ray whose footprint reads level >= 2, against the level-0 store at its hit
@@ -1733,25 +1892,87 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             const double vn[3] = { vol.normal[vi * 4] * 2.0 - 1.0, vol.normal[vi * 4 + 1] * 2.0 - 1.0,
                                    vol.normal[vi * 4 + 2] * 2.0 - 1.0 };
             const bool agree = vn[0] * nn[0] + vn[1] * nn[1] + vn[2] * nn[2] >= 0.0;
+            const double store = std::max(agree ? 2.0 * mean - back : back, 0.0);
             sRead += read;
-            sRef += std::max(agree ? 2.0 * mean - back : back, 0.0);
+            sRef += store;
             ++n;
+            // THE MIP'S OWN PHYSICS, where it is exact: a read at level m averages, coverage-weighted, a block of
+            // 2 x 2^m level-0 cells per axis (the directional volumes are half resolution) with the trilinear blend
+            // to its neighbours; over a block (and its neighbours) holding ONLY up-facing faces of ONE light - an open
+            // floor - that mean IS the level-0 light, whatever the cell. So: the up-facing hits whose surrounding
+            // 3 x (2 x 2^m) cells hold no coverage but +y and one light (1 %) read the store exactly.
+            if (an == 1 && posHalf) {
+                const int m = int(std::floor(std::max(lod - 2.0, 0.0)));
+                const int R = 2 << m;
+                const int jx[3] = { int(vi % size_t(vol.width)), int((vi / size_t(vol.width)) % size_t(vol.height)),
+                                    int(vi / (size_t(vol.width) * size_t(vol.height))) };
+                bool uniform = true;
+                for (int dz = -R; dz <= R && uniform; ++dz)
+                    for (int dy = -R; dy <= R && uniform; ++dy)
+                        for (int dx = -R; dx <= R && uniform; ++dx) {
+                            const int q[3] = { jx[0] + dx, jx[1] + dy, jx[2] + dz };
+                            if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= vol.width || q[1] >= vol.height ||
+                                q[2] >= vol.depth) { uniform = false; break; }
+                            const size_t qi = (size_t(q[2]) * size_t(vol.height) + size_t(q[1])) * size_t(vol.width) + size_t(q[0]);
+                            for (int a = 0; a < 3; ++a) {
+                                const double cp = vol.coverageP[qi * 4 + size_t(a)], cn = vol.coverageN[qi * 4 + size_t(a)];
+                                if ((a != 1 && (cp > 0.0 || cn > 0.0)) || (a == 1 && cn > 0.0 && dy != -1 && dy != 0)) uniform = false;
+                            }
+                            if (!uniform) break;
+                            if (vol.coverageP[qi * 4 + 1] > 0.0) {
+                                const double cq = vol.light[qi * 4 + 3];
+                                const double lq = cq > 0.0 ? lumOf(&vol.light[qi * 4]) / cq / k : 0.0;
+                                const double bq = cq > 0.0 ? lumOf(&vol.lightBack[qi * 4]) / cq / k : 0.0;
+                                const double vq = vol.normal[qi * 4 + 1] * 2.0 - 1.0;
+                                const double sq = std::max(vq >= 0.0 ? 2.0 * lq - bq : bq, 0.0);
+                                if (std::fabs(sq - store) > 0.01 * std::max(store, 0.05)) uniform = false;
+                            }
+                        }
+                if (uniform) {
+                    if (store > 0.05) { uRead += read; uRef += store; ++uN; }
+                    else { ++uDark; if (read > 0.01) ++uDarkLit; }
+                }
+            }
         }
     }
     f.e->setArm("gather.hitsReadback", 0.0);
+    f.e->setArm("gather.jitter", 0.0);
     f.e->setArm("gi.hitDirect", 1.0);
     gFrames += frames;
     const double ratio = sRef > 0.0 ? sRead / sRef : -1.0;
     if (which == "e24") {
+        const double ratioView = sView > 0.0 ? sRead / sView : -1.0;
         std::printf("   E-24 THE DECODE PAST THE CASCADES (clean canyon): %u decode rays past cascade 3's box, sum read / "
-                    "sum exact direct %.3f\n", n, ratio);
-        CHECK_MSG(n >= 100u && ratio >= 0.95 && ratio <= 1.05,
-                  "e24: PAST THE CASCADES A DECODE HIT IS ITS EXACT DIRECT (+ the sky, none here): read / truth %.3f "
-                  "over %u rays (bar 0.95-1.05)", ratio, n);
+                    "sum exact direct toward the ray's viewer %.3f (against the view-AVERAGED direct the store holds: %.3f)\n",
+                    n, ratioView, ratio);
+        for (int k = 0; k < 2; ++k)
+            for (int l = 0; l < 2; ++l)
+                for (int b = 0; b < 4; ++b) {
+                    const SplitAcc &a = split[k][l][b];
+                    if (a.n < 1) continue;
+                    std::printf("     %-11s %-6s %3d-%3d m from the camera: n %6.0f  read %.5f  truth (view-averaged) %.5f "
+                                "-> %.3f | toward the viewer %.5f -> %.3f\n",
+                                k ? "far record" : "record", l ? "lit" : "shaded", 60 + 20 * b, b == 3 ? 999 : 80 + 20 * b,
+                                a.n, a.read / a.n, a.truth / a.n, a.truth > 0 ? a.read / a.truth : -1.0, a.view / a.n,
+                                a.view > 0 ? a.read / a.view : -1.0);
+                }
+        CHECK_MSG(n >= 100u && nView == n && ratioView >= 0.95 && ratioView <= 1.05,
+                  "e24: PAST THE CASCADES A DECODE HIT IS ITS EXACT DIRECT (+ the sky, none here) - the BRDF toward the "
+                  "ray's viewer: read / truth %.3f over %u rays (bar 0.95-1.05)", ratioView, n);
     } else {
         std::printf("   E-25 THE MIP READ (the terrace, gi.hitDirect 0): %u voxel rays at lod >= 2 answered by cascades 2-3 "
-                    "(%u answered finer, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
-        CHECK_MSG(n >= 100u && ratio > 0.0, "e25: the lod >= 2 rays read (%u, %.3f)", n, ratio);
+                    "(%u voxel rays answered by cascades 0-1, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
+        std::printf("   E-25 THE UNIFORM REGIONS (one up-facing light over the read's block and its neighbours): %u lit rays, "
+                    "sum read / sum store %.4f; %u dark rays, %u of them read > 0.01\n", uN, uRef > 0 ? uRead / uRef : -1.0,
+                    uDark, uDarkLit);
+        // THE BAR, from the mip's physics: over a block of one surface kind and one light the coverage-weighted mean
+        // IS the level-0 light, whatever the cell - so the read equals the store to the store's own quantum (10-bit /
+        // half-float rows, well under 1 %); 1 % is the bar. Everywhere else a lod >= 2 read is the mean over its
+        // footprint, not the texel at the hit (the 1.169 above is that mixing, printed, no bar).
+        const double uRatio = uRef > 0.0 ? uRead / uRef : -1.0;
+        CHECK_MSG(uN >= 50u && std::fabs(uRatio - 1.0) <= 0.01,
+                  "e25: A MIP READ OVER ONE LIGHT IS THAT LIGHT: %u lit uniform-region rays read %.4f of the level-0 store "
+                  "(bar 1 +- 1 %%)", uN, uRatio);
     }
     return 0;
 }

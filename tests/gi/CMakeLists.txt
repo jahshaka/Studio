@@ -2554,10 +2554,12 @@ endforeach()
 # read from the WHOLE store, gi.hitDirect 0 - what the no-ray readers read; printed), far_sun_decode_c3 (the clean canyon's
 # decode rays past cascade 3's box against their exact direct; bar 0.95-1.05), far_sun_mip_c3 (the terrace's voxel rays at
 # lod >= 2 against the level-0 store at the hit; printed). FRAMES as their run counted. MEASURE rows (the ship's, never a
-# merge's): two print a reading with no bar, decode_c3's bar is RED today (1.111, BUGS-1 batch 4) and is the lead's, and
-# mip_c3 reads two cascades back (22.6 s, over a fixture's 10 s).
+# merge's): store_c3 holds the store's over-count to CONVERGENCE with the cell (item 17: 1.384 at 1.875 m, 1.129 at
+# 0.469 m; two poses, 10.9 s); decode_c3 holds the decode to the exact direct toward the ray's viewer (BUGS-1
+# item 15: 0.999); mip_c3 holds a mip read over one light to that light (item 16: 0.9996; 3.6 s since the box walk left
+# its loop).
 foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cclutter:27"
-                             "far_sun_store_c3:e21:27" "far_sun_decode_c3:e24:39" "far_sun_mip_c3:e25:39")
+                             "far_sun_store_c3:e21:129" "far_sun_decode_c3:e24:39" "far_sun_mip_c3:e25:39")
     string(REPLACE ":" ";" _far_c3_pair "${_far_c3_row}")
     list(GET _far_c3_pair 0 _far_c3_name)
     list(GET _far_c3_pair 1 _far_c3_mode)
