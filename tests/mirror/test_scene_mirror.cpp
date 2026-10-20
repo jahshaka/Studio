@@ -62,6 +62,26 @@ static void show(const char *tag, const Image &i) {
                 c.r*255, c.g*255, c.b*255, k.r*255, k.g*255, k.b*255);
 }
 
+// THE ENVIRONMENT LANDS WHEN THE ENGINE SAYS SO, NEVER AFTER A GUESSED FRAME COUNT (ship 1bdb9d4e0, 2026-10-20). A sky
+// change requests a capture, an SH read and the specular convolution; until all three land the PREVIOUS reflection and
+// ambient stay bound by design (landEnvironmentIfComplete, SKY-SWAP-1), and under an asynchronous scene the convolution's
+// compute permutation may still be compiling in the background (ASYNC-SHADERS-1) — wall-clock work, not frames. This
+// suite used to render three fixed frames after a sky push; under the ship's 8-wide guard pass that read the previous
+// block's red-below/blue-above sky as magenta 147 3 147 on the chrome cube, and green when the card was quiet. So: one
+// frame for the push to apply (pending is raised inside the frame), then frames until published().environmentPending
+// clears — bounded at 600, a stuck environment is a red here and never a longer wait — then TWO more: the landing frame's
+// own draws re-key on the next drain (the decode twins, SKY-SWAP-1), so the second frame after it is the first that
+// every surface shows the new set.
+template <class E, class S> static void settleEnvironment(E &engine, S *scene, const char *what) {
+    int waited = 0;
+    enginetest::frames(engine, 1);
+    while (scene->published().environmentPending && waited < 600) { enginetest::frames(engine, 1); ++waited; }
+    char msg[160];
+    std::snprintf(msg, sizeof msg, "%s: the environment landed (%d frame(s) after the push)", what, waited + 1);
+    CHECK(!scene->published().environmentPending, msg);
+    enginetest::frames(engine, 2);
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1225,6 +1245,7 @@ int main(int argc, char **argv)
                 mirror.sync(mirrorframe::environment(view));
                 enginetest::frames(engine, 1);
             }
+            settleEnvironment(engine, target, "sky light");   // the set itself, when the engine says it landed
         };
         settleEnv(3);
         view->readPixels(img); show("matte cube, sky light ON", img);
@@ -1299,7 +1320,7 @@ int main(int argc, char **argv)
         cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
         mirror.sync(mirrorframe::camera(view, cam));
-        mirror.sync(); enginetest::frames(engine, 3);
+        mirror.sync(); settleEnvironment(engine, target, "equirect IBL");
         view->readPixels(img); show("metal cube, equirect IBL", img);
         const Colour c = centre(img);
         CHECK(mirror.engineNode(meshNode.data()) != 0, "the chrome cube is mirrored");
@@ -1314,7 +1335,7 @@ int main(int argc, char **argv)
         doc->skyColor = QColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
         mirror.sync(mirrorframe::sky(view));
-        mirror.sync(); enginetest::frames(engine, 3);
+        mirror.sync(); settleEnvironment(engine, target, "blue colour sky");
         view->readPixels(img); show("metal cube, blue colour sky", img);
         const Colour swapped = centre(img);
         CHECK(swapped.b > 0.25f && swapped.b > swapped.g * 1.5f && swapped.b > swapped.r * 1.5f,
@@ -1366,7 +1387,7 @@ int main(int argc, char **argv)
         mirror.sync(mirrorframe::sky(view));
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
-        enginetest::frames(engine, 4);
+        settleEnvironment(engine, target, "gradient sky");
         Image before; CHECK(view->readPixels(before), "idempotency: the settled frame reads back");
         show("gradient sky + chrome cube (settled)", before);
         const SkyDesc settled = jahshaka::engine::inspect::scene(target)->sky();

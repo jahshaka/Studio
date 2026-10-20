@@ -104,7 +104,8 @@ set_tests_properties(shadercache.app.churn PROPERTIES TIMEOUT 600 LABELS "shader
 # shadercache.save_off_frame — THE SAVE LEAVES THE FRAME (FRAME-MONITOR-DOOR-1 stage 4): free-running (--script-live,
 # JAH_FREE_RUNNING=1), COLD on a fresh data root then WARM on the same root (save_off_frame.sh): a compile burst, the
 # watchdog's save waited for in frames — A GUARD OF COUNTS: the copy chunked (cold), no chunked message over K = 8
-# entries, no frame overrun across the save, the writer's write arrived (the milliseconds: the .timing sibling). Before: one
+# entries, the writer's write arrived (the clock — the milliseconds AND the frame overruns on the save's frames — is the
+# .timing sibling's, alone on the card; under the 8-wide guard pass a sibling's load overruns any frame). Before: one
 # message of 22.7 ms cold / 12.5 ms warm (spikes/frame-monitor-door/stage4-measure.txt).
 set(_sof_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-save_off_frame)
 file(MAKE_DIRECTORY ${_sof_home}/run)
@@ -118,8 +119,9 @@ set_tests_properties(shadercache.save_off_frame PROPERTIES
     TIMEOUT 300 LABELS "shadercache")
 jah_tsan_blocked(shadercache.save_off_frame)   # TSAN-GCC15-THREAD-REGISTRY: the copies' hand-off is frame.monitor_pop's arm
 # shadercache.save_off_frame.timing — the guard's milliseconds, a MEASURE row (the ship's, alone on the card): the same
-# two launches, and every render-thread message of every save <= 2 ms, every chunk <= 1 ms (the read's item 6: a guard
-# counts; 0.61-0.86 ms against 1.0 on a loaded box is a measurement).
+# two launches, and every render-thread message of every save <= 2 ms, every chunk <= 1 ms, no frame overrun on the frames
+# that carried the save's messages (the read's item 6: a guard counts; 0.61-0.86 ms against 1.0 on a loaded box is a
+# measurement, and so is a frame against its display period).
 set(_soft_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-save_off_frame_timing)
 file(MAKE_DIRECTORY ${_soft_home}/run)
 jah_gpu_exclusive_test(NAME shadercache.save_off_frame.timing CLASS app TIER document RUN_TIMEOUT 300

@@ -4,12 +4,14 @@
 // root. A compile burst (a cube selected under the translate gizmo: its outline and gizmo shaders compile even warm),
 // then the watchdog's save, waited for in FRAMES (the writer's finished writes, app.shaderCache().save.written).
 // THE GUARD COUNTS (tests count frames, never a clock): on the cold arm the copy ran in more messages than saves (it
-// chunked); no chunked message took more than K entries (save.chunkMaxEntries <= save.chunkEntries); the frames that
-// CARRIED the save's messages carry no frame overrun (save.frameOverruns: the driver's attribution — a frame's work over
-// the display period — counted by the render loop on exactly those frames; the window-wide driver count is printed, a
-// sibling lane's load overruns other frames of a 2-4 s window); the writer's
-// "saved N files" arrived. The milliseconds — the longest message (<= 2 ms) and the longest chunk (<= 1 ms) — are
-// PRINTED here and judged by the measure sibling shadercache.save_off_frame.timing (its driver reads this line).
+// chunked); no chunked message took more than K entries (save.chunkMaxEntries <= save.chunkEntries); the writer's
+// "saved N files" arrived. THE WALL-CLOCK JUDGEMENTS ARE THE MEASURE SIBLING'S (shadercache.save_off_frame.timing, alone
+// on the card; its driver reads the SAVE_OFF_FRAME line printed here): the frames that CARRIED the save's messages carry
+// no frame overrun (save.frameOverruns: the driver's attribution — a frame's work over the display period — counted by
+// the render loop on exactly those frames), the longest message <= 2 ms, the longest chunk <= 1 ms. A frame overrun is a
+// frame's work against the DISPLAY PERIOD, a clock: in the ship's guard pass eight rows share the card and any sibling's
+// load overruns any frame, the save's included (ship 1bdb9d4e0, 2026-10-20: 1 of 10 cold frames overran under the
+// 8-wide pass, 0 of 10 alone) — so this guard COUNTS the frames and prints the overruns, and the measure row judges them.
 // BEFORE (70ab28e3f, measured by hand: spikes/frame-monitor-door/stage4-measure.txt): one message of 22.7 ms cold,
 // 12.5 ms warm; the drag row's pad shape 1-2 frame overruns with the save in its window.
 function assert(cond, msg) {
@@ -55,8 +57,7 @@ if (!warm)
     assert(c1.messages > c1.copied, tag + ": the copy chunked (" + c1.copied + " save(s) in " + c1.messages + " messages)");
 assert(c1.chunkEntries > 0 && c1.chunkMaxEntries <= c1.chunkEntries,
        tag + ": no chunked message took more than K entries (" + c1.chunkMaxEntries + ", K " + c1.chunkEntries + ")");
-assert(c1.frames >= 1 && c1.frameOverruns === 0,
-       tag + ": the frames that carried the save's messages carry no frame overrun (" + c1.frameOverruns + " of " +
-       c1.frames + " frames; the window's driver count, printed: " + frameOver + ")");
+assert(c1.frames >= 1, tag + ": the save's messages rode " + c1.frames + " frame(s) (overruns on them " +
+       c1.frameOverruns + ", the window's driver count " + frameOver + " — judged by the .timing sibling)");
 console.log("save_off_frame " + tag + ": PASS");
 app.quit();
