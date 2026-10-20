@@ -14,7 +14,9 @@
 //   (d) wherever an Atom surface is the picture's — the id is not empty and the id pass's own depth (kAtomViewDepth)
 //       is the final depth — `on` and `ref` agree on the pixel being one, and their ids are word-equal there (the
 //       cull changes no id the picture shows; behind the wall `on` holds nothing where `ref` names what it drew), and
-//   (e) the PICTURE of `on` equals `shut`'s byte for byte (the occlusion and the pass order change no pixel).
+//   (e) the PICTURE of `on` equals `shut`'s byte for byte (the occlusion and the pass order change no pixel);
+//   (f) the stock depth pass and the merge record every frame while the wall is in view, and NOT AT ALL once it is
+//       hidden (stage 1b: no stock item in view, today's frame) — (d) and (e) holding there too.
 // At the base (ATOM-3's tip) (a) is the field and (c) is 0: the late pyramid holds no stock depth, the first cull's
 // history neither, so every hidden sphere is drawn (spikes/atom-3/stage3-stop.txt). The monitor's GPU ms of the id
 // passes, the stock depth pass, the decode and the opaque pass are printed per world and shape (information: the
@@ -88,6 +90,7 @@ struct World {
     View *view = nullptr;
     OgreView *ov = nullptr;
     std::set<NodeId> field;
+    NodeId wall = 0;
 };
 
 /// The wall (stock: front-culled), the field behind it, two spheres in front of it, a sun.
@@ -113,6 +116,7 @@ static void buildWorld(World &w)
         s->setNodeTransform(n, Vec3(0.0f, 2.0f, -6.0f), Quat(), Vec3(16.0f, 6.0f, 1.0f));
         s->attachMesh(n, cube, wm);
         s->setNodeFaceCull(n, FaceCull::Front);
+        w.wall = n;
     }
     // THE FIELD, 12 to 24 m deep: wholly inside the wall's silhouette from the eye (x <= 5 m at 30 m is 0.17 of the
     // depth, the wall's edge 0.64 at 12.5 m), no sphere touching another.
@@ -172,8 +176,16 @@ static bool readDepth(OgreView *v, const char *name, std::vector<float> &out)
 
 /// THE PIXELS WHERE AN ATOM SURFACE IS THE PICTURE'S (the readers' rule: JahAtomView_ps.glsl): the id is not empty
 /// and the id pass's own depth is the final depth, bit for bit.
-static bool atomVisible(OgreView *v, const std::vector<uint32_t> &ids, std::vector<unsigned char> &vis)
+/// With no stock item in view (`depthTest` false) the frame is today's: nothing but Atom draws before the opaque pass,
+/// every id is the picture's, and the Atom view's depth is copied only for its readers — the ids alone decide.
+static bool atomVisible(OgreView *v, const std::vector<uint32_t> &ids, std::vector<unsigned char> &vis,
+                        bool depthTest = true)
 {
+    if (!depthTest) {
+        vis.assign(ids.size() / 2u, 0u);
+        for (size_t i = 0; i < vis.size(); ++i) vis[i] = ids[2 * i] != 0xFFFFFFFFu;
+        return true;
+    }
     std::vector<float> idDepth, finalDepth;
     if (!readDepth(v, detail::kAtomViewDepthTexture, idDepth) || !readDepth(v, detail::kSceneDepthTexture, finalDepth) ||
         idDepth.size() * 2u != ids.size() || finalDepth.size() != idDepth.size())
@@ -226,8 +238,25 @@ static ListCounts probeField(World &w, World &ref)
 }
 
 /// The monitor's GPU ms of the passes that matter, per workspace, medians over the measured frames.
-static void printPassMs(const std::vector<MonitorRecord> &recs, const char *shape)
+static bool printPassMs(const std::vector<MonitorRecord> &recs, const char *shape, const std::string &onWs,
+                        unsigned &stockRows, unsigned &stockAny, unsigned &onRecords)
 {
+    // THE ARM, PER RECORD: of the records holding on's id pass, how many hold BOTH the stock depth pass and the
+    // merge (stockRows), and how many hold either (stockAny); onRecords counts the first.
+    stockRows = stockAny = onRecords = 0u;
+    for (const MonitorRecord &r : recs) {
+        bool id = false, depth = false, merge = false;
+        for (const FramePass &p : r.passes) {
+            if (p.workspace.find(onWs) == std::string::npos) continue;
+            id = id || p.pass == "Jahshaka atom id";
+            depth = depth || p.pass == "Jahshaka atom stock depth";
+            merge = merge || p.pass == "Jahshaka atom id depth merge";
+        }
+        if (!id) continue;
+        ++onRecords;
+        if (depth && merge) ++stockRows;
+        if (depth || merge) ++stockAny;
+    }
     static const char *kPasses[] = { "Jahshaka atom id", "Jahshaka atom id late", "Jahshaka atom stock depth",
                                      "Jahshaka atom id depth merge", "Jahshaka atom decode",
                                      "Jahshaka atom decode prepass", "Jahshaka SSR prepass", "Jahshaka opaque" };
@@ -247,9 +276,13 @@ static void printPassMs(const std::vector<MonitorRecord> &recs, const char *shap
         }
         std::printf("\n");
     }
+    return true;
 }
 
-static void runShape(World &on, World &ref, World &shut, int ssr, const char *shape)
+/// `stockInView`: the wall shown (the stock arm: the stock depth pass and the merge record) or hidden (ATOM-4 stage
+/// 1b: no stock item in view — neither records, the late pass draws on the scene's depth; the hidden-share bars
+/// do not apply, the exactness and the picture still do).
+static void runShape(World &on, World &ref, World &shut, int ssr, const char *shape, bool stockInView = true)
 {
     std::printf("== %s (ssr %d)\n", shape, ssr);
     for (World *w : { &on, &ref, &shut }) {
@@ -257,6 +290,7 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
         fx.allowOffscreen = true;
         fx.ssr = ssr;
         w->view->setPostFx(fx);
+        w->scene->setNodeVisible(w->wall, stockInView);
     }
     // THE SETTLE: the chain (re)built, the first frame of the history, the counters a few frames late.
     for (int i = 0; i < 8; ++i) step(ref);
@@ -273,8 +307,8 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
             std::vector<uint32_t> a, b;
             std::vector<unsigned char> va, vb;
             Image pa, pb;
-            if (!readIds(on.ov, a) || !readIds(ref.ov, b) || a.size() != b.size() || !atomVisible(on.ov, a, va) ||
-                !atomVisible(ref.ov, b, vb) || !on.view->readPixels(pa) || !shut.view->readPixels(pb) ||
+            if (!readIds(on.ov, a) || !readIds(ref.ov, b) || a.size() != b.size() || !atomVisible(on.ov, a, va, stockInView) ||
+                !atomVisible(ref.ov, b, vb, stockInView) || !on.view->readPixels(pa) || !shut.view->readPixels(pb) ||
                 pa.rgba.size() != pb.rgba.size())
                 continue;
             ++compared;
@@ -307,7 +341,16 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
         }
         std::vector<MonitorRecord> recs;
         gE->popMonitorRecords(recs);
-        printPassMs(recs, shape);
+        unsigned stockRows = 0u, stockAny = 0u, onRecords = 0u;
+        printPassMs(recs, shape, std::string("hidden-cut-on"), stockRows, stockAny, onRecords);
+        if (stockInView)
+            CHECK_MSG(onRecords > 0u && stockRows == onRecords,
+                      "%s: (f) the stock arm ran - the stock depth pass and the merge in every frame on's record "
+                      "holds (%u of %u)", shape, stockRows, onRecords);
+        else
+            CHECK_MSG(onRecords > 0u && stockAny == 0u,
+                      "%s: (f) no stock item in view - neither the stock depth pass nor the merge recorded (%u of %u "
+                      "frames)", shape, stockAny, onRecords);
         CHECK_MSG(compared == 4, "%s: four frames' id images and pictures read (%d)", shape, compared);
         CHECK_MSG(idsDiffer == 0, "%s: (d) wherever an Atom surface is the picture's, on's id equals ref's word for word (%d frames differ, worst %zu px)",
                   shape, idsDiffer, worstIds);
@@ -320,6 +363,7 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
                 "atom items %u, stock cullFront %u\n",
                 so.occluded, so.disoccluded, so.cutTriangles, sr.cutTriangles, ss.cutTriangles, so.atomItems,
                 so.cullFront);
+    if (!stockInView) return;
     const ListCounts lc = probeField(on, ref);
     std::printf("   on's field (%zu spheres behind the wall): FIRST list survivors %u, LATE list draws %u\n",
                 on.field.size(), lc.first, lc.late);
@@ -367,6 +411,7 @@ int main()
     }
     runShape(on, ref, shut, 0, "no prepass");
     runShape(on, ref, shut, 1, "the SSR prepass");
+    runShape(on, ref, shut, 0, "no stock in view", false);
 
     for (World *w : { &on, &ref, &shut }) gE->destroyView(w->view);
     for (World *w : { &on, &ref, &shut }) gE->destroyScene(w->scene);
