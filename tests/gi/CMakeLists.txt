@@ -2523,7 +2523,14 @@ endforeach()
 # against its closed form (0.90-1.10). A 384 px view (the frame's cost is per pixel: 0.28 s at 768, 0.07 s at 384,
 # Debug), ONE arm settled by the gather's own rest law: 27 frames, counted (the rest law met at the 23rd, + 4).
 # name:mode:FRAMES. Fixtures: seconds, merge rows.
-foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cclutter:27")
+# BUGS-1 item 14 (preflight-photon-3 E-21 / E-24 / E-25), the same fixture and pose: far_sun_store_c3 (the terrace's share
+# read from the WHOLE store, gi.hitDirect 0 - what the no-ray readers read; printed), far_sun_decode_c3 (the clean canyon's
+# decode rays past cascade 3's box against their exact direct; bar 0.95-1.05), far_sun_mip_c3 (the terrace's voxel rays at
+# lod >= 2 against the level-0 store at the hit; printed). FRAMES as their run counted. MEASURE rows (the ship's, never a
+# merge's): two print a reading with no bar, decode_c3's bar is RED today (1.111, BUGS-1 batch 4) and is the lead's, and
+# mip_c3 reads two cascades back (22.6 s, over a fixture's 10 s).
+foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cclutter:27"
+                             "far_sun_store_c3:e21:27" "far_sun_decode_c3:e24:39" "far_sun_mip_c3:e25:39")
     string(REPLACE ":" ";" _far_c3_pair "${_far_c3_row}")
     list(GET _far_c3_pair 0 _far_c3_name)
     list(GET _far_c3_pair 1 _far_c3_mode)
@@ -2533,6 +2540,7 @@ foreach(_far_c3_row IN ITEMS "far_sun_share_c3:cshare:27" "far_sun_clutter_c3:cc
                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.${_far_c3_name} PROPERTIES TIMEOUT 120 LABELS "engine")
 endforeach()
+set_tests_properties(gi.far_sun_store_c3 gi.far_sun_decode_c3 gi.far_sun_mip_c3 PROPERTIES LABELS "engine;measure")
 # FAR-SUN-2: gi.far_sun_lamp - A LAMP AND A GLOW AT THE HIT: no sun, a point lamp and an emissive crate in the canyon;
 # every voxel-answered gather ray against its exact radiance (the lamp's falloff x cos x DA x its shadow, + the glow),
 # paired on the same rays with the measuring arm gi.hitDirect = 0 (nothing darkens). A guard: 6 s, a 256 px view, 60 frames counted.

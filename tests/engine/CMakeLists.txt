@@ -352,6 +352,25 @@ add_dependencies(test_engine_error_door JahshakaEngineMedia)
 jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_door
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.texture_residency — A TEXTURE'S METADATA CACHE CHANGES NOTHING ON SCREEN (BUGS-1 item 13; preflight-photon-3 §G):
+# an alpha-tested quad with fine foliage alpha (a file texture, so the metadata cache keys it) over a floor under a sun;
+# two processes on the fixture's own cache directory, the first with no texture-meta.json (written at its teardown), the
+# second with it (the texture Resident from metadata, before its data) - their settled presented digests equal.
+add_executable(test_texture_residency test_texture_residency.cpp)
+set_target_properties(test_texture_residency PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_texture_residency PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_texture_residency PRIVATE JahshakaEngine)
+add_dependencies(test_texture_residency JahshakaEngineMedia)
+jah_gpu_row(engine.texture_residency CLASS engine FRAMES 182
+         COLD "the texture metadata cache is the subject - two processes on the fixture's own cache dir (the warm wrapper switches the texture cache off)"
+         COMMAND test_texture_residency
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.texture_residency PROPERTIES TIMEOUT 120 LABELS "engine")
 # frame.monitor_pop — THE MONITOR'S RECORDS ARE POPPED, NEVER REQUESTED (FRAME-MONITOR-DOOR-1): the hand-back door as an
 # engine fixture (the form the TSan arm runs; perf.capture_free_tick is the owner's path and cannot boot under TSan):
 # free-running, a capture on, the host popping after every frame while the render thread pushes; then lockstep. Laws in

@@ -1601,6 +1601,161 @@ int modeInjectLeak(Fixture &f)
     return 0;
 }
 
+// ---------------------------------------------------------------------------------------------
+// gi.far_sun_store_c3 / gi.far_sun_decode_c3 / gi.far_sun_mip_c3 — THE STORE'S THREE MEASUREMENTS (BUGS-1 item 14;
+// preflight-photon-3 E-21 / E-24 / E-25), the far-cascade fixture at the c3 pose, bounces 0 (the store = the direct
+// light), the gather's per-ray readback:
+//   e21 (the terrace): THE WHOLE STORE'S READ - the measuring arm gi.hitDirect 0 makes a voxel-answered hit read the
+//       store whole, which is what the no-ray readers (the cones, the field) read; the wall's share / closed form is
+//       PRINTED (read / truth; no bar: the store's dilution is a known debt, measured here on a fixture).
+//   e24 (the clean canyon): THE DECODE PAST THE CASCADES - every decode-answered ray (a record, or a far one) whose hit
+//       lies past cascade 3's box, against its exact direct (rho I cos DA(cos) x its sun ray; the canyon has no sky):
+//       BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
+//   e25 (the terrace): THE MIP READ - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
+//       level >= 2 (lod from the ray's distance and the probe's solid angle, the reader's jahVoxelFootprintLod), their
+//       read against the level-0 store of the texel at the hit (the side facing the hit): PRINTED (the canyon read
+//       0.98-1.02; a mip read is the coverage-weighted mean, so the ratio's physics is 1.0 over a uniform region and
+//       the dilution elsewhere).
+int modeFarMeasure(Fixture &f, const std::string &which)
+{
+    using namespace diag;
+    const bool clutter = which != "e24";
+    if (!buildCanyon(f)) { std::printf("FAIL: the canyon\n"); return 1; }
+    if (clutter) addTerrace(f);
+    f.s->setGlobalIllumination(highGi(0u));
+    GatherTuning t;
+    t.readback = true;
+    f.s->setGatherTuning(t);
+    const Vec3 cam = poseCam("c3");
+    gTraceWall = wallPoints();
+    gTraceCam = cam;
+    gSettleMin = 0u;
+    if (which != "e24") f.e->setArm("gi.hitDirect", 0.0);   // the store read whole: the no-ray readers' read
+    std::printf("   %s: the canyon %.0f m, %s, %zu boxes, camera (%.0f, %.0f, %.0f)%s\n", which.c_str(),
+                double(gLength), clutter ? "the terrace" : "clean", f.boxes.size(), double(cam.x), double(cam.y),
+                double(cam.z), which != "e24" ? ", gi.hitDirect 0" : "");
+    if (which == "e21") {
+        const double ratio = shareRatio(f, cam, "STORE  ", false, false);
+        std::printf("   E-21 THE WHOLE STORE'S READ on the terrace: the wall's share / closed form %.3f (read / truth; "
+                    "FAR-SUN-2's direct at the hit reads ~1.06 here)\n", ratio);
+        CHECK_MSG(ratio > 0.0, "e21: the share reads (%.3f)", ratio);
+        f.e->setArm("gi.hitDirect", 1.0);
+        return 0;
+    }
+    f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
+    settled(f);
+    const GiStatus g = f.s->published().gi;
+    std::vector<double> cells;
+    for (const auto &cs : g.cascades) cells.push_back(double(cs.cell));
+    std::vector<GiVoxelVolume> vols(4);
+    // the far cascades only (2 and 3: 64^3 at High - a 128^3 cascade's whole readback is seconds); a ray answered
+    // finer is counted apart (e25 measures the far read)
+    unsigned finer = 0u;
+    if (which == "e25")
+        for (int c = 2; c < 4; ++c) f.s->giVoxelVolume(c, vols[size_t(c)]);
+    f.e->setArm("gather.hitsReadback", 1.0);
+    unsigned lastFrame = 0u, raysPer = 64u;
+    double sRead = 0.0, sRef = 0.0;
+    unsigned n = 0, frames = 0;
+    for (int i = 0; i < 12 && n < 20000u; ++i) {
+        render(f.e, 1);
+        ++frames;
+        const GatherStatus gs = f.s->published().gi.gather;
+        if (gs.rays.empty() || gs.raysFrame == lastFrame) continue;
+        lastFrame = gs.raysFrame;
+        raysPer = gs.raysPerProbe ? gs.raysPerProbe : raysPer;
+        for (const GatherRay &r : gs.rays) {
+            if (!(r.distance > 0.0f)) continue;
+            // the cheap filters first (boxAt walks every box: 2,576 on the 80 m terrace)
+            if (which == "e24" ? (r.source != GatherRay::Decode && r.source != GatherRay::DecodeFar)
+                               : (r.source != GatherRay::Voxel || r.cascade >= cells.size()))
+                continue;
+            if (which == "e25" && r.cascade < 2) { ++finer; continue; }
+            const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+            if (which == "e24" && cascadeOf(g, p) >= 0) continue;   // past cascade 3's box only
+            const int bi = boxAt(p, f.boxes);
+            if (bi < 0) continue;
+            const Box &bx = f.boxes[size_t(bi)];
+            double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+            double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+            if (nl < 0.5) {   // a FAR hit names no triangle: the face of its box the point lies on
+                const double P[3] = { p.x, p.y, p.z }, A[3] = { bx.b.mn.x, bx.b.mn.y, bx.b.mn.z },
+                             B[3] = { bx.b.mx.x, bx.b.mx.y, bx.b.mx.z };
+                double best = 1e30;
+                for (int a = 0; a < 3; ++a)
+                    for (int h = 0; h < 2; ++h) {
+                        const double d = std::fabs(P[a] - (h ? A[a] : B[a]));
+                        if (d < best) { best = d; nn[0] = nn[1] = nn[2] = 0.0; nn[a] = h ? -1.0 : 1.0; }
+                    }
+                nl = 1.0;
+            }
+            for (double &x : nn) x /= nl;
+            const double cosL = nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z;
+            const double read = lumOf(r.radiance);
+            if (which == "e24") {
+                sRead += read;
+                sRef += faceRad(bx, cosL) * double(r.sunVisibility);
+                ++n;
+                continue;
+            }
+            // e25: a voxel-answered ray whose footprint reads level >= 2, against the level-0 store at its hit
+            const double cell = cells[r.cascade];
+            const double lod = std::log2(std::max(double(r.distance) * std::sqrt(2.0 / raysPer), cell) / cell);
+            if (lod < 2.0) continue;
+            const GiVoxelVolume &vol = vols[size_t(std::min<int>(r.cascade, 3))];
+            const size_t nvox = size_t(vol.width) * size_t(vol.height) * size_t(vol.depth) * 4u;
+            if (!vol.available || vol.light.size() != nvox || vol.lightBack.size() != nvox || vol.normal.size() != nvox ||
+                vol.coverageP.size() != nvox || vol.coverageN.size() != nvox)
+                continue;
+            // THE TEXEL HOLDING THE SURFACE (modeDiag's pick): along the normal's axis, of the hit's texel and its two
+            // neighbours, the one whose half facing the normal covers most
+            const int an = std::fabs(nn[0]) >= std::fabs(nn[1]) ? (std::fabs(nn[0]) >= std::fabs(nn[2]) ? 0 : 2)
+                                                                : (std::fabs(nn[1]) >= std::fabs(nn[2]) ? 1 : 2);
+            const bool posHalf = nn[an] > 0.0;
+            int ix[3];
+            const double P[3] = { p.x, p.y, p.z };
+            for (int a = 0; a < 3; ++a) ix[a] = int(std::floor((P[a] - vol.origin[a]) / vol.cell[a]));
+            double best = -1.0;
+            size_t vi = 0;
+            for (int d = -1; d <= 1; ++d) {
+                int jx[3] = { ix[0], ix[1], ix[2] };
+                jx[an] += d;
+                if (jx[0] < 0 || jx[1] < 0 || jx[2] < 0 || jx[0] >= vol.width || jx[1] >= vol.height || jx[2] >= vol.depth)
+                    continue;
+                const size_t j = (size_t(jx[2]) * size_t(vol.height) + size_t(jx[1])) * size_t(vol.width) + size_t(jx[0]);
+                const double cov = (posHalf ? vol.coverageP : vol.coverageN)[j * 4 + size_t(an)];
+                if (cov > best + 1e-6) { best = cov; vi = j; }
+            }
+            if (!(best > 0.0)) continue;
+            const double c = vol.light[vi * 4 + 3], k = vol.multiplier > 0 ? vol.multiplier : 1.0;
+            if (!(c > 0.0)) continue;
+            const double mean = lumOf(&vol.light[vi * 4]) / c / k, back = lumOf(&vol.lightBack[vi * 4]) / c / k;
+            const double vn[3] = { vol.normal[vi * 4] * 2.0 - 1.0, vol.normal[vi * 4 + 1] * 2.0 - 1.0,
+                                   vol.normal[vi * 4 + 2] * 2.0 - 1.0 };
+            const bool agree = vn[0] * nn[0] + vn[1] * nn[1] + vn[2] * nn[2] >= 0.0;
+            sRead += read;
+            sRef += std::max(agree ? 2.0 * mean - back : back, 0.0);
+            ++n;
+        }
+    }
+    f.e->setArm("gather.hitsReadback", 0.0);
+    f.e->setArm("gi.hitDirect", 1.0);
+    gFrames += frames;
+    const double ratio = sRef > 0.0 ? sRead / sRef : -1.0;
+    if (which == "e24") {
+        std::printf("   E-24 THE DECODE PAST THE CASCADES (clean canyon): %u decode rays past cascade 3's box, sum read / "
+                    "sum exact direct %.3f\n", n, ratio);
+        CHECK_MSG(n >= 100u && ratio >= 0.95 && ratio <= 1.05,
+                  "e24: PAST THE CASCADES A DECODE HIT IS ITS EXACT DIRECT (+ the sky, none here): read / truth %.3f "
+                  "over %u rays (bar 0.95-1.05)", ratio, n);
+    } else {
+        std::printf("   E-25 THE MIP READ (the terrace, gi.hitDirect 0): %u voxel rays at lod >= 2 answered by cascades 2-3 "
+                    "(%u answered finer, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
+        CHECK_MSG(n >= 100u && ratio > 0.0, "e25: the lod >= 2 rays read (%u, %.3f)", n, ratio);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "share";
@@ -1633,9 +1788,11 @@ int main(int argc, char **argv)
     else if (mode == "cost") rc = modeCost(f);
     else if (mode == "cshare") rc = modeCascade(f, false);
     else if (mode == "cclutter") rc = modeCascade(f, true);
+    else if (mode == "e21" || mode == "e24" || mode == "e25") rc = modeFarMeasure(f, mode);
     else if (mode == "injectleak") rc = modeInjectLeak(f);
     else { std::printf("FAIL: unknown mode %s\n", mode.c_str()); return 1; }
-    if (mode == "cshare" || mode == "cclutter") std::printf("   frames rendered by the settles: %u\n", gFrames);
+    if (mode == "cshare" || mode == "cclutter" || mode == "e21" || mode == "e24" || mode == "e25")
+        std::printf("   frames rendered by the settles: %u\n", gFrames);
     const auto stamp = [](const char *what) {
         if (std::getenv("FARSUN_SETTLE_TRACE"))
             std::printf("   %s at %.2f s\n", what, std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
