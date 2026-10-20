@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# material.live_roundtrip (LIVE-PERSIST-1): a live graph material with a cut-out survives
-# save -> reopen (EMPTY piece cache) -> export -> EMPTY library -> import. Three processes
+# material.live_roundtrip.<row> (LIVE-PERSIST-1): a live graph material with a cut-out survives
+# save -> reopen (EMPTY piece cache) -> export -> EMPTY library -> import. One process per stage
 # (the stages of material_live_roundtrip.js.in); HOME and XDG_CACHE_HOME are scratch, so no
-# per-user cache can stand in for what the bundle must carry. The three frames must agree.
-# Then the graph material is deleted, the project saved without it, the material restored:
-# the reopen must come back live (the save kept `customPieceGraph`).
-# usage: material_live_roundtrip.sh <app> <script.js.in> <fixture.png> <workdir>
+# per-user cache can stand in for what the bundle must carry. The import's frames must agree with
+# the author's and the reopen's. Then the graph material is deleted, the project saved without it,
+# the material restored: the reopen must come back live (the save kept `customPieceGraph`).
+# THREE ROWS, ONE CHAIN (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s — five processes in
+# one row were 85 s), every stage and every comparison kept, in the same order on the same data:
+#   author  — the author stage, the piece cache deleted, the reopen stage (its export): the setup
+#   import  — the import into an EMPTY library, then F0/F1/F2/Fsolid compared   (requires author)
+#   restore — the drop stage, the catalog restored, the restore stage            (requires author, import)
+# (the chain runs in the old row's order — the stages share the scratch HOME, as they always did)
+# usage: material_live_roundtrip.sh <app> <script.js.in> <fixture.png> <workdir> <author|import|restore>
 set -u
-APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"
-rm -rf "$WORK"; mkdir -p "$WORK/home/.cache" || exit 1
+APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"; ROW="$5"
 run() {   # run <stage> <data root>
     sed -e "s#@STAGE@#$1#g" -e "s#@WORK@#$WORK#g" -e "s#@FIXTURE@#$FIXTURE#g" "$SCRIPT_IN" > "$WORK/$1.js"
     ( cd "$(dirname "$APP")" && env HOME="$WORK/home" XDG_CACHE_HOME="$WORK/home/.cache" \
@@ -19,18 +24,27 @@ run() {   # run <stage> <data root>
         echo "FAIL: stage $1 exited $rc (log: $WORK/$1.log)"; tail -5 "$WORK/$1.log"; exit 1
     fi
 }
-run author "$WORK/root-a"
-[ -d "$WORK/root-a/ShaderPieces" ] || { echo "FAIL: the author stage wrote no piece cache under its data root"; exit 1; }
-rm -rf "$WORK/root-a/ShaderPieces"
-run reopen "$WORK/root-a"
-run import "$WORK/root-b"
-# THE GRAPH GOES MISSING AND COMES BACK: the drop stage deletes it and saves; the restore
-# puts its catalog rows (every table but the projects' scenes) and its sidecar back from
-# a copy taken before the drop, then the restore stage reopens.
-rm -rf "$WORK/root-a.bak"; cp -a "$WORK/root-a" "$WORK/root-a.bak"
-run drop "$WORK/root-a"
-db=$(cd "$WORK/root-a" && ls *.db | head -1)
-python3 - "$WORK/root-a/$db" "$WORK/root-a.bak/$db" <<'PYEOF' || { echo "FAIL: could not restore the catalog rows"; exit 1; }
+case "$ROW" in
+author)
+    rm -rf "$WORK"; mkdir -p "$WORK/home/.cache" || exit 1
+    run author "$WORK/root-a"
+    [ -d "$WORK/root-a/ShaderPieces" ] || { echo "FAIL: the author stage wrote no piece cache under its data root"; exit 1; }
+    rm -rf "$WORK/root-a/ShaderPieces"
+    run reopen "$WORK/root-a"
+    echo "material.live_roundtrip: author PASS"; exit 0 ;;
+import|restore)
+    [ -s "$WORK/live_roundtrip.zip" ] && [ -d "$WORK/root-a" ] \
+        || { echo "FAIL: the author row left no archive / library in $WORK (material.live_roundtrip.author runs first)"; exit 1; } ;;
+*)  echo "FAIL: row '$ROW' — author | import | restore"; exit 2 ;;
+esac
+if [ "$ROW" = restore ]; then
+    # THE GRAPH GOES MISSING AND COMES BACK: the drop stage deletes it and saves; the restore
+    # puts its catalog rows (every table but the projects' scenes) and its sidecar back from
+    # a copy taken before the drop, then the restore stage reopens.
+    rm -rf "$WORK/root-a.bak"; cp -a "$WORK/root-a" "$WORK/root-a.bak"
+    run drop "$WORK/root-a"
+    db=$(cd "$WORK/root-a" && ls *.db | head -1)
+    python3 - "$WORK/root-a/$db" "$WORK/root-a.bak/$db" <<'PYEOF' || { echo "FAIL: could not restore the catalog rows"; exit 1; }
 import sqlite3, sys
 c = sqlite3.connect(sys.argv[1])
 c.execute("ATTACH DATABASE ? AS bak", (sys.argv[2],))
@@ -39,8 +53,12 @@ for (t,) in c.execute("SELECT name FROM bak.sqlite_master WHERE type='table'").f
     c.execute('INSERT OR IGNORE INTO main."%s" SELECT * FROM bak."%s"' % (t, t))
 c.commit()
 PYEOF
-cp -rn "$WORK/root-a.bak/AssetStore/." "$WORK/root-a/AssetStore/"
-run restore "$WORK/root-a"
+    cp -rn "$WORK/root-a.bak/AssetStore/." "$WORK/root-a/AssetStore/"
+    run restore "$WORK/root-a"
+    rm -rf "$WORK/root-a.bak"
+    echo "material.live_roundtrip: restore PASS"; exit 0
+fi
+run import "$WORK/root-b"
 python3 - "$WORK" <<'EOF'
 import sys
 from PIL import Image

@@ -79,7 +79,9 @@ avatar.responsive 48.07  quiet n=41
 avatar.responsive.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 avatar.responsive.timing 34.90  ship 3a0422b4e (2026-10-13)
 avatar.responsive.timing.fresh_home 0.02  quiet n=3
-bake.determinism 64.78  quiet n=32
+bake.determinism.standin 8.34  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+bake.determinism.dragon 15.79  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+bake.determinism.throws 42.53  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 bundle.writer 21.13  quiet n=24
 cameras.body 1.57  quiet n=48
 cameras.document 0.00  ship 3a0422b4e (2026-10-13)
@@ -344,7 +346,8 @@ gizmo.plane_handles 0.07  quiet n=46
 gizmo.ring_pick 0.20  ship 3a0422b4e (2026-10-13)
 gizmo.scale_lock 0.00  ship 3a0422b4e (2026-10-13)
 gizmo.screen_size 0.08  quiet n=46
-gpu.cutout_soak 282.20  ship 3a0422b4e (2026-10-13)
+gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+gpu.cutout_soak.tornado 36.65  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 hdr.bloom_amount 1.66  quiet n=44
 hdr.bloom_amount_asan 9.21  quiet n=42
 hdr.bloom_isotropic 2.40  ship 3a0422b4e (2026-10-13)
@@ -393,7 +396,9 @@ log.perf 36.70  ship 3a0422b4e (2026-10-13)
 log.perf.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 looks.engine 1.73  quiet n=43
 looks.engine_asan 9.59  quiet n=42
-material.live_roundtrip 85.25  quiet n=7
+material.live_roundtrip.author 39.27  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+material.live_roundtrip.import 21.17  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+material.live_roundtrip.restore 12.48  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 materialpreview.engine 2.55  quiet n=46
 materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 materials.members 0.06  quiet n=33
@@ -708,7 +713,8 @@ samples.freshhome.Skeletal_Animation 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.Tornado 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.World_Background 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.session 0.00  ship 3a0422b4e (2026-10-13)
-samples.mirror_room_boots 322.06  quiet n=31
+samples.mirror_room_boots.boot1 31.75  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+samples.mirror_room_boots.boot2 32.06  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 samples.session 78.50  ship 3a0422b4e (2026-10-13)
 scale.cpu_walks 15.07  quiet n=46
 scale.gpu_coverage 11.99  quiet n=25
@@ -717,7 +723,11 @@ scale.library.fixture 0.06  quiet n=101
 scale.lights 16.50  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 scale.occlusion 38.40  ship 3a0422b4e (2026-10-13)
 scale.shadow_cut 27.18  quiet n=48
-scene.reopen_fidelity 74.07  quiet n=45
+scene.reopen_fidelity 47.36  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+scene.reopen_fidelity.high_sky 39.53  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+scene.reopen_fidelity.high_sky.fresh_home 0.02  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+scene.reopen_fidelity.scaled 30.15  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+scene.reopen_fidelity.scaled.fresh_home 0.02  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scene.reopen_fidelity.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scenegraph.benchmark 52.00  quiet n=6 (SCENEGRAPH-BASELINE-2 stage 1, 2026-10-19: the full --assert --record run, start to record, 51-53 s; three base + three tip, all PASSED)
 scenegraph.smoke 9.43  quiet n=47
@@ -887,7 +897,8 @@ ssr.engine 5.82  quiet n=39
 ssr.engine_asan 19.66  quiet n=39
 ssr.rings 1.73  quiet n=38
 test_engine 15.99  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
-test_engine_asan 71.07  quiet n=40
+test_engine_asan.part1 9.27  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+test_engine_asan.part2 18.10  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 test_engine_recreate 4.18  quiet n=44
 theme.manager 0.08  quiet n=25
 theme.no_raw_sheets 0.05  quiet n=35

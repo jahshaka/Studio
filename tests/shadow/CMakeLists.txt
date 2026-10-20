@@ -144,29 +144,42 @@ jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom
                  ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster.churn 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine" TIMEOUT 1950)
-# gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
-# cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
-# the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
-# push-time guard is shadow.cutout_caster (one process), its churn the `.churn` twins above.
-jah_gpu_row(gpu.cutout_soak SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
-                 ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(gpu.cutout_soak PROPERTIES
-    LABELS "engine" TIMEOUT 1800
-    ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
-    PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
-    FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
+# gpu.cutout_soak.primitives / .tornado — a cut-out material must never lose the GPU (CUTOUT-CASTER-1): every cut-out path
+# draws under the Khronos validation layer — plain cut-outs on a cube and a sphere and the live graph cut-out the hang was
+# found on (.primitives), the Tornado sample (.tornado) — through the viewport and the offscreen screenshot path, with a
+# pinned and a free shader clock; any "Validation Error" or a lost device is red.
+# REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s). The defect was a caster's texture set bound
+# over a root layout one slot short — a binding the validation layer names on the FIRST draw of the path; the Xid it
+# became took ~2 minutes of drawing to show, and the old soak drew 5,000 frames of each scene (282 s, 11,260 frames) to
+# reproduce the hang itself. The law needs every path drawn under the layer, not the minutes: ONE SOAK PERIOD per scene
+# — 250 frames on the pinned clock + a screenshot, 250 on the free clock + a screenshot (500 frames) — and the two
+# scenes as two rows, each its own process on its own data root (the soak's one-process claim was its minutes).
+# Measured once each (2026-10-20, solo, the card lock held): primitives 37.4 s / 1,020 frames, tornado 36.7 s / 1,002.
+# TIMEOUT 6 x the solo run, rounded up.
+set(_soak_timeout_primitives 230)
+set(_soak_timeout_tornado 220)
+foreach(_part primitives tornado)
+    jah_gpu_row(gpu.cutout_soak.${_part} SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in
+                     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                     ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
+                     ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak.${_part} ${_part}
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gpu.cutout_soak.${_part} PROPERTIES
+        LABELS "engine" TIMEOUT ${_soak_timeout_${_part}}
+        ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+        PASS_REGULAR_EXPRESSION "gpu_cutout_soak: ${_part} PASS"
+        FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
+endforeach()
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "gpu.cutout_soak=11260"
+        "gpu.cutout_soak.primitives=1020"   # TEST-CUT-1: one soak period (500) + the boot and the authoring
+        "gpu.cutout_soak.tornado=1002"      # one soak period (500) + the boot and the Tornado import
         "lights.shadows=832"
         "shadow.atlas_binding=166"
         "shadow.atlas_rebuilds=640"

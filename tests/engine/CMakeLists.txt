@@ -19,7 +19,8 @@
 # compiled straight from the backend sources, leaving the app's engine library alone.
 
 function(jahshaka_engine_test target)
-    add_executable(${target} test_engine.cpp ${ARGN})
+    cmake_parse_arguments(E "NO_ROW" "" "" ${ARGN})
+    add_executable(${target} test_engine.cpp ${E_UNPARSED_ARGUMENTS})
     # Never Qt: the root sets CMAKE_AUTOMOC ON globally.
     set_target_properties(${target} PROPERTIES
         AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -32,6 +33,9 @@ function(jahshaka_engine_test target)
         JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
         JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
     add_dependencies(${target} JahshakaEngineMedia)
+    if(E_NO_ROW)
+        return()
+    endif()
     jah_gpu_row(${target} CLASS engine COMMAND ${target}
              # The backend writes its log to the working directory.
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -594,9 +598,17 @@ if(JAHSHAKA_ASAN)
     target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)
 
-    jahshaka_engine_test(test_engine_asan)
-    jah_ship_row(test_engine_asan)   # THE SHIP SET (TEST-CUT-1)
+    jahshaka_engine_test(test_engine_asan NO_ROW)
     target_link_libraries(test_engine_asan PRIVATE JahshakaEngineAsan)
+    # TWO ROWS, HALF THE CASES EACH (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s). THE LAW is test_engine's own
+    # 96 cases, every one under AddressSanitizer — a use-after-free or an overflow in the backend is a red — and it needs
+    # every case once, not one process: each case builds what it reads on the shared engine and tears it down, which is
+    # what makes test_engine's single-case filter work. `--part k/2` runs the k-th contiguous half in the list's order
+    # (part 2 ends with teardown_is_clean). The FRAMES are each half's (its plain twin's, counted once per part by
+    # spikes/testing-speed-b3/framecount: 490 + 2,416); the price is each part's own solo run: 9.3 / 18.1 s.
+    foreach(_part 1 2)
+        jah_gpu_row(test_engine_asan.part${_part} SHIP CLASS engine COMMAND test_engine_asan --part ${_part}/2
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
     # Use-after-free / overflow detection is the point here and stays on.
@@ -604,8 +616,10 @@ if(JAHSHAKA_ASAN)
     # declared 420 was below the policy, honest only with the +900 s widening (now deleted).
     # STAGE-CLOSE (TESTING-SPEED-B3): an ASAN twin keeps its row and moves to the stage close; test_engine
     # (the same suite, uninstrumented) is the merge tier's.
-    set_tests_properties(test_engine_asan PROPERTIES
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 430 LABELS "engine")
+        # TIMEOUT 120 = the floor (6 x the solo runs 9.3 / 18.1 s are under it; TEST-CUT-1 stage 3, 2026-10-20)
+        set_tests_properties(test_engine_asan.part${_part} PROPERTIES
+            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 120 LABELS "engine")
+    endforeach()
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
@@ -648,7 +662,8 @@ foreach(_row_frames
         "engine.window=65"
         "meshbake.shadow_vao_alias=3"
         "test_engine=2882"
-        "test_engine_asan=2882"   # its plain twin's (the ASan runtime refuses the frame meter)
+        "test_engine_asan.part1=490"    # TEST-CUT-1: its plain twin's half (test_engine --part 1/2, the meter, 2026-10-20)
+        "test_engine_asan.part2=2416"   # (test_engine --part 2/2: the heavy-frame and the monitor cases are here)
         "test_engine_recreate=48"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

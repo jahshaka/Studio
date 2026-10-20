@@ -256,18 +256,33 @@ jah_pool_arm(shading_d shader_time ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shade
 # TORNADO-1: a live graph material applied FROM THE LIBRARY keeps its generated
 # pieces (they travel with the material's definition) and animates.
 jah_pool_arm(shading_d live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_material_apply.js 8)
-# material.live_roundtrip — LIVE-PERSIST-1: ANY live graph material is a complete, persistent
-# bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
-# its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
-# HOME/XDG_CACHE_HOME; the frames agree and the cut-out is visible (a solid control frame).
-jah_gpu_row(material.live_roundtrip SHIP CLASS app TIER epic NEEDS photon
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
-                 ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(material.live_roundtrip PROPERTIES LABELS "scripting" TIMEOUT 600)
+# material.live_roundtrip.author / .import / .restore — LIVE-PERSIST-1: ANY live graph material is a complete, persistent
+# bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with its piece cache DELETED
+# -> export -> import into an EMPTY library, one process a stage with scratch HOME/XDG_CACHE_HOME; the frames agree and
+# the cut-out is visible (a solid control frame); deleted and restored, the graph comes back live.
+# REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s): the law is FIVE processes — a process
+# boundary is what proves the bundle carries what a session held in memory — and each stage's frames are already a
+# settle predicate (frame(): 30-frame steps until two probe readings agree), so nothing is cut: the one row (85 s,
+# 2,342 frames) runs as a FIXTURE CHAIN of three, in its old order on its old data — author (author + reopen and its
+# export) -> import (into an empty library, the four frames compared) -> restore (drop, the catalog put back, restore).
+# Measured once each (2026-10-20, solo, the card lock held): author 39.3 s / 1,135 frames, import 21.2 s / 1,084,
+# restore 12.5 s / 92. TIMEOUT max(6 x the solo run, the 120 s floor), rounded up.
+foreach(_row author import restore)
+    jah_gpu_row(material.live_roundtrip.${_row} SHIP CLASS app TIER epic NEEDS photon
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
+                     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
+                     ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip ${_row}
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set_tests_properties(material.live_roundtrip.author PROPERTIES LABELS "scripting" TIMEOUT 240
+    FIXTURES_SETUP material_live_roundtrip_author)
+set_tests_properties(material.live_roundtrip.import PROPERTIES LABELS "scripting" TIMEOUT 130
+    FIXTURES_SETUP material_live_roundtrip_import
+    FIXTURES_REQUIRED material_live_roundtrip_author DEPENDS material.live_roundtrip.author)
+set_tests_properties(material.live_roundtrip.restore PROPERTIES LABELS "scripting" TIMEOUT 120
+    FIXTURES_REQUIRED "material_live_roundtrip_author;material_live_roundtrip_import"
+    DEPENDS "material.live_roundtrip.author;material.live_roundtrip.import")
 # scripting.e2e.photon_pin_read — WORLD-MODE-1 (brief §2): the scene READER drops a stored `photon`
 # pin. Two processes: a scene saved at Epic with Photon Low gets `worldOverrides.photon = 1` written
 # into its blob by hand; the reopen reads no pin, an honest Custom, and a re-pick that moves Photon;
@@ -2169,8 +2184,10 @@ endif()
 if(TEST gi.pcc_mirror.ray_tier)
     set_property(TEST gi.pcc_mirror.ray_tier PROPERTY JAHSHAKA_TEST_FRAMES 1242)
 endif()
-if(TEST material.live_roundtrip)
-    set_property(TEST material.live_roundtrip PROPERTY JAHSHAKA_TEST_FRAMES 2342)
+if(TEST material.live_roundtrip.author)
+    set_property(TEST material.live_roundtrip.author PROPERTY JAHSHAKA_TEST_FRAMES 1135)
+    set_property(TEST material.live_roundtrip.import PROPERTY JAHSHAKA_TEST_FRAMES 1084)
+    set_property(TEST material.live_roundtrip.restore PROPERTY JAHSHAKA_TEST_FRAMES 92)
 endif()
 if(TEST pool.assets_import)
     set_property(TEST pool.assets_import PROPERTY JAHSHAKA_TEST_FRAMES 1557)

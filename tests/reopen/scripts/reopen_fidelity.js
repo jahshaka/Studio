@@ -32,6 +32,12 @@
 // fields to the byte. Two cycles is what proves a defect is not a one-time
 // default mismatch; the third is cheap and proves it is not compounding.
 
+// THREE ROWS, ONE SCRIPT (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s): REOPEN_PART names the arm a row runs —
+// "main" (the fresh scene and its three save/close/reopen cycles), "high_sky" (the sky above 50 m, two cycles, on a
+// fresh scene of its own), "scaled" (the scaled nodes, three cycles, their own project) — and the generated copy of
+// this file each row runs defines it (tests/reopen/CMakeLists.txt); run by hand, every arm runs.
+var REOPEN_PART = typeof REOPEN_PART === "undefined" ? "all" : REOPEN_PART;
+
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
@@ -143,6 +149,7 @@ function groundOf(snap) {
 }
 
 // ---------------------------------------------------------------------------
+if (REOPEN_PART === "all" || REOPEN_PART === "main") {
 var guid = project.create("Reopen Fidelity " + Date.now());
 assert(guid.length > 10, "project.create -> the default scene");
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 0, z: 0 } });
@@ -255,6 +262,7 @@ for (var cycle = 1; cycle <= 3; cycle++) {
     }
     assert(s === s0, "cycle " + cycle + ": the whole document is field-identical to the fresh scene");
 }
+}
 
 // ---------------------------------------------------------------------------
 // THE REOPENED SKY ABOVE 50 M, DRAWN AND CAPTURED (REOPEN-SKY-1, the merge read's
@@ -289,6 +297,11 @@ function highSky(tag, path) {
                 ", sky probes " + JSON.stringify(shot.probes));
     return { live: live, probes: shot.probes };
 }
+if (REOPEN_PART === "all" || REOPEN_PART === "high_sky") {
+if (REOPEN_PART === "high_sky") {   // its own fresh scene: the arm's claim is the rest rule, not the cycles above
+    guid = project.create("Reopen High Sky " + Date.now());
+    assert(guid.length > 10, "project.create -> the high sky's own default scene");
+}
 var hi0 = highSky("high-fresh", [200, 110, 120]);
 assert(hi0.live && hi0.live.drawnObserverM !== undefined && hi0.live.environmentObserverM !== undefined &&
        hi0.live.skyMean, "high camera: the sky's live readouts are there (the atmosphere is the sky)");
@@ -315,6 +328,7 @@ for (var hc = 1; hc <= 2; hc++) {
                "high cycle " + hc + ": the drawn sky's pixel " + hp + " is the fresh one (" + JSON.stringify(hi.probes[hp]) +
                " vs " + JSON.stringify(hi0.probes[hp]) + ")");
 }
+}
 
 // ---------------------------------------------------------------------------
 // SCALED NODES (added 2026-09-04 by the clean-start sample audit). The scene
@@ -335,6 +349,7 @@ for (var hc = 1; hc <= 2; hc++) {
 //
 // Three shapes, three scale flavours: uniform-1 (the old blind spot's only
 // case), uniform-not-1, and anisotropic.
+if (REOPEN_PART === "all" || REOPEN_PART === "scaled") {
 var rotGuid = project.create("Reopen Scaled " + Date.now());
 function scaledNode(prim, rot, scl) {
     var id = scene.addPrimitive(prim, { position: { x: 0, y: 1, z: 0 } });
@@ -369,5 +384,6 @@ for (cycle = 1; cycle <= 3; cycle++) {
                JSON.stringify(before[c]) + " -> " + JSON.stringify(now) + ", delta " + d + ")");
     }
 }
+}
 
-console.log("reopen_fidelity: ALL OK");
+console.log("reopen_fidelity: " + REOPEN_PART + " OK");

@@ -6790,14 +6790,30 @@ int main(int argc, char **argv) {
         { "monitor_heavy_frames_keep_their_samples", monitor_heavy_frames_keep_their_samples },
         { "teardown_is_clean",                      teardown_is_clean },
     };
-    const std::string filter = argc > 1 ? argv[1] : "";
+    // `--part <k>/<n>` (TEST-CUT-1): the k-th of n contiguous slices of the list above, in its order — the sanitised
+    // twin runs as two rows of half the cases each (CLAUDE.md Testing: every row at most 60 s; ASan's ~4.5x on 96
+    // cases is 71 s), every case still run, by one of the parts. Any other argument names ONE case.
+    std::string filter = argc > 1 ? argv[1] : "";
+    size_t first = 0, last = tests.size();
+    if (filter.rfind("--part", 0) == 0) {
+        const std::string spec = argc > 2 ? argv[2] : "";
+        const size_t slash = spec.find('/');
+        const int k = slash == std::string::npos ? 0 : std::atoi(spec.substr(0, slash).c_str());
+        const int n = slash == std::string::npos ? 0 : std::atoi(spec.substr(slash + 1).c_str());
+        if (n < 1 || k < 1 || k > n) { std::printf("FAIL: --part wants <k>/<n>, 1 <= k <= n (got '%s')\n", spec.c_str()); return 1; }
+        first = tests.size() * size_t(k - 1) / size_t(n);
+        last = tests.size() * size_t(k) / size_t(n);
+        std::printf("part %d/%d: cases %zu..%zu of %zu\n", k, n, first + 1, last, tests.size());
+        filter.clear();
+    }
     {
         std::string error;
         gEngine = Engine::create(testConfig(), error);
         if (!gEngine) { std::printf("FAIL: engine create: %s\n", error.c_str()); return 1; }
     }
     int ran = 0;
-    for (const Test &t : tests) {
+    for (size_t i = first; i < last; ++i) {
+        const Test &t = tests[i];
         if (!filter.empty() && filter != t.name) continue;
         if (!gEngine) { std::printf("[ SKIP ] %s (engine already torn down)\n", t.name); continue; }
         const int before = gFailures;

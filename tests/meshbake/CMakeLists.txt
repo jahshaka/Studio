@@ -227,19 +227,31 @@ set_tests_properties(meshbake.hemisphere_winding PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/meshbake.hemisphere_winding;JAHSHAKA_DATA_ROOT=${_bake_home}/meshbake.hemisphere_winding/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
-# THE BAKE DOES NOT DEPEND ON ITS THREADS (IMPORT-SPEED-1) — `bake.determinism`.
+# THE BAKE DOES NOT DEPEND ON ITS THREADS (IMPORT-SPEED-1) — `bake.determinism.*`.
 # The bake runs its meshes, its chains/DAGs and every nearest-surface loop on the
 # hardware's threads with ordered reductions; the claim that the OUTPUT is the
 # serial one is this suite: a multi-mesh model and the Stanford dragon baked on 1
-# thread and on every thread (twice) give byte-identical blobs.
-add_test(NAME bake.determinism COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism" -- $<TARGET_FILE:test_mesh_bake> --determinism
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_ship_row(bake.determinism)   # THE SHIP SET (TEST-CUT-1)
-# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(bake.determinism PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism;JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism/.local/share/Jahshaka"
-    TIMEOUT 480 LABELS "meshbake")
-jah_no_display(bake.determinism)
+# thread and on every thread (twice) give byte-identical blobs, and a throw in any
+# unit of the bake answers "no bake" and leaves the next bake whole.
+# REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s): every bake of the law kept — each subject
+# once serial and twice on every thread, the ten throw cases (two widths x five units) each followed by a whole bake —
+# as THREE rows of the same binary (`--determinism standin|dragon|throws`), each its own process and home; one row was
+# 65 s; the parts' solo runs 8.3 / 15.8 / 42.5 s (2026-10-20). A CPU row renders nothing (FRAMES 0); over the 10 s CPU
+# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT max(6 x the solo run, the 120 s floor), rounded up.
+set(_bake_timeout_standin 120)
+set(_bake_timeout_dragon 120)
+set(_bake_timeout_throws 260)
+foreach(_part standin dragon throws)
+    add_test(NAME bake.determinism.${_part}
+             COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism.${_part}" -- $<TARGET_FILE:test_mesh_bake>
+                     --determinism ${_part}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(bake.determinism.${_part} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism.${_part};JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism.${_part}/.local/share/Jahshaka"
+        TIMEOUT ${_bake_timeout_${_part}} LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+    jah_no_display(bake.determinism.${_part})
+endforeach()
+jah_ship_row(bake.determinism.standin bake.determinism.dragon bake.determinism.throws)   # THE SHIP SET (TEST-CUT-1)
 
 jah_no_display(meshbake.primitives_baked)
 jah_no_display(meshbake.rebake_generation)
@@ -327,7 +339,4 @@ if(TEST meshbake.shipped_bakes)
 endif()
 if(TEST meshbake.cards.timing)
     set_property(TEST meshbake.cards.timing PROPERTY JAHSHAKA_TEST_FRAMES 0)
-endif()
-if(TEST bake.determinism)
-    set_property(TEST bake.determinism PROPERTY JAHSHAKA_TEST_FRAMES 0)
 endif()

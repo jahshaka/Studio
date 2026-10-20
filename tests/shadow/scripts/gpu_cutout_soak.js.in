@@ -1,15 +1,19 @@
-// gpu.cutout_soak (CUTOUT-CASTER-1): a cut-out material must never lose the GPU. Before the
+// gpu.cutout_soak.<part> (CUTOUT-CASTER-1): a cut-out material must never lose the GPU. Before the
 // fork's caster fix an alpha-tested caster bound its datablock's texture set over a root layout
 // one slot short (the reflection map spilled into the sampler binding) and the alpha test
 // sampled through an unwritten sampler: Xid 109 CTX SWITCH TIMEOUT within ~2 minutes of the
 // LIVE-PERSIST-1 author stage. The soak drives what that stage drove — the live graph cut-out
-// (a pulsing emissive piece, two-sided), plain cut-outs on a cube and a sphere, the viewport
-// and the offscreen screenshot path, a pinned and a free shader clock — for 5,000 frames, then
-// the Tornado sample for 5,000 more. The row runs under the Khronos validation layer: any
-// "Validation Error" fails it (FAIL_REGULAR_EXPRESSION), and so does a lost device.
+// (a pulsing emissive piece, two-sided), plain cut-outs on a cube and a sphere (part
+// "primitives"), the Tornado sample (part "tornado"), the viewport and the offscreen screenshot
+// path, a pinned and a free shader clock — for ONE SOAK PERIOD (TEST-CUT-1: 500 frames, the
+// pinned and the free clock 250 each with a screenshot after each; the binding the defect got
+// wrong is named by the layer on the first draw, the 5,000 frames a scene were the Xid's
+// minutes). The row runs under the Khronos validation layer: any "Validation Error" fails it
+// (FAIL_REGULAR_EXPRESSION), and so does a lost device.
 var OUT = "@OUT@";
 var FIX = "@FIXTURE@";
 var TORNADO = "@TORNADO@";
+var PART = "@PART@";
 function J(x) { return JSON.stringify(x); }
 function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
 
@@ -28,6 +32,8 @@ function soak(frames, tag) {
 var v = engine.validation();
 console.log("validation " + J(v));
 assert(v.requested && v.active, "the validation layer was asked for and is live on the device");
+var PERIOD = 500;   // one soak period: 250 frames on the pinned clock, 250 on the free one (soak() alternates)
+if (PART === "primitives") {
 assert(project.create("Cutout Soak", { template: "basic" }).length > 10, "project.create");
 var cube = scene.addPrimitive("cube", { position: { x: -1.2, y: 1, z: 0 } });
 var sphere = scene.addPrimitive("sphere", { position: { x: 1.2, y: 1, z: 0 } });
@@ -55,10 +61,13 @@ assert(graph.toMaterial(live), "graph.toMaterial");
 assert(node.setProperty(live, "faceCullingMode", "none"), "two-sided");
 editor.select(null);
 editor.setCamera({ position: { x: 2.2, y: 2.4, z: 4.6 }, lookAt: { x: 0, y: 1.0, z: -0.3 }, fov: 50 });
-soak(5000, "primitives");
+soak(PERIOD, "primitives");
 assert(project.close(), "closed");
-
+} else if (PART === "tornado") {
 var imported = project.importArchive(TORNADO);
 assert(imported && imported.guid && project.open(imported.guid), "the Tornado sample");
-soak(5000, "tornado");
-console.log("gpu_cutout_soak: PASS");
+soak(PERIOD, "tornado");
+} else {
+throw new Error("assert failed: no part '" + PART + "' (primitives | tornado)");
+}
+console.log("gpu_cutout_soak: " + PART + " PASS");

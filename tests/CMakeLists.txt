@@ -1151,7 +1151,9 @@ set(JAH_MEASURE_ROWS
     atom.occlusion_exact
     atom.removechild_leak
     avatar.responsive.timing.fresh_home
-    bake.determinism
+    bake.determinism.dragon
+    bake.determinism.standin
+    bake.determinism.throws
     bundle.writer
     engine.atom_draw
     engine.atom_parity
@@ -1185,11 +1187,11 @@ set(JAH_MEASURE_ROWS
     gi.rt_reflect_asan
     gi.speckle
     gi.voxel_coverage
-    gpu.cutout_soak
+    gpu.cutout_soak.primitives
+    gpu.cutout_soak.tornado
     hdr.drag_stable_asan
     hdr.meter_asan
     lights.shadows
-    material.live_roundtrip
     math.parity
     mirror.settle_incremental
     mirror.settle_thumbnails
@@ -1205,7 +1207,6 @@ set(JAH_MEASURE_ROWS
     pool.gi_verbs_stage
     pool.world_light_stage
     samples.freshhome.session
-    samples.mirror_room_boots
     samples.session
     scale.assets
     scale.atlas
@@ -1217,8 +1218,6 @@ set(JAH_MEASURE_ROWS
     scale.lights
     scale.occlusion
     scale.residency
-    scene.reopen_fidelity
-    scene.reopen_fidelity.fresh_home
     scripting.e2e.ogre_ports
     scripting.freshhome.ogre_ports
     shader.async_soak
@@ -1234,7 +1233,8 @@ set(JAH_MEASURE_ROWS
     skeletal.gpu_parity
     ssr.engine_asan
     test_engine
-    test_engine_asan
+    test_engine_asan.part1
+    test_engine_asan.part2
     threading.freshhome.import_soak
     threading.freshhome.newproject_stall_timing
     threading.gi_resolve
