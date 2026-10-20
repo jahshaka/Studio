@@ -2619,6 +2619,16 @@ static int gpuCoverageMain()
 //     0.15 ms a map, on both worlds (1.27x the worst was a flake candidate under contention).
 // The caster pass = every pass of the view's shadow node (PassBucket::ShadowView), its scene
 // passes and the caster cut's passes together.
+// THE PAIRED-ARM LAW (the lead's ruling on the ship's red, 2026-10-20; spikes/ship-fff575ecb/
+// ATOM-REPORT.md): ENGINE-UPGRADE-U5 stages 4 + 4b put a FIXED per-map term into the same pass -
+// each sun map's depth pyramid, the late cut against it and the receiver grid - whatever the
+// casters cost (measured on fff575ecb, GPU ms over 3 maps: world shipped 0.566 / light-depth off
+// 0.412, small 0.420 / 0.173; the small world's off arm is 2026-10-13's 0.057 ms a map). So THREE
+// arms alternate in one process: the cut shipped, the cut with shadow.lightDepth 0 (the pre-U5
+// pass: none of the three built) and PBS. THE BARS ABOVE, UNCHANGED, are on the casters' own
+// cost: the light-depth-off arm against PBS. U5's term (shipped less off, a map) is PRINTED with
+// NO bar - a bar fitted to today's reading is forbidden; the engine item that reduces the term
+// sets one by derivation. The shipped arm is printed against the same bars, for the record.
 static int shadowCutMain()
 {
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
@@ -2649,19 +2659,28 @@ static int shadowCutMain()
         const std::string log = std::string("test-scale-shadow-cut-") + label + "-ogre.log";
         if (!bootWorld(env, w, log.c_str(), spec)) { ++failures; return; }
         pathStill(env, 60);
-        Arm cut, pbs;
+        Arm shipped, cut, pbs;   // `cut` = shadow.lightDepth 0, the casters' own cost (the paired-arm law)
+        unsigned long long shippedTris = 0ull;
         for (int round = 0; round < 2; ++round) {
             env.scene->setAtomDrawEnabled(true);
             frame(env, 60);
+            measure(env, shipped);
+            shippedTris = env.scene->atomDrawStatus().casterTriangles;
+            env.engine->setArm("shadow.lightDepth", 0.0);
+            frame(env, 60);
             measure(env, cut);
+            env.engine->setArm("shadow.lightDepth", 1.0);
             env.scene->setAtomDrawEnabled(false);
             frame(env, 60);
             measure(env, pbs);
         }
         env.scene->setAtomDrawEnabled(true);
+        env.engine->setArm("shadow.lightDepth", 0.0);
         frame(env, 30);
         const AtomDrawStatus st = env.scene->atomDrawStatus();
+        env.engine->setArm("shadow.lightDepth", 1.0);
         const Stats cc = stats(cut.cpu), pc = stats(pbs.cpu), cg = stats(cut.gpu), pg = stats(pbs.gpu);
+        const Stats sc = stats(shipped.cpu), sg = stats(shipped.gpu);
         std::printf("SHADOW %-6s atom items %u | caster maps a frame %u, caster triangles %llu, instances %u | "
                     "shadow-node passes cut %u / pbs %u | CPU ms med cut %.3f pbs %.3f (ratio %.3f) | "
                     "GPU ms med cut %.3f pbs %.3f (ratio %.3f) | frames %zu / %zu\n",
@@ -2669,13 +2688,22 @@ static int shadowCutMain()
                     pbs.passes, cc.median, pc.median, pc.median > 0 ? cc.median / pc.median : -1.0, cg.median,
                     pg.median, pg.median > 0 ? cg.median / pg.median : -1.0, cc.n, pc.n);
         const double perMap = st.casterMaps ? cg.median / double(st.casterMaps) : -1.0;
+        const double maps = double(std::max(1u, st.casterMaps));
+        std::printf("target: scale.shadow_cut %s the shipped path (U5's term included): caster triangles %llu, CPU ratio "
+                    "%.3f (bar %.2f), GPU %.3f ms a map (bar %.2f) - printed, not asserted\n",
+                    label, shippedTris, pc.median > 0 ? sc.median / pc.median : -1.0, cpuBar, sg.median / maps,
+                    gpuBarPerMap);
+        std::printf("target: scale.shadow_cut %s U5's light-depth term (shipped less shadow.lightDepth 0): CPU %+.3f ms, "
+                    "GPU %+.3f ms a map (no bar)\n",
+                    label, (sc.median - cc.median) / maps, (sg.median - cg.median) / maps);
         std::printf("target: scale.shadow_cut %s caster CPU ratio %.3f (bar %.2f), GPU %.3f ms a map (bar %.2f; the "
                     "old route's %.3f ms is the view's level, no reference)\n",
                     label, pc.median > 0 ? cc.median / pc.median : -1.0, cpuBar, perMap, gpuBarPerMap,
                     pg.median / double(std::max(1u, st.casterMaps)));
         REQUIRE(st.on && st.atomItems > 0 && st.casterValid && st.casterMissing == 0u && st.casterMaps > 0u,
                 "%s: the caster cut drew (%u maps, %u missing)", label, st.casterMaps, st.casterMissing);
-        REQUIRE(cc.n >= 100 && pc.n >= 100, "%s: both arms measured (%zu, %zu frames)", label, cc.n, pc.n);
+        REQUIRE(cc.n >= 100 && pc.n >= 100 && sc.n >= 100, "%s: the three arms measured (%zu, %zu, %zu frames)", label,
+                sc.n, cc.n, pc.n);
         REQUIRE(pc.median > 0 && cc.median <= cpuBar * pc.median,
                 "%s: the caster pass's CPU from the cut <= %.2fx the per-instance path's (%.3f vs %.3f ms)", label,
                 cpuBar, cc.median, pc.median);
