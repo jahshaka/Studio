@@ -666,6 +666,23 @@ static void testOrphanReaper(const QString &scratch)
                  {QStringLiteral("-c"), QStringLiteral("sleep 30"),
                   ClaudeLaunchConfig::launchSignature()});
     CHECK(orphan.waitForStarted(3000), "D2: the stand-in orphan started");
+    // THE STAND-IN'S COMMAND LINE IS ESTABLISHED BEFORE THE REAPER LOOKS (ship
+    // 028cd1886, 2026-10-20: red under the 8-wide pass, green alone and in ship
+    // 8d2ca389b). waitForStarted returns when the child's exec has CLOSED the
+    // start pipe (close-on-exec), and the kernel does that before it installs the
+    // new image's argument range — so for a moment /proc/<pid>/cmdline of a
+    // process that has started reads EMPTY, and a loaded box lets the parent run
+    // inside that moment. A real orphan has been alive since a previous launch;
+    // only this stand-in is young. So the premise is read until it holds, in the
+    // test, never a sleep.
+    const auto cmdlineOf = [](qint64 pid) {
+        QFile f(QStringLiteral("/proc/%1/cmdline").arg(pid));
+        return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+    };
+    CHECK(waitFor([&]() {
+              return cmdlineOf(orphan.processId()).contains(ClaudeLaunchConfig::launchSignature().toUtf8());
+          }),
+          "D2: the stand-in's command line carries the signature");
     CHECK(ClaudeLaunchConfig::writePid(project, orphan.processId()), "D2: its pid is recorded");
     CHECK(ClaudeLaunchConfig::readPid(project) == orphan.processId(), "D2: and reads back");
 
