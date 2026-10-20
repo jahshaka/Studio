@@ -12,8 +12,9 @@
 //       (A)'s triangles - a mesh authored in centimetres is cut exactly as the same object authored in metres;
 //   (d) THE DRAWN CLUSTERS ARE THE RULE'S: each instance's drawn triangles = the C++ cut over the probe's verdicts;
 //   (e) THE PIXELS ARE THE ID IMAGE'S: each instance's counted pixels = its slot's pixels in the id image read back;
-//   (f) THE DENSITY VIEW: every pixel of each sphere is painted the class of its BASE mesh's level-0 triangles per
-//       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes; and with the
+//   (f) THE DENSITY VIEW, A brought near and B sent far (two classes): every pixel of each sphere is painted the class
+//       of its BASE mesh's level-0 triangles per visible pixel (the probe's figure), at least two classes are painted,
+//       and atomStatus().density says the same pixels and classes; and with the
 //       count's compute jobs missing (a test door) it paints nothing and reports no figures (BUGS-1 item 6);
 //   (g) THE PROBE IS ONE FRAME: the cut job's probe permutation is gone the frame after (no group is recorded twice
 //       and a second read without an arming answers "not armed"); a probe DISARMED before its frame records no later
@@ -367,7 +368,10 @@ int main(int argc, char **argv)
     scene->setNodeTransform(a, Vec3(-0.8f, 0.0f, 0.0f), Quat(), Vec3(1, 1, 1));
     scene->setNodeTransform(b, Vec3(0.8f, 0.0f, 0.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
 
-    // (f) the density view
+    // (f) the density view - over TWO CLASSES (BUGS-1 item 9: A and B are one DAG at one distance, one class): A
+    // brought near (its 8,192 triangles over many pixels: under one a pixel) and B sent far (over four a pixel)
+    scene->setNodeTransform(a, Vec3(-0.35f, 0.0f, 6.6f), Quat(), Vec3(1, 1, 1));
+    scene->setNodeTransform(b, Vec3(2.0f, 0.0f, -25.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
     scene->setAtomView(AtomView::Density);
     enginetest::frames(e, 4);
     Image img;
@@ -397,6 +401,10 @@ int main(int argc, char **argv)
     CHECK_MSG(total > 1000u && wrong == 0u,
               "(f) every pixel of the spheres is painted its object's class (%u of %u wrong, %u painted)", wrong, total,
               painted);
+    const unsigned classesPainted = (classPx[0] ? 1u : 0u) + (classPx[1] ? 1u : 0u) + (classPx[2] ? 1u : 0u);
+    CHECK_MSG(classesPainted >= 2u,
+              "(f) ...over TWO classes at least (the near sphere's and the far one's: %u / %u / %u px green / yellow / red)",
+              classPx[0], classPx[1], classPx[2]);
     CHECK_MSG(st.densityValid && st.densityPixels == total && st.densityObjects == 2u &&
                   st.densityClassPixels[0] == classPx[0] && st.densityClassPixels[1] == classPx[1] &&
                   st.densityClassPixels[2] == classPx[2],
@@ -426,6 +434,8 @@ int main(int argc, char **argv)
                   "(0 wanted) and the figures are %s", paintedMiss, spherePx, ms.densityValid ? "STILL VALID" : "gone");
     }
     scene->setAtomView(AtomView::Off);
+    scene->setNodeTransform(a, Vec3(-0.8f, 0.0f, 0.0f), Quat(), Vec3(1, 1, 1));
+    scene->setNodeTransform(b, Vec3(0.8f, 0.0f, 0.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
     enginetest::frames(e, 2);
     AtomDrawStatus off = scene->atomDrawStatus();
     CHECK(!off.densityValid, "(f) the density figures are gone with the view");
