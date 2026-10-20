@@ -150,7 +150,7 @@ target_include_directories(test_atom_cut_probe PRIVATE
     "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
 target_link_libraries(test_atom_cut_probe PRIVATE OgreNext)
 add_dependencies(test_atom_cut_probe JahshakaEngineMedia)
-jah_gpu_row(atom.cut_probe CLASS engine FRAMES 33 COMMAND test_atom_cut_probe
+jah_gpu_row(atom.cut_probe CLASS engine FRAMES 37 COMMAND test_atom_cut_probe
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cut_probe PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

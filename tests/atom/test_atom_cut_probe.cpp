@@ -13,7 +13,8 @@
 //   (d) THE DRAWN CLUSTERS ARE THE RULE'S: each instance's drawn triangles = the C++ cut over the probe's verdicts;
 //   (e) THE PIXELS ARE THE ID IMAGE'S: each instance's counted pixels = its slot's pixels in the id image read back;
 //   (f) THE DENSITY VIEW: every pixel of each sphere is painted the class of its BASE mesh's level-0 triangles per
-//       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes;
+//       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes; and with the
+//       count's compute jobs missing (a test door) it paints nothing and reports no figures (BUGS-1 item 6);
 //   (g) THE PROBE IS ONE FRAME: the cut job's probe permutation is gone the frame after (no group is recorded twice
 //       and a second read without an arming answers "not armed");
 //   (h) THE TIER'S THRESHOLD (ATOM-3 stage 1): at the World Mode's 1 / 2 / 3 px the drawn triangles fall strictly.
@@ -389,6 +390,28 @@ int main(int argc, char **argv)
               "(f) atomStatus' density says the same (valid %d, %u px in %u objects; classes %u/%u/%u, the image's %u/%u/%u)",
               int(st.densityValid), st.densityPixels, st.densityObjects, st.densityClassPixels[0],
               st.densityClassPixels[1], st.densityClassPixels[2], classPx[0], classPx[1], classPx[2]);
+    // (f') THE DENSITY FAIL-SAFE (BUGS-1 item 6): the count's compute jobs missing (the test door "atom.densityJobsMissing",
+    // as on a tree whose media did not stage them) - the frames paint NOTHING over the spheres and report no figures,
+    // never the table the frames before them wrote.
+    {
+        e->setArm("atom.densityJobsMissing", 1.0);
+        enginetest::frames(e, 4);
+        Image miss;
+        const bool read = view->readPixels(miss) && miss.width == kW && miss.height == kH;
+        const AtomDrawStatus ms = scene->atomDrawStatus();
+        unsigned paintedMiss = 0, spherePx = 0;
+        for (size_t i = 0; read && i < ids2.size(); ++i) {
+            if (ids2[i] == AtomId::kEmpty) continue;
+            const uint32_t sl = ids2[i] & AtomId::kSlotMask;
+            if (sl != sA && sl != sB) continue;
+            ++spherePx;
+            if (classOf(&miss.rgba[i * 4u]) >= 0) ++paintedMiss;
+        }
+        e->setArm("atom.densityJobsMissing", 0.0);
+        CHECK_MSG(read && spherePx > 1000u && paintedMiss == 0u && !ms.densityValid,
+                  "(f') THE DENSITY FAIL-SAFE: with the count's jobs missing %u of %u sphere pixels are painted a class "
+                  "(0 wanted) and the figures are %s", paintedMiss, spherePx, ms.densityValid ? "STILL VALID" : "gone");
+    }
     scene->setAtomView(AtomView::Off);
     enginetest::frames(e, 2);
     AtomDrawStatus off = scene->atomDrawStatus();
