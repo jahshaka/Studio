@@ -226,6 +226,7 @@ threading.texture_wait_watchdog 21.60  ship 3a0422b4e (2026-10-13)
 thumbnails.studio_env 1.97  quiet n=43
 ui.space_docks 18.40  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.space_docks.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+ui.streaming_indicator 0.02  solo, offscreen, no display (BUGS-7 stage 3, 2026-10-20)
 view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

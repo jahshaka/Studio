@@ -308,10 +308,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     toolbarDeps.toggleDocks = [this]() { docks->openToggleDialog(); };
     toolbarDeps.toast = [this](const QString &title, const QString &text) { showViewportToast(title, text); };
     toolbarDeps.editorActive = [this]() { return currentSpace == WindowSpaces::EDITOR; };
-    // "Compiling shaders (N)" (ASYNC-SHADERS-1): the background compiler's pending count.
-    toolbarDeps.pendingShaders = []() -> unsigned {
+    // THE STREAM-IN INDICATOR (ASYNC-SHADERS-1, BUGS-7): what the last published frame still owed — the background
+    // compiler's pending shaders, the materials drawing a fallback for a texture on its way, the first lighting arm's
+    // stages left.
+    toolbarDeps.streamingWork = []() -> StreamingIndicator::Work {
+        StreamingIndicator::Work w;
         auto eng = EngineHost::instance().engine();
-        return eng ? eng->published().shaders.pending : 0u;   // the last frame's (U3 stage 2)
+        if (!eng) return w;
+        const auto &f = eng->published();   // the last frame's (U3 stage 2)
+        w.shaders = f.shaders.pending;
+        w.textures = f.streaming.materialsAwaitingTexture;
+        w.gi = f.streaming.giStagesLeft;
+        return w;
     };
     toolbar->build(toolbarDeps);
     toolBar = toolbar->bar();
