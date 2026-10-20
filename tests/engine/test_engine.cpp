@@ -1611,6 +1611,36 @@ void equirect_sky_fills_the_background() {
     std::remove(path2.c_str());
 }
 
+// The share of the ibl_specular pass's lobe around n that lands on the +X cube face: Ogre's integrator
+// (Samples/Media/Compute/Algorithms/IBL/SpecularIblIntegrator_piece_cs.any) takes N = V = R = n, draws the
+// half vector by importanceSampleGGX at alpha and weights each sample by N.L; this is that integral by an
+// m x m stratified grid (the integrator's 128 Hammersley samples estimate it).
+static double prefilterShareOfPlusX(const double n[3], double alpha, int m = 400) {
+    const double l = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    const double N[3] = { n[0] / l, n[1] / l, n[2] / l };
+    double t[3] = { 0.0, N[2], -N[1] };   // (1, 0, 0) x N: N is never +-X here
+    const double tl = std::sqrt(t[1] * t[1] + t[2] * t[2]);
+    t[1] /= tl; t[2] /= tl;
+    const double b[3] = { N[1] * t[2] - N[2] * t[1], N[2] * t[0] - N[0] * t[2], N[0] * t[1] - N[1] * t[0] };
+    double num = 0.0, den = 0.0;
+    for (int i = 0; i < m; ++i)
+        for (int j = 0; j < m; ++j) {
+            const double phi = 2.0 * 3.14159265358979323846 * (double(i) + 0.5) / double(m);
+            const double u = (double(j) + 0.5) / double(m);
+            const double ct = std::sqrt((1.0 - u) / (1.0 + (alpha * alpha - 1.0) * u));
+            const double st = std::sqrt(std::max(0.0, 1.0 - ct * ct));
+            double H[3], L[3];
+            for (int k = 0; k < 3; ++k) H[k] = t[k] * st * std::cos(phi) + b[k] * st * std::sin(phi) + N[k] * ct;
+            const double nh = N[0] * H[0] + N[1] * H[1] + N[2] * H[2];
+            for (int k = 0; k < 3; ++k) L[k] = 2.0 * nh * H[k] - N[k];
+            const double nl = N[0] * L[0] + N[1] * L[1] + N[2] * L[2];
+            if (!(nl > 0.0)) continue;
+            den += nl;
+            if (L[0] > std::fabs(L[1]) && L[0] > std::fabs(L[2])) num += nl;
+        }
+    return den > 0.0 ? num / den : 0.0;
+}
+
 // Item 4 of the Ogre adoption wave, in pixels. The sky cube is lit on ONE face
 // (+X) and black everywhere else; a rough metal cube is seen from straight
 // above, so the only thing its top face can reflect is the +Y direction. A box
@@ -1619,6 +1649,24 @@ void equirect_sky_fills_the_background() {
 // black. The ibl_specular pass convolves the whole hemisphere per output texel,
 // so the +X face's light reaches +Y. There are no lights and no ambient: every
 // lit pixel here came from the prefilter.
+//
+// THE NUMBER, DERIVED (PHOTON-3 stage 1 moved it: the old bar "> 12" sat under the 28 the old term read).
+// (1) The prefilter of this sky in +Y. A 16 x 16 cube has 5 mips; output mip m convolves at
+//     alpha = pr^2, pr = 1 - sqrt( 1 - m / 4 ) (CompositorPassIblSpecular::lodToPerceptualRoughness):
+//     mip 3 alpha 0.25, mip 4 alpha 1. BRDF_EnvMap reads lod = r ( mips - 1 ) ( 2 - r ) = 0.9 x 4 x 1.1 = 3.96
+//     (envSpecularRoughness): 0.04 of mip 3 (its four central +Y texels, (+-0.5, 1, +-0.5)) + 0.96 of mip 4
+//     (its one +Y texel). The lobe's +X share: mip 4 0.1115, mip 3 0.0812 -> P = 0.110.
+// (2) The old term, Rs = envColourS kS fresnelS with fresnelS = F0 = 1 (a white metal at N.V 0.994):
+//     255 P = 28.1 - the 28 this row read from 2026-09 to 2026-10-16. The bytes are linear (the offscreen
+//     view's RGBA8_UNORM target; hw_gamma_write is hardcoded at the pin, no tonemap without a chain).
+// (3) THE SPLIT SUM (fork 6d5f6b948): Rs = envColourS kS ( F0 A + B ) at N.V = 3.3 / 3.3185 = 0.9944 (the
+//     camera at (0.3, 4, 0.3), the centre ray meeting the top face y = 0.7 at (0.0525, 0.7, 0.0525)) and
+//     r 0.9: A + B = 0.4208 by the integral (ggxSpecularAlbedo; the engine's table reads 0.4209) ->
+//     255 x 0.110 x 0.4208 = 11.8, the 12 the split sum reads.
+// THE TOLERANCE: half an LSB of the 8-bit target plus the integrator's estimator - its 128 Hammersley
+// samples point-sampled read this face's share 11.4 % below the integral (0.0978 against 0.110; the
+// input's lod-2.8 blur closes most of it: the old term read 28 for the predicted 28.1), so 12 % of the
+// expected: 11.8 +- 1.9. Black (box mips, 0) and the albedo-less term (28) are both outside it.
 void rough_metal_reflects_across_cube_faces() {
     Fixture fx;
     View *v = fx.view("ggx-view", 64, 64, Colour(0, 0, 0)); REQUIRE(v);
@@ -1643,10 +1691,35 @@ void rough_metal_reflects_across_cube_faces() {
     render(fx.e, 4);
     Image img; REQUIRE(v->readPixels(img));
     const Px k = centre(img);
-    std::printf("    rough metal top face under a +X-only sky: %d %d %d\n", k.r, k.g, k.b);
-    CHECK_MSG(k.r > 12,
-              "a GGX-prefiltered cube must carry the +X face's light into +Y (box mips cannot): %d %d %d",
-              k.r, k.g, k.b);
+    const double r = 0.9, mips = 5.0;
+    const double lod = r * (mips - 1.0) * (2.0 - r);
+    const int m0 = int(std::floor(lod));
+    const double f = lod - double(m0);
+    const auto mipShare = [&](int m) {
+        const double pr = 1.0 - std::sqrt(std::max(0.0, 1.0 - double(m) / (mips - 1.0)));
+        const int res = 16 >> m;
+        if (res == 1) { const double n[3] = { 0.0, 1.0, 0.0 }; return prefilterShareOfPlusX(n, pr * pr); }
+        // the bilinear read at the face centre: the mean of its four central texels
+        const double o = 1.0 / double(res);
+        double sum = 0.0;
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sz = -1; sz <= 1; sz += 2) {
+                const double n[3] = { double(sx) * o, 1.0, double(sz) * o };
+                sum += prefilterShareOfPlusX(n, pr * pr);
+            }
+        return 0.25 * sum;
+    };
+    const double P = (1.0 - f) * mipShare(m0) + f * mipShare(m0 + 1);
+    const double nDotV = 3.3 / std::sqrt(3.3 * 3.3 + 2.0 * 0.2475 * 0.2475);
+    double A = 0.0, B = 0.0;
+    enginetest::ggxSpecularAlbedo(nDotV, r, A, B);
+    const double expected = 255.0 * P * (1.0 * A + B);   // F0 = 1: the white metal
+    const double tol = 0.5 + 0.12 * expected;
+    std::printf("    rough metal top face under a +X-only sky: %d %d %d (derived %.2f +- %.2f: prefilter %.4f, "
+                "A + B %.4f at N.V %.4f)\n", k.r, k.g, k.b, expected, tol, P, A + B, nDotV);
+    CHECK_MSG(std::fabs(double(k.r) - expected) <= tol,
+              "a GGX-prefiltered cube carries the +X face's light into +Y (box mips cannot) by the split sum: "
+              "%d %d %d against the derived %.2f +- %.2f", k.r, k.g, k.b, expected, tol);
     CHECK(s->setSky(SkyDesc()));
 }
 

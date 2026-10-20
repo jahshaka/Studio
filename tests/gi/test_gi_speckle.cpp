@@ -395,10 +395,15 @@ static void routeAgreement(Engine *e)
     CHECK_MSG(rel < 0.03,
               "ROUTE AGREEMENT: a gather hit on a static diffuse box answered by the DECODE is the card's answer "
               "(%.2f %% apart, bar 3 %%: the cards' tolerance)", 100.0 * rel);
-    // THE SAME HITS ON A GLOSSY METAL (the silver PBR): the caches store its
-    // diffuse response (none: a metal's albedo is all specular), so the decode must
-    // answer the same — on the base its answer was the lobe, the sun's highlight
-    // seen from the floor. The bar is absolute: 3 % of the diffuse box's bounce.
+    // THE SAME HITS ON A GLOSSY METAL (the silver PBR). A GATHER ray reads a hit's
+    // specular lobe by its INTEGRAL on every route (PHOTON-3, the lead's ruling): of
+    // each light mu E ( F0 A( mu, r ) + w B( mu, r ) ) / pi (the card read's light loop
+    // under JAH_HIT_LOBE_INTEGRAL; the decode's atomGatherMetalLobe), and of the
+    // gathered light its irradiance times F0 A-bar( r ) + w B-bar( r ) (the card's Flat
+    // layer; the decode's posExecution term) - never the lobe toward the ray, which a
+    // few stochastic rays cannot sample (the sun's highlight seen from the floor was
+    // the base's answer). Both routes hold the same two terms, so they agree as the
+    // diffuse box's do. The bar is absolute: 3 % of the diffuse box's bounce.
     s->attachMesh(box, cube, pbr(s, Colour(0.97f, 0.96f, 0.91f), 1.0f, 0.22f));
     double mCacheE = 0.0, mDecodeE = 0.0;
     unsigned mCacheN = 0, mDecodeN = 0;
@@ -412,9 +417,9 @@ static void routeAgreement(Engine *e)
     CHECK_MSG(mDecodeRec > 50u * mCacheRec + 1000u, "...and the silver box's hits are decoded (%llu records)",
               mDecodeRec);
     CHECK_MSG(std::fabs(mDecodeE - mCacheE) < 0.03 * cacheE,
-              "ROUTE AGREEMENT ON A GLOSSY METAL: the decode answers the gather's hit with the diffuse response "
-              "the card stores (|%.5f - %.5f| against the bar %.5f) — no specular lobe", mDecodeE, mCacheE,
-              0.03 * cacheE);
+              "ROUTE AGREEMENT ON A GLOSSY METAL: the decode answers the gather's hit with the lobe's integral "
+              "the card stores, the lights' and the gathered light's (|%.5f - %.5f| against the bar %.5f)",
+              mDecodeE, mCacheE, 0.03 * cacheE);
     e->destroyView(view);
 }
 
