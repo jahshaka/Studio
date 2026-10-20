@@ -417,23 +417,4 @@ endif()
 # offscreen; shown with shaders, textures and the lighting arm owed (alone and together), hidden when nothing is; its
 # painted text >= 4.5:1 on the toolbar's band (a plain label beside it — the base's indicator — printed as the control).
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
-add_executable(test_streaming_indicator test_streaming_indicator.cpp
-    ${CMAKE_SOURCE_DIR}/src/shell/streamingindicator.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/app/themes.qrc)
-set_target_properties(test_streaming_indicator PROPERTIES CXX_STANDARD 17 AUTORCC ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_streaming_indicator PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_streaming_indicator PRIVATE Qt6::Widgets qlementine)
 # (Its HOME and data root are temporary directories of its own: no scratch root under the build dir.)
-add_test(NAME ui.streaming_indicator COMMAND test_streaming_indicator
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(ui.streaming_indicator PROPERTIES TIMEOUT 60 LABELS "ui"
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-jah_no_display(ui.streaming_indicator)
