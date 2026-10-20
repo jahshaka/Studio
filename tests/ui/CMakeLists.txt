@@ -431,10 +431,9 @@ set_target_properties(test_streaming_indicator PROPERTIES CXX_STANDARD 17 AUTORC
 target_include_directories(test_streaming_indicator PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
 target_link_libraries(test_streaming_indicator PRIVATE Qt6::Widgets qlementine)
-set(_streaming_indicator_home ${CMAKE_CURRENT_BINARY_DIR}/home-streaming-indicator)
-file(MAKE_DIRECTORY ${_streaming_indicator_home})
+# (Its HOME and data root are temporary directories of its own: no scratch root under the build dir.)
 add_test(NAME ui.streaming_indicator COMMAND test_streaming_indicator
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(ui.streaming_indicator PROPERTIES TIMEOUT 60 LABELS "ui"
-    ENVIRONMENT "HOME=${_streaming_indicator_home};QT_QPA_PLATFORM=offscreen")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 jah_no_display(ui.streaming_indicator)

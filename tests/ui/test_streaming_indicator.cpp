@@ -60,8 +60,11 @@ static double paintedContrast(QToolBar *bar, QLabel *label, QRgb *bandOut, QRgb 
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QTemporaryDir root;
-    qputenv("JAHSHAKA_DATA_ROOT", root.path().toUtf8());   // the settings the theme reads: the default theme
+    // A HOME AND A DATA ROOT OF ITS OWN, temporary (removed with the run): the settings the theme reads - the default
+    // theme - and nothing written anywhere a person's or another row's settings live.
+    QTemporaryDir home, root;
+    qputenv("HOME", home.path().toUtf8());
+    qputenv("JAHSHAKA_DATA_ROOT", root.path().toUtf8());
     QApplication app(argc, argv);
     ThemeManager::applyAtStartup(app);
     std::printf("== ui.streaming_indicator: the stream-in indicator says what is owed, readably (theme %s)\n",
