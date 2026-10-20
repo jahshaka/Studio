@@ -682,11 +682,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             }
             giFrames += tierFrames;
         }
-        warmScene->setGlobalIllumination(warmGi);
-        for (int i = 0; i < kWarmUpFrames; ++i) {
-            engine->renderOneFrame();
-            poll();
-        }
+        // NO RESTORE (BUGS-7 (c)): the born tier's arm was built above, and the warm-up scene is destroyed next — a
+        // push back to it built a lighting arm nothing drew (four frames of the gate).
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
           static_cast<long long>(giTimer.elapsed()), runPass ? "" : " (a warm cache: skipped — the global pass's key is the recorded one)",
