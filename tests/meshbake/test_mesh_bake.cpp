@@ -2301,7 +2301,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
     int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, sloppy = 0, madeTerminal = 0, retries = 0,
         unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0;
-    double buildMs = 0.0, measureMs = 0.0;
+    double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
         const iris::MeshPtr &m = meshes.at(i);
@@ -2316,7 +2316,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
             continue;
         }
         ++dagMeshes;
-        buildMs += st.buildMs; measureMs += st.measureMs;
+        buildMs += st.buildMs; measureMs += st.measureMs; verifyMs += st.verifyMs;
         sloppy += st.sloppyGroups; madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
         unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
         prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked;
@@ -2446,7 +2446,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
                 "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
                 "relocked %d\n", stuck, madeTerminal, sloppy, retries, unconverged, lockDroppedGroups, emptyGroups,
                 prunedGroups, prunedRelocked);
-    std::printf("  DAG build wall %lld ms (clodBuild %.0f + measure %.0f, summed)\n", qint64(wall.elapsed()), buildMs, measureMs);
+    std::printf("  DAG build wall %lld ms (clodBuild %.0f, of which the verify %.0f over %d retries; measure %.0f; summed)\n",
+                qint64(wall.elapsed()), buildMs, verifyMs, retries, measureMs);
     return 0;
 }
 
