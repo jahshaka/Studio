@@ -33,6 +33,9 @@
 #   --reset <dir>   also removed and recreated (a suite's export target beside its home).
 #   --rm <file>     also removed.
 #   --mkdir <dir>   also created.
+#   JAH_KEEP_HOME=1 (the environment; TOOLING-6 item 3) a DIAGNOSIS run: a green run's home is KEPT where it is (its
+#                   grown cache still promoted), its path printed — a passing row's output and files are read without
+#                   repeating the run by hand; the next run of the row wipes it as always. Never set by a row or a verb.
 #   -- <command>    run, in the directory the caller started in — re-entered by path, because the wipe may have
 #                   deleted it (a ctest WORKING_DIRECTORY inside <home>). THE WIPE AFTER (item 7, the default): when the
 #                   command exits 0 the home is deleted (its empty run/ re-created: a row's working directory); on any other exit it MOVES to <build>/tests/.evidence/<home's
@@ -106,7 +109,11 @@ if [ "$rc" = 0 ]; then
             ) 9>"$shared.lock" || true
         fi
     fi
-    rm -rf "$home"
+    if [ "${JAH_KEEP_HOME:-}" = 1 ]; then
+        echo "fresh_home.sh: JAH_KEEP_HOME=1 — the green run's home is kept: $home" >&2
+    else
+        rm -rf "$home"
+    fi
 else
     # a RED run: the home is the evidence — moved, replacing that home's previous evidence (one red kept per row)
     ev="$tests_dir/.evidence/$(basename "$home")"

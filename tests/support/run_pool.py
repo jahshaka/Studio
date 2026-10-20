@@ -235,7 +235,9 @@ def main():
             return
         verdicts[arm] = (verdict, ms, why)
         lines = pending.pop(arm, [])
-        if verdict != "PASS" and lines:
+        # JAH_KEEP_HOME=1 (TOOLING-6 item 3, a diagnosis run; fresh_home.sh keeps the green home): a PASSING arm's output
+        # is printed too, so a green arm's numbers are read from the row's own run, never a second run by hand
+        if (verdict != "PASS" or os.environ.get("JAH_KEEP_HOME") == "1") and lines:
             say("---- %s.%s: its output (%d line(s)) ----" % (pool, arm, len(lines)))
             for l in lines: say("| " + l)
         say("ARM %s.%s %s %d%s" % (pool, arm, verdict, ms, (" " + why) if why else ""))

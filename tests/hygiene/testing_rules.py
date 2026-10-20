@@ -306,6 +306,8 @@ def fresh_home_behaves(source):
     import shutil
     import tempfile
     fh = os.path.join(os.path.abspath(source), "tests", "support", "fresh_home.sh")
+    # the cases run on the wipe's default: a caller's JAH_KEEP_HOME (a diagnosis run) never reaches them
+    os.environ.pop("JAH_KEEP_HOME", None)
     t = tempfile.mkdtemp(prefix="fresh-home-test-")
     try:
         b = os.path.join(t, "deep", "build")
@@ -320,6 +322,16 @@ def fresh_home_behaves(source):
         check(r.returncode == 0 and gone(home) and os.path.isfile(os.path.join(td, ".shadercache", "a.bin")),
               "fresh_home: a green run deletes its home (an empty <home>/run kept: a row's cwd) and PROMOTES its grown cache as the shared one (%d %s)"
               % (r.returncode, r.stderr[-120:]))
+        # JAH_KEEP_HOME=1 (TOOLING-6 item 3): a DIAGNOSIS run keeps a GREEN run's home where it is and says so
+        kh = os.path.join(td, "x", "home-keep")
+        r = subprocess.run(["sh", fh, kh, "--", "sh", "-c", "echo 42 > %s/run/numbers.txt" % kh], capture_output=True,
+                           text=True, env=dict(os.environ, JAH_KEEP_HOME="1"))
+        check(r.returncode == 0 and os.path.isfile(os.path.join(kh, "run", "numbers.txt"))
+              and ("the green run's home is kept: " + kh) in r.stderr,
+              "fresh_home: JAH_KEEP_HOME=1 keeps a green run's home (its files read after the run) and prints its path (%d %s)"
+              % (r.returncode, r.stderr[-160:]))
+        r = subprocess.run(["sh", fh, kh, "--", "sh", "-c", "true"], capture_output=True)
+        check(r.returncode == 0 and gone(kh), "fresh_home: ...and the next run without it wipes that home as always")
         r = subprocess.run(["sh", fh, home, "--", "sh", "-c", "touch %s/run/x.png; exit 3" % home], capture_output=True)
         check(r.returncode == 3 and gone(home)
               and os.path.isfile(os.path.join(td, ".evidence", "home-a", "run", "x.png")),

@@ -32,7 +32,7 @@ def verdicts(out):
     return v
 
 def run(cmd, env=None):
-    e = dict(os.environ); e.update(env or {})
+    e = dict(os.environ); e.pop("JAH_KEEP_HOME", None); e.update(env or {})   # the default unless a case sets it
     for f in glob.glob("pool-logs/*.log"): os.unlink(f)
     r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=e, text=True, errors="replace")
     return r.returncode, r.stdout
@@ -262,6 +262,17 @@ rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", okapp, 
                 {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing")})
 check(rc3 == 0 and "FINDING: the kernel journal is unreadable" in out3 and "ARM nojournal.a PASS" in out3,
       "an unreadable kernel journal is a printed FINDING, not a red of the pool (devprocess.kernel_journal owns it)")
+# JAH_KEEP_HOME=1 (TOOLING-6 item 3, a diagnosis run): a PASSING arm's own output reaches the row's output too
+with open(okapp, "w") as f:
+    f.write("#!/usr/bin/env python3\nimport sys\na = sys.argv; p = a[a.index('--pool') + 1]\n"
+            "print('ARM-BEGIN %s.a' % p, flush=True)\nprint('the arm measured 17 px', flush=True)\n"
+            "print('ARM %s.a PASS 1' % p, flush=True)\n")
+kargs = [sys.executable, driver, "--pool", "keep", "--app", okapp, "--arm", "a", "x.js", "30"]
+rc5, out5 = run(kargs, {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": empty_journal.name})
+rc6, out6 = run(kargs, {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": empty_journal.name, "JAH_KEEP_HOME": "1"})
+check(rc5 == 0 and rc6 == 0 and "the arm measured 17 px" not in out5 and "| the arm measured 17 px" in out6
+      and "ARM keep.a PASS" in out6,
+      "JAH_KEEP_HOME=1 prints a PASSING arm's output (without it a green arm's output stays in pool-logs/)")
 shutil.rmtree(vdir, ignore_errors=True)
 os.unlink(empty_journal.name)
 
