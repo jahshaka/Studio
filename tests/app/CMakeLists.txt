@@ -40,12 +40,20 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (a hash-free selftest under the layer; it was in the lock by flake history only).
 # budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
+# THE DATA ROOT IS WIPED BEFORE EVERY RUN (2026-10-20): selftest-data persists across runs of one build dir, and a
+# JahLibrary.db left by an older build carries an older schema — the app's reset keeps the storages, wants their sidecar
+# directory, an older AssetStore has none, the library is REFUSED and the self-test exits 4 ("the self-test exited 4" on
+# main's build-linux in an 8-wide run; green in a fresh ship tree). A row owns its own state (shadercache.app 67cefee33,
+# api.contract cd0587fdc: the same fault).
+jah_fresh_home_fixture(app.engine_selftest_validation.fresh_root selftest_data_root "${_selftest_root}" LABELS "app")
+jah_ship_row(app.engine_selftest_validation.fresh_root)
 jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    FIXTURES_REQUIRED selftest_data_root
     TIMEOUT 660 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # app.startup_quiet — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
