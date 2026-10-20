@@ -275,57 +275,14 @@ target_link_libraries(jah_testmesh PUBLIC IrisGL Qt6::Core)
 # sprint's ship only, alone on the card, and are never served. A suite joins the list by a verdict, never by convenience.
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
-    # the timing suites of the push tier
-    app.input_keys app.play_select shadergraph.bake_output gi.budget
-    app.watchdog_stall
-    # ENGINE-UPGRADE-U3: a 7 ms UI stall's dropped headset refreshes (a GUARD since stage 5) and the extract at K = 100
-    vr.ui_stall gi.extract_cost vr.session_pace vr.xr_thread
-    # ENGINE-UPGRADE-U5 (the lead's verdict, decision 10: "The row `gi.scroll_slab.timing` IS a measure row - the lead's
-    # verdict: add it to the measuring list in the branch with this line quoted."): a scroll's GPU against a whole build's.
-    gi.scroll_slab.timing
-    # ENGINE-UPGRADE-U5 decision 9: "the measure row `engine.ray_update_cost` (ms per frame at N = 1,393 Bistro-like
-    # BLAS, 0 / 10 / 100 changes) run by hand."
-    engine.ray_update_cost
-    # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
-    # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
-    # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
-    gi.field_scroll gi.rt_reflect_cost
-    # D6B-GATE-SHAPE (audit §4 R3): timing ratios that sat under RUN_SERIAL only.
-    mirror.scale perf.epic_steady_state perf.drag_mirror_room perf.capture_off_is_free
-    # the stage-close timing rows: the wall-clock benchmark, the stereo frame budget, and the
-    # millisecond halves of the suites whose counts stay at push (tests/support/timingbars.h;
-    # audit §5 — F17's seven and the six beside them).
-    scenegraph.benchmark rigperf.benchmark gi.gather_cost vr.frame_budget
-    open.responsive.timing archive.responsive.timing avatar.responsive.timing
-    chain.hzb.timing engine.gpu_cull.timing gi.field_follows.timing ui.properties_filter.timing
-    ui.components.timing meshbake.cards.timing app.update_check.timing app.shutdown_order.timing
-    vr.warmup.timing scripting.e2e.editor_controls.timing
-    # TESTING-DEBTS-1 T10: the first create's 1000 ms bar (the push row keeps the counts).
-    threading.newproject_stall.timing
-    # TESTING-CLEANUP-2 P10e/P10f: the selection's and the recorder's millisecond bars
-    # (the gating row/pool arms keep the counts and print the milliseconds).
-    ui.selection_cost.timing capture.first_recording.timing capture.offline_unique.timing
-    # FRAME-MONITOR-DOOR-1 stage 4 (the read's item 6): the shader-cache save's milliseconds (the guard counts).
-    shadercache.save_off_frame.timing
-    # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
-    # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
-    # GPU work inside their window would print someone else's number.
-    scale.world scale.voxel_scroll scale.cluster_cut scale.decode scale.tlas scale.cpu_walks
-    scale.library
-    # ATOM-CLUSTER-CUT: the flat cut's milliseconds at 10k instances (D1's decision number).
-    scale.cut_cost
-    # ATOM-SHADOWS-1: the caster pass's CPU and GPU ms, cut against per-instance (paired arms).
-    scale.shadow_cut
-    # TEST-1 (the perf audit's F5): the frame's own GPU span against its monitor rows — a share
-    # of two GPU times read in one frame, which a sibling's GPU work inside the span would inflate.
-    scale.gpu_coverage
-    # ENGINE-UPGRADE-U4 stage 1: the render thread's CPU phases at 10k nodes (the drain, the sun trace, the GPU
-    # scene's compose) — milliseconds of CPU by design, and over a fixture's budget by price (a 10k world's settle).
-    frame.drain_cost_10k gi.trace_sun_cost engine.gpuscene_compose
-    # ENGINE-UPGRADE-U4 stage 5: the mirror's extract with 10k nodes moving (milliseconds of CPU, by hand).
-    mirror.extract_movers_10k
-    # ENGINE-UPGRADE-U4 stage 6: the physics step at 10k bodies and its overlap with the render thread's pool (by hand).
-    physics.step_cost physics.step_overlap)
+    # (TEST-CUT-1: the list is the ship set's measuring rows; the rest were archived with their rows)
+    archive.responsive.timing
+    scripting.e2e.editor_controls.timing
+    # TESTING-CLEANUP-2 P10f: the recorder's millisecond bars (the count and the bar in one row since the pool went).
+    capture.first_recording.timing
+    # D1-SCALE-FIXTURES: the scale world's timed walls — scale.cpu_walks is the scale prefix's ship row.
+    scale.cpu_walks
+)
 # THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
 # resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
 # time holds the card (scripts/gpu-exclusive.sh), and inside it ctest keeps each class to its width.
@@ -424,7 +381,8 @@ function(_jah_data _row _class)
 endfunction()
 
 # jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"] [TEST_WINDOW]] [TOKENS <k>]
-#             [FRAMES <n>] COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+#             [FRAMES <n>] [SHIP] COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+# SHIP (TEST-CUT-1): the row is one of THE SHIP SET (jah_ship_row below).
 # FRAMES <n> (TESTING-SPEED-A item 7; SPECS/TESTING_SPEED_SPEC.md §2 A8): THE FRAMES THE ROW RENDERS, stated — the test
 # property JAHSHAKA_TEST_FRAMES (a row declared by add_test / jah_gpu_exclusive_test sets the same property with
 # set_tests_properties). source.testing_rules reads the PROPERTY (ctest --show-only=json-v1) and reds a kept GPU row
@@ -446,7 +404,7 @@ endfunction()
 # COLD "<why>" — a row whose SUBJECT is the cold compile (a count of compiles a warm cache would hide, the cache itself):
 # no wrapper, no cache, the reason stated where the row is.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -498,17 +456,20 @@ function(jah_gpu_row _row)
     if(_declared)
         _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
+    if(G_SHIP)
+        jah_ship_row(${_row})
+    endif()
 endfunction()
 
-# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
-#                        [WORKING_DIRECTORY <dir>])
+# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> [SHIP]
+#                        COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
 # add_test() through the card's lock (scripts/gpu-exclusive.sh) on ALL the card's slots, labelled `measure`, whatever
 # the row's class (JAH_CLASS keeps it). `set_tests_properties` cannot change a registered COMMAND, so the wrapper is
 # applied at registration: a TARGET name as the first COMMAND word becomes $<TARGET_FILE:...> (it
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the measuring list changes by a verdict only")
@@ -556,6 +517,32 @@ function(jah_gpu_exclusive_test)
         _jah_test_boot_register(${G_NAME} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_measure_label [[${G_NAME}]])")
+    if(G_SHIP)
+        jah_ship_row(${G_NAME})
+    endif()
+endfunction()
+
+# THE SHIP SET (TEST-CUT-1; CLAUDE.md Testing, the owner's LAW of 2026-10-20): the rows `sprint.sh ship` runs, and
+# nothing else — one end-to-end row per subsystem, the six hashes, the sample boots, the sanitizers, the hygiene
+# rows. A row of the set carries the ctest LABEL `ship`: jah_gpu_row(… SHIP) and jah_gpu_exclusive_test(… SHIP) mark
+# their row, jah_ship_row(<row>…) marks a plain add_test() row. The label is appended at the END of the row's
+# directory (a site's own set_tests_properties(… LABELS …) replaces the list; the measure label waits the same way),
+# and jah_ship_closure_pass (the end of this file) gives it to every fixture setup and DEPENDS parent a ship row needs.
+# A ship row is priced at most 60 s in scripts/gate-times.txt (sprint.sh ship refuses one over it or unpriced;
+# source.testing_rules R8/R9). A spec's own rows are NOT marked: `spec.sh merge` archives them (archive/tests/<spec>/).
+function(jah_ship_row)
+    foreach(_t IN LISTS ARGV)
+        cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_ship_label [[${_t}]])")
+    endforeach()
+endfunction()
+function(_jah_ship_label _row)
+    get_test_property(${_row} LABELS _l)
+    if(NOT _l)
+        set(_l "")
+    endif()
+    list(APPEND _l ship)
+    list(REMOVE_DUPLICATES _l)
+    set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
@@ -831,17 +818,10 @@ add_subdirectory(sky)
 add_subdirectory(looks)
 add_subdirectory(distortion)
 add_subdirectory(assets)
-add_subdirectory(assetdelete)
-add_subdirectory(assetpaths)
-add_subdirectory(assetgc)
-add_subdirectory(assetmigrate)
-add_subdirectory(shadergraph)
 add_subdirectory(materialpreview)
 add_subdirectory(materialbundle)
-add_subdirectory(materialmembers)
 add_subdirectory(desktops)
 add_subdirectory(drawers)
-add_subdirectory(assetmeta)
 add_subdirectory(assettray)
 add_subdirectory(audiopeaks)
 add_subdirectory(scripting)
@@ -865,16 +845,7 @@ add_subdirectory(importasync)
 add_subdirectory(openasync)
 add_subdirectory(archiveasync)
 add_subdirectory(avatarasync)
-add_subdirectory(shutdown)
-# The command-line parser's contract (app.cli_options, ledger 150): what the
-# app REFUSES, and why 0 is still a legal --mcp-port.
-add_subdirectory(cli)
-# app.reset_library — `app.resetLibrary()` puts the installation back to a
-# first launch (owner review R10.2): the rows, the store's contents, the
-# project folders, and the fresh-install bootstrap after them.
-add_subdirectory(libraryreset)
 add_subdirectory(ui)
-add_subdirectory(avatar)
 # The shipped sample scenes on a VIRGIN HOME, one test each — the owner's
 # post-wipe first run (samples.cleanstart.*).
 add_subdirectory(samples)
@@ -911,26 +882,18 @@ add_subdirectory(hygiene)
 # GENERATED SHADER PIECES (HLMS_ADOPTION P5): the backend mechanism the shader
 # graph's emitter targets, and the emitter's own gates.
 add_subdirectory(pieces)
-add_subdirectory(apppaths)
-# WHO IS ALLOWED TO SEE A MODAL WINDOW (owner decision D3): the first-launch
-# greeting's driven-session predicate, src/app/firstrun.h.
-add_subdirectory(firstrun)
-add_subdirectory(update)
 # VR phase 1a's external-device route (SPECS/VR_SPEC.md §5/§6). Builds only where
 # libopenxr-dev and the Vulkan render system exist; SKIPS where monado-service is
 # not installed. Nothing here runs on a box with no VR stack.
 add_subdirectory(vr)
 
 # The tooling suites, and the measuring list's closure: every suite the list names is registered through
-# jah_gpu_exclusive_test (app.input_keys and app.play_select need xdotool/curl/jq/Xvfb, vr.warmup.timing the VR stack —
-# absent without them).
+# jah_gpu_exclusive_test. (The rows registered only where their tools exist — the private-Xvfb input drivers, the VR
+# stack's timing row — and their exemption were archived by TEST-CUT-1.)
 add_subdirectory(tooling)
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
-set(_gpu_optional app.input_keys app.play_select vr.warmup.timing vr.frame_budget)
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
-    # The rows registered only when their tools exist (the private-Xvfb input drivers, the
-    # VR stack) are exempt: a box without them registers neither the row nor the lock.
-    if(NOT _t IN_LIST _gpu_registered AND NOT _t IN_LIST _gpu_optional)
+    if(NOT _t IN_LIST _gpu_registered)
         # FATAL on the box the list was measured on; a port that skips a suite is told, not stopped.
         set(_sev WARNING)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -1101,121 +1064,24 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # served. A guard is never lost for its price: a row rewritten to its budget leaves this list (its line in gate-times.txt
 # from its own solo run).
 set(JAH_MEASURE_ROWS
-    app.device_loss_end
-    app.input_keys.fresh_home
-    app.play_select.fresh_home
-    app.shutdown_order.timing.fresh_home
-    archive.responsive
-    archive.responsive.fresh_home
     archive.responsive.timing.fresh_home
-    atom.cluster_crack
-    atom.cluster_cut
-    atom.coverage_trace
-    atom.dag_bound_bar
-    atom.dag_chain_validate
-    atom.decode_exact
-    atom.dolly_gate
-    atom.lod_bound_bar
-    atom.lod_switch
-    atom.lod_switch.fixture
-    atom.occlusion_exact
-    atom.removechild_leak
-    avatar.responsive.timing.fresh_home
-    bake.determinism
+    bake.determinism.dragon
+    bake.determinism.standin
+    bake.determinism.throws
     bundle.writer
-    engine.atom_draw
-    engine.atom_parity
     engine.particles_pfx2_asan
     engine.planar_asan
     gi.cascades_asan
-    gi.cast_shadow_gi
-    gi.chain_converge_scenes
-    gi.chain_converge_scenes.fresh_home
-    gi.contact_occlusion
-    gi.ddgi
-    gi.far_sun_clutter
-    gi.far_sun_share
-    gi.field_alias
-    gi.field_thin_wall
-    gi.gather
-    gi.gather_cards
-    gi.gather_estimator
-    gi.gather_plane
-    gi.gather_plane_target
-    gi.gather_plane_weight
-    gi.gather_reference
-    gi.gather_reference_target
-    gi.gather_stable
-    gi.hit_shade
-    gi.metal_bounce_gate
-    gi.probe_inputs
-    gi.reflect_fog
-    gi.reflect_mover
-    gi.rt_alpha_tested
     gi.rt_reflect_asan
-    gi.speckle
-    gi.voxel_coverage
-    gpu.cutout_soak
+    gpu.cutout_soak.primitives
+    gpu.cutout_soak.tornado
     hdr.drag_stable_asan
     hdr.meter_asan
-    lights.shadows
-    material.live_roundtrip
     math.parity
-    mirror.settle_incremental
-    mirror.settle_thumbnails
-    open.responsive.timing.fresh_home
-    perf.capture_bundle
-    perf.capture_bundle.capture_bundle.fresh_home
-    perf.capture_bundle.capture_quit.fresh_home
-    perf.capture_off_is_free.fresh_home
-    perf.freshhome.drag_mirror_room
-    perf.freshhome.epic_steady_state
-    perf.freshhome.hide_soak
-    perf.hide_soak
-    pool.gi_verbs_stage
-    pool.world_light_stage
-    samples.freshhome.session
-    samples.mirror_room_boots
-    samples.session
-    scale.assets
-    scale.atlas
-    scale.bake
-    scale.far_field
-    scale.hit_list
-    scale.levels
-    scale.library.fixture
-    scale.lights
-    scale.occlusion
-    scale.residency
-    scene.reopen_fidelity
-    scene.reopen_fidelity.fresh_home
-    scripting.e2e.ogre_ports
-    scripting.freshhome.ogre_ports
-    shader.async_soak
-    shader.live_compiles
-    shader.sample_opens_quiet
-    shadercache.app.churn
-    shadercache.container
-    shadercache.container_asan
-    shadercache.engine_pipelines
-    shadow.atom_parity
-    shadow.cutout_caster.churn
-    shadow.two_sided_caster.churn
-    skeletal.gpu_parity
     ssr.engine_asan
     test_engine
-    test_engine_asan
-    threading.freshhome.import_soak
-    threading.freshhome.newproject_stall_timing
-    threading.gi_resolve
-    threading.import_soak
-    threading.import_soak.no_groupless_texture
-    threading.mode
-    vr.eye_grade
-    vr.eye_grade.fresh_home
-    vr.frame_budget.fresh_home
-    vr.gather_stereo
-    vr.session
+    test_engine_asan.part1
+    test_engine_asan.part2
 )
 set_property(GLOBAL PROPERTY JAH_MEASURE_SEEN "")
 function(jah_measure_pass _dir)
@@ -1239,4 +1105,63 @@ foreach(_t IN LISTS JAH_MEASURE_ROWS)
     endif()
 endforeach()
 
-
+# THE SHIP SET'S CLOSURE (TEST-CUT-1): a ship row's fixture setups (FIXTURES_SETUP of a fixture it FIXTURES_REQUIRED)
+# and DEPENDS parents are part of it — `ctest -R` adds the setups itself, and the archive (spec.sh merge, the cut's
+# stage 4) keeps only labelled rows — so each takes the `ship` label too, to a fixed point.
+function(_jah_ship_collect _dir)
+    get_property(_tests DIRECTORY "${_dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        set_property(GLOBAL APPEND PROPERTY JAH_SHIP_ALL "${_t}")
+        set_property(GLOBAL PROPERTY JAH_SHIP_DIR_${_t} "${_dir}")
+    endforeach()
+    get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_sub IN LISTS _subs)
+        _jah_ship_collect("${_sub}")
+    endforeach()
+endfunction()
+function(jah_ship_closure_pass)
+    _jah_ship_collect("${CMAKE_CURRENT_SOURCE_DIR}")
+    get_property(_all GLOBAL PROPERTY JAH_SHIP_ALL)
+    set(_setup_of "")   # "<fixture>=<row>" pairs
+    foreach(_t IN LISTS _all)
+        get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+        get_property(_fs TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_SETUP)
+        foreach(_f IN LISTS _fs)
+            list(APPEND _setup_of "${_f}=${_t}")
+        endforeach()
+    endforeach()
+    set(_moved TRUE)
+    while(_moved)
+        set(_moved FALSE)
+        foreach(_t IN LISTS _all)
+            get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+            get_property(_l TEST ${_t} DIRECTORY "${_d}" PROPERTY LABELS)
+            if(NOT "ship" IN_LIST _l)
+                continue()
+            endif()
+            get_property(_need TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_REQUIRED)
+            get_property(_deps TEST ${_t} DIRECTORY "${_d}" PROPERTY DEPENDS)
+            set(_parents ${_deps})
+            foreach(_pair IN LISTS _setup_of)
+                string(REPLACE "=" ";" _p "${_pair}")
+                list(GET _p 0 _f)
+                list(GET _p 1 _r)
+                if(_f IN_LIST _need)
+                    list(APPEND _parents ${_r})
+                endif()
+            endforeach()
+            foreach(_r IN LISTS _parents)
+                get_property(_rd GLOBAL PROPERTY JAH_SHIP_DIR_${_r})
+                if(NOT _rd)
+                    continue()
+                endif()
+                get_property(_rl TEST ${_r} DIRECTORY "${_rd}" PROPERTY LABELS)
+                if(NOT "ship" IN_LIST _rl)
+                    set_property(TEST ${_r} DIRECTORY "${_rd}" APPEND PROPERTY LABELS ship)
+                    set(_moved TRUE)
+                endif()
+            endforeach()
+        endforeach()
+    endwhile()
+endfunction()
+jah_ship_closure_pass()

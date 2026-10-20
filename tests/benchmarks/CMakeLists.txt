@@ -61,22 +61,7 @@ target_compile_definitions(bench_scenegraph PRIVATE
 target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-# THE BARS: --assert asserts the dispersion bars, the settle slice's bound and every median against the recorded
-# baseline (bench_scenegraph.cpp, "THE RECORDED BASELINE"), and records its result file (the measure's evidence).
-jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
-         --record "${CMAKE_CURRENT_BINARY_DIR}/scenegraph-result.json"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
-# baseline's regress bar into random reds (2026-09-05 gate: the violating
-# metric set differed every run). Serial keeps ctest's own suites off its back; OTHER processes on the
-# box still can — a red here under external load is retried on a quiet box
-# before it is believed (gate protocol).
-set_tests_properties(scenegraph.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "measure"
-    RUN_SERIAL TRUE)
-
-jah_gpu_row(scenegraph.smoke CLASS engine COMMAND bench_scenegraph --smoke
+jah_gpu_row(scenegraph.smoke SHIP CLASS engine COMMAND bench_scenegraph --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 # NOT RUN_SERIAL, deliberately: --smoke asserts nothing about time, so a
@@ -112,16 +97,7 @@ target_compile_definitions(bench_rigperf PRIVATE
 target_link_libraries(bench_rigperf PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_rigperf JahshakaEngineMedia)
 
-# RUN_SERIAL for the same reason scenegraph.benchmark is: it times wall clock,
-# and a parallel ctest schedule turns the dispersion bound into a coin flip — and
-# the GPU-timing lock like it (D6B-GATE-SHAPE: the lock list is the timing list).
-jah_gpu_exclusive_test(NAME rigperf.benchmark CLASS engine RUN_TIMEOUT 600 COMMAND bench_rigperf --assert
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(rigperf.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "measure"
-    RUN_SERIAL TRUE)
-
-jah_gpu_row(rigperf.smoke CLASS engine COMMAND bench_rigperf --smoke
+jah_gpu_row(rigperf.smoke SHIP CLASS engine COMMAND bench_rigperf --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES

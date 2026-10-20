@@ -19,6 +19,7 @@ set_target_properties(test_lod_padding PROPERTIES
 target_link_libraries(test_lod_padding PRIVATE OgreNext)
 add_test(NAME lod.padding_untouched COMMAND test_lod_padding
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(lod.padding_untouched)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(lod.padding_untouched PROPERTIES LABELS "lod")
 jah_no_display(lod.padding_untouched)
 jah_lsan_lane(lod.padding_untouched)

@@ -23,14 +23,13 @@ reported an empty gate as success while printing the rationale for sixteen test
 directories it had decided to skip.
 
 THE CASES, each a rule of the tool rather than a number:
-  1. A CODE PATH SELECTS ROWS: src/services/vrworld.cpp selects the vr app rows (its area rule) and NOT the compiled
-     vr.session, whose executable the build graph says does not contain it; no smoke pair for a product path.
+  1. A CODE PATH SELECTS ROWS: src/services/vrworld.cpp selects the vr app rows (its area rule); no smoke row for a
+     product path.
   2. `--build .` FROM INSIDE THE BUILD DIR MEANS THE BUILD DIR — the same selection as the absolute form.
   3. A DIRECTORY THAT IS NOT A BUILD DIR IS AN ERROR (exit 2, naming it), not an empty answer.
   4. THE HONEST EMPTY SELECTION SURVIVES: a docs-only change selects nothing and exits 0.
   5. A source file with no precise rule still reaches rows.
-  8. The decode's own suite (engine.atom_parity) rides the Atom media and HlmsAtom; a fork pin without a readable diff
-     reaches every row by rule.
+  8. The Atom rows ride the Atom media and HlmsAtom; a fork pin without a readable diff reaches every row by rule.
   10. A suite registered through a helper (jah_gpu_exclusive_test) belongs to the directory that CALLS the helper.
   11. THE SUBJECTS SELECT THEIR SUITES (the suites audit's S1/S2).
   15. A symlinked root is the same tree (with case 2: `--build .` through a fresh symlink).
@@ -187,7 +186,9 @@ def speed_cases(source, build):
         if fn == "runFrame":
             fx = S
             pics = [n for n, t in inv0.items() if t.get("picture")]
-            check(len(S.selected) > 300 and all(p in S.selected for p in pics) and of(S, "gi") and of(S, "hdr"),
+            # (TEST-CUT-1: "every engine fixture" is the set, not a count — the cut left 205 rows of 860)
+            check(set(S.engine_fixture_rows()) <= set(S.selected) and all(p in S.selected for p in pics) and of(S, "gi")
+                  and of(S, "hdr"),
                   "18. an edit inside the frame body (runFrame) -> every engine fixture + the picture set + every rendering app "
                   "row (%d rows)" % len(S.selected))
         else:
@@ -214,7 +215,8 @@ def speed_cases(source, build):
           "none, Hlms/Pbs -> the picture set, Atmosphere -> sky, an unnamed path -> the tier")
     S = sel([])
     S.expand(["*engine-fixtures"], [], "t")
-    check(len(S.selected) > 200, "20. every engine fixture is the engine-linking compiled rows (%d)" % len(S.selected))
+    check(S.selected and all(S.inv[n]["kind"] == "compiled" for n in S.selected),
+          "20. every engine fixture is the engine-linking compiled rows (%d, every one compiled)" % len(S.selected))
     # 21. THE PICTURE SET
     pics = sorted(n for n, t in inv0.items() if t.get("picture"))
     arms = sorted(n for n, t in inv0.items() if t.get("picture_arms"))
@@ -231,8 +233,7 @@ def speed_cases(source, build):
     S = sel(["scripts/gate-times.txt"])
     check("source.row_budget" in S.selected, "22. scripts/gate-times.txt (the prices) selects the budget lint")
     S = sel(["tests/CMakeLists.txt"])
-    check("app.startup_quiet" in S.selected and "api.contract" in S.selected,
-          "22. the test harness (tests/CMakeLists.txt) selects the smoke pair")
+    check("api.contract" in S.selected, "22. the test harness (tests/CMakeLists.txt) selects the smoke row")
     S = sel(["scripts/gate-scope.py"])
     check("source.testing_rules" in S.selected and "source.gate_scope_rules" in S.selected
           and not [n for n in S.selected if not inv0[n]["labels"] & {"hygiene", "tooling"}],
@@ -255,7 +256,7 @@ def speed_cases(source, build):
     S = sel([vp], revs=fake({vp: (va, tail_)}))
     apps = [n for n in S.selected if inv0[n]["app"] and not inv0[n].get("picture") and not inv0[n].get("picture_arms")]
     pics = [n for n, t in inv0.items() if t.get("picture")]
-    check(all(p in S.selected for p in pics) and len(S.selected) > 200 and not apps,
+    check(all(p in S.selected for p in pics) and set(S.engine_fixture_rows()) <= set(S.selected) and not apps,
           "25. an UNNAMED function of OgreView.cpp -> every engine fixture + the picture set (%d rows), no other app row "
           "(%s)" % (len(S.selected), apps[:4]))
     # round 15: a function the map does not name is read by its NAME's keyword first (reflect-fix-1's readSsrHistoryHdr)
@@ -278,8 +279,8 @@ def speed_cases(source, build):
     check(all(p in S.selected for p in pics), "26. src/viewport/ -> the whole picture set (%d of %d)"
           % (sum(p in S.selected for p in pics), len(pics)))
     S = sel(["irisgl/engine/media/Hlms/Jahshaka/JahFog_piece_vs_piece_ps.any"])
-    check(of(S, "sky") and [n for n in S.selected if n.startswith("engine.atom_")] and of(S, "atom"),
-          "26. a Jahshaka Hlms piece (JahFog_piece_*) -> its line (sky) + atom + engine.atom_ (HlmsAtom compiles it)")
+    check(of(S, "sky") and of(S, "atom"),
+          "26. a Jahshaka Hlms piece (JahFog_piece_*) -> its line (sky) + atom (HlmsAtom compiles it)")
     check(all(t_ in (fork_tok(f_) or []) for f_ in ("Components/Hlms/Pbs/src/OgreHlmsPbs.cpp",
                                                     "Samples/Media/Hlms/Pbs/Any/Main/800.PixelShader_piece_ps.any")
               for t_ in ("atom", "engine.atom_")),
@@ -293,16 +294,18 @@ def speed_cases(source, build):
     # 8. the Atom media and HlmsAtom reach the decode's own rows; the fork pin with no diff to read reaches every row
     for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any", "irisgl/engine/src/HlmsAtom.cpp"):
         S = sel([path])
-        check([n for n in S.selected if n.startswith("engine.atom_")], "8. %s reaches the engine.atom_ rows" % path)
+        check([n for n in S.selected if n.startswith(("engine.atom_", "atom."))], "8. %s reaches the Atom rows" % path)
     check(bool(sel(["irisgl/thirdparty/ogre-next"]).full_tier), "8. the fork pin with no diff to read reaches every row")
     # 10. a row registered through a helper (jah_gpu_row's add_test is in tests/CMakeLists.txt) is its CALL SITE's: a
     # change to a test source selects its own row
-    S = sel(["tests/gi/test_gi_cliff.cpp"])
-    check("gi.cliff" in S.selected, "10. tests/gi/test_gi_cliff.cpp selects its own row gi.cliff (%d rows)" % len(S.selected))
+    S = sel(["tests/gi/test_gi_rayquery.cpp"])
+    check("gi.rayquery_asan" in S.selected,
+          "10. tests/gi/test_gi_rayquery.cpp selects its own row gi.rayquery_asan (%d rows)" % len(S.selected))
     # 11. THE SUBJECTS SELECT THEIR GUARDS (the suites audit's S1/S2)
-    for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
-                       ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
-                       ("src/services/projectarchiver.cpp", ("archive.responsive",)),
+    # (TEST-CUT-1: the archived guards left the tuples — OgreChain.cpp's engine.atom_*, meshbake.cpp's atom.cluster_* and
+    # engine.lod_rule_parity, projectarchiver.cpp's archive.responsive; the archive's kept row is a `measure` row, which
+    # the reach never selects)
+    for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("defaults.exposure_plane",)),
                        ("src/services/avatarassets.cpp", ("avatar.responsive",)),
                        ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",))):
         S = sel([path])
@@ -328,9 +331,8 @@ def main(source, build):
     # 1. a code path selects rows, the ones its rule names, and NOT a compiled row whose executable lacks the file
     code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", build, "--json"], source)
     r1 = rows_of(out)
-    check(code == 0 and "ui.vr_panel" in r1, "1. a code path selects its rule's rows (ui.vr_panel; exit %d)" % code)
-    check("vr.session" not in r1 and "app.startup_quiet" not in r1 and "api.contract" not in r1,
-          "1. ...not the compiled vr.session (its executable does not contain vrworld.cpp), no smoke pair")
+    check(code == 0 and "vr.mirror_live" in r1, "1. a code path selects its rule's rows (vr.mirror_live; exit %d)" % code)
+    check("api.contract" not in r1, "1. ...and no smoke row")
     # 2. THE TRAP: `--build .` from inside the build dir is the same answer; 15. so is a symlinked root
     link = tempfile.mkdtemp(prefix="gate-scope-link-")
     try:

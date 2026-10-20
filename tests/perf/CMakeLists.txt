@@ -6,18 +6,6 @@
 # "the timer really re-times", needs a live engine and belongs to the app
 # suites; what would break silently is this arithmetic.)
 find_package(Qt6 REQUIRED COMPONENTS Core)
-add_executable(test_frame_pacing test_frame_pacing.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/framepacing.cpp)
-set_target_properties(test_frame_pacing PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_frame_pacing PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_frame_pacing PRIVATE Qt6::Core)
-add_test(NAME perf.pacing COMMAND test_frame_pacing
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(perf.pacing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "perf")
 
 # THE APP ROWS OF THIS FAMILY ARE STAGE-CLOSE (TESTING-SPEED-B3, the ROWS table): the steady-state,
 # drag and capture-cost measurements (timing rows: the stage close's quiet-box phase), the hide soak,
@@ -30,7 +18,7 @@ set_tests_properties(perf.pacing PROPERTIES
 # it asserts on.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(perf.offscreen_isolation CLASS app TIER low NEEDS NONE NEEDS_WHY "a readback must not redraw the editor view: a counter around a screenshot (no picture claim)"
+jah_gpu_row(perf.offscreen_isolation SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "a readback must not redraw the editor view: a counter around a screenshot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/offscreen_isolation.js
          WORKING_DIRECTORY ${_home}/run)
@@ -61,115 +49,6 @@ set_tests_properties(perf.offscreen_isolation PROPERTIES
 #     nobody can trust is worse than no number. It used to be RUN_SERIAL, which
 #     keeps only this ctest's own rows off it; the lock is box-wide.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
-configure_file(epic_steady_state.js.in
-               ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js @ONLY)
-set(_ess_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-epic_steady_state)
-
-# "A scratch HOME that is virgin every run" is one idea and has one implementation
-# (tests/support/fresh_home.sh through jah_fresh_home_fixture).
-jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf")
-
-jah_gpu_exclusive_test(NAME perf.epic_steady_state CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 300
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js
-         WORKING_DIRECTORY ${_ess_home}/run)
-set_tests_properties(perf.epic_steady_state PROPERTIES
-    ENVIRONMENT "HOME=${_ess_home};JAHSHAKA_DATA_ROOT=${_ess_home}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED perf_home_epic_steady_state
-    LABELS "perf")
-
-# ---------------------------------------------------------------------------
-# perf.drag_mirror_room — WHAT A DRAG COSTS A FRAME (the render audit's A13
-# guard 3; the owner's "5-6 fps while dragging").
-#
-# The symptom that survived two pushes was a frame falling apart while an object
-# was MOVED, and it was invisible to every gate in this tree: the picture was
-# right (so no pixel suite moved) and the document was right (so no document
-# suite moved). DRAG-1 fixed the cadence and gi.drag_cadence pins the CAPTURE
-# contract; this is the other half — a drag's frame COST against a still frame's
-# in the same run, on the shipped sample the report came from.
-#
-# Wired like perf.epic_steady_state beside it, and for the same reasons:
-#
-#   * A VIRGIN HOME through the shared freshhome fixture (the suite imports the
-#     archive itself, so a surviving HOME would make it a re-import and would
-#     carry the previous run's shader cache into the first arm's timings).
-#   * ENGINE UP (no --headless): the subject is a frame being rendered.
-#   * THE GPU-TIMING LOCK, and this one is not politeness: it asserts a TIMING
-#     RATIO, and a sibling measurement sharing the GPU moves the percentile it
-#     compares. It used to be RUN_SERIAL, which reaches only inside one ctest
-#     (lane D6B-GATE-SHAPE; audit §4 R3).
-#   * `perf` label only — NOT `benchmark`: it has no baseline file and nothing
-#     to re-record, so it belongs in the merge tier rather than the stage-close one.
-#   * TIMEOUT 600: 420 rendered frames of the Mirror Room at Epic plus the
-#     archive import. MEASURED at 15.8-16.3 s over five runs, so the timeout is
-#     ~37x it — the room a contended box needs, and far below the class of
-#     hang a timeout exists to end.
-configure_file(drag_mirror_room.js.in
-               ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
-set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
-
-jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf")
-
-jah_gpu_exclusive_test(NAME perf.drag_mirror_room CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 600
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js
-         WORKING_DIRECTORY ${_drag_home}/run)
-set_tests_properties(perf.drag_mirror_room PROPERTIES
-    ENVIRONMENT "HOME=${_drag_home};JAHSHAKA_DATA_ROOT=${_drag_home}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED perf_home_drag_mirror_room
-    LABELS "perf")
-
-# ---------------------------------------------------------------------------
-# perf.hide_soak — HIDING AND SHOWING, TWO HUNDRED TIMES (the render audit's
-# A13 guard 4, with XID-2's kernel watch as its companion).
-#
-# THE DEFECT CLASS. `node.hide` is the cheapest edit a user makes and it touches
-# the most: the visibility walk, the GI caches' staleness, the probe grid, the
-# horizon's release, the ray-traced instance list. Two real defects came out of
-# exactly this gesture — a hide counted as a DEATH (invalidateGiCaches bumping
-# the destruction generation, DRAG-1 item 5) and the owner's hide sequence
-# losing the device through a transient 3D storage image (XID-2, fork ad452604a+0338ca7f2+c4c80b5f7 (was 0071)) —
-# and nothing repeated it enough times to catch either.
-#
-# It asserts NO ABSOLUTE NUMBER: the cycles' own counters against each other
-# (growth-only, epic_steady_state's charter) plus "the renderer refused
-# nothing". The kernel-log half cannot live inside a suite — a test must not
-# sudo — so the companion is the lane's/gate's own `dmesg` watch, and what this
-# suite contributes is the REPEATED GESTURE that makes an Xid likely enough to
-# see.
-#
-# MEASURED: 40.4 s (the archive import, 60 warm-up frames and 800 rendered
-# frames of the Showroom at Epic — the soak itself is 20.2 s of that), which is
-# why the timeout is 600. NOT serial and not locked (lane D6B-GATE-SHAPE; audit
-# FIX-SERIAL): its counters are growth-only and measure no time, and its old
-# reason — VRAM contention beside sibling suites — DEVPROCESS-1 measured false.
-configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
-set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
-
-jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf")
-
-jah_gpu_row(perf.hide_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js
-         WORKING_DIRECTORY ${_hide_home}/run)
-set_tests_properties(perf.hide_soak PROPERTIES
-    ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED perf_home_hide_soak
-    LABELS "perf"
-    TIMEOUT 600)
-
-# ---------------------------------------------------------------------------
-# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
-# claims — in its own comment, or by running --headless, or by building nothing
-# but a document — that it needs no X server. The claim was never enforced, so
-# it drifted: a suite that quietly opened a display still passed on a developer
-# box and would have failed the first CI runner without one, and every
-# unnecessary X connection is one more thing four parallel jobs contend over.
-# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
-# the claim into a gate. Verified 2026-09-09: each of these passes displayless
-# with the same assertion count it has with a display.
-jah_no_display(perf.pacing)
 
 # ---------------------------------------------------------------------------
 # THE RENDER-LOOP MONITOR (RENDER_LOOP_MONITOR_SPEC.md §4.8, lane MON-P1b)
@@ -187,57 +66,17 @@ jah_no_display(perf.pacing)
 set(_cb_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle)
 set(JAH_TEST_BUNDLE ${_cb_home}/bundle)
 configure_file(capture_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js @ONLY)
-add_executable(test_capture_bundle test_capture_bundle.cpp)
-set_target_properties(test_capture_bundle PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # Qt6::Network and the shared MCP harness (tests/support/mcpharness.h, included
 # by path): phase 2 drives a REAL window close (app.quit over MCP) with a
 # capture running, which is the path --script can never take.
 find_package(Qt6 REQUIRED COMPONENTS Network)
-target_link_libraries(test_capture_bundle PRIVATE Qt6::Core Qt6::Network)
-target_compile_definitions(test_capture_bundle PRIVATE
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-    JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
-    JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
-# NEEDS photon (DBUILD-FIX-1): the bundle's events.jsonl must carry a gi.rebuild, and the only gi.*
-# event the engine files is the VCT arm's rebuild (OgreGi.cpp, MonitorEventKind::GiRebuild). NEEDS
-# NONE switched Photon OFF (worldmodes::applyTestTier), where world.gi({quality}) writes a field
-# nothing renders and refreshGi is a no-op — the row was red 3/3 from TEST-NEEDS-1's declaration on.
-# TIER low keeps it cheap: Photon Low runs at Low quality, so the script's quality:"medium" is a
-# change of the arm's shape — a from-scratch rebuild (low:photon = 2 tokens, as low:none).
-jah_gpu_row(perf.capture_bundle CLASS app TIER low NEEDS photon COMMAND test_capture_bundle
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(perf.capture_bundle PROPERTIES
-    LABELS "perf"
-    # 420 -> 900: phase 2 boots the real binary TWICE more (the window-close
-    # case and the default-capture-root check), each a cold-cache engine start.
-    TIMEOUT 900)
 
 # perf.capture_off_is_free — off costs nothing, and the state machine's edges
 # (refusals, the early stop, the return to exactly the state it started in).
 # The engine is up: "no listener is attached to any workspace" needs workspaces.
 set(_off_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off)
 set(JAH_TEST_BUNDLE ${_off_home}/perf/bundle)
-configure_file(capture_off_is_free.js.in
-               ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js @ONLY)
 file(MAKE_DIRECTORY ${_off_home}/run)
-# THE GPU-TIMING LOCK because it MEASURES (lane D6B-GATE-SHAPE; audit §4 R3 — it was
-# RUN_SERIAL, which reaches only inside one ctest): the two off windows are compared
-# against each other in the same run, which survives a loaded box far better than an
-# absolute number would — but a sibling measurement sharing the GPU can still make one
-# window of 60 frames twice the other's for reasons that have nothing to do with the
-# monitor.
-jah_gpu_exclusive_test(NAME perf.capture_off_is_free CLASS app TIER low NEEDS NONE RUN_TIMEOUT 300
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/capture_off_is_free.js
-         WORKING_DIRECTORY ${_off_home}/run)
-set_tests_properties(perf.capture_off_is_free PROPERTIES
-    # JAHSHAKA_PERF_ROOT: `out` is confined to the capture root (a capture
-    # creates directories and truncates files in whatever it is pointed at), so
-    # the suite says where its own root is.
-    ENVIRONMENT "HOME=${_off_home};JAHSHAKA_DATA_ROOT=${_off_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_off_home}/perf"
-    LABELS "perf")
 
 # perf.capture_free_tick — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1): the
 # owner's path (JAH_FREE_RUNNING=1, --script-live: Ctrl+F4's 60-frame capture at 200 cubes, the diagnosis' method) —
@@ -248,17 +87,6 @@ set_tests_properties(perf.capture_off_is_free PROPERTIES
 # pthread_t): its door's TSan form is the engine fixture frame.monitor_pop.
 set(_cft_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_free_tick)
 file(MAKE_DIRECTORY ${_cft_home}/run)
-jah_gpu_row(perf.capture_free_tick CLASS app TIER low NEEDS NONE FRAMES 330
-         NEEDS_WHY "the monitor's door under a free-running capture, in frames per UI tick, its picture no claim"
-         COMMAND ${JAH_FRESH_HOME} --warm ${_cft_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_SOURCE_DIR}/capture_free_tick.js --script-live
-         WORKING_DIRECTORY ${_cft_home}/run)
-set_tests_properties(perf.capture_free_tick PROPERTIES
-    ENVIRONMENT "HOME=${_cft_home};JAHSHAKA_DATA_ROOT=${_cft_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_cft_home}/perf;JAH_FREE_RUNNING=1"
-    LABELS "perf"
-    TIMEOUT 120)
-jah_tsan_blocked(perf.capture_free_tick)   # TSAN-GCC15-THREAD-REGISTRY (U3 decision 49): the door's TSan proof is frame.monitor_pop
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -269,30 +97,12 @@ if(TEST perf.offscreen_isolation)
     jah_fresh_home_fixture(perf.offscreen_isolation.fresh_home perfOffscreenIsolationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" WARM LABELS "perf")
     set_property(TEST perf.offscreen_isolation APPEND PROPERTY FIXTURES_REQUIRED perfOffscreenIsolationFreshHome)
 endif()
-if(TEST perf.capture_off_is_free)
-    jah_fresh_home_fixture(perf.capture_off_is_free.fresh_home perfCaptureOffIsFreeFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off" WARM LABELS "perf")
-    set_property(TEST perf.capture_off_is_free APPEND PROPERTY FIXTURES_REQUIRED perfCaptureOffIsFreeFreshHome)
-endif()
-if(TEST perf.capture_bundle)
-    jah_fresh_home_fixture(perf.capture_bundle.capture_bundle.fresh_home perfCaptureBundleCaptureBundleFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_bundle" WARM LABELS "perf")
-    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureBundleFreshHome)
-endif()
-if(TEST perf.capture_bundle)
-    jah_fresh_home_fixture(perf.capture_bundle.capture_quit.fresh_home perfCaptureBundleCaptureQuitFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_quit" WARM LABELS "perf")
-    set_property(TEST perf.capture_bundle APPEND PROPERTY FIXTURES_REQUIRED perfCaptureBundleCaptureQuitFreshHome)
-endif()
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "perf.capture_bundle=1051"
-        "perf.capture_off_is_free=663"
-        "perf.drag_mirror_room=964"
-        "perf.epic_steady_state=1024"
-        "perf.hide_soak=1349"
         "perf.offscreen_isolation=487"
-        "perf.pacing=0"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

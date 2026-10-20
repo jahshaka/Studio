@@ -18,6 +18,7 @@ add_test(NAME api.contract
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_SOURCE_DIR}/docs/SCRIPTING.md"
          WORKING_DIRECTORY ${_home}/run)
+jah_ship_row(api.contract)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(api.contract PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     TIMEOUT 120

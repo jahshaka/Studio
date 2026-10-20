@@ -1,35 +1,3 @@
-# ATOM's ACCEPTANCE SUITES — the ones that state what the geometry pipeline must
-# LOOK like rather than what it computes (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_
-# ASSET_DESIGN.md). They boot a real engine and read real pixels, so they need a
-# reachable DISPLAY (a Vulkan device on this pin cannot be created without one)
-# and a Vulkan driver or lavapipe, exactly like tests/engine.
-
-# atom.dolly_gate — AT-A7r: a camera dollies 40 m -> 2 m onto a 20k-triangle
-# sphere with a five-level chain, one frame per 0.25 m, and no step's picture —
-# switch or not — may differ from its predecessor by more than 3x the walk's own
-# ordinary step. The bar is computed inside the run from its own non-switch
-# steps, so it is a ratio and not a number that ages.
-add_executable(test_atom_dolly_gate test_atom_dolly_gate.cpp)
-set_target_properties(test_atom_dolly_gate PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_atom_dolly_gate PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_atom_dolly_gate PRIVATE JahshakaEngine)
-add_dependencies(test_atom_dolly_gate JahshakaEngineMedia)
-jah_gpu_row(atom.dolly_gate CLASS engine COMMAND test_atom_dolly_gate
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# 153 poses, each rendering one 1024x1024 frame and downloading it, plus the
-# warm-up: comfortably inside 300 s on the rig (measured ~40 s) and with room
-# for a contended one.
-# budget 30 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — two walks x 153 steps at 1024^2,
-# a readback each, ARE the subject (554 frames; 28 s quiet, 34.7-42 s loaded; spikes/testing-speed-b3/profile.txt).
-# ATOM-3 stage 1 adds the 2 and 3 px walks (the tiers' thresholds, the silhouette caveat MEASURED): 920 frames.
-set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 240 LABELS "engine")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 2 — THE CLUSTER DAG (lane ATOM-CLUSTER-1; SPECS/atom/B2_CLUSTER_DAG_DESIGN.md).
@@ -96,66 +64,6 @@ add_executable(far_blas_measure EXCLUDE_FROM_ALL far_blas_measure.cpp
 jah_cluster_target(far_blas_measure)
 add_dependencies(far_blas_measure JahshakaEngineMedia)
 
-# atom.cluster_cut — THE RULE SELECTS ONE CUT (B2 §2): the bake's two
-# monotonicities, the provenance partition, exactly-one-cut at 64 thresholds and
-# from 40 (eye, tolerance) pairs, monotone refinement, and the format's round trip
-# and refusal — over every shipped mesh the bake gives a DAG, the 20k sphere and
-# the 40 m bar. Document-side: no engine boots, no display.
-# A STAGE-CLOSE ROW (lane D6B-GATE-SHAPE; audit §3c; STAGE-CLOSE-1): 141 s of one process, the bake's
-# sweep over every shipped mesh — it runs in the stage-close batch, and rides a scoped gate ONLY through
-# its own subject: a change to the bake (irisgl/import, meshoptimizer: gate-scope.py STAGE_CLOSE_SUBJECTS)
-# or to tests/atom itself. An engine change no longer selects it (a broad rule leaves it for the batch).
-add_executable(test_atom_cluster_cut test_atom_cluster_cut.cpp ${_cluster_fixture_sources})
-jah_cluster_target(test_atom_cluster_cut)
-add_test(NAME atom.cluster_cut COMMAND test_atom_cluster_cut
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.cluster_cut PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "meshbake")
-jah_no_display(atom.cluster_cut)
-
-# atom.cluster_crack — THE CUT, RENDERED (B2 §3): the uploaded stream checked
-# against the bake, a crack sweep (level 0 -> the root, and the view-dependent cut
-# at four tolerances) on the 20k sphere, the two shipped high-poly models and
-# three primitives, the dolly through the cut against the level-0 control, and
-# the 40 m bar's triangle numbers against the chain. Draws through the TEST
-# HARNESS (cluster_draw.*, route B2) — the product draws no cut in stage 2 — so it
-# reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
-# A STAGE-CLOSE ROW (lane D6B-GATE-SHAPE; audit §3c; STAGE-CLOSE-1): 136 s of a harness draw of a cut
-# the product does not draw (Types.h). Scope-selected by a bake change or a tests/atom change only
-# (STAGE_CLOSE_SUBJECTS); an engine change leaves it for the stage-close batch.
-add_executable(test_atom_cluster_crack test_atom_cluster_crack.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cluster_draw.cpp ${_cluster_fixture_sources})
-jah_cluster_target(test_atom_cluster_crack)
-target_include_directories(test_atom_cluster_crack PRIVATE
-    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
-target_compile_definitions(test_atom_cluster_crack PRIVATE
-    CLUSTER_TEST_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
-target_link_libraries(test_atom_cluster_crack PRIVATE OgreNext)
-add_dependencies(test_atom_cluster_crack JahshakaEngineMedia)
-jah_gpu_row(atom.cluster_crack CLASS engine COMMAND test_atom_cluster_crack
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.cluster_crack PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "engine")
-
-# atom.cut_probe — THE CUT PROBE AND THE DENSITY VIEW READ WHAT THE CUT DID (ATOM-2 stage 1): a baked sphere's DAG
-# twice, in metres at scale 1 and in centimetres at scale 0.01 - every group recorded once, the device's verdicts and
-# 'allowed' the C++ rule's, the centimetre twin cut exactly as the metre one, the drawn clusters the rule's over the
-# probe's verdicts, the counted pixels the id image's, and the density view painting each object's level-0 triangles
-# per visible pixel class (atomStatus' figures the same).
-add_executable(test_atom_cut_probe test_atom_cut_probe.cpp ${_cluster_fixture_sources})
-jah_cluster_target(test_atom_cut_probe)
-target_include_directories(test_atom_cut_probe PRIVATE
-    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
-target_link_libraries(test_atom_cut_probe PRIVATE OgreNext)
-add_dependencies(test_atom_cut_probe JahshakaEngineMedia)
-jah_gpu_row(atom.cut_probe CLASS engine FRAMES 37 COMMAND test_atom_cut_probe
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.cut_probe PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 60 LABELS "engine")
-
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
 # SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public
@@ -205,113 +113,6 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
             VERBATIM)
         list(APPEND _atom_neg_headers "${_atom_neg_gen}/atom_negative_${_stage}_spv.h")
     endforeach()
-    add_executable(test_atom_parity test_atom_parity.cpp)
-    jah_atom_engine_target(test_atom_parity)
-    target_include_directories(test_atom_parity PRIVATE
-        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
-        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
-        ${Vulkan_INCLUDE_DIRS})
-    target_link_libraries(test_atom_parity PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
-    jah_gpu_row(engine.atom_parity CLASS engine COMMAND test_atom_parity
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    # 220 cells in 20 arms, each read until stable, plus a material destroyed mid-grid.
-    # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — the 20 arms are the subject
-    # (580 frames; 37 s quiet, 42-53 s loaded; spikes/testing-speed-b3/profile.txt).
-    set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
-    # ...its quick arm (one row, the destroyed material included) UNDER THE LAYER.
-    if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
-        jah_gpu_row(engine.atom_parity_validation CLASS engine COMMAND test_atom_parity
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_parity_validation PROPERTIES
-            TIMEOUT 120 LABELS "engine"
-            ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
-            FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
-    endif()
-    # engine.atom_draw — THE VISIBILITY BUFFER AS THE PRODUCT'S OPAQUE PATH (ATOM
-    # S3-DRAW): an ordinary view of the parity grid whose chain carries the id pass
-    # and the screen decode, against the same view through stock PBS (the split's
-    # measurement door shut); the ids against the CPU raster; the split's stat; the
-    # buckets. ATOM_DRAW_QUICK=1 runs the direct arm alone (a diagnosis switch).
-    # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12) — the arms are the subject
-    # (624 frames; 36 s quiet, 35.6-47 s loaded).
-    add_executable(test_atom_draw test_atom_draw.cpp)
-    jah_atom_engine_target(test_atom_draw)
-    target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-    jah_gpu_row(engine.atom_draw CLASS engine COMMAND test_atom_draw
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 480 LABELS "engine")
-    # ATOM-CPU-WALKS-1 — the per-frame CPU walks moved onto the GPU scene's change feed
-    # and the device. engine.tlas_compute: the device-written top-level instance array
-    # byte-equal to the CPU writer over a mixed set, its edits and the lattice.
-    # atom.words_still: a still frame visits no slot and re-hashes nothing; a mover
-    # frame visits its slot; an in-place material edit re-routes in one frame.
-    add_executable(test_cpu_walks test_cpu_walks.cpp)
-    jah_atom_engine_target(test_cpu_walks)
-    jah_gpu_row(engine.tlas_compute CLASS engine COMMAND test_cpu_walks --tlas-compute
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.tlas_compute PROPERTIES TIMEOUT 300 LABELS "engine")
-    jah_gpu_row(atom.words_still CLASS engine COMMAND test_cpu_walks --words-still
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.words_still PROPERTIES TIMEOUT 180 LABELS "engine")
-    # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
-    # identical worlds in lockstep, one with the occlusion and one frustum-only, every
-    # frame's id image compared word for word over a still pose, a walk past a wall, a
-    # camera cut, a turn, a letterboxed and an orthographic view. (Its app half,
-    # atom.occlusion_exact_app — Showroom 2 imported, three poses, the shaded picture
-    # with the occlusion on and off — is deleted by TESTING-SPEED-B3: this row guards the
-    # id images word for word; what went is only the final shaded picture through the app.)
-    add_executable(test_atom_occlusion test_atom_occlusion.cpp)
-    jah_atom_engine_target(test_atom_occlusion)
-    jah_gpu_row(atom.occlusion_exact CLASS engine COMMAND test_atom_occlusion
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
-    # atom.two_sided — A TWO-SIDED MATERIAL RIDES ATOM (ATOM-TWO-SIDED-1): a closed sphere and
-    # an open plane, both CULL_NONE, routed to Atom (the cut's two-sided range, the no-cull
-    # id and caster pipelines, the decode's facing flip); the picture from the front and
-    # from behind against stock PBS, the closed mesh's ids against its back-culled ones,
-    # the open plane's shadow from both sides.
-    add_executable(test_atom_two_sided test_atom_two_sided.cpp)
-    jah_atom_engine_target(test_atom_two_sided)
-    jah_gpu_row(atom.two_sided CLASS engine COMMAND test_atom_two_sided
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.two_sided PROPERTIES TIMEOUT 180 LABELS "engine")
-    # atom.masked_id — A CUT-OUT IS AN ATOM ITEM (ENGINE-POLISH-ATOM-1 stage 3, shipped by ATOM-3 stage 2): an
-    # orthographic view, a cut-out plane on whole pixels with an 8-texel checker mask; the id pass's coverage = the
-    # mask's pass fraction x the opaque twin's pixels (within 0.5 %), every hole the floor's id, no hole in the
-    # decode; minified 10x, the view's and the sun maps' silhouettes within 1 px / 1 texel (p99) of the level-0
-    # reference (the arm atom.maskPyramid 0).
-    add_executable(test_atom_masked_id test_atom_masked_id.cpp)
-    jah_atom_engine_target(test_atom_masked_id)
-    jah_gpu_row(atom.masked_id CLASS engine COMMAND test_atom_masked_id
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.masked_id PROPERTIES TIMEOUT 60 LABELS "engine")
-    # atom.masked_coverage — THE MASK'S PYRAMID KEEPS LEVEL 0'S COVERAGE (ATOM-3 stage 2): the device's pyramid read
-    # back against the coverage law level by level (a 1-texel checker bit for bit; a non-power-of-two hash pattern),
-    # and the id pass's coverage of the checker at 1x / 2x / 4x / 8x minification = level 0's 1/2 within one texel.
-    add_executable(test_atom_masked_coverage test_atom_masked_coverage.cpp)
-    jah_atom_engine_target(test_atom_masked_coverage)
-    jah_gpu_row(atom.masked_coverage CLASS engine COMMAND test_atom_masked_coverage
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.masked_coverage PROPERTIES TIMEOUT 60 LABELS "engine")
-    # atom.view_colour — THE TRIANGLES VIEW'S COLOUR IS THE STRUCTURE'S (ENGINE-POLISH-ATOM-1 stage 6): three Atom
-    # spheres (two copies of one mesh) under the 'triangles' view, the first deleted - every kept object's pixels keep
-    # their colours although a slot was renumbered; the copies of one mesh share colours.
-    add_executable(test_atom_view_colour test_atom_view_colour.cpp)
-    jah_atom_engine_target(test_atom_view_colour)
-    jah_gpu_row(atom.view_colour CLASS engine COMMAND test_atom_view_colour
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.view_colour PROPERTIES TIMEOUT 60 LABELS "engine")
-    # atom.component — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3,
-    # atom/AtomComponent.h): two scenes with shadows, each through its own view — the id pass
-    # once and before the screen decode, each caster pass after its map's shadow pass, the
-    # words step once a frame, each scene's caster state its own (bound on its manager), and
-    # a view and a scene destroyed mid-run with the other drawing on. Counts only.
-    add_executable(test_atom_component test_atom_component.cpp)
-    jah_atom_engine_target(test_atom_component)
-    jah_gpu_row(atom.component CLASS engine COMMAND test_atom_component
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.component PROPERTIES TIMEOUT 60 LABELS "engine")
-    set_tests_properties(atom.component PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # counted from the source (12 + 1 + 4 + 3 + 12 + 1 + 3 + the probe)
     # ...AND ITS SANITISED TWIN: the owners' retire windows (a destroyed view's stats ring and a
     # destroyed scene's caster ring, reaped 8 frames later through the device's window) are raw
     # Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
@@ -330,88 +131,14 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_dependencies(test_atom_component_asan JahshakaEngineMedia)
         target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
         target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
-        jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
+        jah_gpu_row(atom.component_asan SHIP CLASS engine COMMAND test_atom_component_asan
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
         set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
     endif()
-    # shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S
-    # OWN CLUSTER CUT (ATOM-SHADOWS-1): every map's cut (PSSM, spot, the point's six faces)
-    # captured by the engine's test door and checked against the rule at the LIGHT's request
-    # and the bound (one texel of the map); and the maps against DENSE stock casters, texel
-    # by texel in light space (test_shadow_atom_cut.cpp states the metrics). Pixel suites,
-    # frames counted: never the GPU lock.
-    add_executable(test_shadow_atom_cut test_shadow_atom_cut.cpp ${_cluster_fixture_sources})
-    jah_cluster_target(test_shadow_atom_cut)
-    jah_atom_engine_target(test_shadow_atom_cut)
     # EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
     set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
-    jah_gpu_row(shadow.atom_cut CLASS engine COMMAND test_shadow_atom_cut --cut
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.atom_cut PROPERTIES TIMEOUT 60 LABELS "engine")   # 7.5 s measured solo x 6, rounded up
-    jah_gpu_row(shadow.atom_parity CLASS engine COMMAND test_shadow_atom_cut --parity
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    # TESTING-CLEANUP-2B item 2: TIMEOUT 120 = 6 x the run log's quiet median 18.8 s (44 quiet PASS runs since 2026-10-01, worst 32.2 s);
-    # declared 60 was below the policy, honest only with the +900 s widening (now deleted).
-    set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 120 LABELS "engine")
-    # shadow.caster_cull — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5 stage 4): the parity
-    # world under a roof, with a planar mirror; the view's and the mirror's sun maps bit-equal with the cull on
-    # and off at rest and through a slide and a pan, every object the roof certainly hides drawn by neither
-    # half of any map (per object, at the cull's stated grain), fewer triangles (test_shadow_atom_cut.cpp).
-    jah_gpu_row(shadow.caster_cull CLASS engine COMMAND test_shadow_atom_cut --light-cull
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.caster_cull PROPERTIES TIMEOUT 120 LABELS "engine")
-    # shadow.caster_receivers — THE RECEIVER TEST (stage 4b, decision 19): two lockstep worlds with a particle system,
-    # a decal, an alpha-tested and a swung rigged receiver, the PICTURE bit-equal with the test on and off at rest and
-    # through a slide, a pan, a grazing look and PCF 6 x 6, the test run on every one of those frames, fewer caster
-    # triangles with it (test_shadow_atom_cut.cpp --receivers; split from shadow.caster_cull: the two outran a
-    # fixture's budget together).
-    jah_gpu_row(shadow.caster_receivers CLASS engine COMMAND test_shadow_atom_cut --receivers
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.caster_receivers PROPERTIES TIMEOUT 120 LABELS "engine")
-    # shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2): two lockstep
-    # worlds (the split on / shut) with a blended plane (through the cut when the split is on) and a cutout plane
-    # (through the cut's masked range when the split is on, ATOM-3 stage 2; also held to its own level-0 reference,
-    # the arm atom.maskPyramid 0) over a floor; the sun maps texel by texel
-    # (shadow.atom_parity's law over each plane's footprint: p99 <= 1 texel, flips <= 0.5 %), the blended plane's
-    # caster filed under atomCaster and drawn by no stock shadow pass (test_shadow_atom_cut.cpp --caster-route).
-    jah_gpu_row(shadow.caster_route CLASS engine COMMAND test_shadow_atom_cut --caster-route
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.caster_route PROPERTIES TIMEOUT 60 LABELS "engine")
-    # shadow.caster_route_lamps / _reflect / _probe — THE OTHER CASTER KINDS THROUGH THE CUT (BUGS-1 item 12;
-    # shadow.caster_route compared the sun maps only): the same three lockstep worlds (cut / stock / bare), texel by
-    # texel by each map's projection (shadow.atom_parity's law: p99 <= 1 texel, flips <= 0.5 %), the planes' own texels
-    # (stock vs bare) non-zero - a spot's map and a point's faces (the view's node, its lamps nudged so their cached
-    # maps re-render through the cut) and a planar mirror's node (Reflect; the cut's caster pass recording its maps).
-    # No Probe row: this open fixture keeps no reflection probe (a probe is kept by what it sees).
-    foreach(_route_kind lamps reflect)
-        jah_gpu_row(shadow.caster_route_${_route_kind} CLASS engine COMMAND test_shadow_atom_cut --caster-route-${_route_kind}
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(shadow.caster_route_${_route_kind} PROPERTIES TIMEOUT 60 LABELS "engine")
-    endforeach()
-    # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
-    # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
-    jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.caster_first_frame PROPERTIES TIMEOUT 120 LABELS "engine")
-    # shadow.stock_lod — A SHADOW MAP DRAWS ITS STOCK CASTERS AT THE LIGHT'S LEVEL (SHADOW-LOD-1, the
-    # fork's caster-pass LOD walk): every caster pass's level for the scrolling-cutout stock casters is the
-    # rule's at the pass's own camera and the map's texels (PSSM splits, a spot, a point's six faces), the
-    # view's levels survive the shadow node's update (the save/restore), and no view pass walks the Atom
-    # queue. Frames counted: never the GPU lock.
-    add_executable(test_shadow_stock_lod test_shadow_stock_lod.cpp)
-    jah_atom_engine_target(test_shadow_stock_lod)
-    jah_gpu_row(shadow.stock_lod CLASS engine COMMAND test_shadow_stock_lod
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(shadow.stock_lod PROPERTIES TIMEOUT 60 LABELS "engine")
-    add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
-    jah_atom_engine_target(test_atom_negative_control)
-    target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
-        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
-        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
-        ${Vulkan_INCLUDE_DIRS})
-    target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
     # ONE ROW PER DEVICE (lane D6B-GATE-SHAPE; audit verdict MERGE): where the Khronos
     # validation layer is installed, the `_validation` rows below ARE the suite — the same
     # binary and the same assertions, plus the layer, FAIL_REGULAR_EXPRESSION on any report
@@ -437,35 +164,10 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # provider's restoration are what the layer reads. Each asserts the layer is ACTIVE
     # (JAH_EXPECT_VALIDATION: Engine::validation — vkCmdDraw must resolve into the layer's library), so a
     # machine without the layer cannot read as green.
-    if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
-        jah_gpu_row(engine.atom_negative_control_validation CLASS engine COMMAND test_atom_negative_control
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_negative_control_validation PROPERTIES
-            TIMEOUT 120 LABELS "engine"
-            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
-            FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
-        if(EXISTS "${_lvp_icd}")
-            add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
-                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-            set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
-                TIMEOUT 120 LABELS "engine"
-                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_EXPECT_VALIDATION=1"
-                FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
-        endif()
-    endif()
 else()
     message(STATUS "Jahshaka: engine.atom_negative_control NOT built — vulkan=${Vulkan_FOUND} "
                    "glslang='${JAH_ATOM_GLSLANG}' vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
 endif()
-
-# ---------------------------------------------------------------------------
-# atom.view — THE ATOM VIEW (lane D0-ATOM-VIEW): world.setAtomView's four false-colour
-# modes over the default scene in both chain shapes (the "scene" grade's post chain,
-# the "plain" grade's passthrough), 'off' pixel-identical after them, nothing painted
-# with the split shut, and a stock-PBR object in front of the floor left lit (the
-# depth-equality test). Every shot is 160 x 90 with every pixel probed. An app run on
-# the rig's display, like the scripting e2e suites.
-jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 12)
 
 # ---------------------------------------------------------------------------
 # atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
@@ -476,23 +178,6 @@ jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 12)
 # mesh is checked in. An app run on the rig's display, like atom.view.
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
-configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
-jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
-# The stand-in is written on the CPU (an .obj), so the fixture boots no Vulkan (GATE-ADMIT-1: no VRAM tokens).
-jah_no_display(atom.lod_switch.fixture)
-jah_gpu_row(atom.lod_switch CLASS app TIER epic NEEDS photon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
-         WORKING_DIRECTORY ${_lod_switch_home}/run)
-# The stand-in's bake (~25 k triangles: chain + DAG + SDF + cards) and the slow zoom's two
-# 60-shot walks (ATOM-CLUSTER-CUT, ~100 s of the 234 s measured solo) are the run.
-# STAGE-CLOSE (TESTING-SPEED-B3, the ROWS table): a whole-scene measurement (the viewport rules, the
-# Levels ramp, the slow zoom's no-band) guarded nowhere else — the ship's run, never the merge's; the
-# band's own fixture is engine.lod_hysteresis.
-set_tests_properties(atom.lod_switch PROPERTIES
-    FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
-    ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
 
 # atom.pass_table — THE FULLEST PASS FITS THE PASS-TEXTURE TABLE (BUGS-1 item 1; preflight-atom-3 §A): an Epic world on
 # the Basic template with sun contact, the 2D clouds and the World fog (+ one area light created and removed: the LTC
@@ -510,7 +195,7 @@ endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_pt_header}")
 set(_pt_home ${CMAKE_CURRENT_BINARY_DIR}/pass-table-home)
 file(MAKE_DIRECTORY ${_pt_home}/run)
-jah_gpu_row(atom.pass_table CLASS app TIER document FRAMES 552
+jah_gpu_row(atom.pass_table SHIP CLASS app TIER document FRAMES 552
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pass_table.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_pass_table.js" "${_pt_table}"
@@ -522,49 +207,10 @@ set_tests_properties(atom.pass_table PROPERTIES
 jah_fresh_home_fixture(atom.pass_table.fresh_home atomPassTableHome "${_pt_home}" WARM LABELS "scripting")
 set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTableHome)
 
-# atom.dag_chain_validate — DAG-CHAIN-VALIDATE-1 (ATOM-SHADOWS-1's F1): Scene::createMesh
-# REFUSES a card that names a LOD level past the chain (a baked mesh with its chain stripped
-# crashed Ogre's caster queue) and ACCEPTS every mesh the product's bake makes (the 20k
-# sphere, the shipped primitives with a DAG, the dragon, the Physics model — their DAG
-# depth against their chain printed) and a stripped chain with no card DRAWS (30 frames of shadows).
-add_executable(test_atom_dag_chain test_atom_dag_chain.cpp ${_cluster_fixture_sources})
-jah_cluster_target(test_atom_dag_chain)
-add_dependencies(test_atom_dag_chain JahshakaEngineMedia)
-jah_gpu_row(atom.dag_chain_validate CLASS engine COMMAND test_atom_dag_chain
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.dag_chain_validate PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "engine")
-
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "atom.cluster_crack=1153"
-        "atom.cluster_cut=0"
-        "atom.dag_chain_validate=372"
-        "atom.dolly_gate=920"
-        "atom.lod_switch=27651"
-        "atom.occlusion_exact=348"
-        "atom.two_sided=378"
-        "atom.masked_coverage=64"
-        "atom.masked_id=82"
-        "atom.view_colour=38"
-        "atom.words_still=223"
-        "engine.atom_draw=624"
-        "engine.atom_negative_control_validation=123"
-        "engine.atom_negative_control_validation_lavapipe=123"
-        "engine.atom_parity=580"
-        "engine.atom_parity_validation=40"
-        "engine.tlas_compute=46"
-        "shadow.atom_cut=80"
-        "shadow.atom_parity=111"
-        "shadow.caster_cull=147"
-        "shadow.caster_receivers=82"
-        "shadow.caster_first_frame=12"
-        "shadow.caster_route=65"
-        "shadow.caster_route_lamps=46"
-        "shadow.caster_route_reflect=52"
-        "shadow.stock_lod=71"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

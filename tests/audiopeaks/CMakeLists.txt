@@ -13,6 +13,7 @@ target_compile_definitions(test_audio_peaks PRIVATE
 target_link_libraries(test_audio_peaks PRIVATE Qt6::Gui Qt6::Multimedia)
 add_test(NAME audio.peaks COMMAND test_audio_peaks
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(audio.peaks)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(audio.peaks PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
 
 # The leak lane (scripts/sanitize.sh lsan): decoder buffers per file.

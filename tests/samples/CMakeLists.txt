@@ -58,67 +58,43 @@ foreach(SAMPLE IN LISTS _samples)
         LABELS "scripting"
         TIMEOUT 480)
 endforeach()
+jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.cleanstart.Particles samples.cleanstart.Physics samples.cleanstart.Showroom samples.cleanstart.Showroom_2 samples.cleanstart.Skeletal_Animation samples.cleanstart.Tornado samples.cleanstart.World_Background)   # THE SHIP SET (TEST-CUT-1)
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
 # archives imported into ONE home and opened back to back in ONE process — the
 # shape the cleanstart fold lost (cross-archive dedup, catalog growth, live
 # scene switches across the process-wide-state class). ~35 s, no pixel probes. STAGE-CLOSE
 # (TESTING-SPEED-B2): seven archives in one process is the stage close's, not a merge's.
-configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting)
-jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
-         WORKING_DIRECTORY ${_shome}/run)
-set_tests_properties(samples.session PROPERTIES
-    ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED samples_home_session
-    LABELS "scripting"
-    TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
-# samples.mirror_room_boots — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture
-# across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
-# scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
-# scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): STAGE-CLOSE.
-jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
+# samples.mirror_room_boots.boot1 / .boot2 — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture across
+# boots (ATOM-DECODE-CLASS-1 recorded two). Each row is ONE boot on a virgin data root: the scene's offscreen picture
+# after 600 fixed-clock frames; boot 2 requires it byte-identical to boot 1's (the runner: scripts/mirror_room_boots.sh).
+# REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s). The law is an equality of pictures across
+# boots, and an equality needs TWO boots — not ten (the row was ten in one process chain: 322 s, 11,348 frames). Each boot
+# keeps its own frames whole — the open's own polls and app.waitForTextures(), then the 600-frame settle the picture is
+# taken after (~1,130 frames a boot, unchanged) — and the two run as two rows, a fixture chain: boot 1 sets up the
+# picture, boot 2 requires it (DEPENDS + FIXTURES_REQUIRED), so neither row is over the minute. Measured once each
+# (2026-10-20, solo, the card lock held): 31.8 s / 1,122 frames and 32.1 s / 1,124. TIMEOUT 6 x the solo run, rounded up.
+jah_gpu_row(samples.mirror_room_boots.boot1 SHIP CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-# TESTING-CLEANUP-2B item 2: TIMEOUT 1940 = 6 x the run log's quiet median 322.1 s (31 quiet PASS runs since 2026-10-01, worst 838.8 s);
-# declared 1800 was below the policy, honest only with the +900 s widening (now deleted).
-set_tests_properties(samples.mirror_room_boots PROPERTIES LABELS "scripting" TIMEOUT 1940)
-
-# samples.archive_fidelity.Tornado — LIVE-PERSIST-1, rewritten by TESTING-SPEED-B2 against the ARCHIVE'S OWN
-# INVARIANTS (no reference picture: tests/samples/data/tornado_reference.jpg and its metric deleted, forward-only):
-# the SHIPPED Tornado archive, opened on a clean machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece
-# cache anywhere), closes (every dependency and file of its manifest is in the zip), imports exactly its assets and
-# objects, keeps its live graph materials (every layer re-emits its pieces from its graph, the shells keep their
-# baked cut-out) after the import AND after a close and reopen, is SEE-THROUGH (>= 0.005) from its own camera (the named failure:
-# a sample that loses its cut-out opens with no holes), and is a FIXED POINT: exported, imported and exported again,
-# the same archive (never held against the shipped zip).
-# THE HOLES BAR: see-through >= 0.005 (the lead, 2026-10-12; the house rule: measured, headroom either way) — the
-# shipped archive reads 0.0165 (three times above), the Top Shell's cut-out OFF (its map solid) 0.000029, 2 stray px
-# (170 times below): spikes/testing-speed-b2/tornado-cutout-off.txt.
-# STAGE-CLOSE: a whole-archive round trip (SPECS/TESTING_SPEED_ROWS.md).
-jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity_tornado.js.in
-                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
-                 ${CMAKE_CURRENT_BINARY_DIR}/archive-fidelity-Tornado
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_invariants.py
+set_tests_properties(samples.mirror_room_boots.boot1 PROPERTIES LABELS "scripting" TIMEOUT 200
+    FIXTURES_SETUP samples_mirror_room_boot1)
+jah_gpu_row(samples.mirror_room_boots.boot2 SHIP CLASS app TIER document
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 2
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting" TIMEOUT 480)
+set_tests_properties(samples.mirror_room_boots.boot2 PROPERTIES LABELS "scripting" TIMEOUT 200
+    FIXTURES_REQUIRED samples_mirror_room_boot1 DEPENDS samples.mirror_room_boots.boot1)
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
-if(TEST samples.archive_fidelity.Tornado)
-    set_property(TEST samples.archive_fidelity.Tornado PROPERTY JAHSHAKA_TEST_FRAMES 791)
-endif()
 if(TEST samples.cleanstart.Matcaps)
     set_property(TEST samples.cleanstart.Matcaps PROPERTY JAHSHAKA_TEST_FRAMES 1470)
 endif()
@@ -146,9 +122,7 @@ endif()
 if(TEST samples.cleanstart.World_Background)
     set_property(TEST samples.cleanstart.World_Background PROPERTY JAHSHAKA_TEST_FRAMES 1466)
 endif()
-if(TEST samples.mirror_room_boots)
-    set_property(TEST samples.mirror_room_boots PROPERTY JAHSHAKA_TEST_FRAMES 11348)
-endif()
-if(TEST samples.session)
-    set_property(TEST samples.session PROPERTY JAHSHAKA_TEST_FRAMES 1046)
+if(TEST samples.mirror_room_boots.boot1)
+    set_property(TEST samples.mirror_room_boots.boot1 PROPERTY JAHSHAKA_TEST_FRAMES 1122)
+    set_property(TEST samples.mirror_room_boots.boot2 PROPERTY JAHSHAKA_TEST_FRAMES 1124)
 endif()

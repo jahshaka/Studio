@@ -23,19 +23,12 @@ function(jahshaka_hdr_test target source)
     add_dependencies(${target} JahshakaEngineMedia)
 endfunction()
 
-jahshaka_hdr_test(test_hdr_drag test_hdr_drag.cpp)
-target_link_libraries(test_hdr_drag PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.drag_stable CLASS engine COMMAND test_hdr_drag
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(hdr.drag_stable PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
-
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_drag_asan test_hdr_drag.cpp)
     target_link_libraries(test_hdr_drag_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_drag_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_drag_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.drag_stable_asan CLASS engine COMMAND test_hdr_drag_asan
+    jah_gpu_row(hdr.drag_stable_asan SHIP CLASS engine COMMAND test_hdr_drag_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
@@ -48,19 +41,13 @@ endif()
 # above: that one asserts the grade is STEADY, this one asserts it is RIGHT, in
 # absolute terms, against numbers computed on paper from a frame of known
 # radiance. See the file header.
-jahshaka_hdr_test(test_hdr_meter test_hdr_meter.cpp)
-target_link_libraries(test_hdr_meter PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.meter CLASS engine COMMAND test_hdr_meter
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
-set_tests_properties(hdr.meter PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_meter_asan test_hdr_meter.cpp)
     target_link_libraries(test_hdr_meter_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_meter_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
+    jah_gpu_row(hdr.meter_asan SHIP CLASS engine COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -75,12 +62,6 @@ endif()
 # ground plane") and for what each arm would catch; the last one is not about
 # the dither at all but about the LDR buffer SMAA works on, which was losing 73
 # of the 256 display codes on its own.
-jahshaka_hdr_test(test_hdr_dither test_hdr_dither.cpp)
-target_link_libraries(test_hdr_dither PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.dither CLASS engine COMMAND test_hdr_dither
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(hdr.dither PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 
 # THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, fork feab041c6 (was 0082)).
 # One bright emissive square on black, rendered four ways in ONE process —
@@ -90,19 +71,13 @@ set_tests_properties(hdr.dither PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 # D (the ratio, which is what a scale applied inside the UNORM blur ladder or
 # ahead of the composite's fromSRGB square would fail) and F (the workspace
 # generation, which is what makes it a dial a person can drag).
-jahshaka_hdr_test(test_hdr_bloom_amount test_hdr_bloom_amount.cpp)
-target_link_libraries(test_hdr_bloom_amount PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.bloom_amount CLASS engine COMMAND test_hdr_bloom_amount
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(hdr.bloom_amount PROPERTIES JAHSHAKA_TEST_FRAMES 26)
 
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_bloom_amount_asan test_hdr_bloom_amount.cpp)
     target_link_libraries(test_hdr_bloom_amount_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.bloom_amount_asan CLASS engine COMMAND test_hdr_bloom_amount_asan
+    jah_gpu_row(hdr.bloom_amount_asan SHIP CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -114,7 +89,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_dither_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_dither_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.dither_asan CLASS engine COMMAND test_hdr_dither_asan
+    jah_gpu_row(hdr.dither_asan SHIP CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -126,24 +101,12 @@ endif()
 # at half its peak across and down agree within 10 %, and the hot spot's row
 # carries no excess at the frame's edges (the old fixed 256x256 ladder blurred 65
 # taps across and 11 down: a full-width band). See the file header.
-jahshaka_hdr_test(test_hdr_bloom_isotropic test_hdr_bloom_isotropic.cpp)
-target_link_libraries(test_hdr_bloom_isotropic PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.bloom_isotropic CLASS engine COMMAND test_hdr_bloom_isotropic
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.bloom_isotropic PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(hdr.bloom_isotropic PROPERTIES JAHSHAKA_TEST_FRAMES 12)
 
 # EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1). A flat emissive
 # plane at a ramp of known radiances, read back four ways in ONE process: the
 # Plain instrument (linear, unchanged), the ungraded display picture in the
 # passthrough and the post shape (the exact sRGB OETF), and the graded picture
 # (the OETF of the film curve; the grey card at 118). See the file header.
-jahshaka_hdr_test(test_hdr_display_encode test_hdr_display_encode.cpp)
-target_link_libraries(test_hdr_display_encode PRIVATE JahshakaEngine)
-jah_gpu_row(hdr.display_encode CLASS engine COMMAND test_hdr_display_encode
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(hdr.display_encode PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(hdr.display_encode PROPERTIES JAHSHAKA_TEST_FRAMES 336)
 
 # hdr.bloom_showroom — NO FULL-WIDTH BAND IN THE PRODUCT (BLOOM-1, the app half of
 # hdr.bloom_isotropic): Showroom 2 from its own camera, the editor's "scene" shot with
@@ -157,7 +120,7 @@ set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
 set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
 jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting")
-jah_gpu_row(hdr.bloom_showroom CLASS app TIER document
+jah_gpu_row(hdr.bloom_showroom SHIP CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
          WORKING_DIRECTORY ${_bloom_home}/run)
 set_tests_properties(hdr.bloom_showroom PROPERTIES

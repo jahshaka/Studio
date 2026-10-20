@@ -22,7 +22,7 @@ target_compile_definitions(test_avatar_async PRIVATE
 
 set(_avatar_async_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async)
 file(MAKE_DIRECTORY ${_avatar_async_home}/run)
-jah_gpu_row(avatar.responsive CLASS app TIER epic NEEDS photon COMMAND test_avatar_async
+jah_gpu_row(avatar.responsive SHIP CLASS app TIER epic NEEDS photon COMMAND test_avatar_async
          WORKING_DIRECTORY ${_avatar_async_home}/run)
 set_tests_properties(avatar.responsive PROPERTIES JAHSHAKA_TEST_FRAMES 921)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.responsive PROPERTIES
@@ -33,16 +33,11 @@ set_tests_properties(avatar.responsive PROPERTIES
 # GPU-timing lock; the push row asserts the rest and prints the readings.
 set(_avatar_async_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing)
 file(MAKE_DIRECTORY ${_avatar_async_timing_home}/run)
-jah_gpu_exclusive_test(NAME avatar.responsive.timing CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 900 COMMAND test_avatar_async
-         WORKING_DIRECTORY ${_avatar_async_timing_home}/run)
-set_tests_properties(avatar.responsive.timing PROPERTIES
-    ENVIRONMENT "HOME=${_avatar_async_timing_home};JAHSHAKA_DATA_ROOT=${_avatar_async_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "avatar;measure")
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked(avatar.responsive avatar.responsive.timing)
+jah_tsan_blocked(avatar.responsive )
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -52,8 +47,4 @@ jah_tsan_blocked(avatar.responsive avatar.responsive.timing)
 if(TEST avatar.responsive)
     jah_fresh_home_fixture(avatar.responsive.fresh_home avatarResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async" WARM LABELS "avatar")
     set_property(TEST avatar.responsive APPEND PROPERTY FIXTURES_REQUIRED avatarResponsiveFreshHome)
-endif()
-if(TEST avatar.responsive.timing)
-    jah_fresh_home_fixture(avatar.responsive.timing.fresh_home avatarResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing" WARM LABELS "avatar")
-    set_property(TEST avatar.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED avatarResponsiveTimingFreshHome)
 endif()

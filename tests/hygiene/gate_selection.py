@@ -245,8 +245,8 @@ def tooling_cases(gs, graph, build, inv0):
           "scripts/gate-scope.py alone is TOOLING-ONLY: the hygiene label (%d rows), no product row (%s)"
           % (len(hyg), product(S)[:6]))
     lints = {n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)}
-    S = sel(["tests/gi/test_gi_cliff.cpp"])
-    check(S.tooling_only and set(S.selected) - lints == {"gi.cliff"},
+    S = sel(["tests/gi/test_gi_rayquery.cpp"])
+    check(S.tooling_only and set(S.selected) - lints == {"gi.rayquery_asan"},
           "a test source alone selects its row and the lints, nothing else — no smoke pair, no other tooling row (%s)"
           % sorted(set(S.selected) - lints)[:6])
     # THE LINTS RIDE EVERY DIFF (TOOLING-2): R2 and the row budget among them, for a one-line test change too
@@ -255,19 +255,19 @@ def tooling_cases(gs, graph, build, inv0):
           % len(lints))
     S = sel(["tests/meshbake/CMakeLists.txt", "scripts/gate_runlog.py"])
     mb = {n for n, t in inv0.items() if t["dir"] == "meshbake"}
-    check(S.tooling_only and mb <= set(S.selected) and "app.startup_quiet" not in S.selected,
+    check(S.tooling_only and mb <= set(S.selected) and "api.contract" not in S.selected,
           "a test registration + a runner script: the declared rows (%d meshbake) + the hygiene label, no smoke pair"
           % len(mb))
     alone = set(sel(["src/services/vrworld.cpp"]).selected)
     S = sel(["scripts/gate-scope.py", "src/services/vrworld.cpp"])
-    check(not S.tooling_only and alone <= set(S.selected) and "app.startup_quiet" not in alone
-          and "ui.vr_panel" in S.selected and "source.gate_scope_rules" in S.selected
+    check(not S.tooling_only and alone <= set(S.selected) and "api.contract" not in alone
+          and "vr.mirror_live" in S.selected and "source.gate_scope_rules" in S.selected
           and not any("hygiene" in S.inv[n]["labels"] for n in alone if not n.startswith("source.")),
           "ONE product path makes it a product diff: the union (vrworld.cpp's %d rows + the tool's hygiene/tooling rows); "
           "the product path alone selects no tools' row and no smoke pair (TESTING-SPEED-A item 5)" % len(alone))
     S = sel(["tests/support/fresh_home.sh"])
-    check("app.startup_quiet" in S.selected and "api.contract" in S.selected,
-          "a change to the test harness (tests/support/) selects the smoke pair (%s)" % sorted(S.selected)[:4])
+    check("api.contract" in S.selected,
+          "a change to the test harness (tests/support/) selects the smoke row (%s)" % sorted(S.selected)[:4])
     check(gs.product_paths(["irisgl/docs/OGRE_BUILD.md", "docs/TESTING.md", "scripts/x.py", "tests/hygiene/y.py",
                             "irisgl/README.md"]) == []
           and len(gs.product_paths(["irisgl/engine/src/OgreGi.cpp", "app/content/x.obj", "CMakeLists.txt",
@@ -329,7 +329,8 @@ def main(source, build):
                   % (c["lane"], missing))
             continue
         t0 = time.time()
-        paths = gs.touched_paths(c["range"])
+        # a recorded path TEST-CUT-1 archived (its owner is gone) is not replayed: it would fall to its directory
+        paths = [p_ for p_ in gs.touched_paths(c["range"]) if p_ not in set(c.get("archived_paths", ()))]
         S = gs.select(paths, c["range"], build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
         # a replay's own new registrations fall to their test directory here (rows_at_tip_only): that is no tier
         whole = bool(S.full_tier or (S.fallback and not c.get("rows_at_tip_only")))

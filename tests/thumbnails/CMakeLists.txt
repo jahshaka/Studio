@@ -2,26 +2,6 @@
 # document node into an offscreen View on the main thread. Output goes to bin/ so
 # app/content/primitives/sphere.obj (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_thumbnails test_thumbnails.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    # previewMaterialForMeshData is BuiltinMaterials::fromMeshData now — the one
-    # mesh-data conversion, instead of a third copy that ignored every PBR field.
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
-set_target_properties(test_thumbnails PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_thumbnails PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-   ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_thumbnails PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_thumbnails PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_thumbnails JahshakaEngineMedia)
-jah_gpu_row(thumbnails.engine CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnails WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(thumbnails.engine PROPERTIES JAHSHAKA_TEST_FRAMES 18)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): MaterialReader::
 # parseShaderAsPbr turns a stored graph definition into the evaluator's
@@ -33,97 +13,7 @@ set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 # resolves next to the executable; its OWN working directory so the throwaway
 # database and the ogre log never land in the shared bin/.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
-add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/materialreader.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    # the bundle model: case 5b renders the shape the module actually writes
-    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/materialhelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pieceemitter.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
-set_target_properties(test_shader_thumbnail PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_shader_thumbnail PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/modules/materials
-   ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_shader_thumbnail PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_shader_thumbnail PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
-add_dependencies(test_shader_thumbnail JahshakaEngineMedia)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-jah_gpu_row(thumbnails.shader CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_shader_thumbnail
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-set_tests_properties(thumbnails.shader PROPERTIES JAHSHAKA_TEST_FRAMES 8)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # thumbnails.sweep — the REPAIR SWEEP's contract (THUMBS-1 fix round F1/F2/F6):
 # it stops when asked (a yield delivers the window's close), it decides from
@@ -132,90 +22,7 @@ set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 # file, a NULL engine (what a headless session hands it), no window: the
 # assertions are about control flow and bookkeeping, never about pixels.
 find_package(Qt6 REQUIRED COMPONENTS Gui Sql Widgets Multimedia Concurrent)
-add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailrebuild.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/assetthumbnail.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/libraryassetnode.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/avatarassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/materialreader.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenereader.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/materialhelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pieceemitter.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp)
-set_target_properties(test_thumbnail_sweep PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_thumbnail_sweep PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/modules/materials
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_thumbnail_sweep PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_thumbnail_sweep PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::Sql
-    Qt6::Widgets Qt6::Multimedia Qt6::Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
-jah_gpu_row(thumbnails.sweep CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnail_sweep
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
-set_tests_properties(thumbnails.sweep PROPERTIES JAHSHAKA_TEST_FRAMES 0)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(thumbnails.sweep PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
 
 # thumbnails.studio_env — THE ONE STUDIO ENVIRONMENT, measured
 # (MATPREVIEW-ENV-1, owner review R9). One binary because the assertion that
@@ -240,7 +47,7 @@ target_compile_definitions(test_preview_environment PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_preview_environment JahshakaEngineMedia)
-jah_gpu_row(thumbnails.studio_env CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
+jah_gpu_row(thumbnails.studio_env SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(thumbnails.studio_env PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

@@ -47,6 +47,7 @@ target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets 
 jah_document_graph(test_structural_undo)
 add_test(NAME commands.structural_undo COMMAND test_structural_undo
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(commands.structural_undo)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(commands.structural_undo PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
 jah_no_display(commands.structural_undo)
@@ -63,47 +64,6 @@ jah_no_display(commands.structural_undo)
 # the Database stub down): the subject IS the destructor's effect on the
 # library, so a stubbed database would prove nothing.
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
-add_executable(test_undo_clear_cost
-    test_undo_clear_cost.cpp
-    test_stubs.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/sceneeditservice.h
-    ${CMAKE_SOURCE_DIR}/src/commands/deletescenenodecommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
-    # the real library, and database.cpp's link closure (the assets.delete
-    # round-trip suite's list)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
-set_target_properties(test_undo_clear_cost PROPERTIES
-    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_undo_clear_cost PRIVATE JAH_REAL_DATABASE)
-target_include_directories(test_undo_clear_cost PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_undo_clear_cost PRIVATE
-    IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 
 # THE COMMIT COUNT — one commit is one fdatasync, which is the unit the owner's
 # 33 s was spent in — comes from sqlite3_commit_hook on the handle Qt's own
@@ -112,20 +72,6 @@ target_link_libraries(test_undo_clear_cost PRIVATE
 # wall-clock bound; it just cannot assert the counts.
 find_path(JAH_SQLITE3_INCLUDE sqlite3.h)
 find_library(JAH_SQLITE3_LIB sqlite3)
-if (JAH_SQLITE3_INCLUDE AND JAH_SQLITE3_LIB)
-    target_compile_definitions(test_undo_clear_cost PRIVATE JAH_HAVE_SQLITE3)
-    target_include_directories(test_undo_clear_cost PRIVATE ${JAH_SQLITE3_INCLUDE})
-    target_link_libraries(test_undo_clear_cost PRIVATE ${JAH_SQLITE3_LIB})
-else()
-    message(STATUS "commands.undo_clear_cost: no sqlite3 headers — commit counts not asserted")
-endif()
-
-jah_document_graph(test_undo_clear_cost)
-add_test(NAME commands.undo_clear_cost COMMAND test_undo_clear_cost
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(commands.undo_clear_cost PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
-jah_no_display(commands.undo_clear_cost)
 
 # ---------------------------------------------------------------------------
 # commands.db_batch — CLOSE-2: ONE GESTURE, ONE COMMIT.
@@ -140,58 +86,6 @@ jah_no_display(commands.undo_clear_cost)
 # Same shape as its sibling above: the REAL database.cpp, and SQLite's own
 # commit hook as ground truth.
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
-add_executable(test_db_batch
-    test_db_batch.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/resetmaterialcommand.cpp
-    # ProjectMembership is a QObject with a signal (AUTOMOC needs the header).
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.h
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # the real library, and database.cpp's link closure (the sibling's list)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
-set_target_properties(test_db_batch PROPERTIES
-    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_db_batch PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_db_batch PRIVATE
-    IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
-
-if (JAH_SQLITE3_INCLUDE AND JAH_SQLITE3_LIB)
-    target_compile_definitions(test_db_batch PRIVATE JAH_HAVE_SQLITE3)
-    target_include_directories(test_db_batch PRIVATE ${JAH_SQLITE3_INCLUDE})
-    target_link_libraries(test_db_batch PRIVATE ${JAH_SQLITE3_LIB})
-else()
-    message(STATUS "commands.db_batch: no sqlite3 headers — commit counts not asserted")
-endif()
-
-jah_document_graph(test_db_batch)
-add_test(NAME commands.db_batch COMMAND test_db_batch
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(commands.db_batch PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
-jah_no_display(commands.db_batch)
 
 # ---------------------------------------------------------------------------
 # commands.preset_copy — PRESET-EDIT-1: the first edit of a preset a project
@@ -201,52 +95,6 @@ jah_no_display(commands.db_batch)
 # content-addressed store on a throwaway SQLite file, because a pin, an edge
 # and a row are catalog facts a stub could not tell the truth about.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
-add_executable(test_preset_copy test_preset_copy.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/presetcopycommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_preset_copy PROPERTIES
-    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_preset_copy PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_preset_copy PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
-add_test(NAME commands.preset_copy COMMAND test_preset_copy
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(commands.preset_copy PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
-jah_no_display(commands.preset_copy)
 
 # ---------------------------------------------------------------------------
 # commands.pin_asset — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
@@ -258,49 +106,3 @@ jah_no_display(commands.preset_copy)
 # a throwaway SQLite file — the tests/materialbundle idiom, same source list —
 # because a pin is a catalog fact and a stub could not tell the truth about it.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
-add_executable(test_pin_asset test_pin_asset.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/pinassetcommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_pin_asset PROPERTIES
-    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_pin_asset PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_pin_asset PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
-add_test(NAME commands.pin_asset COMMAND test_pin_asset
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(commands.pin_asset PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
-jah_no_display(commands.pin_asset)

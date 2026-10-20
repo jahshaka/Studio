@@ -30,47 +30,10 @@ qt_add_resources(test_document_characterisation "document_fixtures"
 jah_document_graph(test_document_characterisation)
 add_test(NAME document.characterisation COMMAND test_document_characterisation
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(document.characterisation)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
-
-# document.write_journal — THE WRITE JOURNAL'S DEDUPE AT ITS THREE EDGES (SCENEGRAPH-BASELINE-2): an id replay (the
-# undo of a delete: re-id'd and attached in one frame, the attach logs), several readers (a take between two writes),
-# the cap (a take behind the drop is incomplete). Counts only. Document only: NULL render system, no display.
-add_executable(test_write_journal test_write_journal.cpp)
-set_target_properties(test_write_journal PROPERTIES AUTOMOC OFF)
-target_include_directories(test_write_journal PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_write_journal PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_write_journal)
-add_test(NAME document.write_journal COMMAND test_write_journal
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.write_journal PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.write_journal)
-
-# document.physics_writeback — THE PHYSICS WRITE-BACK WRITES ONLY WHAT MOVED
-# (SPEED-CPU item 1, perf audit 2026-10-03 D1): a 146-body pile (a group, a
-# nested body) played to sleep; after every checked frame the old
-# write-everything loop would change no node by a bit, a sleeping pile's frame
-# makes zero transform writes, and a node written behind its body's back, a
-# moved group and a moving carrier are each pinned back exactly as before.
-# Document only: NULL render system, no display.
-add_executable(test_physics_writeback test_physics_writeback.cpp)
-set_target_properties(test_physics_writeback PROPERTIES AUTOMOC OFF)
-target_include_directories(test_physics_writeback PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_physics_writeback PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_physics_writeback)
-add_test(NAME document.physics_writeback COMMAND test_physics_writeback
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.physics_writeback PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
-jah_no_display(document.physics_writeback)
 
 # physics.mt_determinism / physics.step_cost / physics.step_overlap — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
 # (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23). A pile of boxes dropped in layers, stepped by the document at the
@@ -97,19 +60,6 @@ target_link_libraries(test_physics_step_cost PRIVATE IrisGL JahshakaEngine Qt6::
 # It inlines Bullet's header math: never contract, as Bullet and the physics TUs (irisgl/CMakeLists.txt, BULLET-BATCHING-1).
 target_compile_options(test_physics_step_cost PRIVATE ${_jah_bake_fp})
 add_dependencies(test_physics_step_cost JahshakaEngineMedia)
-add_test(NAME physics.mt_determinism COMMAND test_physics_step_cost --bodies 500 --frames 32 --threads 7 --runs 3
-         --bound 16 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(physics.mt_determinism PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120 JAHSHAKA_TEST_FRAMES 0)
-jah_no_display(physics.mt_determinism)
-jah_gpu_exclusive_test(NAME physics.step_cost CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
-         --frames 60 --threads 7 --runs 1 --mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(physics.step_cost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
-    JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
-jah_gpu_exclusive_test(NAME physics.step_overlap CLASS engine RUN_TIMEOUT 600 COMMAND test_physics_step_cost --bodies 10000
-         --frames 120 --threads 7 --overlap WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
-    JAHSHAKA_TEST_FRAMES 3470)   # metered 2026-10-18: the free-running render thread at 60 Hz for the run (120 frames of warm-up first)
 # physics.many_movers — THE OWNER'S REAL CASE, MANY MOVERS PER FRAME (THREADING-1 stage 2): 1,000 bodies in play,
 # stepped on the threads the ONE core budget gives the step (--threads budget: the game thread + the foreground share,
 # what the app binds) with the mirror syncing every moved body, the bar on the step + the sync per frame, median past
@@ -118,173 +68,16 @@ set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFOR
 # budget's foreground share starves Bullet. The step and the sync are printed apart (PHYSICS_MANY_MOVERS).
 # A GUARD, not a measure: the bar is a whole 60 Hz frame against ~5 ms, a margin no parallel row on the card's lock
 # closes — so it runs at every merge it is reached by, not only at the ship.
-jah_gpu_row(physics.many_movers CLASS engine COMMAND test_physics_step_cost --bodies 1000
+jah_gpu_row(physics.many_movers SHIP CLASS engine COMMAND test_physics_step_cost --bodies 1000
          --frames 120 --warmup 20 --threads budget --mirror --mt-only --bar 16.7
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
     TIMEOUT 60 JAHSHAKA_TEST_FRAMES 0)   # the mirror syncs; the engine renders nothing (physics.step_cost's metering)
 
-# document.mobility — THE RESOLUTION RULE (SPECS/REALTIME_REFLECTIONS_SPEC.md
-# §3.3.2): which objects the renderer may bake into the room's lighting and
-# which it has to handle per frame. Every driver with its own reason, rule 2's
-# parent inheritance, the user's setting (including where a driver openly beats
-# it), the "an editor drag does NOT promote" claim the whole design rests on —
-# a promotion costs a from-scratch GI rebuild — and the play-scoped soft
-# promotion. Document only: NULL render system, no display.
-add_executable(test_mobility test_mobility.cpp)
-set_target_properties(test_mobility PROPERTIES AUTOMOC OFF)
-target_include_directories(test_mobility PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_mobility PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_mobility)
-add_test(NAME document.mobility COMMAND test_mobility
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.mobility PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.mobility)
-
 # The leak lane (scripts/sanitize.sh lsan): the document model itself — every
 # node, mesh, material and animation type constructed and dropped. No Vulkan,
 # no app process, so LeakSanitizer runs with detect_leaks=1 here.
 jah_lsan_lane(document.characterisation)
-
-# ENGINEERING_DEBT_SPEC A4.2: the ONE fixed-step simulation clock
-# (irisgl/document/scenegraph/simulationclock.h). Header-only arithmetic —
-# no engine, no Qt event loop, no display — asserting exactly the properties
-# scripting.e2e.fixed_clock's byte-identical-across-frame-rates proof rests on:
-# whole grid steps, time from an integer step count, rate independence, the
-# catch-up bound.
-add_executable(test_simulation_clock test_simulation_clock.cpp)
-set_target_properties(test_simulation_clock PROPERTIES AUTOMOC OFF)
-target_include_directories(test_simulation_clock PRIVATE ${CMAKE_SOURCE_DIR})
-add_test(NAME document.simulation_clock COMMAND test_simulation_clock
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.simulation_clock PROPERTIES LABELS "document" TIMEOUT 60)
-jah_no_display(document.simulation_clock)
-
-# ENGINEERING_DEBT_SPEC A4.2, the restart half: six piled rigid bodies stepped
-# on the clock grid, the world torn down and rebuilt as PlayBack does it, four
-# times — every cycle lands every body on the same bits. Headless document
-# graph, no display.
-add_executable(test_physics_restart test_physics_restart.cpp)
-set_target_properties(test_physics_restart PROPERTIES AUTOMOC OFF)
-target_include_directories(test_physics_restart PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_physics_restart PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_physics_restart)
-add_test(NAME document.physics_restart COMMAND test_physics_restart
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.physics_restart PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 120)
-jah_no_display(document.physics_restart)
-
-# document.light_defaults — SHADOWS ON BY DEFAULT and THE ONE SUN RESOLVER
-# (SPECS/SUN_AND_LIGHT_DEFAULTS_SPEC.md). The constructor's shadow default, the
-# scene's uninitialised master switch, and the whole contract of
-# iris::Scene::sunLight(): pin, priority, the TIE, and "this scene has no sun"
-# as a normal answer. Document only: NULL render system, no display.
-add_executable(test_light_defaults test_light_defaults.cpp)
-set_target_properties(test_light_defaults PROPERTIES AUTOMOC OFF)
-target_include_directories(test_light_defaults PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_light_defaults PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_light_defaults)
-add_test(NAME document.light_defaults COMMAND test_light_defaults
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.light_defaults PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.light_defaults)
-
-# document.material_defaults — THE UNAUTHORED SURFACE IS PHYSICAL AND OFF THE
-# TIER'S EDGE (DRAG-1; render audit IRISGL I-1 + APP A2). The constructor's
-# albedo was 1.0 LINEAR at perceptual roughness 0.5 (GGX alpha 0.25: satin, not
-# matte) and that roughness sat 0.0007 outside the traced-reflection band's
-# edge. A default that lands ON a tier's threshold is a defect class; this is
-# the guard. Document only: NULL render system, no display.
-add_executable(test_material_defaults test_material_defaults.cpp)
-set_target_properties(test_material_defaults PROPERTIES AUTOMOC OFF)
-target_include_directories(test_material_defaults PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    # The PUBLIC engine header only, for kRayReflectFeather: the guard reads the
-    # shipped feather instead of copying it (DRAG-1). Header-only — this target
-    # links no engine.
-    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_material_defaults PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_material_defaults)
-add_test(NAME document.material_defaults COMMAND test_material_defaults
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.material_defaults PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.material_defaults)
-
-# document.material_duplicate — A MATERIAL OWNS ITS ROWS, AND A DUPLICATE OWNS ITS OWN (LEAK-1 stage 1): every row
-# type clones whole (Property::clone), a duplicate's rows are distinct objects with equal values, and destroying
-# either material leaves the other whole. In the leak lane it also proves the rows are freed. Document only.
-add_executable(test_material_duplicate test_material_duplicate.cpp)
-set_target_properties(test_material_duplicate PROPERTIES AUTOMOC OFF)
-target_include_directories(test_material_duplicate PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_material_duplicate PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_material_duplicate)
-add_test(NAME document.material_duplicate COMMAND test_material_duplicate
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.material_duplicate PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.material_duplicate)
-jah_lsan_lane(document.material_duplicate)
-
-# document.dirty_list — THE DOCUMENT'S HALF of the dirty-set mirror
-# (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.3): dedupe, the three kinds that cascade
-# over a subtree, eviction (including a node marked and then freed before the
-# list was read), scene membership, the overflow valve, and the material
-# revision that carries what the node list cannot. Document only: NULL render
-# system, no display, no engine.
-add_executable(test_dirty_list test_dirty_list.cpp)
-set_target_properties(test_dirty_list PROPERTIES AUTOMOC OFF)
-target_include_directories(test_dirty_list PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_dirty_list PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_dirty_list)
-add_test(NAME document.dirty_list COMMAND test_dirty_list
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.dirty_list PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.dirty_list)
-
-# document.movement_epoch — THE VIEWER IS NOT THE VIEWED (nodegraph.h's
-# transform-write epoch, lane ENGINE-7 item 1). Four O(scene) walks and three
-# mirror gates hang off `iris::graph::transformWrites()`; a CAMERA used to bump
-# it, so flying re-ran every one of them on every frame (RR2 measured 10.28 ms
-# of the mirror's GI push on 92% of flying frames on an 8,404-node lattice,
-# against 0.024 ms still). Asserts the rule, the camera exemption through every
-# setter a camera is flown with, and the exception — a camera with CHILDREN
-# moves them, so it counts again. Document only: NULL render system, no display.
-add_executable(test_movement_epoch test_movement_epoch.cpp)
-set_target_properties(test_movement_epoch PROPERTIES AUTOMOC OFF)
-target_include_directories(test_movement_epoch PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_movement_epoch PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_movement_epoch)
-add_test(NAME document.movement_epoch COMMAND test_movement_epoch
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.movement_epoch PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.movement_epoch)
 
 # document.no_silent_setters — the STATIC half of the dirty-set law
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets.
@@ -296,13 +89,6 @@ jah_no_display(document.movement_epoch)
 # body that assigns a member and never reaches notifyChanged / markedParams /
 # touch. It caught thirteen emitter setters and the whole camera lens surface.
 find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-    add_test(NAME document.no_silent_setters
-             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/no_silent_setters.py
-                     ${CMAKE_SOURCE_DIR})
-    set_tests_properties(document.no_silent_setters PROPERTIES LABELS "document" TIMEOUT 60)
-    jah_no_display(document.no_silent_setters)
-endif()
 
 # document.reader_defaults — THE READER-DEFAULTS LAW, as a command (render audit
 # I-5, lane READER-DEFAULTS-1), shaped like document.no_silent_setters and
@@ -325,13 +111,6 @@ endif()
 # store and the load timeline. tests/mirror and tests/defaults record the same
 # constraint. The runtime half is scene.reopen_fidelity, which opens real archives
 # with keys missing.)
-if(Python3_Interpreter_FOUND)
-    add_test(NAME document.reader_defaults
-             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/reader_defaults.py
-                     ${CMAKE_SOURCE_DIR})
-    set_tests_properties(document.reader_defaults PROPERTIES LABELS "document" TIMEOUT 60)
-    jah_no_display(document.reader_defaults)
-endif()
 
 # (document.mesh_cache is DELETED — ATOM P2, 2026-09-22. It tested the parse
 # cache behind `Mesh::loadMesh`, and both are gone: nothing outside an import
@@ -339,53 +118,3 @@ endif()
 # be "one file is parsed once" is now "one asset is baked once"
 # (meshbake.primitives_baked).)
 
-# document.sky_write — ONE WRITER FOR THE REALISTIC SKY (SKY-SMALL /
-# SKY-WRITE-1). The dials exist twice in the document (typed fields the renderer
-# reads, a JSON block the panels bind from and the writer serialises); four
-# writers used to keep both halves by hand, with two different sets of clamps.
-# This pins the single path, the clamp, the round trip and — the part that keeps
-# the class from coming back — that `skyRealisticInSync()` actually reports a
-# bypass. Document only: NULL render system, no display.
-add_executable(test_sky_write test_sky_write.cpp)
-set_target_properties(test_sky_write PROPERTIES AUTOMOC OFF)
-target_include_directories(test_sky_write PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_sky_write PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_sky_write)
-add_test(NAME document.sky_write COMMAND test_sky_write
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.sky_write PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.sky_write)
-
-# document.color_json — ONE COLOUR ENCODING (audit D10): the codec in
-# irisgl/core/colorjson.h (0..1 floats, the engine's), its round trip, clamp
-# and absent-object rules, and the document's own writer using it. Every writer
-# and reader of {r, g, b, a} goes through it; the 0..255 integer form is gone.
-# Document only: NULL render system, no display.
-add_executable(test_color_json test_color_json.cpp)
-set_target_properties(test_color_json PROPERTIES AUTOMOC OFF)
-target_include_directories(test_color_json PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_color_json PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_color_json)
-add_test(NAME document.color_json COMMAND test_color_json
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.color_json PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.color_json)
-
-# document.cascade_set_reader — a scene's pinned cascade table past the renderer's slot table
-# is read clamped and the dropped rows counted (the open raises gi.cascades.clamped).
-add_executable(test_cascade_set_reader test_cascade_set_reader.cpp)
-set_target_properties(test_cascade_set_reader PROPERTIES AUTOMOC OFF)
-target_include_directories(test_cascade_set_reader PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
-target_link_libraries(test_cascade_set_reader PRIVATE IrisGL Qt6::Core)
-add_test(NAME document.cascade_set_reader COMMAND test_cascade_set_reader)
-set_tests_properties(document.cascade_set_reader PROPERTIES LABELS "document" TIMEOUT 30)
-jah_no_display(document.cascade_set_reader)

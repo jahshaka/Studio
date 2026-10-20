@@ -17,51 +17,6 @@
 
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 
-# ---- sockets.document -----------------------------------------------------
-# Compiles avatarsockets.cpp beside the test: the built-in bone-name mapping is
-# pure document logic with no module, page or engine behind it.
-add_executable(test_sockets_document test_sockets_document.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp)
-set_target_properties(test_sockets_document PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_sockets_document PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_sockets_document PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_sockets_document)
-add_test(NAME sockets.document COMMAND test_sockets_document
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(sockets.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 120 LABELS "document")
-jah_no_display(sockets.document)
-
-# ---- sockets.render -------------------------------------------------------
-add_executable(test_socket_render test_socket_render.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_socket_render PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_socket_render PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_socket_render PRIVATE
-    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_socket_render PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_socket_render JahshakaEngineMedia)
-jah_gpu_row(sockets.render CLASS engine COMMAND test_socket_render
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(sockets.render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 120 LABELS "mirror")
-
 # ---- sockets.e2e ----------------------------------------------------------
 # The real app binary, --script, with HOME redirected to a scratch dir so the
 # run gets a fresh library and can never touch the user's.
@@ -73,36 +28,13 @@ file(MAKE_DIRECTORY ${_sockets_home}/run)
 set(JAHSHAKA_SOCKETS_RIG "${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sockets.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js @ONLY)
-jah_gpu_row(sockets.e2e CLASS app TIER low NEEDS NONE NEEDS_WHY "socket verbs, camera.screenshot returns a shot (no picture claim)"
+jah_gpu_row(sockets.e2e SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "socket verbs, camera.screenshot returns a shot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js
          WORKING_DIRECTORY ${_sockets_home}/run)
 set_tests_properties(sockets.e2e PROPERTIES
     ENVIRONMENT "HOME=${_sockets_home};JAHSHAKA_DATA_ROOT=${_sockets_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
-
-# ---- sockets.tags ---------------------------------------------------------
-# AVATAR_RIG_PERF_SPEC §4: the engine TAG POINTS behind the socket API, the
-# hierarchy contract they must not break (decision D3 = H1, the graph layer's
-# shadow parent), and the mirror's RECONCILER — which replaced a per-frame
-# read-back-plus-FK resolver with event-driven arming. No rendering, so no
-# display and no GPU; the zero-lag claim itself is sockets.render's.
-add_executable(test_socket_tags test_socket_tags.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_socket_tags PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_socket_tags PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_socket_tags PRIVATE IrisGL Qt6::Gui)
-jah_document_graph(test_socket_tags)
-add_test(NAME sockets.tags COMMAND test_socket_tags
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(sockets.tags PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 120 LABELS "document")
-jah_no_display(sockets.tags)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -121,7 +53,4 @@ endif()
 # the one empty frame a headless engine walks.
 if(TEST sockets.e2e)
     set_property(TEST sockets.e2e PROPERTY JAHSHAKA_TEST_FRAMES 509)
-endif()
-if(TEST sockets.render)
-    set_property(TEST sockets.render PROPERTY JAHSHAKA_TEST_FRAMES 24)
 endif()

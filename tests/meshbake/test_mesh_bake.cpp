@@ -2449,7 +2449,9 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
 /// attribute metric, a 68k-triangle DAG, the SDF's band). Each hardware bake runs
 /// TWICE, so a race that happens to reproduce the serial bytes once is still
 /// asked again.
-static void bakeDeterminism()
+/// `part` (TEST-CUT-1: three rows, each at most 60 s): "standin" (the multi-mesh model), "dragon" (the Stanford
+/// dragon), "throws" (the throw-in-every-unit cases on the multi-mesh model); empty runs all three.
+static void bakeDeterminism(const QString &part = QString())
 {
     QTemporaryDir tmp;
     const QString standinPath = tmp.path() + QStringLiteral("/standin.obj");
@@ -2481,7 +2483,11 @@ static void bakeDeterminism()
     const int hardware = [] { iris::MeshBake::setBakeThreads(1 << 16); return iris::MeshBake::bakeThreads(); }();
     std::printf("  hardware threads: %d\n", hardware);
     CHECK_LOUD(hardware >= 2, "the box has more than one thread (else this suite proves nothing)");
-    const QStringList subjects = { twoPath, QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj") };
+    QStringList subjects;
+    if (part.isEmpty() || part == QStringLiteral("standin")) subjects << twoPath;
+    if (part.isEmpty() || part == QStringLiteral("dragon")) subjects << QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj");
+    const bool throws = part.isEmpty() || part == QStringLiteral("throws");
+    CHECK_LOUD(!subjects.isEmpty() || throws, qUtf8Printable(QStringLiteral("the part '%1' is one of standin, dragon, throws").arg(part)));
     for (const QString &path : subjects) {
         const QString name = QFileInfo(path).fileName();
         QByteArray blob[3];
@@ -2512,7 +2518,9 @@ static void bakeDeterminism()
                    qUtf8Printable(name + QStringLiteral(": 1 thread and %1 threads (twice) bake byte-identical blobs")
                                              .arg(hardware)));
     }
-    CHECK_LOUD(subjects.size() == 2, "both subjects ran");
+    CHECK_LOUD(subjects.size() == (part.isEmpty() ? 2 : (throws ? 0 : 1)), "the part's subjects ran");
+    if (!throws)
+        return;
 
     // AND A BAKE THAT THROWS IS NO BAKE — NOT A DEAD APP (IMPORT-SPEED-1 F1). An
     // exception in any unit of work (the test hook throws in the n-th: early = the
@@ -3199,7 +3207,7 @@ int main(int argc, char **argv)
                             argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism")) {
         std::printf("== 15. the bake does not depend on its threads ==\n");
-        bakeDeterminism();
+        bakeDeterminism(argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString());
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

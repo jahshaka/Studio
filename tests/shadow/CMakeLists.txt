@@ -1,89 +1,4 @@
-# SHADOW TOOLING phase 0 — the isolated spike (SPECS/SHADOW_TOOLING_SPEC.md §9).
-#
-# Unlike every other engine suite this one includes EnginePrivate.h and links
-# Ogre directly: the question it answers ("can static and dynamic shadow maps
-# share one atlas if the clear becomes per-map quads?") is about compositor
-# mechanics that have no public verb yet, and phase 0's whole purpose is to
-# answer it before a verb is designed around it.
-add_executable(test_shadow_spike test_shadow_spike.cpp)
-set_target_properties(test_shadow_spike PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_shadow_spike PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_include_directories(test_shadow_spike PRIVATE
-    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
-target_link_libraries(test_shadow_spike PRIVATE JahshakaEngine OgreNext)
-add_dependencies(test_shadow_spike JahshakaEngineMedia)
 
-# The arithmetic runs in the gate, and so does `cachekinds` (below); the other
-# device-side modes are the phase-0 evidence and are driven by hand (and by the
-# phase-1/2 suites that replace them).
-add_test(NAME shadow.layout COMMAND test_shadow_spike layout
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.layout PROPERTIES TIMEOUT 120 LABELS "document")
-jah_no_display(shadow.layout)
-
-# THE LAMP-MAP CACHE ON THE PROBE AND REFLECT NODE INSTANCES, under the Khronos
-# validation layer (ENGINE_CACHE_POLICY_SPEC §6 — E2's opening probe, kept). It
-# found that an all-cached node with no sun let Ogre's barrier solver throw
-# mid-pass and desync a layout: any "Validation Error" — or that solver
-# message — fails the row, whatever the exit code says.
-jah_gpu_row(shadow.cache_kinds CLASS engine COMMAND test_shadow_spike cachekinds
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.cache_kinds PROPERTIES
-    TIMEOUT 120 LABELS "engine"
-    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
-    FAIL_REGULAR_EXPRESSION "Validation Error;from Undefined to a read-only layout")
-
-# THE GATE SUITE (SHADOW_TOOLING_SPEC.md §7): the budget, the derivation, the
-# status readback and the rebuild churn, through the PUBLIC engine API only.
-add_executable(test_shadow_maps test_shadow_maps.cpp)
-set_target_properties(test_shadow_maps PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_shadow_maps PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_shadow_maps PRIVATE JahshakaEngine)
-add_dependencies(test_shadow_maps JahshakaEngineMedia)
-jah_gpu_row(lights.shadows CLASS engine COMMAND test_shadow_maps
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
-
-# shadow.atlas_rebuilds — THE HITCH COUNTER (T3x, E2 review / ledger 104/121).
-# ITS OWN PROCESS on purpose: what it asserts is what an OPEN costs, and an
-# open can only be seen on a VIRGIN atlas — the atlas never shrinks within a
-# session (owner decision D4), so the first case to grow it takes that
-# observation away from every case after it.
-jah_gpu_row(shadow.atlas_rebuilds CLASS engine COMMAND test_shadow_maps t3x
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 120 LABELS "engine")
-
-# shadow.atlas_binding — T3y, the other half of the same contract: nothing
-# rebuilds the atlas while a world is still BINDING (no view has presented), and
-# when it does come up the count and the clear strategy settle in ONE rebuild.
-# Its own process for T3x's reason — a virgin atlas is the only place an open
-# can be observed.
-jah_gpu_row(shadow.atlas_binding CLASS engine COMMAND test_shadow_maps t3y
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 120 LABELS "engine")
-
-# AN EDITOR HELPER IS NOT A SHADOW CASTER (SHADOW-FIT-1): the shadow node's casters
-# box — what fits the sun's splits — reads Ogre's caster bit under the VIEWPORT's
-# mask, so a helper (a light icon, a gizmo part) that kept the bit moved the fit in
-# the editor viewport and not in a screenshot. The helper's item carries no bit, the
-# box is the real casters' alone, and the un-marked control proves the box reads it.
-jah_gpu_row(shadow.helper_casters CLASS engine COMMAND test_shadow_spike helpercasters
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # CUTOUT-CASTER-1 — AN ALPHA-TESTED CASTER'S SHADOW IS ITS MAP, AND IT NEVER LOSES THE GPU.
 # The fork's caster fix (HlmsPbs: the caster's root layout holds the datablock's reflection map,
@@ -109,7 +24,7 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # first stage-close batch the churn twins took 1008 / 1159 s, over the old TIMEOUT 900: they passed only through the
 # hidden +900 s every gpu row's TIMEOUT carried for the admission wait — deleted by TESTING-CLEANUP-2B (the wait left
 # the clock: tests/cmake/vram_rows.cmake), so 2100 / 1950 is now the twins' whole bound.
-jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+jah_gpu_row(shadow.cutout_caster SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -119,64 +34,43 @@ jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon bloom ssao sma
 # budget 60 s: the measurement (TESTING-SPEED-B3): one process, 1,552 frames, 43.8-52 s loaded (the 377 s price was the
 # six-process era's: stale).
 set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272)
-jah_gpu_row(shadow.two_sided_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                 ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster 1
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-# budget 60 s: the measurement (TESTING-SPEED-B3): one process, 1,107 frames, 33.6-43 s loaded (the 319 s price: stale).
-set_tests_properties(shadow.two_sided_caster PROPERTIES LABELS "engine" TIMEOUT 256)
-jah_gpu_row(shadow.cutout_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                 ${CMAKE_CURRENT_BINARY_DIR}/shadow.cutout_caster.churn 10
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.cutout_caster.churn PROPERTIES LABELS "engine" TIMEOUT 2100)
-jah_gpu_row(shadow.two_sided_caster.churn CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh twosided
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                 ${CMAKE_CURRENT_BINARY_DIR}/shadow.two_sided_caster.churn 10
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine" TIMEOUT 1950)
-# gpu.cutout_soak — 5,000 frames of cut-outs (plain on a cube and a sphere, the live graph
-# cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
-# the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
-# push-time guard is shadow.cutout_caster (one process), its churn the `.churn` twins above.
-jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in
-                 ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
-                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
-                 ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(gpu.cutout_soak PROPERTIES
-    LABELS "engine" TIMEOUT 1800
-    ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
-    PASS_REGULAR_EXPRESSION "gpu_cutout_soak: PASS"
-    FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
+# gpu.cutout_soak.primitives / .tornado — a cut-out material must never lose the GPU (CUTOUT-CASTER-1): every cut-out path
+# draws under the Khronos validation layer — plain cut-outs on a cube and a sphere and the live graph cut-out the hang was
+# found on (.primitives), the Tornado sample (.tornado) — through the viewport and the offscreen screenshot path, with a
+# pinned and a free shader clock; any "Validation Error" or a lost device is red.
+# REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s). The defect was a caster's texture set bound
+# over a root layout one slot short — a binding the validation layer names on the FIRST draw of the path; the Xid it
+# became took ~2 minutes of drawing to show, and the old soak drew 5,000 frames of each scene (282 s, 11,260 frames) to
+# reproduce the hang itself. The law needs every path drawn under the layer, not the minutes: ONE SOAK PERIOD per scene
+# — 250 frames on the pinned clock + a screenshot, 250 on the free clock + a screenshot (500 frames) — and the two
+# scenes as two rows, each its own process on its own data root (the soak's one-process claim was its minutes).
+# Measured once each (2026-10-20, solo, the card lock held): primitives 37.4 s / 1,020 frames, tornado 36.7 s / 1,002.
+# TIMEOUT 6 x the solo run, rounded up.
+set(_soak_timeout_primitives 230)
+set(_soak_timeout_tornado 220)
+foreach(_part primitives tornado)
+    jah_gpu_row(gpu.cutout_soak.${_part} SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in
+                     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_holes.png
+                     ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
+                     ${CMAKE_CURRENT_BINARY_DIR}/gpu.cutout_soak.${_part} ${_part}
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gpu.cutout_soak.${_part} PROPERTIES
+        LABELS "engine" TIMEOUT ${_soak_timeout_${_part}}
+        ENVIRONMENT "VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_validation"
+        PASS_REGULAR_EXPRESSION "gpu_cutout_soak: ${_part} PASS"
+        FAIL_REGULAR_EXPRESSION "Validation Error;DEVICE WAS LOST;assert failed")
+endforeach()
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "gpu.cutout_soak=11260"
-        "lights.shadows=832"
-        "shadow.atlas_binding=166"
-        "shadow.atlas_rebuilds=640"
-        "shadow.cache_kinds=36"
+        "gpu.cutout_soak.primitives=1020"   # TEST-CUT-1: one soak period (500) + the boot and the authoring
+        "gpu.cutout_soak.tornado=1002"      # one soak period (500) + the boot and the Tornado import
         "shadow.cutout_caster=1552"
-        "shadow.cutout_caster.churn=15520"   # ten processes of shadow.cutout_caster
-        "shadow.helper_casters=8"
-        "shadow.layout=0"
-        "shadow.two_sided_caster=1107"
-        "shadow.two_sided_caster.churn=11070"   # ten processes of shadow.two_sided_caster
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)
@@ -186,22 +80,3 @@ foreach(_row_frames
     endif()
 endforeach()
 
-# shadow.cutout_two_sided — A THIN CUTOUT CARD STOPS THE SUN FROM BOTH SIDES (BISTRO-FIXES-3 stage 2): a one-sided
-# alpha-tested card facing AWAY from the sun casts the shadow it casts facing it (the caster never culls a cutout);
-# its cut half stays cut; an opaque one-sided card keeps the stock rule (a closed shape's back face casts nothing).
-add_executable(test_shadow_cutout_two_sided test_shadow_cutout_two_sided.cpp)
-set_target_properties(test_shadow_cutout_two_sided PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_shadow_cutout_two_sided PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_shadow_cutout_two_sided PRIVATE JahshakaEngine)
-add_dependencies(test_shadow_cutout_two_sided JahshakaEngineMedia)
-jah_gpu_row(shadow.cutout_two_sided CLASS engine COMMAND test_shadow_cutout_two_sided
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadow.cutout_two_sided PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(shadow.cutout_two_sided PROPERTIES JAHSHAKA_TEST_FRAMES 120)

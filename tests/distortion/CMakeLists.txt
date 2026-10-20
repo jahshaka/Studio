@@ -27,7 +27,7 @@ endfunction()
 
 jahshaka_distortion_test(test_distortion)
 target_link_libraries(test_distortion PRIVATE JahshakaEngine)
-jah_gpu_row(distortion.engine CLASS engine COMMAND test_distortion
+jah_gpu_row(distortion.engine SHIP CLASS engine COMMAND test_distortion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(distortion.engine PROPERTIES JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(distortion.engine PROPERTIES TIMEOUT 120 LABELS "engine")
@@ -37,7 +37,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_distortion_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_distortion_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_distortion_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(distortion.engine_asan CLASS engine COMMAND test_distortion_asan
+    jah_gpu_row(distortion.engine_asan SHIP CLASS engine COMMAND test_distortion_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(distortion.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are

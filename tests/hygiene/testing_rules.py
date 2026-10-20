@@ -23,6 +23,12 @@ tree and the build's registration, each with its name in the failure line:
      (read from the property); the rows without it are listed in tests/hygiene/frames_pending.txt — a row without
      FRAMES the list does not name is RED, and a listed row that states FRAMES (or is gone) is RED until the list drops
      it (the ratchet only tightens; `--trim-frames-pending` drops them).
+  R8 NO ROW OVER ONE MINUTE (TEST-CUT-1). Every line of scripts/gate-times.txt — every priced row and pool arm, ship
+     or not — is at most 60 s: CLAUDE.md Testing, the owner's LAW of 2026-10-20 ("every test is capped at 60 s"); a
+     longer row is rebuilt to the fewest frames its law needs, or archived, never registered.
+  R9 EVERY SHIP ROW IS PRICED (TEST-CUT-1). Every row labelled `ship` (THE SHIP SET, CLAUDE.md Testing) has a line in
+     scripts/gate-times.txt: `sprint.sh ship` refuses an unpriced ship row before any row runs, so an unpriced one is a
+     ship that cannot start.
   R10 ONE FIXTURE CONFIG (FIXTURE-CONFIG-1). No test source under tests/ constructs a
      `jahshaka::engine::EngineConfig` except tests/support/enginetesthelpers.h: every engine fixture takes its config
      from `enginetest::testEngineConfig(logFile, EngineOverrides)`, the one place the harness sets what every fixture
@@ -78,6 +84,32 @@ def r1_bad(inv):
 
 def r2_bad(inv, priced):
     return sorted(n for n, t in inv.items() if MEASURE not in t["labels"] and n not in priced)
+
+
+LIMIT = 60.0
+SHIP = "ship"
+
+
+def r8_bad(price):
+    """R8: [(row, seconds)] of every priced line over 60 s (CLAUDE.md Testing: every test is capped at 60 s)."""
+    return sorted((n, s) for n, s in price.items() if s > LIMIT)
+
+
+def r9_bad(inv, priced):
+    """R9: the ship rows (label `ship`) with no line in scripts/gate-times.txt — the ship refuses them."""
+    return sorted(n for n, t in inv.items() if SHIP in t["labels"] and n not in priced)
+
+
+def prices(path):
+    out = {}
+    for l in open(path, errors="replace"):
+        p = l.split()
+        if len(p) >= 2 and not l.startswith("#"):
+            try:
+                out[p[0]] = float(p[1])
+            except ValueError:
+                pass
+    return out
 
 
 def r4_bad(name, text, gpu_rows):
@@ -247,6 +279,11 @@ def the_rules_catch():
     check(r2_bad({"m": row([], labels={"engine"})}, set()) == ["m"] and not r2_bad({"m": row([], labels={"engine"})}, {"m"})
           and not r2_bad({"q": row([], labels={"measure"})}, set()),
           "R2 flags an unpriced guard, never a measure row")
+    check(r8_bad({"a": 60.0, "b": 60.01, "p::arm": 61.0}) == [("b", 60.01), ("p::arm", 61.0)] and not r8_bad({"a": 59.9}),
+          "R8 flags every priced row or arm over 60 s, never one at 60 s")
+    check(r9_bad({"s": row([], labels={"ship"}), "g": row([])}, set()) == ["s"]
+          and not r9_bad({"s": row([], labels={"ship", "measure"})}, {"s"}),
+          "R9 flags an unpriced ship row (a measure row of the set too), never an unpriced row outside the set")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())
@@ -400,6 +437,12 @@ def main(source, build):
     bad = r2_bad(inv, priced)
     check(not bad, "R2 every guard is priced in scripts/gate-times.txt (%d unpriced: %s)" % (len(bad), bad[:8]))
 
+    bad = r8_bad(prices(os.path.join(source, "scripts", "gate-times.txt")))
+    check(not bad, "R8 no row over one minute: every line of scripts/gate-times.txt is at most 60 s (%d over: %s)"
+          % (len(bad), ["%s %.1f" % x for x in bad[:8]]))
+    bad = r9_bad(inv, priced)
+    check(not bad, "R9 every ship row is priced in scripts/gate-times.txt (%d unpriced: %s)" % (len(bad), bad[:8]))
+
     files = subprocess.run(["git", "ls-files"], cwd=source, capture_output=True, text=True).stdout.split()
     gpu_rows = {n for n, t in inv.items() if any(c.endswith(LOCK) for c in t["cmd"])}
     bad = []
@@ -428,10 +471,12 @@ def main(source, build):
     check(gs._is_wipe(["sh", "/s/tests/support/fresh_home.sh", "--warm", "/h"]) and gs._is_wipe(["sh", "-c", "rm -rf /h"])
           and not gs._is_wipe(["/b/bin/Jahshaka", "--script", "x.js"]),
           "a fixture setup is a WIPE only when its command is fresh_home.sh / freshhome.cmake / sh -c rm -rf")
-    runfx = [n for n in ("threading.newproject_stall", "threading.import_soak") if n in inv]
+    # the RUN fixtures (TEST-CUT-1: the threading parents this named were archived; the fixture chains of the cut —
+    # a boot that hands its picture on, a stage that hands its library on — are the witnesses now)
+    runfx = [n for n in ("samples.mirror_room_boots.boot1", "material.live_roundtrip.author") if n in inv]
     check(runfx and all(inv[n].get("run_fixture") and not inv[n].get("fixture_setup") for n in runfx)
           and not [n for n, t in inv.items() if t.get("fixture_setup") and t.get("app")],
-          "the threading parents are RUN fixtures (gating rows), and no app row reads as a wipe (%s)" % runfx)
+          "the fixture chains' parents are RUN fixtures (gating rows), and no app row reads as a wipe (%s)" % runfx)
     raw, rc = gs.gate_graph.ctest_inventory(build)
     bad = r6_bad(json.loads(raw or "{}").get("tests", [])) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R6 a row that DEPENDS on another row's run requires a fixture that run sets up %s" % bad[:8])

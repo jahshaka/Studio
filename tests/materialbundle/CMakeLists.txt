@@ -45,6 +45,7 @@ target_include_directories(test_material_bundle PRIVATE
 target_link_libraries(test_material_bundle PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 add_test(NAME materials.bundle COMMAND test_material_bundle
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(materials.bundle)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(materials.bundle PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
 jah_no_display(materials.bundle)
