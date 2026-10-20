@@ -313,7 +313,6 @@ def main(source, build):
     print("\nlanes (recorded diffs re-selected against this build):")
     print("  %-42s %9s  %s" % ("lane", "rows", "env reds selected"))
     table = []
-    classified = None
     for c in cases["lanes"]:
         base, tip = c["range"].split("..")
         missing = [s for s in (base, tip) if not have(source, s)]
@@ -408,9 +407,7 @@ def main(source, build):
             dm = c["derived_max_rows"]
             at = dm["at"]
             lib = graph.target_reach(dm["links"]) or set()
-            if classified is None:      # a row's executables are the selector's own reading of it (classify_rows)
-                classified = fresh_inv(inv0)
-                gs.classify_rows(classified, graph, build)
+            classified = S.inv          # a row's executables and kind: the selector's own reading of them (classify_rows)
             linking = sorted(n for n in classified if not inv0[n].get("fixture_setup") and classified[n]["exes"] & lib)
             lints = [n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)]
             bar = at["rows"] + (len(linking) - at["linking"]) + (len(lints) - at["lints"])
