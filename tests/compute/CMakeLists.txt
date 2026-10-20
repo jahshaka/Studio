@@ -29,6 +29,36 @@ jah_gpu_row(chain.hzb SHIP CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 
+# engine.lod_rule_parity — REVIVED BY ATOM-5 (archived at 163d90223; the spec's own row, archived again at its merge):
+# the quality currency's C++ half against its GLSL half, and since ATOM-5 the cluster cut's DENSITY CAP (caps 1-4)
+# in the fourth copy (the GLSL piece over the shipped meshes' DAGs) and the fifth (the product's cut job), the cut
+# with the cap still ONE cut (no drawn cluster under another, every level-0 triangle covered once).
+add_executable(test_lod_rule_parity test_lod_rule_parity.cpp
+    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_draw.cpp
+    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_lod_rule_parity PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_lod_rule_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/tests/atom
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_lod_rule_parity PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures"
+    CLUSTER_TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/tests/atom/media")
+target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
+jah_gpu_row(engine.lod_rule_parity CLASS engine COMMAND test_lod_rule_parity
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
