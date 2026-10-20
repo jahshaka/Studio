@@ -1,5 +1,5 @@
 
-# engine.lod_rule_parity (archived: archive/tests/engine) — the quality currency's C++ half against its GLSL half,
+# engine.lod_rule_parity (a SHIP row since ATOM-5) — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
 # ATOM stage 2 (lane ATOM-CLUSTER-1) added the FOURTH copy — the cluster cut's C++
 # rule against the product GLSL piece JahClusterCut.glsl, over the shipped meshes'
@@ -29,7 +29,8 @@ jah_gpu_row(chain.hzb SHIP CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# engine.lod_rule_parity — REVIVED BY ATOM-5 (archived at 163d90223; the spec's own row, archived again at its merge):
+# engine.lod_rule_parity — REVIVED BY ATOM-5 (archived at 163d90223) and PROMOTED INTO THE SHIP SET at its merge: the cut's
+# C++ twin and the device's rule are held equal here (a change to one side without the other reds it — the subsystem's guard);
 # the quality currency's C++ half against its GLSL half, and since ATOM-5 the cluster cut's DENSITY CAP (caps 1-4)
 # in the fourth copy (the GLSL piece over the shipped meshes' DAGs) and the fifth (the product's cut job), the cut
 # with the cap still ONE cut (no drawn cluster under another, every level-0 triangle covered once).
@@ -55,7 +56,7 @@ target_compile_definitions(test_lod_rule_parity PRIVATE
     CLUSTER_TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/tests/atom/media")
 target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
-jah_gpu_row(engine.lod_rule_parity CLASS engine FRAMES 15 COMMAND test_lod_rule_parity
+jah_gpu_row(engine.lod_rule_parity SHIP CLASS engine FRAMES 15 COMMAND test_lod_rule_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 60 LABELS "engine")
 

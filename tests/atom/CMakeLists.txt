@@ -185,4 +185,3 @@ foreach(_row_frames
     endif()
 endforeach()
 
-set_source_files_properties(test_atom_density_dolly.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
