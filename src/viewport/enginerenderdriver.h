@@ -51,6 +51,10 @@ public:
         /// its post to its submit (`uiOverruns`), whose record was submitted while a frame had been in flight longer
         /// than a display period (`frameOverruns`), and the misses among them (`carriedExcused`).
         qulonglong uiOverruns = 0, frameOverruns = 0, carriedExcused = 0;
+        /// THE ENGINE'S DRAIN BUDGET, the third attribution (BUGS-7 stage 1): judged ticks whose latched frame left part
+        /// of the structure to the next frame (FrameInputStatus::messagesCarried) — a load streaming in over frames,
+        /// every tick's messages applied in order over the frames after; the engine's own choice, never this law's.
+        qulonglong budgetCarried = 0;
 
         // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
         // It counted ticks with no enabled View — the app sitting on the

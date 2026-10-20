@@ -331,7 +331,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "true to clear the record after reading it.",
           Needs::Document },
         { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, submitted, handOvers, requests, presentAlpha, presentFree}}",
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, budgetCarried, submitted, handOvers, requests, presentAlpha, presentFree, messagesCarried, drainsCut}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -359,6 +359,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "TICKS WITH NO OVERRUN (0 = the law; the editor's tick is paced by the present); `uiOverruns` / `frameOverruns` "
           "— judged ticks whose own work overran a display period from post to submit, or that submitted while a frame "
           "had been in flight longer than one (the owner's hitch budget) — and `carriedExcused`, the misses among them; "
+          "`budgetCarried` — judged ticks whose latched frame carried part of its structure to the next (the engine's "
+          "per-frame drain budget: a load streams in over frames, every message applied in order) — with "
+          "`messagesCarried`, what the last frame left to the next, and `drainsCut`, the drains ever cut; "
           "`presentAlpha` / "
           "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
           "free-running frame; `requests` — the engine requests the host made (each waits up to a frame in "
@@ -1630,6 +1633,7 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
     submit.insert("uiOverruns", double(s.uiOverruns));
     submit.insert("frameOverruns", double(s.frameOverruns));
     submit.insert("carriedExcused", double(s.carriedExcused));
+    submit.insert("budgetCarried", double(s.budgetCarried));
     if (engine) {
         const jahshaka::engine::FrameSubmitStatus st = engine->frameSubmitStatus();
         submit.insert("submitted", double(st.submitted));
@@ -1637,6 +1641,9 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
         submit.insert("requests", double(st.requests));
         submit.insert("presentAlpha", double(engine->published().presentAlpha));
         submit.insert("presentFree", engine->published().presentFree);
+        // THE DRAIN'S BUDGET (BUGS-7): what the last frame carried to the next, and the drains ever cut.
+        submit.insert("messagesCarried", double(engine->published().input.messagesCarried));
+        submit.insert("drainsCut", double(engine->published().input.drainsCut));
     }
     out.insert("submit", submit);
     if (reset && driver) driver->resetWorst();

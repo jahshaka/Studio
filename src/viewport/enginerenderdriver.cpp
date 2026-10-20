@@ -134,8 +134,12 @@ void EngineRenderDriver::tick(bool fromPresent)
     if (mFreeRunning && mEngine && mLastTickSerial) {
         ++mStats.checked;
         const bool missed = mEngine->published().serial < mLastTickSerial;
+        // A FRAME THAT CARRIED PART OF ITS STRUCTURE (the drain's budget, BUGS-7): its serial is the remainder's, so it
+        // never reads as a miss — and the tick's record is NOT whole on screen; named for what it is.
+        const bool budgetCut = mEngine->published().input.messagesCarried > 0u;
         if (mLastTickUiOverrun) { ++mStats.uiOverruns; if (missed) ++mStats.carriedExcused; }
         else if (mLastTickFrameOverrun) { ++mStats.frameOverruns; if (missed) ++mStats.carriedExcused; }
+        else if (budgetCut) ++mStats.budgetCarried;
         else if (missed) ++mStats.carried;
     }
     mLastTickSerial = 0;

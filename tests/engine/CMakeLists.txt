@@ -166,6 +166,22 @@ add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
 jah_gpu_row(frame.drag_latency SHIP CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.drain_budget — A FREE FRAME'S DRAIN IS BOUNDED PER FRAME, THE REST CARRIED IN ORDER (BUGS-7 stage 1): a batch of
+# 20,000 parented creates applies in ONE lockstep frame, and free-running over several frames — the serial advancing and
+# the backlog shrinking every frame, none refused (the order held), the longest drain under half the whole batch's.
+add_executable(test_engine_drain_budget test_engine_drain_budget.cpp)
+set_target_properties(test_engine_drain_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_drain_budget PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_drain_budget PRIVATE JahshakaEngine)
+add_dependencies(test_engine_drain_budget JahshakaEngineMedia)
+jah_gpu_row(frame.drain_budget CLASS engine FRAMES 40 COMMAND test_engine_drain_budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.drain_budget PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
