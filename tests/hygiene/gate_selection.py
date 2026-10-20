@@ -294,6 +294,7 @@ def main(source, build):
     print("\nlanes (recorded diffs re-selected against this build):")
     print("  %-42s %9s  %s" % ("lane", "rows", "env reds selected"))
     table = []
+    classified = None
     for c in cases["lanes"]:
         base, tip = c["range"].split("..")
         missing = [s for s in (base, tip) if not have(source, s)]
@@ -379,6 +380,32 @@ def main(source, build):
         if "max_rows" in c:
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
+        if "derived_max_rows" in c:
+            # THE BAR DERIVED FROM THE GRAPH (TOOLING-6 item 2): a reach that IS an edge of the graph (every executable
+            # that links <links>, and so the physics world) grows with every row registered on that edge — a literal
+            # max_rows moved by hand four times in one night, a merge red each time (§2640). The bar is the recorded
+            # selection moved by what the graph and the inventory say changed since: the rows that link the target and
+            # the source.* lints (which ride every diff); the record itself is asserted ONCE here, at its own numbers.
+            dm = c["derived_max_rows"]
+            at = dm["at"]
+            lib = graph.target_reach(dm["links"]) or set()
+            if classified is None:      # a row's executables are the selector's own reading of it (classify_rows)
+                classified = fresh_inv(inv0)
+                gs.classify_rows(classified, graph, build)
+            linking = sorted(n for n in classified if not inv0[n].get("fixture_setup") and classified[n]["exes"] & lib)
+            lints = [n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)]
+            bar = at["rows"] + (len(linking) - at["linking"]) + (len(lints) - at["lints"])
+            check(bool(lib) and bool(linking), "%s: the graph names the executables that link %s (%d) and their rows (%d)"
+                  % (c["lane"], dm["links"], len(lib), len(linking)))
+            check(not whole and len(gating) <= bar,
+                  "%s: stays at <= %d rows, the bar derived (recorded %d at %d linking rows + %d lints; now %d + %d) (%s)"
+                  % (c["lane"], bar, at["rows"], at["linking"], at["lints"], len(linking), len(lints),
+                     "TIER" if whole else len(gating)))
+            # THE EDGE ITSELF (a selector that drops it selects FEWER rows, and a bar alone passes that): every compiled
+            # row on it is selected — the app rows ride the physics TUs' area rule by their modules, not the graph
+            miss = [n for n in linking if classified[n]["kind"] != "app" and n not in sel]
+            check(not miss, "%s: selects every compiled row that links %s (%d; missing %s)"
+                  % (c["lane"], dm["links"], sum(1 for n in linking if classified[n]["kind"] != "app"), miss[:5]))
 
     tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)
