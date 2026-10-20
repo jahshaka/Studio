@@ -138,3 +138,30 @@ set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 
 
+
+# PHOTON-4 (stage 3): the revived test_gi_metal_bounce.cpp's two rows.
+# gi.workflow_lobe - EVERY SURFACE'S SPECULAR LOBE REACHES THE GI, WHATEVER ITS WORKFLOW: a SpecularAsFresnel and a
+# Specular plate read their metallic twin on the card, store and decode legs of a gather ray and a reflection ray
+# (bar 0.4 %, the archived gi.metal_bounce_route's), and a spec-gloss dielectric carries its 0.04 lobe (its closed form).
+# gi.hit_view_term - A STORE-ANSWERED HIT SENDS ITS DIFFUSE LOBE TOWARD ITS VIEWER: a matte floor seen in a mirror at
+# N.V 0.15 with the sun behind the eye, the store against the decode and the Disney lobe's closed form (bar 1 %).
+add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)
+set_target_properties(test_gi_metal_bounce PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_metal_bounce PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_metal_bounce PRIVATE JahshakaEngine)
+add_dependencies(test_gi_metal_bounce JahshakaEngineMedia)
+jah_gpu_row(gi.workflow_lobe CLASS engine COMMAND test_gi_metal_bounce --workflow
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.workflow_lobe PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.workflow_lobe PROPERTIES JAHSHAKA_TEST_FRAMES 816)
+jah_gpu_row(gi.hit_view_term CLASS engine COMMAND test_gi_metal_bounce --view-term
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_view_term PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(gi.hit_view_term PROPERTIES JAHSHAKA_TEST_FRAMES 100)
