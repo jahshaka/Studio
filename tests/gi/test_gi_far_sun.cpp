@@ -1609,13 +1609,62 @@ int modeInjectLeak(Fixture &f)
 //       store whole, which is what the no-ray readers (the cones, the field) read; the wall's share / closed form is
 //       PRINTED (read / truth; no bar: the store's dilution is a known debt, measured here on a fixture).
 //   e24 (the clean canyon): THE DECODE PAST THE CASCADES - every decode-answered ray (a record, or a far one) whose hit
-//       lies past cascade 3's box, against its exact direct (rho I cos DA(cos) x its sun ray; the canyon has no sky):
-//       BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
+//       lies past cascade 3's box, against its exact direct TOWARD THE RAY'S VIEWER (rho I cos_l x the Disney diffuse
+//       at (sun, hit -> probe), x its sun ray; the canyon has no sky; the probe placed by probePoint with the jitter
+//       off): BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
+//       (BUGS-1 item 15: the row first held the decode to the VIEW-AVERAGED direct the store re-emits, rho I cos DA,
+//       and read 1.111 - 1.06 / 1.20 at 60-80 / 80-100 m, the grazing views' Disney term; toward the viewer 0.999.)
 //   e25 (the terrace): THE MIP READ - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
 //       level >= 2 (lod from the ray's distance and the probe's solid angle, the reader's jahVoxelFootprintLod), their
 //       read against the level-0 store of the texel at the hit (the side facing the hit): PRINTED (the canyon read
 //       0.98-1.02; a mip read is the coverage-weighted mean, so the ratio's physics is 1.0 over a uniform region and
 //       the dilution elsewhere).
+/// THE PROBE'S PLACE (BUGS-1 item 15): the gather's uniform probe of cell (cx, cy) sits on the surface the camera sees at
+/// its block's centre pixel (the jitter off: the arm gather.jitter 1) - the camera ray through it against the analytic
+/// boxes. False where it meets none.
+bool probePoint(const Fixture &f, const Vec3 &cam, unsigned cx, unsigned cy, unsigned stride, Vec3 &out)
+{
+    Vec3 fw(kTarget.x - cam.x, kTarget.y - cam.y, kTarget.z - cam.z);
+    float l = std::sqrt(fw.x * fw.x + fw.y * fw.y + fw.z * fw.z);
+    fw = Vec3(fw.x / l, fw.y / l, fw.z / l);
+    Vec3 r(-fw.z, 0.0f, fw.x);
+    l = std::sqrt(r.x * r.x + r.z * r.z);
+    r = Vec3(r.x / l, 0.0f, r.z / l);
+    const Vec3 u(r.y * fw.z - r.z * fw.y, r.z * fw.x - r.x * fw.z, r.x * fw.y - r.y * fw.x);
+    const double t = std::tan(kFov * 0.5 * kPi / 180.0);
+    const double px = double(cx) * stride + 0.5 * double(stride), py = double(cy) * stride + 0.5 * double(stride);
+    const double x = (px + 0.5) / (0.5 * kSize) - 1.0, y = 1.0 - (py + 0.5) / (0.5 * kSize);
+    Vec3 d(float(fw.x + (r.x * x + u.x * y) * t), float(fw.y + (r.y * x + u.y * y) * t), float(fw.z + (r.z * x + u.z * y) * t));
+    l = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    d = Vec3(d.x / l, d.y / l, d.z / l);
+    float best = 1e30f;
+    for (const Box &b : f.boxes) {
+        float t0 = 0.0f;
+        if (slabEntry(cam, d, b.b, t0) && t0 > 0.0f && t0 < best) best = t0;
+    }
+    if (!(best < 1e29f)) return false;
+    out = Vec3(cam.x + d.x * best, cam.y + d.y * best, cam.z + d.z * best);
+    return true;
+}
+
+/// THE FLOOR'S RADIANCE TOWARD A VIEWER (the BRDF's own view term, BUGS-1 item 15): rho I cos_l x the renormalised
+/// Disney diffuse at (l, v) - the integrand disneyDiffuseAlbedo averages over v (enginetesthelpers.h), roughness 1.
+/// The store and the hit's direct hold that average (a view-independent re-emission); a DECODE shades the BRDF
+/// toward the ray's viewer, and at a grazing view it is brighter.
+double floorRadianceToward(const double n[3], const double toSun[3], const double v[3], double albedo)
+{
+    const double cl = n[0] * toSun[0] + n[1] * toSun[1] + n[2] * toSun[2];
+    const double cv = n[0] * v[0] + n[1] * v[1] + n[2] * v[2];
+    if (!(cl > 0.0) || !(cv > 0.0)) return 0.0;
+    double H[3] = { toSun[0] + v[0], toSun[1] + v[1], toSun[2] + v[2] };
+    const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+    const double vdh = hl > 0.0 ? std::max(0.0, (v[0] * H[0] + v[1] * H[1] + v[2] * H[2]) / hl) : 0.0;
+    const double r = 1.0, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+    const double fd90 = 0.5 * r + 2.0 * vdh * vdh * r;
+    const double ls = 1.0 + (fd90 - 1.0) * std::pow(1.0 - cl, 5.0), vs = 1.0 + (fd90 - 1.0) * std::pow(1.0 - cv, 5.0);
+    return albedo * double(kSunIntensity) * cl * ls * vs * ef;
+}
+
 int modeFarMeasure(Fixture &f, const std::string &which)
 {
     using namespace diag;
@@ -1654,6 +1703,11 @@ int modeFarMeasure(Fixture &f, const std::string &which)
     if (which == "e25")
         for (int c = 2; c < 4; ++c) f.s->giVoxelVolume(c, vols[size_t(c)]);
     f.e->setArm("gather.hitsReadback", 1.0);
+    if (which == "e24") f.e->setArm("gather.jitter", 1.0);   // the probes at their blocks' centres (probePoint)
+    double sView = 0.0;
+    unsigned nView = 0u;
+    struct SplitAcc { double n = 0, read = 0, truth = 0, view = 0; };
+    SplitAcc split[2][2][4];
     unsigned lastFrame = 0u, raysPer = 64u;
     double sRead = 0.0, sRef = 0.0;
     unsigned n = 0, frames = 0;
@@ -1693,9 +1747,32 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             const double cosL = nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z;
             const double read = lumOf(r.radiance);
             if (which == "e24") {
+                const double truth = faceRad(bx, cosL) * double(r.sunVisibility);
                 sRead += read;
-                sRef += faceRad(bx, cosL) * double(r.sunVisibility);
+                sRef += truth;
                 ++n;
+                // THE EXACT DIRECT TOWARD THE RAY'S VIEWER: the BRDF at (sun, hit -> probe)
+                double view = 0.0;
+                Vec3 probe;
+                if (bx.floor && probePoint(f, cam, unsigned(r.cellX), unsigned(r.cellY),
+                                           gs.stride ? gs.stride : 16u, probe)) {
+                    double v[3] = { double(probe.x - p.x), double(probe.y - p.y), double(probe.z - p.z) };
+                    const double vl = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                    for (double &x : v) x /= vl;
+                    const double ts[3] = { kToSun.x, kToSun.y, kToSun.z };
+                    view = floorRadianceToward(nn, ts, v, double(kFloorAlbedo)) * double(r.sunVisibility);
+                }
+                sView += view;
+                ++nView;
+                // THE SPLIT (BUGS-1 item 15's cause): the record kind, lit / shaded, and the hit's distance from the
+                // camera (20 m bins from 60 m)
+                const double dc = std::sqrt(double(p.x - cam.x) * (p.x - cam.x) + double(p.y - cam.y) * (p.y - cam.y) +
+                                            double(p.z - cam.z) * (p.z - cam.z));
+                const int kind = r.source == GatherRay::DecodeFar ? 1 : 0;
+                const int lit = (r.sunVisibility > 0.5f && cosL > 0.0 && bx.floor) ? 1 : 0;
+                const int bin = std::min(3, std::max(0, int((dc - 60.0) / 20.0)));
+                SplitAcc &a = split[kind][lit][bin];
+                a.n += 1; a.read += read; a.truth += truth; a.view += view;
                 continue;
             }
             // e25: a voxel-answered ray whose footprint reads level >= 2, against the level-0 store at its hit
@@ -1739,15 +1816,29 @@ int modeFarMeasure(Fixture &f, const std::string &which)
         }
     }
     f.e->setArm("gather.hitsReadback", 0.0);
+    f.e->setArm("gather.jitter", 0.0);
     f.e->setArm("gi.hitDirect", 1.0);
     gFrames += frames;
     const double ratio = sRef > 0.0 ? sRead / sRef : -1.0;
     if (which == "e24") {
+        const double ratioView = sView > 0.0 ? sRead / sView : -1.0;
         std::printf("   E-24 THE DECODE PAST THE CASCADES (clean canyon): %u decode rays past cascade 3's box, sum read / "
-                    "sum exact direct %.3f\n", n, ratio);
-        CHECK_MSG(n >= 100u && ratio >= 0.95 && ratio <= 1.05,
-                  "e24: PAST THE CASCADES A DECODE HIT IS ITS EXACT DIRECT (+ the sky, none here): read / truth %.3f "
-                  "over %u rays (bar 0.95-1.05)", ratio, n);
+                    "sum exact direct toward the ray's viewer %.3f (against the view-AVERAGED direct the store holds: %.3f)\n",
+                    n, ratioView, ratio);
+        for (int k = 0; k < 2; ++k)
+            for (int l = 0; l < 2; ++l)
+                for (int b = 0; b < 4; ++b) {
+                    const SplitAcc &a = split[k][l][b];
+                    if (a.n < 1) continue;
+                    std::printf("     %-11s %-6s %3d-%3d m from the camera: n %6.0f  read %.5f  truth (view-averaged) %.5f "
+                                "-> %.3f | toward the viewer %.5f -> %.3f\n",
+                                k ? "far record" : "record", l ? "lit" : "shaded", 60 + 20 * b, b == 3 ? 999 : 80 + 20 * b,
+                                a.n, a.read / a.n, a.truth / a.n, a.truth > 0 ? a.read / a.truth : -1.0, a.view / a.n,
+                                a.view > 0 ? a.read / a.view : -1.0);
+                }
+        CHECK_MSG(n >= 100u && nView == n && ratioView >= 0.95 && ratioView <= 1.05,
+                  "e24: PAST THE CASCADES A DECODE HIT IS ITS EXACT DIRECT (+ the sky, none here) - the BRDF toward the "
+                  "ray's viewer: read / truth %.3f over %u rays (bar 0.95-1.05)", ratioView, n);
     } else {
         std::printf("   E-25 THE MIP READ (the terrace, gi.hitDirect 0): %u voxel rays at lod >= 2 answered by cascades 2-3 "
                     "(%u answered finer, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
