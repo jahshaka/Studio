@@ -127,8 +127,12 @@ int main(int argc, char **argv)
         churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
-    // A fresh start every time the suite runs, or "cold" would be a lie.
-    QDir(home + "/.local/share/Jahshaka/shadercache").removeRecursively();
+    // A fresh start every time the suite runs, or "cold" would be a lie — THE WHOLE DATA ROOT, not the shader cache
+    // alone: a library database left by an older build has an older schema, the app's reset of it keeps the storages
+    // and wants their sidecar directory, and an older AssetStore has none, so the app REFUSES the library (exit 4) and
+    // run 1 never starts (main's build-linux, 2026-10-20, a home from an earlier schema; FORWARD-BUILDING: app data is
+    // wiped at a format bump, and a row owns its own state).
+    QDir(home + "/.local/share/Jahshaka").removeRecursively();
 
     const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");

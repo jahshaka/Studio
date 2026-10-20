@@ -338,8 +338,16 @@ def main(source, build):
         os.symlink(os.path.realpath(build), os.path.join(link, "build"))
         code, out, err = run([os.path.join(link, "tree", "scripts", "gate-scope.py"), "--files", "src/services/vrworld.cpp",
                               "--build", ".", "--json"], os.path.join(link, "build"))
-        check(code == 0 and rows_of(out) == r1 and "not in the build graph" not in out + err,
-              "2/15. `--build .` from inside the build dir, through a symlinked root, selects the same %d rows" % len(r1))
+        r2 = rows_of(out)
+        ok2 = code == 0 and r2 == r1 and "not in the build graph" not in out + err
+        # NAME THE CONDITION THAT FAILED (2026-10-20: this case went red once in an 8-wide run on main's build-linux and
+        # green by hand both ways; the message alone could not say whether the exit, the row set or the graph lookup
+        # differed): the exit code, the rows only one side selected, and the first graph complaint.
+        detail = "" if ok2 else " [exit %d; only-abs %s; only-link %s; %s]" % (
+            code, sorted(r1 - r2)[:6], sorted(r2 - r1)[:6],
+            next((l.strip()[:160] for l in (out + err).splitlines() if "not in the build graph" in l), "no graph complaint"))
+        check(ok2, "2/15. `--build .` from inside the build dir, through a symlinked root, selects the same %d rows%s"
+              % (len(r1), detail))
     finally:
         shutil.rmtree(link, ignore_errors=True)
     # 3. a directory that registers no row is an ERROR, never an empty answer
