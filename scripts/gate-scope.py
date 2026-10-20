@@ -651,9 +651,30 @@ def _cache_spelling(build, key="CMAKE_CACHEFILE_DIR"):
 
 
 def build_source_dir(build):
-    """The source tree a build dir was configured from (CMakeCache's CMAKE_HOME_DIRECTORY), AS SPELLED THERE —
-    never realpath'd: the build graph's nodes carry that spelling, and a resolved one misses every file."""
-    return _cache_spelling(build, "CMAKE_HOME_DIRECTORY")
+    """The source tree a build dir was configured from, AS THE BUILD GRAPH SPELLS IT — never realpath'd: the graph's
+    nodes carry that spelling, and a resolved one misses every file. The spelling is build.ninja's, not the cache's
+    (SYMLINK-ROOT-2, 2026-10-20): a build can carry MIXED spellings of one tree — main's build-linux names
+    CMAKE_HOME_DIRECTORY /home/jahshaka/Developer/jahshaka (the symlink) while every source node of build.ninja and
+    CMAKE_CACHEFILE_DIR sit under /mnt/work/Developer/jahshaka (the mount); bound to the cache's spelling, every lookup
+    on main answered "not in the build graph" and the merge gate selected by rule fallback alone. The graph's spelling
+    is the directory build.ninja names the top-level CMakeLists.txt in (the same inode as the cache's root); the cache's
+    spelling stands only when no build.ninja names one."""
+    home = _cache_spelling(build, "CMAKE_HOME_DIRECTORY")
+    if not home:
+        return None
+    bn = os.path.join(build, "build.ninja")
+    try:
+        real = os.path.realpath(home)
+        with open(bn, errors="replace") as f:
+            for line in f:                      # streamed: build.ninja is tens of MB and this runs per invocation
+                if "/CMakeLists.txt" not in line:
+                    continue
+                for d in re.findall(r"(\S+)/CMakeLists\.txt", line):
+                    if os.path.isabs(d) and os.path.realpath(d) == real:
+                        return d
+    except OSError:
+        pass
+    return home
 
 
 def bind_root(build):

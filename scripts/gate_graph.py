@@ -29,7 +29,7 @@ import sys
 
 CXX_EXT = (".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm", ".ipp")
 HEADER_EXT = (".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp")
-_CACHE_VERSION = 7                 # 6-7: nodes respelled — build-dir nodes to the build spelling, source nodes to the configured root (SYMLINK-ROOT-2)
+_CACHE_VERSION = 8                 # 8: nodes as build.ninja spells them; lookups resolve another spelling by realpath (SYMLINK-ROOT-2)
 # the nm cache's own version: bumped whenever what a cached entry means changes (2: the refusal
 # of H1 — no entry may hold an nm failure's empty tables; 3: TESTING-CLEANUP-2B H8b — an EMPTY member
 # whose nm SUCCEEDED is an answer and is cached: only a failed nm is never one, and that raises)
@@ -89,16 +89,6 @@ class NinjaGraph:
 
     def __init__(self, build):
         self.build = os.path.abspath(build)
-        # THE CONFIGURED ROOT'S SPELLING (SYMLINK-ROOT-2, 2026-10-20): a build can carry MIXED spellings of one tree —
-        # main's build-linux was configured as CMAKE_HOME_DIRECTORY /home/jahshaka/Developer/jahshaka (the symlink) with
-        # CMAKE_CACHEFILE_DIR and every build.ninja source node under /mnt/work/Developer/jahshaka (the mount). The
-        # selector binds its ROOT to the cache's root spelling and joins a queried path onto it, so every lookup missed
-        # the graph ("not in the build graph") and the merge gate on main selected by rule fallback alone. Every node
-        # that resolves INSIDE the configured root is respelled under it, so one spelling answers.
-        r = build_roots(self.build)
-        self.root = (r or {}).get("root") or None
-        self._root_real = os.path.realpath(self.root) if self.root else None
-        self._build_real = os.path.realpath(self.build)
         self.rev = collections.defaultdict(set)
         self.exes = set()
         self.kind = {}              # output -> "exe" | "shared" | "static" | "object" | "other"
@@ -176,26 +166,7 @@ class NinjaGraph:
             pass
 
     def _abs(self, p):
-        return self._respell(os.path.normpath(p if os.path.isabs(p) else os.path.join(self.build, p)))
-
-    def _respell(self, p):
-        """`p` under the BUILD DIR's spelling when it resolves inside the build dir (the ctest inventory names artefacts
-        that way: CMAKE_CACHEFILE_DIR), else under the configured ROOT's spelling when it resolves inside the root
-        (SYMLINK-ROOT-2: the selector joins a queried source path onto that root); else as given."""
-        if p == self.build or p.startswith(self.build + "/"):
-            return p
-        rp = os.path.realpath(p)
-        if rp == self._build_real:
-            return self.build
-        if rp.startswith(self._build_real + "/"):
-            return os.path.join(self.build, rp[len(self._build_real) + 1:])
-        if self.root and (p == self.root or p.startswith(self.root + "/")):
-            return p
-        if self._root_real and rp == self._root_real:
-            return self.root
-        if self._root_real and rp.startswith(self._root_real + "/"):
-            return os.path.join(self.root, rp[len(self._root_real) + 1:])
-        return p
+        return os.path.normpath(p if os.path.isabs(p) else os.path.join(self.build, p))
 
     def _parse_build_ninja(self, path):
         lines = open(path, errors="replace").read().replace("$\n", "").split("\n")
