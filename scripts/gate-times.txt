@@ -27,6 +27,7 @@ avatar.responsive.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 bake.determinism.standin 8.34  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 bake.determinism.dragon 15.79  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 bake.determinism.throws 42.53  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+bake.dag_reaches_root 1.12  solo, the card lock held, :71 (ATOM-6 stage 2c, 2026-10-21)
 bundle.writer 21.13  quiet n=24
 cameras.exposure 4.31  quiet n=47
 capture.first_recording.timing 14.90  ship 3a0422b4e (2026-10-13)
@@ -48,7 +49,7 @@ engine.gpuscene_identity 2.16  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-1
 engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.particles_pfx2_asan 11.59  quiet n=41
 engine.planar_asan 10.52  quiet n=39
-engine.lod_rule_parity 4.85  solo, the card lock held, :84 (ATOM-5 stage 2, 2026-10-20; revived from archive/tests/engine with the cap)
+engine.lod_rule_parity 4.78  solo, the card lock held, :71 (ATOM-6 stage 2c, 2026-10-21: the exact rule's one arm + the empty top group)
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
