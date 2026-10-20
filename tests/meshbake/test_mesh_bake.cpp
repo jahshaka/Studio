@@ -2269,15 +2269,15 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
     return 0;
 }
 
-/// `--dag-levels <model> <out.tsv> [threads]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
+/// `--dag-levels <model> <out.tsv> [threads] [--exhaustive] [--mesh i,j]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
 /// DAG from now on): every mesh of the file through the bake's own DAG build, and per depth (a level = what a cut at that
-/// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones, the sloppy ones
-/// (the fallback made the result), the locked positions the results lost, the measured (stored) and estimated errors, the
+/// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones,
+/// the locked positions the results lost, the measured (stored) and estimated errors, the
 /// level-0 islands the groups dropped and the summed triangle area as a fraction of level 0's (one material per aiMesh); per
 /// mesh level 0, the coarsest cut (the clusters of the terminal groups — none when the top group is empty) and how much of it
 /// lies on level-0 components under 12 triangles; for the file the totals, the prune's account and the wall time. A
 /// measurement of the bake — nothing is written but the table.
-static int dagLevels(const QString &path, const QString &outPath, int threads)
+static int dagLevels(const QString &path, const QString &outPath, int threads, bool exhaustive, const QSet<int> &only)
 {
     iris::MeshBake::setBakeThreads(threads);
     const QString arm = QStringLiteral("shipped");
@@ -2296,17 +2296,20 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
     walk(scene->mRootNode);
     QFile out(outPath);
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) { std::printf("FAIL: %s\n", qUtf8Printable(outPath)); return 1; }
-    out.write("mesh\tname\tl0\tcoarsest\tcoarsestSmallComp\tcomps\tcompsUnder12\tdepth\tgroups\ttrisIn\tterminal\tsloppy\t"
+    out.write("mesh\tname\tl0\tcoarsest\tcoarsestSmallComp\tcomps\tcompsUnder12\tdepth\tgroups\ttrisIn\tterminal\t"
               "lockDropped\terrMax\terrMed\testMax\tislandsDropped\tdropExtMax\tareaFrac\tmaterial\n");
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
-    int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, sloppy = 0, madeTerminal = 0, retries = 0,
+    int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, madeTerminal = 0, retries = 0,
         unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0;
     double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
+    std::vector<int> lostByDepth;   // locked positions lost, per depth (the post-sprint audit's numbers)
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
         const iris::MeshPtr &m = meshes.at(i);
+        if (!only.isEmpty() && !only.contains(i)) continue;
         iris::MeshBake::ClusterDagStats st;
         st.wantTerms = true;
+        st.exhaustiveMeasure = exhaustive;
         iris::MeshBake::buildClusterDag(m, &st, variant);
         const iris::MeshClusterDag &dag = m->clusterDag;
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
@@ -2317,7 +2320,11 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
         }
         ++dagMeshes;
         buildMs += st.buildMs; measureMs += st.measureMs; verifyMs += st.verifyMs;
-        sloppy += st.sloppyGroups; madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
+        madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
+        for (int d = 0; d < st.lockedDroppedByDepth.size(); ++d) {
+            if (int(lostByDepth.size()) <= d) lostByDepth.resize(size_t(d) + 1, 0);
+            lostByDepth[size_t(d)] += st.lockedDroppedByDepth.at(d);
+        }
         unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
         prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked;
         // level-0 components by welded position
@@ -2359,7 +2366,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
             for (unsigned c = 0; c < comps; ++c) if (compTris[c] > 0 && compTris[c] < 12) ++compsSmall;
         }
         unsigned long long l0 = 0, coarsest = 0, coarsestSmall = 0;
-        struct Lv { int groups = 0, terminal = 0, sloppy = 0, dropped = 0, islands = 0; unsigned long long tris = 0;
+        struct Lv { int groups = 0, terminal = 0, dropped = 0, islands = 0; unsigned long long tris = 0;
                     double area = 0.0; std::vector<float> err; float est = 0.0f, dropExt = 0.0f; };
         std::map<int, Lv> lv;
         std::vector<int> memberCount(size_t(dag.groups.size()), 0);
@@ -2412,7 +2419,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
                 if (G.estimate != FLT_MAX) L.est = std::max(L.est, G.estimate);
                 if (outputsOf[size_t(g)] == 0) ++emptyGroups;   // the prune emptied it
             }
-            if (g < st.groupSimplifyFlags.size() && (st.groupSimplifyFlags.at(g) & 1u)) ++L.sloppy;
             if (g < st.groupLockedDropped.size()) L.dropped += int(st.groupLockedDropped.at(g));
             if (g < st.groupTerms.size()) { L.islands += st.groupTerms.at(g).islandsDropped;
                                             L.dropExt = std::max(L.dropExt, st.groupTerms.at(g).droppedMaxExtent); }
@@ -2424,9 +2430,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
             Lv &L = kv.second;
             std::sort(L.err.begin(), L.err.end());
             const float emax = L.err.empty() ? -1.0f : L.err.back(), emed = L.err.empty() ? -1.0f : L.err[L.err.size() / 2];
-            out.write(QStringLiteral("%1\t%2\t%3\t%4\t%5\t%6\t%7\t%8\t%9\t%10\t%11\t%12\t%13\t%14\t%15\t%16\t%17\t%18")
+            out.write(QStringLiteral("%1\t%2\t%3\t%4\t%5\t%6\t%7\t%8\t%9\t%10\t%11\t%12\t%13\t%14\t%15\t%16\t%17")
                           .arg(i).arg(names[size_t(i)]).arg(l0).arg(coarsest).arg(coarsestSmall).arg(comps).arg(compsSmall)
-                          .arg(kv.first).arg(L.groups).arg(L.tris).arg(L.terminal).arg(L.sloppy).arg(L.dropped)
+                          .arg(kv.first).arg(L.groups).arg(L.tris).arg(L.terminal).arg(L.dropped)
                           .arg(double(emax), 0, 'g', 5).arg(double(emed), 0, 'g', 5).arg(double(L.est), 0, 'g', 5)
                           .arg(L.islands).arg(double(L.dropExt), 0, 'g', 5).toUtf8()
                       + QStringLiteral("\t%1\t%2\n").arg(area0 > 0.0 ? L.area / area0 : 0.0, 0, 'f', 4)
@@ -2442,10 +2448,13 @@ static int dagLevels(const QString &path, const QString &outPath, int threads)
     std::printf("  COARSEST TOTAL %llu (DAG %llu + DAG-less %llu); chains ending above 128: %d holding %llu, of which on "
                 "level-0 components under 12 tris: %llu\n", coarsestAll, coarsestAll - coarsestDagLess, coarsestDagLess,
                 endAbove128, lateCoarsest, smallInLate);
-    std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; sloppy groups %d; lock retries %d, "
+    std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; lock retries %d, "
                 "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
-                "relocked %d\n", stuck, madeTerminal, sloppy, retries, unconverged, lockDroppedGroups, emptyGroups,
+                "relocked %d\n", stuck, madeTerminal, retries, unconverged, lockDroppedGroups, emptyGroups,
                 prunedGroups, prunedRelocked);
+    std::printf("  locked positions lost per depth:");
+    for (size_t d = 0; d < lostByDepth.size(); ++d) std::printf(" d%zu %d", d, lostByDepth[d]);
+    std::printf("\n");
     std::printf("  DAG build wall %lld ms (clodBuild %.0f, of which the verify %.0f over %d retries; measure %.0f; summed)\n",
                 qint64(wall.elapsed()), buildMs, verifyMs, retries, measureMs);
     return 0;
@@ -3379,9 +3388,20 @@ int main(int argc, char **argv)
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
     }
-    if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels"))
-        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]),
-                         argc > 4 ? QString::fromLocal8Bit(argv[4]).toInt() : 4);
+    if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
+        // [threads] [--exhaustive] [--mesh i,j,...]
+        int threads = 4;
+        bool exhaustive = false;
+        QSet<int> only;
+        for (int a = 4; a < argc; ++a) {
+            const QString arg = QString::fromLocal8Bit(argv[a]);
+            if (arg == QStringLiteral("--exhaustive")) exhaustive = true;
+            else if (arg == QStringLiteral("--mesh") && a + 1 < argc)
+                for (const QString &n : QString::fromLocal8Bit(argv[++a]).split(QLatin1Char(','))) only.insert(n.toInt());
+            else threads = arg.toInt();
+        }
+        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]), threads, exhaustive, only);
+    }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-depths")) {
         QStringList paths;
         for (int a = 2; a < argc; ++a) paths << QString::fromLocal8Bit(argv[a]);
