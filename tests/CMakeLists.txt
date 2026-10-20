@@ -844,6 +844,7 @@ add_subdirectory(meshbake)
 add_subdirectory(importasync)
 add_subdirectory(openasync)
 add_subdirectory(archiveasync)
+add_subdirectory(avatar)        # the avatar FIXTURES only (beta_mannequin.dae: avatar.responsive, scripting.e2e.one_asset read it)
 add_subdirectory(avatarasync)
 add_subdirectory(ui)
 # The shipped sample scenes on a VIRGIN HOME, one test each — the owner's
