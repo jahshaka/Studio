@@ -159,6 +159,17 @@ static std::vector<unsigned> diskPixels(float erode)
 }
 
 // The audit's classifiers (spikes/reflect-tear-audit/metrics/an.py), on display codes.
+// THE BOX'S COVERAGE, by HUE alone (BUGS-2's merge red): the light on a mover's face lags the
+// settled frame by one frame of GI (its voxels arrive a frame later — the known law), so a
+// threshold on the green LEVEL flips at the face's edge (g−r 42 → 40 across a 2-code GI change)
+// while the box sits in the same pixels (3057/3057 at every checkpoint). Placement is the
+// claim; the ratio ignores how bright the face is.
+static bool boxHue(const Image &img, unsigned i)
+{
+    const int r = img.rgba[size_t(i) * 4u], g = img.rgba[size_t(i) * 4u + 1], b = img.rgba[size_t(i) * 4u + 2];
+    return g * 20 > 23 * std::max(r, b);
+}
+
 static bool green(const Image &img, unsigned i)
 {
     const int r = img.rgba[size_t(i) * 4u], g = img.rgba[size_t(i) * 4u + 1], b = img.rgba[size_t(i) * 4u + 2];
@@ -291,10 +302,11 @@ static int uncoverMain(Engine *e, Scene *s, View *view, const char *dumpDir)
             }
         // THE DIRECT BOX AGREES: the moving frame shows the box where this frame put it.
         // (A first version of this lane drew the frame's Atom items a frame late — a
-        // depth-format history texture read by the resolve — and this is the guard.)
+        // depth-format history texture read by the resolve — and this is the guard: a box a
+        // frame late is ~13 px off on every row.) Coverage by hue (boxHue), never by level.
         int directDiff = 0;
         for (unsigned i = 0; i < kWidth * kHeight; ++i)
-            if (green(moving, i) != green(settled, i) && float(i / kWidth) > direct.y0 + 6.0f) ++directDiff;
+            if (boxHue(moving, i) != boxHue(settled, i) && float(i / kWidth) > direct.y0 + 6.0f) ++directDiff;
         for (unsigned i : disk) {
             const bool gm = green(moving, i), gs = green(settled, i);
             if (gm && !foot[i]) ++falsePx;

@@ -137,8 +137,13 @@ assert(nodeId && ("" + nodeId).length > 10, "assets.addToScene -> node " + nodeI
 var EYE = 4.0;
 editor.setCamera({ position: { x: 0, y: 0, z: EYE }, lookAt: { x: 0, y: 0, z: 0 } });
 
-// The geometry counters are LAZY (reading the verb is what switches them on),
-// so prime them before measuring anything.
+// THE COUNTERS ARE SUBSCRIBED BY A CALL (U3 stage 3, app.renderStats' doc): a read opens a
+// 120-published-frame window and the engine stops recording when it closes. A screenshot
+// settles the GI for up to 2000 published frames, so a window opened BEFORE a screenshot can
+// be closed by the time the next reading's frames run (BUGS-2's merge: the bias-0 shot settled
+// in 174 frames and the bias-1.27 reading read 0/0 with metricsRecording false). Every
+// reading therefore opens its own window right before its frames and asserts the engine
+// was recording when it read.
 app.renderStats();
 editor.frame(4);
 
@@ -158,8 +163,10 @@ for (var gy = 0; gy < 7; ++gy)
 
 function measure(tag, bias) {
     editor.setLodBias(bias);
+    app.renderStats();                      // the window opens: the next frames are counted
     editor.frame(4);
     var rs = app.renderStats();
+    assert(rs.metricsRecording, tag + ": the reading's frame was counted (metricsRecording)");
     var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
     var probes = [];
     for (var p = 0; p < shot.probes.length; ++p)
@@ -221,9 +228,11 @@ assert(drop >= expected,
 //    the finest level from wherever it was.
 assert(editor.lodBias() > 0, "editor.lodBias reads back the applied value");
 editor.setLodBias(0);
+app.renderStats();                          // the window opens for the frames below
 editor.frame(4);
 assert(editor.lodBias() === 0, "0 reads back as 0");
 var back = app.renderStats();
+assert(back.metricsRecording, "the back-to-finest reading's frame was counted (metricsRecording)");
 assert(back.submittedTriangles === pinned.triangles,
        "and the scene is back to its finest level, exactly (" + back.submittedTriangles + ")");
 
