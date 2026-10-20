@@ -171,15 +171,26 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // THE BOOT IS FRAMES OF WORK, NEVER SECONDS (TOOLING-6 item 4; the process forbids wall clock): the token comes
+    // after the startup gate, whose every wait is counted in the engine's frames (src/app/shaderbuildgate.cpp — the
+    // warm-up frames, the GI compute set until kGiQuietFrames frames compile nothing, each tier's set the same) — a
+    // cold shader cache is MORE FRAMES, not a red. The 120 s wall-clock wait this replaced ran out on a cold cache
+    // after a rebase (202 shaders, ledger 2636) and redded a row for no defect. So the wait is: the token, or the
+    // process's end; a boot that never ends is the row's own TIMEOUT (the policy's bound), and the gate's frame lines
+    // are printed as they arrive, so even a killed row's output says how far the boot got.
     QString token;
     QByteArray bootLog;
     {
-        QElapsedTimer timer;
-        timer.start();
-        while (timer.elapsed() < 120000 && token.isEmpty()
-               && jahshaka.state() == QProcess::Running) {
+        int shown = 0;
+        while (token.isEmpty() && jahshaka.state() == QProcess::Running) {
             jahshaka.waitForReadyRead(500);
             bootLog += jahshaka.readAll();
+            for (int nl; (nl = bootLog.indexOf('\n', shown)) >= 0; shown = nl + 1) {
+                const QByteArray line = bootLog.mid(shown, nl - shown).trimmed();
+                if (line.contains("startup shader build:"))
+                    printf("boot: %s\n", line.constData());
+            }
+            fflush(stdout);
             const int at = bootLog.indexOf("MCP: token ");
             if (at >= 0) {
                 const int end = bootLog.indexOf('\n', at);
