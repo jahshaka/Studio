@@ -56,9 +56,19 @@ target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
 target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+# THE SEED, ITS OWN ROW (TOOLING-7 stage 2; the derivation in test_async_after_open.cpp's header): the startup build is
+# not this row's subject, and a fresh tree (every ship tree) paid it inside the row — 64 s solo, over the minute. The
+# seed row boots the SAME World Mode (the tier and features below) and quits, only when the seed is missing; the row
+# requires it (a fixture chain: FIXTURES_SETUP + FIXTURES_REQUIRED + DEPENDS, so `-R shader.async_after_open` runs both).
+jah_gpu_row(shader.async_after_open.seed SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+         COMMAND test_async_after_open --seed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 180 LABELS "shadercache"   # 6 x its solo 28.2 s
+    FIXTURES_SETUP asyncAfterOpenSeed)
 jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache")
+set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache"
+    FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)
 
 # shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
@@ -78,9 +88,12 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
-# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
+# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing. The two async rows
+# re-counted 2026-10-20 by the same meter at TOOLING-7's split (the seed's boot-and-quit 463, the cold + warm launches
+# 918 + 382).
 foreach(_row_frames
-        "shader.async_after_open=1325"
+        "shader.async_after_open=1300"
+        "shader.async_after_open.seed=463"
         "shadercache.app=976"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

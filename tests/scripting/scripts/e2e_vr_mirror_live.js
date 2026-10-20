@@ -68,9 +68,17 @@ assert(vr.state().mirror.showing === "eye",
 //
 //   showing "eye" -> the editor's View drew NOTHING (one pipeline)
 //   showing "own" -> the editor's View drew THIS frame (live, not a still)
+//
+// THE WINDOW IS THREE BLINK CYCLES, 90 FRAMES (TOOLING-7 stage 2: the frames the law needs, derived — it was 200,
+// 6.7 cycles). The runner blinks 12 frames of every 30 (JAHSHAKA_VR_TEST_BLINK_EVERY/_FRAMES); the hysteresis hands
+// the desktop back after part of each blink, so a cycle shows the desktop's own camera on ~5.4 frames (measured
+// 2026-10-20: 36 of 200 frames own, 164 eye). The bars below need eye > 50 and own > 5: own > 5 is two hand-backs,
+// eye > 50 is a window over 61 frames (50 / (1 - 0.18)); a WHOLE number of cycles covers every phase of the blink
+// equally, so the counts do not depend on where the window starts — the smallest whole count over 61 is three
+// (expected 74 eye, 16 own). Every frame of the window is still checked for both halves of the rule.
 var prev = editor.viewportState().framesPresented;
 var eyeFrames = 0, ownFrames = 0, drewOnEye = 0, missedOnOwn = 0;
-for (var i = 0; i < 200; ++i) {
+for (var i = 0; i < 90; ++i) {
     editor.frame(1);
     var showing = vr.state().mirror.showing;
     var fp = editor.viewportState().framesPresented;
@@ -79,7 +87,7 @@ for (var i = 0; i < 200; ++i) {
     if (showing === "eye") { ++eyeFrames; if (drew) ++drewOnEye; }
     else { ++ownFrames; if (!drew) ++missedOnOwn; }
 }
-console.log("over 200 frames: " + eyeFrames + " showed the eye, " + ownFrames +
+console.log("over 90 frames: " + eyeFrames + " showed the eye, " + ownFrames +
             " the desktop's own camera");
 assert(eyeFrames > 50, "the eye is what the desktop shows most of the time (" + eyeFrames + ")");
 assert(ownFrames > 5,
@@ -173,14 +181,18 @@ player.frame(2);
 var pst = player.state().vr;
 assert(pst.mirror.mode === "left" && pst.mirror.showing === "eye",
        "THE PLAYER'S WINDOW IS THE EYE'S COPY (" + JSON.stringify(pst.mirror) + ")");
+// TWO BLINK CYCLES, 60 FRAMES (TOOLING-7 stage 2; it was 120, four cycles): the law is one hand-back (sawOwn > 0).
+// Any 30 consecutive frames cover every phase of the 12-in-30 blink once, and the hysteresis is shorter than the
+// blink, so one cycle holds a hand-back (measured 2026-10-20: 18 own frames of 120, ~4.5 a cycle); two cycles, so the
+// verdict never rests on a single blink's edge.
 var sawOwn = 0;
-for (var p = 0; p < 120; ++p) {
+for (var p = 0; p < 60; ++p) {
     player.frame(1);
     if (player.state().vr.mirror.showing === "own") ++sawOwn;
 }
 assert(sawOwn > 0,
        "AND IT TAKES ITS OWN PICTURE BACK WHEN THE RUNTIME STOPS DRAWING (" + sawOwn +
-       " of 120 frames)");
+       " of 60 frames)");
 app.space("editor");
 assert(player.state().vr.active === false,
        "LEAVING THE PLAYER PAGE ENDED THE PLAYER'S SESSION (the rule the owner confirmed)");

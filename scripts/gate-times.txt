@@ -168,7 +168,8 @@ scripting.live 10.56  quiet n=49
 services.core 0.00  ship 3a0422b4e (2026-10-13)
 services.memory 0.10  ship 3a0422b4e (2026-10-13)
 settings.store 0.56  quiet n=12
-shader.async_after_open 34.26  median of 4, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shader.async_after_open 28.57  solo 2026-10-20 (TOOLING-7: the seed split out; 64.06 s solo before on the same fresh tree, the seed made inside the row)
+shader.async_after_open.seed 28.22  solo 2026-10-20 (TOOLING-7: the seed-MAKING run, a fresh tree; a tree that has its seed answers in ~0 s)
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadergraph.emitter_parity 3.14  quiet n=47
 shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
@@ -224,5 +225,5 @@ thumbnails.studio_env 1.97  quiet n=43
 ui.space_docks 18.40  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.space_docks.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
-vr.mirror_live 53.86  quiet n=46
+vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

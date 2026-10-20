@@ -25,7 +25,10 @@ tree and the build's registration, each with its name in the failure line:
      it (the ratchet only tightens; `--trim-frames-pending` drops them).
   R8 NO ROW OVER ONE MINUTE (TEST-CUT-1). Every line of scripts/gate-times.txt — every priced row and pool arm, ship
      or not — is at most 60 s: CLAUDE.md Testing, the owner's LAW of 2026-10-20 ("every test is capped at 60 s"); a
-     longer row is rebuilt to the fewest frames its law needs, or archived, never registered.
+     longer row is rebuilt to the fewest frames its law needs, or archived, never registered. THE CAP IS ON THE PRICE —
+     the row's own SOLO time — never on a loaded run: under the ship's 8-wide load a row runs slower by contention alone,
+     and `sprint.sh ship` PRINTS after its run every row whose loaded time went over 60 s beside its solo price
+     (information for the lead, never a red; TOOLING-7 stage 2).
   R9 EVERY SHIP ROW IS PRICED (TEST-CUT-1). Every row labelled `ship` (THE SHIP SET, CLAUDE.md Testing) has a line in
      scripts/gate-times.txt: `sprint.sh ship` refuses an unpriced ship row before any row runs, so an unpriced one is a
      ship that cannot start.
