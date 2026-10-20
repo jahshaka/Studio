@@ -424,7 +424,8 @@ function(_jah_data _row _class)
 endfunction()
 
 # jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier> NEEDS <features…>|NONE [NEEDS_WHY "<claim>"] [TEST_WINDOW]] [TOKENS <k>]
-#             [FRAMES <n>] COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+#             [FRAMES <n>] [SHIP] COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>] [DATA <sets…>])
+# SHIP (TEST-CUT-1): the row is one of THE SHIP SET (jah_ship_row below).
 # FRAMES <n> (TESTING-SPEED-A item 7; SPECS/TESTING_SPEED_SPEC.md §2 A8): THE FRAMES THE ROW RENDERS, stated — the test
 # property JAHSHAKA_TEST_FRAMES (a row declared by add_test / jah_gpu_exclusive_test sets the same property with
 # set_tests_properties). source.testing_rules reads the PROPERTY (ctest --show-only=json-v1) and reds a kept GPU row
@@ -446,7 +447,7 @@ endfunction()
 # COLD "<why>" — a row whose SUBJECT is the cold compile (a count of compiles a warm cache would hide, the cache itself):
 # no wrapper, no cache, the reason stated where the row is.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -498,17 +499,20 @@ function(jah_gpu_row _row)
     if(_declared)
         _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
+    if(G_SHIP)
+        jah_ship_row(${_row})
+    endif()
 endfunction()
 
-# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
-#                        [WORKING_DIRECTORY <dir>])
+# jah_gpu_exclusive_test(NAME <suite> CLASS <class> [TIER <tier> NEEDS <features…>|NONE] RUN_TIMEOUT <s> [SHIP]
+#                        COMMAND <exe-or-target> [args...] [WORKING_DIRECTORY <dir>])
 # add_test() through the card's lock (scripts/gpu-exclusive.sh) on ALL the card's slots, labelled `measure`, whatever
 # the row's class (JAH_CLASS keeps it). `set_tests_properties` cannot change a registered COMMAND, so the wrapper is
 # applied at registration: a TARGET name as the first COMMAND word becomes $<TARGET_FILE:...> (it
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "TEST_WINDOW" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the measuring list changes by a verdict only")
@@ -556,6 +560,32 @@ function(jah_gpu_exclusive_test)
         _jah_test_boot_register(${G_NAME} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
     endif()
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_measure_label [[${G_NAME}]])")
+    if(G_SHIP)
+        jah_ship_row(${G_NAME})
+    endif()
+endfunction()
+
+# THE SHIP SET (TEST-CUT-1; CLAUDE.md Testing, the owner's LAW of 2026-10-20): the rows `sprint.sh ship` runs, and
+# nothing else — one end-to-end row per subsystem, the six hashes, the sample boots, the sanitizers, the hygiene
+# rows. A row of the set carries the ctest LABEL `ship`: jah_gpu_row(… SHIP) and jah_gpu_exclusive_test(… SHIP) mark
+# their row, jah_ship_row(<row>…) marks a plain add_test() row. The label is appended at the END of the row's
+# directory (a site's own set_tests_properties(… LABELS …) replaces the list; the measure label waits the same way),
+# and jah_ship_closure_pass (the end of this file) gives it to every fixture setup and DEPENDS parent a ship row needs.
+# A ship row is priced at most 60 s in scripts/gate-times.txt (sprint.sh ship refuses one over it or unpriced;
+# source.testing_rules R8/R9). A spec's own rows are NOT marked: `spec.sh merge` archives them (archive/tests/<spec>/).
+function(jah_ship_row)
+    foreach(_t IN LISTS ARGV)
+        cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_ship_label [[${_t}]])")
+    endforeach()
+endfunction()
+function(_jah_ship_label _row)
+    get_test_property(${_row} LABELS _l)
+    if(NOT _l)
+        set(_l "")
+    endif()
+    list(APPEND _l ship)
+    list(REMOVE_DUPLICATES _l)
+    set_tests_properties(${_row} PROPERTIES LABELS "${_l}")
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
@@ -1240,3 +1270,64 @@ foreach(_t IN LISTS JAH_MEASURE_ROWS)
 endforeach()
 
 
+
+# THE SHIP SET'S CLOSURE (TEST-CUT-1): a ship row's fixture setups (FIXTURES_SETUP of a fixture it FIXTURES_REQUIRED)
+# and DEPENDS parents are part of it — `ctest -R` adds the setups itself, and the archive (spec.sh merge, the cut's
+# stage 4) keeps only labelled rows — so each takes the `ship` label too, to a fixed point.
+function(_jah_ship_collect _dir)
+    get_property(_tests DIRECTORY "${_dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        set_property(GLOBAL APPEND PROPERTY JAH_SHIP_ALL "${_t}")
+        set_property(GLOBAL PROPERTY JAH_SHIP_DIR_${_t} "${_dir}")
+    endforeach()
+    get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_sub IN LISTS _subs)
+        _jah_ship_collect("${_sub}")
+    endforeach()
+endfunction()
+function(jah_ship_closure_pass)
+    _jah_ship_collect("${CMAKE_CURRENT_SOURCE_DIR}")
+    get_property(_all GLOBAL PROPERTY JAH_SHIP_ALL)
+    set(_setup_of "")   # "<fixture>=<row>" pairs
+    foreach(_t IN LISTS _all)
+        get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+        get_property(_fs TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_SETUP)
+        foreach(_f IN LISTS _fs)
+            list(APPEND _setup_of "${_f}=${_t}")
+        endforeach()
+    endforeach()
+    set(_moved TRUE)
+    while(_moved)
+        set(_moved FALSE)
+        foreach(_t IN LISTS _all)
+            get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+            get_property(_l TEST ${_t} DIRECTORY "${_d}" PROPERTY LABELS)
+            if(NOT "ship" IN_LIST _l)
+                continue()
+            endif()
+            get_property(_need TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_REQUIRED)
+            get_property(_deps TEST ${_t} DIRECTORY "${_d}" PROPERTY DEPENDS)
+            set(_parents ${_deps})
+            foreach(_pair IN LISTS _setup_of)
+                string(REPLACE "=" ";" _p "${_pair}")
+                list(GET _p 0 _f)
+                list(GET _p 1 _r)
+                if(_f IN_LIST _need)
+                    list(APPEND _parents ${_r})
+                endif()
+            endforeach()
+            foreach(_r IN LISTS _parents)
+                get_property(_rd GLOBAL PROPERTY JAH_SHIP_DIR_${_r})
+                if(NOT _rd)
+                    continue()
+                endif()
+                get_property(_rl TEST ${_r} DIRECTORY "${_rd}" PROPERTY LABELS)
+                if(NOT "ship" IN_LIST _rl)
+                    set_property(TEST ${_r} DIRECTORY "${_rd}" APPEND PROPERTY LABELS ship)
+                    set(_moved TRUE)
+                endif()
+            endforeach()
+        endforeach()
+    endwhile()
+endfunction()
+jah_ship_closure_pass()
