@@ -1614,7 +1614,7 @@ int modeInjectLeak(Fixture &f)
 //       off): BAR sum read / sum truth within 0.95-1.05 - past the cascades a decode hit is its exact direct + the sky.
 //       (BUGS-1 item 15: the row first held the decode to the VIEW-AVERAGED direct the store re-emits, rho I cos DA,
 //       and read 1.111 - 1.06 / 1.20 at 60-80 / 80-100 m, the grazing views' Disney term; toward the viewer 0.999.)
-//   e25 (the terrace): THE MIP READ - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
+//   e25 (the terrace): THE MIP READ (BUGS-1 item 16: barred on the uniform regions, where the mean is exact) - the arm gi.hitDirect 0 again, the voxel-answered rays whose footprint reads a
 //       level >= 2 (lod from the ray's distance and the probe's solid angle, the reader's jahVoxelFootprintLod), their
 //       read against the level-0 store of the texel at the hit (the side facing the hit): PRINTED (the canyon read
 //       0.98-1.02; a mip read is the coverage-weighted mean, so the ratio's physics is 1.0 over a uniform region and
@@ -1700,8 +1700,16 @@ int modeFarMeasure(Fixture &f, const std::string &which)
     // the far cascades only (2 and 3: 64^3 at High - a 128^3 cascade's whole readback is seconds); a ray answered
     // finer is counted apart (e25 measures the far read)
     unsigned finer = 0u;
-    if (which == "e25")
+    if (which == "e25") {
+        const auto t0 = std::chrono::steady_clock::now();
         for (int c = 2; c < 4; ++c) f.s->giVoxelVolume(c, vols[size_t(c)]);
+        // THE COST (BUGS-1 item 16): printed, never a bar (the engine has no wall clock; this is the host's)
+        std::printf("   e25: the two cascades' store read back in %.2f s\n",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    }
+    // THE UNIFORM-REGION ARM (BUGS-1 item 16): rays whose read's whole block holds ONE surface kind and one light
+    double uRead = 0.0, uRef = 0.0;
+    unsigned uN = 0u, uDark = 0u, uDarkLit = 0u;
     f.e->setArm("gather.hitsReadback", 1.0);
     if (which == "e24") f.e->setArm("gather.jitter", 1.0);   // the probes at their blocks' centres (probePoint)
     double sView = 0.0;
@@ -1727,11 +1735,18 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             if (which == "e25" && r.cascade < 2) { ++finer; continue; }
             const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
             if (which == "e24" && cascadeOf(g, p) >= 0) continue;   // past cascade 3's box only
-            const int bi = boxAt(p, f.boxes);
-            if (bi < 0) continue;
-            const Box &bx = f.boxes[size_t(bi)];
             double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
             double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+            // THE COST (BUGS-1 item 16: 22.6 s): boxAt walks every box (2,579 on the terrace) and e25 needs no box -
+            // a voxel ray names its triangle's normal - so the lod filter goes first and the walk is e24's alone
+            if (which == "e25") {
+                if (nl < 0.5) continue;
+                const double cell0 = cells[r.cascade];
+                if (std::log2(std::max(double(r.distance) * std::sqrt(2.0 / raysPer), cell0) / cell0) < 2.0) continue;
+            }
+            const int bi = which == "e24" ? boxAt(p, f.boxes) : 0;
+            if (bi < 0) continue;
+            const Box &bx = f.boxes[size_t(bi)];
             if (nl < 0.5) {   // a FAR hit names no triangle: the face of its box the point lies on
                 const double P[3] = { p.x, p.y, p.z }, A[3] = { bx.b.mn.x, bx.b.mn.y, bx.b.mn.z },
                              B[3] = { bx.b.mx.x, bx.b.mx.y, bx.b.mx.z };
@@ -1810,9 +1825,47 @@ int modeFarMeasure(Fixture &f, const std::string &which)
             const double vn[3] = { vol.normal[vi * 4] * 2.0 - 1.0, vol.normal[vi * 4 + 1] * 2.0 - 1.0,
                                    vol.normal[vi * 4 + 2] * 2.0 - 1.0 };
             const bool agree = vn[0] * nn[0] + vn[1] * nn[1] + vn[2] * nn[2] >= 0.0;
+            const double store = std::max(agree ? 2.0 * mean - back : back, 0.0);
             sRead += read;
-            sRef += std::max(agree ? 2.0 * mean - back : back, 0.0);
+            sRef += store;
             ++n;
+            // THE MIP'S OWN PHYSICS, where it is exact: a read at level m averages, coverage-weighted, a block of
+            // 2 x 2^m level-0 cells per axis (the directional volumes are half resolution) with the trilinear blend
+            // to its neighbours; over a block (and its neighbours) holding ONLY up-facing faces of ONE light - an open
+            // floor - that mean IS the level-0 light, whatever the cell. So: the up-facing hits whose surrounding
+            // 3 x (2 x 2^m) cells hold no coverage but +y and one light (1 %) read the store exactly.
+            if (an == 1 && posHalf) {
+                const int m = int(std::floor(std::max(lod - 2.0, 0.0)));
+                const int R = 2 << m;
+                const int jx[3] = { int(vi % size_t(vol.width)), int((vi / size_t(vol.width)) % size_t(vol.height)),
+                                    int(vi / (size_t(vol.width) * size_t(vol.height))) };
+                bool uniform = true;
+                for (int dz = -R; dz <= R && uniform; ++dz)
+                    for (int dy = -R; dy <= R && uniform; ++dy)
+                        for (int dx = -R; dx <= R && uniform; ++dx) {
+                            const int q[3] = { jx[0] + dx, jx[1] + dy, jx[2] + dz };
+                            if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= vol.width || q[1] >= vol.height ||
+                                q[2] >= vol.depth) { uniform = false; break; }
+                            const size_t qi = (size_t(q[2]) * size_t(vol.height) + size_t(q[1])) * size_t(vol.width) + size_t(q[0]);
+                            for (int a = 0; a < 3; ++a) {
+                                const double cp = vol.coverageP[qi * 4 + size_t(a)], cn = vol.coverageN[qi * 4 + size_t(a)];
+                                if ((a != 1 && (cp > 0.0 || cn > 0.0)) || (a == 1 && cn > 0.0 && dy != -1 && dy != 0)) uniform = false;
+                            }
+                            if (!uniform) break;
+                            if (vol.coverageP[qi * 4 + 1] > 0.0) {
+                                const double cq = vol.light[qi * 4 + 3];
+                                const double lq = cq > 0.0 ? lumOf(&vol.light[qi * 4]) / cq / k : 0.0;
+                                const double bq = cq > 0.0 ? lumOf(&vol.lightBack[qi * 4]) / cq / k : 0.0;
+                                const double vq = vol.normal[qi * 4 + 1] * 2.0 - 1.0;
+                                const double sq = std::max(vq >= 0.0 ? 2.0 * lq - bq : bq, 0.0);
+                                if (std::fabs(sq - store) > 0.01 * std::max(store, 0.05)) uniform = false;
+                            }
+                        }
+                if (uniform) {
+                    if (store > 0.05) { uRead += read; uRef += store; ++uN; }
+                    else { ++uDark; if (read > 0.01) ++uDarkLit; }
+                }
+            }
         }
     }
     f.e->setArm("gather.hitsReadback", 0.0);
@@ -1841,8 +1894,18 @@ int modeFarMeasure(Fixture &f, const std::string &which)
                   "ray's viewer: read / truth %.3f over %u rays (bar 0.95-1.05)", ratioView, n);
     } else {
         std::printf("   E-25 THE MIP READ (the terrace, gi.hitDirect 0): %u voxel rays at lod >= 2 answered by cascades 2-3 "
-                    "(%u answered finer, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
-        CHECK_MSG(n >= 100u && ratio > 0.0, "e25: the lod >= 2 rays read (%u, %.3f)", n, ratio);
+                    "(%u voxel rays answered by cascades 0-1, not read), sum read / sum level-0 store at the hit %.3f\n", n, finer, ratio);
+        std::printf("   E-25 THE UNIFORM REGIONS (one up-facing light over the read's block and its neighbours): %u lit rays, "
+                    "sum read / sum store %.4f; %u dark rays, %u of them read > 0.01\n", uN, uRef > 0 ? uRead / uRef : -1.0,
+                    uDark, uDarkLit);
+        // THE BAR, from the mip's physics: over a block of one surface kind and one light the coverage-weighted mean
+        // IS the level-0 light, whatever the cell - so the read equals the store to the store's own quantum (10-bit /
+        // half-float rows, well under 1 %); 1 % is the bar. Everywhere else a lod >= 2 read is the mean over its
+        // footprint, not the texel at the hit (the 1.169 above is that mixing, printed, no bar).
+        const double uRatio = uRef > 0.0 ? uRead / uRef : -1.0;
+        CHECK_MSG(uN >= 50u && std::fabs(uRatio - 1.0) <= 0.01,
+                  "e25: A MIP READ OVER ONE LIGHT IS THAT LIGHT: %u lit uniform-region rays read %.4f of the level-0 store "
+                  "(bar 1 +- 1 %%)", uN, uRatio);
     }
     return 0;
 }
