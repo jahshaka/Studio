@@ -2269,17 +2269,19 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
     return 0;
 }
 
-/// `--dag-levels <model> <off|prune> <out.tsv> [threads]`: THE CHAIN'S ROOT, PER MESH AND PER DEPTH (ATOM-6 stage 0): every
-/// mesh of the file through the bake's own DAG build — the shipped variant (`off`) or the same with clodConfig::simplify_prune
-/// (`prune`, patch 0004) — and per depth the groups, the triangles they take in, the terminal ones, the sloppy ones (the
-/// fallback made the result), the locked vertices the results lost, the measured (stored) and estimated errors and the
-/// level-0 islands the groups dropped; per mesh level 0, the coarsest cut (the clusters of the terminal groups) and how much
-/// of it lies on level-0 components under 12 triangles. A measurement of the bake — nothing is written.
-static int dagLevels(const QString &path, const QString &arm, const QString &outPath, int threads)
+/// `--dag-levels <model> <out.tsv> [threads]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
+/// DAG from now on): every mesh of the file through the bake's own DAG build, and per depth (a level = what a cut at that
+/// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones, the sloppy ones
+/// (the fallback made the result), the locked positions the results lost, the measured (stored) and estimated errors, the
+/// level-0 islands the groups dropped and the summed triangle area as a fraction of level 0's (one material per aiMesh); per
+/// mesh level 0, the coarsest cut (the clusters of the terminal groups — none when the top group is empty) and how much of it
+/// lies on level-0 components under 12 triangles; for the file the totals, the prune's account and the wall time. A
+/// measurement of the bake — nothing is written but the table.
+static int dagLevels(const QString &path, const QString &outPath, int threads)
 {
     iris::MeshBake::setBakeThreads(threads);
-    const iris::MeshBake::ClusterDagVariant variant = arm == QStringLiteral("prune")
-        ? iris::MeshBake::ClusterDagVariant::PermissiveChargedPrune : iris::MeshBake::ClusterDagVariant::Shipped;
+    const QString arm = QStringLiteral("shipped");
+    const iris::MeshBake::ClusterDagVariant variant = iris::MeshBake::ClusterDagVariant::Shipped;
     Assimp::Importer importer;
     const aiScene *scene = iris::readSceneFile(importer, path, iris::ImportFlags::Canonical);
     const QList<iris::MeshPtr> meshes = testmesh::fromScene(scene);
@@ -2298,7 +2300,7 @@ static int dagLevels(const QString &path, const QString &arm, const QString &out
               "lockDropped\terrMax\terrMed\testMax\tislandsDropped\tdropExtMax\tareaFrac\tmaterial\n");
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
     int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, sloppy = 0, madeTerminal = 0, retries = 0,
-        unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0;
+        unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0;
     double buildMs = 0.0, measureMs = 0.0;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2317,6 +2319,7 @@ static int dagLevels(const QString &path, const QString &arm, const QString &out
         buildMs += st.buildMs; measureMs += st.measureMs;
         sloppy += st.sloppyGroups; madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
         unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
+        prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked;
         // level-0 components by welded position
         const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
         std::vector<unsigned> comp;   // per vertex
@@ -2407,7 +2410,7 @@ static int dagLevels(const QString &path, const QString &arm, const QString &out
             else {
                 L.err.push_back(G.error);
                 if (G.estimate != FLT_MAX) L.est = std::max(L.est, G.estimate);
-                if (outputsOf[size_t(g)] == 0) ++emptyGroups;
+                if (outputsOf[size_t(g)] == 0) ++emptyGroups;   // the prune emptied it
             }
             if (g < st.groupSimplifyFlags.size() && (st.groupSimplifyFlags.at(g) & 1u)) ++L.sloppy;
             if (g < st.groupLockedDropped.size()) L.dropped += int(st.groupLockedDropped.at(g));
@@ -2440,8 +2443,9 @@ static int dagLevels(const QString &path, const QString &arm, const QString &out
                 "level-0 components under 12 tris: %llu\n", coarsestAll, coarsestAll - coarsestDagLess, coarsestDagLess,
                 endAbove128, lateCoarsest, smallInLate);
     std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; sloppy groups %d; lock retries %d, "
-                "unconverged %d; groups that lost a locked vertex %d; simplified groups with no output %d\n",
-                stuck, madeTerminal, sloppy, retries, unconverged, lockDroppedGroups, emptyGroups);
+                "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
+                "relocked %d\n", stuck, madeTerminal, sloppy, retries, unconverged, lockDroppedGroups, emptyGroups,
+                prunedGroups, prunedRelocked);
     std::printf("  DAG build wall %lld ms (clodBuild %.0f + measure %.0f, summed)\n", qint64(wall.elapsed()), buildMs, measureMs);
     return 0;
 }
@@ -3374,9 +3378,9 @@ int main(int argc, char **argv)
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
     }
-    if (argc > 4 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels"))
-        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]), QString::fromLocal8Bit(argv[4]),
-                         argc > 5 ? QString::fromLocal8Bit(argv[5]).toInt() : 4);
+    if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels"))
+        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]),
+                         argc > 4 ? QString::fromLocal8Bit(argv[4]).toInt() : 4);
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-depths")) {
         QStringList paths;
         for (int a = 2; a < argc; ++a) paths << QString::fromLocal8Bit(argv[a]);
