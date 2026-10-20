@@ -198,7 +198,7 @@ target_compile_definitions(test_engine_streaming_picture PRIVATE
 target_include_directories(test_engine_streaming_picture PRIVATE ${X11_INCLUDE_DIR})
 target_link_libraries(test_engine_streaming_picture PRIVATE JahshakaEngine ${X11_LIBRARIES})
 add_dependencies(test_engine_streaming_picture JahshakaEngineMedia)
-jah_gpu_row(frame.streaming_picture CLASS engine FRAMES 60 COMMAND test_engine_streaming_picture
+jah_gpu_row(frame.streaming_picture SHIP CLASS engine FRAMES 60 COMMAND test_engine_streaming_picture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.streaming_picture PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
