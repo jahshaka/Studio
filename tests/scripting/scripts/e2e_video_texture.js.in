@@ -50,6 +50,14 @@ assert(texture.info(screen).generation === 2,
        "and the texture's generation moved by exactly one — a frame IS a write");
 assert(video.state(vid).playing === false,
        "step left the player as it found it (paused)");
+// THE STEP IS ONE DECODED FRAME, NEVER A CLOCK (TOOLING-6 item 8; the 4,000 ms wall-clock wait is deleted): on a
+// paused clip every step writes exactly one frame and one generation, however long the decode takes
+for (var k = 2; k <= 4; ++k) {
+    assert(video.step(vid) === true, "paused step " + k + " delivers a frame");
+    assert(video.state(vid).frames === k && texture.info(screen).generation === k + 1,
+           "...exactly one more frame and one more generation (" + video.state(vid).frames + " frames, generation " +
+           texture.info(screen).generation + ")");
+}
 
 // ---- playing advances it, frame after frame ----------------------------
 assert(video.play(vid) === true, "video.play");
@@ -67,6 +75,18 @@ assert(video.pause(vid) === true, "video.pause");
 assert(video.seek(vid, 500) === true, "video.seek(500)");
 assert(video.step(vid) === true, "a frame arrives after a seek");
 mustThrow(function () { video.seek(vid, -1); }, "a negative position is refused");
+// THE TAIL ENDS THE STEP BY THE CLIP'S OWN EVENT: from 1.75 s of the 2 s clip (16 frames at 8 fps) at most its last
+// two frames are left; the step after them answers false with no frame written — the end of the media, not a timeout
+assert(video.seek(vid, 1750) === true, "video.seek(1750), two frames before the end");
+var tailFrames = 0, endedWithout = false;
+while (tailFrames < 16) {
+    var f0 = video.state(vid).frames;
+    if (video.step(vid) !== true) { endedWithout = video.state(vid).frames === f0; break; }
+    ++tailFrames;
+}
+assert(tailFrames <= 2, "stepping past the clip's end answers false (the clip ended, not a timeout) after at most " +
+       "the two frames it had left (" + tailFrames + ")");
+assert(endedWithout, "...and the false step wrote no frame");
 assert(video.loop(vid, true) === true, "video.loop(true)");
 assert(video.state(vid).loop === true, "the binding reports it is looping");
 assert(video.loop(vid, false) === true, "video.loop(false)");

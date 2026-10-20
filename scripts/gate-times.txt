@@ -565,7 +565,7 @@ pool.doc_assets::pinned_reopen 0.27  quiet n=38
 pool.doc_assets::selection_verbs 0.00  ship 3a0422b4e (2026-10-13)
 pool.doc_assets::uv_tiling 0.14  quiet n=37
 pool.doc_assets::video 1.08  quiet n=38
-pool.doc_assets::video_texture 0.85  quiet n=38
+pool.doc_assets::video_texture 2.02  solo 2026-10-20 (TOOLING-6 item 8: video.step by decoded frames; + three paused steps and the clip's tail, five frames on its 8 fps media clock; n=1)
 pool.editor 29.02  quiet n=46
 pool.editor::add_primitive 0.55  quiet n=46
 pool.editor::build_scene 1.67  quiet n=46

@@ -48,7 +48,7 @@ public:
     Q_INVOKABLE bool stop(const QString &videoGuid);
     Q_INVOKABLE bool seek(const QString &videoGuid, double positionMs);
     Q_INVOKABLE bool loop(const QString &videoGuid, bool on = true);
-    Q_INVOKABLE bool step(const QString &videoGuid, int timeoutMs = 4000);
+    Q_INVOKABLE bool step(const QString &videoGuid);
     Q_INVOKABLE QVariant state(const QString &videoGuid);
     Q_INVOKABLE QVariantList list();
 
