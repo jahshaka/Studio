@@ -1675,7 +1675,7 @@ int modeFarMeasure(Fixture &f, const std::string &which)
     GatherTuning t;
     t.readback = true;
     f.s->setGatherTuning(t);
-    const Vec3 cam = poseCam("c3");
+    const Vec3 cam = poseCam(gPose);   // the rows run c3 (--pose c3); a measure may name another
     gTraceWall = wallPoints();
     gTraceCam = cam;
     gSettleMin = 0u;
@@ -1684,11 +1684,78 @@ int modeFarMeasure(Fixture &f, const std::string &which)
                 double(gLength), clutter ? "the terrace" : "clean", f.boxes.size(), double(cam.x), double(cam.y),
                 double(cam.z), which != "e24" ? ", gi.hitDirect 0" : "");
     if (which == "e21") {
-        const double ratio = shareRatio(f, cam, "STORE  ", false, false);
-        std::printf("   E-21 THE WHOLE STORE'S READ on the terrace: the wall's share / closed form %.3f (read / truth; "
-                    "FAR-SUN-2's direct at the hit reads ~1.06 here)\n", ratio);
-        CHECK_MSG(ratio > 0.0, "e21: the share reads (%.3f)", ratio);
+        // THE STORE'S OVER-COUNT AT TWO CELLS (BUGS-1 item 17): the wall's share read from the store whole and with the
+        // hit's own direct (the gather's own error) at the c3 pose - its rays answered in cascade 3, 1.875 m cells - and
+        // at the c2 pose - cascade 2, 0.469 m - on the same terrace; the quotient is the store's own over-count. Its bar
+        // is CONVERGENCE (the store is a cell mean: it must fall with the cell), never a fixed bar on a discretisation.
+        double over[2] = { -1.0, -1.0 };
+        const char *poses[2] = { "c3", "c2" };
+        for (int k = 0; k < 2; ++k) {
+            const Vec3 pc = poseCam(poses[k]);
+            f.e->setArm("gi.hitDirect", 0.0);
+            const double ratio = shareRatio(f, pc, "STORE  ", false, false);
+            f.e->setArm("gi.hitDirect", 1.0);
+            const double exact = shareRatio(f, pc, "DIRECT ", false, false);
+            over[k] = exact > 0.0 ? ratio / exact : -1.0;
+            std::printf("   E-21 THE WHOLE STORE'S READ on the terrace, pose %s: the wall's share / closed form %.3f from the "
+                        "store, %.3f with the hit's direct - the store's own over-count %.3f\n", poses[k], ratio, exact,
+                        over[k]);
+        }
+        CHECK_MSG(over[0] > 0.0 && over[1] > 0.0 && over[1] < over[0],
+                  "e21: THE STORE'S OVER-COUNT CONVERGES WITH THE CELL: %.3f at 1.875 m cells (c3), %.3f at 0.469 m (c2)",
+                  over[0], over[1]);
+        if (!std::getenv("FARSUN_E21_CLASSES")) return 0;
+        // BY THE CELL AND THE SURFACE (a measure, FARSUN_E21_CLASSES=1; BUGS-1 item 17's cause): at the c2 pose, every
+        // voxel-answered ray read from the store whole against its hit's exact direct (rho I cos DA x its sun ray -
+        // the store's own model, bounces 0), per answering cascade and surface class.
+        f.e->setArm("gi.hitDirect", 0.0);
+        settled(f);
+        f.e->setArm("gather.hitsReadback", 1.0);
+        double cr[4] = {}, ct[4] = {};
+        unsigned cn[4] = {}, last = 0u, frames = 0u;
+        // [cascade][class: 0 floor lit, 1 floor shaded, 2 clutter lit, 3 clutter shaded, 4 black]
+        double kr[4][5] = {}, kt[4][5] = {}, kn[4][5] = {};
+        for (int i = 0; i < 6; ++i) {
+            render(f.e, 1);
+            ++frames;
+            const GatherStatus gs = f.s->published().gi.gather;
+            if (gs.rays.empty() || gs.raysFrame == last) continue;
+            last = gs.raysFrame;
+            for (const GatherRay &r : gs.rays) {
+                if (r.source != GatherRay::Voxel || !(r.distance > 0.0f) || r.cascade > 3u || cn[r.cascade] >= 2000u) continue;
+                double nn[3] = { r.hitNormal[0], r.hitNormal[1], r.hitNormal[2] };
+                const double nl = std::sqrt(nn[0] * nn[0] + nn[1] * nn[1] + nn[2] * nn[2]);
+                if (nl < 0.5) continue;
+                const Vec3 p(r.hitPos[0], r.hitPos[1], r.hitPos[2]);
+                const int bi = boxAt(p, f.boxes);
+                if (bi < 0) continue;
+                const double cosL = (nn[0] * kToSun.x + nn[1] * kToSun.y + nn[2] * kToSun.z) / nl;
+                const Box &bx = f.boxes[size_t(bi)];
+                const double tr = faceRad(bx, cosL) * double(r.sunVisibility);
+                cr[r.cascade] += lumOf(r.radiance);
+                ct[r.cascade] += tr;
+                ++cn[r.cascade];
+                const bool litHit = r.sunVisibility > 0.5f && cosL > 0.0;
+                const int k = !bx.floor ? 4 : (bi == 0 ? (litHit ? 0 : 1) : (litHit ? 2 : 3));
+                kr[r.cascade][k] += lumOf(r.radiance);
+                kt[r.cascade][k] += tr;
+                kn[r.cascade][k] += 1.0;
+            }
+        }
+        f.e->setArm("gather.hitsReadback", 0.0);
         f.e->setArm("gi.hitDirect", 1.0);
+        gFrames += frames;
+        const GiStatus g = f.s->published().gi;
+        for (int c = 0; c < 4; ++c)
+            std::printf("   E-21 BY THE CELL: cascade %d (cell %.3f m): %u voxel rays, the store read / the exact direct %.3f\n",
+                        c, c < int(g.cascades.size()) ? double(g.cascades[size_t(c)].cell) : -1.0, cn[c],
+                        ct[c] > 0 ? cr[c] / ct[c] : -1.0);
+        const char *kname[5] = { "floor lit", "floor shaded", "clutter lit", "clutter shaded", "black" };
+        for (int c = 0; c < 4; ++c)
+            for (int k = 0; k < 5; ++k)
+                if (kn[c][k] > 0)
+                    std::printf("     c%d %-15s n %5.0f  read %.4f  exact %.4f\n", c, kname[k], kn[c][k], kr[c][k] / kn[c][k],
+                                kt[c][k] / kn[c][k]);
         return 0;
     }
     f.view->setCamera(enginetest::testCameraDescLookAt(cam, kTarget));
