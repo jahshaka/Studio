@@ -1063,8 +1063,11 @@ static IdRead readIdPass(Env &env, int frames)
 }
 
 /// The LEVEL RULE's answer for one piece at the view's eye: the cluster cut the DAG
-/// gives at the id pass's own tolerance (kLodBudgetPixels x the scene's LOD bias) —
-/// Types.h clusterCut, the GLSL twin's arithmetic.
+/// gives at the id pass's own tolerance — Types.h clusterCut, the GLSL twin's arithmetic.
+/// THE TOLERANCE IS THE ENGINE'S, READ BACK, never a literal (ATOM-3 stage 1): the id pass
+/// cuts at Scene::pixelTolerance() x lodBias() (OgreAtomIdPass.cpp, req.pixelTolerance), the
+/// World Mode's atomPixelError row the mirror pushed — geometryDoc's High is 2 px, so the
+/// kLodBudgetPixels (1 px) reference drew ~1.8x the id pass's cut (0.56x at 1.3 R, 0.58x at 5 R).
 /// Types.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
 /// tolerance and no frustum — the DAG's ROOT, the coarsest cut the DAG can draw.
 static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
@@ -1082,7 +1085,8 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
         v.scale = k;
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        v.tolerance = root ? 1e30f : kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
+        const auto *applied = jahshaka::engine::inspect::scene(env.scene);
+        v.tolerance = root ? 1e30f : applied->pixelTolerance() * applied->lodBias();
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
@@ -1349,7 +1353,24 @@ static int levelsMain()
 // ATOM-SHADOWS-1's caster buffers). So the row attaches the 250 k shell once COLD (its delta
 // less its warm delta is the one-time term), releases it, and then measures every shell WARM.
 // THE BARS: each shell's warm VRAM within 1.15x of the formula (measured +0 / +12 / +9 / +7 %
-// at 250 k / 1 M / 5 M / 10 M), and the one-time term at most 72 MB (62.9 measured, +15 %).
+// at 250 k / 1 M / 5 M / 10 M), and the one-time term at most 72 MB (62.9 measured, +15 %)
+// PLUS the late caster list's cut buffers (below).
+// ENGINE-UPGRADE-U5 stage 4 (the light's own depth) changed two premises, both measured
+// (spikes/ship-fff575ecb/ATOM-REPORT.md):
+//  * THE SCENE'S SUN-MAP PYRAMIDS ride every shell here: a sun map of a scene with Atom casters
+//    keeps a farthest-depth pyramid of its rectangle (OgreAtomCasterPass.cpp lightPyramidFor:
+//    R32F, the full chain) and a receiver grid (buildReceiverGrid: one uint per 8 x 8-texel tile,
+//    the full chain), made by the scene's FIRST Atom caster and swept two frames after its LAST
+//    (sweepPyramids, kPyramidIdleFrames) - and each shell is attached to an empty scene and
+//    released again, so each pays them. Not a per-mesh cost: the formula carries it as the scene
+//    term, from the published atlas base R (ShadowStatus::resolution; the PSSM rectangles are
+//    R x R, R/2 x R/2, R/2 x R/2, OgreShadow.cpp planShadowAtlas). At R = 2048: 21.33 + 5.33 +
+//    5.33 MiB of pyramid + (87,381 + 2 x 21,845) x 4 B of grid = 32.5 MiB, the +32.5 MB every
+//    shell read over the old formula at the ship (fff575ecb).
+//  * THE LATE CASTER LIST (AtomComponent::casterCullLate) is one more GpuCull whose cut buffers
+//    follow the caster cut's budget: per index 4 B of stream + 8/3 B of triangle words + 16/24 B
+//    of records (OgreGpuCull.cpp ensureCut, kCutIndicesPerRecord 24) = 7.33 B, once per process:
+//    at the 2,097,152-index budget 14.67 MiB, the +14.7 MB the one-time term grew by.
 // ===========================================================================
 static int residencyMain()
 {
@@ -1390,14 +1411,32 @@ static int residencyMain()
         const double mainMB = (double(verts) * 48.0 + double(levelIdx) * 4.0) / 1048576.0;
         const double shadowMB = (double(verts) * 12.0 + double(levelIdx) * 4.0) / 1048576.0;
         const double clusterMB = double(clusterIdx) * 4.0 / 1048576.0;
+        // THE SCENE TERM (U5 stage 4, the header): the three sun maps' pyramids and receiver grids.
+        double sceneMB = 0.0;
+        {
+            const unsigned R = env.engine->published().shadow.resolution, H = R / 2u;
+            auto chainWords = [](unsigned w, unsigned h) {
+                double n = 0.0;
+                for (;;) {
+                    n += double(w) * double(h);
+                    if (w <= 1u && h <= 1u) break;
+                    w = std::max(1u, w >> 1u);
+                    h = std::max(1u, h >> 1u);
+                }
+                return n;
+            };
+            for (unsigned side : { R, H, H })
+                if (side) sceneMB += (chainWords(side, side) + chainWords((side + 7u) / 8u, (side + 7u) / 8u)) * 4.0;
+            sceneMB /= 1048576.0;
+        }
         d.used = (used1 - used0) / 1048576.0;
         d.capacity = double(m1.gpuPoolCapacityBytes - m0.gpuPoolCapacityBytes) / 1048576.0;
-        d.formula = mainMB + shadowMB + clusterMB;
+        d.formula = mainMB + shadowMB + clusterMB + sceneMB;
         std::printf("W5 %-14s %-5s %d pieces %10zu tris %9zu verts | pool used +%8.1f MB (capacity +%8.1f MB) | "
-                    "formula: levels %.1f + shadow chain %.1f + cluster stream %.1f = %.1f MB | over it %+.1f MB | "
-                    "RSS %.0f MB\n",
+                    "formula: levels %.1f + shadow chain %.1f + cluster stream %.1f + the scene's sun-map pyramids %.1f "
+                    "= %.1f MB | over it %+.1f MB | RSS %.0f MB\n",
                     qPrintable(info.name), how, info.pieces, info.triangles, verts, d.used, d.capacity, mainMB,
-                    shadowMB, clusterMB, d.formula, d.used - d.formula, double(rssKb()) / 1024.0);
+                    shadowMB, clusterMB, sceneMB, d.formula, d.used - d.formula, double(rssKb()) / 1024.0);
         std::fflush(stdout);
         for (auto &n : nodes) n->removeFromParent();
         nodes.clear();
@@ -1417,12 +1456,18 @@ static int residencyMain()
         REQUIRE(d.used <= 1.15 * d.formula, "W5 %zu: warm VRAM %.1f MB within 1.15x of the formula's %.1f MB", t, d.used,
                 d.formula);
         if (t == 250000) {
-            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f)\n",
-                        cold.used - d.used, cold.used, d.used);
+            // The late caster list's cut buffers (the header): 7.33 B an index of the caster budget.
+            const double lateMB =
+                double(env.scene->atomDrawStatus().casterIndexBudget) * (4.0 + 8.0 / 3.0 + 16.0 / 24.0) / 1048576.0;
+            const double bar = 72.0 + lateMB;
+            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f) | bar "
+                        "72 + the late caster list %.1f = %.1f MB\n",
+                        cold.used - d.used, cold.used, d.used, lateMB, bar);
             target("W5", cold.used - d.used, "MB", "the engine's one-time allocations the FIRST mesh a process "
-                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)", "<= 72 MB");
-            REQUIRE(cold.used - d.used <= 72.0, "W5: the first mesh's one-time allocations %.1f MB <= 72 MB",
-                    cold.used - d.used);
+                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)",
+                   "<= 72 MB + the late caster list");
+            REQUIRE(cold.used - d.used <= bar, "W5: the first mesh's one-time allocations %.1f MB <= %.1f MB",
+                    cold.used - d.used, bar);
         }
     }
     REQUIRE(measured == 4, "the four shells were measured warm (%d)", measured);
@@ -2961,14 +3006,19 @@ static int coverageTraceMain()
     const int walkFrames = knob("JAH_TRACE_FRAMES", 2000);
     const int landingFrames = knob("JAH_TRACE_LANDING", 600);
     const int budgetAt = knob("JAH_TRACE_BUDGET_AT", 1100);
-    // SMALL, NOT TINY (measured): at walk 1100 the world asks ~582,000 indices, the main
-    // region holds 437,500, and the 62,500-index reserve holds the ~30 overflowing
-    // survivors' root cuts (232 indices a world instance on average, 2.33 M over all
-    // 10,127) — they draw COARSE until the stats ring's report, four frames late, grows
-    // the budget to 1 M. A budget under the reserve's floor (JAH_TRACE_BUDGET=60000) is
-    // the "fits neither" arm: up to 1,845 objects MISSING, counted apart, for the five
-    // frames the report takes — the design's stated limit, reported by the lane.
-    const unsigned smallBudget = unsigned(knob("JAH_TRACE_BUDGET", 500000));
+    // SMALL, NOT TINY (measured): the forced budget's main region (7/8 of it) holds about 3/4
+    // of what the world asks at walk 1100, and the reserve (1/8) the overflowing survivors'
+    // root cuts — they draw COARSE until the stats ring's report, four frames late, grows the
+    // budget. At 1 px (before ATOM-3) the world asked ~582,000 indices there and 500,000 forced
+    // it (main 437,500 = 0.75 of it, reserve 62,500). THIS FIXTURE RUNS HIGH, and ATOM-3 stage 1
+    // made the view's pixel-error the tier's (High 2 px): the cut asks 360,675 indices at walk
+    // 1100 (352,914-355,773 at 1101-1104) and 301,767-305,613 at 1600-1605, so 500,000 (main
+    // 437,500) no longer overflows (ship fff575ecb: 0 coarse). The same design point at the new
+    // demand: 500,000 x 360,675 / 582,000 = 309,860 -> 310,000 (main 271,250 = 0.75 of walk
+    // 1100's ask and under walk 1600's; reserve 38,750). A budget under the reserve's floor
+    // (JAH_TRACE_BUDGET=60000) is the "fits neither" arm: objects MISSING, counted apart, for
+    // the five frames the report takes — the design's stated limit, reported by the lane.
+    const unsigned smallBudget = unsigned(knob("JAH_TRACE_BUDGET", 310000));
     Env env;
     World w;
     // THIS SUITE KEEPS D1's DENSE 600 m WORLD: its budget arms above are measured against
