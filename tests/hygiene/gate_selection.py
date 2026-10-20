@@ -163,6 +163,19 @@ def hunk_cases(gs, graph, build, inv0, cases):
     for c in cases.get("hunks", []):
         path = c["file"]
         a = open(os.path.join(gs.ROOT, path), errors="replace").read()
+        # A SHAPE THE TREE DOES NOT HOLD TODAY (TOOLING-6 item 10, TOOLING-5's read: a latent shape): a context put on BOTH
+        # sides first — in the case's file, or in another build file (`file`) — so the case's edit is read beside it
+        # exactly as it would be in a tree that had it; the tree is never written
+        ctx = c.get("context")
+        other = {}
+        if ctx:
+            cf = ctx.get("file", path)
+            ct = a if cf == path else open(os.path.join(gs.ROOT, cf), errors="replace").read()
+            check(ctx["old"] in ct, "%s: the context's anchor is still in %s" % (c["case"][:40], cf))
+            if ctx["old"] not in ct: continue
+            ct = ct.replace(ctx["old"], ctx["new"], 1)
+            if cf == path: a = ct
+            else: other[cf] = ct
         check(c["old"] in a, "%s: the recorded text is still in %s" % (c["case"][:40], path))
         if c["old"] not in a: continue
         b = a.replace(c["old"], c["new"], 1)
@@ -173,6 +186,7 @@ def hunk_cases(gs, graph, build, inv0, cases):
             def pair(self, p): return ("BASE", "TIP")
             def texts(self, p):
                 if p == path: return a, b
+                if p in other: return other[p], other[p]
                 try: t = open(os.path.join(gs.ROOT, p), errors="replace").read()
                 except OSError: t = ""
                 return t, t
@@ -182,12 +196,17 @@ def hunk_cases(gs, graph, build, inv0, cases):
                     open(os.path.join(d, "a"), "w").write(a); open(os.path.join(d, "b"), "w").write(b)
                     return subprocess.run(["git", "diff", "--no-index", "-U0", "a", "b"], cwd=d,
                                           capture_output=True, text=True).stdout
-        real = gs.Revs
+        real, real_files = gs.Revs, gs.Selection.tree_cmake_files
         gs.Revs = FakeRevs
+        if other:
+            def tree_files(self_, _real=real_files):
+                # the tree's build files with the context's other file as the case holds it (on both sides)
+                return [(f, other.get(f, t)) for f, t in _real(self_)]
+            gs.Selection.tree_cmake_files = tree_files
         try:
             S = gs.select([path], "BASE..TIP", build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
         finally:
-            gs.Revs = real
+            gs.Revs, gs.Selection.tree_cmake_files = real, real_files
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
         # a hunk is read by what it names: never the whole inventory unless the case says so (TOOLING-2: a `must` list
         # passed by a whole-inventory reach proved nothing)
@@ -379,6 +398,30 @@ def main(source, build):
         if "max_rows" in c:
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
+        if "derived_max_rows" in c:
+            # THE BAR DERIVED FROM THE GRAPH (TOOLING-6 item 2): a reach that IS an edge of the graph (every executable
+            # that links <links>, and so the physics world) grows with every row registered on that edge — a literal
+            # max_rows moved by hand four times in one night, a merge red each time (§2640). The bar is the recorded
+            # selection moved by what the graph and the inventory say changed since: the rows that link the target and
+            # the source.* lints (which ride every diff); the record itself is asserted ONCE here, at its own numbers.
+            dm = c["derived_max_rows"]
+            at = dm["at"]
+            lib = graph.target_reach(dm["links"]) or set()
+            classified = S.inv          # a row's executables and kind: the selector's own reading of them (classify_rows)
+            linking = sorted(n for n in classified if not inv0[n].get("fixture_setup") and classified[n]["exes"] & lib)
+            lints = [n for n in inv0 if n.startswith("source.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)]
+            bar = at["rows"] + (len(linking) - at["linking"]) + (len(lints) - at["lints"])
+            check(bool(lib) and bool(linking), "%s: the graph names the executables that link %s (%d) and their rows (%d)"
+                  % (c["lane"], dm["links"], len(lib), len(linking)))
+            check(not whole and len(gating) <= bar,
+                  "%s: stays at <= %d rows, the bar derived (recorded %d at %d linking rows + %d lints; now %d + %d) (%s)"
+                  % (c["lane"], bar, at["rows"], at["linking"], at["lints"], len(linking), len(lints),
+                     "TIER" if whole else len(gating)))
+            # THE EDGE ITSELF (a selector that drops it selects FEWER rows, and a bar alone passes that): every compiled
+            # row on it is selected — the app rows ride the physics TUs' area rule by their modules, not the graph
+            miss = [n for n in linking if classified[n]["kind"] != "app" and n not in sel]
+            check(not miss, "%s: selects every compiled row that links %s (%d; missing %s)"
+                  % (c["lane"], dm["links"], sum(1 for n in linking if classified[n]["kind"] != "app"), miss[:5]))
 
     tooling_cases(gs, graph, build, inv0)
     arm_cases(gs, graph, build, inv0)

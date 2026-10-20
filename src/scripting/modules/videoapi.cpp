@@ -65,14 +65,15 @@ QVector<VerbInfo> VideoApi::verbs() const
           "Loops the clip forever (or stops looping). Off by default: a video bound to a material "
           "ends on its last frame rather than snapping to black.",
           Needs::Document },
-        { "step", "video.step(videoGuid, timeoutMs=4000) -> bool",
+        { "step", "video.step(videoGuid) -> bool",
           "Decodes and delivers the NEXT frame, synchronously: it spins the event loop until one "
-          "frame lands in the texture (or the timeout expires, or the clip ends), then leaves the "
-          "player exactly as it found it — playing if it was playing, paused if it was paused. "
-          "The primitive for anything that must know a frame arrived rather than hope so: a test, "
-          "a thumbnail sweep, a scripted render. Returns false on a timeout or at the end of a "
-          "clip that is not looping. Each successful step moves texture.info(...).generation by "
-          "one.",
+          "frame lands in the texture (or the clip ends, or the player stops or fails — the wait is "
+          "one decoded frame, never a clock), then leaves the player exactly as it found it — "
+          "playing if it was playing, paused if it was paused. The primitive for anything that must "
+          "know a frame arrived rather than hope so: a test, a thumbnail sweep, a scripted render. "
+          "Returns false at the end of a clip that is not looping, or when the player fails "
+          "(video.state(...).lastError says why). Each successful step moves "
+          "texture.info(...).generation and video.state(...).frames by one.",
           Needs::Document },
         { "state", "video.state(videoGuid) -> {video, texture, source, playing, paused, position, duration, loop, frames} | null",
           "The binding's state, or null when the video is not bound. `frames` counts the frames "
@@ -186,15 +187,14 @@ bool VideoApi::loop(const QString &videoGuid, bool on)
     return true;
 }
 
-bool VideoApi::step(const QString &videoGuid, int timeoutMs)
+bool VideoApi::step(const QString &videoGuid)
 {
     LiveVideoBinding *binding = LiveVideo::find(videoGuid);
     if (!binding)
         return refuse(QStringLiteral("video.step: '%1' is not bound").arg(videoGuid));
-    if (!binding->step(timeoutMs))
-        return refuse(QStringLiteral("video.step: no frame arrived within %1 ms (the clip may "
-                                     "have ended — video.loop(guid) or video.seek(guid, 0))")
-                          .arg(timeoutMs));
+    if (!binding->step())
+        return refuse(QStringLiteral("video.step: no frame arrived — the clip ended (video.loop(guid) or "
+                                     "video.seek(guid, 0)) or the player failed (video.state(guid).lastError)"));
     return true;
 }
 

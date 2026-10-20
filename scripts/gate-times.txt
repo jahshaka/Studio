@@ -565,7 +565,7 @@ pool.doc_assets::pinned_reopen 0.27  quiet n=38
 pool.doc_assets::selection_verbs 0.00  ship 3a0422b4e (2026-10-13)
 pool.doc_assets::uv_tiling 0.14  quiet n=37
 pool.doc_assets::video 1.08  quiet n=38
-pool.doc_assets::video_texture 0.85  quiet n=38
+pool.doc_assets::video_texture 2.02  solo 2026-10-20 (TOOLING-6 item 8: video.step by decoded frames; + three paused steps and the clip's tail, five frames on its 8 fps media clock; n=1)
 pool.editor 29.02  quiet n=46
 pool.editor::add_primitive 0.55  quiet n=46
 pool.editor::build_scene 1.67  quiet n=46
@@ -1001,8 +1001,8 @@ shadow.caster_cull 5.29  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.4: the s
 shadow.caster_receivers 5.10  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.3/22.4: the gap, the out-of-view blockers, the negative control; no dragon bake; n=1, 77 frames)
 engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.5: the host drain reset on a throw; n=1, 11 frames)
 engine.texture_residency 2.57  solo, the card lock held, :80, cold shader cache (BUGS-1 item 13, 2026-10-20; 182 frames)
-gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
-gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round: the movers' gate on a metal's card; 573 frames, the gate arms settle 72 — the lowest of three runs beside ATOM-1's gate; over the fixture budget, labelled measure until the row is rewritten to it)
+gi.metal_bounce_route 3.56  solo under the card's lock 2026-10-20 (TOOLING-6 item 6 on PHOTON-3's arm: was 12.33 s at 380 frames — the gather's irradiance readback opened only for the last 5 held frames of each arm; the same 380 frames, the 54 printed answer lines of both rows byte-identical; n=1)
+gi.metal_bounce_gate 5.17  solo under the card's lock 2026-10-20 (TOOLING-6 item 6 on PHOTON-3's arm: was 27.11 s at 849 frames — the readback door only for the read frames, as the route arm; the same 849 frames, the answers byte-identical; n=1)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
 shadow.caster_route 6.10  solo 2026-10-19 (ATOM-3 stage 2: the cutout through the masked range, + its level-0 reference; n=1, 65 frames)
 shadow.caster_route_lamps 5.08  solo, the card lock held, :79 (BUGS-1 item 12, 2026-10-20; 46 frames)

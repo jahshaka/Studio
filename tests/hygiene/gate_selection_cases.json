@@ -120,8 +120,8 @@
     "ssr",
     "looks"
    ],
-   "max_rows": 386,
-   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set — max_rows 378 is the selection exactly (gate.selection counts every selected row, the measure rows reached included): 311 selectable rows, the 29 source.* lints among them (TOOLING-2 fix round) 379 since main's SCENEGRAPH-BASELINE-2 (792323d5e) registered document.write_journal: a new executable that links IrisGL and so the physics world (the graph) — the selection exactly, one row more; 380 since ATOM-2 registered atom.cut_probe (its fixtures link IrisGL: the same edge, one row more); 381 since LEAK-1 registered document.material_duplicate (test_material_duplicate links IrisGL: the same edge, one row more); 382 since BUGS-1 batch 1 registered atom.pass_table (an app row: the app links IrisGL, the same edge, one row more); 384 since THREADING-1 registered threading.budget + physics.many_movers (both link IrisGL). BUGS-1 batch 3 (item 12): shadow.caster_route_lamps and shadow.caster_route_reflect are new rows of test_shadow_atom_cut, whose cluster fixtures link IrisGL and so the physics world - the same edge, two rows more (384 -> 386)."
+   "derived_max_rows": {"links": "IrisGL", "at": {"rows": 384, "linking": 376, "lints": 29}},
+   "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set — max_rows 378 is the selection exactly (gate.selection counts every selected row, the measure rows reached included): 311 selectable rows, the 29 source.* lints among them (TOOLING-2 fix round) 379 since main's SCENEGRAPH-BASELINE-2 (792323d5e) registered document.write_journal: a new executable that links IrisGL and so the physics world (the graph) — the selection exactly, one row more; 380 since ATOM-2 registered atom.cut_probe (its fixtures link IrisGL: the same edge, one row more); 381 since LEAK-1 registered document.material_duplicate (test_material_duplicate links IrisGL: the same edge, one row more); 382 since BUGS-1 batch 1 registered atom.pass_table (an app row: the app links IrisGL, the same edge, one row more); 384 since THREADING-1 registered threading.budget + physics.many_movers (both link IrisGL). BUGS-1 batch 3 (item 12): shadow.caster_route_lamps and shadow.caster_route_reflect are new rows of test_shadow_atom_cut, whose cluster fixtures link IrisGL and so the physics world - the same edge, two rows more (384 -> 386). TOOLING-6 item 2: the literal is gone — the bar is derived (derived_max_rows: the 384 recorded at 376 rows linking IrisGL and 29 lints, at main e3dfad85e, moved by the graph's count of the rows that link IrisGL and the lints' count), and every compiled row that links IrisGL must be selected (the edge itself, so a selector that drops it still reds)."
   }
  ],
  "hunks": [
@@ -539,6 +539,36 @@
    "new": "set(DEPLOY_STAMP \"${CMAKE_BINARY_DIR}/deploy.stamp\")\nset(UNIX ON)\nmessage(STATUS \"deploy: ${UNIX}\")\n",
    "require_tier": true,
    "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-6 10a: a variable's user that is NOT a block and that the reader cannot resolve is never dropped beside a sibling that resolves — the root's include_directories(${JAH_GENERATED_DIR}) with a message() reading the same variable beside it (TOOLING-5's read, probe P3: 29 rows, no tier), then the set() changed: the WHOLE TIER",
+   "file": "CMakeLists.txt",
+   "context": {
+    "old": "include_directories(${JAH_GENERATED_DIR})\n",
+    "new": "include_directories(${JAH_GENERATED_DIR})\nmessage(STATUS \"generated: ${JAH_GENERATED_DIR}\")\n"
+   },
+   "old": "set(JAH_GENERATED_DIR \"${CMAKE_BINARY_DIR}/generated\")\n",
+   "new": "set(JAH_GENERATED_DIR \"${CMAKE_BINARY_DIR}/generated2\")\n",
+   "require_tier": true,
+   "must": [],
+   "must_not": []
+  },
+  {
+   "case": "TOOLING-6 10b: a -P script whose invokers resolve only in part keeps every invoker's reach — a third invoker the reader cannot resolve (an execute_process at tests/gi's configure) beside the two threading rows that run it (TOOLING-5's read: the fall-through to the script's own reading dropped the invokers' marks): tests/gi's scope (gi.metal_bounce) AND the two threading rows",
+   "file": "tests/threading/nogrouplesstexture.cmake",
+   "context": {
+    "file": "tests/gi/CMakeLists.txt",
+    "old": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\n",
+    "new": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\nexecute_process(COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)\n"
+   },
+   "old": "    file(STRINGS ${_log} _hits REGEX \"valid resourceGroup\")\n",
+   "new": "    file(STRINGS ${_log} _hits REGEX \"a valid resourceGroup\")\n",
+   "must": [
+    "gi.metal_bounce",
+    "threading.import_soak.no_groupless_texture",
+    "threading.newproject_stall.no_groupless_texture"
+   ],
    "must_not": []
   }
  ]

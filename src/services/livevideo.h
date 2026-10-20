@@ -54,12 +54,13 @@ public:
     bool loop() const { return looping; }
 
     /// Decodes and delivers the NEXT frame, synchronously: spins a local event
-    /// loop until one lands in the texture or `timeoutMs` expires, leaving the
-    /// player in the state it found it in. The primitive a test, a batch tool
+    /// loop until one lands in the texture — or the clip ends, or the player
+    /// stops or fails: the unit is one decoded frame, never a clock — leaving
+    /// the player in the state it found it in. The primitive a test, a batch tool
     /// or a thumbnail sweep needs — everything else about video is
     /// asynchronous by nature, and asserting on "some frames probably arrived"
     /// is how a suite becomes a flake.
-    bool step(int timeoutMs = 4000);
+    bool step();
 
     QVariantMap state() const;
     QString textureGuid() const { return liveGuid; }

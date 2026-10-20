@@ -178,25 +178,31 @@ void LiveVideoBinding::setLoop(bool loop)
     player->setLoops(loop ? QMediaPlayer::Infinite : 1);
 }
 
-bool LiveVideoBinding::step(int timeoutMs)
+bool LiveVideoBinding::step()
 {
+    // ONE DECODED FRAME IS THE UNIT, NEVER A CLOCK (TOOLING-6 item 8): the step ends on an EVENT of the decoder — the
+    // frame landed in the texture, the clip ended or is invalid, the player stopped or failed. The 4,000 ms wall-clock
+    // deadline this replaced was a bar the process forbids: under a loaded -j8 pass one frame took 4,517 ms to decode
+    // and the step failed with nothing wrong (SPECS/DEBTS_2026_10_13.md, VIDEO-STEP-WALLCLOCK-BAR). A decoder that
+    // never answers is the caller's row's own bound (the pool's arm budget, the ctest TIMEOUT), not a guess here.
     const quint64 before = frameCount;
     const bool wasPlaying = player->playbackState() == QMediaPlayer::PlayingState;
-    if (!wasPlaying) player->play();
 
     QEventLoop loop;
-    QTimer deadline;
-    deadline.setSingleShot(true);
-    connect(&deadline, &QTimer::timeout, &loop, &QEventLoop::quit);
     connect(this, &LiveVideoBinding::frameDelivered, &loop, &QEventLoop::quit);
-    // A clip that ENDED delivers nothing ever again; without this the step
-    // would sit out its whole timeout at the tail of every non-looping video.
+    // A clip that ENDED delivers nothing ever again: the step is over at its tail.
     connect(player, &QMediaPlayer::mediaStatusChanged, &loop,
             [&loop](QMediaPlayer::MediaStatus s) {
                 if (s == QMediaPlayer::EndOfMedia || s == QMediaPlayer::InvalidMedia) loop.quit();
             });
-    deadline.start(timeoutMs > 0 ? timeoutMs : 4000);
-    loop.exec();
+    connect(player, &QMediaPlayer::playbackStateChanged, &loop,
+            [&loop](QMediaPlayer::PlaybackState s) { if (s == QMediaPlayer::StoppedState) loop.quit(); });
+    connect(player, &QMediaPlayer::errorOccurred, &loop,
+            [this, &loop](QMediaPlayer::Error, const QString &why) { lastError = why; loop.quit(); });
+    if (!wasPlaying) player->play();
+    if (frameCount == before && player->mediaStatus() != QMediaPlayer::InvalidMedia
+        && player->error() == QMediaPlayer::NoError)
+        loop.exec();
 
     if (!wasPlaying) player->pause();
     return frameCount > before;
