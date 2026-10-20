@@ -337,6 +337,7 @@ set(SRCS
     src/shell/shellheader.cpp
     src/shell/editorpage.cpp
     src/shell/editortoolbar.cpp
+    src/shell/streamingindicator.cpp
     src/shell/shellactions.cpp
     src/shell/shellservices.cpp
     src/services/projectrunner.cpp
@@ -655,6 +656,7 @@ set(HEADERS
     src/shell/shellheader.h
     src/shell/editorpage.h
     src/shell/editortoolbar.h
+    src/shell/streamingindicator.h
     src/shell/shellactions.h
     src/shell/shellservices.h
     src/services/projectrunner.h

@@ -24,6 +24,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVariantList>
 
+#include "shell/streamingindicator.h"
+
 #include <functional>
 
 class ActionHost;
@@ -59,9 +61,9 @@ public:
         std::function<void(const QString &, const QString &)> toast;
         /// The editor is the active space (the snap keys act only there).
         std::function<bool()> editorActive;
-        /// Shaders the engine's background compiler has not landed yet (ASYNC-SHADERS-1):
-        /// the "Compiling shaders (N)" indicator, shown while it is above 0.
-        std::function<unsigned()> pendingShaders;
+        /// What the world still owes the picture (StreamingIndicator: shaders, textures, the first lighting arm):
+        /// the toolbar's stream-in indicator, shown while anything is owed.
+        std::function<StreamingIndicator::Work()> streamingWork;
     };
     void build(const Deps &deps);
 

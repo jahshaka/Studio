@@ -232,34 +232,9 @@ void EditorToolbar::build(const Deps &deps)
     empty->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolBar->addWidget(empty);
 
-    // "COMPILING SHADERS (N)" (ASYNC-SHADERS-1). After a project is open no compile
-    // freezes the window: the engine builds a new shader in the background and the object
-    // draws a grey placeholder meanwhile — this says how many are still on their way. It
-    // reads two atomics four times a second and is visible only while N > 0. Its action is
-    // `shaderCompiles` in editor.toolbar (visible + the text as its tooltip).
-    {
-        QLabel *label = new QLabel;
-        label->setObjectName(QStringLiteral("shaderCompileIndicator"));
-        QAction *indicator = toolBar->addWidget(label);
-        indicator->setObjectName(QStringLiteral("actionShaderCompiles"));
-        indicator->setVisible(false);
-        if (deps.pendingShaders) {
-            QTimer *poll = new QTimer(label);
-            poll->setInterval(250);
-            connect(poll, &QTimer::timeout, label, [label, indicator, pending = deps.pendingShaders]() {
-                const unsigned n = pending();
-                if (n > 0) {
-                    const QString text = tr("Compiling shaders (%1)").arg(n);
-                    if (label->text() != text) {
-                        label->setText(text);
-                        indicator->setToolTip(text);
-                    }
-                }
-                if (indicator->isVisible() != (n > 0)) indicator->setVisible(n > 0);
-            });
-            poll->start();
-        }
-    }
+    // THE STREAM-IN INDICATOR (ASYNC-SHADERS-1's "Compiling shaders (N)"; BUGS-7: textures and the lighting arm too,
+    // in the theme's window text): what the world still owes the picture, visible only while something is owed.
+    new StreamingIndicator(toolBar, deps.streamingWork);
 
 	QAction *actionExport = new QAction(toolBar);
 	actionExport->setObjectName(QStringLiteral("actionExport"));

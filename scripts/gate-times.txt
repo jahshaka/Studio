@@ -50,6 +50,8 @@ engine.particles_pfx2_asan 11.59  quiet n=41
 engine.planar_asan 10.52  quiet n=39
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+frame.drain_budget 1.88  solo, warm, the card lock held, :83 (BUGS-7 stage 1, 2026-10-20)
+frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
 frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
@@ -224,6 +226,7 @@ threading.texture_wait_watchdog 21.60  ship 3a0422b4e (2026-10-13)
 thumbnails.studio_env 1.97  quiet n=43
 ui.space_docks 18.40  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.space_docks.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+ui.streaming_indicator 0.02  solo, offscreen, no display (BUGS-7 stage 3, 2026-10-20)
 view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
