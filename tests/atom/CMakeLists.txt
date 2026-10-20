@@ -184,3 +184,26 @@ foreach(_row_frames
         set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
     endif()
 endforeach()
+
+# atom.density_dolly — ATOM-5 stage 3: THE DENSITY CAP, TRIANGLES AGAINST DISTANCE. A generated ROUGH facade (a 1 m
+# panel of 8,192 triangles, every vertex displaced +-5 cm: relief deeper than its triangles are wide, an error that
+# hardly grows per halving) and a smooth 8k sphere beside it, dollied 6 .. 96 m (five stops a factor 2 apart, 30
+# frames of settle each) at High with the cap off (1) and on
+# (2) and at Epic (1): the device's verdicts are Types.h clusterGroupVerdict's, the triangles never rise, the cap
+# coarsens the facade and leaves the sphere exactly as it was, Epic is exact; the exponents and the silhouette delta
+# printed. The spec's own row: archived at the merge. It links the bake (IrisGL) and the mirror's hand-off.
+add_executable(test_atom_density_dolly test_atom_density_dolly.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_source_files_properties(test_atom_density_dolly.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+jah_atom_engine_target(test_atom_density_dolly)
+target_include_directories(test_atom_density_dolly PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_atom_density_dolly PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    CLUSTER_FIXTURE_DIR="${_cluster_fixture_dir}")
+target_link_libraries(test_atom_density_dolly PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+jah_gpu_row(atom.density_dolly CLASS engine FRAMES 477 COMMAND test_atom_density_dolly
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.density_dolly PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 60 LABELS "engine")
