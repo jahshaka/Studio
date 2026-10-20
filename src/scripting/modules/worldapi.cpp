@@ -2016,7 +2016,7 @@ bool WorldApi::setAtomDraw(bool on)
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
     es->setAtomDrawEnabled(on);
-    return es->atomDrawStatus().on;
+    return es->atomDrawOn();
 }
 
 bool WorldApi::setAtomOcclusion(bool on)
@@ -2027,7 +2027,7 @@ bool WorldApi::setAtomOcclusion(bool on)
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
     es->setAtomOcclusionEnabled(on);
-    return on && es->atomDrawStatus().on;
+    return on && es->atomDrawOn();
 }
 
 namespace {
