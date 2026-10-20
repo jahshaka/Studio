@@ -46,6 +46,10 @@ int main(int argc, char **argv)
         if (line.contains(QStringLiteral("BUGS6_WATCH"))) { phase = Watching; continue; }
         const int at = line.indexOf(QStringLiteral("BUGS6 {"));
         if (at >= 0) { r = QJsonDocument::fromJson(line.mid(at + 6).toUtf8()).object(); continue; }
+        // The open's own ledger line and the driver's slow-frame lines: printed, for the reader.
+        if (phase != Before && (line.contains(QStringLiteral("=== SCENE OPEN ===")) ||
+                                line.contains(QStringLiteral("slow frame:"))))
+            std::printf("    app: %s\n", qPrintable(line.trimmed().left(200)));
         const QRegularExpressionMatch m = cloneRe.match(line);
         if (m.hasMatch()) {
             if (phase == Before) lastCloneBefore = std::max(lastCloneBefore, m.captured(2).toInt());

@@ -77,14 +77,15 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "A NAME ANOTHER PROJECT CARRIES (compared case-insensitively) IS REFUSED BY NAME, with the free "
           "name offered — \"a project named 'A' already exists; 'A 2' is free\" (project.nextFreeName); "
           "projects are identified by guid, and a name is a label no two of them share."
-          "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
-          "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
-          "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
-          "engine does on the UI thread, and it is no longer built inside the load: it would land "
-          "on a frame drawn behind the loading cover, which nobody can see. It is built one stage "
-          "per frame once the world is on screen, so `world.giStatus()` read immediately after this "
-          "reports an arm that is not there yet. A script that asserts on it renders its own frames "
-          "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
+          "\n\nTHE WORLD'S LIGHTING IS BUILT INSIDE THE LOAD (SPECS/BUGS_6_SPEC.md stage 1). A "
+          "world's FIRST global-illumination arm — the voxel cascades, the reflection-probe grid, the "
+          "irradiance field — is the longest thing the engine does on the UI thread; it is built on the "
+          "load's own frames once the world is installed (its geometry, sky, world settings and camera "
+          "in the renderer), before the shader warm-up and the reveal, because built after the reveal "
+          "it landed on the first frame the user sees (298 ms on the default world). It still waits for "
+          "what it reads — a camera a drawing view has tracked, the voxel inputs' textures, the sky, "
+          "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
+          "after this returns: `world.giStatus().vctBound` says which.",
           Needs::Document },
         { "createAsync", "project.createAsync(name, {template, location}) -> guid",
           "THE CREATE, WITHOUT THE WAIT (SPECS/OPEN_COVER_SPEC.md §2 C/§4). Exactly what "
@@ -108,14 +109,15 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
           "the closed project's undo history goes with it, and the rest of the run records into a fresh entry."
-          "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
-          "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
-          "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
-          "engine does on the UI thread, and it is no longer built inside the load: it would land "
-          "on a frame drawn behind the loading cover, which nobody can see. It is built one stage "
-          "per frame once the world is on screen, so `world.giStatus()` read immediately after this "
-          "reports an arm that is not there yet. A script that asserts on it renders its own frames "
-          "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
+          "\n\nTHE WORLD'S LIGHTING IS BUILT INSIDE THE LOAD (SPECS/BUGS_6_SPEC.md stage 1). A "
+          "world's FIRST global-illumination arm — the voxel cascades, the reflection-probe grid, the "
+          "irradiance field — is the longest thing the engine does on the UI thread; it is built on the "
+          "load's own frames once the world is installed (its geometry, sky, world settings and camera "
+          "in the renderer), before the shader warm-up and the reveal, because built after the reveal "
+          "it landed on the first frame the user sees (298 ms on the default world). It still waits for "
+          "what it reads — a camera a drawing view has tracked, the voxel inputs' textures, the sky, "
+          "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
+          "after this returns: `world.giStatus().vctBound` says which.",
           Needs::Document },
         { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "

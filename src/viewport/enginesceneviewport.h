@@ -319,6 +319,7 @@ public:
     qulonglong rectChanges() const override { return EngineViewWidget::rectChanges(); }
     void beginSceneLoad(const QString &title = QString()) override;
     void endSceneLoad() override;
+    void releaseLightingArm() override;
     StreamingPending streamingPending() const override;
     QString coverState() const override;
     qulonglong coversPresented() const override { return mCoversPresented; }
@@ -535,8 +536,13 @@ private:
     /// A world is on its way and none of it is on screen yet — the engine's
     /// half of `mSceneLoadPending`, and it needs to be its own flag because
     /// `clearScene` wipes that one while an open is in flight (see
-    /// refreshOverlay). Drives `Scene::setLoading`.
+    /// refreshOverlay). The cover's and the indicator's flag.
     bool mWorldArriving = false;
+    /// THE FIRST LIGHTING ARM IS HELD (BUGS-6 stage 1): raised with `mWorldArriving` in
+    /// beginSceneLoad, lowered when the world is INSTALLED (releaseLightingArm, the open's own
+    /// sequence, before its warm-up and its reveal) or at endSceneLoad. Drives `Scene::setLoading`
+    /// with the mirror's owed attaches.
+    bool mArmHeld = false;
     /// Binds this widget's View to the scene, with the view-side state that
     /// belongs to the editor's own picture (shadows, the VR helper channel).
     void bindViewToScene();

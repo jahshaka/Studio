@@ -912,7 +912,7 @@ bool EngineSceneViewport::ensureEngineScene()
     // `beginSceneLoad` raises the flag, and on the first world of a session it
     // runs BEFORE this scene exists — so the flag is pushed again here, and the
     // world that would otherwise build its whole arm behind the cover does not.
-    mEngineScene->setLoading(mWorldArriving);
+    mEngineScene->setLoading(mArmHeld);
     bindViewToScene();
     return true;
 }
@@ -2659,7 +2659,7 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         mMirror->sync(views);
         // ...and while meshes are still owed the world has not arrived: no
         // FIRST-TIME lighting arm over half a world (Scene::setLoading).
-        if (mEngineScene) mEngineScene->setLoading(mWorldArriving || mMirror->attachesOwed() > 0);
+        if (mEngineScene) mEngineScene->setLoading(mArmHeld || mMirror->attachesOwed() > 0);
     }
     framemonitor::Stage overlayStage("host.overlay");
     // SIZED FOR THE PICTURE, not for the camera we are flying (F7): the gizmo's
@@ -4498,10 +4498,11 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // The streaming window opens with the load and is spent by the driver's
     // ticks after the reveal (OPEN_COVER_SPEC §2.1).
     mStreamFramesLeft = kStreamFramesAfterReveal;
-    // AND THE ENGINE IS TOLD, for the whole stretch: no first-time GI arm until
-    // this world is on screen. Raised here and lowered in refreshOverlay, where
-    // the cover comes down — the two are the same event seen from both sides.
+    // AND THE ENGINE IS TOLD: no first-time GI arm over a world that is still
+    // being installed. Lowered once it is installed (releaseLightingArm, the
+    // open's own sequence) — never later than the end of the load.
     mWorldArriving = true;
+    mArmHeld = true;
     if (mEngineScene) mEngineScene->setLoading(true);
     // Loading, not the computed state: the caller is telling us a world is on
     // its way, and it is about to block this thread reading it. The Qt cover
@@ -4555,7 +4556,17 @@ jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
 void EngineSceneViewport::endSceneLoad()
 {
     mWorldArriving = false;
+    mArmHeld = false;
     if (mEngineScene) mEngineScene->setLoading(false);
+}
+
+// THE WORLD IS INSTALLED: ITS FIRST LIGHTING ARM BUILDS BEHIND THE OPEN (BUGS-6 stage 1).
+// See the interface's note. The meshes the mirror's budget still owes keep the hold (the
+// syncFrame rule): an arm over half a world is built twice.
+void EngineSceneViewport::releaseLightingArm()
+{
+    mArmHeld = false;
+    if (mEngineScene) mEngineScene->setLoading(mMirror && mMirror->attachesOwed() > 0);
 }
 
 void EngineSceneViewport::primeSceneGeometry()
