@@ -189,15 +189,11 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
     Ogre::RenderSystem *rs = Ogre::Root::getSingleton().getRenderSystem();
     Ogre::HlmsCompute *hc = Ogre::Root::getSingleton().getHlmsManager()->getComputeHlms();
 
-    // w = THE DENSITY TERM (ATOM-5), the product's own numbers (Types.h clusterGroupReplacedSizes, as
-    // OgreGpuScene.cpp uploads them).
-    std::vector<float> replaced;
-    clusterGroupReplacedSizes(groups, clusters, replaced);
     std::vector<GpuGroup> g(groups.size());
     for (size_t i = 0; i < groups.size(); ++i) {
         const MeshClusterGroup &s = groups[i];
         g[i] = GpuGroup{ { s.centre[0], s.centre[1], s.centre[2], s.radius },
-                         { s.error, s.estimate, float(s.depth), replaced[i] } };
+                         { s.error, s.estimate, float(s.depth), 0.0f } };
     }
     std::vector<GpuCluster> c(clusters.size());
     for (size_t i = 0; i < clusters.size(); ++i) {
@@ -212,7 +208,7 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
         ParityView p;
         std::memcpy(p.row, s.worldRow, sizeof(p.row));
         p.eyeScale[0] = s.eye[0]; p.eyeScale[1] = s.eye[1]; p.eyeScale[2] = s.eye[2];
-        p.eyeScale[3] = s.densityCap;   // ATOM-5 (the device derives the scale from the rows)
+        p.eyeScale[3] = 0.0f;   // unused (the device derives the scale from the rows)
         p.lod[0] = s.tolerance; p.lod[1] = s.projScaleY; p.lod[2] = s.viewportHeight; p.lod[3] = s.orthographic ? 1.0f : 0.0f;
         v[i] = p;
     }

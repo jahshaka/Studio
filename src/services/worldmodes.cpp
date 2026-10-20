@@ -639,30 +639,6 @@ QVector<Row> buildRows()
         r.set = [](const iris::ScenePtr &s, int v) { s->atomPixelError = qBound(1, v, 8); };
         out.append(r);
     }
-    {
-        // THE VIEW'S DENSITY CAP (ATOM-5): below Epic a cluster group may stand in for finer
-        // clusters whose triangles are already smaller than a pixel, at up to this many times
-        // the pixel-error row's deviation (Types.h clusterGroupVerdict). At 1 the cut is the exact
-        // rule (Epic; both selftest scenes). The numbers are the lead's starting values
-        // (2026-10-20); the owner's eye tunes them at the smoke — a parent that erases a thin
-        // part pops where the cap flips (atom.density_dolly prints the silhouette delta).
-        Row r;
-        r.id = QStringLiteral("atomDensityCap");
-        r.label = QStringLiteral("Geometry Density Cap");
-        r.group = QStringLiteral("Rendering");
-        r.type = RowType::Int;
-        r.minValue = 1; r.maxValue = 8;
-        r.tier[0] = 4; r.tier[1] = 3; r.tier[2] = 2; r.tier[3] = 1;
-        r.cost = QStringLiteral("Where a mesh's triangles are already smaller than a pixel, a view "
-                                "may draw a coarser version of it that deviates up to this many "
-                                "times the pixel error: 1 is exact (no extra simplification), 2-4 "
-                                "draw fewer triangles on dense far objects, and a thin part can "
-                                "appear or vanish where the coarser version takes over. Shadow "
-                                "maps are not affected. Costs nothing to change: no shader rebuilds.");
-        r.get = [](const iris::ScenePtr &s) { return s->atomDensityCap; };
-        r.set = [](const iris::ScenePtr &s, int v) { s->atomDensityCap = qBound(1, v, 8); };
-        out.append(r);
-    }
 
     // ---- Shadows -----------------------------------------------------------
     {

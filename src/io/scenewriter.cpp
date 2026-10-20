@@ -171,8 +171,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowMapBudget"] = scene->shadowMapBudget;
     // The view's pixel-error threshold, in pixels (the World Mode's atomPixelError row).
     sceneObj["atomPixelError"] = scene->atomPixelError;
-    // The view's density cap (the World Mode's atomDensityCap row; 1 = the exact rule).
-    sceneObj["atomDensityCap"] = scene->atomDensityCap;
     sceneObj["particleTimeScale"] = scene->particleTimeScale;
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Engine-viewport settings,
     // so they live beside antiAliasing rather than anywhere near the materials.

@@ -97,31 +97,6 @@ static MeshData chainedMesh()
     return d;
 }
 
-/// THE CAP'S OWN CONTENT (ATOM-5): a ROUGH PANEL — 1 m, 64 x 64 quads, every vertex displaced by a deterministic
-/// random height in +-5 cm (relief deeper than its 1.56 cm triangles are wide), atom.density_dolly's facade. The
-/// shipped meshes are smooth, and on smooth content the cap's clause cannot hold (its frontier triangles are larger
-/// than a pixel), so without this mesh the sweeps would exercise the clause on a handful of views only.
-static iris::MeshPtr roughPanel()
-{
-    const int n = 64;
-    std::vector<float> pos, nrm;
-    std::vector<unsigned> idx;
-    unsigned seed = 12345u;
-    for (int j = 0; j <= n; ++j)
-        for (int i = 0; i <= n; ++i) {
-            seed = seed * 1664525u + 1013904223u;
-            const float z = 0.05f * (float(seed >> 8) / float(1u << 24) * 2.0f - 1.0f);
-            pos.insert(pos.end(), { -0.5f + float(i) / float(n), -0.5f + float(j) / float(n), z });
-            nrm.insert(nrm.end(), { 0.0f, 0.0f, 1.0f });
-        }
-    for (int j = 0; j < n; ++j)
-        for (int i = 0; i < n; ++i) {
-            const unsigned a = unsigned(j * (n + 1) + i), b = a + 1u, c = a + unsigned(n + 1), d = c + 1u;
-            idx.insert(idx.end(), { a, b, d, a, d, c });
-        }
-    return clusterfix::meshFromArrays(pos, nrm, {}, idx);
-}
-
 // ---- THE FOURTH COPY: THE CLUSTER CUT (ATOM stage 2, lane ATOM-CLUSTER-1) --------
 //
 // The cut's rule is the same currency applied PER GROUP of a mesh's cluster DAG
@@ -154,7 +129,6 @@ static void clusterCutParity(Engine *e)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "rough-panel", roughPanel() });   // ATOM-5: the cap's content
 
     // The instance: rotated 30 degrees about Y then 20 about X, scaled NON-UNIFORMLY
     // (1 : 0.6 : 1.3 along its own axes, times the sweep's scale), placed `dist`
@@ -169,10 +143,7 @@ static void clusterCutParity(Engine *e)
     // The tiers' 1 / 2 / 3 / 4 px (the World Mode's atomPixelError row, ATOM-3) and half a pixel.
     const float tols[5] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f };
     const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
-    // ...and THE DENSITY CAP (ATOM-5): the World Mode's 1 (Epic, the exact rule) / 2 / 3 / 4 at every one of them.
-    const float caps[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
     unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
-    unsigned long long capMoved = 0, capViews = 0;
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
@@ -182,20 +153,18 @@ static void clusterCutParity(Engine *e)
         for (int di = 0; di < 20; ++di) {
             const float dist = std::pow(500.0f, float(di) / 19.0f);   // 1 m .. 500 m
             for (float sc : scales)
-                for (float tol : tols)
-                    for (float cap : caps) {   // the cap innermost: views[vi - k] at cap 1 is this view's exact twin
-                        ClusterCutView v;
-                        for (int r = 0; r < 3; ++r) {
-                            for (int c = 0; c < 3; ++c) v.worldRow[r][c] = R[r][c] * axis[c] * sc;
-                            v.worldRow[r][3] = r == 2 ? -dist : 0.0f;
-                        }
-                        v.scale = worldMaxAxisScale(&v.worldRow[0][0]);
-                        v.tolerance = tol;
-                        v.projScaleY = 1.0f / std::tan(30.0f * 3.14159265f / 180.0f);
-                        v.viewportHeight = 1080.0f;
-                        v.densityCap = cap;
-                        views.push_back(v);
+                for (float tol : tols) {
+                    ClusterCutView v;
+                    for (int r = 0; r < 3; ++r) {
+                        for (int c = 0; c < 3; ++c) v.worldRow[r][c] = R[r][c] * axis[c] * sc;
+                        v.worldRow[r][3] = r == 2 ? -dist : 0.0f;
                     }
+                    v.scale = worldMaxAxisScale(&v.worldRow[0][0]);
+                    v.tolerance = tol;
+                    v.projScaleY = 1.0f / std::tan(30.0f * 3.14159265f / 180.0f);
+                    v.viewportHeight = 1080.0f;
+                    views.push_back(v);
+                }
         }
         std::vector<unsigned char> drawn;
         if (!gpu.run(f.data.clusterGroups, f.data.clusters, views, drawn, err)) {
@@ -206,16 +175,11 @@ static void clusterCutParity(Engine *e)
         const size_t nc = f.data.clusters.size();
         unsigned long long meshBad = 0, meshNear = 0, meshNearBad = 0;
         size_t distinct = 0;
-        std::vector<unsigned> cut, previous, exact;
-        std::vector<float> replaced;
-        clusterGroupReplacedSizes(f.data.clusterGroups, f.data.clusters, replaced);
+        std::vector<unsigned> cut, previous;
         for (size_t vi = 0; vi < views.size(); ++vi) {
             clusterCut(f.data.clusterGroups, f.data.clusters, views[vi], cut);
             if (cut != previous) ++distinct;
             previous = cut;
-            // THE CAP IS NOT VACUOUS: how many capped views cut differently from their cap-1 twin.
-            if (views[vi].densityCap == 1.0f) exact = cut;
-            else { ++capViews; capMoved += cut != exact ? 1u : 0u; }
             std::vector<unsigned char> cpu(nc, 0);
             for (unsigned c : cut) cpu[c] = 1;
             for (size_t c = 0; c < nc; ++c) {
@@ -230,14 +194,6 @@ static void clusterCutParity(Engine *e)
                     const MeshClusterGroup &gr = f.data.clusterGroups[size_t(g)];
                     const float a = clusterGroupAllowed(gr, views[vi]);
                     if (gr.error < FLT_MAX && std::fabs(a - gr.error) <= 1.0e-4f * gr.error) near = true;
-                    // ...and the cap's two comparisons (ATOM-5): the error against allowed x cap, the
-                    // replaced triangles against the footprint.
-                    const float cap = views[vi].densityCap;
-                    if (cap > 1.0f && gr.error < FLT_MAX) {
-                        const float fp = clusterGroupFootprint(gr, views[vi]);
-                        if (std::fabs(a * cap - gr.error) <= 1.0e-4f * gr.error) near = true;
-                        if (std::fabs(replaced[size_t(g)] * views[vi].scale - fp) <= 1.0e-4f * fp) near = true;
-                    }
                 }
                 if (near) ++meshNear;
                 if (cpu[c] == drawn[vi * nc + c]) continue;
@@ -263,10 +219,6 @@ static void clusterCutParity(Engine *e)
                   "of a threshold",
                   evaluated, drawnTotal, mismatched + nearMismatched, nearMismatched, nearThreshold);
     CHECK(mismatched == 0u && nearMismatched == 0u, msg);
-    std::snprintf(msg, sizeof(msg),
-                  "THE DENSITY CAP REACHES THE SWEEP (ATOM-5): %llu of %llu capped views cut differently from their "
-                  "cap-1 twin", capMoved, capViews);
-    CHECK(capMoved > 0u, msg);
 }
 
 // ---- THE FIFTH COPY: THE PRODUCT'S CUT (ATOM-CLUSTER-CUT) --------------------------
@@ -294,24 +246,15 @@ static void productCutParity(Engine *e, View *view)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "rough-panel", roughPanel() });   // ATOM-5: the cap's content
 
-    struct Set { float tol, fovDeg, height; bool ortho; float cap; };
-    // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows), and THE DENSITY CAP (ATOM-5): the
-    // tiers' (tolerance, cap) pairs High (2, 2), Medium (3, 3), Low (4, 4), a capped orthographic view, and High's
-    // pair again at 2,160 rows (a headset eye's) with its own cap-1 twin (set 12) — the height that puts the rough
-    // panel's 80 m instance inside the window where its clusters are sub-sample and its error is 2-4 px (the twin
-    // measures that window at 0.030-0.044 m of distance per row of height per unit of scale), so the capped sets are
-    // not vacuous on the content the cap is for.
-    const Set sets[13] = { { 0.5f, 45.0f, 1080.0f, false, 1.0f }, { 1.0f, 45.0f, 1080.0f, false, 1.0f },
-                           { 4.0f, 90.0f, 720.0f, false, 1.0f },  { 1.0f, 110.0f, 2376.0f, false, 1.0f },
-                           { 1.0f, 45.0f, 1080.0f, true, 1.0f },  { 2.0f, 45.0f, 1080.0f, false, 1.0f },
-                           { 3.0f, 60.0f, 1080.0f, false, 1.0f }, { 2.0f, 45.0f, 1080.0f, false, 2.0f },
-                           { 3.0f, 60.0f, 1080.0f, false, 3.0f }, { 4.0f, 90.0f, 720.0f, false, 4.0f },
-                           { 1.0f, 45.0f, 1080.0f, true, 2.0f },  { 2.0f, 45.0f, 2160.0f, false, 2.0f },
-                           { 2.0f, 45.0f, 2160.0f, false, 1.0f } };
+    struct Set { float tol, fovDeg, height; bool ortho; };
+    // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows).
+    const Set sets[7] = { { 0.5f, 45.0f, 1080.0f, false }, { 1.0f, 45.0f, 1080.0f, false },
+                          { 4.0f, 90.0f, 720.0f, false },  { 1.0f, 110.0f, 2376.0f, false },
+                          { 1.0f, 45.0f, 1080.0f, true },  { 2.0f, 45.0f, 1080.0f, false },
+                          { 3.0f, 60.0f, 1080.0f, false } };
     unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
-    unsigned long long coverageBad = 0, overlapBad = 0, capPairs = 0, capChanged = 0;
+    unsigned long long coverageBad = 0, overlapBad = 0;
     unsigned depthHist[16] = {};
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
@@ -356,11 +299,7 @@ static void productCutParity(Engine *e, View *view)
                     slots);
         unsigned long long meshBad = 0, meshNearBad = 0, meshNear = 0, meshPairs = 0;
         std::set<std::vector<unsigned>> distinctCuts;
-        std::vector<float> replacedSizes;
-        clusterGroupReplacedSizes(f.data.clusterGroups, f.data.clusters, replacedSizes);
-        std::map<std::pair<unsigned, int>, std::vector<unsigned>> cutAt;   // (slot, set) -> the device's cut
-        for (int si = 0; si < 13; ++si) {
-            const Set &ps = sets[si];
+        for (const Set &ps : sets) {
             GpuCullRequest r;
             if (!e->fillCullView(view, r)) { std::printf("FAIL: fillCullView\n"); ++failures; break; }
             for (int i = 0; i < 24; ++i) r.planes[i] = 0.0f;
@@ -372,7 +311,6 @@ static void productCutParity(Engine *e, View *view)
             r.projScaleY = 1.0f / std::tan(ps.fovDeg * 0.5f * 3.14159265f / 180.0f);
             r.viewportHeight = ps.height;
             r.orthographic = ps.ortho;
-            r.densityCap = ps.cap;
             GpuCullResult res;
             if (!e->gpuCull(sc, view, r, /*readBack=*/true, res)) {
                 std::printf("FAIL: %s: gpuCull: %s\n", m.first.c_str(), e->takeLastError().c_str());
@@ -396,28 +334,20 @@ static void productCutParity(Engine *e, View *view)
                 v.projScaleY = r.projScaleY;
                 v.viewportHeight = r.viewportHeight;
                 v.orthographic = r.orthographic;
-                v.densityCap = r.densityCap;
                 std::vector<unsigned> cpu;
                 clusterCut(f.data.clusterGroups, f.data.clusters, v, cpu);
                 std::vector<unsigned> gpu = gpuBySlot[slot];
                 std::sort(gpu.begin(), gpu.end());
                 std::sort(cpu.begin(), cpu.end());
-                cutAt[{ slot, si }] = gpu;
                 distinctCuts.insert(cpu);
                 ++meshPairs;
                 drawnTotal += cpu.size();
                 // Near a threshold: any group of the mesh afforded within 1e-4 of its error.
                 bool near = false;
-                for (size_t gi = 0; gi < f.data.clusterGroups.size(); ++gi) {
-                    const MeshClusterGroup &gr = f.data.clusterGroups[gi];
+                for (const MeshClusterGroup &gr : f.data.clusterGroups) {
                     if (gr.error >= FLT_MAX) continue;
                     const float a = clusterGroupAllowed(gr, v);
                     if (std::fabs(a - gr.error) <= 1.0e-4f * gr.error) { near = true; break; }
-                    if (v.densityCap > 1.0f) {   // the cap's two comparisons (ATOM-5)
-                        const float fp = clusterGroupFootprint(gr, v);
-                        if (std::fabs(a * v.densityCap - gr.error) <= 1.0e-4f * gr.error ||
-                            std::fabs(replacedSizes[gi] * v.scale - fp) <= 1.0e-4f * fp) { near = true; break; }
-                    }
                 }
                 meshNear += near ? 1u : 0u;
                 // THE DEVICE'S SET IS ONE CUT ON ITS OWN (the fix round's F2): no drawn
@@ -448,16 +378,6 @@ static void productCutParity(Engine *e, View *view)
                                 "CPU %zu\n", m.first.c_str(), nodeOf[table[slot].nodeId], double(ps.tol),
                                 double(ps.fovDeg), double(ps.height), ps.ortho ? " ortho" : "", gpu.size(), cpu.size());
             }
-        }
-        // THE CAP REACHES THE PRODUCT'S CUT (ATOM-5): each capped set against its cap-1 twin (7/5, 8/6, 9/2, 10/4, 11/12).
-        for (const auto &kv : cutAt) {
-            static const int twinOf[13] = { -1, -1, -1, -1, -1, -1, -1, 5, 6, 2, 4, 12, -1 };
-            const int t = twinOf[kv.first.second];
-            if (t < 0) continue;
-            auto it = cutAt.find({ kv.first.first, t });
-            if (it == cutAt.end()) continue;
-            ++capPairs;
-            capChanged += it->second != kv.second ? 1u : 0u;
         }
         ++meshesRun;
         pairs += meshPairs;
@@ -490,9 +410,7 @@ static void productCutParity(Engine *e, View *view)
                   "THE PRODUCT'S CUT IS CELL-IDENTICAL TO clusterCut: %llu (instance, view) cuts, %llu clusters "
                   "drawn, %llu differ (%llu of them at a threshold; %llu cuts had a group within 1e-4)",
                   pairs, drawnTotal, bad + nearBad, nearBad, nearCount);
-    CHECK(bad == 0u && nearBad == 0u, msg);    std::snprintf(msg, sizeof(msg), "THE DENSITY CAP REACHES THE PRODUCT'S CUT (ATOM-5): %llu of %llu capped (instance, "
-                  "view) cuts differ from their cap-1 twin", capChanged, capPairs);
-    CHECK(capChanged > 0u, msg);
+    CHECK(bad == 0u && nearBad == 0u, msg);
 }
 
 int main(int argc, char **argv)
