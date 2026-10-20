@@ -173,7 +173,7 @@ set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTabl
 # atom.hidden_cut — THE ID PASS CULLS WHAT A STOCK WALL HIDES (ATOM-4 stage 0): a front-culled (stock) wall in front of
 # 30 Atom spheres it hides wholly, three lockstep worlds (the occlusion, the same chain with no history, the door shut),
 # both chain shapes (no prepass / the SSR prepass): the FIRST list's and the LATE list's draws behind the wall are 0, the
-# depth test rejects the whole field, the id image equals the history-less twin's word for word and the picture the
+# depth test rejects the whole field, the ids the picture shows equal the history-less twin's word for word and the picture the
 # door-shut world's byte for byte. RED at the base: the late pyramid held no stock depth, so the field was drawn.
 add_executable(test_atom_hidden_cut test_atom_hidden_cut.cpp)
 jah_atom_engine_target(test_atom_hidden_cut)

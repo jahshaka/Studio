@@ -11,7 +11,9 @@
 //   (a) the FIRST list's survivors behind the wall and (b) the LATE list's draws behind the wall (the cut probe's
 //       groups by list, over the field's slots) are 0 — the hidden share is CULLED, not moved to the late list;
 //   (c) the frame's depth test rejects every field sphere (AtomDrawStatus::occluded == the field);
-//   (d) the id image of `on` equals `ref`'s word for word (the cull changes no id), and
+//   (d) wherever an Atom surface is the picture's — the id is not empty and the id pass's own depth (kAtomViewDepth)
+//       is the final depth — `on` and `ref` agree on the pixel being one, and their ids are word-equal there (the
+//       cull changes no id the picture shows; behind the wall `on` holds nothing where `ref` names what it drew), and
 //   (e) the PICTURE of `on` equals `shut`'s byte for byte (the occlusion and the pass order change no pixel).
 // At the base (ATOM-3's tip) (a) is the field and (c) is 0: the late pyramid holds no stock depth, the first cull's
 // history neither, so every hidden sphere is drawn (spikes/atom-3/stage3-stop.txt). The monitor's GPU ms of the id
@@ -150,6 +152,38 @@ static bool readIds(OgreView *v, std::vector<uint32_t> &out)
     return true;
 }
 
+/// A depth texture of the view's chain (D32: one float a texel).
+static bool readDepth(OgreView *v, const char *name, std::vector<float> &out)
+{
+    Ogre::CompositorWorkspace *ws = v->workspace();
+    if (!ws) return false;
+    Ogre::TextureGpu *tex = nullptr;
+    for (Ogre::CompositorNode *n : ws->getNodeSequence())
+        if ((tex = n->getDefinedTexture(Ogre::IdString(name))) != nullptr) break;
+    if (!tex) return false;
+    Ogre::Image2 img;
+    img.convertFromTexture(tex, 0u, 0u);
+    const Ogre::TextureBox box = img.getData(0u);
+    const unsigned w = tex->getWidth(), h = tex->getHeight();
+    out.assign(size_t(w) * h, 0.0f);
+    for (unsigned r = 0; r < h; ++r) std::memcpy(&out[size_t(r) * w], box.at(0, r, 0), size_t(w) * sizeof(float));
+    return true;
+}
+
+/// THE PIXELS WHERE AN ATOM SURFACE IS THE PICTURE'S (the readers' rule: JahAtomView_ps.glsl): the id is not empty
+/// and the id pass's own depth is the final depth, bit for bit.
+static bool atomVisible(OgreView *v, const std::vector<uint32_t> &ids, std::vector<unsigned char> &vis)
+{
+    std::vector<float> idDepth, finalDepth;
+    if (!readDepth(v, detail::kAtomViewDepthTexture, idDepth) || !readDepth(v, detail::kSceneDepthTexture, finalDepth) ||
+        idDepth.size() * 2u != ids.size() || finalDepth.size() != idDepth.size())
+        return false;
+    vis.assign(idDepth.size(), 0u);
+    for (size_t i = 0; i < idDepth.size(); ++i)
+        vis[i] = ids[2 * i] != 0xFFFFFFFFu && std::memcmp(&idDepth[i], &finalDepth[i], sizeof(float)) == 0;
+    return true;
+}
+
 static Engine *gE = nullptr;
 
 /// One frame of the three worlds; `ref`'s history is thrown away first (its first cull tests nothing).
@@ -237,19 +271,28 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
         for (int f = 0; f < 4; ++f) {
             step(ref);
             std::vector<uint32_t> a, b;
+            std::vector<unsigned char> va, vb;
             Image pa, pb;
-            if (!readIds(on.ov, a) || !readIds(ref.ov, b) || a.size() != b.size() || !on.view->readPixels(pa) ||
-                !shut.view->readPixels(pb) || pa.rgba.size() != pb.rgba.size())
+            if (!readIds(on.ov, a) || !readIds(ref.ov, b) || a.size() != b.size() || !atomVisible(on.ov, a, va) ||
+                !atomVisible(ref.ov, b, vb) || !on.view->readPixels(pa) || !shut.view->readPixels(pb) ||
+                pa.rgba.size() != pb.rgba.size())
                 continue;
             ++compared;
-            size_t d = 0;
-            for (size_t i = 0; i < a.size(); i += 2)
-                if (a[i] != b[i] || a[i + 1] != b[i + 1]) {
+            size_t d = 0, shown = 0, hidden = 0;
+            for (size_t i = 0; i < a.size(); i += 2) {
+                const size_t px = i / 2;
+                if (vb[px]) ++shown;
+                else if (b[i] != 0xFFFFFFFFu) ++hidden;   // ref drew an id the picture does not show
+                if (va[px] != vb[px] || (vb[px] && (a[i] != b[i] || a[i + 1] != b[i + 1]))) {
                     if (d < 3)
-                        std::printf("   ids differ at (%zu, %zu): on %08x %08x | ref %08x %08x\n", (i / 2) % kW,
-                                    (i / 2) / kW, a[i], a[i + 1], b[i], b[i + 1]);
+                        std::printf("   ids differ at (%zu, %zu): on %08x %08x (shown %d) | ref %08x %08x (shown %d)\n",
+                                    px % kW, px / kW, a[i], a[i + 1], int(va[px]), b[i], b[i + 1], int(vb[px]));
                     ++d;
                 }
+            }
+            if (f == 0)
+                std::printf("   the Atom pixels the picture shows %zu; ids ref drew behind a nearer surface %zu\n",
+                            shown, hidden);
             if (d) { ++idsDiffer; worstIds = std::max(worstIds, d); }
             size_t q = 0;
             for (size_t i = 0; i < pa.rgba.size(); i += 4)
@@ -266,7 +309,7 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
         gE->popMonitorRecords(recs);
         printPassMs(recs, shape);
         CHECK_MSG(compared == 4, "%s: four frames' id images and pictures read (%d)", shape, compared);
-        CHECK_MSG(idsDiffer == 0, "%s: (d) on's id image equals ref's word for word (%d frames differ, worst %zu px)",
+        CHECK_MSG(idsDiffer == 0, "%s: (d) wherever an Atom surface is the picture's, on's id equals ref's word for word (%d frames differ, worst %zu px)",
                   shape, idsDiffer, worstIds);
         CHECK_MSG(picDiffer == 0, "%s: (e) on's picture equals shut's byte for byte (%d frames differ, worst %zu px)",
                   shape, picDiffer, worstPic);
