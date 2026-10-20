@@ -41,6 +41,16 @@ tree and the build's registration, each with its name in the failure line:
   R11 THE ENGINE'S RECORD IS THE FIXTURES' ALONE (ENGINE-UPGRADE-U3 stage 2). No file under src/ or irisgl/mirror
      includes jahshaka/engine/EngineInspect.h — the test door onto the engine's own record of what a host set; the host
      keeps what it set.
+  R12 A ROW WITH A SCRATCH ROOT UNDER THE BUILD DIR DECLARES ITS WIPE (TOOLING-7 stage 1). Every row whose
+     ENVIRONMENT sets JAHSHAKA_DATA_ROOT or HOME to a path under the build dir owns that root: its command is
+     tests/support/fresh_home.sh wiping it (the in-row wipe, a one-script row's default), or it FIXTURES_REQUIRES a
+     fixture whose setup row is fresh_home.sh wiping it (jah_fresh_home_fixture: the same root, or a home the root sits
+     in, or one of its --reset dirs), or it carries the test property JAHSHAKA_TEST_KEEPS_HOME with its one-line reason
+     (a row whose LAW is a later launch on the same root). WHY: a root kept across runs outlives a library schema change
+     — the app's reset keeps the storages, the old AssetStore has no sidecar directory, the library is REFUSED (exit 4)
+     — and three ship rows went red that way on main's long-lived build-linux (shadercache.app 67cefee33, api.contract
+     cd0587fdc, app.engine_selftest_validation f4ad56a90) and green in a fresh ship tree. RED ON BASE f4ad56a90:
+     scripting.e2e.editor_controls.timing.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -265,6 +275,69 @@ def r10_files(source):
     return out
 
 
+ROOT_VARS = ("JAHSHAKA_DATA_ROOT", "HOME")
+KEEPS_HOME = "JAHSHAKA_TEST_KEEPS_HOME"
+
+
+def _fresh_home_wipes(cmd):
+    """The paths a fresh_home.sh command wipes (its <home> and every --reset dir), or None when the command does not run
+    fresh_home.sh. The script may sit behind a launcher (scripts/gpu-exclusive.sh, `sh`): its own arguments start after
+    it and end at `--`."""
+    at = next((i for i, c in enumerate(cmd) if os.path.basename(c) == "fresh_home.sh"), None)
+    if at is None:
+        return None
+    out, args, i = [], cmd[at + 1:], 0
+    while i < len(args) and args[i] != "--":
+        a = args[i]
+        if a in ("--warm", "--keep-home", "--setup"):
+            i += 1
+        elif a in ("--cache", "--rm", "--mkdir"):
+            i += 2
+        elif a == "--reset":
+            if i + 1 < len(args):
+                out.append(args[i + 1])
+            i += 2
+        else:
+            out.append(a)                                # <home>: the first positional; nothing after it is a flag
+            break
+    return out
+
+
+def _under(path, top):
+    path, top = os.path.realpath(path), os.path.realpath(top)
+    return path == top or path.startswith(top.rstrip("/") + "/")
+
+
+def r12_bad(tests, build):
+    """[`row (VAR=root)`] for every row whose ENVIRONMENT points JAHSHAKA_DATA_ROOT or HOME under `build` without a wipe
+    of that root it declares (its own fresh_home.sh command, a required fresh_home.sh fixture) or a stated keep
+    (JAHSHAKA_TEST_KEEPS_HOME with a reason). `tests`: ctest's json-v1 `tests` list. Paths are compared real (the tree
+    may be configured through the ~/Developer symlink: SYMLINK-ROOT-2)."""
+    setups = {}
+    for t in tests:
+        w = _fresh_home_wipes(t.get("command") or [])
+        for f in _list(_props(t).get("FIXTURES_SETUP")):
+            if w:
+                setups.setdefault(f, []).extend(w)
+    bad = []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        P = _props(t)
+        roots = []
+        for e in _list(P.get("ENVIRONMENT")):
+            k, _, v = e.partition("=")
+            if k in ROOT_VARS and v and _under(v, build):
+                roots.append((k, v))
+        if not roots or str(P.get(KEEPS_HOME, "")).strip():
+            continue
+        wipes = list(_fresh_home_wipes(t.get("command") or []) or [])
+        for f in _list(P.get("FIXTURES_REQUIRED")):
+            wipes += setups.get(f, [])
+        for k, v in roots:
+            if not any(_under(v, w) for w in wipes):
+                bad.append("%s (%s=%s)" % (t["name"], k, os.path.relpath(os.path.realpath(v), os.path.realpath(build))))
+    return bad
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -329,6 +402,26 @@ def the_rules_catch():
                                             "\"l\", enginetest::EngineOverrides().headless());\nbool b = cfg.headless == true;"}),
           "R10 flags an EngineConfig built outside the helper (a default/brace variable, a temporary, a new, a field write), "
           "not the helper itself, a comment, a string, a wrapper of the helper or a read")
+    C = lambda name, cmd, **p: dict(T(name, **p), command=cmd)
+    fh = "/s/tests/support/fresh_home.sh"
+    env = ["HOME=/b/tests/x/h", "JAHSHAKA_DATA_ROOT=/b/tests/x/h/.local/share/Jahshaka"]
+    r12 = r12_bad([C("bare", ["/b/bin/Jahshaka"], ENVIRONMENT=env),
+                   C("inrow", ["/s/scripts/gpu-exclusive.sh", "--label", "l", "sh", fh, "--warm", "/b/tests/x/h", "--",
+                               "/b/bin/Jahshaka"], ENVIRONMENT=env),
+                   C("h.setup", ["sh", fh, "--setup", "--warm", "--reset", "/b/tests/x/r", "/b/tests/x/h"],
+                     FIXTURES_SETUP=["fx"]),
+                   C("fixtured", ["/b/bin/Jahshaka"], ENVIRONMENT=env, FIXTURES_REQUIRED=["fx"]),
+                   C("reset", ["/b/bin/Jahshaka"], ENVIRONMENT=["JAHSHAKA_DATA_ROOT=/b/tests/x/r/d"], FIXTURES_REQUIRED=["fx"]),
+                   C("other", ["/b/bin/Jahshaka"], ENVIRONMENT=["HOME=/b/tests/x/g"], FIXTURES_REQUIRED=["fx"]),
+                   C("kept", ["/b/bin/Jahshaka"], ENVIRONMENT=env, JAHSHAKA_TEST_KEEPS_HOME="the warm second launch"),
+                   C("outside", ["/b/bin/Jahshaka"], ENVIRONMENT=["HOME=/tmp/x/y/z"]),
+                   C("wrongroot", ["sh", fh, "--warm", "/b/tests/x/other", "--", "/b/bin/Jahshaka"], ENVIRONMENT=env[:1])],
+                  "/b")
+    check(r12 == ["bare (HOME=tests/x/h)", "bare (JAHSHAKA_DATA_ROOT=tests/x/h/.local/share/Jahshaka)",
+                  "other (HOME=tests/x/g)", "wrongroot (HOME=tests/x/h)"],
+          "R12 flags a row whose scratch root under the build dir has no wipe (none, a fixture wiping another root, an "
+          "in-row wipe of another home), never one wiped in-row, by its fixture (home or --reset), kept with a reason, "
+          "or outside the build dir (%s)" % r12)
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
@@ -499,6 +592,9 @@ def main(source, build):
     bad = r10_bad(r10_files(source))
     check(not bad, "R10 one fixture config: no test source builds an EngineConfig outside %s (%d sites: %s)"
           % (R10_HELPER, len(bad), bad[:8]))
+    bad = r12_bad(tests, build) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R12 every row with a scratch root under the build dir declares its wipe (fresh_home.sh in the row or "
+          "a required fresh_home fixture of that root) or %s with its reason (%d without: %s)" % (KEEPS_HOME, len(bad), bad[:12]))
     inspect = []
     for root in ("src", os.path.join("irisgl", "mirror")):
         for dirpath, _dirs, names in os.walk(os.path.join(source, root)):
