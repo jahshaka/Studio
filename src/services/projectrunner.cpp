@@ -265,6 +265,9 @@ void ProjectRunner::open(bool playMode)
 	// silently on the very first open, when no render view exists yet.
 	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	mViewport->primeSceneSync();
+	// THE WORLD IS INSTALLED (BUGS-6 stage 1): this route renders no frame before
+	// its reveal, so the arm builds on the reveal's own first frame, inside the open.
+	mViewport->releaseLightingArm();
 	// The pass shape this machine's editor draws with, for the NEXT launch's
 	// startup gate (F1b): two settings values, written only on change.
 	mViewport->rememberPassShape();
@@ -272,8 +275,8 @@ void ProjectRunner::open(bool playMode)
 	// THE LOAD IS OVER (OPEN_COVER_SPEC §2 A). Said here and at the runner's
 	// `finished` — the two ends of the two routes — and NOT inside
 	// stageReveal, which is a SLICE on the threaded route with one more
-	// boundary frame behind it: that frame is the world's first, and letting it
-	// build the whole GI arm is the block this lane removes, one frame later.
+	// boundary frame behind it. (The first lighting arm no longer waits for
+	// this: releaseLightingArm above, BUGS-6 stage 1.)
 	mViewport->endSceneLoad();
 }
 
@@ -330,9 +333,9 @@ void ProjectRunner::startRunnerIfNeeded()
 	connect(mRunner, &SceneOpenRunner::finished, this, [this](bool) {
 		mHost->hideOpenProgress();
 		// EVERY SLICE HAS RUN, AND SO HAS THE LAST BOUNDARY FRAME: the world is
-		// installed and on screen, so the engine may build its first GI arm
-		// (OPEN_COVER_SPEC §2 A). One frame later than the reveal, and
-		// deliberately — see open().
+		// installed and on screen (OPEN_COVER_SPEC §2 A). Its first GI arm was
+		// released at the "Lighting the world" slice (BUGS-6 stage 1); this
+		// lowers the hold for a route that never reached it.
 		if (mViewport) mViewport->endSceneLoad();
 	});
 	// THE INSTALL DRIVES ITS OWN FRAME (lane OPEN-FRAMES-1, 2026-09-15).
@@ -444,6 +447,9 @@ void ProjectRunner::startOpenRun(bool playMode)
 	slices.append({ QStringLiteral("Lighting the world…"), 90, [this]() {
 		LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
 		mViewport->primeSceneEnvironment();
+		// THE WORLD IS INSTALLED: its first lighting arm builds on this slice's
+		// boundary frame, behind the open (BUGS-6 stage 1; the interface's note).
+		mViewport->releaseLightingArm();
 	} });
 	// SHADER_CACHE_SPEC §5: build the world's shaders while the cover is still
 	// up, so the frames right after the reveal do not hitch through dozens of
@@ -523,8 +529,9 @@ void ProjectRunner::startOpenRun(bool playMode)
 // slice per event-loop turn with a frame at every boundary. Two things follow
 // for free and both are the point: the window answers between the slices, and
 // the engine is told a world is on its way (stageBegin's `beginSceneLoad`),
-// which is what puts the arm on the streaming path instead of into the first
-// frame the user sees.
+// which holds the first lighting arm until the world is installed and then
+// builds it on the create's own frames (releaseLightingArm, BUGS-6 stage 1)
+// instead of on the first frame the user sees.
 //
 // THE PAGE SWITCH MOVED TO THE END, with the open's reveal. It used to be first
 // — "to ensure the editor's context is created" — and that ordering is what put
@@ -617,6 +624,9 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     slices.append({ QStringLiteral("Lighting the world…"), 90, [this]() {
         LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
         mViewport->primeSceneEnvironment();
+        // THE WORLD IS INSTALLED: its first lighting arm builds on this slice's
+        // boundary frame, behind the create (BUGS-6 stage 1; the interface's note).
+        mViewport->releaseLightingArm();
     } });
     if (mSettings->get(settingkeys::shaderWarmupOnOpen)) {
         slices.append({ QStringLiteral("Compiling shaders…"), 95, [this]() {

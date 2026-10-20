@@ -1524,6 +1524,17 @@ public:
     /// long before the page is shown, and the cover's own state machine is
     /// torn down and rebuilt mid-load (clearScene).
     virtual void endSceneLoad() {}
+    /// THE WORLD IS INSTALLED (BUGS-6 stage 1): its geometry and its environment
+    /// (the sky, the world settings, the camera) are in the renderer, so the
+    /// engine may build the world's FIRST global-illumination arm now — on the
+    /// open's own frames, before its shader warm-up (which then compiles the
+    /// bound arm's permutations) and before the reveal. Measured on the create of
+    /// the default world (spikes/bugs-6/create-only.out:127): the arm deferred
+    /// past the reveal put a 297.9 ms frame — the arm's 171 ms of CPU and 140 ms
+    /// of GPU — on the first frame the user sees. The arm still waits for what it
+    /// reads (a camera a drawing view tracked, the voxel inputs' textures, the
+    /// sky, the meshes the mirror still owes), each bounded by its own rule.
+    virtual void releaseLightingArm() {}
     /// "Show whatever you have": re-evaluates the cover and presents it
     /// synchronously. Every route onto the editor page calls this — a page
     /// switch reveals the viewport's native window, and until the engine
