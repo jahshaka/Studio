@@ -107,21 +107,6 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(gi.rayquery_asan PROPERTIES JAHSHAKA_TEST_FRAMES 180)
 endif()
 
-# gi.card_walk_cost — THE CARD WALK AT 10k SLOTS (ENGINE-UPGRADE-U3 decision 36): a `measure` row, run by hand —
-# 10,000 carded cubes, twenty arrivals, each a full walk of the card casters' records; the walk's own time printed.
-add_executable(test_gi_card_walk test_gi_card_walk.cpp)
-set_target_properties(test_gi_card_walk PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_card_walk PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_card_walk PRIVATE JahshakaEngine)
-add_dependencies(test_gi_card_walk JahshakaEngineMedia)
-
 # CLOUDS-2D-3: THE CLOUD LAYER'S PHYSICS — a sheet never adds light (a full deck at
 # every sun height and density leaves the ground at most as bright as the clear
 # sky; a half deck's tile mean likewise, its shadows brighter than a full deck's)
@@ -150,87 +135,6 @@ set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
                      TIMEOUT 120 LABELS "engine")
 set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 
-# SURFACE-CACHE-1b's MEASUREMENT ARM — a TOOL, not a suite (no add_test): the
-# numbers in the lane's report are taken by code that is read, and re-taking
-# them later is one command rather than a reconstruction.
-add_executable(sc1b_measure EXCLUDE_FROM_ALL sc1b_measure.cpp)
-set_target_properties(sc1b_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(sc1b_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(sc1b_measure PRIVATE JahshakaEngine)
-add_dependencies(sc1b_measure JahshakaEngineMedia)
-
-# DIRECT-DIFFUSE-1's MEASUREMENT ARM (lane MEASURE-1a) — a TOOL, not a suite,
-# for the same reason: the mechanism behind "the direct term renders 66-69 % of
-# albedo*P/pi" is a number, and the number is taken by code that is read. It
-# states HlmsPbs's own closed form before every measurement and bisects the
-# light power so an 8-bit undithered picture still pins a ratio to ~0.1 %.
-add_executable(direct_diffuse_measure EXCLUDE_FROM_ALL direct_diffuse_measure.cpp)
-set_target_properties(direct_diffuse_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(direct_diffuse_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(direct_diffuse_measure PRIVATE JahshakaEngine)
-add_dependencies(direct_diffuse_measure JahshakaEngineMedia)
-
-# GA-FAR's MEASUREMENT ARM (lane MEASURE-1b) — a TOOL, not a suite: it counts
-# how many of the gather's rays take rq_probe_gather.comp's else-branch and how
-# many of those can get a real far answer, by reproducing the shader's own ray
-# set on the CPU and tracing it through Engine::traceRays.
-add_executable(gather_far_measure EXCLUDE_FROM_ALL gather_far_measure.cpp)
-set_target_properties(gather_far_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(gather_far_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(gather_far_measure PRIVATE JahshakaEngine)
-add_dependencies(gather_far_measure JahshakaEngineMedia)
-
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 
-# VOXEL-LEAK-TRACE (PHOTON-VOXEL-5 item (iii)) — a TOOL, not a suite: gi.gather's leak room,
-# the pixel's four cones from the -Z wall's inner face by the engine's own reader, per cone
-# colour / alpha / cascade, lamp on and off, and the store dumped (JAH_VOXEL_DUMP).
-add_executable(voxel_leak_trace EXCLUDE_FROM_ALL voxel_leak_trace.cpp)
-set_target_properties(voxel_leak_trace PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(voxel_leak_trace PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(voxel_leak_trace PRIVATE JahshakaEngine)
-add_dependencies(voxel_leak_trace JahshakaEngineMedia)
-
-# voxel_store_room_trace — a TOOL (PHOTON-VOXEL-5 item (ii)): scripting.e2e.gi_voxel_store's room -
-# the cascade-0 voxels holding a face that looks into the room whose direct light is zero.
-add_executable(voxel_store_room_trace EXCLUDE_FROM_ALL voxel_store_room_trace.cpp)
-set_target_properties(voxel_store_room_trace PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(voxel_store_room_trace PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(voxel_store_room_trace PRIVATE JahshakaEngine)
-add_dependencies(voxel_store_room_trace JahshakaEngineMedia)
 

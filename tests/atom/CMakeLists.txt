@@ -25,44 +25,7 @@ foreach(_m IN LISTS _cluster_models)
     endif()
 endforeach()
 
-# The fixtures + (for the engine suites) the harness: a TEST TOOL, compiled into
-# the executables below and into nothing of the product. The mirror is compiled
-# in (as tests/assets does) because the hand-off under test IS
-# SceneMirror::toMeshData.
-set(_cluster_fixture_sources
-    ${CMAKE_CURRENT_SOURCE_DIR}/cluster_fixtures.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-function(jah_cluster_target _t)
-    set_target_properties(${_t} PROPERTIES
-        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-    target_include_directories(${_t} PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_definitions(${_t} PRIVATE
-        JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-        CLUSTER_FIXTURE_DIR="${_cluster_fixture_dir}"
-        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-    target_link_libraries(${_t} PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-endfunction()
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-
-# cluster_config_measure — the measurement the shipped clodConfig was chosen by,
-# and the per-asset bake table. A TOOL (EXCLUDE_FROM_ALL), never a suite.
-add_executable(cluster_config_measure EXCLUDE_FROM_ALL cluster_config_measure.cpp
-    ${_cluster_fixture_sources})
-jah_cluster_target(cluster_config_measure)
-
-# far_blas_measure — ATOM-FARBLAS-1's numbers: the far BLAS's memory per shipped
-# mesh and the lattice's TLAS size / build / refit. A TOOL (EXCLUDE_FROM_ALL).
-add_executable(far_blas_measure EXCLUDE_FROM_ALL far_blas_measure.cpp
-    ${_cluster_fixture_sources})
-jah_cluster_target(far_blas_measure)
-add_dependencies(far_blas_measure JahshakaEngineMedia)
 
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
