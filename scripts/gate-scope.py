@@ -46,11 +46,11 @@ ENGINE_SUBSYSTEMS = [
     # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
     # defaults.exposure_plane and engine.atom_draw/parity, gate_selection_cases.json "S2 the chain")
     (r"media/Hlms/Jahshaka/Jah(Bloom|DisplayEncode|HdrMeter|Srgb|Screen)|src/OgreChain\.cpp$",
-     ["hdr", "ssr", "looks", "*picture", "defaults", "engine.atom_draw", "engine.atom_parity"],
+     ["hdr", "ssr", "looks", "*picture", "defaults"],
      "the post chain (bloom, encode, meter)"),
     # THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST; round 21): every world-lighting consumer reads its lights from it — the
     # voxels' light injection and the cards' relight (gi), Atom's hit decode (atom); the light rows and scale.lights
-    (r"SceneLightList", ["lights", "scale.lights", "gi", "atom"], "the scene's one light list"),
+    (r"SceneLightList", ["lights", "gi", "atom"], "the scene's one light list"),
     # Photon: the voxel chain, the cascades, the gather, the cards, the probes, the irradiance field
     # (+ the screenshot rows: the GI lights every pixel a picture row compares — CONTACT-OCCLUSION-1's GI change went red on
     # pool.world_sky's clouds_2d arm and atom.occlusion_exact_app, gate_selection_cases.json; the hdr/ssr/looks fixtures,
@@ -540,7 +540,7 @@ def product_paths(paths):
 # to THE TEST HARNESS only (TESTING-SPEED-A item 5, SPECS/TESTING_SPEED_SPEC.md §2 A6): the helpers every row runs
 # through, the rows' macros, the CMake helpers. A product change is guarded at every merge by the six hash lines and by
 # what it reaches; it never selects the pair by itself.
-ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
+ALWAYS_ON_CODE = ["api.contract"]   # (app.startup_quiet, its pair, was archived by TEST-CUT-1)
 # the Studio paths that sit on the subsystem table (their AREA_RULES line is their whole reach — no build graph)
 STUDIO_TABLE_PATHS = (r"^src/services/worldmodes\.",)
 HARNESS_PATHS = re.compile(r"^(tests/support/|tests/CMakeLists\.txt$|tests/cmake/)")

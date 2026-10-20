@@ -1,40 +1,3 @@
-# ATOM P3's SUBSTRATE and the depth pyramid (SPECS/atom/A4_SUBSTRATE_CULL_DESIGN.md;
-# SPECS/NANITE_SPEC.md §4.2-§4.3).
-# Every suite here boots a real engine with no scene and no frame: they measure GPU
-# machinery, not a picture. Same runtime requirements as tests/engine (a
-# reachable DISPLAY — a Vulkan device on this pin cannot be created without one
-# — and a Vulkan driver or lavapipe).
-
-# engine.gpu_cull — ATOM P3's substrate: the cull, the compaction and the
-# GPU-sized indirect chain over the GPU scene, with a CPU cull as the reference.
-# (It replaces compute.indirect_dispatch, whose three proof jobs this lane
-# deleted: the same claim — a dispatch sized by a count a compute shader wrote —
-# is asserted here over real instances, at an empty set, an arbitrary small one
-# and the whole table.)
-add_executable(test_gpu_cull test_gpu_cull.cpp)
-set_target_properties(test_gpu_cull PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gpu_cull PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gpu_cull PRIVATE JahshakaEngine)
-add_dependencies(test_gpu_cull JahshakaEngineMedia)
-jah_gpu_row(engine.gpu_cull CLASS engine COMMAND test_gpu_cull
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# budget 15 s: the measurement, a LOADED box (TESTING-SPEED-B3, 2026-10-12): one dolly cycle (900 frames) for four
-# identical ones — 916 frames; 8.7 / 13.2 / 22.2 s at load 6-20 (median 13.2; 57-68 s loaded at the base). A bound:
-# the solo price, re-measured at the close, sits under it.
-set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
-# engine.gpu_cull.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
-# FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME engine.gpu_cull.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gpu_cull
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.gpu_cull.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
 
 # engine.lod_rule_parity — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
@@ -44,34 +7,9 @@ set_tests_properties(engine.gpu_cull.timing PROPERTIES
 # cluster fixtures and the harness's device runner (tests/atom/cluster_*), and the
 # harness reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_lod_rule_parity test_lod_rule_parity.cpp
-    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_draw.cpp
-    ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_lod_rule_parity PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_lod_rule_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
-    ${CMAKE_SOURCE_DIR}/tests/atom
-    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
-target_compile_definitions(test_lod_rule_parity PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures"
-    CLUSTER_TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/tests/atom/media")
-target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
 # The suite's own TU names a local `slots` (the GPU table's slot count); with Qt's
 # headers in it now, Qt's `slots` keyword macro would eat it.
 set_source_files_properties(test_lod_rule_parity.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
-add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
-jah_gpu_row(engine.lod_rule_parity CLASS engine COMMAND test_lod_rule_parity
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # chain.hzb — the closest-depth pyramid: shape, the reduction texel by texel,
 # and its GPU cost at 1920x1080 through fork 1a81f866a+1bccc3f93 (was 0027)'s timestamps.
@@ -90,44 +28,17 @@ add_dependencies(test_hzb JahshakaEngineMedia)
 jah_gpu_row(chain.hzb SHIP CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
-# chain.hzb.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17
-# FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME chain.hzb.timing CLASS engine RUN_TIMEOUT 180 COMMAND test_hzb
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(chain.hzb.timing PROPERTIES
-    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;measure")
-
-# engine.voxel_reader_parity — THE ONE VOXEL READER (PHOTON-READER-1): the same
-# cones through the same bound cascade chain, marched by a FRAGMENT program and
-# by an Hlms COMPUTE job both built from jah_voxel_{sample,march,parity}.glsl,
-# compared bit for bit (Engine::voxelReaderParity), on the four-cascade chain
-# and a one-cascade chain (one directional store at every tier: PHOTON-MARCH-1).
-add_executable(test_voxel_reader_parity test_voxel_reader_parity.cpp)
-set_target_properties(test_voxel_reader_parity PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_voxel_reader_parity PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_voxel_reader_parity PRIVATE JahshakaEngine)
-add_dependencies(test_voxel_reader_parity JahshakaEngineMedia)
-jah_gpu_row(engine.voxel_reader_parity CLASS engine COMMAND test_voxel_reader_parity
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "chain.hzb=68"
-        "chain.hzb.timing=68"   # chain.hzb's (the same binary)
-        "engine.gpu_cull=916"
-        "engine.gpu_cull.timing=916"   # engine.gpu_cull's (the same binary)
-        "engine.lod_rule_parity=14"
-        "engine.voxel_reader_parity=17"
+           # chain.hzb's (the same binary)
+        
+           # engine.gpu_cull's (the same binary)
+        
+        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

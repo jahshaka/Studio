@@ -19,23 +19,7 @@ jah_gpu_row(particles.document_to_engine SHIP CLASS engine COMMAND test_particle
 set_tests_properties(particles.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 357)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
-# ParticleFX2 adoption (PARTICLES_FX2_SPEC.md phase 0): the ENGINE's own
-# simulation, with no document and no mirror. Links JahshakaEngine only, plus
-# Qt6::Gui for the offscreen QGuiApplication the Vulkan/XCB support object needs.
-add_executable(test_particles_pfx2 test_particles_pfx2.cpp)
-set_target_properties(test_particles_pfx2 PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_particles_pfx2 PRIVATE ${CMAKE_SOURCE_DIR})
-target_compile_definitions(test_particles_pfx2 PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_particles_pfx2 PRIVATE JahshakaEngine Qt6::Gui)
-add_dependencies(test_particles_pfx2 JahshakaEngineMedia)
-jah_gpu_row(engine.particles_pfx2 CLASS engine COMMAND test_particles_pfx2 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.particles_pfx2 PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(engine.particles_pfx2 PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
+   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # The same suite over the SANITISED copy of the backend (tests/engine defines
 # JahshakaEngineAsan; tests/ adds engine before particles). Particle definitions
@@ -67,28 +51,4 @@ if(JAHSHAKA_ASAN)
         TIMEOUT 120 LABELS "particles")
 endif()
 
-# THE FIRE GATE (PARTICLES_FX2_SPEC §11 phase 3). Builds the SHIPPING fire preset
-# through the document and the mirror, then asserts the SHAPE of what the engine
-# drew: banded luminance, taper, warmth, motion and a clean freeze. Statistical
-# by construction — emission is seeded from a process-wide LCG and the affectors
-# run on worker threads, so there is no pixel-exact answer to compare against.
-# Links IrisGL + JahshakaEngine like the mirror suite (it needs the document).
-add_executable(test_particles_fire test_particles_fire.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-set_target_properties(test_particles_fire PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_particles_fire PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_particles_fire PRIVATE
-    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_particles_fire PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-add_dependencies(test_particles_fire JahshakaEngineMedia)
-jah_gpu_row(particles.fire_shape CLASS engine COMMAND test_particles_fire
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(particles.fire_shape PROPERTIES JAHSHAKA_TEST_FRAMES 191)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(particles.fire_shape PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
+   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)

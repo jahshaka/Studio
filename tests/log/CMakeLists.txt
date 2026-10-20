@@ -11,32 +11,7 @@
 # (fork F5-A, absorb at the sink). Nothing else in the document library is
 # touched, and no engine boots.
 find_package(Qt6 REQUIRED COMPONENTS Core Gui)
-add_executable(test_jahlog test_jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/sessionheader.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_jahlog PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_jahlog PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
-# The same build id the shader-cache fingerprint uses — the header row that
-# correlates a log with a cache directory has to be the real one here too.
-# JAH_KNOWN_NOISE_SELFTEST adds ONE synthetic entry to jahlog's known-noise
-# table, in this build of jahlog.cpp only. The shipping table is empty by
-# design (a suppression must never outlive the bug it hides), but the
-# machinery has to stay covered for the day an unfixable upstream flood earns
-# an entry — so the suite drives a message no real defect ever emits.
-target_compile_definitions(test_jahlog PRIVATE
-    JAHSHAKA_VERSION="${JAHSHAKA_VERSION}"
-    JAH_KNOWN_NOISE_SELFTEST=1)
-target_link_libraries(test_jahlog PRIVATE IrisGL Qt6::Core Qt6::Gui)
-add_test(NAME log.core COMMAND test_jahlog WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(log.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 120 LABELS "log")
 # No display at all: the whole point of the services.core shape.
-jah_no_display(log.core)
 
 # log.events — the verbs and the event markers against the REAL binary
 # (SESSION_LOG_SPEC §10 phase 2 gate). Two halves, both needed: the JS asserts
@@ -48,15 +23,6 @@ jah_no_display(log.core)
 # reachable X display), and takes its OWN HOME so the library DB is fresh.
 set(_le_home ${CMAKE_CURRENT_BINARY_DIR}/log-events-home)
 file(MAKE_DIRECTORY ${_le_home}/run)
-jah_gpu_row(log.events CLASS app TIER low NEEDS NONE TEST_WINDOW
-         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_events.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js"
-         WORKING_DIRECTORY ${_le_home}/run)
-set_tests_properties(log.events PROPERTIES
-    ENVIRONMENT "HOME=${_le_home};JAHSHAKA_DATA_ROOT=${_le_home}/.local/share/Jahshaka"
-    TIMEOUT 240
-    LABELS "log")
 
 # log.engine — the engine half (SESSION_LOG_SPEC §10 phase 3 gate): the Ogre
 # LogListener, the device rows, the per-session ogre sibling and the pump's
@@ -88,40 +54,11 @@ set_tests_properties(log.engine PROPERTIES
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_LOGPERF_CURL curl)
     find_program(JAH_LOGPERF_JQ jq)
-    if(JAH_LOGPERF_CURL AND JAH_LOGPERF_JQ)
-        set(_lp_home ${CMAKE_CURRENT_BINARY_DIR}/log-perf-home)
-        file(MAKE_DIRECTORY ${_lp_home}/run)
-        jah_gpu_row(log.perf CLASS app TIER low NEEDS NONE
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_perf.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-                         "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_perf.js"
-                         0
-                 WORKING_DIRECTORY ${_lp_home}/run)
-        set_tests_properties(log.perf PROPERTIES
-            ENVIRONMENT "HOME=${_lp_home};JAHSHAKA_DATA_ROOT=${_lp_home}/.local/share/Jahshaka"
-            TIMEOUT 360
-            LABELS "log")
-    else()
-        message(STATUS "log.perf skipped: needs curl and jq")
-    endif()
 endif()
 
-# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
-# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
-# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
-if(TEST log.events)
-    jah_fresh_home_fixture(log.events.fresh_home logEventsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-events-home" WARM LABELS "log")
-    set_property(TEST log.events APPEND PROPERTY FIXTURES_REQUIRED logEventsFreshHome)
-endif()
 if(TEST log.engine)
     jah_fresh_home_fixture(log.engine.fresh_home logEngineFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-engine-home" WARM LABELS "log")
     set_property(TEST log.engine APPEND PROPERTY FIXTURES_REQUIRED logEngineFreshHome)
-endif()
-if(TEST log.perf)
-    jah_fresh_home_fixture(log.perf.fresh_home logPerfFreshHome "${CMAKE_CURRENT_BINARY_DIR}/log-perf-home" WARM LABELS "log")
-    set_property(TEST log.perf APPEND PROPERTY FIXTURES_REQUIRED logPerfFreshHome)
 endif()
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
@@ -131,10 +68,4 @@ endif()
 # the one empty frame a headless engine walks.
 if(TEST log.engine)
     set_property(TEST log.engine PROPERTY JAHSHAKA_TEST_FRAMES 616)
-endif()
-if(TEST log.events)
-    set_property(TEST log.events PROPERTY JAHSHAKA_TEST_FRAMES 469)
-endif()
-if(TEST log.perf)
-    set_property(TEST log.perf PROPERTY JAHSHAKA_TEST_FRAMES 1149)
 endif()

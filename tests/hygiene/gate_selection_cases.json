@@ -1,19 +1,18 @@
 {
- "about": "gate.selection's recorded cases (MODULAR-GATE-1). Each LANE case is a lane's diff as it merged into d-build (merge^1..merge) or as its own scoped gate ran, the suites its gates found RED with a verdict of REAL (must: the selector must include every one — a miss is a selector defect, fixed in scripts/gate-scope.py and never by editing this list), the reds judged ENVIRONMENTAL (env: reported, not required — contention, a GPU-time bar under load, a persistent home), and the lane's own named suites. The evidence for every verdict is the lane's spike (named per case) and the ledger entry. A FILES case is the suites audit's S1/S2 (SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §7): a subject path must select its suites. When a suite is renamed or becomes a pool's arm, rename it here in the same commit.",
+ "about": "gate.selection's recorded cases (MODULAR-GATE-1). Each LANE case is a lane's diff as it merged into d-build (merge^1..merge) or as its own scoped gate ran, the suites its gates found RED with a verdict of REAL (must: the selector must include every one — a miss is a selector defect, fixed in scripts/gate-scope.py and never by editing this list), the reds judged ENVIRONMENTAL (env: reported, not required — contention, a GPU-time bar under load, a persistent home), and the lane's own named suites. The evidence for every verdict is the lane's spike (named per case) and the ledger entry. A FILES case is the suites audit's S1/S2 (SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §7): a subject path must select its suites. When a suite is renamed or becomes a pool's arm, rename it here in the same commit. TEST-CUT-1 (2026-10-20) took every row outside THE SHIP SET out of the tree (archive/tests/ in the lead repo): an archived row is dropped from the cases like a deleted one, a recorded path the cut archived is listed in its case's `archived_paths` and not replayed (its owner is gone: replayed, it would fall to its directory), and a HUNK case whose text the cut archived is retired (archive/tests/gate/gate_selection_cases.retired.json).",
  "lanes": [
   {
    "lane": "D1-SCALE-FIXTURES",
    "range": "3f6043817..6a5cb7fa0",
    "ledger": "§1241",
    "evidence": "spikes/d1-scale-fixtures/gate-f.log",
-   "must": [
-    "scale.world",
-    "scale.cpu_walks"
-   ],
-   "env": [
-    "gi.field_follows"
-   ],
-   "note": "the merge's gate fell back to the MERGE tier on tests/CMakeLists.txt (a suite list + add_subdirectory(scale)); gi.field_follows a wall-clock bar under load (3x red, then 4/4)"
+   "must": [],
+   "env": [],
+   "note": "the merge's gate fell back to the MERGE tier on tests/CMakeLists.txt (a suite list + add_subdirectory(scale)); gi.field_follows a wall-clock bar under load (3x red, then 4/4)",
+   "archived_paths": [
+    "tests/scale/scale_assets_gen.cpp",
+    "tests/scale/test_scale.cpp"
+   ]
   },
   {
    "lane": "CREATE-CRASH-1",
@@ -21,12 +20,15 @@
    "ledger": "§1248",
    "evidence": "spikes/create-crash-1/gate-scoped.log",
    "must": [
-    "ui.show_walk",
     "open.frames"
    ],
    "env": [],
-   "note": "scoped 170/170",
-   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: open.responsive -> open.frames (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)"
+   "note": "scoped 170/170 | TEST-CUT-1: the range's registrations of rows the cut archived resolve to nothing here and fall to their test directory, as a tip-only row does (rows_at_tip_only)",
+   "rewritten_by": "TESTING-SPEED-A for TESTING-SPEED-B's batches: open.responsive -> open.frames (the batches delete or move these rows to stage-close; the same subsystem's kept row stands in)",
+   "archived_paths": [
+    "tests/ui/test_show_walk.cpp"
+   ],
+   "rows_at_tip_only": true
   },
   {
    "lane": "FOG-ATMO-1 (merge, fork pin cd5eae355)",
@@ -34,17 +36,20 @@
    "ledger": "§1277 §1278",
    "evidence": "spikes/fog-atmo-1/gate-scope-fix3.log",
    "must": [
-    "api.contract",
-    "gi_verbs_b.gather_default"
+    "api.contract"
    ],
    "env": [
-    "app.engine_selftest_validation",
-    "gi.field_follows",
-    "gi.rt_reflect_cost"
+    "app.engine_selftest_validation"
    ],
-   "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier)",
+   "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier) | TEST-CUT-1: the range's registrations of rows the cut archived resolve to nothing here and fall to their test directory, as a tip-only row does (rows_at_tip_only)",
    "fork_reach": true,
-   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (gi_verbs.gi_status -> gi_verbs_b.gather_default)"
+   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 2 (its pools split: gi_verbs_b/_stage, editor_view_b/_c, world_sky_b, world_light_stage): gi_verbs.gather_default -> gi_verbs.gi_status (an arm that stays in its pool in both trees); TESTING-SPEED-B2 (outside its owns, on the lead's word): the substitute arms re-pointed to the REAL arms in the pools they now live in (gi_verbs.gi_status -> gi_verbs_b.gather_default)",
+   "archived_paths": [
+    "tests/document/reader_defaults.py",
+    "tests/scripting/scripts/e2e_gather_default.js",
+    "tests/ui/test_panel_undo.cpp"
+   ],
+   "rows_at_tip_only": true
   },
   {
    "lane": "BLOOM-1 (TESTING-SPEED-A replay)",
@@ -64,7 +69,10 @@
    ],
    "no_whole_pool": true,
    "note": "SPECS/TESTING_SPEED_SPEC.md §2 A4: the bloom chain's media + OgreChain.cpp + worldmodes.cpp select hdr + ssr + looks + THE PICTURE SET, ZERO gi rows, no pool selected whole (its screenshot arms only); not an exact set (the range also reaches test_engine, vrapi.cpp's vr rows and scripting.e2e.ssr_mirror)",
-   "rows_at_tip_only": true
+   "rows_at_tip_only": true,
+   "archived_paths": [
+    "tests/scripting/scripts/e2e_ssr_mirror.js.in"
+   ]
   },
   {
    "lane": "BLOOM-1 on d-build (TESTING-SPEED-A round 15)",
@@ -80,14 +88,15 @@
     "photon"
    ],
    "rows_at_tip_only": true,
-   "note": "the engine CMake edit (BLOOM-1's comment + the media registration) is read by WHAT it changed: a source-list / comment edit scopes by the files it names — never the family rule (the 54 'irisgl/engine/CMakeLists.txt: rule ^irisgl/(engine/|thirdparty/og…' rows were the lane's stale selector); an option or flag edit is everything, said"
+   "note": "the engine CMake edit (BLOOM-1's comment + the media registration) is read by WHAT it changed: a source-list / comment edit scopes by the files it names — never the family rule (the 54 'irisgl/engine/CMakeLists.txt: rule ^irisgl/(engine/|thirdparty/og…' rows were the lane's stale selector); an option or flag edit is everything, said",
+   "archived_paths": [
+    "tests/scripting/scripts/e2e_ssr_mirror.js.in"
+   ]
   },
   {
    "lane": "P1C-LIGHT-LIST pin move on d-build (TESTING-SPEED-A round 21)",
    "range": "bd713186b..5b1d2a502",
-   "must": [
-    "scale.lights"
-   ],
+   "must": [],
    "env": [],
    "must_families": [
     "lights",
@@ -97,7 +106,10 @@
    "must_picture": true,
    "none_of": [],
    "rows_at_tip_only": true,
-   "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component"
+   "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component",
+   "archived_paths": [
+    "tests/scale/test_scale.cpp"
+   ]
   },
   {
    "lane": "BULLET-BATCHING-1 (TOOLING-2 stage 1)",
@@ -105,13 +117,8 @@
    "ledger": "§2561",
    "evidence": "spikes/bullet-batching-1/merge.log; spikes/tooling-2/s1-before.txt, s1-after.txt",
    "must": [
-    "physics.mt_determinism",
-    "document.physics_restart",
-    "document.physics_writeback",
     "document.characterisation",
-    "export.walkers",
-    "export.web",
-    "avatar.locomotion"
+    "export.web"
    ],
    "env": [],
    "none_of": [
@@ -120,7 +127,7 @@
     "ssr",
     "looks"
    ],
-   "derived_max_rows": {"links": "IrisGL", "at": {"rows": 384, "linking": 376, "lints": 29}},
+   "derived_max_rows": {"links": "IrisGL", "at": {"rows": 110, "linking": 86, "lints": 29}, "recorded": "TEST-CUT-1 (2026-10-20): re-recorded at the cut tree (205 rows, the ship set) — the record at 384 / 376 / 29 was the 849-row inventory, which the cut moved under it (the selector unchanged; the six rows outside the IrisGL edge and the lints: gate.selection, skeletal.share_asan, engine.particles_pfx2_asan, avatar.responsive, archive.responsive.timing, mcp.e2e)"},
    "note": "the merge ran the WHOLE inventory twice (657 rows, 0 served, 93 min each): irisgl/CMakeLists.txt's Bullet block read as a directory-wide setting (set_property(DIRECTORY … CMAKE_CONFIGURE_DEPENDS) is a configure input only), the applier's execute_process unread (it applies bullet-patches/: each patch by what it patches), the patch's tree guessed from its directory's name (bullet-patches/ patches bullet3/: the applier's -DSRC says so), the foreach'd target_compile_options(${_bt}) unexpanded, set(_jah_bake_fp PARENT_SCOPE) read as this file's; and Bullet's 'callers' were 28 Studio sources whose only references were COPIES of Bullet's inline code (a vtable, btAlignedAllocator::deallocate) — the picture set and the VR rows rode on them. The ui/vr rows left are the physics world's: executables that construct it (the graph) and the physics TUs' area rule — environment.cpp's own change reaches the same set — max_rows 378 is the selection exactly (gate.selection counts every selected row, the measure rows reached included): 311 selectable rows, the 29 source.* lints among them (TOOLING-2 fix round) 379 since main's SCENEGRAPH-BASELINE-2 (792323d5e) registered document.write_journal: a new executable that links IrisGL and so the physics world (the graph) — the selection exactly, one row more; 380 since ATOM-2 registered atom.cut_probe (its fixtures link IrisGL: the same edge, one row more); 381 since LEAK-1 registered document.material_duplicate (test_material_duplicate links IrisGL: the same edge, one row more); 382 since BUGS-1 batch 1 registered atom.pass_table (an app row: the app links IrisGL, the same edge, one row more); 384 since THREADING-1 registered threading.budget + physics.many_movers (both link IrisGL). BUGS-1 batch 3 (item 12): shadow.caster_route_lamps and shadow.caster_route_reflect are new rows of test_shadow_atom_cut, whose cluster fixtures link IrisGL and so the physics world - the same edge, two rows more (384 -> 386). TOOLING-6 item 2: the literal is gone — the bar is derived (derived_max_rows: the 384 recorded at 376 rows linking IrisGL and 29 lints, at main e3dfad85e, moved by the graph's count of the rows that link IrisGL and the lints' count), and every compiled row that links IrisGL must be selected (the edge itself, so a selector that drops it still reds)."
   }
  ],
@@ -131,11 +138,8 @@
    "old": "    const Vec3 upW{ 0.f, 1.f, 0.f };\n",
    "new": "    const Vec3 upW{ 0.f, 0.f, 1.f };\n",
    "must": [
-    "engine.atom_parity",
-    "engine.window",
     "defaults.exposure_plane",
-    "distortion.engine",
-    "gi.card_capture"
+    "distortion.engine"
    ]
   },
   {
@@ -143,80 +147,26 @@
    "file": "irisgl/engine/include/jahshaka/engine/Types.h",
    "old": "    float halfDepth = 0.0f;       ///< half the depth range the capture must cover\n",
    "new": "    float halfDepth = 0.5f;       ///< half the depth range the capture must cover\n",
-   "must": [
-    "gi.speckle",
-    "gi.contact_occlusion"
-   ],
+   "must": [],
    "note": "the Fable read's case; vr.grab_maths stays reached through src/scripting/modules/assetsapi.cpp (it names MeshCardDesc; test_vr_grab links it)",
-   "must_not": [
-    "ui.presets_favorites"
-   ],
+   "must_not": [],
    "rewritten_by": "TESTING-SPEED-A item 4 — an engine header's namer header is followed through its inline functions' names, not to every reader"
-  },
-  {
-   "case": "SMALL(c) a changed script path on an add_test COMMAND line is a changed row, not a source-list entry",
-   "file": "tests/log/CMakeLists.txt",
-   "old": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js\"\n",
-   "new": "                 \"${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events_v2.js\"\n",
-   "must": [
-    "log.events"
-   ]
-  },
-  {
-   "case": "T10 a timing twin's jah_timing_script() line reaches the push row AND the twin (TESTING-DEBTS-1: it fell back to the MERGE tier)",
-   "file": "tests/threading/CMakeLists.txt",
-   "old": "                  ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)\n",
-   "new": "                  ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.timing.js)   \n",
-   "must": [
-    "threading.newproject_stall",
-    "threading.newproject_stall.timing"
-   ]
-  },
-  {
-   "case": "T3 a changed line of a VR row's registration (vr.session_undithered) selects that row",
-   "file": "tests/vr/CMakeLists.txt",
-   "old": "    ENVIRONMENT \"${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home\")\n",
-   "new": "    ENVIRONMENT \"${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home;JAH_TSA_PROBE=1\")\n",
-   "must": [
-    "vr.session_undithered"
-   ],
-   "rewritten_by": "TESTING-SPEED-A fix round, for TESTING-SPEED-B batch 4: vr.warmup / vr.warmup_control carry stage-close in B4's tree — the case moves to vr.session_undithered, a VR row that stays in the merge tier; its loop-variable proof moves to T3b (gi.gather_${_arm}, kept rows)"
-  },
-  {
-   "case": "T3b a changed jah_gpu_row whose row name is a loop variable (gi.gather_${_arm}) resolves through ctest's backtrace",
-   "file": "tests/gi/CMakeLists.txt",
-   "old": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm}\n",
-   "new": "    jah_gpu_row(gi.gather_${_arm} CLASS engine COMMAND test_gi_gather_phase2 ${_arm} --tsa\n",
-   "must": [
-    "gi.gather_plane",
-    "gi.gather_deterministic",
-    "gi.gather_cards"
-   ],
-   "rewritten_by": "TESTING-SPEED-A fix round: T3's loop-variable proof on kept rows (gi.gather_plane / _deterministic / _cards)"
   },
   {
    "case": "T3 a changed line inside jah_scale_row's body reaches every row registered through it (6 fallbacks before)",
    "file": "tests/scale/CMakeLists.txt",
    "old": "        jah_gpu_row(${_name} CLASS engine TOKENS 2 COMMAND test_scale ${_mode} WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n",
    "new": "        jah_gpu_row(${_name} CLASS engine TOKENS 3 COMMAND test_scale ${_mode} WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n",
-   "must": [
-    "scale.lights",
-    "scale.levels"
-   ]
+   "must": []
   },
   {
    "case": "TOOLING-2 a compile flag on Bullet's four targets (a foreach'd target_compile_options) reaches the physics world's rows, not the picture set",
    "file": "irisgl/CMakeLists.txt",
    "old": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O2> ${_jah_bake_fp})\n",
    "new": "    target_compile_options(${_bt} PRIVATE $<$<CONFIG:Debug>:-O3> ${_jah_bake_fp})\n",
-   "must": [
-    "physics.mt_determinism",
-    "document.physics_restart",
-    "export.walkers"
-   ],
+   "must": [],
    "must_not": [
     "theme.sheets",
-    "hdr.bloom_amount",
     "ssr.engine",
     "looks.engine"
    ]
@@ -228,8 +178,6 @@
    "new": "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_bullet_patch_files} ${_bullet_patch_files}\n",
    "must": [],
    "must_not": [
-    "physics.mt_determinism",
-    "ui.toast",
     "theme.sheets"
    ]
   },
@@ -240,8 +188,6 @@
    "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} PROPERTY OBJECT_DEPENDS ${_deps})\n",
    "must": [],
    "must_not": [
-    "engine.window",
-    "gi.card_capture",
     "app.engine_selftest_validation"
    ]
   },
@@ -251,7 +197,6 @@
    "old": "static const float kGroundSpan = 200.0f;\n",
    "new": "static const float kGroundSpan = 201.0f;\n",
    "must": [
-    "gi.cliff",
     "source.testing_rules",
     "source.row_budget"
    ],
@@ -264,8 +209,7 @@
    "new": "    file(SHA256 \"${_clod_stage}/clusterlod.h\"  _clod_staged_sha)\n",
    "must": [],
    "must_not": [
-    "api.contract",
-    "app.startup_quiet"
+    "api.contract"
    ]
   },
   {
@@ -275,8 +219,7 @@
    "new": "        string(REPLACE \"vendor patch applied:\" \"vendor patch  already applied:\" _clod_patch_output \"${_clod_patch_output}\")\n",
    "must": [],
    "must_not": [
-    "api.contract",
-    "app.startup_quiet"
+    "api.contract"
    ]
   },
   {
@@ -286,8 +229,7 @@
    "new": "if(_clod_patch_result EQUAL 0 AND  EXISTS \"${_clod_patched_root}/meshoptimizer-clusterlod/clusterlod.h\")\n",
    "must": [],
    "must_not": [
-    "api.contract",
-    "app.startup_quiet"
+    "api.contract"
    ]
   },
   {
@@ -296,8 +238,6 @@
    "old": "+++ b/src/BulletDynamics/ConstraintSolver/btBatchedConstraints.cpp\n",
    "new": "+++ b/src/LinearMath/btAlignedAllocator.cpp\n",
    "must": [
-    "physics.mt_determinism",
-    "document.physics_restart",
     "theme.sheets"
    ],
    "must_not": []
@@ -349,8 +289,6 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "add_compile_options(-ffast-math)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "engine.window",
-    "gi.card_capture",
     "app.engine_selftest_validation"
    ],
    "must_not": [],
@@ -373,9 +311,7 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -ffast-math\")\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation",
-    "engine.window",
-    "gi.card_capture"
+    "app.engine_selftest_validation"
    ],
    "must_not": [],
    "why_has": [
@@ -425,8 +361,7 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "add_compile_options(-ffast-math)\nadd_definitions(-DJAH_PROBE=1)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation",
-    "engine.window"
+    "app.engine_selftest_validation"
    ],
    "must_not": [],
    "why_has": [
@@ -502,8 +437,7 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "unset(CMAKE_CXX_FLAGS)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation",
-    "engine.window"
+    "app.engine_selftest_validation"
    ],
    "must_not": []
   },
@@ -512,13 +446,7 @@
    "file": "irisgl/engine/CMakeLists.txt",
    "old": "set(OGRE_NEXT_VULKAN_RS_LIB \"${OGRE_NEXT_VULKAN_RS_LIB}\" PARENT_SCOPE)",
    "new": "set(OGRE_NEXT_VULKAN_RS_LIB \"\" PARENT_SCOPE)",
-   "must": [
-    "vr.grab_maths",
-    "vr.session",
-    "vr.input_session",
-    "vr.eye_grade",
-    "pool.vr_session"
-   ],
+   "must": [],
    "must_not": []
   },
   {
@@ -527,8 +455,7 @@
    "old": "set(_body \"\")",
    "new": "set(_body \" \")",
    "must": [
-    "app.engine_selftest_validation",
-    "engine.window"
+    "app.engine_selftest_validation"
    ],
    "must_not": []
   },
@@ -552,23 +479,6 @@
    "new": "set(JAH_GENERATED_DIR \"${CMAKE_BINARY_DIR}/generated2\")\n",
    "require_tier": true,
    "must": [],
-   "must_not": []
-  },
-  {
-   "case": "TOOLING-6 10b: a -P script whose invokers resolve only in part keeps every invoker's reach — a third invoker the reader cannot resolve (an execute_process at tests/gi's configure) beside the two threading rows that run it (TOOLING-5's read: the fall-through to the script's own reading dropped the invokers' marks): tests/gi's scope (gi.metal_bounce) AND the two threading rows",
-   "file": "tests/threading/nogrouplesstexture.cmake",
-   "context": {
-    "file": "tests/gi/CMakeLists.txt",
-    "old": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\n",
-    "new": "add_executable(test_gi_metal_bounce test_gi_metal_bounce.cpp)\nexecute_process(COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)\n"
-   },
-   "old": "    file(STRINGS ${_log} _hits REGEX \"valid resourceGroup\")\n",
-   "new": "    file(STRINGS ${_log} _hits REGEX \"a valid resourceGroup\")\n",
-   "must": [
-    "gi.metal_bounce",
-    "threading.import_soak.no_groupless_texture",
-    "threading.newproject_stall.no_groupless_texture"
-   ],
    "must_not": []
   }
  ]

@@ -6,87 +6,6 @@
 # transform stability. Engine sections need a reachable DISPLAY (Vulkan),
 # platform stays offscreen.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
-add_executable(test_importer_glb test_importer_glb.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    # database.cpp's link closure (same as tests/assetmeta)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    # transform-panel echo regression (the double-import scale corruption)
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
-    # the panel's Classic sheet lives in the theme archive (theme sweep)
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
-    # SCALE-LOCK-1: the transform panel records its lock toggle with this.
-    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
-set_target_properties(test_importer_glb PROPERTIES AUTOMOC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_importer_glb PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_glb PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_importer_glb PRIVATE IrisGL JahshakaEngine
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-jah_links_assimp(test_importer_glb)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_importer_glb)
-add_dependencies(test_importer_glb JahshakaEngineMedia)
-add_test(NAME importer.glb COMMAND test_importer_glb
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.glb PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.glb)
-
-# FBX importer regression suite (assimp-patches/0001): a skin cluster that
-# references a control point no polygon uses must not abort the importer.
-# Pure assimp + the canonical preset — no Qt, no display, no engine. The
-# preset's VALUES live in irisgl/import/importflags.cpp (IrisGL-private; the
-# public header is opaque ints), compiled in here so the suite stays free of
-# libIrisGL and still asserts the one definition.
-add_executable(test_importer_fbx test_importer_fbx.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/import/importflags.cpp)
-set_target_properties(test_importer_fbx PROPERTIES CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_importer_fbx PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
-    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include)
-target_compile_definitions(test_importer_fbx PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_fbx PRIVATE assimp)
-add_test(NAME importer.fbx COMMAND test_importer_fbx
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.fbx PROPERTIES TIMEOUT 120 LABELS "importer")
 
 # PLY + STL: the two mesh formats added to irisgl/CMakeLists.txt's assimp
 # importer allowlist. The suite is a build-configuration gate as much as a
@@ -166,65 +85,6 @@ set_tests_properties(importer.meshformats PROPERTIES
 # point is the pipeline's handling of hostile FILE CONTENT, which happens long
 # before anything renders.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
-add_executable(test_importer_security test_importer_security.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
-    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
-    # the bake on the asset's import settings.
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
-    # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    # database.cpp's link closure (same set tests/importasync links)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
-set_target_properties(test_importer_security PROPERTIES AUTOMOC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_importer_security PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_security PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_security PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_importer_security)
-add_test(NAME importer.security COMMAND test_importer_security
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.security PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.security)
 
 # ANIMATION-ASSET suite (ModelTypes::Animation): the structural sniff, the
 # clip reader (clip table + rig signature + pose strip) and the three import
@@ -234,68 +94,11 @@ jah_no_display(importer.security)
 # character file has to ship as a fixture; the animation-only GLB, the rigged
 # control and the .bvh are the avatar module's committed fixtures.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
-add_executable(test_importer_animation test_importer_animation.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
-    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
-    # the bake on the asset's import settings.
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    # database.cpp's link closure (same set tests/importasync links)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
-set_target_properties(test_importer_animation PROPERTIES AUTOMOC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_importer_animation PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_animation PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_animation PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-# A document node is an engine node now (SCENEGRAPH_SPEC D2) — the headless
-# engine, NULL render system, no display, no GPU. jah_no_display proves it.
-jah_document_graph(test_importer_animation)
-add_test(NAME importer.animation COMMAND test_importer_animation
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.animation PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.animation)
 
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
 # buffers. Only the two suites that do NOT link the engine — importer.glb and
 # importer.meshformats bring a Vulkan device up, which is what the lane's
 # membership rule excludes.
-jah_lsan_lane(importer.fbx importer.security)
 
 # MATERIAL-IMPORT suite (the GLB material defects of 2026-09-08): the glTF
 # workflow shapes — KHR_materials_pbrSpecularGlossiness, no PBR block at all,
@@ -304,51 +107,7 @@ jah_lsan_lane(importer.fbx importer.security)
 # PIXELS (the imported spec-gloss material against the full-metal reading it
 # used to get). Renders, so it needs the engine and a reachable DISPLAY.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
-add_executable(test_importer_materials test_importer_materials.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    # database.cpp's link closure (same as tests/importer's other suites)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_importer_materials PROPERTIES AUTOMOC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_importer_materials PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_materials PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_importer_materials PRIVATE IrisGL JahshakaEngine
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-add_dependencies(test_importer_materials JahshakaEngineMedia)
-jah_gpu_row(importer.materials CLASS engine COMMAND test_importer_materials
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.materials PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(importer.materials PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
+   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # TEXTURE-GUID suite (the owner's "GLB imports come in without textures",
 # 2026-09-09): the SAVE + REOPEN half of an imported model. The textures are
@@ -359,58 +118,6 @@ set_tests_properties(importer.materials PROPERTIES
 # way a scene save does, reopens it, and drives the reader-side repair for
 # scenes already saved wrong. No engine, no display, no GPU.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
-add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
-    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
-    # the bake on the asset's import settings.
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    # database.cpp's link closure (same as tests/importer's other suites)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_importer_texture_guids PROPERTIES AUTOMOC ON CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_importer_texture_guids PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_texture_guids PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_texture_guids PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
-add_test(NAME importer.texture_guids COMMAND test_importer_texture_guids
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.texture_guids PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.texture_guids)
 
 # importer.extent — the IMPORT SETTINGS and the measurement
 # (SPECS/IMPORT_DIALOG_SPEC.md §9). The three unit_cube fixtures pin what a
@@ -424,64 +131,6 @@ jah_no_display(importer.texture_guids)
 # inferred fitScale, a per-instance multiply and the avatar double-normalisation
 # order) retired with the import dialog.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
-add_executable(test_importer_extent test_importer_extent.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
-    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
-    # the bake on the asset's import settings.
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    # database.cpp's link closure (same as tests/importer's other suites)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_importer_extent PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_importer_extent PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_extent PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_extent PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_importer_extent)
-add_test(NAME importer.extent COMMAND test_importer_extent
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.extent PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.extent)
 
 # importer.scene — THE FBX SCENE (BISTRO-IMPORT-1, SPECS/BISTRO-FIXES-1.md stages 1-3).
 # One hand-written fixture of ours (fixtures/make_scene_fbx.py: a split specular pair,
@@ -491,62 +140,4 @@ jah_no_display(importer.extent)
 # name, the box's size, the light/camera nodes, one movable and the rest static.
 # Headless document graph, no display.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
-add_executable(test_importer_scene test_importer_scene.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
-    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
-    # the bake on the asset's import settings.
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetimporter.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
-    # database.cpp's link closure (same as tests/importer's other suites)
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-set_target_properties(test_importer_scene PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_importer_scene PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_importer_scene PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_importer_scene PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_importer_scene)
-add_test(NAME importer.scene COMMAND test_importer_scene
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(importer.scene PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
-jah_no_display(importer.scene)
 

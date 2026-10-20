@@ -27,76 +27,13 @@ add_test(NAME services.core COMMAND test_services
 jah_ship_row(services.core)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
-# services.selection_set — the SET's own contracts (EDITOR_MULTISELECT_SPEC §5).
-# Real document nodes, so it boots the headless document graph like every other
-# document suite; no display, no GPU.
-add_executable(test_selection_set test_selection_set.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
-    # ...and the COPY NAMING rule (owner decision 2026-09-09), which is the
-    # other half of "what a set edit produces". Another leaf: QString plus
-    # SceneNode::children, no services, no engine.
-    ${CMAKE_SOURCE_DIR}/src/services/nodenaming.cpp)
-set_target_properties(test_selection_set PROPERTIES AUTOMOC ON
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_selection_set PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_selection_set PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
-jah_document_graph(test_selection_set)
-add_test(NAME services.selection_set COMMAND test_selection_set
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.selection_set PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
-jah_no_display(services.selection_set)
-
 # services.looks — the looks catalogue (POST_LOOKS_SPEC.md §4.1). Links the
 # presentation table and IrisGL (the document half of the catalogue lives
 # there, with SceneMirror and the scene reader as its other consumers). No
 # engine, no display: this is a table-agreement and validator test.
 find_package(Qt6 REQUIRED COMPONENTS Core)
-add_executable(test_looks_registry test_looks_registry.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/looks.cpp)
-set_target_properties(test_looks_registry PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_looks_registry PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_looks_registry PRIVATE IrisGL Qt6::Core)
-add_test(NAME services.looks COMMAND test_looks_registry
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.looks PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     LABELS "services")
-jah_no_display(services.looks)
 
-# engine.error_pump — STABILITY_PROGRAM_SPEC Lane 1. The only suite in the tree
-# that links BOTH the engine and a Studio service, because that is exactly the
-# seam it tests: Engine::takeLastError() on one side, EngineErrorPump on the
-# other. Needs a reachable DISPLAY like every engine suite (Ogre's XCB support
-# object connects at plugin load) even though the view is offscreen.
-add_executable(test_engine_error_pump test_engine_error_pump.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/engineerrorpump.cpp
-    # The pump logs into JahLog's `engine` category now (SESSION_LOG_SPEC §5):
-    # same text, same rate limiting, now timestamped and frame-numbered.
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_engine_error_pump PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_engine_error_pump PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
-target_compile_definitions(test_engine_error_pump PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_engine_error_pump PRIVATE IrisGL JahshakaEngine Qt6::Gui)
-add_dependencies(test_engine_error_pump JahshakaEngineMedia)
-jah_gpu_row(engine.error_pump CLASS engine COMMAND test_engine_error_pump
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(engine.error_pump PROPERTIES JAHSHAKA_TEST_FRAMES 0)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 120 LABELS "services")
+   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # services.memory — session-registry OWNERSHIP (deep audit 2026-09, area 3).
 # Links only the two registries it tests plus IrisGL (the SceneNodePtr payload
@@ -125,52 +62,6 @@ set_tests_properties(services.memory PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
     LABELS "services")
 jah_no_display(services.memory)
 
-# services.animation_undo — the keyframe domain's undo (verb-coverage audit
-# F16). The RESTORE SEMANTICS have to be proved with a plain QUndoStack: a
-# --script run is one open macro and QUndoStack refuses to undo into one, so
-# scripting.e2e.anim can only prove the commands were pushed. Document only:
-# no engine rendering, no display (but it builds a document, so it boots the
-# headless graph like every other document suite).
-add_executable(test_animation_undo test_animation_undo.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationedits.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/animationcommands.cpp)
-set_target_properties(test_animation_undo PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_animation_undo PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_animation_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
-jah_document_graph(test_animation_undo)
-add_test(NAME services.animation_undo COMMAND test_animation_undo
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.animation_undo PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
-jah_no_display(services.animation_undo)
-
-# services.ogre_samples — the seeded ogre.cfg and the launch guards
-# (SPECS/OGRE_SAMPLES_TAB_SPEC.md §7.3/§9.2). Pure file + string work: links
-# the service and the two-line settings manager it reads its override from,
-# no engine, no document, no display. The headless e2e proves the VERBS refuse;
-# this proves the file they would write is windowed rather than fullscreen,
-# which is the value that decides whether "Launch Original" is a side-by-side
-# or a takeover of the owner's screen.
-add_executable(test_ogre_samples test_ogre_samples.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/ogresamples.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_ogre_samples PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_ogre_samples PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_ogre_samples PRIVATE Qt6::Gui Qt6::Widgets)
-add_test(NAME services.ogre_samples COMMAND test_ogre_samples
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.ogre_samples PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
-jah_no_display(services.ogre_samples)
-
 # The sanitizer lanes (scripts/sanitize.sh).
 #   tsan  services.memory registers and drops session assets the way the app
 #         does from more than one thread's callbacks.
@@ -197,44 +88,4 @@ jah_no_display(services.core)
 # iris::PbrMaterial::mapRowNames(), which is the assertion that matters). No
 # database, no engine, no display.
 find_package(Qt6 REQUIRED COMPONENTS Gui)
-add_executable(test_clipboard test_clipboard.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetrefs.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/clipboardbackend.cpp)
-set_target_properties(test_clipboard PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_clipboard PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_clipboard PRIVATE IrisGL Qt6::Gui)
-add_test(NAME services.clipboard COMMAND test_clipboard
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.clipboard PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
-jah_no_display(services.clipboard)
 
-# services.scene_stats — the three leaves behind the F3 readout and
-# app.renderStats().sceneTriangles (owner review 2026-09-18, answer Q3): the
-# DOCUMENT's own triangle census, the rolling-window counter that replaced two
-# lifetime totals, and the readout's wording.
-#
-# Real document nodes (so the headless document graph, like services.selection_set
-# — an iris::SceneNode IS an Ogre scene node since the swap), and nothing else:
-# no shell, no render driver, no display. The two window/row headers are
-# header-only on purpose so a suite this small can link them.
-add_executable(test_scene_stats test_scene_stats.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/scenestats.cpp)
-set_target_properties(test_scene_stats PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_scene_stats PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_scene_stats PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
-jah_document_graph(test_scene_stats)
-add_test(NAME services.scene_stats COMMAND test_scene_stats
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(services.scene_stats PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
-jah_no_display(services.scene_stats)

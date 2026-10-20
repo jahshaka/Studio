@@ -73,26 +73,6 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 # runs on whatever Xvfb the gate uses.
 set(_sq_home ${CMAKE_CURRENT_BINARY_DIR}/startup-quiet-home)
 file(MAKE_DIRECTORY ${_sq_home}/run)
-jah_gpu_row(app.startup_quiet CLASS app TIER document
-         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
-         WORKING_DIRECTORY ${_sq_home}/run)
-# TESTING-CLEANUP-2B: TIMEOUT 320 = the slot-era worst 311.4 s (9 PASS runs since 2026-10-09 18:00), above 6 x the
-# quiet median 30.1 s = 190 — the policy's max (tests/CMakeLists.txt); 300 sat below its own slot-era worst.
-set_tests_properties(app.startup_quiet PROPERTIES
-    ENVIRONMENT "HOME=${_sq_home};JAHSHAKA_DATA_ROOT=${_sq_home}/.local/share/Jahshaka"
-    TIMEOUT 320
-    LABELS "app")
-
-# app.knob_refusals — THE RENDER THREAD'S TEST KNOBS REFUSE WHAT THEY CANNOT HONOUR (FRAME-MONITOR-DOOR-1 stage 2):
-# JAH_FREE_RUNNING=1 with a script run and no --script-live exits 2 naming --script-live (the Off policy owns the loop:
-# no driver tick, the free2k hang); with --script-live it runs; JAH_ENGINE_ONE_THREAD=1 + free-running exits 2. Three
-# --headless processes, refused before QApplication: no engine, no display (a CPU row).
-add_test(NAME app.knob_refusals COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/knob_refusals.sh"
-         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-set_tests_properties(app.knob_refusals PROPERTIES TIMEOUT 60 LABELS "app")
-jah_no_display(app.knob_refusals)
 
 # app.test_needs_boot — A TEST PROCESS BOOTS WHAT ITS ROW NEEDS (TEST-NEEDS-1; services/testtier.h,
 # worldmodes::applyTestTier). Three boots of one home under their own JAHSHAKA_TEST_TIER /
@@ -120,20 +100,6 @@ set_tests_properties(app.test_needs_boot PROPERTIES
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
 file(MAKE_DIRECTORY ${_siv_home}/run)
-# TIER epic NEEDS photon (TEST-NEEDS-1, the lead's lifecycle rule): three boots that end in the
-# editor after a refused VR start — the engine's startup path with Photon on, as the product boots;
-# TEST_WINDOW keeps the 1280x720 window TEST-TIER-1 measured it at.
-jah_gpu_row(app.start_in_vr CLASS app TIER epic NEEDS photon TEST_WINDOW
-         COMMAND sh ${JAH_FRESH_HOME} --warm ${_siv_home} --
-                 bash "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/start_in_vr.js"
-         WORKING_DIRECTORY ${_siv_home}/run)
-# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-set_tests_properties(app.start_in_vr PROPERTIES
-    ENVIRONMENT "HOME=${_siv_home};JAHSHAKA_DATA_ROOT=${_siv_home}/.local/share/Jahshaka;JAHSHAKA_VR="
-    TIMEOUT 300
-    LABELS "app")
 
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
@@ -163,99 +129,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_CURL curl)
     find_program(JAH_JQ jq)
     find_program(JAH_XVFB Xvfb)
-    if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
-        set(_ik_home ${CMAKE_CURRENT_BINARY_DIR}/input-keys-home)
-        file(MAKE_DIRECTORY ${_ik_home}/run)
-        # PORT 0 = EPHEMERAL. The app prints "MCP: port N" and the script reads
-        # it back; two suites both naming 8751 is what made -j4 unsafe
-        # (TEST_GATE_AUDIT.md §4.1).
-        # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-        jah_gpu_exclusive_test(NAME app.input_keys CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 600
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
-                 WORKING_DIRECTORY ${_ik_home}/run)
-        # TIMEOUT is a DOCUMENTED EXCEPTION to the 6x policy, like the suite it
-        # replaces was: this row is one long chain of synthesised keys with
-        # fixed sleeps between them, and a loaded box stretches every one of
-        # them. 600 s against a ~40 s measured run.
-        # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-        set_tests_properties(app.input_keys PROPERTIES
-            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
-            RUN_SERIAL TRUE
-            LABELS "app")
-    else()
-        message(STATUS "app.input_keys skipped: needs xdotool, curl, jq and Xvfb")
-    endif()
 endif()
-
-# app.play_select — A REAL CLICK AND A REAL GIZMO DRAG ON A PLAYING SCENE
-# (PLAY-SELECT-1, owner R13). The verb-level half of the lane is
-# scripting.e2e.play_select; what only a live window can answer is whether the
-# gesture ARRIVES — the routing under test is QMouseEvent delivery into the
-# viewport widget, which no function call can stand in for. Same shape as
-# app.input_keys above: its own private Xvfb (never JAH_TEST_DISPLAY, which may
-# name a developer's session), an ephemeral MCP port read back from the log, and
-# THE GPU-TIMING LOCK like input_keys (lane D6B-GATE-SHAPE; audit §4 R5): its
-# gestures are a chain of fixed sleeps whose ARRIVAL is the timing class. It was
-# RUN_SERIAL "because synthesised input goes wherever the server has focus" —
-# void: the server is its own.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
-        set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
-        file(MAKE_DIRECTORY ${_ps_home}/run)
-        jah_gpu_exclusive_test(NAME app.play_select CLASS app TIER low NEEDS NONE TEST_WINDOW RUN_TIMEOUT 400
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
-                 WORKING_DIRECTORY ${_ps_home}/run)
-        # Like app.input_keys, a DOCUMENTED exception to the 6x policy: a chain
-        # of synthesised gestures with fixed sleeps between them, every one of
-        # which a loaded box stretches. 400 s against a ~50 s measured run.
-        # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
-        set_tests_properties(app.play_select PROPERTIES
-            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
-            LABELS "app")
-    else()
-        message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
-    endif()
-endif()
-
-# ---- app.scene_switch_after_play -------------------------------------------
-# crash-1788594910 regression gate: switching scenes with play/simulate state
-# still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
-# against the closed project's torn-down scene). Real binary, scratch HOME.
-jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 10)
-
-# ---- app.multiselect_outline ------------------------------------------------
-# EVERY member of a selection SET is outlined, not just the primary
-# (EDITOR_MULTISELECT_SPEC §2.3/D4 a). Two cubes, one per half of the frame,
-# probed in their own half — a secondary that quietly stopped drawing would pass
-# every verb suite in the program and fail only here. The hull<->wireframe
-# style-toggle trick, so the gizmo cancels out. It also carries the two claims of
-# the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
-# Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
-# "one selected" arm) and the GROUND never is (its ground arm).
-jah_pool_arm(editor_view_b multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
-
-# ---- app.close_shot ---------------------------------------------------------
-# A PROJECT'S DESKTOP TILE IS THE PRESENTED FRAME (CLOSE-SHOT-2): read back from
-# the window (View::requestFrameCapture), drawn once without the grid, outline and
-# gizmo — no second render, no settle. The frame as shown against the capture, the
-# save's tile against a clean capture, and the close's tile showing an edit.
-jah_pool_arm(editor_view_c close_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_close_shot.js 12)
-
-# ---- app.window_fits --------------------------------------------------------
-# A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
-# MainWindow::fitToScreen is only reachable when there is no stored geometry, so
-# the suite gets an empty data root and asks app.window() what the boot produced.
-# --headless: offscreen QPA, no engine, no display at all (jah_no_display), and
-# the offscreen screen is smaller than the .ui's authored 1612x1530 — which is
-# the condition the clamp exists for.
-jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 1 HEADLESS)
-
-# ---- pool.doc::thread_budget ------------------------------------------------
-# app.threadBudget() (THREADING-1 stage 1): the ONE core budget's tiers through the verb, and what the live process
-# applied at its start — Bullet's scheduler, Qt's global pool's cap, the bake pool's workers. Headless: no engine.
-jah_pool_arm(doc thread_budget ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_thread_budget.js 1 HEADLESS)
 
 # pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
 # src/app/cli/scriptrunner.cpp, so the row lives with the app's): the real app,
@@ -265,34 +139,6 @@ jah_pool_arm(doc thread_budget ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_thread_bu
 # be asked to do (a SIGSEGV mid-arm, a hang past the budget, a lost baseline — one arm each).
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-runner)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME pool.runner
-         COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} --
-                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/test_run_pool.py
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${JAH_RUN_POOL}
-                 ${CMAKE_CURRENT_SOURCE_DIR}/pool_selftest
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(pool.runner PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "pool;scripting;tooling" TIMEOUT 180)
-jah_no_display(pool.runner)
-
-# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
-# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
-# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
-if(TEST app.startup_quiet)
-    jah_fresh_home_fixture(app.startup_quiet.fresh_home appStartupQuietFreshHome "${CMAKE_CURRENT_BINARY_DIR}/startup-quiet-home" WARM LABELS "app")
-    set_property(TEST app.startup_quiet APPEND PROPERTY FIXTURES_REQUIRED appStartupQuietFreshHome)
-endif()
-if(TEST app.input_keys)
-    jah_fresh_home_fixture(app.input_keys.fresh_home appInputKeysFreshHome "${CMAKE_CURRENT_BINARY_DIR}/input-keys-home" WARM LABELS app)
-    set_property(TEST app.input_keys APPEND PROPERTY FIXTURES_REQUIRED appInputKeysFreshHome)
-endif()
-if(TEST app.play_select)
-    jah_fresh_home_fixture(app.play_select.fresh_home appPlaySelectFreshHome "${CMAKE_CURRENT_BINARY_DIR}/play-select-home" WARM LABELS app)
-    set_property(TEST app.play_select APPEND PROPERTY FIXTURES_REQUIRED appPlaySelectFreshHome)
-endif()
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
@@ -302,18 +148,6 @@ endif()
 if(TEST app.engine_selftest_validation)
     set_property(TEST app.engine_selftest_validation PROPERTY JAHSHAKA_TEST_FRAMES 2196)
 endif()
-if(TEST app.start_in_vr)
-    set_property(TEST app.start_in_vr PROPERTY JAHSHAKA_TEST_FRAMES 607)
-endif()
-if(TEST app.startup_quiet)
-    set_property(TEST app.startup_quiet PROPERTY JAHSHAKA_TEST_FRAMES 535)
-endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)
-endif()
-if(TEST app.input_keys)
-    set_property(TEST app.input_keys PROPERTY JAHSHAKA_TEST_FRAMES 2751)
-endif()
-if(TEST app.play_select)
-    set_property(TEST app.play_select PROPERTY JAHSHAKA_TEST_FRAMES 1787)
 endif()

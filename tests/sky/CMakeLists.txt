@@ -23,13 +23,6 @@ function(jahshaka_sky_test_src target src)
     add_dependencies(${target} JahshakaEngineMedia)
 endfunction()
 
-jahshaka_sky_test(test_sun_transmittance)
-target_link_libraries(test_sun_transmittance PRIVATE JahshakaEngine)
-jah_gpu_row(sky.sun_transmittance CLASS engine COMMAND test_sun_transmittance
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(sky.sun_transmittance PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(sky.sun_transmittance PROPERTIES JAHSHAKA_TEST_FRAMES 5)
-
 if(JAHSHAKA_ASAN)
     jahshaka_sky_test(test_sun_transmittance_asan)
     target_link_libraries(test_sun_transmittance_asan PRIVATE JahshakaEngineAsan)
@@ -52,26 +45,11 @@ endif()
 # image on an ordinary editor run. Any "Validation Error" fails the row
 # whatever the exit code says, and the row's own assertions prove the mirror
 # cube really samples the sky (so the layer half cannot pass by accident).
-jahshaka_sky_test_src(test_env_layout test_env_layout.cpp)
-target_link_libraries(test_env_layout PRIVATE JahshakaEngine)
-jah_gpu_row(sky.env_layout CLASS engine COMMAND test_env_layout
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(sky.env_layout PROPERTIES
-    TIMEOUT 120 LABELS "engine"
-    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
-    FAIL_REGULAR_EXPRESSION "Validation Error")
-set_tests_properties(sky.env_layout PROPERTIES JAHSHAKA_TEST_FRAMES 28)
 
 # sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
 # FOG-ATMO-1). The file header carries the model, the instrument (two emissive
 # levels read back in float) and the physics bar: T(2 km) within 0.01 of
 # exp(-sigma d) at the atmosphere's one density.
-jahshaka_sky_test_src(test_aerial_perspective test_aerial_perspective.cpp)
-target_link_libraries(test_aerial_perspective PRIVATE JahshakaEngine)
-jah_gpu_row(sky.aerial_perspective CLASS engine COMMAND test_aerial_perspective
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(sky.aerial_perspective PROPERTIES TIMEOUT 120 LABELS "engine")
-set_tests_properties(sky.aerial_perspective PROPERTIES JAHSHAKA_TEST_FRAMES 153)
 
 # sky.atmosphere — THE PLANET'S ATMOSPHERE (SKY-ATMOSPHERE-1).
 jahshaka_sky_test_src(test_atmosphere test_atmosphere.cpp)

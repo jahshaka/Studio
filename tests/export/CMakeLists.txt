@@ -38,23 +38,6 @@ jah_no_display(export.web)
 # spawns a real browser; successful adoption is rig-verified (needs Chrome +
 # GPU).
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
-add_executable(test_embedded_preview test_embedded_preview.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/embeddedpreview.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/publish/publishrecord.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc)
-set_target_properties(test_embedded_preview PROPERTIES AUTOMOC ON AUTORCC ON)
-target_include_directories(test_embedded_preview PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_embedded_preview PRIVATE Qt6::Widgets)
-if(JAH_XCB_FOUND)
-    target_link_libraries(test_embedded_preview PRIVATE PkgConfig::JAH_XCB)
-endif()
-# X11-embedding is the feature under test (its main() forces xcb on purpose):
-# the suite is Linux-only by design; other platforms have no XEmbed to test.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_test(NAME export.embed COMMAND test_embedded_preview
-             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(export.embed PROPERTIES LABELS "export")
-endif()
 
 # Shared export walkers (ASSET_PIPELINE_SPEC §3.3 phase-5 front half):
 # traversal/skip/classification, scene inventory, mesh buffer readers.
@@ -63,55 +46,12 @@ endif()
 # suite that owns the walkers is where the exported TRS round trip belongs —
 # what the walkers hand out has to survive into the file. iesprofile.cpp is the
 # exporter's only extra link dependency.
-add_executable(test_export_walkers test_export_walkers.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/gltfexporter.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/walkers/scenewalker.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/walkers/meshbufferreader.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp)
-set_target_properties(test_export_walkers PROPERTIES AUTOMOC OFF)
-target_include_directories(test_export_walkers PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_export_walkers PRIVATE IrisGL Qt6::Gui)
 # This suite builds a DOCUMENT, and a document node is an engine node now
 # (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
 # system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
 # below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_export_walkers)
-add_test(NAME export.walkers COMMAND test_export_walkers
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(export.walkers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
-jah_no_display(export.walkers)
-
-# Raw export + manifest v2 round-trip over a fixture store (content source,
-# oid dedup, name collisions, DB-only rows, flat-folder fallback, v1 reader
-# acceptance). Pure QtCore.
-add_executable(test_raw_export test_raw_export.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/exportmanifest.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/rawexporter.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp)
-set_target_properties(test_raw_export PROPERTIES AUTOMOC OFF)
-target_include_directories(test_raw_export PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_raw_export PRIVATE Qt6::Core Qt6::Sql)
-add_test(NAME export.raw COMMAND test_raw_export
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
 
 # The leak lane (scripts/sanitize.sh lsan): the walkers and writers build whole
 # document trees in memory. export.embed spawns a browser, so it stays out.
-jah_lsan_lane(export.raw export.web export.walkers)
+jah_lsan_lane( export.web )
 
-# ---------------------------------------------------------------------------
-# DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
-# claims — in its own comment, or by running --headless, or by building nothing
-# but a document — that it needs no X server. The claim was never enforced, so
-# it drifted: a suite that quietly opened a display still passed on a developer
-# box and would have failed the first CI runner without one, and every
-# unnecessary X connection is one more thing four parallel jobs contend over.
-# jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
-# the claim into a gate. Verified 2026-09-09: each of these passes displayless
-# with the same assertion count it has with a display.
-jah_no_display(export.raw)

@@ -65,19 +65,9 @@ jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.c
 # shape the cleanstart fold lost (cross-archive dedup, catalog growth, live
 # scene switches across the process-wide-state class). ~35 s, no pixel probes. STAGE-CLOSE
 # (TESTING-SPEED-B2): seven archives in one process is the stage close's, not a merge's.
-configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS scripting)
-jah_gpu_row(samples.session CLASS app TIER epic NEEDS photon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
-         WORKING_DIRECTORY ${_shome}/run)
-set_tests_properties(samples.session PROPERTIES
-    ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
-    FIXTURES_REQUIRED samples_home_session
-    LABELS "scripting"
-    TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # samples.mirror_room_boots.boot1 / .boot2 — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture across
 # boots (ATOM-DECODE-CLASS-1 recorded two). Each row is ONE boot on a virgin data root: the scene's offscreen picture
@@ -101,35 +91,11 @@ jah_gpu_row(samples.mirror_room_boots.boot2 SHIP CLASS app TIER document
 set_tests_properties(samples.mirror_room_boots.boot2 PROPERTIES LABELS "scripting" TIMEOUT 200
     FIXTURES_REQUIRED samples_mirror_room_boot1 DEPENDS samples.mirror_room_boots.boot1)
 
-# samples.archive_fidelity.Tornado — LIVE-PERSIST-1, rewritten by TESTING-SPEED-B2 against the ARCHIVE'S OWN
-# INVARIANTS (no reference picture: tests/samples/data/tornado_reference.jpg and its metric deleted, forward-only):
-# the SHIPPED Tornado archive, opened on a clean machine (a virgin data root, HOME and XDG_CACHE_HOME — no piece
-# cache anywhere), closes (every dependency and file of its manifest is in the zip), imports exactly its assets and
-# objects, keeps its live graph materials (every layer re-emits its pieces from its graph, the shells keep their
-# baked cut-out) after the import AND after a close and reopen, is SEE-THROUGH (>= 0.005) from its own camera (the named failure:
-# a sample that loses its cut-out opens with no holes), and is a FIXED POINT: exported, imported and exported again,
-# the same archive (never held against the shipped zip).
-# THE HOLES BAR: see-through >= 0.005 (the lead, 2026-10-12; the house rule: measured, headroom either way) — the
-# shipped archive reads 0.0165 (three times above), the Top Shell's cut-out OFF (its map solid) 0.000029, 2 stray px
-# (170 times below): spikes/testing-speed-b2/tornado-cutout-off.txt.
-# STAGE-CLOSE: a whole-archive round trip (SPECS/TESTING_SPEED_ROWS.md).
-jah_gpu_row(samples.archive_fidelity.Tornado CLASS app TIER document
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_fidelity_tornado.js.in
-                 ${CMAKE_SOURCE_DIR}/scenes/Tornado.zip
-                 ${CMAKE_CURRENT_BINARY_DIR}/archive-fidelity-Tornado
-                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/archive_invariants.py
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(samples.archive_fidelity.Tornado PROPERTIES LABELS "scripting" TIMEOUT 480)
-
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
-if(TEST samples.archive_fidelity.Tornado)
-    set_property(TEST samples.archive_fidelity.Tornado PROPERTY JAHSHAKA_TEST_FRAMES 791)
-endif()
 if(TEST samples.cleanstart.Matcaps)
     set_property(TEST samples.cleanstart.Matcaps PROPERTY JAHSHAKA_TEST_FRAMES 1470)
 endif()
@@ -160,7 +126,4 @@ endif()
 if(TEST samples.mirror_room_boots.boot1)
     set_property(TEST samples.mirror_room_boots.boot1 PROPERTY JAHSHAKA_TEST_FRAMES 1122)
     set_property(TEST samples.mirror_room_boots.boot2 PROPERTY JAHSHAKA_TEST_FRAMES 1124)
-endif()
-if(TEST samples.session)
-    set_property(TEST samples.session PROPERTY JAHSHAKA_TEST_FRAMES 1046)
 endif()

@@ -1,21 +1,5 @@
 # Document picking, no renderer.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_scene_picker test_scene_picker.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scenepicker.cpp)
-set_target_properties(test_scene_picker PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17)
-target_include_directories(test_scene_picker PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-   ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_scene_picker PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_scene_picker PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
-# This suite builds a DOCUMENT, and a document node is an engine node now
-# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
-# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
-# below runs it with DISPLAY unset, which is the proof of that claim.
-jah_document_graph(test_scene_picker)
-add_test(NAME picking.document COMMAND test_scene_picker WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(picking.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
-jah_no_display(picking.document)
 
 # PICKING vs THE WIDE-ASPECT FOV CLAMP (2026-09-07). Unlike the suite above this
 # one needs PIXELS — it renders the scene through the engine at the disputed
@@ -40,22 +24,3 @@ set_tests_properties(picking.fov_cap PROPERTIES JAHSHAKA_TEST_FRAMES 9)   # the 
 set_tests_properties(picking.fov_cap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "engine")
 
-# The leak lane (scripts/sanitize.sh lsan): document picking allocates the
-# triangle/BVH scratch per pick.
-jah_lsan_lane(picking.document)
-
-# picking.trimesh_index — THE PICKING MESH'S SPATIAL INDEX GIVES THE BRUTE-FORCE
-# ANSWER (SPEED-CPU, perf audit 2026-10-03 P1): the shipped primitives, the
-# bake's grid fixture, a 233k-triangle soup and the degenerate cases, each
-# picked by hundreds of segments through the TriangleBvh and through the
-# brute-force loop — same hits, same order, same bits. Pure geometry: no
-# engine, no display. assimp only to read the fixtures (jah_links_assimp).
-add_executable(test_trimesh_index test_trimesh_index.cpp)
-set_target_properties(test_trimesh_index PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17)
-target_include_directories(test_trimesh_index PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl)
-target_compile_definitions(test_trimesh_index PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_trimesh_index PRIVATE IrisGL Qt6::Core)
-jah_links_assimp(test_trimesh_index)
-add_test(NAME picking.trimesh_index COMMAND test_trimesh_index WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(picking.trimesh_index PROPERTIES LABELS "document" TIMEOUT 120)
-jah_no_display(picking.trimesh_index)

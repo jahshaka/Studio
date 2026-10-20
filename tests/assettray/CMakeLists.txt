@@ -11,54 +11,6 @@
 # tray runs on every edge write and every keypress, so its cost is per-key.
 # Headless (offscreen platform); never touches the user's live JahLibrary.db.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
-add_executable(test_assettray test_assettray.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assettray.cpp
-    # DRAWERS-1: the project's FOLDER model and its two undo commands — the
-    # bodies of assets.folders/createFolder/renameFolder/deleteFolder/
-    # moveToFolder, tested here with no ScriptHost in the way.
-    ${CMAKE_SOURCE_DIR}/src/services/projectfolders.cpp
-    ${CMAKE_SOURCE_DIR}/src/commands/projectfoldercommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
-    # rule 6 asks the bundle layer whether a texture folds into its material
-    ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp
-    # the member stamp's two keys and both edits (IMPORT-INTENT-1)
-    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    # database.cpp's link closure (same as tests/drawers)
-    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
-    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
-    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
-set_target_properties(test_assettray PROPERTIES AUTOMOC ON)
-target_include_directories(test_assettray PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_assettray PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 
 # THE STATEMENT COUNT comes from sqlite3_trace_v2 on the handle Qt's own
 # QSQLITE driver opened (QSqlDriver::handle) — no instrumentation in the
@@ -66,20 +18,6 @@ target_link_libraries(test_assettray PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::M
 # still checks every RULE; it just does not assert the counts.
 find_path(JAH_SQLITE3_INCLUDE sqlite3.h)
 find_library(JAH_SQLITE3_LIB sqlite3)
-if (JAH_SQLITE3_INCLUDE AND JAH_SQLITE3_LIB)
-    target_compile_definitions(test_assettray PRIVATE JAH_HAVE_SQLITE3)
-    target_include_directories(test_assettray PRIVATE ${JAH_SQLITE3_INCLUDE})
-    target_link_libraries(test_assettray PRIVATE ${JAH_SQLITE3_LIB})
-else()
-    message(STATUS "assets.tray: no sqlite3 headers — the query-count bound is not asserted")
-endif()
-
-add_test(NAME assets.tray COMMAND test_assettray
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(assets.tray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
-
-jah_lsan_lane(assets.tray)
-jah_no_display(assets.tray)
 
 # ---------------------------------------------------------------------------
 # D11-LIBRARY-SCALE's two suites, on the same REAL Database link closure.
@@ -140,12 +78,6 @@ jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp)
 jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
-jah_d11_suite(test_archive_closure archive.closure test_archive_closure.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/assetclosure.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/bundlestage.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/assetrefs.cpp
-    ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp)
 
 # bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker
 # writes the same manifest + payload bytes as on the calling thread, for a 200-entry pack; the

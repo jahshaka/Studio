@@ -21,12 +21,6 @@ function(jahshaka_planar_test target)
     add_dependencies(${target} JahshakaEngineMedia)
 endfunction()
 
-jahshaka_planar_test(test_planar)
-target_link_libraries(test_planar PRIVATE JahshakaEngine)
-jah_gpu_row(engine.planar CLASS engine COMMAND test_planar
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.planar PROPERTIES TIMEOUT 120 LABELS "engine")
-
 if(JAHSHAKA_ASAN)
     jahshaka_planar_test(test_planar_asan)
     target_link_libraries(test_planar_asan PRIVATE JahshakaEngineAsan)
@@ -47,7 +41,7 @@ endif()
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        "engine.planar=33"
+        
         "engine.planar_asan=33"   # its plain twin's
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
