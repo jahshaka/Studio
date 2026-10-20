@@ -905,3 +905,18 @@ endif()
 if(TEST scripting.e2e.editor_controls.timing)
     set_property(TEST scripting.e2e.editor_controls.timing PROPERTY JAHSHAKA_TEST_FRAMES 2581)
 endif()
+
+# scripting.e2e.atom_density_cap — ATOM-5 stage 1: THE VIEW'S DENSITY CAP IS ONE WORLD-MODE ROW (`atomDensityCap`,
+# Low 4 / Medium 3 / High 2 / Epic 1): world.mode writes it, world.atomDensityCap() reads it, world.tierTable()'s world
+# list carries each mode's column, an override pins it and the scene file keeps it across save -> close -> open.
+# Document verbs only -> --headless (no engine, no display). The spec's own row: archived at the merge.
+set(_adcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_density_cap)
+file(MAKE_DIRECTORY ${_adcHome}/run)
+add_test(NAME scripting.e2e.atom_density_cap
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_density_cap.js --headless
+         WORKING_DIRECTORY ${_adcHome}/run)
+set_tests_properties(scripting.e2e.atom_density_cap PROPERTIES
+    ENVIRONMENT "HOME=${_adcHome};JAHSHAKA_DATA_ROOT=${_adcHome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(scripting.e2e.atom_density_cap)

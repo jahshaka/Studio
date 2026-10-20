@@ -74,6 +74,7 @@ public:
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
     Q_INVOKABLE double atomPixelError();
+    Q_INVOKABLE double atomDensityCap();
     /// THE SHADER CLOCK (TORNADO-1, G7): pin it for a reproducible frame of an
     /// animated material, or hand it back to the free (frame-counted) clock.
     Q_INVOKABLE QVariantMap shaderTime(const QVariantMap &params = QVariantMap());
