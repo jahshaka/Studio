@@ -13,6 +13,12 @@
 # them.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/api-contract-home)
 file(MAKE_DIRECTORY ${_home}/run)
+# THE SCRATCH HOME IS WIPED BEFORE EVERY RUN (2026-10-20): it persists across runs of one build dir, and a JahLibrary.db
+# left by an older build carries an older schema — the app's reset keeps the storages, wants their sidecar directory, an
+# older AssetStore has none, and the library is REFUSED (exit 4): "--dump-api-docs exited 4" on main's build-linux, green
+# in a fresh ship tree. A row owns its own state (the same fault as shadercache.app, 67cefee33).
+jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" LABELS "scripting")
+jah_ship_row(api.contract.fresh_home)   # a ship row's setup runs in the ship set too
 add_test(NAME api.contract
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
@@ -21,6 +27,7 @@ add_test(NAME api.contract
 jah_ship_row(api.contract)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(api.contract PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED api_contract_home
     TIMEOUT 120
     LABELS "scripting")
 # `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):

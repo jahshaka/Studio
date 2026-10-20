@@ -22,8 +22,10 @@ if [ ! -f "$COMMITTED" ]; then
     exit 1
 fi
 
-# HOME and the working directory are the caller's scratch (CTest sets both), so
-# the run gets a fresh library and writes its logs/settings nowhere shared.
+# HOME and the working directory are the caller's scratch (CTest sets both) and
+# the api_contract_home fixture WIPES that home before this runs, so the run
+# gets a fresh library (a stale one of an older schema is refused, exit 4) and
+# writes its logs/settings nowhere shared.
 "$BIN" --dump-api-docs "$OUT" > dump.log 2>&1
 rc=$?
 if [ $rc -ne 0 ]; then
