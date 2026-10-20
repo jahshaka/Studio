@@ -55,7 +55,7 @@ target_compile_definitions(test_lod_rule_parity PRIVATE
     CLUSTER_TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/tests/atom/media")
 target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
-jah_gpu_row(engine.lod_rule_parity CLASS engine COMMAND test_lod_rule_parity
+jah_gpu_row(engine.lod_rule_parity CLASS engine FRAMES 15 COMMAND test_lod_rule_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 60 LABELS "engine")
 

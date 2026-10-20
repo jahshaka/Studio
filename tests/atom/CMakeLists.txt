@@ -202,7 +202,7 @@ target_include_directories(test_atom_density_dolly PRIVATE ${CMAKE_SOURCE_DIR} $
 target_compile_definitions(test_atom_density_dolly PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     CLUSTER_FIXTURE_DIR="${_cluster_fixture_dir}")
 target_link_libraries(test_atom_density_dolly PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
-jah_gpu_row(atom.density_dolly CLASS engine COMMAND test_atom_density_dolly
+jah_gpu_row(atom.density_dolly CLASS engine FRAMES 477 COMMAND test_atom_density_dolly
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.density_dolly PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
