@@ -22,13 +22,14 @@ static int failures = 0;
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    // THE SCRIPT IS THE ROW'S ARGUMENT, so the selector reads its verbs (gate-scope: a row's argv files).
+    if (argc < 2) { std::printf("FAIL: usage: test_gi_open_frame <gi_open_frame.js>\n"); return 1; }
     QProcess proc;
     proc.setProcessEnvironment(QProcessEnvironment::systemEnvironment());   // HOME / the data root: the row's
     proc.setWorkingDirectory(QDir::currentPath());
     proc.setProcessChannelMode(QProcess::MergedChannels);
     proc.start(QStringLiteral(JAHSHAKA_BINARY),
-               QStringList() << "--script"
-                             << QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/bugs/gi_open_frame.js"));
+               QStringList() << "--script" << QString::fromLocal8Bit(argv[1]));
     if (!proc.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); return 1; }
     if (!proc.waitForFinished(55000)) {
         std::printf("FAIL: app did not exit inside the row's 60 s\n");
