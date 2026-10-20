@@ -19,6 +19,7 @@ archive.responsive.timing 49.60  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing.fresh_home 0.02  quiet n=3
 assets.engine 2.81  quiet n=45
 atom.component_asan 9.07  spec EU-2 stage 3 (2026-10-14)
+atom.density_dolly 2.77  solo, the card lock held, :84 (ATOM-5 stage 3, 2026-10-20; red at the base: the device cap forced to 1)
 atom.pass_table 42.85  solo, the card lock held, :77, cold shader cache after the fork pin bump (BUGS-1 item 1, 2026-10-19)
 atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)
@@ -48,6 +49,7 @@ engine.gpuscene_identity 2.16  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-1
 engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.particles_pfx2_asan 11.59  quiet n=41
 engine.planar_asan 10.52  quiet n=39
+engine.lod_rule_parity 4.85  solo, the card lock held, :84 (ATOM-5 stage 2, 2026-10-20; revived from archive/tests/engine with the cap)
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
@@ -165,6 +167,7 @@ scripting.e2e.tex_ref 9.90  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tex_ref.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tray_panel 34.60  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tray_panel.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+scripting.e2e.atom_density_cap 3.45  solo, the card lock held, :84 (ATOM-5 stage 1, 2026-10-20)
 scripting.live 10.56  quiet n=49
 services.core 0.00  ship 3a0422b4e (2026-10-13)
 services.memory 0.10  ship 3a0422b4e (2026-10-13)
