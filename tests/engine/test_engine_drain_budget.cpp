@@ -2,7 +2,7 @@
 // FREE-RUNNING (the owner's mode) a frame drained the messages of every host tick queued while the previous frame ran —
 // on Bistro's first open (§2604) 823 -> 25,515 messages a frame and frames of 0.8-5 s of render-thread CPU, growing with
 // the queue — so a FREE frame applies the structure for at most its drain budget (OgreEngine::freeDrainBudgetMs: the
-// part of the display period the frame's own work leaves, never under half a period, never over one) and carries the
+// part of the display period the frame's own work leaves, else as much as that work itself) and carries the
 // rest, in the one order, to the next frame (RenderThread::carryForward). LOCKSTEP is unchanged: a frame inside the
 // caller's call applies its whole record (the six hashes, every test).
 //
@@ -70,7 +70,8 @@ int main()
     CHECK(l1.messagesRefused == l0.messagesRefused, "LOCKSTEP: no create was refused");
 
     // ---- FREE: the batch over several frames, in order, one frame at a time ---------------------------------------
-    // A 240 Hz display: a budget of 2.1-4.2 ms a frame against the whole batch's lockstep drain above.
+    // A 240 Hz display: a budget of a few ms a frame (this fixture's own frame work is ~1 ms) against the whole batch's
+    // lockstep drain above.
     e->setDisplayPeriod(1.0f / 240.0f);
     e->setFreeRunning(true);
     e->latchSnapshot();
