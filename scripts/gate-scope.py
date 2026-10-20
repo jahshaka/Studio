@@ -124,7 +124,7 @@ OGRE_ENGINE_FUNCTIONS = {
                          "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
                          "registerCommonMaterials", "tellEveryHlms", "create", "OgreEngine", "~OgreEngine",
                          "setFixedFrameDelta", "fixedFrameDelta", "documentGraphScene", "blankSceneManager",
-                         "viewNameTaken", "setTransformWriteCounter", "computeDeferralsAtFrameStart",
+                         "viewNameTaken", "setTransformWriteCounter",
                          "asyncViewCount", "noteAsyncView", "isAlive")},
     # the device's faults: loss, OOM, the injected frame faults (tests/engine's fault rows)
     **{f: ["engine", "threading"] for f in ("latchDeviceLost", "latchOutOfMemoryInFrame", "deviceLost",

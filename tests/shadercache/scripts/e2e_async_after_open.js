@@ -31,7 +31,7 @@ function phase(label, change) {
     var p = { phase: label, pendingPeak: 0, placeholderDraws: 0, pendingSkips: 0, frames: 0,
               worstFrameMs: 0, pictureDuring: "" };
     // FRAMES, never time: step until nothing is pending (bounded), then settle.
-    for (var i = 0; i < 3000; ++i) {   // a bound: held frames are not paced by the display
+    for (var i = 0; i < 3000; ++i) {   // a bound in frames
         var t0 = Date.now();
         editor.frame(1);
         var ms = Date.now() - t0;
@@ -52,8 +52,6 @@ function phase(label, change) {
     p.placeholderDraws = after.placeholderDraws - before.placeholderDraws;
     p.pendingSkips = after.pendingSkips - before.pendingSkips;
     p.failed = after.failed - before.failed;
-    p.heldFrames = after.heldFrames - before.heldFrames;
-    p.holeyPresented = after.holeyPresented - before.holeyPresented;
     p.live = live() - liveBefore;
     p.pictureAfter = OUTDIR + "/" + label + "_after.png";
     editor.presentedFrame(p.pictureAfter, { helpers: true });

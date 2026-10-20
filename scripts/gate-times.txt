@@ -51,6 +51,7 @@ engine.planar_asan 10.52  quiet n=39
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.drain_budget 1.88  solo, warm, the card lock held, :83 (BUGS-7 stage 1, 2026-10-20)
+frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
 frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
