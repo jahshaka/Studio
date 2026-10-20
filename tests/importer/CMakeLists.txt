@@ -96,7 +96,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
-# buffers. Only the two suites that do NOT link the engine — importer.glb and
+# buffers. Only the two suites that do NOT link the engine — importer.glb (archived: archive/tests/importer) and
 # importer.meshformats bring a Vulkan device up, which is what the lane's
 # membership rule excludes.
 
@@ -118,7 +118,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # scenes already saved wrong. No engine, no display, no GPU.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 
-# importer.extent — the IMPORT SETTINGS and the measurement
+# importer.extent (archived: archive/tests/importer) — the IMPORT SETTINGS and the measurement
 # (SPECS/IMPORT_DIALOG_SPEC.md §9). The three unit_cube fixtures pin what a
 # FILE declares, the settings cases pin what a USER decides over it (unit
 # override, uniform scale, rotation, origin), and the skinned section pins the
@@ -131,7 +131,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 # order) retired with the import dialog.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 
-# importer.scene — THE FBX SCENE (BISTRO-IMPORT-1, SPECS/BISTRO-FIXES-1.md stages 1-3).
+# importer.scene (archived: archive/tests/importer) — THE FBX SCENE (BISTRO-IMPORT-1, SPECS/BISTRO-FIXES-1.md stages 1-3).
 # One hand-written fixture of ours (fixtures/make_scene_fbx.py: a split specular pair,
 # a cutout, a tinted glass with one missing map, a 2 m box under a pivot chain, a
 # directional light, a camera and a Take that moves ONE node) through the real

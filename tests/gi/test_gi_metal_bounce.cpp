@@ -1,4 +1,4 @@
-// gi.metal_bounce — A METAL RE-EMITS BY ITS SPECULAR LOBE'S INTEGRAL (ENGINE-UPGRADE-U5 stage 5,
+// gi.metal_bounce (archived: archive/tests/gi) — A METAL RE-EMITS BY ITS SPECULAR LOBE'S INTEGRAL (ENGINE-UPGRADE-U5 stage 5,
 // METAL-BOUNCE-1; it replaces gi.voxel_metal_albedo, whose law - a metal re-emits 1 - metalness of the
 // diffuser - was the DIFFUSE-ONLY store's: a white rough metal re-emitted 0).
 //
@@ -26,7 +26,7 @@
 //     of the diffuser's - the furnace's answer: a white rough metal re-emits ~ its lobe's reflectance.
 // THE BARS: 1.5 % on every store ratio - the store's diffuse lobe is a fit (JahDiffuseAlbedo, worst
 // 0.0096 against the integral this test takes), the lobe's table is bilinear (0.22 % worst at mu >= 0.2,
-// PhotonSpecularAlbedo.h) and a half-float quantum of a lit voxel is 0.1 %; the panel's 3 % (gi.env_cone's).
+// PhotonSpecularAlbedo.h) and a half-float quantum of a lit voxel is 0.1 %; the panel's 3 % (gi.env_cone (archived: archive/tests/gi)'s).
 // Roughness 0.3 (the metal re-emits MORE than the diffuser) and 0.9 (LESS): the two sides of the ratio.
 // THE LIVE EDITS (the voxel inputs of a PBR edit, OgreMaterials.cpp): on the r 0.6 diffuser of the direct
 // arm, a roughness-only edit (0.6 -> 0.3) and then a metalness edit (0 -> 0.5), each settled by the host's
@@ -144,9 +144,9 @@ void ggxLobe(const double L[3], const double V[3], double r, double &dvis, doubl
 
 int main(int argc, char **argv)
 {
-    // `--route`: THE TINTED METAL AND THE MOVER (gi.metal_bounce_route); the rest is gi.metal_bounce
+    // `--route`: THE TINTED METAL AND THE MOVER (gi.metal_bounce_route (archived: archive/tests/gi)); the rest is gi.metal_bounce (archived: archive/tests/gi)
     const bool route = argc > 1 && std::string(argv[1]) == "--route";
-    // `--gate`: THE MOVERS' GATE ON A METAL'S CARD (gi.metal_bounce_gate, ENGINE-POLISH-PHOTON-1's fix round)
+    // `--gate`: THE MOVERS' GATE ON A METAL'S CARD (gi.metal_bounce_gate (archived: archive/tests/gi), ENGINE-POLISH-PHOTON-1's fix round)
     const bool gate = argc > 1 && std::string(argv[1]) == "--gate";
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-metal-bounce-ogre.log");

@@ -1,6 +1,6 @@
 
 
-# gi.coalesce — the drag-a-light gate (spec §5 / P2). Links the MIRROR as well
+# gi.coalesce (archived: archive/tests/gi) — the drag-a-light gate (spec §5 / P2). Links the MIRROR as well
 # as the engine (like tests/mirror) because the coalescing gate is mirror-side
 # and the cheap light-only path is engine-side; the contract is the pair.
 find_package(Qt6 REQUIRED COMPONENTS Gui)
@@ -10,8 +10,8 @@ find_package(Qt6 REQUIRED COMPONENTS Gui)
 # The odd one out in this directory, deliberately: it links no engine of its
 # own and renders nothing. Photon's phase-2 subject is RESOLUTION — which
 # technique, quality and irradiance-field state a tier and its pins produce —
-# and the renderer's half of that is already gated by gi.modes, gi.pcc_mirror
-# and gi.ddgi, none of which this phase touches. Keeping the resolution suite
+# and the renderer's half of that is already gated by gi.modes (archived: archive/tests/gi), gi.pcc_mirror (archived: archive/tests/gi)
+# and gi.ddgi (archived: archive/tests/gi), none of which this phase touches. Keeping the resolution suite
 # beside them is what makes "gi.* is green" mean the whole GI surface.
 #
 # It compiles the registry straight in (the services layer is not a library),

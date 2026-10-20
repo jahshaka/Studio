@@ -31,7 +31,7 @@ For more information see the LICENSE file
 //     This suite quits from the PLAYER space and then boots the app a SECOND
 //     time in the same data root: the editor must still open with its panels.
 //
-// WHY THE REAL BINARY OVER MCP (the ui.column_law harness): dock visibility and
+// WHY THE REAL BINARY OVER MCP (the ui.column_law (archived: archive/tests/ui) harness): dock visibility and
 // width are produced by a LAYOUT in a shown window, with the event loop turning
 // between the space switch and the measurement — a --script run holds the loop
 // for its whole run and cannot see them. And rule 2 needs a real

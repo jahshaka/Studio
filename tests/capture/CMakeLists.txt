@@ -3,7 +3,7 @@
 # backend's construction with its libraries preloaded, lane max 1.01 ms x the worst stretch on record 3.5, rounded
 # up; the lead's decision 2026-10-11; the derivation in the script), ARMED in a jah_timing_script copy of the
 # script, its own process on its own wiped home (warm caches), on the quiet box under the GPU-timing lock — every
-# count and the bar together (the capture pool and capture.offline_unique.timing were archived by TEST-CUT-1).
+# count and the bar together (the capture pool and capture.offline_unique.timing (archived: archive/tests/capture) were archived by TEST-CUT-1).
 # RUN_TIMEOUT = 6x the measured run after the admission (2026-10-09 on :71: 32 s). TIER document: a bar measures
 # the boot its scene counts on (the recording view takes the scene's own chain at its own tier).
 set(_cap_timing_first_recording 200)

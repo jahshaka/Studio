@@ -29,7 +29,7 @@ endif()
 # ENVIRONMENT line (which REPLACES the property) can forget it. A VR suite passes
 # `--vr`, which wins over the environment (CliOptions::resolveVr). A test that
 # names JAHSHAKA_VR itself is left alone: `JAHSHAKA_VR=` (empty) is how
-# app.start_in_vr lets the preference decide.
+# app.start_in_vr (archived: archive/tests/app) lets the preference decide.
 function(_jah_vr_off_walk dir)
     get_property(_tests DIRECTORY "${dir}" PROPERTY TESTS)
     foreach(_t IN LISTS _tests)
@@ -141,7 +141,7 @@ endfunction()
 #       CMAKE_CXX_COMPILER=clang++, lavapipe): the app BOOTS — and after ~14 minutes of its first boot the same
 #       registry CHECK fires from the same interceptor (QThreadPool::start under QPixmap::scaled for a QLabel icon):
 #       the recycled pthread_t is Qt's, uninstrumented, and both runtimes reject it. host.sync_getters and
-#       host.error_door stay quarantined; the render thread's proofs run as ENGINE FIXTURES under TSan (label
+#       host.error_door (archived: archive/tests/host) stay quarantined; the render thread's proofs run as ENGINE FIXTURES under TSan (label
 #       tsan-render: frame.record_determinism, engine.message_order, frame.drag_latency, frame.interpolation,
 #       view.window_on_render_thread, engine.error_door, frame.monitor_pop).
 #       MEASURED AGAIN 2026-10-11 (RUNNER-A7A, every row run once in build-tsan with lavapipe): the registry CHECK
@@ -198,7 +198,7 @@ endfunction()
 # THE SAMPLE (lead, TESTING-CLEANUP-2B fix round after read 4): the median is over the run log's SLOT-ERA quiet PASS runs
 # (the archive, testing/runs — a lane's own re-measure is a set of records IN it, never a replacement for it), and only
 # runs taken the way the GATE runs the row: a row the gate runs COLD (a fresh rc tree's home: open.responsive,
-# open.responsive.timing — their homes keep the shader cache, so only a tree's first run is cold) is measured on its
+# open.responsive.timing (archived: archive/tests/open) — their homes keep the shader cache, so only a tree's first run is cold) is measured on its
 # cold runs; warm repeats in one home are not its sample. Each TIMEOUT comment names the sample: n, the median, the
 # slot-era worst, cold/warm, the date, and what was on the box.
 # It used to be whatever number felt safe when the row was written: 25 suites
@@ -209,7 +209,7 @@ endfunction()
 #
 # THE FLOOR IS 120 s, NOT THE AUDIT'S 60. Contention on this box is measured in
 # multiples, not percentages: samples.cleanstart.Matcaps runs 18.7 s solo and
-# 36.5 s at -j2, CLAUDE.md's gate facts record threading.newproject_stall at
+# 36.5 s at -j2, CLAUDE.md's gate facts record threading.newproject_stall (archived: archive/tests/threading) at
 # 1.8x headroom under four live Vulkan lanes, and most of these rows are three
 # to seven seconds of which four are an engine boot. A 60 s floor on a five
 # second boot-bound suite is twelve-fold headroom that one bad afternoon eats;
@@ -217,14 +217,14 @@ endfunction()
 # ten) with margin nobody has to argue about.
 #
 # The CONTENTION CLASS — CLAUDE.md's solo-retry list — gets 300 s instead:
-# open.responsive, archive.responsive, app.engine_selftest_validation,
+# open.responsive, archive.responsive (archived: archive/tests/archive), app.engine_selftest_validation,
 # threading.{newproject_stall,mode,mode_serial}, scripting.e2e.{player_verbs,
-# space_switch,sun_light}, gi.budget, app.watchdog_stall, claude.chat,
-# ui.media_lazy, shadergraph.bake_output and the perf.* suites.
+# space_switch,sun_light}, gi.budget (archived: archive/tests/gi), app.watchdog_stall (archived: archive/tests/app), claude.chat,
+# ui.media_lazy (archived: archive/tests/ui), shadergraph.bake_output (archived: archive/tests/shadergraph) and the perf.* suites.
 #
 # DOCUMENTED EXCEPTIONS, each with its reason at its own registration:
 # cameras.e2e (900, it times out under GI-rebuild contention starving the
-# mode-2 compile pool) and app.input_keys (600, one long chain of synthesised
+# mode-2 compile pool) and app.input_keys (archived: archive/tests/app) (600, one long chain of synthesised
 # keys with fixed sleeps between them).
 #
 # A new row takes 6x its own measured seconds, or the floor, whichever is more.
@@ -239,8 +239,8 @@ endfunction()
 # ROWS THAT SET NO TIMEOUT (46 of them: the sub-second document suites, the
 # wipe fixtures) get ctest's DEFAULT, which every documented gate command sets
 # to `--timeout 120` (docs/TESTING_GATE.md) — never ctest's own 1500 s. The
-# contention class is per row (engine_selftest_validation 180, ui.media_lazy
-# 120, shadergraph.bake_output 120, claude.chat the default), not a flat 300.
+# contention class is per row (engine_selftest_validation 180, ui.media_lazy (archived: archive/tests/ui)
+# 120, shadergraph.bake_output (archived: archive/tests/shadergraph) 120, claude.chat the default), not a flat 300.
 
 # WHITE-BOX IMPORTER SUITES. assimp is IrisGL's PRIVATE dependency (ENGINEERING
 # DEBT L4, 2026-09-10): nothing that links libIrisGL sees its headers or its
@@ -323,7 +323,7 @@ function(_jah_test_boot_apply _row)
 endfunction()
 # A row that starts the APP declares TIER + NEEDS: every CLASS app row (the app, or a harness that
 # spawns it), and a CLASS vr row whose command names the app target (a VR engine suite such as
-# vr.session is an engine binary in the vr class). Every other row declares neither: an engine
+# vr.session (archived: archive/tests/vr) is an engine binary in the vr class). Every other row declares neither: an engine
 # binary sets its GI in C++, and the selftest route binds no editor scene.
 function(_jah_test_boot_declared _who _class _tier _cmd _out)
     set(_needs ${ARGN})
@@ -556,7 +556,7 @@ endfunction()
 #              runtime a PRIVATE XDG_RUNTIME_DIR (run_vr_*.sh: mktemp -d /tmp/jahvr.XXXXXX), so
 #              the old "one IPC socket" reason was void; two runtimes at once is unmeasured,
 #              so the family stays mutually exclusive.
-#   gi_chain — the cascade-chain suites (tests/gi, engine.gi_scan). Their reason was VRAM ("the
+#   gi_chain — the cascade-chain suites (tests/gi, engine.gi_scan (archived: archive/tests/engine)). Their reason was VRAM ("the
 #              chain holds four voxel volumes"), which DEVPROCESS-1 measured false (2.3 of 16 GB
 #              with three GPU processes live); they stay exclusive among themselves.
 # THE COST PUTS A FAMILY FIRST. A locked family is a CHAIN (the monado one is ~12 min end to
@@ -873,8 +873,8 @@ add_subdirectory(benchmarks)
 # `scale.*` suite per wall W1-W14, label `scale-target` (printed, never gating).
 # AFTER tests/atom: the world reads that directory's configure-time model extraction.
 add_subdirectory(scale)
-# The session log (SPECS/SESSION_LOG_SPEC.md): log.core (the sink, no display),
-# log.events (verbs + event markers, real binary), log.engine (the Ogre
+# The session log (SPECS/SESSION_LOG_SPEC.md): log.core (archived: archive/tests/log) (the sink, no display),
+# log.events (archived: archive/tests/log) (verbs + event markers, real binary), log.engine (the Ogre
 # listener + device rows) and log.perf (the periodic sampler).
 add_subdirectory(log)
 # Source-hygiene gates (no binary, no display): source.no_glsl_path guards the

@@ -1766,7 +1766,7 @@ int main(int argc, char **argv)
         // re-voxelised, on the way in and on the way out. MATERIAL-SWAP-GI-1
         // (2026-09-20) made a material-only change an IN-PLACE SWAP
         // (Scene::setNodeMaterial) that invalidates the item's own box; arm A
-        // asserts the mirror takes that path, gi.material_swap measures what
+        // asserts the mirror takes that path, gi.material_swap (archived: archive/tests/gi) measures what
         // the engine then pays. Arm B records that the flag does no harm, and
         // arm C that it is a gate and not a mute.
         {
@@ -1815,7 +1815,7 @@ int main(int argc, char **argv)
             // MATERIAL-SWAP-GI-1: the engine's half. A hover used to be two
             // RE-ATTACHES (detach + create, the GI caches invalidated whole);
             // it is two IN-PLACE SWAPS now — Scene::setNodeMaterial, which
-            // invalidates the item's own box (gi.material_swap measures the
+            // invalidates the item's own box (gi.material_swap (archived: archive/tests/gi) measures the
             // cascades that pays).
             CHECK(mirror.materialSwapCount() - swaps0 == 2 && mirror.meshAttachCount() - attaches0 == 0,
                   "GI preview: a hover in and out is two in-place material swaps and no re-attach");
@@ -1946,7 +1946,7 @@ int main(int argc, char **argv)
     // the object-side mask on a mesh node's Item, and inside the LightDesc for
     // a light. Both are CHANGE-GUARDED, which is the half that breaks silently:
     // a guard that never notices a change means the second edit never lands.
-    // (The pixel proof that the masks then filter light is lights.masks.)
+    // (The pixel proof that the masks then filter light is lights.masks (archived: archive/tests/lights).)
     {
         auto ldoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
@@ -2523,7 +2523,7 @@ int main(int argc, char **argv)
     // buildFragment; a fragment's children live in the scene graph, which needs this
     // suite's Ogre::Root): the doubleSided quad's node reads faceCullingMode None, the
     // one-sided quad's DefinedInMaterial — and the mirror honours it (CULL-MODE-2, the
-    // node's cull through its material's cull twin; mirror.cull_twin is the whole
+    // node's cull through its material's cull twin; mirror.cull_twin (archived: archive/tests/mirror) is the whole
     // story): from below, the doubleSided quad draws and the one-sided one does not.
     {
         auto sdoc4 = iris::Scene::create();

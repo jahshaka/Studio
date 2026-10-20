@@ -4,7 +4,7 @@
 // kSettleSliceMaxMs — and, a wall-clock measure by nature, every median against THE RECORDED BASELINE
 // (tests/benchmarks/baseline-linux.json, SCENEGRAPH-BASELINE-2 stage 4) with a bar wider than the metric's own
 // dispersion: max(10 %, 3 x cv) (see "THE RECORDED BASELINE" below). Its COUNTS laws live in guards:
-// mirror.reparent_local (a reparent costs the fragment, never the scene).
+// mirror.reparent_local (archived: archive/tests/mirror) (a reparent costs the fragment, never the scene).
 //
 // WHAT IT MEASURES (§6's four metrics, plus two free ones worth having):
 //

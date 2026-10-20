@@ -557,7 +557,7 @@ void partB()
             // display emit 18 %. Unreal's filmic tonemapper (IMAGE-1) is BUILT
             // through (0.18, 0.18), so the inversion is 0.18 — and the curve
             // itself is held at nine exposures to the shader's reference
-            // (hdr.display_encode). Here: the inversion is an inversion.
+            // (hdr.display_encode (archived: archive/tests/hdr)). Here: the inversion is an inversion.
             const double xStar = 0.18;
             CHECK(std::fabs(double(iris::lens::greyCardFilmInput()) - xStar) < 1e-5,
                   "the film curve inverts to x* = %.6f (the tonemapper input that displays as "
@@ -802,7 +802,7 @@ void partC()
 // ---------------------------------------------------------------------------
 // PART D — THE METER, THROUGH THE DOCUMENT (EXPOSURE-2).
 //
-// hdr.meter asserts the histogram meter's ARITHMETIC against numbers computed
+// hdr.meter (archived: archive/tests/hdr) asserts the histogram meter's ARITHMETIC against numbers computed
 // on paper. This part asserts the other half: that the scene's choice of
 // METERING PATTERN reaches the view that renders it, that a camera override
 // does not silently reset it, and that it MOVES THE PICTURE in the direction

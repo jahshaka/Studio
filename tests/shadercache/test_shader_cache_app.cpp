@@ -24,7 +24,7 @@
 //   run 3       : --clear-shader-cache makes a warm launch cold again, and the
 //                 run still succeeds. Our r.InvalidateCachedShaders.
 //
-// shadercache.app.churn (`--churn`, stage-close) — its own home: a cold launch
+// shadercache.app.churn (archived: archive/tests/shadercache) (`--churn`, stage-close) — its own home: a cold launch
 // seeds the cache (the state the churn ran on as run 5 of the old row), then
 // THE SAVE UNDER CHURN. Every World post row through every
 //                 value, the player in and out, 300 SKY CHANGES, a save after

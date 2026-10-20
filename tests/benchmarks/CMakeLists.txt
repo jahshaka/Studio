@@ -5,7 +5,7 @@
 #   ./bench_scenegraph --record <file>   ...and the JSON result file (the evidence)
 #   ./bench_scenegraph --baseline-from baseline-linux.json <r1> <r2> <r3>   the baseline, from three quiet runs
 # baseline-linux.json is recorded by hand on a quiet box from one build (SCENEGRAPH-BASELINE-2 stage 4) and
-# rewritten only by the spec that earns an improvement; the reparent's law in counts is mirror.reparent_local's.
+# rewritten only by the spec that earns an improvement; the reparent's law in counts is mirror.reparent_local (archived: archive/tests/mirror)'s.
 #
 # It links exactly what the mirror suite links (IrisGL + JahshakaEngine + the
 # mirror TU, which is not part of either library), because "document edit ->

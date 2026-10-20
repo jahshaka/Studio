@@ -5,7 +5,7 @@
 // code: the PUSH tier runs four suites at once beside other lanes' gates, and the
 // GPU-timing lock excludes only the other lock holders — never the CPU load of the
 // suites around it. open.responsive's 300 ms frame bar went red that way (605 ms cold
-// at -j4), and so did gi.field_follows' worst frame.
+// at -j4), and so did gi.field_follows (archived: archive/tests/gi)' worst frame.
 //
 // So a suite with such a bar is registered TWICE over one binary:
 //   * the push-tier row runs every COUNT, structure and picture assertion, and PRINTS

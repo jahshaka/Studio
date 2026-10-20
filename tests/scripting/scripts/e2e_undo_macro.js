@@ -112,7 +112,7 @@ assert(world.get().gi.updateBudget === budgetBefore, "...and rolled back the bud
 // with one transaction and one fdatasync each — closing the owner's project
 // froze the UI thread for 33,156 ms inside QUndoStack::clear(). The command now
 // queues the row and one flush applies the batch (the timing half is the
-// commands.undo_clear_cost suite). `editor.undoState().pendingAssetDeletes` is
+// commands.undo_clear_cost (archived: archive/tests/commands) suite). `editor.undoState().pendingAssetDeletes` is
 // that queue, and the rule it reports is the one a user can feel: a delete that
 // can still be UNDONE owes nothing at all.
 var owed = scene.addPrimitive("cube");

@@ -53,7 +53,7 @@ QString cacheRoot();
 /// producer made is STALE by its header and is re-baked in place by the fixture row.
 /// Inside a ScopedCacheDir, that scope's private directory instead.
 QString cacheDir();
-/// Bake into a private directory for the scope (scale.bake: a forced bake must
+/// Bake into a private directory for the scope (scale.bake (archived: archive/tests/scale): a forced bake must
 /// neither delete nor race the shared blob).
 struct ScopedCacheDir {
     explicit ScopedCacheDir(const QString &dir);
@@ -188,7 +188,7 @@ struct WorldSpec {
     worldmodes::PhotonTier tier = worldmodes::PhotonTier::High;
     /// 0 = the editor's own shape: every object its own PbrMaterial
     /// (SceneEditService gives each placed primitive one). N > 0: N shared
-    /// materials cycled over the instances (scale.decode's bucket arms).
+    /// materials cycled over the instances (scale.decode (archived: archive/tests/scale)'s bucket arms).
     int   materials = 0;
     /// DISTINCT base-colour textures cycled over the materials (0 = untextured).
     /// The decode's bucket count follows them (HlmsAtom::BucketKey::textures).
@@ -210,8 +210,8 @@ struct World {
 };
 
 /// D1's DENSE 600 m WORLD: the same 10k instances at a 6 m pitch, the lamps at 30 m, the
-/// editor's 500 m far plane — for the rows whose bars were calibrated on it (scale.occlusion,
-/// scale.shadow_cut's world arm, scale.cpu_walks, atom.decode_exact, atom.coverage_trace).
+/// editor's 500 m far plane — for the rows whose bars were calibrated on it (scale.occlusion (archived: archive/tests/scale),
+/// scale.shadow_cut (archived: archive/tests/scale)'s world arm, scale.cpu_walks, atom.decode_exact (archived: archive/tests/atom), atom.coverage_trace (archived: archive/tests/atom)).
 inline WorldSpec denseWorld()
 {
     WorldSpec s;

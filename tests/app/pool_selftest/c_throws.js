@@ -1,2 +1,2 @@
-// pool.runner arm c — an assertion that fails: its arm is FAIL with this message.
+// pool.runner (archived: archive/tests/pool) arm c — an assertion that fails: its arm is FAIL with this message.
 throw new Error("assert failed: the expected failure");

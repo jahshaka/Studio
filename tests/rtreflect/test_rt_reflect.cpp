@@ -1,4 +1,4 @@
-// gi.rt_reflect — RAY-TRACED REFLECTIONS (SPECS/PHOTON_SPEC.md §7 R5).
+// gi.rt_reflect (archived: archive/tests/gi) — RAY-TRACED REFLECTIONS (SPECS/PHOTON_SPEC.md §7 R5).
 //
 // THE ONE THING THIS SUITE EXISTS TO PROVE, and it is a thing no screen-space
 // technique can do: a mirror shows what is BEHIND THE CAMERA.
@@ -131,7 +131,7 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
     return r;
 }
 
-/// THE COST ARM (PHOTON_SPEC §7 R5 item 7, `gi.rt_reflect_cost`).
+/// THE COST ARM (PHOTON_SPEC §7 R5 item 7, `gi.rt_reflect_cost` (archived: archive/tests/gi)).
 ///
 /// SAME BINARY, SAME FIXTURE BUILDER, a different question — which is why it is
 /// an env-selected path and not a second source file: the cost of a trace is
@@ -173,9 +173,9 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 ///
 /// TWO ROWS, because the answer is different on the two sides of 1.0:
 ///
-///   gi.rt_reflect_lamp        L = 0.9, inside the emissive voxel store's old
+///   gi.rt_reflect_lamp (archived: archive/tests/gi)        L = 0.9, inside the emissive voxel store's old
 ///                             UNORM range.
-///   gi.rt_reflect_lamp_clip   L = 3.0, which used to be clipped to 1.0 by the
+///   gi.rt_reflect_lamp_clip (archived: archive/tests/gi)   L = 3.0, which used to be clipped to 1.0 by the
 ///                             EMISSIVE VOXEL STORE (PFG_RGBA8_UNORM) on its way
 ///                             into the cache — fork ad452604a+155a56bf8 (was 0087) made that store
 ///                             RGBA16F (VOXEL-CLIP-1, 2026-09-22).
@@ -194,7 +194,7 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// bar exists to tolerate. An AXIS-ALIGNED slab several cells thick fills whole
 /// cells, so the coverage term is 1 and the only thing left in the number is the
 /// UNITS, which is what this arm is for. The residual is not being avoided: it
-/// is `gi.rt_reflect`'s own subject and F1-HITRES's.
+/// is `gi.rt_reflect` (archived: archive/tests/gi)'s own subject and F1-HITRES's.
 ///
 /// THE INSTRUMENT IS CHECKED, not assumed: one full-frame emissive card at four
 /// known radiances, two of them ABOVE 1.0, must read back as those radiances
@@ -1137,7 +1137,7 @@ static int costMain(Engine *e, const char *, const char *)
         // store, not re-shaded by the hit decode. The reflection's timestamp pair
         // spans the decode pass (the trace runs in front of it, the filter after),
         // so a fixture whose hits leave the volume measures the decode instead —
-        // that is what hid gi.rt_reflect_cost's 2.7x for a week. At most 1 % of
+        // that is what hid gi.rt_reflect_cost (archived: archive/tests/gi)'s 2.7x for a week. At most 1 % of
         // the frame's pixels may go to the hit list (measured ~100 mirror, ~400
         // glossy; 714k when the cascade missed the far wall).
         // ...EXCEPT IN AN ALL-MIRROR METAL BOX (REFLECT-FIX-1): every wall a roughness-0
@@ -1561,7 +1561,7 @@ static int lampMain(Engine *e, bool target)
 
 // ---------------------------------------------------------------------------
 /// F1-HITRES — A MIRROR'S HIT IS SHADED FROM THE HIT SURFACE'S CARD
-/// (PHOTON-CARDS-2 part B, SC-1d; `--hitres`, the row gi.rt_reflect_hitres).
+/// (PHOTON-CARDS-2 part B, SC-1d; `--hitres`, the row gi.rt_reflect_hitres (archived: archive/tests/gi)).
 ///
 /// THE DEFECT IT CLOSES. A reflection ray's hit used to be shaded from the
 /// Photon voxels alone, and a MIRROR reads their finest mip — still two cells
@@ -1575,7 +1575,7 @@ static int lampMain(Engine *e, bool target)
 /// albedo 1 -> F0 = 1, roughness 0) redirects a ray without attenuating it, so
 /// the mirror pixel whose ray lands on the panel at P reads the panel's
 /// outgoing radiance at P — which is what the panel's CARD stores at P (the
-/// panel's albedo x its lighting, the CardLight job's arithmetic; gi.card_lighting
+/// panel's albedo x its lighting, the CardLight job's arithmetic; gi.card_lighting (archived: archive/tests/gi)
 /// holds that to pbsDirect). The pixel's P is geometry: the mirror is the plane
 /// z = kMirrorZ, so the ray through a pixel, unfolded, meets the panel's plane
 /// mirrored to z = 2 kMirrorZ - kPanelZ. So the suite computes, per pixel of a
@@ -1913,7 +1913,7 @@ static int hitresMain(Engine *e)
 // ---------------------------------------------------------------------------
 /// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
 /// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
-/// --footprint-sweep`, gi.rt_reflect's own fixture (the mirror wall, the carded
+/// --footprint-sweep`, gi.rt_reflect (archived: archive/tests/gi)'s own fixture (the mirror wall, the carded
 /// emissive cube behind the camera), the wall's roughness swept.
 ///
 /// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
@@ -2045,7 +2045,7 @@ static int footprintSweepMain(Engine *e)
 
 // ---------------------------------------------------------------------------
 /// RAY-FMT-CHECK (PHOTON P3; `--format-check`, the rows
-/// gi.rt_reflect_format_lavapipe and gi.rt_reflect_format_refused_lavapipe).
+/// gi.rt_reflect_format_lavapipe (archived: archive/tests/gi) and gi.rt_reflect_format_refused_lavapipe (archived: archive/tests/gi)).
 ///
 /// The tier's availability gate asks the device for STORAGE_IMAGE support of
 /// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
@@ -2110,7 +2110,7 @@ static int formatCheckMain(Engine *e, const std::string &logFile)
 }
 
 // ---------------------------------------------------------------------------
-/// ENV-RAY-MATCH (PHOTON P3; `--env-ray-match`, the row gi.env_ray_match).
+/// ENV-RAY-MATCH (PHOTON P3; `--env-ray-match`, the row gi.env_ray_match (archived: archive/tests/gi)).
 ///
 /// A SILVER FLOOR UNDER THE REALISTIC SKY (PAN-SMEAR-1's fixture: metal 1, the
 /// camera at (0,5,14) looking at (0,1,0) — a glossy floor at a grazing angle)

@@ -1,4 +1,4 @@
-// vr.ui_stall — A UI-THREAD STALL SHORTER THAN THE DISPLAY PERIOD NEVER COSTS A DISPLAY PERIOD (ENGINE-UPGRADE-U3;
+// vr.ui_stall (archived: archive/tests/vr) — A UI-THREAD STALL SHORTER THAN THE DISPLAY PERIOD NEVER COSTS A DISPLAY PERIOD (ENGINE-UPGRADE-U3;
 // the lead's ruling after stage 1's measurement).
 //
 // TODAY the editor's render driver ticks on Qt's main thread and the VR frame's `xrWaitFrame` runs INSIDE that tick,
@@ -14,7 +14,7 @@
 // over 600 with the stall armed.
 //
 // THE BAR (a law of the design, stage 5): 0 periods missed per stall. RED ON MAIN — the base numbers are in
-// tests/vr/CMakeLists.txt's vr.ui_stall block — so the row is `measure` until stage 5 flips it to a guard.
+// tests/vr/CMakeLists.txt's vr.ui_stall (archived: archive/tests/vr) block — so the row is `measure` until stage 5 flips it to a guard.
 var failures = 0;
 function ok(cond, msg) {
     if (cond) { console.log("ok:   " + msg); }

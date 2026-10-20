@@ -3642,7 +3642,7 @@ void analytic_sky_is_the_engines_and_takes_our_sun() {
 // 6). The engine's half: Scene::atmosphereSunTint, the direct beam's
 // transmittance at the sun's elevation over its value at the zenith (lane
 // SKY-DENSITY-1 made that a derivation from the atmosphere's turbidity instead
-// of a read-out of the sky preset; sky.sun_transmittance gates the model
+// of a read-out of the sky preset; sky.sun_transmittance (archived: archive/tests/sky) gates the model
 // itself, this case gates the behaviour around it).
 //
 // White at noon (the user's picked colour IS the noon value), red-shifted and
@@ -3811,13 +3811,13 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     // spectrally, a spread of 0.125 rather than 0.09. So the old
     // `spread <= 0.08` could not have been met by the physics either, and it
     // is re-based on the reference instead of on a hand-picked bar.
-    // sky.sun_transmittance is where the tint is gated against that reference
+    // sky.sun_transmittance (archived: archive/tests/sky) is where the tint is gated against that reference
     // across eight elevations; here it only has to stay DAYLIGHT.
     const Colour tint = jahshaka::engine::atmosphereSunTint(s->published().atmosphere, Vec3(0.0f, 0.587785f, -0.809017f));
     std::printf("    sun tint at 36 degrees  %.3f %.3f %.3f\n", tint.r, tint.g, tint.b);
     // THE REFERENCE IS THE PLANET'S ATMOSPHERE'S OWN (SKY-ATMOSPHERE-1): its
     // transmittance integral at the default haze (the reference's clear air),
-    // 36 degrees over zenith — sky.sun_transmittance holds the same integral to
+    // 36 degrees over zenith — sky.sun_transmittance (archived: archive/tests/sky) holds the same integral to
     // 2e-3 at eight elevations. The retired Preetham turbidity-2.5 reference
     // (0.858 / 0.820 / 0.732) described different air.
     const float ref36[3] = { 0.9585f, 0.9063f, 0.8286f };
@@ -3846,7 +3846,7 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
 // (THE ANALYTIC SKY BRINGS NO FOG WITH IT — `analytic_sky_brings_no_fog` —
 // IS DELETED with the zeroing it guarded, lane FOG-ATMO-1. Under the realistic
 // sky the air is now a medium at the atmosphere's own density, which is
-// sky.aerial_perspective's physics bar: a far surface keeps exp(-sigma d) of
+// sky.aerial_perspective (archived: archive/tests/sky)'s physics bar: a far surface keeps exp(-sigma d) of
 // itself, 75.8 % at 2 km at the shipped turbidity.)
 
 // THE SKY'S FOG COLOUR CANNOT OUTLIVE THE SKY IT IS MADE OF (round-2 review
@@ -4939,7 +4939,7 @@ void object_counts_track_lifetimes() {
                   empty.materials, c.materials);
 
         // AND IT IS FLAT WHILE IDLE. This is the property the whole
-        // perf.epic_steady_state gate stands on, asserted here at the boundary
+        // perf.epic_steady_state (archived: archive/tests/perf) gate stands on, asserted here at the boundary
         // where it is cheap: rendering the same scene again allocates nothing.
         const ObjectCounts beforeIdle = c;
         render(fx.e, 10);

@@ -1,6 +1,6 @@
 // pieces.mirror — the hop the other suites do not cover (HLMS_ADOPTION P5).
 //
-// shadergraph.emitter_parity proves the emitted GLSL is right, and pieces.spike
+// shadergraph.emitter_parity proves the emitted GLSL is right, and pieces.spike (archived: archive/tests/pieces)
 // proves the engine verb works. Between them sits the part the app actually
 // depends on: a DOCUMENT material that carries a generated piece must reach the
 // renderer through SceneMirror, and the mirror must push a clock so the surface

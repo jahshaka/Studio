@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vr.session — the phase-2 VR session, run against Monado's SIMULATED headset.
+# vr.session (archived: archive/tests/vr) — the phase-2 VR session, run against Monado's SIMULATED headset.
 #
 # Usage: run_vr_session.sh <test-binary> <monado-manifest>
 #

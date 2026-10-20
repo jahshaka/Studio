@@ -1,6 +1,6 @@
-# gi.gather_plane_weight (test_gi_gather_findings.cpp): the Monte Carlo its two-sided bar is
+# gi.gather_plane_weight (archived: archive/tests/gi) (test_gi_gather_findings.cpp): the Monte Carlo its two-sided bar is
 # predicted from — the same geometry, run by hand: python3 fence_occlusion_mc.py
-# gi.gather_plane_weight's geometry: does the fence (1-3 cm proud of the wall, x <= 0) hide the
+# gi.gather_plane_weight (archived: archive/tests/gi)'s geometry: does the fence (1-3 cm proud of the wall, x <= 0) hide the
 # red panel (x -4..-1, y 0.5..2.5, 0.55 m in front of the wall) from a wall point just right of
 # the fence's edge? Cosine-weighted Monte Carlo of the panel's projected solid angle.
 import math,random

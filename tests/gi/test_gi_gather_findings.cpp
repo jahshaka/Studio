@@ -2,7 +2,7 @@
 // SPECS/photon/C2_GATHER_FILTERED_DEFAULT_ON_DESIGN.md section 1.1). One binary,
 // four entries, the mode on the command line:
 //
-//   gi.gather_glass  GA-GLASS  A blended (Glass / Blend / Refractive) fragment
+//   gi.gather_glass (archived: archive/tests/gi)  GA-GLASS  A blended (Glass / Blend / Refractive) fragment
 //                              reads NO probe irradiance: the gather's answer at
 //                              a pixel is the OPAQUE surface the prepass drew
 //                              there, not the glass in front of it. The glass
@@ -10,15 +10,15 @@
 //                              cones, the environment), so its pixels are the
 //                              gather-OFF picture's while the opaque surfaces
 //                              around it move.
-//   gi.gather_nest   GA-NEST   The registration is PASS-scoped: a colour render
+//   gi.gather_nest (archived: archive/tests/gi)   GA-NEST   The registration is PASS-scoped: a colour render
 //                              of the same SceneManager that is not the pass the
 //                              gather was recorded for (a planar mirror, a probe
 //                              capture) sees no `jah_probe_gather` and shades
 //                              with its own diffuse path.
-//   gi.gather_sky    GA-SKY    ONE-ENV's miss, asserted: a zenith sun with its
+//   gi.gather_sky (archived: archive/tests/gi)    GA-SKY    ONE-ENV's miss, asserted: a zenith sun with its
 //                              disc on, and the open floor's probe irradiance is
 //                              the disc-free sky's SH irradiance within 3 % (the SH9 bound; SKY-ATMOSPHERE-1).
-//   gi.gather_plane_weight     THE GATHER'S PLANE WEIGHT at a crushed cage: a
+//   gi.gather_plane_weight (archived: archive/tests/gi)     THE GATHER'S PLANE WEIGHT at a crushed cage: a
 //                              wall pixel beside the edge of a fence 2 cm in
 //                              front of it — where every probe around it passes
 //                              one plane test — reads the WALL's irradiance (the
@@ -864,7 +864,7 @@ static int planeWeightMain(Engine *e)
 }
 
 // ===========================================================================
-// gi.gather_letterbox — THE GATHER'S EYE BASIS UNDER A CONSTRAINED ASPECT
+// gi.gather_letterbox (archived: archive/tests/gi) — THE GATHER'S EYE BASIS UNDER A CONSTRAINED ASPECT
 // (PHOTON-GATHER-1d; 1c's hand-off item 5). Under a letterboxing camera the
 // picture is the target's INNER rectangle while the gather addresses the whole
 // target, so its eye basis is EXPANDED to the target — the ray tier's shared
@@ -888,7 +888,7 @@ static int letterboxMain(Engine *e)
         std::printf("ok: no ray queries on this machine — gi.gather_letterbox skips cleanly\n");
         return 0;
     }
-    // THE OPEN FLOOR UNDER THE SKY (gi.gather_sky's fixture): every floor point
+    // THE OPEN FLOOR UNDER THE SKY (gi.gather_sky (archived: archive/tests/gi)'s fixture): every floor point
     // sees the same sky, so the floor's E/pi is ONE number wherever it is sampled
     // and a probe answers every floor pixel — WHEN it sits on the surface its
     // pixel shows. A probe reconstructed through the wrong basis sits off it,
@@ -948,7 +948,7 @@ static int letterboxMain(Engine *e)
 }
 
 // ===========================================================================
-// gi.gather_edge — GA-EDGE (PHOTON-GATHER-1d fix round)
+// gi.gather_edge (archived: archive/tests/gi) — GA-EDGE (PHOTON-GATHER-1d fix round)
 // ===========================================================================
 // A pixel on a SILHOUETTE belongs to the surface it is on. The selftest's B1
 // showed 1-px bright lines along the blocks' top silhouettes: the integrate's

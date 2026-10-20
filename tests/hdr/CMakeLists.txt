@@ -109,11 +109,11 @@ endif()
 # (the OETF of the film curve; the grey card at 118). See the file header.
 
 # hdr.bloom_showroom — NO FULL-WIDTH BAND IN THE PRODUCT (BLOOM-1, the app half of
-# hdr.bloom_isotropic): Showroom 2 from its own camera, the editor's "scene" shot with
+# hdr.bloom_isotropic (archived: archive/tests/hdr)): Showroom 2 from its own camera, the editor's "scene" shot with
 # bloom and at bloomAmount 0; every row's two end pixels agree within 2 codes unless a
 # pixel bright enough to bloom lies within a halo's reach of them. An app run on the
 # rig's display; a FRESH home per run (the sample is imported). A whole-scene proof: a
-# stage-close row (hdr.bloom_isotropic is the seconds-long merge guard of the same claim).
+# stage-close row (hdr.bloom_isotropic (archived: archive/tests/hdr) is the seconds-long merge guard of the same claim).
 # TIER document: the sample opens at its own saved World (the product's picture,
 # which a test tier would rewrite before the shot).
 set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")

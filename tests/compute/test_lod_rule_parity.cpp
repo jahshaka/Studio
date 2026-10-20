@@ -1,4 +1,4 @@
-// engine.lod_rule_parity — ONE QUALITY CURRENCY, TWO IMPLEMENTATIONS, AND THE
+// engine.lod_rule_parity (archived: archive/tests/engine) — ONE QUALITY CURRENCY, TWO IMPLEMENTATIONS, AND THE
 // PROOF THEY ARE THE SAME (SPECS/atom/A4_SUBSTRATE_CULL_DESIGN.md section 3).
 //
 // THE CURRENCY is `sampleFootprintPerspective` + `allowedWorldError` +
@@ -286,7 +286,7 @@ static void productCutParity(Engine *e, View *view)
         std::vector<GpuSceneEntry> table;
         for (int frame = 0; frame < 60 && inTable < 8u; ++frame) {
             enginetest::frames(e, 1);
-            // The table's dirty scan (engine.atom_draw's door): a scene whose frames
+            // The table's dirty scan (engine.atom_draw (archived: archive/tests/engine)'s door): a scene whose frames
             // nothing in the view reads the table in (no GI, no rays) stages nothing.
             static_cast<jahshaka::engine::detail::OgreScene *>(sc)->ensureGpuScene(false);
             slots = sc->published().gpuScene.slotCount;
@@ -354,7 +354,7 @@ static void productCutParity(Engine *e, View *view)
                 // cluster sits under another drawn one (a drawn cluster produced by a
                 // group whose member is drawn), and the drawn clusters' regions cover
                 // every level-0 triangle exactly once (the bake's provenance partition,
-                // atom.cluster_cut's own count).
+                // atom.cluster_cut (archived: archive/tests/atom)'s own count).
                 {
                     std::vector<unsigned char> isDrawn(f.data.clusters.size(), 0);
                     for (unsigned c : gpu) if (c < isDrawn.size()) isDrawn[c] = 1;
@@ -680,7 +680,7 @@ int main(int argc, char **argv)
         // (`allowedWorldError(t, footprint(s*d), s)` IS `footprint(d)`) that can
         // only fail on a float boundary and never touches the strategy. What
         // states that physics against the RENDERER is the 500-instance block
-        // above (six octaves of scale, the drawn byte) and atom.dolly_gate's 10x
+        // above (six octaves of scale, the drawn byte) and atom.dolly_gate (archived: archive/tests/atom)'s 10x
         // arm (the same 152 poses at scale 10 and ten times the distance must
         // draw the same level); and a change that dropped the divisor from
         // `allowedWorldError` itself would red the GPU-vs-C++ sweep below, since

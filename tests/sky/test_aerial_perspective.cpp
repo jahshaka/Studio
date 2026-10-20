@@ -1,4 +1,4 @@
-// sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY
+// sky.aerial_perspective (archived: archive/tests/sky) — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY
 // (FOG-ATMO-1; rebased by SKY-ATMOSPHERE-1) — headless, framework-free, links
 // JahshakaEngine only (a reachable DISPLAY and a Vulkan driver, like tests/engine).
 //

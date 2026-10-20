@@ -56,7 +56,7 @@ trap cleanup EXIT
 # the suite has no subject. `simple` is the profile our action set suggests
 # bindings for, which is the point.
 #
-# JAH_MONADO_CONTROLLERS=none starts the headset ALONE (meshbake.shipped_bakes):
+# JAH_MONADO_CONTROLLERS=none starts the headset ALONE (meshbake.shipped_bakes (archived: archive/tests/meshbake)):
 # with no controller bound to either hand, `vr.inject` is accepted — the one way
 # to put a Touch profile in a hand on a box whose runtime has no Touch model.
 CONTROLLERS=(SIMULATED_LEFT=simple SIMULATED_RIGHT=simple)

@@ -17,7 +17,7 @@
 // through the one pipeline, the writer and both readers resolve it through
 // the CAS like any texture, and every by-name fallback is deleted — so this
 // gate now proves the round trip with no name-matching left anywhere
-// (scripting.e2e.shipped_assets asserts the identity half: guid, pin, store).
+// (scripting.e2e.shipped_assets (archived: archive/tests/scripting) asserts the identity half: guid, pin, store).
 //
 // Three more round-trip defects fell out of the field diff and are gated here
 // too: the Shadow Caster flag was never serialized at all (the Ground is

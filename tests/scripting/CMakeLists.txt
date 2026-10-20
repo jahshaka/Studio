@@ -1,6 +1,6 @@
 # Scripting engine tests (SCRIPTING_SPEC.md phase 0+).
 #
-# scripting.engine — unit test of the QJSEngine host: evaluation, error line
+# scripting.engine (archived: archive/tests/scripting) — unit test of the QJSEngine host: evaluation, error line
 # numbers, console capture, undo-macro wrapping, registry metadata validation.
 # Links ONLY the scripting core (no MainWindow, no engine): the core is designed
 # to have zero Studio dependencies (ScriptHost carries std::function probes).
@@ -63,7 +63,7 @@ set_tests_properties(host.sync_getters PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
-# host.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decision 44, D1): 300
+# host.error_door (archived: archive/tests/host) — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decision 44, D1): 300
 # FREE-RUNNING driver frames (JAH_FREE_RUNNING=1) with every scene message refused (engine.arm messages.refuse) and
 # one posted per frame, the error pump draining every tick; every refusal reaches it through the snapshot. A count,
 # in frames (the race it guards is TSan's to see: the 47 arm).
@@ -159,7 +159,7 @@ set(_texmiss_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing)
 file(MAKE_DIRECTORY ${_texmiss_home}/run)
 set(_arriving_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-arriving_line)
 file(MAKE_DIRECTORY ${_arriving_home}/run)
-# scripting.e2e.pump_defer — a UI-thread operation's pump delivers no other work
+# scripting.e2e.pump_defer (archived: archive/tests/scripting) — a UI-thread operation's pump delivers no other work
 # (STUDIO-D1 fix round; services/uithreadwait.h). Arm 1, in-process: an MCP
 # request landing in a real operation's pump with no MCP dispatch running is
 # deferred, then answered. Arm 2, the app: two MCP clients, B asking while A's
@@ -282,7 +282,7 @@ set_tests_properties(scripting.e2e.tex_ref PROPERTIES
     TIMEOUT 300)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
-# (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
+# (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle (archived: archive/tests/perf):
 # the app records, the shell half reads frames.jsonl and machine.json, because
 # "exactly 60 records" is a line count and not a counter the app reports about
 # itself. JAHSHAKA_PERF_ROOT: `out` is confined to the capture root, so the
@@ -317,7 +317,7 @@ endforeach()
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_scope)
 file(MAKE_DIRECTORY ${_home}/run)
 
-# scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
+# scripting.e2e.thumbnails_order (archived: archive/tests/scripting) — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
 # A material thumbnail FIRST, a model import SECOND: the renderer named its
 # offscreen View with a fixed string and a second instance could not create it,
 # so every model imported after the session's first material/shader thumbnail
@@ -335,7 +335,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
 file(MAKE_DIRECTORY ${_home}/run)
 
 # scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
-# (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the
+# (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog (archived: archive/tests/ui) pins the record the
 # widgets produce and scripting.e2e.import_settings pins the verbs; this pins
 # the JOIN — the dialog's own OK button, on a real library asset, re-bakes it,
 # the open scene follows at scale 1, and the record it writes is byte-identical
@@ -463,20 +463,20 @@ set_tests_properties(gi.one_writer PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
-# gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
+# gi.pcc_mirror.ray_tier (archived: archive/tests/gi) — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
 # Showroom 2 at Epic: no grid with rays on, the grid with rays off, gone again with rays back
 # on, and the roughness-0 sphere's reflection A/B against the grid's answer. The engine's books
-# for the same rule are gi.pcc_mirror's arm (i). A FRESH home per run (the sample is imported).
+# for the same rule are gi.pcc_mirror (archived: archive/tests/gi)'s arm (i). A FRESH home per run (the sample is imported).
 set(JAH_PCC_RAY_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pcc_ray_tier)
 set(JAH_PCC_RAY_OUT "${_home}/run/")
 file(MAKE_DIRECTORY ${_home}/run)
 
-# gi.chain_converge_scenes — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT on the
+# gi.chain_converge_scenes (archived: archive/tests/gi) — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT on the
 # default scene and Showroom 2 at High (PHOTON-WRITER-1 SWEEPS-3; the room half is
-# gi.chain_converge): from a perturbed history a second sweep changes no byte of
+# gi.chain_converge (archived: archive/tests/gi)): from a perturbed history a second sweep changes no byte of
 # any cascade's light (world.giVoxelStats's lightDigest). Fresh home per run.
-# STAGE-CLOSE (lane D6B-GATE-SHAPE; audit §3c, verdict STAGE-CLOSE): 80 s for the claim gi.chain_converge
+# STAGE-CLOSE (lane D6B-GATE-SHAPE; audit §3c, verdict STAGE-CLOSE): 80 s for the claim gi.chain_converge (archived: archive/tests/gi)
 # (9 s) holds at every push; an engine change still selects it in its own scoped gate.
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
@@ -540,7 +540,7 @@ set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_manne
 foreach(_ms multiselect multiselect_edit)
 endforeach()
 
-# scripting.e2e.ogre_ports — THE PORTS (SPECS/OGRE_SAMPLES_TAB_SPEC.md §3): the
+# scripting.e2e.ogre_ports (archived: archive/tests/scripting) — THE PORTS (SPECS/OGRE_SAMPLES_TAB_SPEC.md §3): the
 # archives the Ogre-Samples tab's tiles open, imported into a VIRGIN home,
 # opened, rendered and measured. ogre_samples above is the verb half (the
 # inventory and the launch refusal); this is the content half.
@@ -668,7 +668,7 @@ jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.
 
 # scripting.e2e.primitives — the ONE primitive table through the VERB (owner
 # review R6 / answer Q4). The table's own contract — the meshes, the tangents,
-# the tile icons, the old-guid mapping — is defaults.primitive_table; this is
+# the tile icons, the old-guid mapping — is defaults.primitive_table (archived: archive/tests/defaults); this is
 # "every name the drawer offers is a name the verb accepts", plus the retired
 # four refused by name, plus the Mirror Room still opening with its teapot.
 jah_pool_arm(editor primitives ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_primitives.js 8)
@@ -680,14 +680,14 @@ jah_pool_arm(editor primitives ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_primitive
 # finest level. Needs the engine: no --headless.
 jah_pool_arm(editor add_primitive ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_add_primitive.js 2)
 
-# scripting.e2e.material_tabs — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN
+# scripting.e2e.material_tabs (archived: archive/tests/scripting) — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN
 # AT ONCE. It needs the PAGE (the five tab verbs are the page's own entry
 # points), so no --headless; its own home, wiped before the run, because the
 # tab set it leaves behind is what the relaunch half reads.
 set(_mtHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_tabs)
 file(MAKE_DIRECTORY ${_mtHome}/run)
 
-# scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
+# scripting.e2e.material_bundle (archived: archive/tests/scripting) — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
 # flow the spec names: pick an image from disk -> ONE tile -> export -> an
 # EMPTY library -> it still resolves. Two processes, because "an empty library"
 # is not something a verb can fake: the first exports an archive from a normal
@@ -757,7 +757,7 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
-# scripting.e2e.preset_edit — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
+# scripting.e2e.preset_edit (archived: archive/tests/scripting) — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
 # PROJECT'S TO EDIT, and the FIRST EDIT is what makes the copy (the owner's
 # rule, 2026-09-21). The copy keeps the preset's NAME, the project's pin moves
 # onto it, the meshes follow, the library master and every other project are
@@ -767,7 +767,7 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
 set(_peHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_edit)
 file(MAKE_DIRECTORY ${_peHome}/run)
 
-# scripting.e2e.preset_seed_boot — THE FIRST-RUN SEED ON THE ROUTE A PERSON
+# scripting.e2e.preset_seed_boot (archived: archive/tests/scripting) — THE FIRST-RUN SEED ON THE ROUTE A PERSON
 # TAKES (SEED-STAMP-1). preset_apply above seeds through
 # `materials.seedPresets()`, which mints each map inside `definitionFor` and
 # stamps it there; a LAUNCH runs `MaterialPresetSeeder`, which mints the maps
@@ -785,7 +785,7 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_boot)
 file(MAKE_DIRECTORY ${_psHome}/run)
 
-# scripting.e2e.preset_seed_race — THE USER'S IMPORT *DURING* THAT SEED
+# scripting.e2e.preset_seed_race (archived: archive/tests/scripting) — THE USER'S IMPORT *DURING* THAT SEED
 # (SEED-SMALL-1). The two arms above are a BEFORE and an AFTER, one importer at
 # a time by construction; this one runs both at once, which is the case the
 # seed's own by-content check cannot answer (it is asked once, for all

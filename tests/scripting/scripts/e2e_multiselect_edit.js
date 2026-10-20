@@ -21,7 +21,7 @@
 // scripting.e2e.anim documents), so editor.undo() from inside this file can
 // never reach the steps it just made. What it CAN prove is that the commands
 // were recorded, via undoState().pushes. The atomicity is gated where a user
-// actually meets it: app.input_keys presses Delete and then Ctrl+Z as
+// actually meets it: app.input_keys (archived: archive/tests/app) presses Delete and then Ctrl+Z as
 // REAL KEYS, with no script macro anywhere, and asserts every member comes back.
 
 function assert(cond, msg) {
@@ -170,7 +170,7 @@ assert(rootChildren().indexOf(atRoot[0]) >= 0, "at the scene root");
 //
 // "Cube" -> "Cube2" -> "Cube3": a numeric suffix, NO space, never "Cube Copy",
 // unique among SIBLINGS — and ONE rule for Duplicate and for Paste, because a
-// copy is a copy however it was made. services.selection_set gates the rule
+// copy is a copy however it was made. services.selection_set (archived: archive/tests/services) gates the rule
 // itself and its edges; this is the rule reaching a real document through the
 // two verbs a user actually presses.
 //

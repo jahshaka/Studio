@@ -1,4 +1,4 @@
-// app.shutdown_order — the shutdown sequence, asserted instead of remembered
+// app.shutdown_order (archived: archive/tests/app) — the shutdown sequence, asserted instead of remembered
 // (STABILITY_PROGRAM_SPEC.md §1.5 / Lane 3).
 //
 // Nobody had written the order down, and twice that cost a defect: undo
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     // QNetworkAccessManager: Qt >= 6.7 cancels a request after 30 s by
     // default, the harness threw the cancellation away, and the caller read a
     // BLANK object whose .value("ok") is false — a failed verb with no
-    // message. ui.window_minimum lost a gate to it.
+    // message. ui.window_minimum (archived: archive/tests/ui) lost a gate to it.
     //
     // Proving it needs a request that outlives its budget without costing the
     // gate 30 s: a DELIBERATELY short transfer timeout on a second client
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
                     static_cast<long long>(tookMs),
                     QJsonDocument(late).toJson(QJsonDocument::Compact).constData());
         // The 900 ms bar is STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
-        // app.shutdown_order.timing arms it on a quiet box; the "no reply within" error
+        // app.shutdown_order.timing (archived: archive/tests/app) arms it on a quiet box; the "no reply within" error
         // below is this row's proof that the request gave up at its timeout.
         JAH_TIMING_CHECK("app.shutdown_order", tookMs < 900,
                          "a request that outlives the transfer timeout RETURNS at the timeout");

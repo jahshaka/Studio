@@ -1,4 +1,4 @@
-// The APP half of vr.frame_budget (lane V1-RIG item 5, PHOTON_SPEC §11 item 8 /
+// The APP half of vr.frame_budget (archived: archive/tests/vr) (lane V1-RIG item 5, PHOTON_SPEC §11 item 8 /
 // the ledger's "the 90 Hz bar's rig arms"). It RECORDS; test_vr_frame_budget.cpp
 // reads what it wrote and judges it — the scripting engine has no file access.
 //

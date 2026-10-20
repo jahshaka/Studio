@@ -1,5 +1,5 @@
 // particles.document_to_engine — the DOCUMENT half of the ParticleFX2 adoption
-// (PARTICLES_FX2_SPEC.md §11 phase 1). The engine half is engine.particles_pfx2.
+// (PARTICLES_FX2_SPEC.md §11 phase 1). The engine half is engine.particles_pfx2 (archived: archive/tests/engine).
 //
 // The suite name is older than the design it now covers, and that is deliberate:
 // the question it asks has not changed — "does an emitter authored in the
@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     if (!view || !target) return 1;
     view->setScene(target);
     enginetest::testCameraLookAt(view, Vec3(0, 0.8f, 6.0f), Vec3(0, 0.8f, 0));
-    // A fixed step, for the same reason engine.particles_pfx2 uses one: an
+    // A fixed step, for the same reason engine.particles_pfx2 (archived: archive/tests/engine) uses one: an
     // offscreen frame takes about a millisecond, so wall-clock frames buy
     // milliseconds of simulated fire and no assertion below would mean anything.
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));

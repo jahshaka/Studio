@@ -21,17 +21,17 @@
 #     stays inside the same budget, rebuilds no grid, leaves one tile per
 #     project, and its ledger carries the close it began with — and after those
 #     40+ creates in one process the Properties column is shown, mounted and owes
-#     nothing (the create-loop SIGSEGV's column; ui.show_walk is its mechanism).
+#     nothing (the create-loop SIGSEGV's column; ui.show_walk (archived: archive/tests/ui) is its mechanism).
 # EVERY RUN STARTS FROM A FIXED LIBRARY: the suite deletes the home's library
 # database, its lock, the asset store and the project folders before it spawns
 # the app (the shader cache stays) — the home used to grow ~14 projects a run.
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
 
-# ONE ROW, AT THE STAGE CLOSE (TESTING-SPEED-B3): open.responsive.timing below is the suite — every
+# ONE ROW, AT THE STAGE CLOSE (TESTING-SPEED-B3): open.responsive.timing (archived: archive/tests/open) below is the suite — every
 # count, structure and ledger assertion AND the millisecond bars armed (JAHSHAKA_TIMING_BARS=1), on a quiet
 # box under the GPU-timing lock. Its push-tier twin `open.responsive` (the same binary in a second home,
 # the bars only printed: 147 s a merge) is deleted; the merge tier's openasync guard is open.frames.
-# open.responsive.timing — the counts and the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
+# open.responsive.timing (archived: archive/tests/open) — the counts and the millisecond bars (stage-close; `quiet-box`: never a scoped gate).
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
 

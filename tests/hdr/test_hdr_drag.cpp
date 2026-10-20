@@ -225,7 +225,7 @@ int main()
         // arms move 1.05 % of the gap per frame against average's 0.26 %, both
         // of them smooth and both well under the filter's own 2.284 % ceiling.
         // The pattern's own behaviour is asserted where it can be exact, in
-        // hdr.meter and cameras.exposure part D.
+        // hdr.meter (archived: archive/tests/hdr) and cameras.exposure part D.
         fx.meterPattern = r.pattern;
         view->setPostFx(fx);
 

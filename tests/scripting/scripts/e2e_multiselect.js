@@ -66,7 +66,7 @@ assert(editor.selection() === n[5], "the toggled-in node is the primary again");
 assert(editor.select([n[1]]), "select row 1");
 assert(editor.selectAdd(n[3]), "ctrl-add row 3");
 // The verb takes the two ENDS explicitly — deciding that the first one is the
-// topmost SELECTED row is the tree's job (ui.tree_multiselect proves that half).
+// topmost SELECTED row is the tree's job (ui.tree_multiselect (archived: archive/tests/ui) proves that half).
 var range = editor.selectRange(n[1], n[5]);
 assert(range.length === 5, "the range is inclusive on both ends (" + range.length + " rows)");
 assert(editor.selection() === n[5], "the clicked end becomes the primary");
@@ -98,7 +98,7 @@ assert(J(editor.selectionSet()) === J([rootId]), "which replaces the selection w
 // ---- 4b. SELECT ALL (Ctrl+A, §8.7) ----------------------------------------
 // Every node except the World root, in document pre-order, topmost first — and
 // not an undo entry. The KEY half (a focused text field keeps the chord) is
-// app.input_keys; this is the capability the key runs.
+// app.input_keys (archived: archive/tests/app); this is the capability the key runs.
 var pushesSelAll = editor.undoState().pushes;
 var all = editor.selectAll();
 assert(all.length === scene.nodes().length - 1,

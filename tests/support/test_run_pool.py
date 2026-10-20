@@ -180,7 +180,7 @@ check(findings(outs["low"], "LEAK") == ["LEAK tiered +60 over 3 arms"],
       "a monotonic climb over 3 arms AFTER the step is a LEAK of the climb alone (%s)" % findings(outs["low"], "LEAK"))
 check(not findings(outs["epic"], "LEAK") and not findings(outs["epic"], "STEP"), "a flat curve is no LEAK and no STEP")
 check("0 not PASS" in outs["low"], "a STEP and a LEAK are findings, never a red")
-# THE OLD FALSE POSITIVE (pool.editor_view's recorded curve, 2026-09-27): drift that goes down once,
+# THE OLD FALSE POSITIVE (pool.editor_view (archived: archive/tests/pool)'s recorded curve, 2026-09-27): drift that goes down once,
 # then a one-time step — the old rule (last - first > the largest step) called it LEAK +168
 rc5, out5 = tiered("low", [338, 339, 344, 342, 350, 353, 491, 505, 506])
 show(out5)

@@ -324,7 +324,7 @@ int main(int argc, char **argv)
     //    (PLAYER-SPAWN-1 rule 2, owner 2026-09-17).
     //
     // The rule lives on the document (Scene::armCameraIfNoneActive, pinned by
-    // cameras.document); WHO applies it is this command, because an ADD is the
+    // cameras.document (archived: archive/tests/cameras)); WHO applies it is this command, because an ADD is the
     // only thing that should — a project LOAD builds its graph through the
     // reader, which pushes no commands, so a saved file's silence about the
     // active camera keeps meaning the free viewer.

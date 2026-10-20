@@ -1,4 +1,4 @@
-# archive.responsive — the threaded project archive (STABILITY_PROGRAM_SPEC
+# archive.responsive (archived: archive/tests/archive) — the threaded project archive (STABILITY_PROGRAM_SPEC
 # Lane 4), measured the way open.responsive measures an open: spawn the REAL
 # binary, drive it over MCP, and read the main-thread heartbeat's worst gap
 # while an export and an import are in flight. Also asserts the two things the

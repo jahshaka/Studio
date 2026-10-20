@@ -7,8 +7,8 @@
 # `photon` can never sit in scene->worldOverrides, because setMode skips a pinned row. Three
 # doors could put it there: worldmodes::setRowValue, worldmodes::pinRowValue, and the scene
 # READER (a document written while the old mapping let the row be pinned). The first two are
-# driven at runtime by gi.tiers (photon_override_reads_custom), the reader by
-# scripting.e2e.photon_pin_read (a blob that pins photon, reopened); this lint is the source half:
+# driven at runtime by gi.tiers (archived: archive/tests/gi) (photon_override_reads_custom), the reader by
+# scripting.e2e.photon_pin_read (archived: archive/tests/scripting) (a blob that pins photon, reopened); this lint is the source half:
 # the reader deletes the key right after it reads the map (forward-only: one remove, never
 # honoured), each setter refuses it before its insert, and nothing first-party writes a `photon`
 # pin by hand.
@@ -71,9 +71,9 @@ fi
 #                                    already keep photon-free
 #      irisgl/document/scenegraph/scene.cpp  the reset: an empty map
 #    What a source read cannot see (an alias of the map, a QJsonObject built elsewhere and
-#    assigned through one of those three) is covered at RUNTIME: gi.tiers
-#    photon_override_reads_custom (the setters), scripting.e2e.photon_pin_read (the reader on a
-#    blob that pins photon, and the save after it), ui.photon_panel (the panel and its undo).
+#    assigned through one of those three) is covered at RUNTIME: gi.tiers (archived: archive/tests/gi)
+#    photon_override_reads_custom (the setters), scripting.e2e.photon_pin_read (archived: archive/tests/scripting) (the reader on a
+#    blob that pins photon, and the save after it), ui.photon_panel (archived: archive/tests/ui) (the panel and its undo).
 hand_report=$(python3 - <<'PYEOF'
 import os, re
 roots = ("src", "irisgl/document", "irisgl/core")

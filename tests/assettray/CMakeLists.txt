@@ -1,4 +1,4 @@
-# assets.tray — the EDITOR TRAY's listing and the Assets page's LIBRARY GRID,
+# assets.tray (archived: archive/tests/assets) — the EDITOR TRAY's listing and the Assets page's LIBRARY GRID,
 # plus (DRAWERS-1) the PROJECT'S FOLDER MODEL behind assets.folders and its
 # four mutating verbs: the rules, the refusals, where a filing is recorded for
 # a pinned library row against a row the project owns, and the undo of a
@@ -27,7 +27,7 @@ find_library(JAH_SQLITE3_LIB sqlite3)
 # LISTING SELECTS A THUMBNAIL (the query log: every thumbnail select keyed by
 # guid), the tiles read by guid in batches and decoded off the UI thread, the
 # predicates' indexes present and used by the planner.
-# archive.closure — the closure walk at one statement per BFS level and the
+# archive.closure (archived: archive/tests/archive) — the closure walk at one statement per BFS level and the
 # payload at one header + one edge statement for the set, one files statement
 # and one BLOB read per asset, answering exactly what the per-node walk did.
 set(_d11_db_closure

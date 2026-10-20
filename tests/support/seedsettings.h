@@ -27,7 +27,7 @@ For more information see the LICENSE file
 // LAUNCH (owner decision D3, 2026-09-12 — src/app/firstrun.h), where it cannot
 // touch the quit path at all AND is suppressed outright for any run that is
 // being driven; the seeding is therefore DEAD and is gone (CRUD law). The
-// contract it stood in for is now asserted directly, by app.first_launch.
+// contract it stood in for is now asserted directly, by app.first_launch (archived: archive/tests/app).
 //
 // They each had their own copy of the same block, and every copy wrote
 // `<binary dir>/jahsettings.ini` — the file that IS shared by every run of a

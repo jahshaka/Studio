@@ -1,4 +1,4 @@
-// app.library_keep, PHASE 1 — a library with something in EVERY home
+// app.library_keep (archived: archive/tests/app), PHASE 1 — a library with something in EVERY home
 // (ASSETS-HOME-1). The shell prepends the fixture paths (KEEP_PNG, KEEP_RIG,
 // KEEP_CLIP, KEEP_MODEL). Each guid is printed as `NAME=guid` for the arms.
 //

@@ -30,7 +30,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
 # SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public
-# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack
+# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack (archived: archive/tests/atom)
 # does) and link Ogre: the grid builds its own workspaces on the scene's manager,
 # the control records raw Vulkan through the engine's pass provider.
 function(jah_atom_engine_target _t)
@@ -49,7 +49,7 @@ function(jah_atom_engine_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
-# engine.atom_parity — the grid: materials x lights x Photon terms, stock HlmsPbs
+# engine.atom_parity (archived: archive/tests/engine) — the grid: materials x lights x Photon terms, stock HlmsPbs
 # against HlmsAtom's decode over a hand-made id buffer, per cell mean <= 1.0 code
 # and <= 0.5 % of interior pixels beyond 8 codes, a grazing cell included. It reads
 # until every arm is stable (frames, never time) and prints the whole grid.
@@ -133,8 +133,8 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
-# atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
-# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar bakes)
+# atom.lod_switch (archived: archive/tests/atom) — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
+# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar (archived: archive/tests/atom) bakes)
 # imported through the owner's route: the chain's per-object level (shadows, stock PBR)
 # steps down over 30-500 m, comes back to 0 and holds across a band edge; the Levels view
 # paints the CUT's depth, coarser further out; and a slow zoom shows no pop (no band). The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no

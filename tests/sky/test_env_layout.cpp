@@ -36,7 +36,7 @@
 //      stopped being bound at all;
 //   2. the layout, by the Khronos validation layer: the ctest row carries
 //      `VK_INSTANCE_LAYERS` and `FAIL_REGULAR_EXPRESSION "Validation Error"`,
-//      the same shape shadow.cache_kinds uses. A sky CHANGE is exercised twice
+//      the same shape shadow.cache_kinds (archived: archive/tests/shadow) uses. A sky CHANGE is exercised twice
 //      because each change re-runs the capture and the convolution, and it is
 //      the frames AFTER a convolution that sample the cube.
 #include "jahshaka/engine/Engine.h"

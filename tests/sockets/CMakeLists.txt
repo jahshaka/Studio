@@ -1,11 +1,11 @@
 # Sockets (CAMERAS_SPEC §5 / phase 4 — owner decision D9).
 #
-# sockets.document  the socket maths against hand-computed matrices, the
+# sockets.document (archived: archive/tests/sockets)  the socket maths against hand-computed matrices, the
 #                   bind-pose fallback (no engine at all), every refusal, the
 #                   stale cases, duplication, the scene's attachment
 #                   registry, and the avatar module's bone-name table. Pure
 #                   iris:: + avatarsockets.cpp, offscreen.
-# sockets.render    the same thing through the WHOLE chain — engine pose ->
+# sockets.render (archived: archive/tests/sockets)    the same thing through the WHOLE chain — engine pose ->
 #                   mirror read-back -> resolver -> applyCamera -> pixels. A
 #                   camera on an animated bone must photograph a different shot
 #                   as the rig moves, and a detached one must not.
@@ -39,7 +39,7 @@ set_tests_properties(sockets.e2e PROPERTIES
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST sockets.e2e)
     jah_fresh_home_fixture(sockets.e2e.fresh_home socketsE2eFreshHome "${CMAKE_CURRENT_BINARY_DIR}/sockets-home" WARM LABELS "scripting")

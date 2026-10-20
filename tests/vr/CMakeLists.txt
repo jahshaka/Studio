@@ -1,13 +1,13 @@
 # THE VR SUITES (SPECS/VR_SPEC.md §6). (`vr.spike_1a`, phase 1a's external-device
 # spike, was deleted by VR-START-1 with the route it proved: the engine no longer
-# boots on a runtime-made device; `vr.session` is the session's suite.)
+# boots on a runtime-made device; `vr.session` (archived: archive/tests/vr) is the session's suite.)
 #
 # EVERYTHING BELOW THE FIRST GUARD IS OPTIONAL. Without libopenxr-dev, without
 # the Vulkan render system, or on macOS, none of the RUNTIME suites is built and
 # none is registered; without monado-service on the box the registered ones SKIP
 # (exit 77). A box with no VR stack is a supported box.
 #
-# `vr.grab_maths` (stage 1, immediately below) is the exception and is
+# `vr.grab_maths` (archived: archive/tests/vr) (stage 1, immediately below) is the exception and is
 # registered FIRST, before any guard: it is pure arithmetic with no runtime, no
 # display and no GPU in it, so it runs everywhere — see its own note.
 
@@ -30,13 +30,13 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
     CACHE FILEPATH "OpenXR manifest of the simulated-HMD runtime the VR gate uses")
 
 # THE VR RUNTIME ROWS RUN AT THE SHIP (TESTING-SPEED-B4; SPECS/TESTING_SPEED_ROWS.md, vr): every row
-# below that starts a Monado runtime — vr.session, vr.gather_stereo, vr.no_picture_start, vr.mirror_live,
-# vr.start_recovery, vr.start_press, vr.start_broken (a broken manifest, but its wrapper still SKIPs
-# without Monado: it moves with them), vr.input_session, vr.warmup, vr.warmup_control, vr.eye_grade and
-# the two pools pool.vr_session / pool.vr_validation — carries `stage-close` (the SHIP run only); their
-# fresh-home fixtures carry it with them. Rows, locks, budgets and bars unchanged. vr.session_undithered
-# (7 s, the byte-identical eyes) and vr.grab_maths stay in the merge tier; the no-runtime VR fixtures
-# (pool.vr_noruntime) are tests/scripting's.
+# below that starts a Monado runtime — vr.session (archived: archive/tests/vr), vr.gather_stereo (archived: archive/tests/vr), vr.no_picture_start (archived: archive/tests/vr), vr.mirror_live,
+# vr.start_recovery (archived: archive/tests/vr), vr.start_press (archived: archive/tests/vr), vr.start_broken (archived: archive/tests/vr) (a broken manifest, but its wrapper still SKIPs
+# without Monado: it moves with them), vr.input_session (archived: archive/tests/vr), vr.warmup (archived: archive/tests/vr), vr.warmup_control (archived: archive/tests/vr), vr.eye_grade (archived: archive/tests/vr) and
+# the two pools pool.vr_session (archived: archive/tests/pool) / pool.vr_validation (archived: archive/tests/pool) — carries `stage-close` (the SHIP run only); their
+# fresh-home fixtures carry it with them. Rows, locks, budgets and bars unchanged. vr.session_undithered (archived: archive/tests/vr)
+# (7 s, the byte-identical eyes) and vr.grab_maths (archived: archive/tests/vr) stay in the merge tier; the no-runtime VR fixtures
+# (pool.vr_noruntime (archived: archive/tests/pool)) are tests/scripting's.
 
 # ---------------------------------------------------------------------------
 # vr_session.verbs_session — the `vr.*` verbs through the APP, against the simulated
@@ -46,7 +46,7 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 # vr_session.player_session — THE PLAYER IN THE HEADSET (SPECS/VR_SPEC.md §4.5, phase 3):
 # the app with `--vr`, a real session, the Player page up, the mirror on the player's own
 # view, the rig placed on the play camera and flown by the verb the fly keys call. The
-# no-runtime half is vr_noruntime.player_vr; the rig's arithmetic is `player.vr`.
+# no-runtime half is vr_noruntime.player_vr; the rig's arithmetic is `player.vr` (archived: archive/tests/player).
 #
 # vr_session.photon_view — THE PHOTON VIEW WITH A HEADSET UP (PHOTON-VIEW-1 fix round,
 # F6): while a stereo view draws the scene, Ogre's voxel and probe visualizers (low-level
@@ -60,7 +60,7 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 # vr.mirror_live — THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the
 # owner's finding F2 of the push-#50 smoke, SPECS/VR_SPEC.md §5 phase 4).
 #
-# The app half of the rule `vr.session` asserts on pixels: while the runtime
+# The app half of the rule `vr.session` (archived: archive/tests/vr) asserts on pixels: while the runtime
 # draws eyes the editor's own View draws nothing (one render pipeline) and the
 # moment it stops the desktop takes its own camera back, live — which on a real
 # headset is exactly when the wearer lifts it to look at the desk. Plus the
@@ -72,7 +72,7 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 # waited for, begun and ended — only the runtime's answer is replaced):
 # _BLINK_EVERY is how often, _BLINK_FRAMES how long. Twelve frames every thirty
 # is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
-# them apart is `vr.session`'s case.
+# them apart is `vr.session` (archived: archive/tests/vr)'s case.
 set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
 jah_gpu_row(vr.mirror_live SHIP CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
@@ -92,15 +92,15 @@ set_tests_properties(vr.mirror_live PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
-# vr.start_broken (VR-START-1 case d): the active manifest's runtime library cannot be
+# vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
      "{ \"file_format_version\": \"1.0.0\", \"runtime\": { \"name\": \"Broken\", \"library_path\": \"/nonexistent/libopenxr_broken.so\" } }\n")
 
-# vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
+# vr.frame_budget (archived: archive/tests/vr) — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 #
-# Split in two like perf.capture_bundle, and for the same reason: the app
+# Split in two like perf.capture_bundle (archived: archive/tests/perf), and for the same reason: the app
 # RECORDS (vr_frame_budget.js drives a session at the Quest Pro's eye size and
 # writes two capture bundles) and a reader JUDGES what it wrote, because the
 # scripting engine has no file access. The reader prints the budget lines the
@@ -116,7 +116,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vr_frame_budget.js.in"
                "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js" @ONLY)
 
 # ---------------------------------------------------------------------------
-# vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
+# vr.eye_grade (archived: archive/tests/vr) — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
 # EYE-GRADE-1; SPECS/VR_SPEC.md §6).
 #
 # The only suite in the tree that looks at what the RUNTIME DISPLAYS. Every
@@ -128,7 +128,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vr_frame_budget.js.in"
 # runtime our bytes are linear, so it encoded them a second time). Its runner
 # therefore starts the compositor with an X window and captures it with xwd.
 #
-# THREE PIECES, like vr.frame_budget: the app RECORDS (its own eye picture, the
+# THREE PIECES, like vr.frame_budget (archived: archive/tests/vr): the app RECORDS (its own eye picture, the
 # desktop's screenshot, and the descriptions it asserts itself), the runner
 # CAPTURES the runtime's window while the script holds a picture still, and a
 # Qt reader JUDGES the files — a script cannot open a PNG.

@@ -1,7 +1,7 @@
 // THE 2D CLOUD LAYER'S PHYSICS (CLOUDS-2D-3; the owner 2026-09-28: "they look all
 // the same, hard edges, and they brighten the scene"). The verb, the document, the
-// capture cadence and the ground shadow's strength are pool.world_sky's clouds_2d
-// arm and gi.card_clouds; this file holds the two claims those cannot make:
+// capture cadence and the ground shadow's strength are pool.world_sky (archived: archive/tests/pool)'s clouds_2d
+// arm and gi.card_clouds (archived: archive/tests/gi); this file holds the two claims those cannot make:
 //
 //   energy — A SHEET NEVER ADDS LIGHT. The ground under a full deck, at every sun
 //            height and every density, receives at most what it receives under a
@@ -12,7 +12,7 @@
 //            a cloud's shadow is brighter than the same shadow under a full deck
 //            (the gaps' sky and the lit cloud sides light it). Measured on a
 //            matte ground in the plain grade, the sun dimmed so nothing clips,
-//            GI off (the sheet's shadow on the bounce is gi.card_clouds' claim),
+//            GI off (the sheet's shadow on the bounce is gi.card_clouds (archived: archive/tests/gi)' claim),
 //            through the document and the mirror — the product's own path.
 //   shape  — THE FIELD'S CHARACTER: many cloud sizes, an edge that is a ramp in
 //            kilometres, a period the eye cannot find (caseShape says the metrics).
@@ -706,7 +706,7 @@ int caseBakeCost() {
                 res[0][2][2] - res[0][1][2], res[1][2][2] - res[1][1][2], cs.fieldBakes);
     return 0;
 }
-// cloud_2d.budget — THE CLOUD LAYER'S TEXTURE BUDGET (CLOUD-BAKE-MEMORY-1): after a bake, every
+// cloud_2d.budget (archived: archive/tests/cloud_2d) — THE CLOUD LAYER'S TEXTURE BUDGET (CLOUD-BAKE-MEMORY-1): after a bake, every
 // texture the cloud layer holds — the field (kCloudFieldBytes, Types.h: the 2048^2 R16F tile
 // with its mip chain, the same at every tier) and its two 1 x 1 stand-ins — within the stated
 // budget, and the bake's three 512^2 intermediates gone with the workspace that made them.

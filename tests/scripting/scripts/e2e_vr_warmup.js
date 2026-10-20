@@ -1,4 +1,4 @@
-// vr.warmup — THE STEREO WARM-UP: NO FRAME THE RUNTIME IS SHOWN COMPILES A
+// vr.warmup (archived: archive/tests/vr) — THE STEREO WARM-UP: NO FRAME THE RUNTIME IS SHOWN COMPILES A
 // SHADER (lane VR-WARMUP-1; SPECS/VR_SPEC.md §6, VrConfig::warmUpFrames).
 //
 // THE DEFECT THIS PINS. Before the warm-up, the FIRST frame a VR session was
@@ -15,7 +15,7 @@
 // from the rig's origin through a wide frustum — with no XR frame open, nothing
 // submitted and nothing mirrored.
 //
-// ITS CALIBRATION IS ITS OWN SUITE: `vr.warmup_control` runs the same session
+// ITS CALIBRATION IS ITS OWN SUITE: `vr.warmup_control` (archived: archive/tests/vr) runs the same session
 // with `warmUp: 0` and asserts that the compiles DO land on the shown frames.
 // Two processes, because a second session in one process finds everything
 // already built — which is itself asserted here, at the end.
@@ -101,7 +101,7 @@ assert(after.compiledThisRun === warmed.compiledThisRun,
 // measured 13-19 ms of work per shown frame (plus this rig's 10-18 ms present
 // copy) and a pre-warm-up first frame of 890-1,180 ms: four times clear of
 // both, so a loaded box cannot red it and the defect cannot pass it.
-// AND IT IS STAGE-CLOSE (lane D6B-GATE-SHAPE): vr.warmup.timing runs a copy of this script with
+// AND IT IS STAGE-CLOSE (lane D6B-GATE-SHAPE): vr.warmup.timing (archived: archive/tests/vr) runs a copy of this script with
 // JAH_TIMING_BARS defined (tests/CMakeLists.txt, jah_timing_script); here it prints.
 var worstOk = worstMs < 250;
 var worstMsg = "and none of them hitched: worst " + worstMs + " ms (the same frame cost " +

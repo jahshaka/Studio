@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# meshbake.quit_during_bake — F5 (STAGE-CLOSE-TRIAGE-1 round 4): a run that ends while an import's
+# meshbake.quit_during_bake (archived: archive/tests/meshbake) — F5 (STAGE-CLOSE-TRIAGE-1 round 4): a run that ends while an import's
 # bake is IN FLIGHT stops it at a cancel point inside the job and exits 0 — never waiting the job out,
 # never the forced exit 86. Asserted: the import returned with its bake pending, the session log says
 # the bake was cancelled, the run's code is 0 and its log carries the close bracket.

@@ -1,4 +1,4 @@
-// pieces.live_paths — the engine half of the LIVE GRAPH PATHS (TORNADO-1).
+// pieces.live_paths (archived: archive/tests/pieces) — the engine half of the LIVE GRAPH PATHS (TORNADO-1).
 //
 // Two backend mechanisms the shader-graph emitter now targets, each proven
 // against the ordinary material route it must equal — the same scene, the same

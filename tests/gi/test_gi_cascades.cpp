@@ -1,4 +1,4 @@
-// gi.cascades — PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0).
+// gi.cascades (archived: archive/tests/gi) — PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0).
 //
 // The voxels are a chain of camera-centred boxes, chained through Ogre's own
 // `VctLighting::addCascade` and scheduled by us (the single scene-fitted volume

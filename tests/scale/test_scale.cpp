@@ -205,7 +205,7 @@ static bool bootWorld(Env &env, World &w, const char *log, WorldSpec spec = Worl
 }
 
 // ===========================================================================
-// scale.world — THE WORLD FIXTURE ITSELF (brief §4.1): its build times and the four
+// scale.world (archived: archive/tests/scale) — THE WORLD FIXTURE ITSELF (brief §4.1): its build times and the four
 // camera paths' frame costs (still, 200 m walk, 60 m teleport, 30 s fly).
 // ===========================================================================
 static int worldMain()
@@ -214,7 +214,7 @@ static int worldMain()
     World w;
     if (!bootWorld(env, w, "test-scale-world-ogre.log")) return 1;
     REQUIRE(gpuTimed(env), "the frame monitor has GPU timing (fork 1a81f866a+1bccc3f93 (was 0027)'s query pool)");
-    // THE STILL AND THE FLY here; THE WALK AND THE TELEPORT are scale.voxel_scroll's
+    // THE STILL AND THE FLY here; THE WALK AND THE TELEPORT are scale.voxel_scroll (archived: archive/tests/scale)'s
     // (W1 reads their cascade rows) — the four paths in one process are ~8 minutes
     // of Debug frames, over the five a suite may take.
     const auto still = collect(env, [&] { pathStill(env, 120); });
@@ -234,7 +234,7 @@ static int worldMain()
 }
 
 // ===========================================================================
-// scale.voxel_scroll — W1: WHAT A CASCADE STEP COSTS.
+// scale.voxel_scroll (archived: archive/tests/scale) — W1: WHAT A CASCADE STEP COSTS.
 // Since ENGINE-UPGRADE-U5 stage 1 a walking step SCROLLS (the overlap copied, only the entering
 // slab voxelised, spread over frames by the per-frame budget: `vct.scrollN` rows, then the commit's
 // `vct.cascadeN`); a teleport of a whole box or more rebuilds whole.
@@ -319,7 +319,7 @@ static int voxelScrollMain()
 }
 
 // ===========================================================================
-// scale.lights, part 2 — W2: THE ONE LIGHT LIST (P1C-LIGHT-LIST; irisgl engine/src/SceneLightList.h).
+// scale.lights (archived: archive/tests/scale), part 2 — W2: THE ONE LIGHT LIST (P1C-LIGHT-LIST; irisgl engine/src/SceneLightList.h).
 // The voxel injection used to take the FIRST 16 lights in memory order (after IMAGE-1's range
 // cull) and the cards the first 64 with no range cull. Now every consumer selects from the scene's
 // one list: range-culled against its own box, the budget's worth by contribution (the one falloff
@@ -709,7 +709,7 @@ static void lightListArms(Env &env)
 }
 
 // ===========================================================================
-// scale.lights, part 1 — W2: THE VOXEL INJECTION'S BUDGET (V2-P0A's sweep; P1C-LIGHT-LIST's rule).
+// scale.lights (archived: archive/tests/scale), part 1 — W2: THE VOXEL INJECTION'S BUDGET (V2-P0A's sweep; P1C-LIGHT-LIST's rule).
 // Anchor: irisgl/engine/src/photon/voxel/PhotonVoxelLighting.cpp (lightBudgetFor: 16 at
 // 128^3, 128 at 64^3) and SceneLightList::select (the range cull, then the budget by
 // contribution, the rest counted over it). Part 2 (lightListArms, above) holds the rule's arms.
@@ -932,7 +932,7 @@ static int lightsCostMain()
 // ===========================================================================
 // THE LARGE ASSET for W3 / W4: THE 10 M SHELL from the shared scale cache (requireShell —
 // a missing shell is the row's FAIL, never a smaller asset measured in its place; the
-// fixture row scale.assets bakes it once per bake producer for the whole box).
+// fixture row scale.assets (archived: archive/tests/scale) bakes it once per bake producer for the whole box).
 // ===========================================================================
 static constexpr size_t kLargeAsset = 10000000;
 
@@ -1101,7 +1101,7 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
 }
 
 // ===========================================================================
-// scale.cluster_cut — W3: THE CUT PER CLUSTER GROUP (ATOM-CLUSTER-CUT closed the wall:
+// scale.cluster_cut (archived: archive/tests/scale) — W3: THE CUT PER CLUSTER GROUP (ATOM-CLUSTER-CUT closed the wall:
 // until then the id pass drew one LEVEL per instance, and inside the bounds d = 0 forced
 // level 0). Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullCut_cs.glsl (the cull's cut
 // job). Number: triangles the id pass draws for the large asset at three camera distances
@@ -1204,7 +1204,7 @@ static int clusterCutMain()
 }
 
 // ===========================================================================
-// scale.cut_cost — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
+// scale.cut_cost (archived: archive/tests/scale) — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
 // D1): THE FLAT CUT'S COST AT 10k INSTANCES. The world fixture, the id pass's own request
 // (visible | Atom, one sample x the LOD bias, mode 3) at five poses across it. THE GPU
 // NUMBER IS THE ID PASS'S OWN ROW (the monitor's timestamp pair around the pass: the four
@@ -1272,7 +1272,7 @@ static int cutCostMain()
 }
 
 // ===========================================================================
-// scale.levels — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
+// scale.levels (archived: archive/tests/scale) — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
 // finest 8 LEVELS reached the GPU path (GpuScene::kLevelsPerMesh); the id pass now draws
 // the cut, whose terminal groups' clusters are drawn when nothing finer is affordable.
 // Number: the triangles the id pass draws for the asset at 1 km against the chain's
@@ -1339,7 +1339,7 @@ static int levelsMain()
 }
 
 // ===========================================================================
-// scale.residency — W5: EVERYTHING RESIDENT, UNCOMPRESSED.
+// scale.residency (archived: archive/tests/scale) — W5: EVERYTHING RESIDENT, UNCOMPRESSED.
 // Anchor: irisgl/engine/src/OgreMesh.cpp:858-866 (48 B vertices: float3 pos, float3
 // normal, float4 tangent, float2 uv) and :1000-1011 (the shadow chain beside the levels).
 // Number: the VRAM each shell takes when attached, measured through the ENGINE'S OWN STATS
@@ -1476,7 +1476,7 @@ static int residencyMain()
 }
 
 // ===========================================================================
-// scale.decode — W6: THE DECODE IS ONE FULL-SCREEN DRAW PER BUCKET.
+// scale.decode (archived: archive/tests/scale) — W6: THE DECODE IS ONE FULL-SCREEN DRAW PER BUCKET.
 // Anchor: irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any (the per-bucket screen
 // decode; the geometry fetch before the late discard). Number: the decode pass's GPU ms
 // against the bucket count on the world — material sets built for ~1, 8, 35 and 200
@@ -1526,7 +1526,7 @@ static int decodeMain()
 }
 
 // ===========================================================================
-// atom.decode_exact — THE CLASSIFICATION CHANGES WHO SHADES A PIXEL, NEVER WHAT IT
+// atom.decode_exact (archived: archive/tests/atom) — THE CLASSIFICATION CHANGES WHO SHADES A PIXEL, NEVER WHAT IT
 // SHADES (ATOM-DECODE-CLASS-1). D1's world (10,000 instances) wearing ~200 buckets,
 // one still pose, both chain shapes — no prepass (the opaque decode pass classifies)
 // and the SSR prepass (the prepass's decode pass classifies, the opaque one loads).
@@ -1717,7 +1717,7 @@ static int decodeExactMain()
 }
 
 // ===========================================================================
-// scale.occlusion — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
+// scale.occlusion (archived: archive/tests/scale) — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
 // The id pass culls the Atom queue against the depth pyramid in the two-pass form
 // (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
 // the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
@@ -1732,7 +1732,7 @@ static int decodeExactMain()
 // THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
 // walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
 // frame-by-frame proof — the first frame after a camera cut included — is
-// atom.occlusion_exact's (two worlds in lockstep): this world's first frames after a jump
+// atom.occlusion_exact (archived: archive/tests/atom)'s (two worlds in lockstep): this world's first frames after a jump
 // are not a picture of the pose even frustum-only (settledIds says why).
 // ===========================================================================
 static bool readIdsAt(Env &env, std::vector<uint32_t> &ids)
@@ -1881,7 +1881,7 @@ static int occlusionMain()
 }
 
 // ===========================================================================
-// scale.tlas — W8: THE CPU-WRITTEN TLAS.
+// scale.tlas (archived: archive/tests/scale) — W8: THE CPU-WRITTEN TLAS.
 // Anchor: irisgl/engine/src/OgreRayQuery.cpp:2035-2100 (the instance write) and
 // :3131-3155 (rebuilt on any movement). Number: the CPU ms of the instance write
 // (RayQueryStatus::gatherMs) and the engine.rayquery stage, per MOVING frame (one item
@@ -1931,7 +1931,7 @@ static int tlasMain()
 }
 
 // ===========================================================================
-// scale.atlas — W9: THE FIXED CARD ATLAS, GLOBAL INVALIDATION, 64 LIGHTS.
+// scale.atlas (archived: archive/tests/scale) — W9: THE FIXED CARD ATLAS, GLOBAL INVALIDATION, 64 LIGHTS.
 // Anchor: irisgl/engine/src/SurfaceCache.h:110-119 (kCardPageSize 128, kCardAtlasSize 2048
 // = 256 pages); OgreSurfaceCache.cpp:923 (the 7/8 stop), 1129 (kMaxCardLights 64).
 // Number: the cards held against the cards WANTED (every card of every candidate inside
@@ -1993,7 +1993,7 @@ static int atlasMain()
 }
 
 // ===========================================================================
-// scale.far_field — W10: THE FAR FIELD, 60 m / 208 m.
+// scale.far_field (archived: archive/tests/scale) — W10: THE FAR FIELD, 60 m / 208 m.
 // Anchors: irisgl/engine/src/OgreRayQuery.cpp:230 (kMaxReflectCascades 4) and :4645-4652
 // (the reflection ray's length: the outer cascade's diagonal, at least 50 m, at most the
 // far plane); ScreenProbeGather.h:69 (kGatherMaxCascades 4: what a gather hit reads).
@@ -2160,7 +2160,7 @@ static int farFieldMain()
 }
 
 // ===========================================================================
-// scale.bake — W11: THE SINGLE-THREADED BAKE.
+// scale.bake (archived: archive/tests/scale) — W11: THE SINGLE-THREADED BAKE.
 // Anchor: irisgl/import/meshbake.cpp (no threads anywhere in the bake);
 // spikes/atom-cluster-1/bake-table-1b.txt (dragon 68k: 31.8 s, 10.3 s the DAG).
 // Number: seconds per million triangles through MeshBake::buildFromFile (the import
@@ -2209,7 +2209,7 @@ static int bakeMain()
 }
 
 // ===========================================================================
-// scale.hit_list — W12: THE HIT LIST (1.17 M records vs 2.07 M Epic gather rays).
+// scale.hit_list (archived: archive/tests/scale) — W12: THE HIT LIST (1.17 M records vs 2.07 M Epic gather rays).
 // Anchor: irisgl/engine/src/EnginePrivate.h:960 (kHitListHeightFactor 0.5625: the list
 // is sized from the view); rq_probe_gather.comp:300-311 (a dropped record = zero radiance).
 // Number: records appended, dropped and the capacity (RayQueryStatus) on the Epic world at
@@ -2289,7 +2289,7 @@ static int cpuWalksMain()
     if (!bootWorld(env, w, "test-scale-cpu-walks-ogre.log", denseWorld())) return 1;
     pathStill(env, 30);
     iris::MeshNodePtr mover = w.items[w.items.size() / 3];
-    mover->setMobility(iris::Mobility::Movable);   // see scale.tlas: a mover the renderer moves every frame
+    mover->setMobility(iris::Mobility::Movable);   // see scale.tlas (archived: archive/tests/scale): a mover the renderer moves every frame
     frame(env, 30);
     const iris::Vec3 home = mover->getLocalPos();
     static const char *kWalks[5] = { "engine.gpuscene", "engine.cards", "engine.atomwords", "engine.rayquery",
@@ -2519,7 +2519,7 @@ static int frameArmsMain(bool lattice)
 }
 
 // ===========================================================================
-// scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
+// scale.gpu_coverage (archived: archive/tests/scale) — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5).
 // The frame monitor's records carry the frame's OWN GPU span (MonitorRecord::frameGpuMs), and the
 // monitor times every stretch in which none of its rows is open: a stretch that crossed a CPU
 // submission is the GPU WAITING (gpuIdleMs — a frame-schedule reading, printed, never a coverage
@@ -2600,7 +2600,7 @@ static int gpuCoverageMain()
 }
 
 // ---------------------------------------------------------------------------
-// scale.shadow_cut — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
+// scale.shadow_cut (archived: archive/tests/scale) — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
 // and GPU time with the Atom casters drawn by the light's cluster cut (one indirect draw a
 // map) against the per-instance stock PBS caster path (the split's door shut: every item
 // back on PBS, its caster drawn per instance). PAIRED ARMS in one process, alternated
@@ -2613,7 +2613,7 @@ static int gpuCoverageMain()
 //   * GPU: ABSOLUTE, per map re-rendered — never a ratio against the old route. The old route
 //     drew each caster at the VIEW's level (the pin's shadow passes never compute LOD), i.e.
 //     the wrong geometry for the light, so its GPU time is no reference for a correct map
-//     (shadow.atom_parity is the physics: within a texel of the dense caster, where the old
+//     (shadow.atom_parity (archived: archive/tests/shadow) is the physics: within a texel of the dense caster, where the old
 //     route was 10.7 texels off). Measured over three runs on D1's world: 0.065 / 0.089 / 0.102
 //     ms a map (3 PSSM maps), 0.044 on the small one; the bar is 1.5x the WORST seen, rounded:
 //     0.15 ms a map, on both worlds (1.27x the worst was a flake candidate under contention).
@@ -2909,8 +2909,8 @@ static int occlusionPyramidMain(int w, int h)
 }
 
 // ===========================================================================
-// atom.coverage_trace — ATOM-BLACK-FRAMES-1: THE 10k WORLD NEVER RENDERS A FRAME WITHOUT ITS
-// ATOM SURFACE. D1's world at ~200 buckets (atom.decode_exact's deterministic config), the
+// atom.coverage_trace (archived: archive/tests/atom) — ATOM-BLACK-FRAMES-1: THE 10k WORLD NEVER RENDERS A FRAME WITHOUT ITS
+// ATOM SURFACE. D1's world at ~200 buckets (atom.decode_exact (archived: archive/tests/atom)'s deterministic config), the
 // decode's DISCRIMINATOR on (the arm `atom.discriminate`, HlmsAtom::preparePassHash): every
 // pixel a bucket draw reaches is painted — code 0 where every validity term holds, else the
 // code of the FIRST term that failed (800.Atom_piece_ps.any, AtomDeclDecode) — and every

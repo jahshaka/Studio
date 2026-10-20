@@ -20,12 +20,12 @@
 # app.shaderCache() from its output. TWO ROWS (TESTING-SPEED-B3; one row of five launches before):
 #   shadercache.app        three launches — cold, warm (the steady state's compiled == 0 is its bar:
 #                          the first warm launch IS the steady state since WARMUPSET-2), cleared.
-#   shadercache.app.churn  `--churn`, stage-close, its own home: a seeding cold launch, then the save
+#   shadercache.app.churn (archived: archive/tests/shadercache)  `--churn`, stage-close, its own home: a seeding cold launch, then the save
 #                          under churn (the SMOKE-ENGINE-1 crash: the pass-cache delta < 8 across 300 sky
 #                          captures, the capacity >= 8192), unchanged.
 # WHAT MOVED WITH THE SPLIT, ON RECORD (the read's F2, accepted by the lead 2026-10-12): the old run 3 loaded a cache
 # that a WARM launch had saved (run 2's clean-quit save). The merge row no longer has that warm-save -> next-load
-# round trip; shadercache.app.churn covers it at the sprint close — its churn launch loads the cache its seeding cold
+# round trip; shadercache.app.churn (archived: archive/tests/shadercache) covers it at the sprint close — its churn launch loads the cache its seeding cold
 # launch saved at its clean quit.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 add_executable(test_shader_cache_app test_shader_cache_app.cpp)
@@ -70,7 +70,7 @@ jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom 
 set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache"
     FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)
 
-# shader.async_soak (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
+# shader.async_soak (archived: archive/tests/shader) (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
 # STAGE-CLOSE (TESTING-SPEED-B3): the soak is the ship's; shader.async_after_open is the merge tier's guard of
 # the background compile.

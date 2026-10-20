@@ -1,4 +1,4 @@
-// archive.responsive — exporting and importing a world must not freeze the
+// archive.responsive (archived: archive/tests/archive) — exporting and importing a world must not freeze the
 // window (STABILITY_PROGRAM_SPEC.md Lane 4, REBASED shape).
 //
 // The archive path used to be two static functions that ran the whole thing —
@@ -57,7 +57,7 @@ using namespace mcpharness;
 
 /// THE UI-GAP BUDGETS ARE STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h): a
 /// wall-clock gap reads the box's load as much as the archiver. The push row
-/// (archive.responsive) asserts the round trip, the manifest, the cancel, the quit and
+/// (archive.responsive (archived: archive/tests/archive)) asserts the round trip, the manifest, the cancel, the quit and
 /// that the probe measured every operation, and PRINTS each gap against its budget;
 /// archive.responsive.timing (stage-close, quiet box, the GPU lock) arms the budgets.
 static const bool gTimingBars = jahtest::timingBarsArmed();

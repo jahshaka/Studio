@@ -1,4 +1,4 @@
-// shader.live_compiles — a compile on the UI thread after the splash is a named defect
+// shader.live_compiles (archived: archive/tests/shader) — a compile on the UI thread after the splash is a named defect
 // (SHADER-WARM-2; services/livecompiles.h). Three launches into a scratch home: COLD (the
 // shader cache wiped — the owner's first launch after a driver update), WARM, and WARM WITH A
 // MOVED GLOBAL-PASS KEY (a Studio-only change: the pass must run, nothing compile live). Each

@@ -690,7 +690,7 @@ int main(int argc, char **argv)
     // VrConfig::helpers = true and the Player's false). So the proof is a
     // PICTURE taken through that switch, and it needs no headset: the eye's own
     // half — that a kHelperBit node reaches an editor-shape eye and not a
-    // player-shape one — is `vr.session` case 8, on the eyes' real pixels.
+    // player-shape one — is `vr.session` (archived: archive/tests/vr) case 8, on the eyes' real pixels.
     {
         // The suite's own camera and view, re-stated: the blocks above move the
         // camera, swap views and clear overlays, and this one is a PICTURE.

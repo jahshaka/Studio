@@ -1,5 +1,5 @@
 // hdr.bloom_showroom — NO FULL-WIDTH BAND IN SHOWROOM 2 (lane BLOOM-1; the app half of
-// hdr.bloom_isotropic). The defect (spikes/light-band-1): the old bloom blurred a fixed
+// hdr.bloom_isotropic (archived: archive/tests/hdr)). The defect (spikes/light-band-1): the old bloom blurred a fixed
 // 256x256 target 65 taps across and 11 down, so every highlight became a band across
 // the whole frame at its own height — Showroom 2, from its own camera, showed two (the
 // torus' highlight, the spheres' tops), present with bloom and gone at bloomAmount 0.
@@ -11,7 +11,7 @@
 // grade's float readback, times the grade's exposure multiplier, against the bloom
 // threshold: below it the prefilter passes nothing).
 // A halo is a disc; a band is a row. The disc's reach is the ladder's (measured by
-// hdr.bloom_isotropic at 960 wide: a saturated hot spot's halo stays >= 1 code out to
+// hdr.bloom_isotropic (archived: archive/tests/hdr) at 960 wide: a saturated hot spot's halo stays >= 1 code out to
 // ~1/4 of the width); kHaloReach is set wider than that.
 // THE SECOND BAR (worstAll): that exemption is wide (Showroom 2 has ~76 hot grid points and
 // it skips ~928 of the 1080 row ends), so a band or a widened halo on an exempt row would

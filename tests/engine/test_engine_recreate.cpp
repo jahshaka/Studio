@@ -20,20 +20,20 @@ static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 /// `--shadow-vao` runs ONE cycle and only the shadow-VAO arm, so the alias
-/// assertions have a ctest name of their own (`meshbake.shadow_vao_alias`) that
+/// assertions have a ctest name of their own (`meshbake.shadow_vao_alias` (archived: archive/tests/meshbake)) that
 /// gate-scope can select. The default run does all three cycles AND the arm — the
 /// arm's whole subject is a destroy that used to throw, so it belongs in the suite
 /// that destroys three engines as well as in a suite of its own.
 static bool gShadowVaoOnly = false;
 
 /// THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11; PHOTON-SCENE-SWITCH-1) —
-/// the body of `meshbake.shadow_vao_alias`, and a case of this suite as well.
+/// the body of `meshbake.shadow_vao_alias` (archived: archive/tests/meshbake), and a case of this suite as well.
 ///
 /// EVERY LEVEL IS SHRUNK, over ONE position-only vertex buffer: Ogre builds a
 /// pass's pipeline from the FIRST VAO's vertex layout (OgreHlms.cpp:2939-2942), so
 /// the MIXED list this arm used to assert (the shrunk VAO at level 0, the normal
 /// VAOs aliased above it) drew every coarse level into the shadow map as garbage —
-/// `gi.sun_contact_both` is the picture. The checks: one independent shadow VAO per
+/// `gi.sun_contact_both` (archived: archive/tests/gi) is the picture. The checks: one independent shadow VAO per
 /// level, and the destroy of a list whose VAOs SHARE a vertex buffer comes back
 /// clean (the double free the pin used to throw lived in exactly this destroy).
 static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {

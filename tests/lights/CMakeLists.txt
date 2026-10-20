@@ -6,7 +6,7 @@
 # driver or lavapipe).
 #
 # TWO BINARIES, deliberately. lights.falloff measures the light's own geometry
-# (attenuation range, spot cone) with an ambient of zero; lights.hygiene
+# (attenuation range, spot cone) with an ambient of zero; lights.hygiene (archived: archive/tests/lights)
 # measures the shadow atlas and the shader-compile counters, which need a warm
 # cache and a scene that has already rendered. Neither wants the other's setup,
 # and the compile counters are process-wide.

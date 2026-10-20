@@ -1,7 +1,7 @@
 // THE STORE DUMP (PHOTON-VOXEL-4): `JAH_VOXEL_DUMP=<dir>` makes a suite that calls it write each
 // cascade's read-back split store (GiVoxelVolume) to <dir>/<tag>_<cascade>.bin - dims, origin,
 // cell, multiplier, then per texel RGBA float coverage+, coverage-, position+, position-, light. The
-// voxel lab reads them (tests/support/voxel_lab.h loadDump; gi.voxel_lab's `validate DIR` arm):
+// voxel lab reads them (tests/support/voxel_lab.h loadDump; gi.voxel_lab (archived: archive/tests/gi)'s `validate DIR` arm):
 // the reader's rules are measured over the stores the suites' scenes really build. Unset, it
 // does nothing.
 #pragma once

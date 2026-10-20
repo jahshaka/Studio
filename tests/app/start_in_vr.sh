@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# app.start_in_vr (VR-START-1) — THE VR PREFERENCES AND THE POLICY CHECK, three boots of one
+# app.start_in_vr (archived: archive/tests/app) (VR-START-1) — THE VR PREFERENCES AND THE POLICY CHECK, three boots of one
 # fresh home, none of which lets the OpenXR loader open a runtime:
 #   1. the defaults (Start in VR on, WiVRn) with no active manifest -> the notice; the button -> the dialog;
 #   2. Start in VR off, the active manifest names Monado -> the button's dialog says so, nothing opened;

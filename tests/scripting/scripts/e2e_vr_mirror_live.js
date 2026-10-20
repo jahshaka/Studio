@@ -13,7 +13,7 @@
 // camera back and draws again. The engine owns that decision
 // (VrSession::setDesktopShowsEye) and reports it as `vr.state().mirror.showing`.
 //
-// WHAT THIS SUITE ADDS TO `vr.session`, which asserts the same rule on PIXELS
+// WHAT THIS SUITE ADDS TO `vr.session` (archived: archive/tests/vr), which asserts the same rule on PIXELS
 // (readPixels of the real desktop target, both arms): the APP. The editor's own
 // viewport, the real render driver, the real hosts — and the page rule beside
 // it, because both are about a session that must not outlive what hosts it.
@@ -106,7 +106,7 @@ assert(missedOnOwn === 0,
 // "It drew" and "it drew something new" are different claims. Park on a frame
 // where the desktop is its own, move the editor's camera, and its picture must
 // follow — a frozen eye painted over it could not. (The pixels themselves are
-// `vr.session`'s; here the camera really moves and the view really draws.)
+// `vr.session` (archived: archive/tests/vr)'s; here the camera really moves and the view really draws.)
 var parked = 0;
 while (parked < 400 && vr.state().mirror.showing !== "own") { editor.frame(1); ++parked; }
 assert(vr.state().mirror.showing === "own", "parked on the desktop's own camera");

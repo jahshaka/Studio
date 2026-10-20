@@ -1,6 +1,6 @@
 # The session log (SPECS/SESSION_LOG_SPEC.md).
 #
-# log.core — the sink itself: levels, categories, the precedence chain, the
+# log.core (archived: archive/tests/log) — the sink itself: levels, categories, the precedence chain, the
 # file lifecycle, rotation, the Qt funnel and the §8-R5 micro-benchmark. Links
 # ONLY JahLog + SessionHeader + the version constants (the services.core shape):
 # no MainWindow, no engine, no document, no display. It re-execs ITSELF for the
@@ -13,7 +13,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Core Gui)
 # No display at all: the whole point of the services.core shape.
 
-# log.events — the verbs and the event markers against the REAL binary
+# log.events (archived: archive/tests/log) — the verbs and the event markers against the REAL binary
 # (SESSION_LOG_SPEC §10 phase 2 gate). Two halves, both needed: the JS asserts
 # everything readable through log.since/log.tail/log.counts, and the shell
 # wrapper asserts the ARTIFACT — brackets, block order, the ogre sibling, the

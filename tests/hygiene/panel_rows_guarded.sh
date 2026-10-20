@@ -12,7 +12,7 @@
 # panel does, on purpose). The sky panel kept a raw `TexturePickerWidget *` to
 # the row of a sky type it had rebuilt away from, and `setEquiMap` — the modeless
 # texture picker's double-click after the row was retired — tested it for null and wrote through
-# it: ui.panel_lifetime reproduces that as a heap-use-after-free under ASan
+# it: ui.panel_lifetime (archived: archive/tests/ui) reproduces that as a heap-use-after-free under ASan
 # (READ of size 8 in TexturePickerWidget::setTexture, freed by
 # ~TexturePickerWidget from a DeferredDelete).
 #

@@ -37,7 +37,7 @@ namespace mcpharness {
 /// error set — which this harness used to throw away, returning `{}`. Every
 /// caller then read `.value("ok")` off an empty object and saw `false`: a
 /// script failure with NO message, indistinguishable from the app refusing the
-/// verb. It cost `ui.window_minimum` a red on 2026-09-15 (ledger 404), where
+/// verb. It cost `ui.window_minimum` (archived: archive/tests/ui) a red on 2026-09-15 (ledger 404), where
 /// `app.space('player')` — bringing up a second View under four Vulkan
 /// instances — simply took longer than 30 s.
 ///
@@ -47,14 +47,14 @@ namespace mcpharness {
 /// import, and a space switch that boots a second View — tens of seconds at
 /// worst, and this box has never been slow enough to quadruple that. And it is
 /// below the SMALLEST ctest TIMEOUT among the suites sharing this header
-/// (app.shutdown_order at 120 s), so a request that really is never answered
+/// (app.shutdown_order (archived: archive/tests/app) at 120 s), so a request that really is never answered
 /// dies with a message the log carries instead of the whole suite being killed
 /// by ctest with nothing to read.
 ///
 /// A suite whose own budget is larger and whose verbs legitimately run longer
 /// raises `McpClient::transferTimeoutMs` (avatar.responsive, import.shutdown
-/// and perf.capture_bundle do). It is never lowered blindly — the one place
-/// that lowers it is the case in app.shutdown_order that PROVES the timeout
+/// and perf.capture_bundle (archived: archive/tests/perf) do). It is never lowered blindly — the one place
+/// that lowers it is the case in app.shutdown_order (archived: archive/tests/app) that PROVES the timeout
 /// reports itself.
 static const int kTransferTimeoutMs = 90000;
 
@@ -137,7 +137,7 @@ struct McpClient
     QString lastTransportError;
     int transportFailures = 0;
 
-    /// A CASE THAT PROVOKES A TRANSPORT FAILURE ON PURPOSE (app.shutdown_order proves the transfer
+    /// A CASE THAT PROVOKES A TRANSPORT FAILURE ON PURPOSE (app.shutdown_order (archived: archive/tests/app) proves the transfer
     /// timeout reports itself) sets this on ITS client (one used for nothing after it: a client that
     /// failed sends no further request, see post()): the failure is still counted and kept, but
     /// printed as `expected(transport): …` — never the `FAIL(transport): …` a run log records as the
@@ -375,8 +375,8 @@ static const char *const kLayoutProbe =
 /// SETTLE BY READING, NEVER BY SLEEPING (TESTING-CLEANUP-2 P10a; trap 7: settle by count, read
 /// until the value stops moving). A layout change lands over a few turns of the app's event loop
 /// — posted LayoutRequests, the X server's ConfigureNotify, a dock's deferred restore — and the
-/// five copies of `settle()` this replaces each slept 800 ms and hoped (ui.column_law 5 FAIL in
-/// 211 runs, ui.window_minimum a 120 s TIMEOUT at 7x starvation). This reads `probe` once per MCP
+/// five copies of `settle()` this replaces each slept 800 ms and hoped (ui.column_law (archived: archive/tests/ui) 5 FAIL in
+/// 211 runs, ui.window_minimum (archived: archive/tests/ui) a 120 s TIMEOUT at 7x starvation). This reads `probe` once per MCP
 /// request — every request is at least one whole turn of the app's event loop, and with `frames`
 /// above 0 the read first steps that many frames on the fixed clock (`editor.frame`) — until
 /// `stableReads` consecutive reads answer the same, bounded by `maxReads` COUNTED reads. Returns

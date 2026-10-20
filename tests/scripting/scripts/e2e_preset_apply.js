@@ -27,7 +27,7 @@
 //   5. THE PIN IS AN UNDO STEP (F5's other half). What can be asserted from
 //      inside a script run is that the step was RECORDED — a run is ONE open
 //      macro, so editor.undo() cannot reach it. What undoing it DOES is
-//      commands.pin_asset, against the same command with the real database.
+//      commands.pin_asset (archived: archive/tests/commands), against the same command with the real database.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -132,7 +132,7 @@ assert(gold.readOnly === false && materialRows().length === 0,
 // that project's to edit, and the SAVE is what makes the copy. What this arm
 // keeps is the half that must not change — an edit that has not been saved
 // has written NOTHING down, so a library with no preset rows still has none.
-// (The save, the copy and the pin move are scripting.e2e.preset_edit's.)
+// (The save, the copy and the pin move are scripting.e2e.preset_edit (archived: archive/tests/scripting)'s.)
 var presetNodes = graph.nodes().length;
 assert(!!graph.addNode("float"), "graph.addNode is taken on a preset's graph");
 assert(graph.setBlendMode("Translucent") === true, "…and so is a settings edit");
@@ -384,7 +384,7 @@ assert(Math.abs(afterEdit - 0.11) < 1e-3,
 // AND THE PRESET'S OWN ROW IS NEVER SAVED OVER. The save is allowed now (the
 // owner's rule: a preset a project holds is editable) — what it does is COPY:
 // the write lands on the project's own bundle and the master's definition does
-// not move. `scripting.e2e.preset_edit` owns the copy's full contract; what is
+// not move. `scripting.e2e.preset_edit` (archived: archive/tests/scripting) owns the copy's full contract; what is
 // asserted here is the master's immutability, which is this suite's subject.
 var brickBefore = JSON.stringify(materials.members(BRICK).map(function (m) {
     return m.guid + ":" + m.slot;
@@ -566,7 +566,7 @@ assert(true, "…and all twenty presets open as PBR graphs that know what they a
 //
 // A script run is ONE open macro, so editor.undo() from here reaches the step
 // BEFORE the run and can never reach this apply — what undoing the pin DOES
-// is commands.pin_asset. What belongs here is that the step was RECORDED, and
+// is commands.pin_asset (archived: archive/tests/commands). What belongs here is that the step was RECORDED, and
 // that a SECOND apply of an already-held bundle records no pin step at all.
 var cube3 = scene.addPrimitive("Cube");
 var pushesBefore = editor.undoState().pushes;

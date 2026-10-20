@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# meshbake.shipped_bakes — SHIPPED-BAKES-1's app arm: assimp is an IMPORT-time
+# meshbake.shipped_bakes (archived: archive/tests/meshbake) — SHIPPED-BAKES-1's app arm: assimp is an IMPORT-time
 # dependency, and the app makes NO runtime parse.
 #
 # RUN 1 — a FRESH data root boots (the seed bakes every shipped mesh: the

@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
+// vr.frame_budget (archived: archive/tests/vr) — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 // SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 //
 // The READER half. `vr_frame_budget.js` renders the default scene and Showroom 2

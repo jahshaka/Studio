@@ -54,7 +54,7 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    # the Stanford dragon tests/atom extracts at configure time (atom.lod_bound_bar)
+    # the Stanford dragon tests/atom extracts at configure time (atom.lod_bound_bar (archived: archive/tests/atom))
     JAH_CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures")
 target_link_libraries(test_mesh_bake PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
@@ -75,7 +75,7 @@ endif()
 # what it wrote, this run.
 set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-homes)
 
-# meshbake.quit_during_bake — F5: a run that ends with an import's bake in flight cancels it inside
+# meshbake.quit_during_bake (archived: archive/tests/meshbake) — F5: a run that ends with an import's bake in flight cancels it inside
 # its job and exits 0 (bake_quit.sh; the app, headless, its own data root).
 set(_quit_home ${CMAKE_CURRENT_BINARY_DIR}/quit-during-bake-home)
 file(MAKE_DIRECTORY ${_quit_home}/run)
@@ -126,7 +126,7 @@ set_tests_properties(meshbake.archive_bakes PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
     TIMEOUT 400 LABELS "meshbake")
 
-# meshbake.shipped_bakes (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
+# meshbake.shipped_bakes (archived: archive/tests/meshbake) (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
 # its seed BAKES every shipped mesh (the primitives, the Teapot, the preview
 # docks' subjects, the VR controllers — one per row of src/data/primitives.h) — opens the Avatar
 # space, imports a character and its walk clip and PLAYS the clip from its clip
@@ -141,7 +141,7 @@ file(MAKE_DIRECTORY ${_shipped_home}/run)
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST meshbake.archive_bakes)
     jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS meshbake)

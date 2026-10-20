@@ -40,14 +40,14 @@ set_tests_properties(theme.sheets PROPERTIES
 jah_tsan_blocked(theme.sheets)   # spawns the app
 jah_lsan_lane(theme.sheets)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
-# theme.no_raw_sheets — the static half of the no-raw-stylesheet law (theme review SF-3):
+# theme.no_raw_sheets (archived: archive/tests/theme) — the static half of the no-raw-stylesheet law (theme review SF-3):
 # the live walk cannot see menus and dialogs built on demand, so the source is linted too.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST theme.sheets)
     jah_fresh_home_fixture(theme.sheets.fresh_home themeSheetsFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-theme-sheets" WARM LABELS "ui")
