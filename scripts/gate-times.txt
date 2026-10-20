@@ -21,6 +21,8 @@ assets.engine 2.81  quiet n=45
 atom.component_asan 9.07  spec EU-2 stage 3 (2026-10-14)
 atom.pass_table 42.85  solo, the card lock held, :77, cold shader cache after the fork pin bump (BUGS-1 item 1, 2026-10-19)
 atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
+atom.hidden_cut 1.60  solo, the card lock held, :91 (ATOM-4 stage 1b, 2026-10-20, with ctest -R of the two rows; red at the base 4.11)
+atom.light_depth_term 1.65  solo, the card lock held, :91 (ATOM-4 stage 2(a), 2026-10-20)
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)
 avatar.responsive 48.07  quiet n=41
 avatar.responsive.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

@@ -170,6 +170,28 @@ set_tests_properties(atom.pass_table PROPERTIES
 jah_fresh_home_fixture(atom.pass_table.fresh_home atomPassTableHome "${_pt_home}" WARM LABELS "scripting")
 set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTableHome)
 
+# atom.hidden_cut — THE ID PASS CULLS WHAT A STOCK WALL HIDES (ATOM-4 stage 0): a front-culled (stock) wall in front of
+# 30 Atom spheres it hides wholly, three lockstep worlds (the occlusion, the same chain with no history, the door shut),
+# both chain shapes (no prepass / the SSR prepass): the FIRST list's and the LATE list's draws behind the wall are 0, the
+# depth test rejects the whole field, the ids the picture shows equal the history-less twin's word for word and the picture the
+# door-shut world's byte for byte. RED at the base: the late pyramid held no stock depth, so the field was drawn.
+add_executable(test_atom_hidden_cut test_atom_hidden_cut.cpp)
+jah_atom_engine_target(test_atom_hidden_cut)
+set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+jah_gpu_row(atom.hidden_cut CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.hidden_cut PROPERTIES TIMEOUT 60 LABELS "engine")
+
+# atom.light_depth_term — U5's PER-MAP LIGHT-DEPTH TERM (ATOM-4 stage 2; the archived scale.shadow_cut's paired arm
+# revived on a fixture of its own): the sun maps with shadow.lightDepth 1 texel-equal to the frustum-only maps (0) with
+# the light's depth rejecting something; the pyramids' texels and bytes from the maps' rectangles (full -> half
+# resolution); the term (1 less 0, ABAB) and one pyramid build's GPU ms printed, no timing bar.
+add_executable(test_atom_light_depth_term test_atom_light_depth_term.cpp)
+jah_atom_engine_target(test_atom_light_depth_term)
+jah_gpu_row(atom.light_depth_term CLASS engine FRAMES 290 COMMAND test_atom_light_depth_term
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.light_depth_term PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
