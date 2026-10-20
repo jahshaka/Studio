@@ -2032,7 +2032,9 @@ bool WorldApi::setAtomOcclusion(bool on)
 
 namespace {
 const char *const kAtomViewNames[] = { "off", "triangles", "levels", "buckets", "objects", "density" };
-constexpr int kAtomViewCount = int(sizeof(kAtomViewNames) / sizeof(kAtomViewNames[0]));
+using jahshaka::engine::kAtomViewCount;
+static_assert(int(sizeof(kAtomViewNames) / sizeof(kAtomViewNames[0])) == kAtomViewCount,
+              "one name per AtomView, in its order");
 }
 
 bool WorldApi::setAtomView(const QString &view)
