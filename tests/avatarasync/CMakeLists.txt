@@ -1,5 +1,5 @@
 # avatar.responsive — the Avatar module's import and character switch must not
-# freeze the app (AV1, owner 2026-09-13), measured the way archive.responsive
+# freeze the app (AV1, owner 2026-09-13), measured the way archive.responsive (archived: archive/tests/archive)
 # and open.responsive measure theirs: spawn the REAL binary, drive it over MCP,
 # and read the main-thread heartbeat's worst gap while the work is in flight.
 # Also asserts what the threading is not allowed to cost — the threaded import
@@ -28,21 +28,21 @@ set_tests_properties(avatar.responsive PROPERTIES JAHSHAKA_TEST_FRAMES 921)   # 
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
     TIMEOUT 360 LABELS "avatar")
-# avatar.responsive.timing — THE MILLISECOND BARS, stage-close (lane D6B-GATE-SHAPE; audit §5,
+# avatar.responsive.timing (archived: archive/tests/avatar) — THE MILLISECOND BARS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1 on a quiet box, under the
 # GPU-timing lock; the push row asserts the rest and prints the readings.
 set(_avatar_async_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing)
 file(MAKE_DIRECTORY ${_avatar_async_timing_home}/run)
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
-# take it — same reason import.shutdown and archive.responsive are blocked.
+# take it — same reason import.shutdown and archive.responsive (archived: archive/tests/archive) are blocked.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(avatar.responsive )
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST avatar.responsive)
     jah_fresh_home_fixture(avatar.responsive.fresh_home avatarResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async" WARM LABELS "avatar")

@@ -42,7 +42,7 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Leak detection off for the same reason the engine suite turns it off: the
     # only leaks are libdbus allocations behind the Vulkan loader.
-    # STAGE-CLOSE (TESTING-SPEED-B3): the ASAN twin keeps its row at the stage close; engine.particles_pfx2 is the
+    # STAGE-CLOSE (TESTING-SPEED-B3): the ASAN twin keeps its row at the stage close; engine.particles_pfx2 (archived: archive/tests/engine) is the
     # merge tier's.
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}"

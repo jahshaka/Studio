@@ -1,5 +1,5 @@
 // A MOVING OBJECT'S REFLECTIONS CONVERGE AS A STILL ONE'S DO (REFLECT-MOVERS-1) —
-// `gi.reflect_mover`.
+// `gi.reflect_mover` (archived: archive/tests/gi).
 //
 // THE OWNER'S FINDING: "heavy dithering in reflections, especially when moving
 // objects — if an animated sphere moving around has its reflection dither as it

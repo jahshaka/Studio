@@ -25,49 +25,12 @@ foreach(_m IN LISTS _cluster_models)
     endif()
 endforeach()
 
-# The fixtures + (for the engine suites) the harness: a TEST TOOL, compiled into
-# the executables below and into nothing of the product. The mirror is compiled
-# in (as tests/assets does) because the hand-off under test IS
-# SceneMirror::toMeshData.
-set(_cluster_fixture_sources
-    ${CMAKE_CURRENT_SOURCE_DIR}/cluster_fixtures.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
-function(jah_cluster_target _t)
-    set_target_properties(${_t} PROPERTIES
-        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-    target_include_directories(${_t} PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_definitions(${_t} PRIVATE
-        JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-        CLUSTER_FIXTURE_DIR="${_cluster_fixture_dir}"
-        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-    target_link_libraries(${_t} PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
-endfunction()
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-
-# cluster_config_measure — the measurement the shipped clodConfig was chosen by,
-# and the per-asset bake table. A TOOL (EXCLUDE_FROM_ALL), never a suite.
-add_executable(cluster_config_measure EXCLUDE_FROM_ALL cluster_config_measure.cpp
-    ${_cluster_fixture_sources})
-jah_cluster_target(cluster_config_measure)
-
-# far_blas_measure — ATOM-FARBLAS-1's numbers: the far BLAS's memory per shipped
-# mesh and the lattice's TLAS size / build / refit. A TOOL (EXCLUDE_FROM_ALL).
-add_executable(far_blas_measure EXCLUDE_FROM_ALL far_blas_measure.cpp
-    ${_cluster_fixture_sources})
-jah_cluster_target(far_blas_measure)
-add_dependencies(far_blas_measure JahshakaEngineMedia)
 
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
 # SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public
-# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack
+# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack (archived: archive/tests/atom)
 # does) and link Ogre: the grid builds its own workspaces on the scene's manager,
 # the control records raw Vulkan through the engine's pass provider.
 function(jah_atom_engine_target _t)
@@ -86,7 +49,7 @@ function(jah_atom_engine_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
-# engine.atom_parity — the grid: materials x lights x Photon terms, stock HlmsPbs
+# engine.atom_parity (archived: archive/tests/engine) — the grid: materials x lights x Photon terms, stock HlmsPbs
 # against HlmsAtom's decode over a hand-made id buffer, per cell mean <= 1.0 code
 # and <= 0.5 % of interior pixels beyond 8 codes, a grazing cell included. It reads
 # until every arm is stable (frames, never time) and prints the whole grid.
@@ -170,8 +133,8 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
-# atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
-# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar bakes)
+# atom.lod_switch (archived: archive/tests/atom) — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
+# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar (archived: archive/tests/atom) bakes)
 # imported through the owner's route: the chain's per-object level (shadows, stock PBR)
 # steps down over 30-500 m, comes back to 0 and holds across a band edge; the Levels view
 # paints the CUT's depth, coarser further out; and a slow zoom shows no pop (no band). The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no

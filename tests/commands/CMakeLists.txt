@@ -53,7 +53,7 @@ set_tests_properties(commands.structural_undo PROPERTIES
 jah_no_display(commands.structural_undo)
 
 # ---------------------------------------------------------------------------
-# commands.undo_clear_cost — CLOSE-1: clearing an undo stack costs MEMORY, not
+# commands.undo_clear_cost (archived: archive/tests/commands) — CLOSE-1: clearing an undo stack costs MEMORY, not
 # disk syncs.
 #
 # The owner's project close froze the UI thread for 33,156 ms because
@@ -74,7 +74,7 @@ find_path(JAH_SQLITE3_INCLUDE sqlite3.h)
 find_library(JAH_SQLITE3_LIB sqlite3)
 
 # ---------------------------------------------------------------------------
-# commands.db_batch — CLOSE-2: ONE GESTURE, ONE COMMIT.
+# commands.db_batch (archived: archive/tests/commands) — CLOSE-2: ONE GESTURE, ONE COMMIT.
 #
 # The create-side half of CLOSE-1. An asset row written outside a transaction
 # is autocommitted, and an autocommit is a real transaction (journal, write,
@@ -88,16 +88,16 @@ find_library(JAH_SQLITE3_LIB sqlite3)
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
 
 # ---------------------------------------------------------------------------
-# commands.preset_copy — PRESET-EDIT-1: the first edit of a preset a project
+# commands.preset_copy (archived: archive/tests/commands) — PRESET-EDIT-1: the first edit of a preset a project
 # holds is ONE undo step (the copy, the pin move and the use edges together).
 #
-# The same idiom as commands.pin_asset below it: the REAL Database and the REAL
+# The same idiom as commands.pin_asset (archived: archive/tests/commands) below it: the REAL Database and the REAL
 # content-addressed store on a throwaway SQLite file, because a pin, an edge
 # and a row are catalog facts a stub could not tell the truth about.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 
 # ---------------------------------------------------------------------------
-# commands.pin_asset — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
+# commands.pin_asset (archived: archive/tests/commands) — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
 # an apply that PINS is an apply that UNPINS on undo.
 #
 # The pin was a bare service call after the undo macro closed, so an undone

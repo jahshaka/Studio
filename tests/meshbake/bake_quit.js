@@ -1,4 +1,4 @@
-// meshbake.quit_during_bake's script (bake_quit.sh): a dense model is placed (its import bakes it),
+// meshbake.quit_during_bake (archived: archive/tests/meshbake)'s script (bake_quit.sh): a dense model is placed (its import bakes it),
 // exported as a share file, taken out of the library, and imported back — the import lands the rows
 // and returns with the model's bake on a worker (a node paste carries the same closure, but the
 // clipboard's 4 MB inline budget references a model this size instead of carrying it) — and the run

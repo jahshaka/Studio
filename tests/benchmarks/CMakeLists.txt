@@ -5,7 +5,7 @@
 #   ./bench_scenegraph --record <file>   ...and the JSON result file (the evidence)
 #   ./bench_scenegraph --baseline-from baseline-linux.json <r1> <r2> <r3>   the baseline, from three quiet runs
 # baseline-linux.json is recorded by hand on a quiet box from one build (SCENEGRAPH-BASELINE-2 stage 4) and
-# rewritten only by the spec that earns an improvement; the reparent's law in counts is mirror.reparent_local's.
+# rewritten only by the spec that earns an improvement; the reparent's law in counts is mirror.reparent_local (archived: archive/tests/mirror)'s.
 #
 # It links exactly what the mirror suite links (IrisGL + JahshakaEngine + the
 # mirror TU, which is not part of either library), because "document edit ->
@@ -102,22 +102,6 @@ jah_gpu_row(rigperf.smoke SHIP CLASS engine COMMAND bench_rigperf --smoke
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
-
-# MEASURE-1d's instrument (draw-call-bound or vertex-bound) — a TOOL, not a
-# suite, and EXCLUDE_FROM_ALL for the same reason the gi measure tools are: the
-# number is taken by code that is read, and no gate runs it.
-add_executable(atom_bound_measure EXCLUDE_FROM_ALL atom_bound_measure.cpp)
-set_target_properties(atom_bound_measure PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(atom_bound_measure PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(atom_bound_measure PRIVATE JahshakaEngine)
-add_dependencies(atom_bound_measure JahshakaEngineMedia)
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of

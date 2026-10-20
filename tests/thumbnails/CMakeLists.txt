@@ -15,7 +15,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 
-# thumbnails.sweep — the REPAIR SWEEP's contract (THUMBS-1 fix round F1/F2/F6):
+# thumbnails.sweep (archived: archive/tests/thumbnails) — the REPAIR SWEEP's contract (THUMBS-1 fix round F1/F2/F6):
 # it stops when asked (a yield delivers the window's close), it decides from
 # (guid, type, has-a-thumbnail) rather than from every blob in the catalog, and
 # it tells "nothing to draw" apart from "broken". Real Database on a throwaway

@@ -1,3 +1,3 @@
-// pool.runner arm d — the one-script contract: a numeric completion value is a failure count.
+// pool.runner (archived: archive/tests/pool) arm d — the one-script contract: a numeric completion value is a failure count.
 console.log("ok: arm d ran");
 2

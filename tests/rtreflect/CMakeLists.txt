@@ -5,8 +5,8 @@
 # links JahshakaEngine only. Same runtime requirements as tests/ssr and
 # tests/gi: a reachable DISPLAY and a Vulkan driver.
 #
-# TWO ENTRIES, ONE BINARY, and that is the point: `gi.rt_reflect` is the traced
-# picture and `gi.rt_reflect_norays` is the picture a machine WITHOUT ray
+# TWO ENTRIES, ONE BINARY, and that is the point: `gi.rt_reflect` (archived: archive/tests/gi) is the traced
+# picture and `gi.rt_reflect_norays` (archived: archive/tests/gi) is the picture a machine WITHOUT ray
 # queries draws, proved on the same GPU through the tier's own switch. A machine
 # that has no ray queries at all skips the first cleanly.
 function(jahshaka_rt_reflect_test target)

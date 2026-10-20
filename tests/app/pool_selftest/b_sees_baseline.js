@@ -1,4 +1,4 @@
-// pool.runner arm b — the baseline an arm starts from: no global of an earlier arm, no
+// pool.runner (archived: archive/tests/pool) arm b — the baseline an arm starts from: no global of an earlier arm, no
 // project open. Redeclaring arm a's `const` is itself the proof of the fresh realm — in a
 // shared realm it is a SyntaxError before the first line runs.
 const POOL_LEAK = "b";

@@ -1048,7 +1048,7 @@ static void lodChain()
 
 // ---------------------------------------------------------------------------
 // 8. SURFACE CARDS (SPECS/SURFACE_CACHE_ASSESSMENT.md §2/§7 phase 1) — the
-//    `meshbake.cards` suite.
+//    `meshbake.cards` (archived: archive/tests/meshbake) suite.
 //
 // The card list is what phases 2 and 4 will SPEND: the capture's cost is fixed
 // per card (SURFACE-CACHE-0 measured 0.042-0.057 ms of CPU and 352 KB at 128^2
@@ -1233,7 +1233,7 @@ static void surfaceCards()
             testmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
         // The cards are built HERE now: nothing builds them at creation since
         // ATOM P2 deleted Mesh::loadMesh, and a primitive's real cards are its
-        // BAKE's (meshbake.primitives_baked).
+        // BAKE's (meshbake.primitives_baked (archived: archive/tests/meshbake)).
         if (!cube.isNull()) iris::MeshBake::buildCards(cube, iris::kDefaultMaxCards);
         CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
                    "the cube gets exactly six cards — the 6-face box, not two per face");
@@ -1434,7 +1434,7 @@ static void surfaceCards()
                    "the same surface reads the same coverage at every density — the raster's "
                    "ceiling does not buy its bound with coverage");
         // Both wall-clock bars are STAGE-CLOSE (lane D6B-GATE-SHAPE; tests/support/timingbars.h):
-        // meshbake.cards.timing arms them on a quiet box; this row asserts the coverage.
+        // meshbake.cards.timing (archived: archive/tests/meshbake) arms them on a quiet box; this row asserts the coverage.
         JAH_TIMING_CHECK("meshbake.cards", bounded,
                    "and the cost stops tracking the triangle count: 4x the triangles is less "
                    "than 4x the time, at every step");
@@ -1445,7 +1445,7 @@ static void surfaceCards()
 
 
 // ---------------------------------------------------------------------------
-// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — an arm of the `atom.lod_bound_bar` suite
+// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — an arm of the `atom.lod_bound_bar` (archived: archive/tests/atom) suite
 // (`--bound-bar` runs it after the bar, section 14).
 //
 // THE CLAIM UNDER TEST, in one sentence: for every level of every shipped mesh,
@@ -1462,7 +1462,7 @@ static void surfaceCards()
 // 1.25x the bake's (0.80-0.90 on the shipped meshes), which is the margin being judged.
 // `flat_grid_100m.obj` (the old 100 m ground plane, kept here as a test subject) reads ~0.20 because its bound is the precision floor. The physics bar —
 // bound >= the dense reference AND <= 2x the simplifier's error — is
-// atom.lod_bound_bar; `test_mesh_bake --bound-terms <file>` prints a chain's terms.
+// atom.lod_bound_bar (archived: archive/tests/atom); `test_mesh_bake --bound-terms <file>` prints a chain's terms.
 //
 // WHAT IT ADDS TO THE BAR: the same dense re-measure through the BAKE's own route
 // (`MeshBake::buildFromFile`, where the bar loads through testmesh::parseFile), one bound and
@@ -1532,7 +1532,7 @@ static void errorBound()
 }
 
 // ---------------------------------------------------------------------------
-// 10. THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — the `meshbake.sdf` suite.
+// 10. THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — the `meshbake.sdf` (archived: archive/tests/meshbake) suite.
 //
 // WHAT A DISTANCE FIELD HAS TO GET RIGHT, and what each check is for:
 //
@@ -1663,7 +1663,7 @@ static void signedDistanceField()
 }
 
 // ---------------------------------------------------------------------------
-// 11. EVERY SHIPPED MESH IS A BAKED LIBRARY ASSET — `meshbake.primitives_baked`
+// 11. EVERY SHIPPED MESH IS A BAKED LIBRARY ASSET — `meshbake.primitives_baked` (archived: archive/tests/meshbake)
 //     (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §2.3)
 // ---------------------------------------------------------------------------
 //
@@ -1777,7 +1777,7 @@ static void primitivesBaked()
 }
 
 // ---------------------------------------------------------------------------
-// 12. THE NEXT GENERATION WINS — `meshbake.rebake_generation` (BAKE-RETIRE-1)
+// 12. THE NEXT GENERATION WINS — `meshbake.rebake_generation` (archived: archive/tests/meshbake) (BAKE-RETIRE-1)
 // ---------------------------------------------------------------------------
 //
 // A bake's file NAME is `<sourceOid16>-<settingsHash>.jmb`: it names the CONTENT
@@ -1936,7 +1936,7 @@ static void rebakeGeneration()
 }
 
 // ---------------------------------------------------------------------------
-// 13. THE HEMISPHERE'S CAP IS WOUND THE RIGHT WAY — `meshbake.hemisphere_winding`
+// 13. THE HEMISPHERE'S CAP IS WOUND THE RIGHT WAY — `meshbake.hemisphere_winding` (archived: archive/tests/meshbake)
 //     (HEMISPHERE-CAP-1)
 // ---------------------------------------------------------------------------
 //
@@ -2009,8 +2009,8 @@ static void windingAgreesWithNormals()
 }
 
 // ---------------------------------------------------------------------------
-// 14. THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — the `atom.lod_bound_bar`
-// suite, and the scan stand-in `atom.lod_switch` imports.
+// 14. THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — the `atom.lod_bound_bar` (archived: archive/tests/atom)
+// suite, and the scan stand-in `atom.lod_switch` (archived: archive/tests/atom) imports.
 //
 // THE DEFECT IT GUARDS. A scan's debris islands (1-6 triangle components floating
 // round the surface) were collapsed away by the simplifier and then measured
@@ -2418,7 +2418,7 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     // DISPLACEMENT LOCK (clusterdag::build — a removed vertex or a lost facet past 2x
     // its group's own error, or an island bigger than the group's error, is locked
     // and the whole DAG rebuilt; the stand-in converges in 6 builds). Before it the
-    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound,
+    // stand-in's groups read 24 of 30 over. Gated by `--target` (atom.dag_bound (archived: archive/tests/atom),
     // no longer a photon-target: the row gates) — the dense reference (a) is the
     // other row's, which it keeps for the price.
     std::printf("target: %s DAG (b) %d of %d groups over 2x/2.5x clusterlod's error, worst x %.2f (bar 0)%s\n",
@@ -2633,7 +2633,7 @@ static void boundBar()
     CHECK_LOUD(chained >= 10, "the subject list really does carry chained meshes");
 }
 
-/// `atom.dag_bound_bar` (and, with `target`, `atom.dag_bound`): the bound
+/// `atom.dag_bound_bar` (archived: archive/tests/atom) (and, with `target`, `atom.dag_bound` (archived: archive/tests/atom)): the bound
 /// bar's subjects, their CLUSTER DAG's groups (dagBar).
 static void dagBoundBar(bool target)
 {
@@ -2970,7 +2970,7 @@ static void clipBake()
 
 
 // ---------------------------------------------------------------------------
-// 18. THE IMPORT BAKES' LANDING — `meshbake.async_landing` (STAGE-CLOSE-TRIAGE-1 rounds 3-4)
+// 18. THE IMPORT BAKES' LANDING — `meshbake.async_landing` (archived: archive/tests/meshbake) (STAGE-CLOSE-TRIAGE-1 rounds 3-4)
 // ---------------------------------------------------------------------------
 //
 // In process, against a real fixture store: the bake an import lands off the UI thread.
@@ -3128,8 +3128,8 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
-    // `--cards` is the meshbake.cards suite; with no argument the binary runs
-    // everything meshbake.roundtrip has always run (plus the card SERIALIZER
+    // `--cards` is the meshbake.cards (archived: archive/tests/meshbake) suite; with no argument the binary runs
+    // everything meshbake.roundtrip (archived: archive/tests/meshbake) has always run (plus the card SERIALIZER
     // check inside the round trip itself).
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cards")) {
         std::printf("== 8. surface cards ==\n");
@@ -3138,7 +3138,7 @@ int main(int argc, char **argv)
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
     }
-    // `--sdf` is meshbake.sdf: its own suite because it is its own claim (and it
+    // `--sdf` is meshbake.sdf (archived: archive/tests/meshbake): its own suite because it is its own claim (and it
     // prints a table the design asked for).
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--sdf")) {
         std::printf("== 10. the signed distance field ==\n");

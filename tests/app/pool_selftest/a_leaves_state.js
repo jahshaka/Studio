@@ -1,4 +1,4 @@
-// pool.runner arm a — leaves a global and an OPEN project behind, on purpose: arm b proves
+// pool.runner (archived: archive/tests/pool) arm a — leaves a global and an OPEN project behind, on purpose: arm b proves
 // the pool's baseline took both away (a fresh JavaScript realm; project.close by the pool).
 const POOL_LEAK = "a";
 var POOL_GLOBAL = "a";

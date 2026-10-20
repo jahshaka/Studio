@@ -22,7 +22,7 @@
 // StyleSheet:: getters (compiled into this suite).
 //
 // Why the real binary over MCP: the tour needs pages that only exist in a
-// shown window with a turning event loop (the ui.column_law harness).
+// shown window with a turning event loop (the ui.column_law (archived: archive/tests/ui) harness).
 #include "../support/mcpharness.h"
 
 #include <QJsonArray>

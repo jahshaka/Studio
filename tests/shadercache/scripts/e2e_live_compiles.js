@@ -1,4 +1,4 @@
-// shader.live_compiles (SHADER-WARM-2): after the startup splash, NOTHING compiles on
+// shader.live_compiles (archived: archive/tests/shader) (SHADER-WARM-2): after the startup splash, NOTHING compiles on
 // the UI thread outside a compile window — the owner's shape, "the Unreal way". The
 // startup gate builds the global set (the engine's passes, the editor's, the default
 // world's materials); a create or an open builds its project's set inside its own

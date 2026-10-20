@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# log.events — the verbs and the event markers against the real binary
+# log.events (archived: archive/tests/log) — the verbs and the event markers against the real binary
 # (SESSION_LOG_SPEC §10 phase 2 gate).
 #
 # The JavaScript half (e2e_log_events.js) asserts everything readable through

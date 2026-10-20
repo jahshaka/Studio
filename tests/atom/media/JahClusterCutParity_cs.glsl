@@ -3,7 +3,7 @@
 // JahLevelRule_piece_cs.any (the one currency and the column scale) and
 // JahClusterCut.glsl, included by name — over one mesh's DAG tables for N views,
 // one thread per (view, cluster), and writes 1 where the rule draws the cluster.
-// engine.lod_rule_parity compares that set with the C++ half's (Types.h
+// engine.lod_rule_parity (archived: archive/tests/engine) compares that set with the C++ half's (Types.h
 // clusterCut) to the bit.
 @insertpiece( SetCrossPlatformSettings )
 @insertpiece( JahLevelRuleScale )

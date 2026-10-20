@@ -27,7 +27,7 @@ add_test(NAME services.core COMMAND test_services
 jah_ship_row(services.core)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
-# services.looks — the looks catalogue (POST_LOOKS_SPEC.md §4.1). Links the
+# services.looks (archived: archive/tests/services) — the looks catalogue (POST_LOOKS_SPEC.md §4.1). Links the
 # presentation table and IrisGL (the document half of the catalogue lives
 # there, with SceneMirror and the scene reader as its other consumers). No
 # engine, no display: this is a table-agreement and validator test.
@@ -80,7 +80,7 @@ jah_lsan_lane(services.core services.memory)
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(services.core)
-# services.clipboard — the clipboard's two leaves (CLIPBOARD_SPEC P0): the
+# services.clipboard (archived: archive/tests/services) — the clipboard's two leaves (CLIPBOARD_SPEC P0): the
 # envelope codec and the key-aware asset walk, plus the in-memory backend.
 # Links the three leaf TUs and IrisGL (the walk's material key table IS
 # iris::PbrMaterial::mapRowNames(), which is the assertion that matters). No

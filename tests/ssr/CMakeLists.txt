@@ -36,7 +36,7 @@ target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 # fixtures show TRACED reflections as well, and the measurements stop being
 # about the march. So the suite runs in the picture it was written for; not one
 # of its bars is re-anchored. The COMBINED picture (march + rays, and the
-# fallback beside it) is `gi.rt_reflect` / `gi.rt_reflect_norays`.
+# fallback beside it) is `gi.rt_reflect` (archived: archive/tests/gi) / `gi.rt_reflect_norays` (archived: archive/tests/gi).
 jah_gpu_row(ssr.engine SHIP CLASS engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
@@ -58,7 +58,7 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(ssr.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 endif()
 
-# ssr.rings — SSR-RINGS-1's measurement of the concentric staircase on a curved
+# ssr.rings (archived: archive/tests/ssr) — SSR-RINGS-1's measurement of the concentric staircase on a curved
 # glossy surface (its own binary: the fixture is a sphere and the statistic a
 # radial profile, and mixing it into ssr.engine's floor fixture would re-anchor
 # that suite's bars for nothing).

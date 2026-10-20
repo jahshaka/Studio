@@ -1,4 +1,4 @@
-# perf.pacing — the frame-pacing interval policy (fps audit F1).
+# perf.pacing (archived: archive/tests/perf) — the frame-pacing interval policy (fps audit F1).
 #
 # DISPLAY-FREE and dependency-free: it links src/services/framepacing.cpp and
 # Qt Core, nothing else. No engine, no widgets, no QScreen — the policy is a
@@ -10,7 +10,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core)
 # THE APP ROWS OF THIS FAMILY ARE STAGE-CLOSE (TESTING-SPEED-B3, the ROWS table): the steady-state,
 # drag and capture-cost measurements (timing rows: the stage close's quiet-box phase), the hide soak,
 # the capture bundle and the offscreen isolation (minutes of app runs: the ship's) — with their fresh
-# homes. perf.pacing (a pure function, no engine) stays in the merge tier.
+# homes. perf.pacing (archived: archive/tests/perf) (a pure function, no engine) stays in the merge tier.
 #
 # perf.offscreen_isolation — a thumbnail/screenshot readback must not redraw
 # (and present) the editor's on-screen view (fps audit F5). Engine up, its own
@@ -27,7 +27,7 @@ set_tests_properties(perf.offscreen_isolation PROPERTIES
     LABELS "perf"
     TIMEOUT 240)
 
-# perf.epic_steady_state — the GROWTH-ONLY steady-state gate (fps audit F11).
+# perf.epic_steady_state (archived: archive/tests/perf) — the GROWTH-ONLY steady-state gate (fps audit F11).
 #
 # The regression net for the class that shipped on 2026-09-05: a frame that got
 # more expensive, and object counts that grew, while every pixel and every
@@ -59,7 +59,7 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 # performance number; the only inequality in either of them is a same-run ratio
 # that catches a listener left attached.
 
-# perf.capture_bundle — the bundle is complete, parseable and internally
+# perf.capture_bundle (archived: archive/tests/perf) — the bundle is complete, parseable and internally
 # consistent. Split in two on purpose: the app RECORDS (capture_bundle.js, which
 # needs the engine and a project) and the harness READS what it wrote, because
 # the scripting engine has no file access.
@@ -71,14 +71,14 @@ configure_file(capture_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.j
 # capture running, which is the path --script can never take.
 find_package(Qt6 REQUIRED COMPONENTS Network)
 
-# perf.capture_off_is_free — off costs nothing, and the state machine's edges
+# perf.capture_off_is_free (archived: archive/tests/perf) — off costs nothing, and the state machine's edges
 # (refusals, the early stop, the return to exactly the state it started in).
 # The engine is up: "no listener is attached to any workspace" needs workspaces.
 set(_off_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_off)
 set(JAH_TEST_BUNDLE ${_off_home}/perf/bundle)
 file(MAKE_DIRECTORY ${_off_home}/run)
 
-# perf.capture_free_tick — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1): the
+# perf.capture_free_tick (archived: archive/tests/perf) — A CAPTURE IN FREE-RUNNING COSTS THE UI TICK NOTHING IT CAN FEEL (FRAME-MONITOR-DOOR-1): the
 # owner's path (JAH_FREE_RUNNING=1, --script-live: Ctrl+F4's 60-frame capture at 200 cubes, the diagnosis' method) —
 # every UI tick during the capture lasts at most one frame budget (<= 2 render-thread frames beside it), the capture
 # ends within 120 ticks and 120 render-thread frames, the bundle holds exactly its 60 records, nothing was dropped, and
@@ -91,7 +91,7 @@ file(MAKE_DIRECTORY ${_cft_home}/run)
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law's held 66 'ColumnLaw' projects). Each row below
+# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
 # creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
 if(TEST perf.offscreen_isolation)
     jah_fresh_home_fixture(perf.offscreen_isolation.fresh_home perfOffscreenIsolationFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" WARM LABELS "perf")

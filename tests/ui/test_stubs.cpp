@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// Link stubs for ui.material_panel: the panel TUs reference the Studio
+// Link stubs for ui.material_panel (archived: archive/tests/ui): the panel TUs reference the Studio
 // database, the material reader and the scene writer (all only reachable
 // through UI actions the test never takes - the shader selector combo and the
 // texture-dependency bookkeeping, which is db-guarded). Stubbing them keeps
@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
-// CALL COUNTERS — ui.db_handles asserts that the library bookkeeping a panel
+// CALL COUNTERS — ui.db_handles (archived: archive/tests/ui) asserts that the library bookkeeping a panel
 // skips without a library really happens once the library arrives. Every other
 // suite ignores them.
 int gStubCreateDependencyCalls = 0;
@@ -65,7 +65,7 @@ MaterialReader::MaterialReader(TextureSource texSrc)
 {
 }
 
-/// The one guid this stub answers for (ui.db_handles): the material blade's
+/// The one guid this stub answers for (ui.db_handles (archived: archive/tests/ui)): the material blade's
 /// combo slot only reaches its library bookkeeping when the pick RESOLVES, so
 /// a suite about that slot needs one material that does.
 extern const char *const kStubResolvableMaterialGuid;

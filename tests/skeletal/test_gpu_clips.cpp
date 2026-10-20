@@ -137,7 +137,7 @@ static double worstBoneDiff(Scene *s, NodeId a, NodeId b, size_t boneCount)
 /// document evaluator (updateSceneAnimation -> toBonePoses); that is retired
 /// (ANIMATION_ENGINE_MIGRATION_SPEC, full retirement), and the extractor is
 /// separately gated against a FROZEN recording of the evaluator's answers in
-/// skeletal.clip_extract — so the chain of trust is
+/// skeletal.clip_extract (archived: archive/tests/skeletal) — so the chain of trust is
 ///     frozen document oracle  <-  extractor  <-  engine.
 static std::vector<BonePose> posesFrom(const SkeletonDesc &rig, const iris::ExtractedClip &clip,
                                        float t)

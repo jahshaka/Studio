@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// Link stubs for ui.selection_cost, ON TOP OF tests/ui/test_stubs.cpp (which
+// Link stubs for ui.selection_cost (archived: archive/tests/ui), ON TOP OF tests/ui/test_stubs.cpp (which
 // this suite also compiles). The suite builds the WHOLE properties panel — all
 // seventeen blades — so it reaches a few more corners of the Sql/io/dialog
 // layers than the two single-panel suites do. Everything stubbed here is
@@ -33,7 +33,7 @@ For more information see the LICENSE file
 #include "ui/controls/libraryassetpicker.h"
 
 /// The project guid a suite asks with when it wants this stub to ANSWER.
-/// ui.db_handles uses it to prove that the World blade's "Background Ambience"
+/// ui.db_handles (archived: archive/tests/ui) uses it to prove that the World blade's "Background Ambience"
 /// row appears once the library reaches the blade — every other suite keeps
 /// the empty answer it was written against.
 extern const char *const kStubProjectWithMusic;

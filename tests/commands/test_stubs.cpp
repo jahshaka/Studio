@@ -85,7 +85,7 @@ void SelectionService::select(iris::SceneNodePtr) {}
 
 // ---- Database --------------------------------------------------------------
 //
-// commands.undo_clear_cost compiles this file against the REAL database.cpp
+// commands.undo_clear_cost (archived: archive/tests/commands) compiles this file against the REAL database.cpp
 // (its whole subject is what the delete command's destructor does to the
 // library), so the stub stands down there.
 #ifndef JAH_REAL_DATABASE

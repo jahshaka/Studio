@@ -21,7 +21,7 @@ jah_gpu_row(mirror.document_to_engine SHIP CLASS engine COMMAND test_scene_mirro
 set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 856)
 
-# mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
+# mirror.vr_proxies (archived: archive/tests/mirror) — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
 # §5 phase 4, lane VR-4). The two HAND markers the editor's VR preview shows
 # (there is no head marker, by the owner's rule), the two-bit helper rule that
 # decides which picture draws which furniture, and the proof that a helper-less
@@ -29,7 +29,7 @@ set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 8
 # byte-identical to one with no session at all.
 #
 # NEEDS NO RUNTIME: setVrProxies takes a VrStatus as data, so the suite hands it
-# three poses and never asks OpenXR anything. The runtime half is vr.session.
+# three poses and never asks OpenXR anything. The runtime half is vr.session (archived: archive/tests/vr).
 # THE APP'S OWN MODEL RESOURCES, compiled into this suite (claim H, phase 4b
 # stage 1): the mirror's default controller-model path is a qrc path
 # (":/content/vr/meta-quest-touch-pro/left.obj"), so the suite that asserts the

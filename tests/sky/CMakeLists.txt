@@ -37,16 +37,16 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(sky.sun_transmittance_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5)
 endif()
 
-# sky.env_layout — THE REFLECTION CUBE'S LAYOUT (lane ENGINE-SMALL-B,
+# sky.env_layout (archived: archive/tests/sky) — THE REFLECTION CUBE'S LAYOUT (lane ENGINE-SMALL-B,
 # ENVPROBE-LAYOUT-1). Under the Khronos validation layer, like
-# shadow.cache_kinds: the convolution used to leave the cubemap every PBR
+# shadow.cache_kinds (archived: archive/tests/shadow): the convolution used to leave the cubemap every PBR
 # datablock samples in `ResourceLayout::Uav` (VK_IMAGE_LAYOUT_GENERAL) and
 # nothing moved it — `VUID-vkCmdDraw-None-09600` on ten subresources of one
 # image on an ordinary editor run. Any "Validation Error" fails the row
 # whatever the exit code says, and the row's own assertions prove the mirror
 # cube really samples the sky (so the layer half cannot pass by accident).
 
-# sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
+# sky.aerial_perspective (archived: archive/tests/sky) — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
 # FOG-ATMO-1). The file header carries the model, the instrument (two emissive
 # levels read back in float) and the physics bar: T(2 km) within 0.01 of
 # exp(-sigma d) at the atmosphere's one density.

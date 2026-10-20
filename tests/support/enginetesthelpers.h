@@ -83,7 +83,7 @@ struct EngineOverrides {
 /// always wins.
 /// THE FIXTURES' CAP: the union of every engine family's shaders outgrows the app's 256 MiB (220 MB /
 /// 1,686 shaders on one tree's night), and a save past the cap WIPES the directory — the union would go
-/// cold every few days. The harness's cache is held to 1 GiB (shadercache.fixture_warm reads it back).
+/// cold every few days. The harness's cache is held to 1 GiB (shadercache.fixture_warm (archived: archive/tests/shadercache) reads it back).
 constexpr unsigned long long kFixtureShaderCacheMaxBytes = 1024ull * 1024ull * 1024ull;
 
 inline void applyHarnessDefaults(EngineConfig &cfg)
@@ -209,7 +209,7 @@ inline MeshData unitCubeMesh()
 
 /// THE SIX-FACE BOX CARD LIST for a unit cube of half-extent `h`, in MESH space —
 /// the shape the bake's generator produces for a convex mesh, written by hand so
-/// an engine suite needs no document and no .jmb (gi.card_*, gi.gather_cards).
+/// an engine suite needs no document and no .jmb (gi.card_*, gi.gather_cards (archived: archive/tests/gi)).
 inline std::vector<MeshCardDesc> boxCards(float h, float margin = 0.02f)
 {
     std::vector<MeshCardDesc> cards;
@@ -393,8 +393,8 @@ inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
 // illumination and that number IS the leak.
 //
 // It lived in tests/gi/test_gi_leak_room.cpp and was copied verbatim into
-// gi.gather, which is one fixture too many: the two suites compare their
-// numbers against each other (the gather's field arm reproduces gi.leak_room's
+// gi.gather (archived: archive/tests/gi), which is one fixture too many: the two suites compare their
+// numbers against each other (the gather's field arm reproduces gi.leak_room (archived: archive/tests/gi)'s
 // chain arm to within 0.7 %) and that comparison is only worth anything while
 // the rooms are the SAME room. It is here so they cannot drift.
 namespace leakroom {
@@ -428,7 +428,7 @@ struct Room {
 /// `shiftZ` moves the room and its lamps (not the camera, so not the lattice)
 /// along z: at 0 the -Z wall's inner face lies ON a cascade-0 texel plane, so a
 /// wall thinner than the cell is split between two texels, not held by one
-/// (gi.gather's two-sided arm moves it -0.02 m; PHOTON-VOXEL-5).
+/// (gi.gather (archived: archive/tests/gi)'s two-sided arm moves it -0.02 m; PHOTON-VOXEL-5).
 inline Room build(Scene *s, View *view, float T, float shiftZ = 0.0f)
 {
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));

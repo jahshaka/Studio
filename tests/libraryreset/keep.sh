@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# app.library_keep — THE USER'S STORAGES SURVIVE WHAT THEY SHOULD (ASSETS-HOME-1).
+# app.library_keep (archived: archive/tests/app) — THE USER'S STORAGES SURVIVE WHAT THEY SHOULD (ASSETS-HOME-1).
 #
 #   1. one data root is POPULATED with a row in every home (keep_populate.js):
 #      imports in Assets, an avatar in the Avatar storage, a New Material and a

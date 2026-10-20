@@ -1,4 +1,4 @@
-// engine.gpu_walk_parity — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2).
+// engine.gpu_walk_parity (archived: archive/tests/engine) — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2).
 //
 // The dirty scan walks only the slots the frame NAMED (the change set's moved subtrees and the
 // engine's seams); every flags word that moves without a transform is marked by its seam
@@ -45,7 +45,7 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", m_); ++failures; }                     \
     } while (0)
 
-// engine.gpu_walk_parity_free (`--free-running`, ENGINE-UPGRADE-U3 decision 56): THE INTERPOLATED POSE IS THE TABLE'S.
+// engine.gpu_walk_parity_free (archived: archive/tests/engine) (`--free-running`, ENGINE-UPGRADE-U3 decision 56): THE INTERPOLATED POSE IS THE TABLE'S.
 // The owner's mode on its render thread: a document mover recorded at 60 Hz steps and drawn by FREE frames at a 90 Hz
 // display period (inspect::EngineEcho::presentationFrame, an exact count) — every in-between pose the interpolation
 // writes, and the cur it puts back when the motion stops, must be named to the GPU-scene walk, or the table rests

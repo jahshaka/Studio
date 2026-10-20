@@ -70,7 +70,7 @@ target_compile_definitions(test_engine_recreate PRIVATE
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
 jah_gpu_row(test_engine_recreate SHIP CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# meshbake.shadow_vao_alias — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
+# meshbake.shadow_vao_alias (archived: archive/tests/meshbake) — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
 # PHOTON-SCENE-SWITCH-1), as its own ctest name so gate-scope can select it: a
 # 6-level mesh must hold one SHRUNK shadow VAO per level over one vertex buffer
 # (never a mixed list — the caster pipeline takes the first VAO's layout), must
@@ -136,7 +136,7 @@ jah_tsan_render(frame.record_determinism engine.message_order)   # the render th
 
 # frame.interpolation — THE OWNER'S MODE DRAWS BETWEEN THE GRID STATES (ENGINE-UPGRADE-U3 stage 5): a 60 Hz mover at
 # a 90 Hz display period, three poses per two steps, x = (2/3) j a closed form; lockstep frames draw the newest
-# state exactly. frame.interpolation_apply (`--apply`, measure): 10,000 nodes' apply on the pool vs the frame's thread.
+# state exactly. frame.interpolation_apply (archived: archive/tests/frame) (`--apply`, measure): 10,000 nodes' apply on the pool vs the frame's thread.
 add_executable(test_engine_interpolation test_engine_interpolation.cpp)
 set_target_properties(test_engine_interpolation PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
@@ -183,7 +183,7 @@ jah_gpu_row(engine.error_door SHIP CLASS engine FRAMES 620 COMMAND test_engine_e
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.monitor_pop — THE MONITOR'S RECORDS ARE POPPED, NEVER REQUESTED (FRAME-MONITOR-DOOR-1): the hand-back door as an
-# engine fixture (the form the TSan arm runs; perf.capture_free_tick is the owner's path and cannot boot under TSan):
+# engine fixture (the form the TSan arm runs; perf.capture_free_tick (archived: archive/tests/perf) is the owner's path and cannot boot under TSan):
 # free-running, a capture on, the host popping after every frame while the render thread pushes; then lockstep. Laws in
 # counts and frames: every recorded record popped once, in frame order, the stop's tail in one pop, nothing dropped; the
 # capture's snapshot through one request in both modes; and (stage 4) a shader-cache save posted while frames draw free —
@@ -217,10 +217,10 @@ jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fix
 # buffers bounded by its slots; the fallback with no compute queue requested; the bracket under
 # the Khronos validation layer with synchronization validation on, zero messages. Its own
 # binary because it reaches the render system's device (links the Vulkan RS, like
-# engine.descriptor_pools) and because the two other rows set the process environment.
+# engine.descriptor_pools (archived: archive/tests/engine)) and because the two other rows set the process environment.
 find_package(Vulkan QUIET)
 
-# engine.gpu_walk_parity — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2): with the arm
+# engine.gpu_walk_parity (archived: archive/tests/engine) — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2): with the arm
 # gpuscene.walkParity, every slot is checked against the table after every frame's compose; every
 # writer kind of a slot's transform or flags word leaves 0 misses. See the source.
 add_executable(test_engine_gpu_walk_parity test_engine_gpu_walk_parity.cpp)

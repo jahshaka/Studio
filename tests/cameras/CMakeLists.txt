@@ -1,11 +1,11 @@
 # Scene cameras (CAMERAS_SPEC phase 1 — document + verbs).
 #
-# cameras.document      the document half: the type-enum fix and its sweep
+# cameras.document (archived: archive/tests/cameras)      the document half: the type-enum fix and its sweep
 #                       points, the angle <-> focal-length binding in both
 #                       directions, reflection of every setting, duplication,
 #                       and the scene camera registry + active camera. Pure
 #                       iris:: — no engine, no app, offscreen.
-# cameras.play_routing  the ONE behavioural change phase 1 makes to rendering:
+# cameras.play_routing (archived: archive/tests/cameras)  the ONE behavioural change phase 1 makes to rendering:
 #                       SceneMirror::applyCamera renders through the active
 #                       camera while PLAYING and through the caller's camera
 #                       while editing. Real engine, real frames, pixels are the

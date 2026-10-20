@@ -1,4 +1,4 @@
-// shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S OWN
+// shadow.atom_cut (archived: archive/tests/shadow) / shadow.atom_parity (archived: archive/tests/shadow) — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S OWN
 // CLUSTER CUT (ATOM-SHADOWS-1; SPECS/briefs/ATOM-SHADOWS-1.md, the lead's bar of 2026-09-27).
 //
 // The bar is PHYSICS, never agreement with an old picture: before this lane a caster drew
@@ -8,7 +8,7 @@
 // it is one TEXEL OF THE MAP: a surface displaced by less than one texel's footprint moves
 // no texel's depth by more than the rasteriser's own quantisation.
 //
-//   --cut (shadow.atom_cut): every map of the view's shadow node — the sun's three PSSM
+//   --cut (shadow.atom_cut (archived: archive/tests/shadow)): every map of the view's shadow node — the sun's three PSSM
 //     splits (orthographic), a spot light's map (perspective) and a point light's six cube
 //     faces (perspective, 90 degrees) — has its cut captured by the engine's test door
 //     (OgreScene::armCasterProbeForTest), and:
@@ -26,7 +26,7 @@
 //          map's at distance d is 2 d / (|row1| x height);
 //       4. nothing drew coarse or nothing (the stream fits), and some map drew coarser than
 //          level 0 (the far split — the claim is not vacuous).
-//   --parity (shadow.atom_parity): TWO lockstep worlds, the same camera every frame: one
+//   --parity (shadow.atom_parity (archived: archive/tests/shadow)): TWO lockstep worlds, the same camera every frame: one
 //     through the caster cut, the other through the stock PBS caster with DENSE casters
 //     (the split's door shut and every mesh given level 0 only). The two views' shadow
 //     ATLASES are read back and compared texel by texel over every active map, in LIGHT
@@ -705,7 +705,7 @@ static int parityMain()
 }
 
 // ---------------------------------------------------------------------------
-// shadow.caster_first_frame — CASTER-USES-1: THE FIRST FRAME RECORDS EVERY MAP. The caster
+// shadow.caster_first_frame (archived: archive/tests/shadow) — CASTER-USES-1: THE FIRST FRAME RECORDS EVERY MAP. The caster
 // pass's stats ring held a fixed 64 maps a frame, and a first frame renders every map at
 // once, so the overflow went unrecorded. EIGHT views of the one scene (each with its own
 // shadow node: the PSSM splits, the spot, the point's six faces) render their first
@@ -745,7 +745,7 @@ static int firstFrameMain()
 }
 
 // ---------------------------------------------------------------------------
-// --light-cull (shadow.caster_cull) — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5
+// --light-cull (shadow.caster_cull (archived: archive/tests/shadow)) — THE CASTER CULL BY THE LIGHT'S OWN DEPTH (ENGINE-UPGRADE-U5
 // stage 4, the lead's decision 10). The parity world under a ROOF: a 26 x 0.3 x 38 m slab 6 m up
 // over the field's three near rows, between them and the sun. A sun map's Atom casters are tested
 // against the previous frame's depth pyramid of that map, the rejected again against this frame's
@@ -1346,12 +1346,12 @@ static int lightCullMain()
 }
 
 // ---------------------------------------------------------------------------
-// shadow.caster_route — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2). Two lockstep
+// shadow.caster_route (archived: archive/tests/shadow) — THE PBS-ROUTED CASTERS THROUGH THE CUT (ENGINE-POLISH-ATOM-1 stage 2). Two lockstep
 // worlds, the same camera every frame, a lit floor under a BLENDED plane and a CUTOUT plane (an 8-texel checker of
 // holes): one world with the split on - the blended plane's caster through the caster cut (its colour stays on PBS),
 // the cutout's through the cut's MASKED range (ATOM-3 stage 2: the mask's pyramid, at the level the map texel's
 // footprint asks for) - the other with the split shut (every caster the stock PBS caster, dense). The cut-out is
-// held to its stock twin AND to its own level-0 reference (the arm atom.maskPyramid 0): p99 <= 1 texel. The sun maps compared texel by texel in light space (shadow.atom_parity's metric) over
+// held to its stock twin AND to its own level-0 reference (the arm atom.maskPyramid 0): p99 <= 1 texel. The sun maps compared texel by texel in light space (shadow.atom_parity (archived: archive/tests/shadow)'s metric) over
 // the whole map and over each plane's own footprint: p99 <= 1 texel, flips <= 0.5 %. And the route itself: the
 // verb files the blended plane's caster under `atomCaster` (0 blended on the PBS side), and the stock shadow scene
 // passes' masks no longer reach its Ogre item (Ogre's any-bit cull: the item's flags against every pass's mask).
@@ -1532,7 +1532,7 @@ struct RectParity {
     float p99 = 0.0f, mx = 0.0f;
 };
 
-/// shadow.atom_parity's orthographic metric over one rectangle of a sun map.
+/// shadow.atom_parity (archived: archive/tests/shadow)'s orthographic metric over one rectangle of a sun map.
 RectParity orthoParity(const Atlas &A, const Atlas &B, const Ogre::Matrix4 &ma, const Ogre::ShadowTextureDefinition *td,
                        unsigned x0, unsigned y0, unsigned x1, unsigned y1, float empty, float bias)
 {
@@ -1564,7 +1564,7 @@ RectParity orthoParity(const Atlas &A, const Atlas &B, const Ogre::Matrix4 &ma, 
 }  // namespace
 
 /// THE THREE WORLDS' MAPS OF ONE SHADOW NODE, texel by texel (BUGS-1 item 12): every active map of `na` whose light
-/// type is in `typeMask` (1 << Ogre::Light::LightTypes), against the stock world's (nb) by shadow.atom_parity's law for
+/// type is in `typeMask` (1 << Ogre::Light::LightTypes), against the stock world's (nb) by shadow.atom_parity (archived: archive/tests/shadow)'s law for
 /// its projection - orthographic (a sun map), perspective (a spot: the linearised depth) or a point's paraboloid (its
 /// depth range) - p99 <= 1 texel, flips <= 0.5 % at 1 cm; and the planes' OWN texels, where the stock world differs from
 /// the bare one (nc): the comparison is not vacuous where they are > 0. Returns (maps compared, own texels summed).
@@ -1690,8 +1690,8 @@ static void routeWorldsGone(RouteWorld &a, RouteWorld &b, RouteWorld &c)
     }
 }
 
-/// --caster-route-lamps (shadow.caster_route_lamps): THE SPOT'S MAP AND THE POINT'S FACES through the cut against the
-/// stock casters, the sun maps' law (BUGS-1 item 12: shadow.caster_route compared the sun maps only).
+/// --caster-route-lamps (shadow.caster_route_lamps (archived: archive/tests/shadow)): THE SPOT'S MAP AND THE POINT'S FACES through the cut against the
+/// stock casters, the sun maps' law (BUGS-1 item 12: shadow.caster_route (archived: archive/tests/shadow) compared the sun maps only).
 static int casterRouteLampsMain()
 {
     std::printf("== shadow.caster_route_lamps: the planes' casters in a spot map and a point's faces, cut vs stock\n");
@@ -1725,7 +1725,7 @@ static std::vector<Ogre::CompositorShadowNode *> reflectNodes(RouteWorld &w)
     return out;
 }
 
-/// --caster-route-reflect (shadow.caster_route_reflect): THE REFLECT NODE's sun maps (a planar mirror's) through the
+/// --caster-route-reflect (shadow.caster_route_reflect (archived: archive/tests/shadow)): THE REFLECT NODE's sun maps (a planar mirror's) through the
 /// cut against the stock casters.
 static int casterRouteReflectMain()
 {
@@ -1928,7 +1928,7 @@ static int casterRouteMain()
     return 0;
 }
 
-/// --receivers (shadow.caster_receivers) - THE RECEIVER TEST'S LAW alone (receiverSection), its own row: the light-depth
+/// --receivers (shadow.caster_receivers (archived: archive/tests/shadow)) - THE RECEIVER TEST'S LAW alone (receiverSection), its own row: the light-depth
 /// laws and this one together outran a fixture's 10 s budget (source.row_budget, U5's master check).
 static int receiversMain()
 {

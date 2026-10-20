@@ -26,7 +26,7 @@ endfunction()
 # edit is a new file, and a scene without a piece stays byte-identical.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 
-# pieces.live_paths — the engine half of the LIVE graph paths (TORNADO-1): the UV
+# pieces.live_paths (archived: archive/tests/pieces) — the engine half of the LIVE graph paths (TORNADO-1): the UV
 # scroll equals the same offset (G1) and an emissive added through the fork's
 # custom_ps_emissive hook equals the material's own emissive (G2), whole image,
 # byte for byte, each with a control that proves the comparison can see.

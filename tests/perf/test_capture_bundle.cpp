@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// perf.capture_bundle — THE CAPTURE BUNDLE IS COMPLETE AND CORRECT
+// perf.capture_bundle (archived: archive/tests/perf) — THE CAPTURE BUNDLE IS COMPLETE AND CORRECT
 // (RENDER_LOOP_MONITOR_SPEC §4.8 and §7's rewritten acceptance).
 //
 // DATA INTEGRITY ONLY. Nothing here asserts a performance number, a budget or a

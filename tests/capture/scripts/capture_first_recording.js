@@ -6,7 +6,7 @@
 // frames too. The startup shader gate draws that very view (recordingview::create, armed every
 // frame) behind the splash, so the first recording's start, warm-up and first recorded frames
 // compile and load ZERO shaders. The probe is THIS click's (a project open/create is media-free:
-// app.startup_quiet), and it is cheap because the app names Qt Multimedia's ONE hardware backend
+// app.startup_quiet (archived: archive/tests/app)), and it is cheap because the app names Qt Multimedia's ONE hardware backend
 // from the engine's adapter (services/mediahardware.h: the unnamed check cost 731 ms).
 // FIRST in the pool: the claim is about the process's first recording.
 

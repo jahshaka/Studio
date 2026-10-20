@@ -1,6 +1,6 @@
 // THE HISTOGRAM METER'S ARITHMETIC, MEASURED (EXPOSURE-2).
 //
-// The companion of hdr.drag_stable: that suite asserts the meter is STEADY,
+// The companion of hdr.drag_stable (archived: archive/tests/hdr): that suite asserts the meter is STEADY,
 // this one asserts it is RIGHT — in absolute terms, against numbers computed
 // on paper from the frame the fixture renders.
 //

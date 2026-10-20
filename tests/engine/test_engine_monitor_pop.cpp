@@ -1,5 +1,5 @@
 // frame.monitor_pop — THE MONITOR'S RECORDS ARE POPPED, NEVER REQUESTED (FRAME-MONITOR-DOOR-1): the hand-back door as
-// an ENGINE FIXTURE, the form the TSan arm runs (the app row perf.capture_free_tick cannot boot under either libtsan:
+// an ENGINE FIXTURE, the form the TSan arm runs (the app row perf.capture_free_tick (archived: archive/tests/perf) cannot boot under either libtsan:
 // Qt's recycled pthread_t, TSAN-GCC15-THREAD-REGISTRY). FREE-RUNNING on the render thread with the host's calls as
 // records (the app's shape), a capture on: the render thread retires a record into the engine's hand-back every frame
 // while this thread pops it after every frame it sees — the push and the pop concurrent, under the queue's one lock.
@@ -8,7 +8,7 @@
 // takes it, the next returns 0); nothing dropped. AND THE CAPTURE'S SNAPSHOT IS ASKED (stage 3): one Engine::request
 // in each mode, while the render thread draws free and while it is stepped — the same shape both times (live, the label,
 // the view's workspaces), its `frame` the last frame that closed before the request (no popped record is newer). (That a pop never waits on a frame is the app row's, in frames per
-// UI tick: perf.capture_free_tick.) AND THE SHADER CACHE'S SAVE (stage 4), posted while the render thread draws free:
+// UI tick: perf.capture_free_tick (archived: archive/tests/perf).) AND THE SHADER CACHE'S SAVE (stage 4), posted while the render thread draws free:
 // its incremental copy continued by the frames, then the writer serializing the copies and the pipeline cache while
 // frames keep drawing — the copies' cross-thread hand-off, on the fixture's OWN cold cache (a warm one has nothing to
 // save). Under TSan, zero reports.

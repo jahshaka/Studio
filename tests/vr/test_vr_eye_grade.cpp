@@ -1,7 +1,7 @@
-// vr.eye_grade's READER — THE COLOUR CONTRACT, JUDGED ON THE PICTURES (lane
+// vr.eye_grade (archived: archive/tests/vr)'s READER — THE COLOUR CONTRACT, JUDGED ON THE PICTURES (lane
 // EYE-GRADE-1; SPECS/VR_SPEC.md §6).
 //
-// Split from the app for the reason perf.capture_bundle and vr.frame_budget are
+// Split from the app for the reason perf.capture_bundle (archived: archive/tests/perf) and vr.frame_budget (archived: archive/tests/vr) are
 // split: the scripting engine has no file access, so the APP writes pictures
 // (its own eye, its own desktop screenshot) and the RUNNER captures the
 // runtime's compositor window, and something has to open the three of them and

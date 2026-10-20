@@ -1,4 +1,4 @@
-// app.library_keep, PHASE 2 — one arm of Clear Database (ASSETS-HOME-1). The
+// app.library_keep (archived: archive/tests/app), PHASE 2 — one arm of Clear Database (ASSETS-HOME-1). The
 // shell prepends CLEAR_ASSETS, CLEAR_MATERIALS and the guids keep_populate.js
 // printed. The reset runs with exactly those boxes; afterwards EXACTLY the
 // unticked storages are there, each row in its home with its members and its

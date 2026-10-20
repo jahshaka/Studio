@@ -265,7 +265,7 @@ def speed_cases(source, build):
     check(S.selected and "ssr" in fams_ and not fams_ & {"vr", "particles", "ui", "hdr"} and len(S.selected) < 100,
           "25. round 15: a NEW OgreView function named by a keyword (readSsrTsaHistory: 'Ssr') -> the reflection rows "
           "only, never every engine fixture (%d rows: %s)" % (len(S.selected), sorted(fams_)[:8]))
-    # round 21: THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST) has its table line: the light rows, scale.lights, the GI and
+    # round 21: THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST) has its table line: the light rows, scale.lights (archived: archive/tests/scale), the GI and
     # Atom (its three consumers) — never "no rule, no symbol, no graph owner"
     S = sel(["irisgl/engine/src/SceneLightList.cpp"])
     fams_ = {n.split(".")[0] for n in S.selected}
@@ -303,7 +303,7 @@ def speed_cases(source, build):
           "10. tests/gi/test_gi_rayquery.cpp selects its own row gi.rayquery_asan (%d rows)" % len(S.selected))
     # 11. THE SUBJECTS SELECT THEIR GUARDS (the suites audit's S1/S2)
     # (TEST-CUT-1: the archived guards left the tuples — OgreChain.cpp's engine.atom_*, meshbake.cpp's atom.cluster_* and
-    # engine.lod_rule_parity, projectarchiver.cpp's archive.responsive; the archive's kept row is a `measure` row, which
+    # engine.lod_rule_parity (archived: archive/tests/engine), projectarchiver.cpp's archive.responsive (archived: archive/tests/archive); the archive's kept row is a `measure` row, which
     # the reach never selects)
     for path, rows in (("irisgl/engine/src/OgreChain.cpp", ("defaults.exposure_plane",)),
                        ("src/services/avatarassets.cpp", ("avatar.responsive",)),

@@ -10,10 +10,15 @@
 // permutations, which no startup set holds — never the startup build behind the splash (53-58 s
 // of the old 87-s cold launch, Debug, a loaded box; spikes/testing-speed-b3/profile.txt). So the
 // cold home is seeded with THE STARTUP SEED: the shader cache a launch that only boots and quits
-// leaves (`e2e-async-after-open-seed/`, kept beside the row's home and made by the row itself
-// when it is missing). A seed the build no longer matches (the cache's fingerprint moved) is
-// refused by the app, which then compiles the startup set itself — the run stays valid, only
+// leaves (`e2e-async-after-open-seed/`, kept beside the row's home). A seed the build no longer matches (the cache's
+// fingerprint moved) is refused by the app, which then compiles the startup set itself — the run stays valid, only
 // slower — and the row deletes the stale seed so the next run makes a fresh one.
+//
+// THE SEED IS ITS OWN ROW (TOOLING-7 stage 2; the trap file's "split into rows that run parts of the same law"):
+// `test_async_after_open --seed` is shader.async_after_open.seed, the FIXTURES_SETUP row that makes the seed when it is
+// missing — a boot that only quits, once per build tree (a ship tree is a fresh tree: the row paid that whole startup
+// build inside itself, 64 s solo on a fresh tree, 2026-10-20, over the minute). The row the law is about runs the two
+// launches only: the startup build is not its subject.
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -167,22 +172,32 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-async-after-open"));
     const QString seed = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seed/shadercache"));
-    QDir(home).removeRecursively();            // an empty library; the shader cache is the seed's
-    QDir().mkpath(home + "/run");
-    QDir().mkpath(home + "/cache");
-    QDir().mkpath(home + "/cold");
-    QDir().mkpath(home + "/warm");
 
-    // THE STARTUP SEED (the header): made once when missing, copied into the cold home every run.
-    if (!QDir(seed).exists()) {
+    // THE STARTUP SEED'S ROW (the header): made when missing; a present seed is the row's whole answer.
+    if (app.arguments().contains(QStringLiteral("--seed"))) {
+        if (QDir(seed).exists()) {
+            std::printf("    the startup seed is there (made by an earlier run of this row): nothing to do\nPASS\n");
+            return 0;
+        }
         const QString seedHome = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seeding"));
         const bool seeded = seedLaunch(seedHome) &&
                             QDir().mkpath(QFileInfo(seed).absolutePath()) &&
                             QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);
         QDir(seedHome).removeRecursively();
-        std::printf("    the startup seed: %s\n", seeded ? "made by a boot-and-quit launch" : "COULD NOT be made (the cold launch builds the startup set)");
+        std::printf("    the startup seed: %s\n%s\n", seeded ? "made by a boot-and-quit launch" : "COULD NOT be made",
+                    seeded ? "PASS" : "FAIL");
+        return seeded ? 0 : 1;
     }
-    copyTree(seed, home + "/.local/share/Jahshaka/shadercache");
+
+    QDir(home).removeRecursively();            // an empty library; the shader cache is the seed's
+    QDir().mkpath(home + "/run");
+    QDir().mkpath(home + "/cache");
+    QDir().mkpath(home + "/cold");
+    QDir().mkpath(home + "/warm");
+    // ...copied into the cold home every run (no seed — the row run alone without its setup — is the stale seed's case:
+    // the cold launch compiles the startup set itself, valid and slower)
+    if (!copyTree(seed, home + "/.local/share/Jahshaka/shadercache"))
+        std::printf("    no startup seed (run shader.async_after_open.seed first): the cold launch builds the startup set\n");
 
     const QJsonObject cold = runApp(home, home + "/cold");
     // A STALE SEED (the app's cache fingerprint moved since it was made): the cold launch compiled the

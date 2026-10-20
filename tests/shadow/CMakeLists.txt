@@ -8,7 +8,7 @@
 #                             shadow is the checker cell by cell (the analytic projection: a
 #                             horizontal caster over the floor casts a translated copy), and a
 #                             SCROLLING cut-out's shadow holes move with the scroll.
-#   shadow.two_sided_caster — the opaque plane two-sided, upright and turned over: the opaque
+#   shadow.two_sided_caster (archived: archive/tests/shadow) — the opaque plane two-sided, upright and turned over: the opaque
 #                             plane's shadow (area within 10 %).
 # THE GATE ROWS RUN ONE PROCESS (STAGE-CLOSE-1 U3): the claim, read once, in every gate that reaches
 # them. THE CHURN — "one process proves nothing about the next" — is the `.churn` twins': the same

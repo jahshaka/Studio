@@ -75,7 +75,7 @@ unsigned long long rssKb() { return statusKb("VmRSS"); }
 // the bake cache
 // ---------------------------------------------------------------------------
 
-/// A scope's private bake directory (scale.bake's forced bake: a measurement that must
+/// A scope's private bake directory (scale.bake (archived: archive/tests/scale)'s forced bake: a measurement that must
 /// never delete or race the SHARED blob another tree is reading). Empty = the shared cache.
 static QString g_cacheOverride;
 

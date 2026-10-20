@@ -1,5 +1,5 @@
 #!/bin/sh
-# threading.mode / threading.gi_resolve — THE PAIR IN ONE ROW (TESTING-SPEED-B3): the same script run
+# threading.mode (archived: archive/tests/threading) / threading.gi_resolve (archived: archive/tests/threading) — THE PAIR IN ONE ROW (TESTING-SPEED-B3): the same script run
 # TWICE in sequence, each in its own VIRGIN home (tests/support/fresh_home.sh, the one wipe), first with
 # the editor scene's real worker pool (parallel shader compilation), then with JAHSHAKA_SCENE_THREADS=1
 # (serial compilation: Ogre's serial branch, OgreRenderQueue.cpp needs > 1 worker), and the two PNGs

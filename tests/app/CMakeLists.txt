@@ -56,7 +56,7 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
     FIXTURES_REQUIRED selftest_data_root
     TIMEOUT 660 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
-# app.startup_quiet — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
+# app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
 # observable in a REAL boot, so this is the one suite that reads the boot log:
 #
@@ -66,12 +66,12 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 #       DEFAULT connection into MainWindow::setupProjectDB.
 #   6c  "invalid parameters in SMAA.material(83)" — fork c290052de (was 0012).
 #   6a  Qt Multimedia on the startup path (iris::Scene and VideoPreviewWidget
-#       both built a QMediaPlayer in their constructors). ui.media_lazy is the
+#       both built a QMediaPlayer in their constructors). ui.media_lazy (archived: archive/tests/ui) is the
 #       precise guard; this one catches anything ELSE that starts constructing
 #       media objects at boot. Keyed on Qt's own "qt.multimedia.ffmpeg: Using
 #       Qt multimedia with FFmpeg" banner, which the backend prints when it is
 #       first instantiated — a one-way guard (if a future Qt silences the
-#       banner this assertion weakens, ui.media_lazy does not).
+#       banner this assertion weakens, ui.media_lazy (archived: archive/tests/ui) does not).
 #
 # TWO runs under ONE scratch HOME on purpose: the 6b warning needs a database
 # to already exist, because main()'s schema check (FORWARD-ONLY-1) opens one
@@ -102,14 +102,14 @@ set_tests_properties(app.test_needs_boot PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
-# app.start_in_vr — THE VR PREFERENCES (VR-START-1): Start in VR (on) and the headset runtime (WiVRn);
+# app.start_in_vr (archived: archive/tests/app) — THE VR PREFERENCES (VR-START-1): Start in VR (on) and the headset runtime (WiVRn);
 # a policy refusal opens no OpenXR runtime and ends in the editor plus one notice or dialog.
 # Three boots of one fresh home (start_in_vr.sh). `JAHSHAKA_VR=` (empty) keeps the tests/ walk
 # from adding JAHSHAKA_VR=0: this row is the one that lets the preference decide.
 set(_siv_home ${CMAKE_CURRENT_BINARY_DIR}/start-in-vr-home)
 file(MAKE_DIRECTORY ${_siv_home}/run)
 
-# app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
+# app.input_keys (archived: archive/tests/app) — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
 # This was three ctest rows until 2026-09-09: app.pacing_undo (the frame-pacing
 # loop, deep audit area 7 F8, plus the Ctrl+Z routing of area 1),
@@ -139,7 +139,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XVFB Xvfb)
 endif()
 
-# pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
+# pool.runner (archived: archive/tests/pool) — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
 # src/app/cli/scriptrunner.cpp, so the row lives with the app's): the real app,
 # headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown
 # assertion and a numeric completion value as FAIL, the pool going on, JAH_POOL_ARMS's subset

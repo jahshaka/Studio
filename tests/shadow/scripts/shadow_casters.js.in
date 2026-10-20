@@ -1,4 +1,4 @@
-// shadow.cutout_caster / shadow.two_sided_caster (CUTOUT-CASTER-1). One process = one RUN;
+// shadow.cutout_caster / shadow.two_sided_caster (archived: archive/tests/shadow) (CUTOUT-CASTER-1). One process = one RUN;
 // shadow_casters.sh runs it N times and reads the frames (the verdicts are in the wrapper).
 //
 // THE RIG. The basic template's sun (direction (0, -0.766, -0.643)) over its floor; a 3 x 3 m
@@ -39,7 +39,7 @@ function pair(name) {
 // 1. THE SOLID REFERENCE: the opaque single-sided plane (faces the sun).
 pair("solid");
 if (WHAT === "twosided") {
-    // 2. TWO-SIDED (shadow.two_sided_caster): the same plane, both faces drawn — and the plane
+    // 2. TWO-SIDED (shadow.two_sided_caster (archived: archive/tests/shadow)): the same plane, both faces drawn — and the plane
     //    turned over (only its back faces the sun), which casts only through the two-sided cull.
     assert(node.setProperty(p, "faceCullingMode", "none"), "two-sided");
     pair("twosided");

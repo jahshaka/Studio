@@ -1,4 +1,4 @@
-// shader.sample_opens_quiet (ASYNC-SHADERS-1) — open every shipped sample on a cold shader cache
+// shader.sample_opens_quiet (archived: archive/tests/shader) (ASYNC-SHADERS-1) — open every shipped sample on a cold shader cache
 // (one launch, the samples in order, the background compiler on as in an interactive session):
 // after each open's own window nothing compiles on the UI thread. The owner's smoke caught four
 // ~2 s stalls after sample opens — a GI rebuild's compute permutations and the PBS set that

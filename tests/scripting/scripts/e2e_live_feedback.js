@@ -1,4 +1,4 @@
-// scripting.live / scripting.live_off — THE RUN POLICY (SCRIPTING_LIVE_SPEC §3.1).
+// scripting.live / scripting.live_off (archived: archive/tests/scripting) — THE RUN POLICY (SCRIPTING_LIVE_SPEC §3.1).
 //
 // ONE script, two ctest entries: the app is started with --script-live for the
 // first and plainly for the second, and the script asks which run it is in
@@ -41,8 +41,8 @@ assert(undoBefore.macroOpen === true, "the run's undo macro is open on the UI th
 // refuses every document write arriving from the UI, under EITHER policy,
 // because the UI thread is free between these verbs either way. Nobody is
 // clicking in a ctest run, so what this asserts is the state the app is really
-// in (the refusal itself is proven in scripting.engine, where a timer delivers
-// a hand edit into a live run, and in ui.panel_undo and gizmo.group_transform,
+// in (the refusal itself is proven in scripting.engine (archived: archive/tests/scripting), where a timer delivers
+// a hand edit into a live run, and in ui.panel_undo (archived: archive/tests/ui) and gizmo.group_transform (archived: archive/tests/gizmo),
 // where real gestures are driven against the gate).
 var gate = editor.editGate();
 assert(gate.scriptRunning === true, "the edit gate says a script run is in flight");

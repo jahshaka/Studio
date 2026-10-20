@@ -1,4 +1,4 @@
-// hdr.display_encode — EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1).
+// hdr.display_encode (archived: archive/tests/hdr) — EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1).
 //
 // THE DEFECT. Nothing in the chain applied the sRGB OETF: the film curve's
 // LINEAR output (and the ungraded scene's linear radiance) reached plain UNORM

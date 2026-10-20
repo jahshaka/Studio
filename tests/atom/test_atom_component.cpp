@@ -1,4 +1,4 @@
-// atom.component — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3;
+// atom.component (archived: archive/tests/atom) — ATOM IS A COMPONENT OF ITS SCENE (ENGINE-UPGRADE-2 stage 3;
 // irisgl/engine/src/atom/AtomComponent.h). Counts only, no picture.
 //
 // Two scenes, each drawn by its own view with shadows: A holds six Atom cubes, a floor and

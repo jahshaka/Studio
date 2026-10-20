@@ -1,5 +1,5 @@
 
-# engine.lod_rule_parity — the quality currency's C++ half against its GLSL half,
+# engine.lod_rule_parity (archived: archive/tests/engine) — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
 # ATOM stage 2 (lane ATOM-CLUSTER-1) added the FOURTH copy — the cluster cut's C++
 # rule against the product GLSL piece JahClusterCut.glsl, over the shipped meshes'

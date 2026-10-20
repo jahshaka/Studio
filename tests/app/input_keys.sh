@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
+# app.input_keys (archived: archive/tests/app) — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
 # This is the merge of what used to be three ctest rows — app.pacing_undo,
 # app.multiselect_keys and app.navigation_keys — each of which started its own
@@ -27,7 +27,7 @@
 #     spaces. And "N objects delete as ONE undo step" is unobservable from a
 #     --script run, because a run is itself one open macro.
 #
-#   * NAVIGATION. input.fly_controls pins the fly MATHS headless. What only a
+#   * NAVIGATION. input.fly_controls (archived: archive/tests/input) pins the fly MATHS headless. What only a
 #     live window can answer is whether the key ARRIVES (the arrows are
 #     WindowShortcut material all over the app) and whether the freed letter
 #     now reaches the tool shortcut while the right button is held.

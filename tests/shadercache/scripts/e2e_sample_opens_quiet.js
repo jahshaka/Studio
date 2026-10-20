@@ -1,4 +1,4 @@
-// shader.sample_opens_quiet (ASYNC-SHADERS-1): every shipped sample, opened through the sample
+// shader.sample_opens_quiet (archived: archive/tests/shader) (ASYNC-SHADERS-1): every shipped sample, opened through the sample
 // browser's own route on a cold shader cache, the way the owner opens it (the background
 // compiler on): after each open's window, 240 frames compile NOTHING on the UI thread.
 // app.shaderCache().liveCompiles counts every compile a frame waited for (SHADER-WARM-2's

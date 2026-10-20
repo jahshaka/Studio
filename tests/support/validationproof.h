@@ -6,7 +6,7 @@
 // is not live on the device. JAH_EXPECT_VALIDATION is what keeps a row honest when its environment
 // line is edited away: the row then fails instead of running unlayered.
 //
-// IT BITES (measured 2026-10-09, :71): sky.env_layout's binary with JAH_EXPECT_VALIDATION=1 and NO
+// IT BITES (measured 2026-10-09, :71): sky.env_layout (archived: archive/tests/sky)'s binary with JAH_EXPECT_VALIDATION=1 and NO
 // layer in its environment -> "requested no, expected yes, ACTIVE NO" and exit 1; under its row's
 // VK_INSTANCE_LAYERS -> ACTIVE yes, vkCmdDraw resolving into libVkLayer_khronos_validation.so (so
 // the legacy variable DOES load the layer on this loader). Read it once a VIEW exists: before the

@@ -1,4 +1,4 @@
-// gi.leak_room — THE FIELD'S LEAK FIX, UNDER A CASCADE CHAIN TOO
+// gi.leak_room (archived: archive/tests/gi) — THE FIELD'S LEAK FIX, UNDER A CASCADE CHAIN TOO
 // (SPECS/PHOTON_SPEC.md E1's bar; promoted from the PHOTON-S2 spike harness,
 // spikes/photon-s2/FINDINGS.md §3, which measured the numbers this pins).
 //
@@ -43,7 +43,7 @@ static int failures = 0;
 static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
-// (its fix round, B1): gi.gather measures the same room with a third arm
+// (its fix round, B1): gi.gather (archived: archive/tests/gi) measures the same room with a third arm
 // and the two suites compare their numbers against each other, which is only
 // worth anything while the rooms are the same room. `enginetest::leakroom`
 // carries the shell, the two lamps, the pose and the measurement block.
@@ -134,7 +134,7 @@ int main()
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
         // The shell, the two lamps and the pose — one shared fixture, so
-        // gi.gather's third arm measures THIS room and not a copy of it.
+        // gi.gather (archived: archive/tests/gi)'s third arm measures THIS room and not a copy of it.
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
         // ONE measurement path, run once per arm: set the arm, light the
@@ -210,7 +210,7 @@ int main()
     // calls a sphere's voxels two-sided, the injection takes abs(NdotL), and the
     // sphere's FAR side is lit by a lamp that is behind it. That is the leak
     // class, and no other suite sees it: this file's rooms and
-    // gi.cascade_determinism's plates are all axis-aligned, where the seam is
+    // gi.cascade_determinism (archived: archive/tests/gi)'s plates are all axis-aligned, where the seam is
     // never crossed.
     //
     // THE INSTRUMENT is the far side of the subject itself. One lamp, nothing

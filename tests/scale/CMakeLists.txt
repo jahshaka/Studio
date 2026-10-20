@@ -18,7 +18,7 @@
 #                 big bakes are W11 itself (minutes and gigabytes), so they are made
 #                 ONCE PER BAKE FORMAT FOR THE WHOLE BOX (re-baked in place when stale) by
 #                 the fixture row
-#                 `scale.assets` (the tool `scale_assets_gen`; a no-op once cached)
+#                 `scale.assets` (archived: archive/tests/scale) (the tool `scale_assets_gen`; a no-op once cached)
 #                 into THE SHARED SCALE CACHE; a row whose shell is missing FAILS and
 #                 says how to bake it — no row ever measures a smaller asset instead;
 #   the LIBRARY — test_scale_library.cpp generates it through the import door.
@@ -26,7 +26,7 @@
 # (default ~/Developer/testing/scale-cache — outside every tree, so a new worktree reads the
 # shells the last one baked), one sub-directory per bake FORMAT VERSION (v<kFormatVersion>,
 # scale_world.cpp cacheDir; ~1.1 GB): every reader checks a blob's fingerprint from its header,
-# and a blob another bake producer made is STALE — scale.assets re-bakes it in place.
+# and a blob another bake producer made is STALE — scale.assets (archived: archive/tests/scale) re-bakes it in place.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
 find_package(X11 REQUIRED)
 
@@ -66,11 +66,11 @@ add_executable(test_scale test_scale.cpp ${_scale_world_sources})
 jah_scale_target(test_scale)
 
 # ---------------------------------------------------------------------------
-# THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact
-# and atom.removechild_leak. scale.occlusion, atom.coverage_trace and the bars that TIME the world (scale.cpu_walks,
-# scale.shadow_cut, scale.gpu_coverage, scale.library) are stage-close: measurements of a whole world. scale.library's
-# setup row scale.library.fixture keeps its label (the ROWS table: KEEP — a no-op once the template exists; ctest adds it
-# to whatever names scale.library).
+# THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact (archived: archive/tests/atom)
+# and atom.removechild_leak (archived: archive/tests/atom). scale.occlusion (archived: archive/tests/scale), atom.coverage_trace (archived: archive/tests/atom) and the bars that TIME the world (scale.cpu_walks,
+# scale.shadow_cut (archived: archive/tests/scale), scale.gpu_coverage (archived: archive/tests/scale), scale.library (archived: archive/tests/scale)) are stage-close: measurements of a whole world. scale.library (archived: archive/tests/scale)'s
+# setup row scale.library.fixture (archived: archive/tests/scale) keeps its label (the ROWS table: KEEP — a no-op once the template exists; ctest adds it
+# to whatever names scale.library (archived: archive/tests/scale)).
 # The `scale-target` rows print, never gate, and are untouched.
 #
 # THE ROWS — one per wall. Label `scale-target` on every one (TARGET_LABELS). The rows
@@ -97,8 +97,8 @@ set(SCALE_T_BAKE 300)         # 48 s (a 250 k shell baked: W11 itself)
 set(SCALE_T_HIT 430)          # 71 s
 set(SCALE_T_WALKS 340)        # 47-57 s
 set(SCALE_T_SHADOW 450)       # both worlds in one process: 48 s + 24.4 s measured, x 6
-# scale.library: 48-110 s over a GENERATED library (6 x 110 s). The generation is its own row
-# since GATE-SPEED-1 (scale.library.fixture below): 10,000 imports + 25 creates + 475 archive
+# scale.library (archived: archive/tests/scale): 48-110 s over a GENERATED library (6 x 110 s). The generation is its own row
+# since GATE-SPEED-1 (scale.library.fixture (archived: archive/tests/scale) below): 10,000 imports + 25 creates + 475 archive
 # imports, 184-200 s measured in a fresh rc tree and up to ~14 min on a loaded box — the
 # one-time fixture cost, whose budget (30 min) is the fixture row's, never the lock's.
 set(SCALE_T_LIBRARY 660)
@@ -118,17 +118,17 @@ endfunction()
 # W7 IS CLOSED (ATOM-OCCLUSION-1): its row is a BAR — the two-pass id pass within 1.25x of the
 # reference cull and its id image the frustum-only one at every pose — and not a target.
 # STAGE-CLOSE (TESTING-SPEED-B3, the lead's verdict): case-bound — 3 arms x 8 poses of id readbacks ARE the
-# measurement (45 s quiet); a scale property. atom.occlusion_exact is the merge tier's occlusion guard.
+# measurement (45 s quiet); a scale property. atom.occlusion_exact (archived: archive/tests/atom) is the merge tier's occlusion guard.
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
 # THE SHIP SET (TEST-CUT-1): the scale prefix's end-to-end row — the 10k-node world's CPU walks, timed under the lock.
-# (scale.library was the first pick; its setup scale.library.fixture generates a 10,000-asset template, 180 s in a
+# (scale.library (archived: archive/tests/scale) was the first pick; its setup scale.library.fixture (archived: archive/tests/scale) generates a 10,000-asset template, 180 s in a
 # fresh tree, so its true price is over the minute: archived.)
 jah_ship_row(scale.cpu_walks)
 # ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
 # frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
-# scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
+# scale.gpu_coverage (archived: archive/tests/scale) — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
 # the lattice at Epic, still and panning, the GPU work no monitor row names against the frame's BUSY
 # span (its own GPU span less the GPU's wait for submissions, MonitorRecord::gpuIdleMs — printed as a
 # target, never gated); the median frame's unattributed share stays under 5 %. A BAR, so it gates
@@ -136,7 +136,7 @@ set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # (the lattice's settle is most of it); the run budget is ~3x that.
 set(SCALE_T_COVERAGE 600)
 
-# scale.assets — THE SHELLS' FIXTURE ROW (V2-P0A): bakes every shell the rows read (250 k,
+# scale.assets (archived: archive/tests/scale) — THE SHELLS' FIXTURE ROW (V2-P0A): bakes every shell the rows read (250 k,
 # 1 M, 5 M, 10 M) into the shared cache when it is missing or STALE (another bake producer's,
 # re-baked in place), and otherwise reports the bake records from their side files without
 # reading a blob. It sweeps the pieces a killed baker left first. CPU only (no Vulkan, no

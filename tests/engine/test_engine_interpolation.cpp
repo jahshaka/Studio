@@ -42,7 +42,7 @@ static FrameInput record(Scene *scene, NodeId node, unsigned long long step, flo
     return in;
 }
 
-// frame.interpolation_apply (`--apply`, a MEASURE row): the apply of 10,000 moved nodes per free frame, on the scene's
+// frame.interpolation_apply (archived: archive/tests/frame) (`--apply`, a MEASURE row): the apply of 10,000 moved nodes per free frame, on the scene's
 // pool against the frame's thread (engine.arm "interp.serial"), median of 30 frames each — printed, never a bar.
 static int applyMeasure()
 {

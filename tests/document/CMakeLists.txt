@@ -35,7 +35,7 @@ set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
 
-# physics.mt_determinism / physics.step_cost / physics.step_overlap — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
+# physics.mt_determinism (archived: archive/tests/physics) / physics.step_cost (archived: archive/tests/physics) / physics.step_overlap (archived: archive/tests/physics) — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
 # (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23). A pile of boxes dropped in layers, stepped by the document at the
 # fixed step, frames counted; Bullet's own scheduler bound on the test's thread (its game thread) at the box's share.
 # The GUARD (500 bodies, document only): single- vs multi-threaded and run to run, BIT-EQUAL before the first contact
@@ -79,8 +79,8 @@ set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 # no app process, so LeakSanitizer runs with detect_leaks=1 here.
 jah_lsan_lane(document.characterisation)
 
-# document.no_silent_setters — the STATIC half of the dirty-set law
-# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets.
+# document.no_silent_setters (archived: archive/tests/document) — the STATIC half of the dirty-set law
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets (archived: archive/tests/theme).
 # Since the mirror only looks at a node the DOCUMENT says changed, a setter that
 # writes a reflected field and reports nothing is a change that never reaches
 # the screen — not a crash, not visible in any pixel test, and healed a second
@@ -90,9 +90,9 @@ jah_lsan_lane(document.characterisation)
 # touch. It caught thirteen emitter setters and the whole camera lens surface.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
-# document.reader_defaults — THE READER-DEFAULTS LAW, as a command (render audit
-# I-5, lane READER-DEFAULTS-1), shaped like document.no_silent_setters and
-# theme.no_raw_sheets: a lint over the source, because the class it guards
+# document.reader_defaults (archived: archive/tests/document) — THE READER-DEFAULTS LAW, as a command (render audit
+# I-5, lane READER-DEFAULTS-1), shaped like document.no_silent_setters (archived: archive/tests/document) and
+# theme.no_raw_sheets (archived: archive/tests/theme): a lint over the source, because the class it guards
 # against is a LITERAL somebody types, not a value somebody can assert.
 #
 # `src/io/scenereader.cpp` default-constructs the document object and overwrites
@@ -116,5 +116,5 @@ find_package(Python3 COMPONENTS Interpreter QUIET)
 # cache behind `Mesh::loadMesh`, and both are gone: nothing outside an import
 # parses a model, the shipped meshes are baked library assets, and what used to
 # be "one file is parsed once" is now "one asset is baked once"
-# (meshbake.primitives_baked).)
+# (meshbake.primitives_baked (archived: archive/tests/meshbake)).)
 

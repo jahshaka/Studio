@@ -8,7 +8,7 @@
 // store (the crossing rule of jah_voxel_sample.glsl's jahVoxelReadPlane at mip 0 for a
 // ray: both halves). The suites hold the GPU store to this
 // model and derive their bars from what the model predicts, never from the store.
-// Shared by gi.voxel_coverage and gi.field_thin_wall; cubic cells (the chain's).
+// Shared by gi.voxel_coverage (archived: archive/tests/gi) and gi.field_thin_wall (archived: archive/tests/gi); cubic cells (the chain's).
 #pragma once
 
 #include "jahshaka/engine/Engine.h"

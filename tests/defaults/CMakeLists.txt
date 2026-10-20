@@ -30,7 +30,7 @@ set_tests_properties(defaults.exposure_plane PROPERTIES JAHSHAKA_TEST_FRAMES 675
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
 
-# defaults.primitive_table — THE ONE PRIMITIVE TABLE as a contract (owner review
+# defaults.primitive_table (archived: archive/tests/defaults) — THE ONE PRIMITIVE TABLE as a contract (owner review
 # R6 / answer Q4, lane SMALL-UI-A). No engine and no display: the app's own
 # models.qrc is compiled in (so the suite reads the resource paths the PRODUCT
 # ships, never the source tree), the meshes go through the document's parser,

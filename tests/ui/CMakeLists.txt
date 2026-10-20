@@ -1,4 +1,4 @@
-# ui.material_panel — the material properties panel edits the MATERIAL, not
+# ui.material_panel (archived: archive/tests/ui) — the material properties panel edits the MATERIAL, not
 # just its Property list (the dead-panel regression, 2026-08-31). Compiles the
 # panel slice with link stubs for Database/MaterialReader/SceneWriter
 # (tests/ui/test_stubs.cpp) so the suite stays free of Sql and the io/ layer.
@@ -11,7 +11,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Test Sql)
 # scripting.e2e (renamed presentation_state), which survives unchanged, and the
 # pixels are gated by test_engine's hud_overlay_* cases.
 
-# ui.media_lazy — Qt Multimedia stays off the startup path
+# ui.media_lazy (archived: archive/tests/ui) — Qt Multimedia stays off the startup path
 # (STABILITY_PROGRAM_SPEC Lane 6a). VideoPreviewWidget and iris::Scene both
 # used to construct a QMediaPlayer in their constructors, which loaded the
 # ffmpeg backend and enumerated audio devices (pipewire/PulseAudio) on every
@@ -44,7 +44,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     jah_tsan_render(view.window_on_render_thread)   # the render thread's TSan arm (U3 decision 47)
 endif()
 
-# ui.photon_panel — the World panel's Photon section (GI_UNIFIED_SPEC.md §2 / P2).
+# ui.photon_panel (archived: archive/tests/ui) — the World panel's Photon section (GI_UNIFIED_SPEC.md §2 / P2).
 #
 # The unification's promise is a UI one ("one switch, engine picks the
 # techniques, hide the settings it consumes"), so it is asserted on the REAL
@@ -53,7 +53,7 @@ endif()
 # into the document instead of inventing panel state. Offscreen, no display.
 
 # ---------------------------------------------------------------------------
-# ui.vr_panel — THE WORLD PANEL'S VR SECTION (lane VR-WORLD-1, owner request
+# ui.vr_panel (archived: archive/tests/ui) — THE WORLD PANEL'S VR SECTION (lane VR-WORLD-1, owner request
 # 2026-09-18: a place to set the project's VR settings).
 #
 # The ask is a UI one, so it is asserted on the REAL widget: one row per entry
@@ -66,7 +66,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 # A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-# ui.selection_cost — a selection change costs the same at switch 200 as at
+# ui.selection_cost (archived: archive/tests/ui) — a selection change costs the same at switch 200 as at
 # switch 1 (the 1 fps / 2-7 s stall regression, owner session 2026-09-08).
 #
 # The subject is the REAL properties panel under the REAL Qlementine style: the
@@ -78,8 +78,8 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 # use for the Sql/io layer. Offscreen, no display; the document nodes need the
 # headless graph like every other document suite.
 # THE PROPERTIES-COLUMN SLICE, named once (COMPONENTS-1). Two suites compile
-# the WHOLE right column — ui.selection_cost, which measures what a pick costs,
-# and ui.components, which drives the Components section — and an eighty-line
+# the WHOLE right column — ui.selection_cost (archived: archive/tests/ui), which measures what a pick costs,
+# and ui.components (archived: archive/tests/ui), which drives the Components section — and an eighty-line
 # source list copied twice is a list that stops agreeing with itself the first
 # time a blade is added. Both targets take this variable; neither owns it.
 set(JAH_PROPERTIES_COLUMN_SOURCES
@@ -188,7 +188,7 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
 file(CREATE_LINK "${CMAKE_BINARY_DIR}/bin/app" "${CMAKE_CURRENT_BINARY_DIR}/app"
      SYMBOLIC)
 
-# ui.properties_width — THE PROPERTIES PANEL FITS ITS DOCK (owner report
+# ui.properties_width (archived: archive/tests/ui) — THE PROPERTIES PANEL FITS ITS DOCK (owner report
 # 2026-09-08: "the settings run off the right side of the panel and I can't see
 # some of them").
 #
@@ -198,10 +198,10 @@ file(CREATE_LINK "${CMAKE_BINARY_DIR}/bin/app" "${CMAKE_CURRENT_BINARY_DIR}/app"
 # for every kind of selection, that the content's minimum width fits the
 # viewport and that no visible row's right edge falls outside it.
 #
-# Same slice, stubs and style as ui.selection_cost (the row minimums ARE style
+# Same slice, stubs and style as ui.selection_cost (archived: archive/tests/ui) (the row minimums ARE style
 # metrics, so the theme has to be the real one). Offscreen, no display.
 # THE PROPERTIES PANEL'S SOURCE SET, shared by the two suites that build the
-# real panel offscreen (ui.properties_width measures its width, ui.properties_tabs
+# real panel offscreen (ui.properties_width (archived: archive/tests/ui) measures its width, ui.properties_tabs (archived: archive/tests/ui)
 # drives its World | Selection tabs). One list, so a new blade never makes one of
 # them link and the other not.
 set(JAH_PROPERTIES_PANEL_SOURCES
@@ -298,7 +298,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 
-# ui.tree_multiselect — THE OUTLINER'S MODIFIER SEMANTICS (EDITOR_MULTISELECT_SPEC
+# ui.tree_multiselect (archived: archive/tests/ui) — THE OUTLINER'S MODIFIER SEMANTICS (EDITOR_MULTISELECT_SPEC
 # §2.2 / §5), on the real SceneHierarchyWidget with real QTest clicks.
 #
 # The subject is the press-time override of Qt's OWN Shift range: with
@@ -310,7 +310,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
 # none of them runs).
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
-# ui.column_law — S1: every page's columns are the editor's columns, and the
+# ui.column_law (archived: archive/tests/ui) — S1: every page's columns are the editor's columns, and the
 # console is a TAB of the editor's bottom tray. Spawns the REAL binary and
 # drives it over MCP (the shutdown suites' harness): these widths come out of a
 # LAYOUT, which only happens in a shown window with the event loop turning
@@ -325,7 +325,7 @@ file(MAKE_DIRECTORY ${_columns_home}/run)
 # path (source.gpu_rows_closure reads JAHSHAKA_BINARY = the app as "spawns the app").
 
 # ui.space_docks — THE EDITOR COMES BACK WITH ITS PANELS (lane SPACE-1, owner
-# report 2026-09-14). Same harness as ui.column_law, and for the same reason —
+# report 2026-09-14). Same harness as ui.column_law (archived: archive/tests/ui), and for the same reason —
 # these are LAYOUT facts, only visible in a shown window with the loop turning
 # between the switch and the measurement — plus one thing no single-process
 # suite can do: it quits the app FROM THE PLAYER SPACE and boots it again in the
@@ -359,13 +359,13 @@ file(MAKE_DIRECTORY ${_matdrag_home}/run)
 set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
 
-# ui.view_options_submenu — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the
+# ui.view_options_submenu (archived: archive/tests/ui) — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the
 # owner's smoke 2026-10-19). Real pointer input at the editor's View Options button and its Atom
 # View / Photon View rows, where the app reports them (app.widget, app.menus): a hover pops each
 # submenu, a click on its row the moment the pointer arrives pops it (the press that used to
 # strand it behind Qt's menu fade), and after a use the first hover pops it again; each mode it
 # triggers is the view the world reads. TIER high NEEDS photon: the Atom view paints at High (Low
-# is a passthrough viewport) and Photon's Voxels needs Photon. ITS OWN XVFB, like app.input_keys
+# is a passthrough viewport) and Photon's Voxels needs Photon. ITS OWN XVFB, like app.input_keys (archived: archive/tests/app)
 # (the script says why: synthesised input goes to whatever is under the pointer), and registered
 # only where the tools it drives exist. FRAMES 260 is an OBSERVATION under the Live render policy
 # (the green runs rendered 260; the red run, which waits out its bounded polls, rendered 692).
@@ -378,7 +378,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XDPYINFO xdpyinfo)
 endif()
 
-# ui.mcp_prefs — the Claude/MCP preferences page does not write back STALE
+# ui.mcp_prefs (archived: archive/tests/ui) — the Claude/MCP preferences page does not write back STALE
 # state (round-2 review of MCP-LOG-1). OK saves every page of a dialog that is
 # built once and shown many times, so a control still showing what it was
 # built with silently reverts whatever changed in between: a scripted
@@ -387,7 +387,7 @@ endif()
 # server, the window and the theme — no Sql, no engine, no MainWindow.
 find_package(Qt6 REQUIRED COMPONENTS Widgets HttpServer)
 # ---------------------------------------------------------------------------
-# ui.presets_favorites — CLOSE-2 (round 2, D1): the Models/Materials presets
+# ui.presets_favorites (archived: archive/tests/ui) — CLOSE-2 (round 2, D1): the Models/Materials presets
 # tabs read the library when their Database ARRIVES, not while they are being
 # built. Both constructors used to call addFavorites() through an unassigned
 # `AssetPanel::handle`; null-guarding that read alone would have silently
@@ -396,7 +396,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets HttpServer)
 # reads proves more than a real one.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Concurrent)
 
-# ui.import_dialog — THE IMPORT DECISION, AS A DIALOG
+# ui.import_dialog (archived: archive/tests/ui) — THE IMPORT DECISION, AS A DIALOG
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). The dialog's product is an
 # iris::ImportSettings record, so the load-bearing assertion is that the record
 # its widgets emit is byte-identical (canonical JSON, and therefore bake key) to

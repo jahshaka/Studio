@@ -1,5 +1,5 @@
 // avatar.responsive — the Avatar module must not freeze the app (AV1, owner
-// 2026-09-13), measured the way archive.responsive measures an archive.
+// 2026-09-13), measured the way archive.responsive (archived: archive/tests/archive) measures an archive.
 //
 // The owner imported a rigged FBX into the module and the app looked crashed:
 // the session log reads `import: 'Jennifer.fbx' -> … (6 objects, 9332 ms)` on
@@ -68,7 +68,7 @@ using namespace mcpharness;
 /// "the verb returned in < 1,000 ms" and the UI-gap budgets read the box's load as much
 /// as the threading. The push row (avatar.responsive) asserts the job started, the app
 /// answered while it was in flight, the UI thread ticked, the result and each avatar's
-/// animations, and PRINTS the milliseconds; avatar.responsive.timing (stage-close, quiet
+/// animations, and PRINTS the milliseconds; avatar.responsive.timing (archived: archive/tests/avatar) (stage-close, quiet
 /// box, the GPU lock) arms the bars.
 static const bool gTimingBars = jahtest::timingBarsArmed();
 #define TIMING_CHECK(cond, msg) JAH_TIMING_CHECK("avatar.responsive", cond, msg)
@@ -77,7 +77,7 @@ static const bool gTimingBars = jahtest::timingBarsArmed();
 /// thread is one import COMMIT slice (the CAS ingest of one already-hashed
 /// file plus its catalog rows) or the graft of a parsed character into the
 /// preview document — tens of milliseconds each on this fixture. 750 ms is the
-/// same number archive.responsive uses and for the same reason: an order of
+/// same number archive.responsive (archived: archive/tests/archive) uses and for the same reason: an order of
 /// magnitude of headroom over the real work, an order of magnitude below the
 /// ~5 s of unanswered pings that makes the desktop offer to force-quit. The
 /// pre-fix measurement on the owner's file was 12 438 ms (lane AV1, on this
@@ -152,7 +152,7 @@ static void drainApp() { if (gApp) gAppLog += gApp->readAll(); }
 /// Measured on this box 2026-09-15 (lane RESPONSIVE-3), quiet and under 40
 /// spinners, warm and with the binary's pages evicted: an avatar import
 /// compiles ZERO (91 -> 91 every time, and a throwaway warm-up import changes
-/// neither the count nor the gap). archive.responsive's import is the opposite
+/// neither the count nor the gap). archive.responsive (archived: archive/tests/archive)'s import is the opposite
 /// case: the sample's own permutations compile inside its window and block the
 /// UI thread ~2.3 s doing it.
 static int shadersCompiled(McpClient &mcp)
@@ -327,7 +327,7 @@ int main(int argc, char **argv)
             std::printf("info: HOME is not the suite's scratch home (%s) — not resetting\n",
                         home.toUtf8().constData());
     }
-    // AFTER the wipe (the archive.responsive ordering lesson): unseeded, the
+    // AFTER the wipe (the archive.responsive (archived: archive/tests/archive) ordering lesson): unseeded, the
     // modal donate dialog meets app.quit() and the process never exits.
     testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
 
@@ -369,7 +369,7 @@ int main(int argc, char **argv)
     // ---- 0. THE BOOT CONTROL, which is also the warm-up -------------------
     // The first frames of a PROCESS pay the engine's shader/PSO compile storm
     // inside renderOneFrame — UI-thread work this lane neither owns nor can
-    // slice, and the cost is real: archive.responsive measured ~1 780 ms of it
+    // slice, and the cost is real: archive.responsive (archived: archive/tests/archive) measured ~1 780 ms of it
     // on a quiet box and spent months reading it as its own subject (see the
     // boot control there). This suite wipes its data root — which IS the
     // engine's shader + pipeline cache — at the top of every run, so EVERY run
@@ -796,7 +796,7 @@ int main(int argc, char **argv)
     }
 
     // THE ORDERED SHUTDOWN RAN, all eight steps (src/shell/shutdownorder.h) —
-    // the thing a forced exit skips. app.shutdown_order asserts the ORDER on a
+    // the thing a forced exit skips. app.shutdown_order (archived: archive/tests/app) asserts the ORDER on a
     // quiet app; this asserts that the sequence happens AT ALL with a module's
     // background job in flight, which is the case that used to lose it.
     {

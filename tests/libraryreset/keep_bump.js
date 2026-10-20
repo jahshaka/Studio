@@ -1,4 +1,4 @@
-// app.library_keep, PHASE 3 — A FORMAT BUMP (ASSETS-HOME-1; the lead's
+// app.library_keep (archived: archive/tests/app), PHASE 3 — A FORMAT BUMP (ASSETS-HOME-1; the lead's
 // acceptance 2026-10-05). The shell boots the populated library with
 // JAHSHAKA_TEST_LIBRARY_GENERATION one above this build's generation, so the
 // startup check runs the bump this build would run: the catalog is dropped and

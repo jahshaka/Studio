@@ -1,4 +1,4 @@
-// shader.async_soak (ASYNC-SHADERS-1): the background compiler under use, with the Vulkan
+// shader.async_soak (archived: archive/tests/shader) (ASYNC-SHADERS-1): the background compiler under use, with the Vulkan
 // validation layer on (the driver sets it): 50 material applies while the camera flies, a
 // BLOCKING render meeting a pending permutation (an offscreen screenshot right after a new
 // material: the in-frame queue's workers and the service's publish in one frame), a SCENE

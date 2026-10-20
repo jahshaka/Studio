@@ -39,7 +39,7 @@ set_tests_properties(threading.staging_race PROPERTIES
 # raced on.
 jah_tsan_lane(threading.staging_race)
 
-# threading.mode (gate G1-c) and threading.gi_resolve — THE TWO COMPILE PAIRS, ONE ROW EACH
+# threading.mode (archived: archive/tests/threading) (gate G1-c) and threading.gi_resolve (archived: archive/tests/threading) — THE TWO COMPILE PAIRS, ONE ROW EACH
 # (TESTING-SPEED-B3; they were three ctest entries each: the parallel half, the _serial half and a
 # _pixels byte compare between their fixtures).
 #
@@ -59,13 +59,13 @@ jah_tsan_lane(threading.staging_race)
 # compile beside each other (GATE-SPEED-1's verdict, spikes/gate-speed-1/); the COST starts the chain early.
 set(JAH_COST_THREADING 80000)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
-# The gi_resolve script's own header carries the defect it guards (the one frame threading.mode does not
+# The gi_resolve script's own header carries the defect it guards (the one frame threading.mode (archived: archive/tests/threading) does not
 # exercise: world.refreshGi() EXACTLY ONE rendered frame after the compile burst) and what fixed it
 # (Ogre fork 1bccc3f93+a98e2b0af: BufferPacked's creation serial in the descriptor slots).
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 # — the real binary cannot start under GCC 15's libtsan; threading.staging_race carries the lane's coverage.
 
-# threading.import_soak / threading.newproject_stall — THE TWO HANGS
+# threading.import_soak (archived: archive/tests/threading) / threading.newproject_stall (archived: archive/tests/threading) — THE TWO HANGS
 # (defect wave 2026-09-08; the mechanisms are in the scripts' own headers).
 #
 # Both drive the REAL binary through --script with the engine up, because both
@@ -118,7 +118,7 @@ set_tests_properties(threading.texture_wait_watchdog PROPERTIES
 # beside the parent's red instead of grepping a crashed run's logs (the logs stay in the home for the triage).
 # source.testing_rules R6 guards the shape: a row that DEPENDS on another row requires a fixture that row sets up.
 
-# Same toolchain quarantine as threading.mode: the real binary cannot start
+# Same toolchain quarantine as threading.mode (archived: archive/tests/threading): the real binary cannot start
 # under GCC 15's libtsan.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(

@@ -1,4 +1,4 @@
-// gi.rayquery — THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1).
+// gi.rayquery (archived: archive/tests/gi) — THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1).
 //
 // The tier keeps a ray-traceable copy of the scene: one bottom-level
 // acceleration structure per mesh, one top-level structure over the instances,
@@ -167,7 +167,7 @@ static bool imagesEqual(const Image &a, const Image &b)
 }
 
 // =========================================================================================
-// engine.ray_update_counts (--update-counts) and engine.ray_update_cost (--update-cost, a measure row)
+// engine.ray_update_counts (archived: archive/tests/engine) (--update-counts) and engine.ray_update_cost (archived: archive/tests/engine) (--update-cost, a measure row)
 // THE RAY TIER'S HOST UPDATE IS PATCHED BY WHAT CHANGED (ENGINE-UPGRADE-U5 stage 3, the bars ruled by the
 // lead's decision 14.4). On Bistro's walk updateRayQuery was 12.9 % of the render thread: the job's per-mesh
 // table re-written whole every frame a BLAS level was built, two scans over every BLAS key with a find each,
@@ -910,7 +910,7 @@ int main(int argc, char **argv)
         // changes, no node is touched — only the datablock's alpha test, in
         // place. SINCE REFLECT-MOVERS-2 A CUT-OUT STAYS IN THE STRUCTURE: its
         // instance turns FORCE_NO_OPAQUE and every ray query tests its candidates
-        // against its mask (jah_rq_alpha.glsl; gi.rt_alpha_tested holds the holes).
+        // against its mask (jah_rq_alpha.glsl; gi.rt_alpha_tested (archived: archive/tests/gi) holds the holes).
         // With no albedo map the raster's test reads the background diffuse's
         // alpha (opaque here): every texel is kept, so the ray still stops.
         PbrParams cut;

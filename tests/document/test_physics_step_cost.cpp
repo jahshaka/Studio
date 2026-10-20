@@ -1,4 +1,4 @@
-// physics.mt_determinism / physics.step_cost / physics.step_overlap — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
+// physics.mt_determinism (archived: archive/tests/physics) / physics.step_cost (archived: archive/tests/physics) / physics.step_overlap (archived: archive/tests/physics) — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
 // (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23).
 //
 // A pile of N boxes dropped in layers onto a ground, stepped by the document (Scene::advance at the fixed 1/60 step:
@@ -30,7 +30,7 @@
 //                  an engine scene after each step (the transform-only fast path, decision 22.1) — the sync timed too
 //   --overlap      THE CORE BUDGET'S QUESTION: an engine on its own render thread draws 10,000 cubes moving every frame
 //                  while this thread steps; the step's time inside the render thread's pool spans is the overlap
-//   --bound S      THE GUARD (physics.mt_determinism): through checkpoint S, the seq-vs-mt and run-to-run differences
+//   --bound S      THE GUARD (physics.mt_determinism (archived: archive/tests/physics)): through checkpoint S, the seq-vs-mt and run-to-run differences
 //                  held to the derived bound — bit-equal before the first contact, then at most the landing's
 //                  sqrt(2gh) dt once and g dt^2 per step (see the law below)
 //   --mt-only      the mt arm alone (a thread count's own process: the sweep)

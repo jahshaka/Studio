@@ -1,4 +1,4 @@
-# tests/avatar — THE AVATAR FIXTURES ONLY (TEST-CUT-1, 2026-10-20). The avatar suites (avatar.document, .preview, .locomotion,
+# tests/avatar — THE AVATAR FIXTURES ONLY (TEST-CUT-1, 2026-10-20). The avatar suites (avatar.document (archived: archive/tests/avatar), .preview, .locomotion,
 # .movement, .possession, .assets, .locomotion_mirror) left the tree for archive/tests/avatar/ (the tag tests-before-cut-1
 # holds them); what stays is the fixture two CORE rows read: avatar.responsive (tests/avatarasync) and scripting.e2e.one_asset
 # (tests/scripting) spawn the default avatar from beta_mannequin.dae and load its walk from beta_walk.dae. Ships 3 and 4

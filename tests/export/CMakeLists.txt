@@ -52,6 +52,6 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 # below runs it with DISPLAY unset, which is the proof of that claim.
 
 # The leak lane (scripts/sanitize.sh lsan): the walkers and writers build whole
-# document trees in memory. export.embed spawns a browser, so it stays out.
+# document trees in memory. export.embed (archived: archive/tests/export) spawns a browser, so it stays out.
 jah_lsan_lane( export.web )
 

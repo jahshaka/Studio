@@ -1,4 +1,4 @@
-// The app half of perf.capture_bundle — it RECORDS; test_capture_bundle.cpp
+// The app half of perf.capture_bundle (archived: archive/tests/perf) — it RECORDS; test_capture_bundle.cpp
 // reads what it wrote and judges it (the scripting engine has no file access,
 // deliberately, so validation lives in the C++ half).
 //

@@ -1,4 +1,4 @@
-// log.events — the verb surface and the event markers, against the REAL binary
+// log.events (archived: archive/tests/log) — the verb surface and the event markers, against the REAL binary
 // (SESSION_LOG_SPEC §10 phase 2 gate).
 //
 // This suite exists because the markers can only be proved where they actually

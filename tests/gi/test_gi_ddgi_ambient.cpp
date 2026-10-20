@@ -1,4 +1,4 @@
-// gi.ddgi_ambient — THE SKY INSIDE THE IRRADIANCE FIELD, end to end.
+// gi.ddgi_ambient (archived: archive/tests/gi) — THE SKY INSIDE THE IRRADIANCE FIELD, end to end.
 //
 // SINCE PHOTON-ENV-1 THE FIELD CARRIES THE SKY ITSELF: every probe ray that
 // escapes the voxels reads the one environment in its direction, and the
@@ -61,7 +61,7 @@
 // compared with the cone reference, which over-reads a corner (+11.7 points): the
 // cone's corner is the target row gi.cone_corner_target (PHOTON-FIELD-ROTATE-1).
 //
-// Its own binary, like every GI suite here. Determinism discipline is gi.ddgi's: fixed frame delta, no
+// Its own binary, like every GI suite here. Determinism discipline is gi.ddgi (archived: archive/tests/gi)'s: fixed frame delta, no
 // wall clock, and a rebuild-determinism control before any A/B is believed.
 // PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
 // the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
@@ -155,7 +155,7 @@ static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec
 static const Colour kAmbientUpper(0.40f, 0.40f, 0.44f);
 static const Colour kAmbientLower(0.10f, 0.10f, 0.12f);
 
-/// The VCT parameters every case starts from — gi.ddgi's, so the numbers in
+/// The VCT parameters every case starts from — gi.ddgi (archived: archive/tests/gi)'s, so the numbers in
 /// this file and the ones in that one are about comparable pictures.
 static GiParams vctBase()
 {
@@ -178,7 +178,7 @@ static GiParams vctBase()
 // THE OPEN SCENE, shared by cases 1 and 2: a big floor with one wall standing
 // on it, an ambient hemisphere pair, and NO LIGHTS AT ALL. With nothing but
 // ambient in the scene, every number below is a measurement of the ambient term
-// rather than a comparison of two whole lighting solutions (gi.ambient's
+// rather than a comparison of two whole lighting solutions (gi.ambient (archived: archive/tests/gi)'s
 // premise), and with no light injected the field's own irradiance is zero — so
 // whatever the fix adds is unambiguously the recovered ambient.
 //
@@ -299,7 +299,7 @@ static OpenScene buildOpenScene(Engine *e, const char *name)
     // the floor's SKY VISIBILITY (cosineSkyVisibilityUp, the corner quadratures), which
     // is the physics of a wall that only blocks. Since the store holds the sky's direct
     // term at every bounce count, a white wall under this sky bounces albedo x its sky
-    // irradiance onto the floor (gi.contact_occlusion arm B) — measured 95.4 % at the foot
+    // irradiance onto the floor (gi.contact_occlusion (archived: archive/tests/gi) arm B) — measured 95.4 % at the foot
     // against a sky-visibility bar of 80.3-89.5 % — which is right, and not this
     // suite's subject (the field's visibility).
     addSlab(o.scene, Colour(0.0f, 0.0f, 0.0f), Vec3(0.0f, 2.0f, -2.0f), Vec3(12.0f, 4.0f, 0.4f));
@@ -313,7 +313,7 @@ static OpenScene buildOpenScene(Engine *e, const char *name)
 // The shared four-cone set (jah_voxel_cones.glsl: axes at 45 degrees about the floor's normal,
 // tan of the half angle 0.98269, 0.25 each) marched from the floor by the engine's own reader
 // (Engine::voxelReaderParity's compute arm, bit-identical to the pixel's:
-// engine.voxel_reader_parity), each cone's escape the pixel's 1 - min(1, alpha / 0.95) - and on
+// engine.voxel_reader_parity (archived: archive/tests/engine)), each cone's escape the pixel's 1 - min(1, alpha / 0.95) - and on
 // the CPU by the voxel lab (tests/support/voxel_lab.h), the same march with the same three rules
 // (jahConeBelow, jahVoxelFirstPlane, jahVoxelKernelLevel):
 //   (a) THE READ IS THE RULE: the lab over the split store read back from the GPU; every cone's
@@ -328,7 +328,7 @@ static OpenScene buildOpenScene(Engine *e, const char *name)
 //       RESIDUAL OF THIS SET AND READER - the wall inside the wide cones' first two planes,
 //       read through a kernel wider than the stretch the wall occupies (the same geometry as
 //       the sealed room's A/C class). The owed refinement is VOXEL-5 (a lateral-only mip
-//       family per axis); a wider set is not it (gi.voxel_lab's split arm: six -0.022,
+//       family per axis); a wider set is not it (gi.voxel_lab (archived: archive/tests/gi)'s split arm: six -0.022,
 //       Fibonacci-12 +0.006 there, at 3x the cones).
 //   BAR 2 = the reference against the truth (the cosine-weighted sky visibility) - THE SET'S
 //       ERROR, a property of four wide cones on a hemisphere with a wall in part of one or two
@@ -655,7 +655,7 @@ int main(int argc, char **argv)
         ref.mode = GiMode::Vct;
         ref.quality = GiQuality::Low;        // the Low tier's cascade set (one store at every tier)
         // NO BOUNCE: the subject is the SKY the field and the cones see; the sky-lit wall's
-        // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi's and the cards'
+        // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi (archived: archive/tests/gi)'s and the cards'
         // subject, and it is not in the analytic below (skyIrradiance).
         ref.numBounces = 0;
         ref.cascadeCount = 1;                // see vctBase: one cascade, the lab's store
@@ -838,7 +838,7 @@ int main(int argc, char **argv)
     }
 
     // =====================================================================
-    // CASE 3 — THE BOUNCE SURVIVES. gi.ddgi's lit room with ambient added: the
+    // CASE 3 — THE BOUNCE SURVIVES. gi.ddgi (archived: archive/tests/gi)'s lit room with ambient added: the
     // fix must add achromatic ambient WITHOUT eating the red bounce the field
     // is there to carry.
     // =====================================================================
@@ -862,7 +862,7 @@ int main(int argc, char **argv)
         l.castShadows = false;
         s->setLight(light, l);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
-        const unsigned fx = 64, fy = 96;      // gi.ddgi's floor probe
+        const unsigned fx = 64, fy = 96;      // gi.ddgi (archived: archive/tests/gi)'s floor probe
 
         // THE SKY OFF (a black ambient: no environment for any reader), then ON.
         GiParams field = vctBase();
@@ -912,7 +912,7 @@ int main(int argc, char **argv)
         view->setScene(s);
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));      // the sky OFF first
 
-        // gi.pcc_mirror's closed room: interior x,z in [-4,4], y in [0,5],
+        // gi.pcc_mirror (archived: archive/tests/gi)'s closed room: interior x,z in [-4,4], y in [0,5],
         // 0.4-thick shell, and no way in for sky.
         // Mid-grey rather than white, and a dim light: a white box around a
         // bright point light clips most of the frame, and a clipped pixel
@@ -994,7 +994,7 @@ int main(int argc, char **argv)
         // NOT THE QUANTUM. The quantum floor is ~0.3 of a code: the 10-bit coverage (1/1023 a
         // texel) over the ~3 crossings a cone makes of the shell, 0.003 of escape against the
         // sky. What moves a pixel by 2 codes is geometry the four-cone set's plane march does not
-        // yet read - gi.voxel_lab's `sealed` arm, this shell voxelised analytically (64^3), the
+        // yet read - gi.voxel_lab (archived: archive/tests/gi)'s `sealed` arm, this shell voxelised analytically (64^3), the
         // shipped reader, the four-cone set from every inner surface point on a 0.3 m grid
         // (534 of 13176 cones escape; mean point leak 0.0056), by CLASS:
         //   A  a wall within 0.4 m above the floor   54 of  864 cones, worst cone 0.760, point 0.190
@@ -1005,7 +1005,7 @@ int main(int argc, char **argv)
         //   D  elsewhere                            368 of 9848 cones, worst cone 0.257, point 0.064
         //      - THE COARSE EDGE: the plane axis's lateral reach is its own texel, so a cone
         //      whose plane axis crosses the ceiling beyond a coarse texel's reach never reads it.
-        // THE LATERAL-ONLY MIP FAMILY WAS TRIED AND REFUTED (PHOTON-VOXEL-5 item (i), gi.voxel_lab
+        // THE LATERAL-ONLY MIP FAMILY WAS TRIED AND REFUTED (PHOTON-VOXEL-5 item (i), gi.voxel_lab (archived: archive/tests/gi)
         // `sealed`): it makes the plane term an exact mean over the cone's footprint, and near a
         // wall that footprint runs past the shell into minor-axis surfaces the kernel under-reads
         // - escaping cones 534 -> 652 on the plane axis (A/B/C/D 54/94/50/454), 1,910 on every

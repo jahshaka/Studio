@@ -1,4 +1,4 @@
-// gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU over an
+// gi.voxel_lab (archived: archive/tests/gi) — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU over an
 // ANALYTIC store (SYNTH: boxes voxelised exactly into the split coverage and position), against
 // the CONE-TRACE REFERENCE of the true geometry. No engine: tests/support/voxel_lab.h is the
 // march, the store, the references and the cone sets. It is the instrument the reader's rules
@@ -7,24 +7,24 @@
 // closed; the reference is a probability).
 //
 // ARMS (the ctest row runs `sealed 64` and `split 32`):
-//   sealed [R]   gi.ddgi_ambient case 5's shell (0.4 m walls, overlapping corners) at R^3 cubic
+//   sealed [R]   gi.ddgi_ambient (archived: archive/tests/gi) case 5's shell (0.4 m walls, overlapping corners) at R^3 cubic
 //                cells: the four-cone set from every inner surface point on a 0.3 m grid; every
 //                escape is sky through a closed shell. Per CLASS (A a wall within 0.4 m above
 //                the floor, B the ceiling-wall edge, C the floor within 0.4 m of a wall, D the
 //                rest), for the shipped reader and the candidates the lab measured.
 //   sets [R]     the same shell for every set (four, six, Fibonacci-8/12/16): the per-set record.
-//   split [R]    gi.ddgi_ambient's open scene (the floor slab and the wall in its 18 x 9 x 18 m
+//   split [R]    gi.ddgi_ambient (archived: archive/tests/gi)'s open scene (the floor slab and the wall in its 18 x 9 x 18 m
 //                box, 2R x R x 2R cubic cells): per set, BAR 1 (the read against the cone-trace
 //                reference - the store's error) and BAR 2 (the reference against the hemisphere's
 //                truth - the set's error).
 //   validate DIR the reader over stores the suites dumped (tests/support/voxeldump.h,
-//                JAH_VOXEL_DUMP=DIR): the four-cone set at gi.ddgi_ambient's two floor points.
+//                JAH_VOXEL_DUMP=DIR): the four-cone set at gi.ddgi_ambient (archived: archive/tests/gi)'s two floor points.
 //   THE LIGHT (tests/support/voxel_lab_colour.h; PHOTON-VOXEL-5 item (ii)), per light model - one
 //   light per voxel, LIGHT PER FACE SIDE (two sides by the voxel's normal groups), per face:
-//   leak DIR [T]  gi.gather's leak room on a dump's four lattices: the red the pixel's cones
+//   leak DIR [T]  gi.gather (archived: archive/tests/gi)'s leak room on a dump's four lattices: the red the pixel's cones
 //                 carry, and the halves holding red their faces do not carry, by voxel class;
 //   thin DIR [dz] its thin walls: a ray's hit read and a probe's ray (the lattices moved dz);
-//   roof DIR      gi.voxel_coverage's MEASURE-2 (b) roof: the underside's light, the floor's cones;
+//   roof DIR      gi.voxel_coverage (archived: archive/tests/gi)'s MEASURE-2 (b) roof: the underside's light, the floor's cones;
 //   flatwall [R]  a dark wall over a lit 0.1 m floor: the column the cones read.
 //   THE STORE LIT BY LAMPS THROUGH THE INJECTION (synthLamps: its normal, its shadow march), per
 //   store - one light, two sides, the FUSED form (light per half-axis into the directional level
@@ -243,7 +243,7 @@ static std::vector<LitCascade> litChain(const std::vector<Cascade> &heads, const
     return ch;
 }
 
-/// gi.gather's leak room (tests/support/leakroom.h): a sealed 10 m room of wall thickness T.
+/// gi.gather (archived: archive/tests/gi)'s leak room (tests/support/leakroom.h): a sealed 10 m room of wall thickness T.
 static std::vector<Box> leakBoxes(double T)
 {
     const double ho = 5.0 + T * 0.5, span = 10.0 + 2.0 * T;
@@ -342,7 +342,7 @@ static void armLeak(const std::string &dir, double T)
     CHECK(redOf[kPerFace] <= 1e-9, "the ideal (each half its own faces' light) carries no red");
 }
 
-/// gi.gather's THIN WALL (the leak room at 0.50 / 0.20 / 0.10 / 0.05 m): a RAY's hit on the -Z
+/// gi.gather (archived: archive/tests/gi)'s THIN WALL (the leak room at 0.50 / 0.20 / 0.10 / 0.05 m): a RAY's hit on the -Z
 /// wall's inner face read by jahVoxelRadiance (the texel either side, the larger opacity) at lod
 /// 0 and 1, and a field probe's RAY (aperture 0, the march) from 0.5 m inside the wall - the red
 /// each reads, per light model. The physics: the inner face's green 0.3, no red.
@@ -385,7 +385,7 @@ static void armThin(const std::string &dir, double shiftZ)
     }
 }
 
-/// MEASURE-2 (b) IN THE LAB (gi.voxel_coverage's roof): a 0.1 m roof lit by the sun over a closed
+/// MEASURE-2 (b) IN THE LAB (gi.voxel_coverage (archived: archive/tests/gi)'s roof): a 0.1 m roof lit by the sun over a closed
 /// dark room, at x = 11 (inside cascade 2) and x = 40 (only in cascade 3), on the dumped lattices:
 /// over the roof voxels above the room's interior the radiance x coverage the top's half (+y) and
 /// the underside's (-y) carry, and the four cones from the room's floor (the physics: 0 - the room
@@ -465,9 +465,9 @@ static void armRoof(const std::string &dir)
     }
 }
 
-/// THE FLAT WALL (gi.card_lighting_indirect's class): a 0.4 m wall standing on a 0.1 m floor lit
+/// THE FLAT WALL (gi.card_lighting_indirect (archived: archive/tests/gi)'s class): a 0.4 m wall standing on a 0.1 m floor lit
 /// from above (radiance 0.5), the wall's face dark; the four cones from the wall's face at 0.8 /
-/// 1.6 / 2.8 m on gi.ddgi_ambient's open-scene lattice - the colour must not change with the light
+/// 1.6 / 2.8 m on gi.ddgi_ambient (archived: archive/tests/gi)'s open-scene lattice - the colour must not change with the light
 /// model where no voxel holds two opposed faces, and the floor's lit top must read the same.
 static void armFlatWall(int R)
 {
@@ -518,7 +518,7 @@ static std::vector<LitCascade> lampChain(const std::vector<Cascade> &heads, cons
     return ch;
 }
 
-/// THE FUSED FORM IN THE LAB (PHOTON-VOXEL-5 item (ii), the lead's option 3): gi.gather's leak
+/// THE FUSED FORM IN THE LAB (PHOTON-VOXEL-5 item (ii), the lead's option 3): gi.gather (archived: archive/tests/gi)'s leak
 /// room LIT BY ITS LAMPS (the green point lamp inside at (0, 3, 2.5), intensity 3; the red one a
 /// metre outside the -Z wall, 25) through the injection's own lighting - its normal, its shadow
 /// march - per store: the pixel's four cones from the -Z wall's inner face (nine points), a ray's
