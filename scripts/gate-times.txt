@@ -5,6 +5,11 @@
 # every guard against its class's budget at this price (a fixture or a CPU row 10 s, an app row 60 s); a `measure` row
 # runs at the sprint's ship only; source.testing_rules R2 fails a guard with no line. A spec that adds or rewrites a row
 # writes its line from its own solo run.
+# NO LINE OVER 60 s (TEST-CUT-1; CLAUDE.md Testing, the owner's law of 2026-10-20: every test is capped at 60 s):
+# source.testing_rules R8 reds a line over 60 s (a row or a pool arm, ship or not), R9 a row labelled `ship` with no
+# line; `sprint.sh ship` refuses a ship row over 60 s or unpriced before any row runs (exit 2); `spec.sh merge` refuses a
+# spec whose ADDED row is (exit 2) and archives the added rows it did not mark SHIP. Since the cut every registered row
+# is THE SHIP SET's (205 rows; the rest are in the lead repo's archive/tests/<prefix>/ with their last prices).
 api.contract 3.40  ship 3a0422b4e (2026-10-13)
 app.engine_selftest_validation 43.43  quiet n=46; budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it
 app.test_needs_boot 33.40  ship 3a0422b4e (2026-10-13)
