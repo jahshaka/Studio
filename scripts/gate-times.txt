@@ -57,7 +57,7 @@ atom.dag_bound 4.67  the run log's atom.dag_bound_target (quiet n=32): the same 
 atom.dag_bound_bar 18.70  quiet n=30
 atom.dag_chain_validate 12.07  quiet n=44
 atom.decode_exact 22.44  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
-atom.dolly_gate 43.49  solo 2026-10-19 (ATOM-3 stage 1: the 1 px walk, its control, the 2 and 3 px walks and the 10x arm; 920 frames, a measure row; n=1)
+atom.dolly_gate 43.13  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: a measure row, its time recorded; 920 frames; n=1)
 atom.lod_bound_bar 11.36  quiet n=30
 atom.lod_switch 237.65  quiet n=43
 atom.lod_switch.fixture 0.05  quiet n=52
@@ -222,8 +222,10 @@ gi.far_blas 3.86  quiet n=43
 gi.far_sun_clutter 106.29  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_clutter_c3 5.62  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (5.50/5.62/5.67)
 gi.far_sun_lamp 6.11  hand: FAR-SUN-2 solo under gpu-exclusive, n=3 (6.07/6.11/6.12)
+gi.far_sun_mip_c3 22.50  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: a measure row, its time recorded — 0 shader compiles, the work is the row's; n=1)
 gi.far_sun_share 104.33  hand: FAR-SUN-1 self-audit at a4264c2e6, n=1
 gi.far_sun_share_c3 4.96  hand: FAR-CASCADE-FIXTURE solo median under gpu-exclusive, n=3 (4.87/4.96/5.03)
+gi.far_sun_store_c3 3.56  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: a measure row, its time recorded; n=1)
 gi.field_alias 72.80  ship 3a0422b4e (2026-10-13)
 gi.field_dependency 3.59  solo EU-2 stage 2 (2026-10-14)
 gi.field_variance_stop 7.72  spec EU-2B stage 4 read (2026-10-15)
@@ -335,7 +337,7 @@ gi.voxel_coverage 44.23  quiet n=42
 gi.voxel_emissive 6.75  quiet n=39
 gi.voxel_feed 3.03  quiet n=40
 gi.voxel_lab 1.45  quiet n=34
-gi.metal_bounce 6.15  solo 2026-10-18 (ENGINE-UPGRADE-U5 stage 5, METAL-BOUNCE-1; the tinted metal and the mover are gi.metal_bounce_route; n=1, 1310 frames)
+gi.metal_bounce 7.93  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: re-timed once, 1470 frames, 15 compiles; under the budget, unchanged)
 gi.voxel_resident 4.72  quiet n=45
 gizmo.drag_frame 0.10  ship 3a0422b4e (2026-10-13)
 gizmo.group_transform 0.06  quiet n=46
@@ -1001,8 +1003,8 @@ shadow.caster_cull 5.29  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.4: the s
 shadow.caster_receivers 5.10  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.3/22.4: the gap, the out-of-view blockers, the negative control; no dragon bake; n=1, 77 frames)
 engine.texture_drain_reset 1.75  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.5: the host drain reset on a throw; n=1, 11 frames)
 engine.texture_residency 2.57  solo, the card lock held, :80, cold shader cache (BUGS-1 item 13, 2026-10-20; 182 frames)
-gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: the tinted metal, the mover through the decode; n=1)
-gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round: the movers' gate on a metal's card; 573 frames, the gate arms settle 72 — the lowest of three runs beside ATOM-1's gate; over the fixture budget, labelled measure until the row is rewritten to it)
+gi.metal_bounce_route 2.02  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: was 11.80 s at 380 frames — the gather's irradiance readback opened only for the last 5 held frames of each arm; the same 380 frames, the answers byte-identical; n=1)
+gi.metal_bounce_gate 1.78  solo under the card's lock 2026-10-20 (TOOLING-6 item 6: was 17.52 s at 573 frames — the readback door only for the read frames, as the route arm; the same 573 frames, the answers byte-identical; n=1)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
 shadow.caster_route 6.10  solo 2026-10-19 (ATOM-3 stage 2: the cutout through the masked range, + its level-0 reference; n=1, 65 frames)
 shadow.caster_route_lamps 5.08  solo, the card lock held, :79 (BUGS-1 item 12, 2026-10-20; 46 frames)
