@@ -87,7 +87,6 @@ file(MAKE_DIRECTORY ${_off_home}/run)
 # pthread_t): its door's TSan form is the engine fixture frame.monitor_pop.
 set(_cft_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-capture_free_tick)
 file(MAKE_DIRECTORY ${_cft_home}/run)
-   # TSAN-GCC15-THREAD-REGISTRY (U3 decision 49): the door's TSan proof is frame.monitor_pop
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
@@ -103,13 +102,7 @@ endif()
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
-        
-        
-        
-        
         "perf.offscreen_isolation=487"
-        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

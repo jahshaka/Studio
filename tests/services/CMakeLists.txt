@@ -33,8 +33,6 @@ set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 # engine, no display: this is a table-agreement and validator test.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
 # services.memory — session-registry OWNERSHIP (deep audit 2026-09, area 3).
 # Links only the two registries it tests plus IrisGL (the SceneNodePtr payload
 # an asset pins). No engine, no database, no display; runs offscreen.

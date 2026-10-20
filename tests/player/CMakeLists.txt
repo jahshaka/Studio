@@ -4,7 +4,6 @@
 # controllers) with link stubs for the Studio globals they reach into. Output
 # goes to bin/ so asset paths relative to the executable resolve.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # EDITOR/PLAYER PARITY: the same document through EnginePlayerScene and through
 # the editor viewport's own mirror calls, into two identical offscreen views —

@@ -10,8 +10,7 @@
    "env": [],
    "note": "the merge's gate fell back to the MERGE tier on tests/CMakeLists.txt (a suite list + add_subdirectory(scale)); gi.field_follows a wall-clock bar under load (3x red, then 4/4)",
    "archived_paths": [
-    "tests/scale/scale_assets_gen.cpp",
-    "tests/scale/test_scale.cpp"
+    "tests/scale/scale_assets_gen.cpp"
    ]
   },
   {
@@ -106,10 +105,7 @@
    "must_picture": true,
    "none_of": [],
    "rows_at_tip_only": true,
-   "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component",
-   "archived_paths": [
-    "tests/scale/test_scale.cpp"
-   ]
+   "note": "SceneLightList.* has its table line (the light rows, scale.lights, gi, atom); a header's brace-only line, a body of a function the hunk inserts and a comment-for-code hunk never add the enclosing class (PhotonVoxelLighting.h, EnginePrivate.h's OgreScene members by name); the rest of the breadth is OgreScene's constructor/destroy (the core map's _CORE) and the fork pin move by component"
   },
   {
    "lane": "BULLET-BATCHING-1 (TOOLING-2 stage 1)",

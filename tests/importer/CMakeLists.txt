@@ -107,7 +107,6 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # PIXELS (the imported spec-gloss material against the full-metal reading it
 # used to get). Renders, so it needs the engine and a reachable DISPLAY.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # TEXTURE-GUID suite (the owner's "GLB imports come in without textures",
 # 2026-09-09): the SAVE + REOPEN half of an imported model. The textures are

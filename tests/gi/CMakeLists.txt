@@ -44,11 +44,6 @@ set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 set_tests_properties(photon.tiers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(photon.tiers)
 
-   # 2 + 3 + 8 + 3 staged, 3 whole, 12 + 12 + 4 the recapture, 1
-
-   # counted by the suite (frames rendered)
-   # counted by the suite
-
 # THE CASCADE SUITE UNDER ASan (PHOTON_SPEC G1, round-2 F1). The per-cascade
 # dirty path replaces a live cascade's VOXELISER under a kept VctLighting, and
 # every failure path around that swap is a candidate use-after-free: the lighting
@@ -81,9 +76,6 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1966)
 endif()
-
-   # the frames it renders, counted 2026-10-18
-   # the frames it renders, counted 2026-10-18
 
 # THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the
 # newest code in the engine and it hand-manages Vulkan memory, so it is exactly
@@ -129,8 +121,6 @@ target_compile_definitions(test_gi_card_walk PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_card_walk PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_walk JahshakaEngineMedia)
-
-   # metered 2026-10-18
 
 # CLOUDS-2D-3: THE CLOUD LAYER'S PHYSICS — a sheet never adds light (a full deck at
 # every sun height and density leaves the ground at most as bright as the clear
@@ -244,12 +234,3 @@ target_compile_definitions(voxel_store_room_trace PRIVATE
 target_link_libraries(voxel_store_room_trace PRIVATE JahshakaEngine)
 add_dependencies(voxel_store_room_trace JahshakaEngineMedia)
 
-   # counted from the source (12 + 1 + 4 + the probe; the plain scene 12 + 1 + 6; the verb-time step 6 + 6 + 6 + 12)
-
-   # measured (a temporary renderOneFrame counter: 1 + 16)
-
-   # measured (a temporary renderOneFrame counter: 2 x (300 + 12))
-
-   # counted from the source (<= 224 settle + 2 x 126)
-   # counted from the run (224 oracle settle + 1 + 4 + 158 stop settle + 30 + the stop's light tick 136)
-   # counted from the run (224 + 1 + 4 + 254 + 30: the stop declines in the dark room; no tick)

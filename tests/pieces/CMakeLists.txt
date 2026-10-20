@@ -24,14 +24,12 @@ endfunction()
 # The stage-5a SPIKE: hand-written pieces, no generator. Proves the mechanism
 # the emitter would target — it compiles, it renders, the clock moves it, an
 # edit is a new file, and a scene without a piece stays byte-identical.
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 
 # pieces.live_paths — the engine half of the LIVE graph paths (TORNADO-1): the UV
 # scroll equals the same offset (G1) and an emissive added through the fork's
 # custom_ps_emissive hook equals the material's own emissive (G2), whole image,
 # byte for byte, each with a control that proves the comparison can see.
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # shadergraph.emitter_parity — THE DIFFERENTIAL ORACLE. Needs BOTH halves: the
 # graph/evaluator slice (Qt widgets, because node models carry live widgets) and

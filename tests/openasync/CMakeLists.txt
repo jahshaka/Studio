@@ -35,8 +35,6 @@ find_package(Qt6 REQUIRED COMPONENTS Core Network)
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
 
-   # spawns the app: see jah_tsan_blocked
-
 # open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1).
 #
 # The deterministic half of the async-open crash fix: an open driven by a pump
@@ -72,9 +70,7 @@ endif()
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
         "open.frames=539"
-        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

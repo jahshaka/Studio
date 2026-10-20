@@ -36,6 +36,12 @@ set(_scale_model_dir ${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures)
 set(JAH_SCALE_ASSET_CACHE_ROOT "$ENV{HOME}/Developer/testing/scale-cache" CACHE PATH
     "The shared scale-suite bake cache (one per box; per-producer sub-directories)")
 
+set(_scale_world_sources
+    ${CMAKE_CURRENT_SOURCE_DIR}/scale_world.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/scale_x11.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+
 function(jah_scale_target _t)
     set_target_properties(${_t} PROPERTIES
         AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -56,18 +62,8 @@ function(jah_scale_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
-# scale.library — W14 (test_scale_library.cpp): the real binary over MCP on a
-# generated 10,000-asset / 500-project data root (made through assets.importFile and
-# project.create, once, into library-template/; copied per run) against an empty one.
-add_executable(test_scale_library test_scale_library.cpp)
-set_target_properties(test_scale_library PROPERTIES CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_scale_library PRIVATE ${CMAKE_SOURCE_DIR}/tests)
-target_link_libraries(test_scale_library PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Sql)
-target_compile_definitions(test_scale_library PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    SCALE_LIBRARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+add_executable(test_scale test_scale.cpp ${_scale_world_sources})
+jah_scale_target(test_scale)
 
 # ---------------------------------------------------------------------------
 # THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact
@@ -119,21 +115,19 @@ function(jah_scale_row _name _mode _timeout _locked)
     endif()
     set_tests_properties(${_name} PROPERTIES LABELS "scale" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endfunction()
-   # the fixture: still + 30 s fly
-   # W1 (+ the 200 m walk, the 60 m teleport)
-  # W2 (a voxel digest: exact, not timed)
-   # W3 (+ the owed id/decode ms)
-  # W4
-   # D1: the flat cut's ms at 10k
-  # W5 (the engine's pool stats)
-   # W6
-  # W7 (triangle counts)
-   # W8
-  # W9 (card counts)
-  # W10 (two pictures)
-  # W11 (CPU only: no GPU, no display)
-  # W12 (record counts)
-   # W13
+# W7 IS CLOSED (ATOM-OCCLUSION-1): its row is a BAR — the two-pass id pass within 1.25x of the
+# reference cull and its id image the frustum-only one at every pose — and not a target.
+# STAGE-CLOSE (TESTING-SPEED-B3, the lead's verdict): case-bound — 3 arms x 8 poses of id readbacks ARE the
+# measurement (45 s quiet); a scale property. atom.occlusion_exact is the merge tier's occlusion guard.
+jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
+# THE SHIP SET (TEST-CUT-1): the scale prefix's end-to-end row — the 10k-node world's CPU walks, timed under the lock.
+# (scale.library was the first pick; its setup scale.library.fixture generates a 10,000-asset template, 180 s in a
+# fresh tree, so its true price is over the minute: archived.)
+jah_ship_row(scale.cpu_walks)
+# ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
+# frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
+# removes the label, so the row gates. The dirty scan stays a printed target inside it.
+set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # scale.gpu_coverage — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
 # the lattice at Epic, still and panning, the GPU work no monitor row names against the frame's BUSY
 # span (its own GPU span less the GPU's wait for submissions, MonitorRecord::gpuIdleMs — printed as a
@@ -154,44 +148,11 @@ set(SCALE_T_ASSETS 3600)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")
 
-# W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
-# THE FIXTURE IS ITS OWN ROW, OUTSIDE THE LOCK (GATE-SPEED-1 item 4; the gate-speed audit's T1):
-# `scale.library.fixture` generates the 10k-asset / 500-project template through the app's own
-# doors as an ordinary app row (2 tokens) in the parallel phase, and is a no-op once the template
-# exists; the locked measurement requires it and never generates (a missing template is its FAIL).
-# ctest adds a required setup row to any selection that names the measurement (`-L timing`, `-R`).
-jah_gpu_row(scale.library.fixture CLASS app TIER low NEEDS NONE COMMAND test_scale_library --generate
-            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
-                     FIXTURES_SETUP scale_library_template)
-jah_gpu_exclusive_test(NAME scale.library SHIP CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
-                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
-# SKIP (77), SAID, where the counted bars cannot count: app.databaseReads is unavailable when the Qt
-# SQL driver carries its own SQLite (the Qt installer's macOS/Windows builds; databasereads.h).
-set_tests_properties(scale.library PROPERTIES LABELS "scale" FIXTURES_REQUIRED scale_library_template
-                     SKIP_RETURN_CODE 77)
-
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        "scale.library.fixture=4808"   # a GENERATING run (a no-op once the template exists)
-        
-        
-        
-        
+        "scale.cpu_walks=517"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

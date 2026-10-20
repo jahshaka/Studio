@@ -2,11 +2,6 @@
 # Skeleton::boneTransforms), the mirror's per-frame skinning, and the engine's
 # dynamic-vertex-buffer verb — all pixel-asserted on a two-bone programmatic arm.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # ANIMATION_ENGINE_MIGRATION_SPEC gates G2-G6: the clip boundary. Same rig, same
 # clip, same absolute times, driven through the document evaluator and through

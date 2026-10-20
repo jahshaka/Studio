@@ -133,8 +133,7 @@ samples.freshhome.Tornado 0.00  ship 3a0422b4e (2026-10-13)
 samples.freshhome.World_Background 0.00  ship 3a0422b4e (2026-10-13)
 samples.mirror_room_boots.boot1 31.75  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 samples.mirror_room_boots.boot2 32.06  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
-scale.library 14.60  ship 3a0422b4e (2026-10-13)
-scale.library.fixture 0.06  quiet n=101
+scale.cpu_walks 15.07  quiet n=46
 scene.reopen_fidelity 47.36  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scene.reopen_fidelity.high_sky 39.53  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scene.reopen_fidelity.high_sky.fresh_home 0.02  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)

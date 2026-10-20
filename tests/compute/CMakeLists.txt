@@ -34,11 +34,6 @@ set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "chain.hzb=68"
-           # chain.hzb's (the same binary)
-        
-           # engine.gpu_cull's (the same binary)
-        
-        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

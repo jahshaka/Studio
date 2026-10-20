@@ -19,8 +19,6 @@ jah_gpu_row(particles.document_to_engine SHIP CLASS engine COMMAND test_particle
 set_tests_properties(particles.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 357)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
 # The same suite over the SANITISED copy of the backend (tests/engine defines
 # JahshakaEngineAsan; tests/ adds engine before particles). Particle definitions
 # outlive their nodes by design and their datablocks are destroyed after the
@@ -51,4 +49,3 @@ if(JAHSHAKA_ASAN)
         TIMEOUT 120 LABELS "particles")
 endif()
 
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)

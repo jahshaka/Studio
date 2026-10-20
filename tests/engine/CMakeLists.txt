@@ -166,8 +166,6 @@ add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
 jah_gpu_row(frame.drag_latency SHIP CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
-   # metered 2026-10-18
-   # metered 2026-10-18
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
@@ -222,8 +220,6 @@ jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fix
 # engine.descriptor_pools) and because the two other rows set the process environment.
 find_package(Vulkan QUIET)
 
-   # counted from the source (2 scales x (60 settle + the fragment's one) )
-
 # engine.gpu_walk_parity — THE NAMED WALK'S GUARD (ENGINE-UPGRADE-2B stage 2): with the arm
 # gpuscene.walkParity, every slot is checked against the table after every frame's compose; every
 # writer kind of a slot's transform or flags word leaves 0 misses. See the source.
@@ -237,7 +233,6 @@ target_compile_definitions(test_engine_gpu_walk_parity PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_gpu_walk_parity PRIVATE JahshakaEngine)
 add_dependencies(test_engine_gpu_walk_parity JahshakaEngineMedia)
-   # the frames it renders, counted (decision 18.7: the two U4 steps and the death sequence added)
 # engine.gpuscene_identity — THE PARALLEL COMPOSE IS THE SERIAL ONE, BYTE FOR BYTE (ENGINE-UPGRADE-U4 stage 4): 8 workers,
 # 1,024 moving cubes, the compose's digest (every composed slot's index, row and tail in replay order) compared between
 # the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
@@ -248,7 +243,6 @@ jah_gpu_row(engine.gpuscene_identity SHIP CLASS engine COMMAND test_engine_gpu_w
 set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"
     JAHSHAKA_TEST_FRAMES 18)   # 1 + 6 warm + 10 + 1
 jah_tsan_render(engine.gpuscene_identity)
-   # 6 + 2 + 24 free + 6 free + 1
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
@@ -310,21 +304,6 @@ endif()
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "decals.engine=60"
-                     # 300 x 3 arms + 20 + 1,000 (counted from the source)
-        
-           # 10 + (60 + 2) + (120 + 2) + (120 + 2) + 3 (the shared target), counted from the source
-                     # 10 + 3 x (240 + 2)
-             # 10 + 2 x (5 + 1 + 3 + 3), counted from the source
-        
-        
-        
-          # measured (a temporary renderOneFrame counter: + the graphics-build frame 1 + 8)
-        
-        
-        
-           # counted from the source (it _exits: no meter report)
-        
-        
         "test_engine=2882"
         "test_engine_asan.part1=490"    # TEST-CUT-1: its plain twin's half (test_engine --part 1/2, the meter, 2026-10-20)
         "test_engine_asan.part2=2416"   # (test_engine --part 2/2: the heavy-frame and the monitor cases are here)

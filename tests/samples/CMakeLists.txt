@@ -67,7 +67,6 @@ jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.c
 # (TESTING-SPEED-B2): seven archives in one process is the stage close's, not a merge's.
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # samples.mirror_room_boots.boot1 / .boot2 — REFLECT-STATE-1: the Mirror Room sample's picture is ONE picture across
 # boots (ATOM-DECODE-CLASS-1 recorded two). Each row is ONE boot on a virgin data root: the scene's offscreen picture

@@ -37,11 +37,6 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 # fresh-home fixtures carry it with them. Rows, locks, budgets and bars unchanged. vr.session_undithered
 # (7 s, the byte-identical eyes) and vr.grab_maths stay in the merge tier; the no-runtime VR fixtures
 # (pool.vr_noruntime) are tests/scripting's.
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # ---------------------------------------------------------------------------
 # vr_session.verbs_session — the `vr.*` verbs through the APP, against the simulated
@@ -60,8 +55,6 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 #
 # All three (and vr_session.sample_open, below) are arms of ONE pool row: one Monado
 # runtime, one `--vr` process (the pool is declared at the end of this file).
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # ---------------------------------------------------------------------------
 # vr.mirror_live — THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the
@@ -96,17 +89,10 @@ set_tests_properties(vr.mirror_live PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
 # vr.start_broken (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/broken-openxr-runtime.json"
      "{ \"file_format_version\": \"1.0.0\", \"runtime\": { \"name\": \"Broken\", \"library_path\": \"/nonexistent/libopenxr_broken.so\" } }\n")
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
@@ -144,8 +130,6 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vr_frame_budget.js.in"
 # CAPTURES the runtime's window while the script holds a picture still, and a
 # Qt reader JUDGES the files — a script cannot open a PNG.
 set(JAH_EYE_GRADE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-out")
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 get_property(_vr_rows DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _vr_rows)

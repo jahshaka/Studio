@@ -16,12 +16,6 @@
 
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-
 # ---- cameras.exposure -----------------------------------------------------
 # CAMERA_LENS_SPEC §4/§5 (P3 + P4): the per-VIEW post-chain globals listener and
 # everything that rides it. Real engine, real frames. The headline is two views

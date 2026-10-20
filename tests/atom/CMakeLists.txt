@@ -113,7 +113,6 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
             VERBATIM)
         list(APPEND _atom_neg_headers "${_atom_neg_gen}/atom_negative_${_stage}_spv.h")
     endforeach()
-   # counted from the source (12 + 1 + 4 + 3 + 12 + 1 + 3 + the probe)
     # ...AND ITS SANITISED TWIN: the owners' retire windows (a destroyed view's stats ring and a
     # destroyed scene's caster ring, reaped 8 frames later through the device's window) are raw
     # Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
@@ -140,7 +139,6 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     endif()
     # EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
     set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
-   # 7.5 s measured solo x 6, rounded up
     # ONE ROW PER DEVICE (lane D6B-GATE-SHAPE; audit verdict MERGE): where the Khronos
     # validation layer is installed, the `_validation` rows below ARE the suite — the same
     # binary and the same assertions, plus the layer, FAIL_REGULAR_EXPRESSION on any report
@@ -213,32 +211,6 @@ set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTabl
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

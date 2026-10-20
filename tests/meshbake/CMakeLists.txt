@@ -106,8 +106,6 @@ foreach(_part standin dragon throws)
 endforeach()
 jah_ship_row(bake.determinism.standin bake.determinism.dragon bake.determinism.throws)   # THE SHIP SET (TEST-CUT-1)
 
-   # in-process, offscreen, no engine (read 6 delivery: source.gpu_rows_closure)
-
 # meshbake.archive_bakes (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every
 # model it brings (archives carry no bakes), so a fresh library that imports the
 # shipped samples opens them from bakes with ZERO parses; and with the bakes gone

@@ -320,9 +320,6 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
 set(_columns_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns)
 file(MAKE_DIRECTORY ${_columns_home}/run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # The harness header names the app's binary for its spawn(), which this row never calls: no app, so not the app's
 # path (source.gpu_rows_closure reads JAHSHAKA_BINARY = the app as "spawns the app").
@@ -355,21 +352,12 @@ jah_lsan_lane(ui.space_docks)   # spawns the app: its harness reads the child's 
 
 set(_winmin_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum)
 file(MAKE_DIRECTORY ${_winmin_home}/run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 set(_matdrag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag)
 file(MAKE_DIRECTORY ${_matdrag_home}/run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-   # spawns the app
-   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-   # spawns the app (GCC 15 libtsan, tests/CMakeLists.txt)
-   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
 # ui.view_options_submenu — THE VIEW OPTIONS SUBMENUS POP EVERY TIME (ATOM-MENU-POPUP-1, the
 # owner's smoke 2026-10-19). Real pointer input at the editor's View Options button and its Atom
@@ -398,7 +386,6 @@ endif()
 # an untouched OK used to STOP). The page is a slice with link stubs for the
 # server, the window and the theme — no Sql, no engine, no MainWindow.
 find_package(Qt6 REQUIRED COMPONENTS Widgets HttpServer)
-   # offscreen widgets only, no X needed
 # ---------------------------------------------------------------------------
 # ui.presets_favorites — CLOSE-2 (round 2, D1): the Models/Materials presets
 # tabs read the library when their Database ARRIVES, not while they are being

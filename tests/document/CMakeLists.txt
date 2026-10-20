@@ -60,8 +60,6 @@ target_link_libraries(test_physics_step_cost PRIVATE IrisGL JahshakaEngine Qt6::
 # It inlines Bullet's header math: never contract, as Bullet and the physics TUs (irisgl/CMakeLists.txt, BULLET-BATCHING-1).
 target_compile_options(test_physics_step_cost PRIVATE ${_jah_bake_fp})
 add_dependencies(test_physics_step_cost JahshakaEngineMedia)
-   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
-   # metered 2026-10-18: the free-running render thread at 60 Hz for the run (120 frames of warm-up first)
 # physics.many_movers — THE OWNER'S REAL CASE, MANY MOVERS PER FRAME (THREADING-1 stage 2): 1,000 bodies in play,
 # stepped on the threads the ONE core budget gives the step (--threads budget: the game thread + the foreground share,
 # what the app binds) with the mirror syncing every moved body, the bar on the step + the sync per frame, median past

@@ -48,7 +48,6 @@ set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache"
 # message of 22.7 ms cold / 12.5 ms warm (spikes/frame-monitor-door/stage4-measure.txt).
 set(_sof_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-save_off_frame)
 file(MAKE_DIRECTORY ${_sof_home}/run)
-   # TSAN-GCC15-THREAD-REGISTRY: the copies' hand-off is frame.monitor_pop's arm
 # shadercache.save_off_frame.timing — the guard's milliseconds, a MEASURE row (the ship's, alone on the card): the same
 # two launches, and every render-thread message of every save <= 2 ms, every chunk <= 1 ms, no frame overrun on the frames
 # that carried the save's messages (the read's item 6: a guard counts; 0.61-0.86 ms against 1.0 on a loaded box is a
@@ -97,16 +96,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "shader.async_after_open=1325"
-        
-        
-        
         "shadercache.app=976"
-        
-        
-           # its plain twin's, an upper bound (the corruption cases only)
-        
-        
-        
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

@@ -2,7 +2,6 @@
 # document node into an offscreen View on the main thread. Output goes to bin/ so
 # app/content/primitives/sphere.obj (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): MaterialReader::
 # parseShaderAsPbr turns a stored graph definition into the evaluator's
@@ -15,7 +14,6 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 # database and the ogre log never land in the shared bin/.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # thumbnails.sweep — the REPAIR SWEEP's contract (THUMBS-1 fix round F1/F2/F6):
 # it stops when asked (a yield delivers the window's close), it decides from
@@ -25,7 +23,6 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 # assertions are about control flow and bookkeeping, never about pixels.
 find_package(Qt6 REQUIRED COMPONENTS Gui Sql Widgets Multimedia Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 
 # thumbnails.studio_env — THE ONE STUDIO ENVIRONMENT, measured
 # (MATPREVIEW-ENV-1, owner review R9). One binary because the assertion that

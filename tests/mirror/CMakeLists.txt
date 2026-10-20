@@ -21,11 +21,6 @@ jah_gpu_row(mirror.document_to_engine SHIP CLASS engine COMMAND test_scene_mirro
 set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 856)
 
-   # EnginePrivate.h: the engine's own node for a NodeId
-   # OgreNext: the engine's cached derived transform, read after a frame
-
-   # the mirror syncs; the engine renders nothing (metered 2026-10-18)
-
 # mirror.vr_proxies — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC
 # §5 phase 4, lane VR-4). The two HAND markers the editor's VR preview shows
 # (there is no head marker, by the owner's rule), the two-bit helper rule that

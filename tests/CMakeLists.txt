@@ -275,32 +275,14 @@ target_link_libraries(jah_testmesh PUBLIC IrisGL Qt6::Core)
 # sprint's ship only, alone on the card, and are never served. A suite joins the list by a verdict, never by convenience.
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
-       
-    
-       
-    
-    
-     
-       
-       
-     archive.responsive.timing 
-       
-       
-     scripting.e2e.editor_controls.timing
-    
-    # TESTING-CLEANUP-2 P10e/P10f: the selection's and the recorder's millisecond bars
-    # (the gating row/pool arms keep the counts and print the milliseconds).
-     capture.first_recording.timing 
-    
-         
-    scale.library
-    
-    
-    
-      
-    
-    # ENGINE-UPGRADE-U4 stage 6: the physics step at 10k bodies and its overlap with the render thread's pool (by hand).
-     )
+    # (TEST-CUT-1: the list is the ship set's measuring rows; the rest were archived with their rows)
+    archive.responsive.timing
+    scripting.e2e.editor_controls.timing
+    # TESTING-CLEANUP-2 P10f: the recorder's millisecond bars (the count and the bar in one row since the pool went).
+    capture.first_recording.timing
+    # D1-SCALE-FIXTURES: the scale world's timed walls — scale.cpu_walks is the scale prefix's ship row.
+    scale.cpu_walks
+)
 # THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
 # resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
 # time holds the card (scripts/gpu-exclusive.sh), and inside it ctest keeps each class to its width.
@@ -906,15 +888,12 @@ add_subdirectory(pieces)
 add_subdirectory(vr)
 
 # The tooling suites, and the measuring list's closure: every suite the list names is registered through
-# jah_gpu_exclusive_test (app.input_keys and app.play_select need xdotool/curl/jq/Xvfb, vr.warmup.timing the VR stack —
-# absent without them).
+# jah_gpu_exclusive_test. (The rows registered only where their tools exist — the private-Xvfb input drivers, the VR
+# stack's timing row — and their exemption were archived by TEST-CUT-1.)
 add_subdirectory(tooling)
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
-set(_gpu_optional    )
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
-    # The rows registered only when their tools exist (the private-Xvfb input drivers, the
-    # VR stack) are exempt: a box without them registers neither the row nor the lock.
-    if(NOT _t IN_LIST _gpu_registered AND NOT _t IN_LIST _gpu_optional)
+    if(NOT _t IN_LIST _gpu_registered)
         # FATAL on the box the list was measured on; a port that skips a suite is told, not stopped.
         set(_sev WARNING)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -1085,121 +1064,24 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # served. A guard is never lost for its price: a row rewritten to its budget leaves this list (its line in gate-times.txt
 # from its own solo run).
 set(JAH_MEASURE_ROWS
-    
-    
-    
-    
-    
-    
     archive.responsive.timing.fresh_home
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     bake.determinism.dragon
     bake.determinism.standin
     bake.determinism.throws
     bundle.writer
-    
-    
     engine.particles_pfx2_asan
     engine.planar_asan
     gi.cascades_asan
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     gi.rt_reflect_asan
-    
-    
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
     hdr.drag_stable_asan
     hdr.meter_asan
-    
     math.parity
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    scale.library.fixture
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ssr.engine_asan
     test_engine
     test_engine_asan.part1
     test_engine_asan.part2
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 )
 set_property(GLOBAL PROPERTY JAH_MEASURE_SEEN "")
 function(jah_measure_pass _dir)

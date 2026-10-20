@@ -33,7 +33,6 @@ if(JAHSHAKA_ASAN)
     # STAGE-CLOSE (TESTING-SPEED-B3): the ASAN twin keeps its row at the stage close; engine.planar is
     # the merge tier's.
     set_tests_properties(engine.planar_asan PROPERTIES TIMEOUT 120 LABELS "engine"
-
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
 
@@ -41,7 +40,6 @@ endif()
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
         "engine.planar_asan=33"   # its plain twin's
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

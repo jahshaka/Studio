@@ -84,8 +84,6 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 # follow them (an inspector left in the merge tier would pull its parent back in through its fixture).
 configure_file(texture_wait_watchdog.js.in ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js @ONLY)
 
-   # 20 iterations x a 30 s budget each: the timeout must not undercut the suite's own budget (code review 2026-09-10)
-
 # threading.texture_wait_watchdog — the give-up path itself, under the engine's
 # JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only
 # way). Its own HOME: the run deliberately renders frames whose textures are
@@ -123,22 +121,13 @@ set_tests_properties(threading.texture_wait_watchdog PROPERTIES
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked( 
+jah_tsan_blocked(
                  threading.texture_wait_watchdog)
-   # its inspector's run (item 3 above)
-   # its inspector's run (item 3 above)
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
-        
-        
-        
-        
-        
-        
-        
         "threading.staging_race=255"
         "threading.texture_wait_watchdog=473"
         )

@@ -37,4 +37,3 @@ set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 # and the tile icons are read off the app folder exactly as the drawer reads
 # them.
 qt6_add_resources(_primitive_table_qrc ${CMAKE_SOURCE_DIR}/app/models.qrc)
-   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)

@@ -70,16 +70,7 @@ endforeach()
 foreach(_row_frames
         "gpu.cutout_soak.primitives=1020"   # TEST-CUT-1: one soak period (500) + the boot and the authoring
         "gpu.cutout_soak.tornado=1002"      # one soak period (500) + the boot and the Tornado import
-        
-        
-        
-        
         "shadow.cutout_caster=1552"
-           # ten processes of shadow.cutout_caster
-        
-        
-        
-           # ten processes of shadow.two_sided_caster
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)
