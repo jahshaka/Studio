@@ -16,7 +16,8 @@
 //       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes; and with the
 //       count's compute jobs missing (a test door) it paints nothing and reports no figures (BUGS-1 item 6);
 //   (g) THE PROBE IS ONE FRAME: the cut job's probe permutation is gone the frame after (no group is recorded twice
-//       and a second read without an arming answers "not armed");
+//       and a second read without an arming answers "not armed"); a probe DISARMED before its frame records no later
+//       frame (BUGS-1 item 7, the verb's timeout);
 //   (h) THE TIER'S THRESHOLD (ATOM-3 stage 1): at the World Mode's 1 / 2 / 3 px the drawn triangles fall strictly.
 // FRAMES, NEVER TIME: every reading follows a counted frame.
 // The engine's private headers BEFORE the document's (Qt's keyword macros - emit, slots - would rewrite them).
@@ -314,6 +315,18 @@ int main(int argc, char **argv)
     AtomCutProbe again;
     CHECK(scene->atomCutProbe(again) && !again.valid && again.error.find("not armed") != std::string::npos,
           "(g) a read without an arming answers 'not armed'");
+    // (g') A DISARMED PROBE RECORDS NOTHING (BUGS-1 item 7: world.atomCutProbe's timeout disarms): armed, taken back
+    // before any frame, then two frames drawn - the read answers 'not armed', no later frame took the arming.
+    {
+        CHECK(scene->armAtomCutProbe(), "(g') the probe arms");
+        scene->disarmAtomCutProbe();
+        enginetest::frames(e, 2);
+        AtomCutProbe late;
+        const bool lateAnswered = scene->atomCutProbe(late);   // read before the message is formatted
+        CHECK_MSG(lateAnswered && !late.valid && late.error.find("not armed") != std::string::npos,
+                  "(g') a disarmed probe records no later frame: the read answers '%s' (valid %d)", late.error.c_str(),
+                  int(late.valid));
+    }
 
     // (c) the units: (B) is (A) in centimetres - B moved to where A stood (and A to where B stood), probed again,
     // so each group of B is judged from exactly the eye and place each group of A was

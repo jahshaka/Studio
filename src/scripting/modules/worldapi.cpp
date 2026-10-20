@@ -1815,7 +1815,11 @@ QVariantMap WorldApi::atomCutProbe(const QVariantMap &params)
             host.viewport->renderFrames(1);
             answered = es->atomCutProbe(p);
         }
-        if (!answered) p.error = "no frame of the viewport recorded the cut in 8 frames";
+        if (!answered) {
+            // GIVEN UP: the arming is taken back, or a later frame would record a probe nobody reads (BUGS-1 item 7)
+            es->disarmAtomCutProbe();
+            p.error = "no frame of the viewport recorded the cut in 8 frames";
+        }
     }
     // THE NAMES ARE THE DOCUMENT'S: one reverse map from the mirror (appapi's renderStats pattern).
     QHash<jahshaka::engine::NodeId, QString> docNames;
