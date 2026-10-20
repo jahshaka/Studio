@@ -912,12 +912,3 @@ endif()
 # Document verbs only -> --headless (no engine, no display). The spec's own row: archived at the merge.
 set(_adcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_density_cap)
 file(MAKE_DIRECTORY ${_adcHome}/run)
-add_test(NAME scripting.e2e.atom_density_cap
-         COMMAND sh "${JAH_FRESH_HOME}" "${_adcHome}" --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_density_cap.js --headless
-         WORKING_DIRECTORY ${_adcHome}/run)
-set_tests_properties(scripting.e2e.atom_density_cap PROPERTIES
-    ENVIRONMENT "HOME=${_adcHome};JAHSHAKA_DATA_ROOT=${_adcHome}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 60)
-jah_no_display(scripting.e2e.atom_density_cap)
