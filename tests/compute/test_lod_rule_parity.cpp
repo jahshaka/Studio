@@ -113,6 +113,42 @@ static MeshData chainedMesh()
 // within 1e-4 of a threshold are counted over every evaluation, as the three
 // older copies count them, and a disagreement at one is reported apart (float
 // ordering between two compilers) but still fails.
+// ---- THE EMPTY TOP GROUP (ATOM-6 stage 2c) --------------------------------------------------
+// A group the bake's prune emptied (every component removed whole) is a GROUP with its measured error and NO output
+// clusters: affordable, the object draws nothing there (a card under its own extent vanishes). The runtime must
+// agree on it: the twin and the device draw nothing for an affordable empty group and not its members. The fixture
+// is a card soup's bake whose terminal groups are made empty groups — each keeps its members and gets a finite error
+// above every other group's (monotone), so a far view affords it and the whole object vanishes.
+static iris::MeshPtr cardSoup(int cards)
+{
+    std::vector<float> p, n;
+    std::vector<unsigned> idx;
+    unsigned seed = 77u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    for (int c = 0; c < cards; ++c) {
+        const float cx = rnd() * 2.0f - 1.0f, cy = rnd() * 2.0f - 1.0f, cz = rnd() * 2.0f - 1.0f, h = 0.05f;
+        const float tilt = rnd() * 3.14159265f;
+        const float ux = std::cos(tilt), uz = std::sin(tilt);
+        const unsigned b = unsigned(p.size() / 3);
+        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (const auto &k : corners) {
+            p.insert(p.end(), { cx + h * k[0] * ux, cy + h * k[1], cz + h * k[0] * uz });
+            n.insert(n.end(), { -uz, 0.0f, ux });
+        }
+        idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
+    }
+    return clusterfix::meshFromArrays(p, n, {}, idx);
+}
+static bool emptyTop(const std::string &name) { return name.rfind("empty-top", 0) == 0; }
+static void makeTopEmpty(clusterfix::Fixture &f)
+{
+    float top = 0.0f;
+    for (const MeshClusterGroup &g : f.data.clusterGroups)
+        if (g.error < FLT_MAX) top = std::max(top, g.error);
+    for (MeshClusterGroup &g : f.data.clusterGroups)
+        if (g.error >= FLT_MAX) { g.error = std::max(top, 1e-3f) * 2.0f; g.estimate = g.error; }
+}
+
 static void clusterCutParity(Engine *e)
 {
     std::printf("\n== the fourth copy: the CLUSTER CUT, C++ against the GLSL piece ==\n");
@@ -129,6 +165,7 @@ static void clusterCutParity(Engine *e)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
+    meshes.push_back({ "empty-top-cards", cardSoup(400) });   // ATOM-6: the empty top group
 
     // The instance: rotated 30 degrees about Y then 20 about X, scaled NON-UNIFORMLY
     // (1 : 0.6 : 1.3 along its own axes, times the sweep's scale), placed `dist`
@@ -148,6 +185,7 @@ static void clusterCutParity(Engine *e)
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
         if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
+        if (emptyTop(m.first)) makeTopEmpty(f);
         ++meshesRun;
         std::vector<ClusterCutView> views;
         for (int di = 0; di < 20; ++di) {
@@ -246,6 +284,7 @@ static void productCutParity(Engine *e, View *view)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
+    meshes.push_back({ "empty-top-cards", cardSoup(400) });   // ATOM-6: the empty top group
 
     struct Set { float tol, fovDeg, height; bool ortho; };
     // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows).
@@ -254,12 +293,18 @@ static void productCutParity(Engine *e, View *view)
                           { 1.0f, 45.0f, 1080.0f, true },  { 2.0f, 45.0f, 1080.0f, false },
                           { 3.0f, 60.0f, 1080.0f, false } };
     unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
-    unsigned long long coverageBad = 0, overlapBad = 0;
+    unsigned long long coverageBad = 0, overlapBad = 0, emptyTopVanished = 0;
     unsigned depthHist[16] = {};
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
         if (!clusterfix::bake(f, m.second, m.first, iris::MeshBake::ClusterDagVariant::Shipped, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
+        if (emptyTop(m.first)) makeTopEmpty(f);
+        // THE GROUPS WITH NO OUTPUT CLUSTERS (the empty groups): where one is affordable its members' regions
+        // are covered by nothing — the object vanishes there, which is the empty group's meaning.
+        std::vector<unsigned char> hasOutput(f.data.clusterGroups.size(), 0);
+        for (const MeshCluster &c : f.data.clusters)
+            if (c.refined >= 0) hasOutput[size_t(c.refined)] = 1;
         Scene *sc = e->createScene("cut-" + m.first);
         view->setScene(sc);
         const MeshId mesh = sc->createMesh(f.data);
@@ -369,7 +414,18 @@ static void productCutParity(Engine *e, View *view)
                         if (int(c) < f.stats.clusterRegions.size())
                             for (quint32 t : f.stats.clusterRegions.at(int(c)))
                                 if (t < cover.size()) ++cover[t];
-                    for (unsigned n : cover) coverageBad += n != 1u ? 1u : 0u;
+                    // under an AFFORDABLE EMPTY group nothing is the right cover
+                    std::vector<unsigned char> vanished(f.triangles, 0u);
+                    for (size_t c = 0; c < f.data.clusters.size(); ++c) {
+                        const int g = f.data.clusters[c].group;
+                        if (hasOutput[size_t(g)] || !clusterGroupVerdict(f.data.clusterGroups[size_t(g)], v)) continue;
+                        if (int(c) < f.stats.clusterRegions.size())
+                            for (quint32 t : f.stats.clusterRegions.at(int(c)))
+                                if (t < vanished.size()) vanished[t] = 1;
+                    }
+                    for (size_t t = 0; t < cover.size(); ++t)
+                        coverageBad += (cover[t] == 1u || (cover[t] == 0u && vanished[t])) ? 0u : 1u;
+                    if (emptyTop(m.first) && gpu.empty()) ++emptyTopVanished;
                 }
                 if (gpu == cpu) continue;
                 if (near) ++meshNearBad; else ++meshBad;
@@ -406,6 +462,9 @@ static void productCutParity(Engine *e, View *view)
                   "level-0 triangle covered exactly once by the drawn regions (%llu triangle-cuts off)",
                   overlapBad, coverageBad);
     CHECK(overlapBad == 0u && coverageBad == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "THE EMPTY TOP GROUP (ATOM-6): %llu (instance, view) cuts where the object vanished, "
+                  "the device and the twin alike", emptyTopVanished);
+    CHECK(emptyTopVanished > 0u, msg);
     std::snprintf(msg, sizeof(msg),
                   "THE PRODUCT'S CUT IS CELL-IDENTICAL TO clusterCut: %llu (instance, view) cuts, %llu clusters "
                   "drawn, %llu differ (%llu of them at a threshold; %llu cuts had a group within 1e-4)",

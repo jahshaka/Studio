@@ -2269,6 +2269,192 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
     return 0;
 }
 
+// ---- bake.dag_reaches_root (ATOM-6 stage 2c) ---------------------------------------------------
+//
+// THE CHAIN REACHES ITS ROOT ON CONTENT MADE OF SMALL PIECES. An edge collapse never removes a connected
+// component, so before ATOM-6 a group of leaf cards or closed boxes could not halve: it was terminal at depth 0
+// (or fell to the sloppy fallback) and the chain ended there (the Bistro's cypresses at 6,656 triangles). With
+// the bake's own prune (clusterlod patch 0004: the group's unlocked components removed whole, smallest island
+// first, charged their full extent) a CARD SOUP (2,000 quads in a 2 m sphere) and a KIT-BASH (200 closed
+// 12-triangle boxes on a grid) bake to DAGs whose coarsest cut is EMPTY or one cluster (<= 128 triangles), whose
+// stored errors are monotone up the DAG and under kMaxRelBound x the extent, and in which no group is terminal
+// for lack of a target (only the root may be). RED at the base: terminal at depth 0, the coarsest in the
+// thousands. The area per level is printed (the coverage, parked for the area-preserving item).
+namespace dagroot {
+
+iris::MeshPtr meshFromArrays(const std::vector<float> &positions, const std::vector<float> &normals,
+                             const std::vector<float> &uvs, const std::vector<unsigned> &indices)
+{
+    iris::MeshPtr m = iris::Mesh::create();
+    const auto add = [&](iris::VertexAttribUsage usage, const std::vector<float> &v, int comps) {
+        iris::VertexLayout layout;
+        layout.addAttrib(usage, iris::AttribTypeFloat, comps, comps * int(sizeof(float)));
+        auto vb = iris::VertexBuffer::create(layout);
+        vb->setData(const_cast<float *>(v.data()), unsigned(v.size() * sizeof(float)));
+        m->addVertexBuffer(vb);
+    };
+    add(iris::VertexAttribUsage::Position, positions, 3);
+    add(iris::VertexAttribUsage::Normal, normals, 3);
+    add(iris::VertexAttribUsage::TexCoord0, uvs, 2);
+    auto ib = iris::IndexBuffer::create();
+    ib->setData(const_cast<unsigned *>(indices.data()), unsigned(indices.size() * sizeof(unsigned)));
+    m->setIndexBuffer(ib);
+    m->usesIndexBuffer = true;
+    m->numVerts = int(positions.size() / 3);
+    m->numFaces = int(indices.size() / 3);
+    m->primitiveMode = iris::PrimitiveMode::Triangles;
+    return m;
+}
+
+/// 2,000 two-triangle cards, 10 cm, scattered and turned inside a sphere of radius 1 m (deterministic).
+iris::MeshPtr cardSoup()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 2024u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    for (int c = 0; c < 2000; ++c) {
+        float cx, cy, cz;
+        do { cx = rnd() * 2.0f - 1.0f; cy = rnd() * 2.0f - 1.0f; cz = rnd() * 2.0f - 1.0f; }
+        while (cx * cx + cy * cy + cz * cz > 1.0f);
+        // two orthonormal in-plane axes from a random normal
+        float nx = rnd() * 2.0f - 1.0f, ny = rnd() * 2.0f - 1.0f, nz = rnd() * 2.0f - 1.0f;
+        float nl = std::sqrt(nx * nx + ny * ny + nz * nz); if (nl < 1e-3f) { nx = 0; ny = 1; nz = 0; nl = 1; }
+        nx /= nl; ny /= nl; nz /= nl;
+        float ax = std::fabs(nx) < 0.9f ? 1.0f : 0.0f, ay = ax > 0.5f ? 0.0f : 1.0f, az = 0.0f;
+        float ux = ay * nz - az * ny, uy = az * nx - ax * nz, uz = ax * ny - ay * nx;
+        const float ul = std::sqrt(ux * ux + uy * uy + uz * uz); ux /= ul; uy /= ul; uz /= ul;
+        const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+        const float h = 0.05f;
+        const unsigned b = unsigned(p.size() / 3);
+        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (const auto &k : corners) {
+            p.insert(p.end(), { cx + h * (k[0] * ux + k[1] * vx), cy + h * (k[0] * uy + k[1] * vy), cz + h * (k[0] * uz + k[1] * vz) });
+            n.insert(n.end(), { nx, ny, nz });
+            uv.insert(uv.end(), { k[0] * 0.5f + 0.5f, k[1] * 0.5f + 0.5f });
+        }
+        idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
+    }
+    return meshFromArrays(p, n, uv, idx);
+}
+
+/// 200 closed boxes (12 triangles each, 24 vertices: a face's own normal), 10 cm, on a 20 x 10 grid 30 cm apart.
+iris::MeshPtr kitBash()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    const float h = 0.05f;
+    const int faces[6][3] = { { 0, 0, 1 }, { 0, 0, -1 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
+    for (int gy = 0; gy < 10; ++gy)
+        for (int gx = 0; gx < 20; ++gx) {
+            const float c[3] = { gx * 0.3f, gy * 0.3f, 0.0f };
+            for (const auto &f : faces) {
+                // the face's two in-plane axes
+                int a = f[0] ? 1 : 0, bAxis = f[2] ? 1 : 2;
+                if (f[1]) { a = 0; bAxis = 2; }
+                const unsigned base = unsigned(p.size() / 3);
+                const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+                for (const auto &k : corners) {
+                    float v[3] = { c[0] + h * float(f[0]), c[1] + h * float(f[1]), c[2] + h * float(f[2]) };
+                    v[a] += h * k[0];
+                    v[bAxis] += h * k[1];
+                    p.insert(p.end(), { v[0], v[1], v[2] });
+                    n.insert(n.end(), { float(f[0]), float(f[1]), float(f[2]) });
+                    uv.insert(uv.end(), { k[0] * 0.5f + 0.5f, k[1] * 0.5f + 0.5f });
+                }
+                // winding is irrelevant to the DAG; two triangles per face
+                idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+            }
+        }
+    return meshFromArrays(p, n, uv, idx);
+}
+
+}   // namespace dagroot
+
+static int dagReachesRoot()
+{
+    // meshbake.cpp's safety net (lodchain::kMaxRelBound): no stored error past a quarter of the extent.
+    constexpr float kMaxRelBound = 0.25f;
+    struct Case { const char *name; iris::MeshPtr mesh; };
+    const Case cases[] = { { "card soup (2,000 quads, 4,000 tris)", dagroot::cardSoup() },
+                           { "kit-bash (200 closed boxes, 2,400 tris)", dagroot::kitBash() } };
+    for (const Case &cs : cases) {
+        iris::MeshBake::ClusterDagStats st;
+        QElapsedTimer t; t.start();
+        iris::MeshBake::buildClusterDag(cs.mesh, &st);
+        const iris::MeshClusterDag &dag = cs.mesh->clusterDag;
+        std::printf("== %s: %d clusters, %d groups, depth %d, %lld ms; pruned groups %d, empty %d, pruned re-locked %d; "
+                    "lock retries %d, made terminal by the lock %d, unconverged %d\n",
+                    cs.name, dag.clusters.size(), dag.groups.size(), st.depth, qint64(t.elapsed()), st.prunedGroups,
+                    st.emptyGroups, st.prunedRelocked, st.groupRetries, st.groupsMadeTerminal, st.groupsUnconverged);
+        CHECK_LOUD(!dag.isEmpty(), "the mesh has a DAG");
+        if (dag.isEmpty()) continue;
+        // the extent: the largest AABB axis of the positions
+        float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        const float *pos = nullptr;
+        for (const iris::VertexBufferPtr &vb : cs.mesh->getVertexBuffers())
+            if (!vb->vertexLayout.getAttribs().isEmpty() &&
+                vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position) {
+                pos = reinterpret_cast<const float *>(vb->data);
+                for (size_t i = 0; i < size_t(vb->dataSize) / sizeof(float); i += 3)
+                    for (int k = 0; k < 3; ++k) { lo[k] = std::min(lo[k], pos[i + k]); hi[k] = std::max(hi[k], pos[i + k]); }
+            }
+        const float extent = std::max(std::max(hi[0] - lo[0], hi[1] - lo[1]), hi[2] - lo[2]);
+        int maxDepth = 0;
+        for (const auto &g : dag.groups) maxDepth = std::max(maxDepth, int(g.depth));
+        std::vector<int> members(size_t(dag.groups.size()), 0);
+        unsigned long long coarsest = 0;
+        std::map<int, double> area;   // the level-d surface (a cluster lives from its birth to its group's depth)
+        bool monotone = true;
+        for (const auto &c : dag.clusters) {
+            ++members[size_t(c.group)];
+            const auto &g = dag.groups.at(c.group);
+            if (g.error == FLT_MAX) coarsest += c.triangleCount;
+            if (c.refined >= 0 && g.error < dag.groups.at(c.refined).error) monotone = false;
+            double a = 0.0;
+            for (int t = 0; t < c.triangleCount && pos; ++t) {
+                const float *p0 = pos + 3 * size_t(dag.vertexOf(c, t, 0)), *p1 = pos + 3 * size_t(dag.vertexOf(c, t, 1)),
+                            *p2 = pos + 3 * size_t(dag.vertexOf(c, t, 2));
+                const double ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2];
+                const double vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+                a += 0.5 * std::sqrt((uy * vz - uz * vy) * (uy * vz - uz * vy) + (uz * vx - ux * vz) * (uz * vx - ux * vz) +
+                                     (ux * vy - uy * vx) * (ux * vy - uy * vx));
+            }
+            const int born = c.refined < 0 ? 0 : int(dag.groups.at(c.refined).depth) + 1;
+            const int dies = g.error == FLT_MAX ? maxDepth + 1 : int(g.depth);
+            for (int d = born; d <= dies; ++d) area[d] += a;
+        }
+        int stuck = 0, overBound = 0;
+        float worst = 0.0f;
+        for (int g = 0; g < dag.groups.size(); ++g) {
+            const auto &G = dag.groups.at(g);
+            const bool root = g == dag.groups.size() - 1 && members[size_t(g)] == 1;
+            if (G.error == FLT_MAX) { if (!root) ++stuck; continue; }
+            worst = std::max(worst, G.error);
+            if (!(G.error <= kMaxRelBound * extent)) ++overBound;
+        }
+        std::printf("   coarsest cut %llu triangles; stuck groups %d; worst stored error %.4g (%.3f of the extent %.3g)\n",
+                    coarsest, stuck, double(worst), extent > 0.0f ? double(worst / extent) : 0.0, double(extent));
+        std::printf("   area per level (of level 0's):");
+        for (const auto &kv : area) std::printf(" d%d %.2f", kv.first, area.at(0) > 0.0 ? kv.second / area.at(0) : 0.0);
+        std::printf("\n");
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: the coarsest cut is empty or one cluster (%llu <= 128)", cs.name, coarsest);
+        CHECK_LOUD(coarsest <= 128ull, msg);
+        std::snprintf(msg, sizeof(msg), "%s: no group is terminal for lack of a target (%d stuck)", cs.name, stuck);
+        CHECK_LOUD(stuck == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the stored errors are monotone up the DAG", cs.name);
+        CHECK_LOUD(monotone, msg);
+        std::snprintf(msg, sizeof(msg), "%s: every stored error under kMaxRelBound x the extent (%d over)", cs.name, overBound);
+        CHECK_LOUD(overBound == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the displacement lock re-locked no pruned piece (%d)", cs.name, st.prunedRelocked);
+        CHECK_LOUD(st.prunedRelocked == 0, msg);
+    }
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
 /// `--dag-levels <model> <out.tsv> [threads] [--exhaustive] [--mesh i,j]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
 /// DAG from now on): every mesh of the file through the bake's own DAG build, and per depth (a level = what a cut at that
 /// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones,
@@ -3388,6 +3574,7 @@ int main(int argc, char **argv)
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
     }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
     if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
         // [threads] [--exhaustive] [--mesh i,j,...]
         int threads = 4;

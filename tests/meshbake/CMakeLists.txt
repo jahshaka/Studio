@@ -106,6 +106,16 @@ foreach(_part standin dragon throws)
 endforeach()
 jah_ship_row(bake.determinism.standin bake.determinism.dragon bake.determinism.throws)   # THE SHIP SET (TEST-CUT-1)
 
+# bake.dag_reaches_root (ATOM-6 stage 2c, the builder's row — archived at the merge): a card soup (2,000 quads in a
+# 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake to DAGs whose coarsest cut is empty or one cluster,
+# errors monotone and under kMaxRelBound x the extent, no group terminal for lack of a target, no pruned piece
+# re-locked. Red at the base (terminal at depth 0). A CPU row: FRAMES 0.
+add_test(NAME bake.dag_reaches_root COMMAND $<TARGET_FILE:test_mesh_bake> --dag-reaches-root
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.dag_reaches_root PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.dag_reaches_root)
+
 # meshbake.archive_bakes (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every
 # model it brings (archives carry no bakes), so a fresh library that imports the
 # shipped samples opens them from bakes with ZERO parses; and with the bakes gone
