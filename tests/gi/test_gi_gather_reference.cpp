@@ -29,9 +29,11 @@
 // MATTE is not a wish here, it is authored: the floor uses the Specular
 // workflow at ior 1.0 with a black specular colour — F0 = 0, no environment
 // specular at all — which is the same recipe the default ground uses (GF1), so
-// the pixel carries the DIFFUSE term and nothing else. And with no area light
-// in the scene the pin's `envBRDF` is the identity (1,0,1), so the arithmetic
-// above is the whole shader.
+// the pixel carries the DIFFUSE term and nothing else. RE-DERIVED for the split
+// sum (PHOTON-3: the fork's BRDF_EnvMap takes envColourS * kS * (F0 A + B) from
+// the lobe's albedo table, gi.env_brdf): kS = 0 makes the environment's
+// specular exactly zero whatever A and B are, and the diffuse share fresnelD =
+// 1 - fresnelS is 1 at F0 = 0, so the arithmetic above is the whole shader.
 //
 // WHAT IS CALIBRATED RATHER THAN ASSUMED. Three things, all measured inside the
 // suite and all printed:
