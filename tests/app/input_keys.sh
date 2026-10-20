@@ -492,6 +492,11 @@ if [ "${u1:-0}" -gt 0 ] 2>/dev/null; then
         || bad "graph.undo() claimed to undo an empty stack"
 else
     bad "the palette drag made no graph edit (undoCount=$u1) — the graph half is unproven"
+    # The chord is still PRESSED: whether the shortcut map dispatches Ctrl+Shift+Z
+    # (asserted per chord below) does not depend on the graph having a node, and
+    # without the press a failed drag was reported a second time as "the keys never
+    # arrived" (ship fff575ecb).
+    key ctrl+shift+z
 fi
 
 # --- the chords have exactly ONE claimant each ---------------------------

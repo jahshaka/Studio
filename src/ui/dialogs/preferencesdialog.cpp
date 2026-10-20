@@ -32,7 +32,15 @@ PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, Settings
     // preferencesdialog.ui used to embed these (classic-only now; theme sweep)
     setStyleSheet(StyleSheet::PreferencesDialogRoot());
 
-	this->setWindowFlags(Qt::FramelessWindowHint);
+	// A DIALOG WITH A PARENT STAYS A WINDOW (APP-1, ship fff575ecb). setWindowFlags
+	// REPLACES the flags: FramelessWindowHint alone drops Qt::Dialog, and a widget
+	// with a parent and no window type is a CHILD WIDGET. While the dialog had no
+	// parent that was harmless (a parentless widget is always a window); since
+	// LEAK-1 gave it the main window as its owner, it became a child of
+	// MainWindow, shown with it, painted over every page and eating the drops
+	// meant for the Materials canvas (app.input_keys' palette drag). Add the
+	// frameless hint to the dialog's own flags instead of replacing them.
+	setWindowFlag(Qt::FramelessWindowHint, true);
 	setWindowModality(Qt::ApplicationModal);
 
 	db = handle;
