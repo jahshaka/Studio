@@ -447,10 +447,21 @@ int main(int argc, char **argv)
                 g.gather = GiToggle::On;
                 s->setGlobalIllumination(g);
                 GatherTuning t;
-                t.readback = true;
+                t.readback = false;   // on for the frames that are read only (readHeld, TOOLING-6 item 6)
                 t.restOff = true;
                 t.freezeFrameIndex = true;
                 s->setGatherTuning(t);
+                // THE READBACK FOR THE FRAMES THAT ARE READ (TOOLING-6 item 6: the row was 12.3 s, over the fixture budget):
+                // the readback door copies the whole 256x256 irradiance target to the host on EVERY frame it is on (a test door, GatherTuning::readback), and the estimator ignores
+                // it (sameEstimator: a readback toggle is no new history) — so the held frames run without it and the door opens for
+                // the last kReadFrames of them, past the readback's retire latency (kFramesInFlight 3): the same frames, the same answers
+                constexpr int kReadFrames = 5;
+                const auto readHeld = [&](int held) {
+                    run(held - kReadFrames);
+                    t.readback = true; s->setGatherTuning(t);
+                    run(kReadFrames);
+                };
+                const auto closeRead = [&]() { t.readback = false; s->setGatherTuning(t); };
                 // arms 0 / 1 the black dielectric still / a mover; 2 / 3 the tinted metal still / a mover; 4 THE STORE'S
                 // LEG: the tinted metal still on the UNCARDED cube - its hits read the store's material and direct
                 // term (jahHitDirect) on purpose, the route the cards answer ahead of
@@ -472,8 +483,9 @@ int main(int argc, char **argv)
                         s->refreshGlobalIllumination();
                     }
                     settle(s);
-                    run(48);   // the held sequence's history converged on the arm's route
+                    readHeld(48);   // the held sequence's history converged on the arm's route
                     const GatherStatus st = s->published().gi.gather;
+                    closeRead();
                     double sum[3] = {};
                     unsigned px = 0;
                     if (!st.irradiance.empty())
@@ -889,10 +901,21 @@ int main(int argc, char **argv)
         g.gather = GiToggle::On;
         s->setGlobalIllumination(g);
         GatherTuning t;
-        t.readback = true;
+        t.readback = false;   // on for the frames that are read only (readHeld, TOOLING-6 item 6)
         t.restOff = true;
         t.freezeFrameIndex = true;
         s->setGatherTuning(t);
+        // THE READBACK FOR THE FRAMES THAT ARE READ (TOOLING-6 item 6: the row was 27.1 s, over the fixture budget):
+        // the readback door copies the whole 256x256 irradiance target to the host on EVERY frame it is on (a test door, GatherTuning::readback), and the estimator ignores
+        // it (sameEstimator: a readback toggle is no new history) — so the held frames run without it and the door opens for
+        // the last kReadFrames of them, past the readback's retire latency (kFramesInFlight 3): the same frames, the same answers
+        constexpr int kReadFrames = 5;
+        const auto readHeld = [&](int held) {
+            run(held - kReadFrames);
+            t.readback = true; s->setGatherTuning(t);
+            run(kReadFrames);
+        };
+        const auto closeRead = [&]() { t.readback = false; s->setGatherTuning(t); };
         // arms: 0 the card, the mover away; 1 the card, the mover over; 2 the card under the PARTIAL roof; 3 the store
         // (uncarded) under the partial roof; 4 the store, over; 5 the store, away; 6 the BLACK plate, away; 7 the black
         // plate, over; 8 the black plate under the partial roof
@@ -923,8 +946,9 @@ int main(int argc, char **argv)
             s->setNodeTransform(moverNode, ga.roof == Roof::Away ? moverAway : moverOver, Quat(),
                                 ga.roof == Roof::Partial ? partialScale : moverScale);
             settle(s);
-            run(72);   // the held history's carry-over of the previous arm (0.1 % after 48 frames) under 1e-4
+            readHeld(72);   // the held history's carry-over of the previous arm (0.1 % after 48 frames) under 1e-4
             const GatherStatus st = s->published().gi.gather;
+            closeRead();
             double sum[3] = {};
             unsigned px = 0;
             if (!st.irradiance.empty())
