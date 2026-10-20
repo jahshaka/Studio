@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     QJsonObject r;
     enum { Before, Creating, Watching, After } phase = Before;
     QStringList compiles, clones, pipelines;
-    int lastCloneBefore = 0;
+    int lastCloneBefore = 0, bootPermutations = 0, bootPipelines = 0, bootShaders = 0;
     static const QRegularExpression cloneRe(QStringLiteral("Photon/Scroll(Copy|Position)/(\\d+)"));
     for (const QString &line : out.split('\n')) {
         if (line.contains(QStringLiteral("BUGS6_CREATE_BEGIN"))) { phase = Creating; continue; }
@@ -54,6 +54,16 @@ int main(int argc, char **argv)
         if (m.hasMatch()) {
             if (phase == Before) lastCloneBefore = std::max(lastCloneBefore, m.captured(2).toInt());
             else if (phase == Creating || phase == Watching) clones.append(line.trimmed());
+        }
+        // THE BOOT'S OWN COUNTS (the startup gate is in it), printed: compute permutations compiled, pipelines
+        // built from compiled code, and the compute shaders really compiled or served by the microcode cache.
+        if (phase == Before) {
+            if (line.contains(QStringLiteral("compiles a permutation in the frame"))) ++bootPermutations;
+            else if (line.contains(QStringLiteral("builds a pipeline in the frame"))) ++bootPipelines;
+            else if (line.contains(QStringLiteral("_cs compiled successfully")) ||
+                     line.contains(QStringLiteral("_cs was in microcode cache"))) ++bootShaders;
+            else if (line.contains(QStringLiteral("startup shader build:")))
+                std::printf("    app: %s\n", qPrintable(line.trimmed().left(200)));
         }
         if (phase == Watching && line.contains(QStringLiteral("compiles a permutation in the frame")))
             compiles.append(line.trimmed());
@@ -72,6 +82,9 @@ int main(int argc, char **argv)
     std::printf("    HlmsCompute lines across the create: %d; scroll clones %d (the last id before it %d); "
                 "compiles after the reveal %d\n", int(pipelines.size()), int(clones.size()), lastCloneBefore,
                 int(compiles.size()));
+    std::printf("    the boot: %d compute permutations compiled in the frame, %d pipelines built from compiled code, "
+                "%d compute shaders compiled or served by the microcode cache\n", bootPermutations, bootPipelines,
+                bootShaders);
     CHECK(atReveal.value("vctBound").toBool(), "(a) the lighting arm is bound when the create returns");
     CHECK(after.value("rebuilds").toInt() == atReveal.value("rebuilds").toInt(),
           "(a) no arm rebuild on the frames after the reveal");
