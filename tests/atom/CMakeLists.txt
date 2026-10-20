@@ -379,6 +379,17 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_gpu_row(shadow.caster_route CLASS engine COMMAND test_shadow_atom_cut --caster-route
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(shadow.caster_route PROPERTIES TIMEOUT 60 LABELS "engine")
+    # shadow.caster_route_lamps / _reflect / _probe — THE OTHER CASTER KINDS THROUGH THE CUT (BUGS-1 item 12;
+    # shadow.caster_route compared the sun maps only): the same three lockstep worlds (cut / stock / bare), texel by
+    # texel by each map's projection (shadow.atom_parity's law: p99 <= 1 texel, flips <= 0.5 %), the planes' own texels
+    # (stock vs bare) non-zero - a spot's map and a point's faces (the view's node, its lamps nudged so their cached
+    # maps re-render through the cut) and a planar mirror's node (Reflect; the cut's caster pass recording its maps).
+    # No Probe row: this open fixture keeps no reflection probe (a probe is kept by what it sees).
+    foreach(_route_kind lamps reflect)
+        jah_gpu_row(shadow.caster_route_${_route_kind} CLASS engine COMMAND test_shadow_atom_cut --caster-route-${_route_kind}
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(shadow.caster_route_${_route_kind} PROPERTIES TIMEOUT 60 LABELS "engine")
+    endforeach()
     # shadow.caster_first_frame — CASTER-USES-1: eight views of the world render their first
     # frame together (> 64 caster maps for the scene's one stats ring): every map recorded.
     jah_gpu_row(shadow.caster_first_frame CLASS engine COMMAND test_shadow_atom_cut --first-frame
@@ -551,6 +562,8 @@ foreach(_row_frames
         "shadow.caster_receivers=82"
         "shadow.caster_first_frame=12"
         "shadow.caster_route=65"
+        "shadow.caster_route_lamps=46"
+        "shadow.caster_route_reflect=52"
         "shadow.stock_lod=71"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

@@ -1362,6 +1362,7 @@ struct RouteWorld {
     OgreView *ov = nullptr;
     NodeId blended = 0, cutout = 0;
     Vec3 blendedAt, cutoutAt;
+    std::vector<std::pair<NodeId, Vec3>> lamps;   ///< RouteExtra::Lamps' spot and point, at their places
 };
 
 /// A FLAT n x n GRID of side 2 h in the XZ plane facing +y (front counter-clockwise from above), UVs 0..1 along
@@ -1384,7 +1385,13 @@ MeshData flatGrid(int n, float h)
     return d;
 }
 
-bool makeRouteWorld(RouteWorld &w, const char *name, bool split)
+/// WHAT A ROUTE WORLD ADDS FOR THE OTHER CASTER KINDS (BUGS-1 item 12; the kinds: OgreShadow.cpp's ShadowNodeKind):
+/// a spot and a point lamp over the planes (the view's node's lamp maps), a planar mirror with shadows (the Reflect
+/// node). (The Probe node is not here: this open fixture keeps no reflection probe - a probe is kept by what it sees,
+/// and here it sees sky - and an enclosure would put its roof between the sun and the planes in every map.)
+enum class RouteExtra { None, Lamps, Mirror };
+
+bool makeRouteWorld(RouteWorld &w, const char *name, bool split, RouteExtra extra = RouteExtra::None)
 {
     w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     w.scene = gE->createScene(name);
@@ -1445,6 +1452,40 @@ bool makeRouteWorld(RouteWorld &w, const char *name, bool split)
         s->attachMesh(w.cutout, grid, m);
     }
     enginetest::addDirectionalLight(s, Vec3(-0.35f, -0.85f, -0.4f), 2.2f);
+    if (extra == RouteExtra::Lamps) {
+        {   // THE SPOT, 5 m over the two planes, straight down (-Y, the helpers' convention): both in its cone
+            const NodeId n = s->createNode();
+            s->setNodeTransform(n, Vec3(0.0f, 5.0f, -6.0f), Quat(), Vec3(1, 1, 1));
+            w.lamps.push_back({ n, Vec3(0.0f, 5.0f, -6.0f) });
+            LightDesc l;
+            l.type = LightType::Spot;
+            l.intensity = 30.0f;
+            l.range = 15.0f;
+            l.spotAngleDegrees = 70.0f;
+            s->setLight(n, l);
+        }
+        {   // THE POINT, between the planes and the camera, 3 m up: their shadows fall on the floor beyond
+            const NodeId n = s->createNode();
+            s->setNodeTransform(n, Vec3(0.0f, 3.0f, -3.5f), Quat(), Vec3(1, 1, 1));
+            w.lamps.push_back({ n, Vec3(0.0f, 3.0f, -3.5f) });
+            LightDesc l;
+            l.type = LightType::Point;
+            l.intensity = 20.0f;
+            l.range = 12.0f;
+            s->setLight(n, l);
+        }
+    } else if (extra == RouteExtra::Mirror) {
+        // A PLANAR MIRROR on the floor in front of the planes (lightCullMain's): its own shadow node's sun maps
+        PbrParams mp;
+        mp.albedo = Colour(0.5f, 0.5f, 0.5f);
+        mp.roughness = 0.9f;
+        const NodeId mirror = addBox(s, Vec3(0.0f, 0.02f, -3.0f), Vec3(2.5f, 0.01f, 1.5f), s->createPbrMaterial(mp));
+        PlanarReflectionParams pr;
+        pr.budget = 1;
+        pr.resolution = 256;
+        pr.shadows = true;
+        if (!s->setPlanarReflections(pr) || !s->setNodePlanarReflector(mirror, true)) return false;
+    }
     if (!split) s->setAtomDrawEnabled(false);
     w.view->setOffscreenContract(OffscreenContract::StillPicture);
     w.view->setScene(s);
@@ -1521,6 +1562,200 @@ RectParity orthoParity(const Atlas &A, const Atlas &B, const Ogre::Matrix4 &ma, 
     return r;
 }
 }  // namespace
+
+/// THE THREE WORLDS' MAPS OF ONE SHADOW NODE, texel by texel (BUGS-1 item 12): every active map of `na` whose light
+/// type is in `typeMask` (1 << Ogre::Light::LightTypes), against the stock world's (nb) by shadow.atom_parity's law for
+/// its projection - orthographic (a sun map), perspective (a spot: the linearised depth) or a point's paraboloid (its
+/// depth range) - p99 <= 1 texel, flips <= 0.5 % at 1 cm; and the planes' OWN texels, where the stock world differs from
+/// the bare one (nc): the comparison is not vacuous where they are > 0. Returns (maps compared, own texels summed).
+static std::pair<unsigned, unsigned> nodeParity(const char *tag, Ogre::CompositorShadowNode *na,
+                                                Ogre::CompositorShadowNode *nb, Ogre::CompositorShadowNode *nc,
+                                                unsigned typeMask)
+{
+    std::pair<unsigned, unsigned> out{ 0u, 0u };
+    Atlas A, B, C;
+    const bool read = na && nb && nc && readAtlas(na, A) && readAtlas(nb, B) && readAtlas(nc, C) && A.w == B.w &&
+                      A.h == B.h && C.w == B.w && C.h == B.h && !A.d.empty();
+    CHECK_MSG(read, "%s: the three worlds' atlases read back", tag);
+    if (!read) return out;
+    const Ogre::CompositorShadowNodeDef *def = na->getDefinition();
+    for (const auto &m : activeMaps(na)) {
+        if (!(typeMask & (1u << unsigned(m.second)))) continue;
+        const unsigned idx = m.first;
+        const bool point = m.second == Ogre::Light::LT_POINT, ortho = m.second == Ogre::Light::LT_DIRECTIONAL;
+        const Ogre::Matrix4 ma = na->getViewProjectionMatrix(idx), mb = nb->getViewProjectionMatrix(idx),
+                            mc = nc->getViewProjectionMatrix(idx);
+        float camDiff = 0.0f;
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                camDiff = std::max(camDiff, std::max(float(std::fabs(ma[r][c] - mb[r][c])),
+                                                     float(std::fabs(ma[r][c] - mc[r][c]))));
+        char label[64];
+        std::snprintf(label, sizeof(label), "%s map %u %s", tag, idx, ortho ? "pssm" : point ? "point (dpsm)" : "spot");
+        CHECK_MSG(camDiff < 1e-4f, "%s: the three worlds render it from the same light camera (%.2g)", label,
+                  double(camDiff));
+        const Ogre::ShadowTextureDefinition *td = def->getShadowTextureDefinition(idx);
+        const unsigned x0 = unsigned(float(td->uvOffset.x) * float(A.w)), y0 = unsigned(float(td->uvOffset.y) * float(A.h));
+        const unsigned mw = unsigned(float(td->uvLength.x) * float(A.w)), mh = unsigned(float(td->uvLength.y) * float(A.h));
+        Ogre::Real nearD = 0, farD = 1;
+        na->getMinMaxDepthRange(idx, nearD, farD);
+        const float tx = 0.5f * float(td->uvLength.x) + float(td->uvOffset.x);
+        const float r0[3] = { float(ma[0][0] - tx * ma[3][0]), float(ma[0][1] - tx * ma[3][1]),
+                              float(ma[0][2] - tx * ma[3][2]) };
+        const float r2[4] = { float(ma[2][0]), float(ma[2][1]), float(ma[2][2]), float(ma[2][3]) };
+        const float r3[4] = { float(ma[3][0]), float(ma[3][1]), float(ma[3][2]), float(ma[3][3]) };
+        const float r0len = std::sqrt(r0[0] * r0[0] + r0[1] * r0[1] + r0[2] * r0[2]);
+        const float r2len = std::sqrt(r2[0] * r2[0] + r2[1] * r2[1] + r2[2] * r2[2]);
+        const float r3len = std::sqrt(r3[0] * r3[0] + r3[1] * r3[1] + r3[2] * r3[2]);
+        const float pA = r3len > 0 ? (r2[0] * r3[0] + r2[1] * r3[1] + r2[2] * r3[2]) / (r3len * r3len) : 0.0f;
+        const float pB = r2[3] - pA * r3[3];
+        auto linear = [&](float z) { return std::fabs(z - pA) > 1e-12f ? pB / (z - pA) : 0.0f; };
+        Ogre::TextureGpu *cube = point ? na->getDefinedTexture(Ogre::IdString("tmpCubemap")) : nullptr;
+        const float bias = 0.01f;
+        float empty = 0.0f;
+        {
+            std::map<float, unsigned> freq;
+            for (unsigned y = y0; y < y0 + mh; ++y)
+                for (unsigned x = x0; x < x0 + mw; ++x) ++freq[B.d[size_t(y) * B.w + x]];
+            unsigned best = 0;
+            for (const auto &kv : freq)
+                if (kv.second > best) { best = kv.second; empty = kv.first; }
+        }
+        std::vector<float> errTexels;
+        unsigned both = 0, silhouette = 0, flips = 0, own = 0;
+        for (unsigned y = y0; y < y0 + mh; ++y)
+            for (unsigned x = x0; x < x0 + mw; ++x) {
+                const size_t o = size_t(y) * A.w + x;
+                const float da = A.d[o], db = B.d[o];
+                own += db != C.d[o];
+                const bool ca = da != empty, cb = db != empty;
+                if (!ca && !cb) continue;
+                if (ca != cb) { ++silhouette; ++flips; continue; }
+                ++both;
+                float errWorld = 0.0f, texel = 1.0f;
+                if (ortho) {
+                    errWorld = std::fabs(da - db) / std::max(1e-12f, r2len);
+                    texel = 1.0f / (r0len * float(A.w));
+                } else if (point) {
+                    errWorld = std::fabs(da - db) * float(farD - nearD);
+                    const float dist = (1.0f - db) * float(farD - nearD) + float(nearD);
+                    texel = 2.0f * dist / float(cube ? cube->getHeight() : mh);
+                } else {
+                    const float za = linear(da), zb = linear(db);
+                    errWorld = std::fabs(za - zb);
+                    texel = std::fabs(zb) / (r0len * float(A.w));
+                }
+                errTexels.push_back(texel > 0.0f ? errWorld / texel : 0.0f);
+                if (errWorld > bias) ++flips;
+            }
+        std::sort(errTexels.begin(), errTexels.end());
+        const float p99 = errTexels.empty() ? 0.0f : errTexels[size_t(double(errTexels.size() - 1) * 0.99)];
+        const unsigned covered = both + silhouette;
+        std::printf("   %-26s %4ux%-4u covered %7u (the planes' own %6u) | p99 %.3f texels | silhouette %u | flips %u "
+                    "(%.3f %%)\n", label, mw, mh, covered, own, double(p99), silhouette, flips,
+                    covered ? 100.0 * double(flips) / double(covered) : 0.0);
+        CHECK_MSG(p99 <= 1.0f && double(flips) <= 0.005 * double(covered),
+                  "%s: p99 <= 1 texel (%.3f), flips <= 0.5 %% (%u of %u)", label, double(p99), flips, covered);
+        ++out.first;
+        out.second += own;
+    }
+    return out;
+}
+
+/// THE THREE ROUTE WORLDS FOR ONE OF THE OTHER KINDS (BUGS-1 item 12): cut / stock / bare (the planes hidden), one
+/// camera, `settle` frames.
+static bool routeWorlds(RouteWorld &a, RouteWorld &b, RouteWorld &c, RouteExtra extra, const char *tag, int settle)
+{
+    const std::string n(tag);
+    if (!makeRouteWorld(a, (n + "-cut").c_str(), true, extra) || !makeRouteWorld(b, (n + "-stock").c_str(), false, extra) ||
+        !makeRouteWorld(c, (n + "-bare").c_str(), false, extra))
+        return false;
+    c.scene->setNodeVisible(c.blended, false);
+    c.scene->setNodeVisible(c.cutout, false);
+    const CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 3.2f, 1.5f), Vec3(0.0f, 0.4f, -6.0f));
+    for (RouteWorld *w : { &a, &b, &c }) w->view->setCamera(cam);
+    enginetest::frames(gE, settle);
+    const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
+    CHECK_MSG(sa.on && !sb.on && sa.atomCaster == 1u && sa.atomMasked == 1u,
+              "%s: one world through the split (the blended plane's caster through the cut %u, the cut-out masked %u), "
+              "the other all stock PBS", tag, sa.atomCaster, sa.atomMasked);
+    return true;
+}
+
+static void routeWorldsGone(RouteWorld &a, RouteWorld &b, RouteWorld &c)
+{
+    for (RouteWorld *w : { &a, &b, &c }) {
+        gE->destroyView(w->view);
+        gE->destroyScene(w->scene);
+    }
+}
+
+/// --caster-route-lamps (shadow.caster_route_lamps): THE SPOT'S MAP AND THE POINT'S FACES through the cut against the
+/// stock casters, the sun maps' law (BUGS-1 item 12: shadow.caster_route compared the sun maps only).
+static int casterRouteLampsMain()
+{
+    std::printf("== shadow.caster_route_lamps: the planes' casters in a spot map and a point's faces, cut vs stock\n");
+    RouteWorld a, b, c;
+    if (!routeWorlds(a, b, c, RouteExtra::Lamps, "lamps", 40)) { std::printf("FAIL: the worlds\n"); return 1; }
+    // THE LAMP MAPS RE-RENDERED NOW, in all three worlds alike (a lamp map is cached: the cut world's first one was
+    // drawn before its GPU scene was live, through PBS - parityMain's nudge)
+    for (RouteWorld *w : { &a, &b, &c })
+        for (const auto &l : w->lamps)
+            w->scene->setNodeTransform(l.first, Vec3(l.second.x, l.second.y + 0.002f, l.second.z), Quat(), Vec3(1, 1, 1));
+    enginetest::frames(gE, 6);
+    Ogre::CompositorShadowNode *na = shadowNodeOf(a.ov), *nb = shadowNodeOf(b.ov), *nc = shadowNodeOf(c.ov);
+    const auto spot = nodeParity("view", na, nb, nc, 1u << Ogre::Light::LT_SPOTLIGHT);
+    const auto pt = nodeParity("view", na, nb, nc, 1u << Ogre::Light::LT_POINT);
+    CHECK_MSG(spot.first >= 1u && spot.second > 50u && pt.first >= 1u && pt.second > 50u,
+              "the planes cast into the spot's map (%u maps, %u own texels) and the point's (%u, %u)", spot.first,
+              spot.second, pt.first, pt.second);
+    routeWorldsGone(a, b, c);
+    return 0;
+}
+
+/// The planar mirror's shadow node(s) a route world's scene owns (each planar slot's), in its order.
+static std::vector<Ogre::CompositorShadowNode *> reflectNodes(RouteWorld &w)
+{
+    std::vector<Ogre::CompositorWorkspace *> ws;
+    static_cast<OgreScene *>(w.scene)->shadowWorkspaces(detail::ShadowNodeKind::Reflect, ws);
+    std::vector<Ogre::CompositorShadowNode *> out;
+    for (Ogre::CompositorWorkspace *x : ws)
+        if (Ogre::CompositorShadowNode *n = x ? x->findShadowNode(Ogre::IdString(OgreView::kReflectShadowNodeName)) : nullptr)
+            out.push_back(n);
+    return out;
+}
+
+/// --caster-route-reflect (shadow.caster_route_reflect): THE REFLECT NODE's sun maps (a planar mirror's) through the
+/// cut against the stock casters.
+static int casterRouteReflectMain()
+{
+    std::printf("== shadow.caster_route_reflect: the planes' casters in the planar mirror's sun maps, cut vs stock\n");
+    RouteWorld a, b, c;
+    if (!routeWorlds(a, b, c, RouteExtra::Mirror, "reflect", 40)) { std::printf("FAIL: the worlds\n"); return 1; }
+    // THE CUT DRAWS THE MIRROR'S MAPS (not vacuous): the frames counted with the cut world's caster pass recording a
+    // mirror's map (kind 1) with instances in it.
+    unsigned cutMaps = 0;
+    for (int i = 0; i < 12; ++i) {
+        enginetest::frames(gE, 1);
+        for (const AtomCasterMapStats &m : a.scene->atomDrawStatus().casterPerMap)
+            if (m.kind == 1u && m.instances > 0u) ++cutMaps;
+    }
+    CHECK_MSG(cutMaps > 0u, "the caster cut drew %u mirror maps with instances in 12 frames", cutMaps);
+    const auto la = reflectNodes(a), lb = reflectNodes(b), lc = reflectNodes(c);
+    CHECK_MSG(!la.empty() && la.size() == lb.size() && la.size() == lc.size(),
+              "each world holds the mirror's node: %zu / %zu / %zu", la.size(), lb.size(), lc.size());
+    unsigned maps = 0, own = 0;
+    for (size_t i = 0; i < la.size() && la.size() == lb.size() && la.size() == lc.size(); ++i) {
+        char t[32];
+        std::snprintf(t, sizeof(t), "reflect %zu", i);
+        const auto r = nodeParity(t, la[i], lb[i], lc[i], 1u << Ogre::Light::LT_DIRECTIONAL);
+        maps += r.first;
+        own += r.second;
+    }
+    CHECK_MSG(maps >= 1u && own > 50u, "the planes cast into the mirror's sun maps (%u maps, %u own texels)", maps, own);
+    routeWorldsGone(a, b, c);
+    return 0;
+}
 
 static int casterRouteMain()
 {
@@ -1707,7 +1942,7 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const std::string mode = argc > 1 ? argv[1] : "--cut";
-    if (mode != "--caster-route" && !loadFixtures(mode != "--light-cull" && mode != "--receivers")) {
+    if (mode.rfind("--caster-route", 0) != 0 && !loadFixtures(mode != "--light-cull" && mode != "--receivers")) {
         std::printf("FAIL: the fixtures (the shipped models did not bake)\n");
         return 1;
     }
@@ -1717,6 +1952,8 @@ int main(int argc, char **argv)
                   : mode == "--light-cull"  ? "test-shadow-caster-cull-ogre.log"
                   : mode == "--receivers"   ? "test-shadow-caster-receivers-ogre.log"
                   : mode == "--caster-route" ? "test-shadow-caster-route-ogre.log"
+                  : mode == "--caster-route-lamps" ? "test-shadow-caster-route-lamps-ogre.log"
+                  : mode == "--caster-route-reflect" ? "test-shadow-caster-route-reflect-ogre.log"
                                             : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
@@ -1727,6 +1964,8 @@ int main(int argc, char **argv)
                  : mode == "--light-cull"  ? lightCullMain()
                  : mode == "--receivers"   ? receiversMain()
                  : mode == "--caster-route" ? casterRouteMain()
+                 : mode == "--caster-route-lamps" ? casterRouteLampsMain()
+                 : mode == "--caster-route-reflect" ? casterRouteReflectMain()
                                            : cutMain();
     engine.reset();
     std::printf("%s (%d failure%s)\n", failures || rc ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
