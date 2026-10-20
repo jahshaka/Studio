@@ -58,6 +58,7 @@ target_link_libraries(test_import_async PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
 add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_ship_row(import.async)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(import.async PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "importer")
 
@@ -78,7 +79,7 @@ target_compile_definitions(test_import_shutdown PRIVATE
 
 set(_shutdown_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shutdown)
 file(MAKE_DIRECTORY ${_shutdown_home}/run)
-jah_gpu_row(import.shutdown CLASS app TIER epic NEEDS photon COMMAND test_import_shutdown
+jah_gpu_row(import.shutdown SHIP CLASS app TIER epic NEEDS photon COMMAND test_import_shutdown
          WORKING_DIRECTORY ${_shutdown_home}/run)
 set_tests_properties(import.shutdown PROPERTIES
     ENVIRONMENT "HOME=${_shutdown_home};JAHSHAKA_DATA_ROOT=${_shutdown_home}/.local/share/Jahshaka"

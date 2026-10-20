@@ -24,7 +24,7 @@ target_compile_definitions(test_exposure_plane PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_exposure_plane PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_exposure_plane JahshakaEngineMedia)
-jah_gpu_row(defaults.exposure_plane CLASS engine COMMAND test_exposure_plane
+jah_gpu_row(defaults.exposure_plane SHIP CLASS engine COMMAND test_exposure_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(defaults.exposure_plane PROPERTIES JAHSHAKA_TEST_FRAMES 675)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

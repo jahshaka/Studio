@@ -25,7 +25,7 @@ target_compile_definitions(test_staging_race PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_staging_race PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_staging_race JahshakaEngineMedia)
-jah_gpu_row(threading.staging_race CLASS engine COMMAND test_staging_race
+jah_gpu_row(threading.staging_race SHIP CLASS engine COMMAND test_staging_race
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(threading.staging_race PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "threading")
@@ -186,7 +186,7 @@ set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_wat
 
 jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" LABELS "threading")
 
-jah_gpu_row(threading.texture_wait_watchdog CLASS app TIER low NEEDS NONE
+jah_gpu_row(threading.texture_wait_watchdog SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js
          WORKING_DIRECTORY ${_thr_home_wd}/run)

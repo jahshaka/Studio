@@ -30,6 +30,7 @@ qt_add_resources(test_document_characterisation "document_fixtures"
 jah_document_graph(test_document_characterisation)
 add_test(NAME document.characterisation COMMAND test_document_characterisation
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(document.characterisation)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
@@ -118,7 +119,7 @@ set_tests_properties(physics.step_overlap PROPERTIES ENVIRONMENT "QT_QPA_PLATFOR
 # budget's foreground share starves Bullet. The step and the sync are printed apart (PHYSICS_MANY_MOVERS).
 # A GUARD, not a measure: the bar is a whole 60 Hz frame against ~5 ms, a margin no parallel row on the card's lock
 # closes — so it runs at every merge it is reached by, not only at the ship.
-jah_gpu_row(physics.many_movers CLASS engine COMMAND test_physics_step_cost --bodies 1000
+jah_gpu_row(physics.many_movers SHIP CLASS engine COMMAND test_physics_step_cost --bodies 1000
          --frames 120 --warmup 20 --threads budget --mirror --mt-only --bar 16.7
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"

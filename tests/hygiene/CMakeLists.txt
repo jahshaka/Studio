@@ -5,6 +5,7 @@
 add_test(NAME source.no_glsl_path
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_glsl_path.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.no_glsl_path)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_glsl_path PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_glsl_path)
 
@@ -15,6 +16,7 @@ jah_no_display(source.no_glsl_path)
 add_test(NAME source.fork_stamp
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/fork_stamp.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.fork_stamp)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.fork_stamp PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.fork_stamp)
 
@@ -26,6 +28,7 @@ jah_no_display(source.fork_stamp)
 add_test(NAME source.no_raw_transaction
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_transaction.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.no_raw_transaction)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_raw_transaction PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_raw_transaction)
 
@@ -36,6 +39,7 @@ jah_no_display(source.no_raw_transaction)
 add_test(NAME source.db_pointers_initialised
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/db_pointers_initialised.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.db_pointers_initialised)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.db_pointers_initialised PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.db_pointers_initialised)
 
@@ -48,6 +52,7 @@ jah_no_display(source.db_pointers_initialised)
 add_test(NAME source.panel_rows_guarded
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/panel_rows_guarded.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.panel_rows_guarded)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.panel_rows_guarded PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.panel_rows_guarded)
 # source.bake_key_guard — BAKEKEY-1: the mesh-bake key's hand-bumped half.
@@ -61,6 +66,7 @@ jah_no_display(source.panel_rows_guarded)
 add_test(NAME source.bake_key_guard
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/bake_key_guard.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.bake_key_guard)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.bake_key_guard PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.bake_key_guard)
 
@@ -70,6 +76,7 @@ jah_no_display(source.bake_key_guard)
 add_test(NAME source.no_engine_transform_reads
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_engine_transform_reads.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.no_engine_transform_reads)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_engine_transform_reads PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_engine_transform_reads)
 
@@ -80,6 +87,7 @@ jah_no_display(source.no_engine_transform_reads)
 add_test(NAME source.one_readfile
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_readfile.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.one_readfile)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.one_readfile PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_readfile)
 
@@ -90,6 +98,7 @@ jah_no_display(source.one_readfile)
 add_test(NAME source.assimp_import_only
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/assimp_import_only.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.assimp_import_only)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.assimp_import_only PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.assimp_import_only)
 
@@ -101,6 +110,7 @@ jah_no_display(source.assimp_import_only)
 add_test(NAME source.one_material_resolve
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_material_resolve.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.one_material_resolve)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.one_material_resolve PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_material_resolve)
 
@@ -110,6 +120,7 @@ jah_no_display(source.one_material_resolve)
 add_test(NAME source.photon_never_pinned
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/photon_never_pinned.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.photon_never_pinned)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.photon_never_pinned PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.photon_never_pinned)
 
@@ -122,6 +133,7 @@ jah_no_display(source.photon_never_pinned)
 add_test(NAME source.material_page_identity
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/material_page_identity.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.material_page_identity)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.material_page_identity PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.material_page_identity)
 
@@ -151,6 +163,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.gate_scope_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    jah_ship_row(source.gate_scope_rules)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.gate_scope_rules)
     # gate.selection — THE SELECTOR'S REPLAY (MODULAR-GATE-1): the recorded lanes' diffs
@@ -161,6 +174,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME gate.selection
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_selection.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    jah_ship_row(gate.selection)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
@@ -171,6 +185,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.testing_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/testing_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    jah_ship_row(source.testing_rules)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
     jah_no_display(source.testing_rules)
     # source.row_budget — A ROW IS A SECONDS-LONG GUARD (DOCS/PROCESS.md): every kept guard's price (scripts/gate-times.txt)
@@ -179,12 +194,14 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.row_budget
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_budget.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    jah_ship_row(source.row_budget)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.row_budget PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.row_budget)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/no_renders_tracked.py" "${CMAKE_SOURCE_DIR}")
+    jah_ship_row(source.no_renders_tracked)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.no_renders_tracked PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.no_renders_tracked)
 endif()
@@ -206,6 +223,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.member_init
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/member_init.py"
                      "${CMAKE_SOURCE_DIR}")
+    jah_ship_row(source.member_init)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.member_init PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.member_init)
 endif()
@@ -219,6 +237,7 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME source.notices_coverage
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/notices_coverage.py"
                      "${CMAKE_SOURCE_DIR}")
+    jah_ship_row(source.notices_coverage)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.notices_coverage PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.notices_coverage)
 endif()
@@ -231,6 +250,7 @@ endif()
 add_test(NAME source.one_fonticons
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_fonticons.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.one_fonticons)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.one_fonticons PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_fonticons)
 
@@ -241,6 +261,7 @@ jah_no_display(source.one_fonticons)
 add_test(NAME source.settings_keys
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/settings_keys.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.settings_keys)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.settings_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.settings_keys)
 
@@ -255,6 +276,7 @@ add_test(NAME source.gpu_rows_closure
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gpu_rows_closure.py"
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
+jah_ship_row(source.gpu_rows_closure)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.gpu_rows_closure)
 
@@ -268,6 +290,7 @@ add_test(NAME source.row_declares_needs
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/row_declares_needs.py"
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
+jah_ship_row(source.row_declares_needs)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
 jah_no_display(source.row_declares_needs)
 
@@ -276,6 +299,7 @@ jah_no_display(source.row_declares_needs)
 add_test(NAME source.scene_no_friends
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scene_no_friends.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.scene_no_friends)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.scene_no_friends PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.scene_no_friends)
 
@@ -284,6 +308,7 @@ jah_no_display(source.scene_no_friends)
 add_test(NAME source.photon_one_dispatch
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/photon_one_dispatch.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.photon_one_dispatch)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.photon_one_dispatch PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.photon_one_dispatch)
 
@@ -293,6 +318,7 @@ jah_no_display(source.photon_one_dispatch)
 add_test(NAME source.graphics_queue_seams
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/graphics_queue_seams.py"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.graphics_queue_seams)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.graphics_queue_seams PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.graphics_queue_seams)
 
@@ -302,6 +328,7 @@ jah_no_display(source.graphics_queue_seams)
 add_test(NAME source.scene_no_photon_members
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/scene_no_photon_members.py"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.scene_no_photon_members)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.scene_no_photon_members PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.scene_no_photon_members)
 
@@ -311,6 +338,7 @@ jah_no_display(source.scene_no_photon_members)
 add_test(NAME source.atom_no_registries
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/atom_no_registries.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.atom_no_registries)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.atom_no_registries PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.atom_no_registries)
 
@@ -320,6 +348,7 @@ jah_no_display(source.atom_no_registries)
 add_test(NAME source.no_fixed_gi_volume
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_fixed_gi_volume.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.no_fixed_gi_volume)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_fixed_gi_volume PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_fixed_gi_volume)
 
@@ -331,5 +360,6 @@ jah_no_display(source.no_fixed_gi_volume)
 add_test(NAME source.shell_boundaries
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/shell_boundaries.sh"
                  "${CMAKE_SOURCE_DIR}")
+jah_ship_row(source.shell_boundaries)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.shell_boundaries PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.shell_boundaries)

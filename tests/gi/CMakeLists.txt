@@ -340,6 +340,7 @@ target_link_libraries(test_photon_tiers PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_photon_tiers)
 add_test(NAME photon.tiers COMMAND test_photon_tiers
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_ship_row(photon.tiers)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 120)
 set_tests_properties(photon.tiers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
@@ -1065,7 +1066,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
     target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(gi.cascades_asan CLASS engine COMMAND test_gi_cascades_asan
+    jah_gpu_row(gi.cascades_asan SHIP CLASS engine COMMAND test_gi_cascades_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
@@ -1183,7 +1184,7 @@ if(JAHSHAKA_ASAN)
     add_dependencies(test_gi_rayquery_asan JahshakaEngineMedia)
     target_compile_options(test_gi_rayquery_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(gi.rayquery_asan CLASS engine COMMAND test_gi_rayquery_asan
+    jah_gpu_row(gi.rayquery_asan SHIP CLASS engine COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
@@ -1428,7 +1429,7 @@ target_compile_definitions(test_cloud_2d PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_cloud_2d PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_cloud_2d JahshakaEngineMedia)
-jah_gpu_row(cloud_2d.energy CLASS engine COMMAND test_cloud_2d energy
+jah_gpu_row(cloud_2d.energy SHIP CLASS engine COMMAND test_cloud_2d energy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "engine")

@@ -91,6 +91,7 @@ foreach(_variant live off)
         LABELS "scripting"
         TIMEOUT 180)
 endforeach()
+jah_ship_row(scripting.live)   # THE SHIP SET (TEST-CUT-1)
 
 # host.sync_getters — THE DOOR, COUNTED (ENGINE-UPGRADE-U3 stage 2): 600 editor frames — 300 driver ticks (--script-live,
 # the owner's mode: one after each script frame) and 300 lockstep frames, an object moving and selected — make ZERO
@@ -98,7 +99,7 @@ endforeach()
 # calls; what the editor reads per frame is the published snapshot, what it set it keeps). A count, in frames.
 set(_hsgHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_sync_getters)
 file(MAKE_DIRECTORY ${_hsgHome}/run)
-jah_gpu_row(host.sync_getters CLASS app TIER low NEEDS NONE FRAMES 630
+jah_gpu_row(host.sync_getters SHIP CLASS app TIER low NEEDS NONE FRAMES 630
          NEEDS_WHY "a count of the host's synchronous engine entries, the capture inside the window is a subject, its picture no claim"
          COMMAND ${JAH_FRESH_HOME} --warm ${_hsgHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -132,7 +133,7 @@ jah_tsan_blocked(host.sync_getters host.error_door)   # TSAN-GCC15-THREAD-REGIST
 # drawn by the next frame the render thread began (none merged into the next tick's), zero synchronous engine reads.
 set(_edlHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_drag_latency)
 file(MAKE_DIRECTORY ${_edlHome}/run)
-jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 260
+jah_gpu_row(editor.drag_latency SHIP CLASS app TIER low NEEDS NONE FRAMES 260
          COMMAND ${JAH_FRESH_HOME} --warm ${_edlHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/editor_drag_latency.js --script-live
@@ -259,7 +260,7 @@ jah_pool_arm(shading_d live_material_apply ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e
 # bundle. A cut-out (baked) + live-emissive (piece) graph material survives save -> reopen with
 # its piece cache DELETED -> export -> import into an EMPTY library, three processes with scratch
 # HOME/XDG_CACHE_HOME; the frames agree and the cut-out is visible (a solid control frame).
-jah_gpu_row(material.live_roundtrip CLASS app TIER epic NEEDS photon
+jah_gpu_row(material.live_roundtrip SHIP CLASS app TIER epic NEEDS photon
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
@@ -290,7 +291,7 @@ set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
 file(MAKE_DIRECTORY ${_ect_home}/run)
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
                   ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
-jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app TIER document   RUN_TIMEOUT 180
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing SHIP CLASS app TIER document   RUN_TIMEOUT 180
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
     WORKING_DIRECTORY ${_ect_home}/run)
 set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
@@ -703,7 +704,7 @@ jah_pool_arm(world_sky_c sky_name_recycle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2
 # budget 70 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
-jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app TIER epic NEEDS photon
+jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
@@ -936,6 +937,7 @@ add_test(NAME scripting.e2e.clip_ref
                  ${CMAKE_SOURCE_DIR}/tests/skeletal/fixtures/mixamo_tpose.fbx
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clip_ref.js
          WORKING_DIRECTORY ${_home}/run)
+jah_ship_row(scripting.e2e.clip_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clip_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
@@ -957,6 +959,7 @@ add_test(NAME scripting.e2e.tex_ref
                  ${CMAKE_SOURCE_DIR}/tests/importer/fixtures/textured_pbr_quad.glb
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tex_ref.js
          WORKING_DIRECTORY ${_home}/run)
+jah_ship_row(scripting.e2e.tex_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.tex_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
@@ -973,7 +976,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
 configure_file(scripts/e2e_perf_capture_frames.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
-jah_gpu_row(scripting.e2e.perf_capture_frames CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
+jah_gpu_row(scripting.e2e.perf_capture_frames SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
@@ -1283,6 +1286,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
          WORKING_DIRECTORY ${_home}/run)
+jah_ship_row(scripting.e2e.one_asset)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.one_asset PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_asset_home
@@ -1308,7 +1312,7 @@ configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
 jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.tray_panel CLASS app TIER low NEEDS NONE
+jah_gpu_row(scripting.e2e.tray_panel SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 550 = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
@@ -1329,7 +1333,7 @@ configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_wr
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(gi.one_writer CLASS app TIER epic NEEDS photon
+jah_gpu_row(gi.one_writer SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
          WORKING_DIRECTORY ${_home}/run)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
@@ -1687,6 +1691,7 @@ add_test(NAME scripting.e2e.clipboard_budget
                  bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard_budget.js
          WORKING_DIRECTORY ${_cbud_home}/run)
+jah_ship_row(scripting.e2e.clipboard_budget)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES
     ENVIRONMENT "HOME=${_cbud_home}"
     LABELS "scripting"
@@ -1812,7 +1817,7 @@ configure_file(scripts/e2e_player_bounce.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.player_bounce CLASS app TIER epic NEEDS photon
+jah_gpu_row(scripting.e2e.player_bounce SHIP CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1919,6 +1924,7 @@ file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
          WORKING_DIRECTORY ${_msiHome}/run)
+jah_ship_row(scripting.e2e.material_share_import)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.material_share_import PROPERTIES
     ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
@@ -1955,6 +1961,7 @@ file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
          WORKING_DIRECTORY ${_paHome}/run)
+jah_ship_row(scripting.e2e.preset_apply)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     ENVIRONMENT "HOME=${_paHome};JAHSHAKA_DATA_ROOT=${_paHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED presetApplyHome
@@ -2094,6 +2101,7 @@ jah_add_pool(gi_movers TIER document   LABELS scripting)
 # pool.gi_movers split by its arms' seconds (TESTING-SIMPLE: 89 s whole)
 jah_add_pool(gi_movers_b TIER document   LABELS scripting)
 jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
+jah_ship_row(pool.editor)   # THE SHIP SET (TEST-CUT-1)
 jah_add_pool(editor_view TIER document   LABELS scripting)
 jah_add_pool(editor_view_b TIER document   LABELS scripting)
 jah_add_pool(editor_view_c TIER document   LABELS scripting)

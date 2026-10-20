@@ -139,6 +139,7 @@ jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/librarymodel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp)
+jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
 jah_d11_suite(test_archive_closure archive.closure test_archive_closure.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetclosure.cpp
     ${CMAKE_SOURCE_DIR}/src/services/bundlestage.cpp
@@ -161,5 +162,6 @@ target_include_directories(test_bundle_writer PRIVATE ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src)
 target_link_libraries(test_bundle_writer PRIVATE Qt6::Core Qt6::Concurrent zip)
 add_test(NAME bundle.writer COMMAND test_bundle_writer WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(bundle.writer)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(bundle.writer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets" TIMEOUT 120)
 jah_no_display(bundle.writer)

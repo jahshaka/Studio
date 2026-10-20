@@ -234,6 +234,7 @@ set_tests_properties(meshbake.hemisphere_winding PROPERTIES
 # thread and on every thread (twice) give byte-identical blobs.
 add_test(NAME bake.determinism COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism" -- $<TARGET_FILE:test_mesh_bake> --determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_ship_row(bake.determinism)   # THE SHIP SET (TEST-CUT-1)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(bake.determinism PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism;JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism/.local/share/Jahshaka"
@@ -258,7 +259,7 @@ set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(archive/archive_bakes_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js @ONLY)
-jah_gpu_row(meshbake.archive_bakes CLASS app TIER low NEEDS NONE
+jah_gpu_row(meshbake.archive_bakes SHIP CLASS app TIER low NEEDS NONE
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"

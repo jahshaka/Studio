@@ -65,6 +65,7 @@ foreach(_arm first_recording offline_unique)
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         LABELS "scripting;capture;measure")
 endforeach()
+jah_ship_row(capture.first_recording.timing)   # THE SHIP SET (TEST-CUT-1)
 
 # pool.capture_validation — THE RECORDER UNDER THE KHRONOS VALIDATION LAYER (TESTING-CLEANUP-2 H4):
 # the recording view's chain, the NV12 job and the readback ring had never run under the layer in

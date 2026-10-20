@@ -37,7 +37,7 @@ target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 # about the march. So the suite runs in the picture it was written for; not one
 # of its bars is re-anchored. The COMBINED picture (march + rays, and the
 # fallback beside it) is `gi.rt_reflect` / `gi.rt_reflect_norays`.
-jah_gpu_row(ssr.engine CLASS engine COMMAND test_ssr
+jah_gpu_row(ssr.engine SHIP CLASS engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
@@ -48,7 +48,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_ssr_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_ssr_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_ssr_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(ssr.engine_asan CLASS engine COMMAND test_ssr_asan
+    jah_gpu_row(ssr.engine_asan SHIP CLASS engine COMMAND test_ssr_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.

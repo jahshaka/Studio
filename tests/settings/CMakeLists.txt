@@ -15,5 +15,6 @@ target_include_directories(test_settings_store PRIVATE
 target_link_libraries(test_settings_store PRIVATE Qt6::Core)
 add_test(NAME settings.store COMMAND test_settings_store
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(settings.store)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(settings.store PROPERTIES TIMEOUT 60 LABELS "services")
 jah_no_display(settings.store)

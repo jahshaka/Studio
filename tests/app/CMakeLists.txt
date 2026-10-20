@@ -40,7 +40,7 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (a hash-free selftest under the layer; it was in the lock by flake history only).
 # budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
-jah_gpu_row(app.engine_selftest_validation CLASS selftest
+jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
@@ -103,7 +103,7 @@ jah_no_display(app.knob_refusals)
 # row's own declaration is its heaviest boot (the tokens it must hold).
 set(_tnb_home ${CMAKE_CURRENT_BINARY_DIR}/test-needs-boot-home)
 file(MAKE_DIRECTORY ${_tnb_home}/run)
-jah_gpu_row(app.test_needs_boot CLASS app TIER epic NEEDS photon bloom
+jah_gpu_row(app.test_needs_boot SHIP CLASS app TIER epic NEEDS photon bloom
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_tnb_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/test_needs_boot.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"

@@ -15,7 +15,7 @@ target_compile_definitions(test_particles PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_particles PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_particles JahshakaEngineMedia)
-jah_gpu_row(particles.document_to_engine CLASS engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(particles.document_to_engine SHIP CLASS engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(particles.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 357)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
@@ -55,7 +55,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_particles_pfx2_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_particles_pfx2_asan PRIVATE JahshakaEngineAsan Qt6::Gui)
     add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
-    jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
+    jah_gpu_row(engine.particles_pfx2_asan SHIP CLASS engine COMMAND test_particles_pfx2_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Leak detection off for the same reason the engine suite turns it off: the

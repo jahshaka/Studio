@@ -24,6 +24,7 @@ target_include_directories(test_services PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(services.core)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
 # services.selection_set — the SET's own contracts (EDITOR_MULTISELECT_SPEC §5).
@@ -119,6 +120,7 @@ target_link_libraries(test_memory_ownership PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_memory_ownership)
 add_test(NAME services.memory COMMAND test_memory_ownership
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(services.memory)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(services.memory PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "services")
 jah_no_display(services.memory)

@@ -83,7 +83,7 @@ target_include_directories(test_emitter_parity PRIVATE
 target_link_libraries(test_emitter_parity PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_dependencies(test_emitter_parity JahshakaEngineMedia)
-jah_gpu_row(shadergraph.emitter_parity CLASS engine
+jah_gpu_row(shadergraph.emitter_parity SHIP CLASS engine
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.emitter_parity PROPERTIES JAHSHAKA_TEST_FRAMES 92)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
@@ -173,7 +173,7 @@ target_include_directories(test_piece_mirror PRIVATE
 target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Concurrent Qt6::Multimedia)
 add_dependencies(test_piece_mirror JahshakaEngineMedia)
-jah_gpu_row(pieces.mirror CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
+jah_gpu_row(pieces.mirror SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(pieces.mirror PROPERTIES JAHSHAKA_TEST_FRAMES 127)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(pieces.mirror PROPERTIES

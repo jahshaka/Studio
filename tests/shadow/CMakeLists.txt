@@ -109,7 +109,7 @@ set_tests_properties(shadow.helper_casters PROPERTIES TIMEOUT 120 LABELS "engine
 # first stage-close batch the churn twins took 1008 / 1159 s, over the old TIMEOUT 900: they passed only through the
 # hidden +900 s every gpu row's TIMEOUT carried for the admission wait — deleted by TESTING-CLEANUP-2B (the wait left
 # the clock: tests/cmake/vram_rows.cmake), so 2100 / 1950 is now the twins' whole bound.
-jah_gpu_row(shadow.cutout_caster CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+jah_gpu_row(shadow.cutout_caster SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.sh cutout
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/shadow_casters.js.in
@@ -148,7 +148,7 @@ set_tests_properties(shadow.two_sided_caster.churn PROPERTIES LABELS "engine" TI
 # cut-out the hang was found on, the screenshot path, a pinned and a free clock), then 5,000 of
 # the Tornado sample, under the Khronos validation layer. MINUTES OF ONE PROCESS: a stage-close row; its
 # push-time guard is shadow.cutout_caster (one process), its churn the `.churn` twins above.
-jah_gpu_row(gpu.cutout_soak CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+jah_gpu_row(gpu.cutout_soak SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in

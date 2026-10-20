@@ -154,7 +154,7 @@ target_link_libraries(test_importer_meshformats PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
 jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)
-jah_gpu_row(importer.meshformats CLASS engine COMMAND test_importer_meshformats
+jah_gpu_row(importer.meshformats SHIP CLASS engine COMMAND test_importer_meshformats
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.meshformats PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(importer.meshformats PROPERTIES

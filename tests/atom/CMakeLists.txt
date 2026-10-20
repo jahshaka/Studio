@@ -330,7 +330,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_dependencies(test_atom_component_asan JahshakaEngineMedia)
         target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
         target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
-        jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
+        jah_gpu_row(atom.component_asan SHIP CLASS engine COMMAND test_atom_component_asan
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -510,7 +510,7 @@ endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_pt_header}")
 set(_pt_home ${CMAKE_CURRENT_BINARY_DIR}/pass-table-home)
 file(MAKE_DIRECTORY ${_pt_home}/run)
-jah_gpu_row(atom.pass_table CLASS app TIER document FRAMES 552
+jah_gpu_row(atom.pass_table SHIP CLASS app TIER document FRAMES 552
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pass_table.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_pass_table.js" "${_pt_table}"

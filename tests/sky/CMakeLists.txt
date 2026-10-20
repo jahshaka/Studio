@@ -35,7 +35,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_sun_transmittance_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_sun_transmittance_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_sun_transmittance_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(sky.sun_transmittance_asan CLASS engine COMMAND test_sun_transmittance_asan
+    jah_gpu_row(sky.sun_transmittance_asan SHIP CLASS engine COMMAND test_sun_transmittance_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine, tests/ssr and tests/hdr: the only leaks LSan
     # finds here are libdbus-1 allocations reached from the Vulkan loader.
@@ -76,7 +76,7 @@ set_tests_properties(sky.aerial_perspective PROPERTIES JAHSHAKA_TEST_FRAMES 153)
 # sky.atmosphere — THE PLANET'S ATMOSPHERE (SKY-ATMOSPHERE-1).
 jahshaka_sky_test_src(test_atmosphere test_atmosphere.cpp)
 target_link_libraries(test_atmosphere PRIVATE JahshakaEngine)
-jah_gpu_row(sky.atmosphere CLASS engine COMMAND test_atmosphere
+jah_gpu_row(sky.atmosphere SHIP CLASS engine COMMAND test_atmosphere
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.atmosphere PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(sky.atmosphere PROPERTIES JAHSHAKA_TEST_FRAMES 231)

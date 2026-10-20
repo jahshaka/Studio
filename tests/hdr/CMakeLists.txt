@@ -35,7 +35,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_drag_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_drag_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_drag_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.drag_stable_asan CLASS engine COMMAND test_hdr_drag_asan
+    jah_gpu_row(hdr.drag_stable_asan SHIP CLASS engine COMMAND test_hdr_drag_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
@@ -60,7 +60,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_meter_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_meter_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
+    jah_gpu_row(hdr.meter_asan SHIP CLASS engine COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -102,7 +102,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_bloom_amount_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.bloom_amount_asan CLASS engine COMMAND test_hdr_bloom_amount_asan
+    jah_gpu_row(hdr.bloom_amount_asan SHIP CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -114,7 +114,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_dither_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_dither_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(hdr.dither_asan CLASS engine COMMAND test_hdr_dither_asan
+    jah_gpu_row(hdr.dither_asan SHIP CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -157,7 +157,7 @@ set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
 set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
 jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting")
-jah_gpu_row(hdr.bloom_showroom CLASS app TIER document
+jah_gpu_row(hdr.bloom_showroom SHIP CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
          WORKING_DIRECTORY ${_bloom_home}/run)
 set_tests_properties(hdr.bloom_showroom PROPERTIES

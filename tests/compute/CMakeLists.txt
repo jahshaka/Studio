@@ -87,7 +87,7 @@ target_compile_definitions(test_hzb PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_hzb PRIVATE JahshakaEngine)
 add_dependencies(test_hzb JahshakaEngineMedia)
-jah_gpu_row(chain.hzb CLASS engine COMMAND test_hzb
+jah_gpu_row(chain.hzb SHIP CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 # chain.hzb.timing — its millisecond bar(s), stage-close (lane D6B-GATE-SHAPE; audit §5 F17

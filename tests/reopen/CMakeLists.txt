@@ -8,7 +8,7 @@
 # contract every pixel e2e suite here has.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/reopen-home)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scene.reopen_fidelity CLASS app TIER document
+jah_gpu_row(scene.reopen_fidelity SHIP CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/reopen_fidelity.js
          WORKING_DIRECTORY ${_home}/run)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 450 = 6 x the run log's quiet median 74.0 s (44 quiet PASS runs since 2026-10-01, worst 232.0 s);

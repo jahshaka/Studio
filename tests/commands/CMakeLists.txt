@@ -47,6 +47,7 @@ target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets 
 jah_document_graph(test_structural_undo)
 add_test(NAME commands.structural_undo COMMAND test_structural_undo
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(commands.structural_undo)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(commands.structural_undo PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
 jah_no_display(commands.structural_undo)

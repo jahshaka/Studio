@@ -63,7 +63,7 @@ target_compile_definitions(test_editor_player_parity PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL Qt6::Widgets)
 add_dependencies(test_editor_player_parity JahshakaEngineMedia)
-jah_gpu_row(player.editor_parity CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
+jah_gpu_row(player.editor_parity SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(player.editor_parity PROPERTIES JAHSHAKA_TEST_FRAMES 123)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 # TESTING-CLEANUP-2B item 7, re-based after read 4 (2026-10-10; the sample per tests/CMakeLists.txt's policy — the run

@@ -145,7 +145,7 @@ target_compile_definitions(test_gpu_clips PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_gpu_clips JahshakaEngineMedia)
-jah_gpu_row(skeletal.gpu_clips CLASS engine COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(skeletal.gpu_clips SHIP CLASS engine COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.gpu_clips PROPERTIES JAHSHAKA_TEST_FRAMES 66)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
@@ -199,6 +199,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_skeleton_share_asan PRIVATE JahshakaEngineAsan)
     add_test(NAME skeletal.share_asan COMMAND test_skeleton_share_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_ship_row(skeletal.share_asan)   # THE SHIP SET (TEST-CUT-1)
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share is the merge row.

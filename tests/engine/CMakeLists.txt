@@ -45,6 +45,7 @@ function(jahshaka_engine_test target)
 endfunction()
 
 jahshaka_engine_test(test_engine)
+jah_ship_row(test_engine)   # THE SHIP SET (TEST-CUT-1)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
 # declared 120 was below the policy, honest only with the +900 s widening (now deleted).
 # budget 20 s: the measurement (TESTING-SPEED-B3) — 96 cases, 2,882 frames, 15.9-16.1 s at load 6 (42-51 s loaded at the
@@ -84,7 +85,7 @@ target_compile_definitions(test_engine_recreate PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
-jah_gpu_row(test_engine_recreate CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(test_engine_recreate SHIP CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # meshbake.shadow_vao_alias — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
 # PHOTON-SCENE-SWITCH-1), as its own ctest name so gate-scope can select it: a
 # 6-level mesh must hold one SHRUNK shadow VAO per level over one vertex buffer
@@ -109,7 +110,7 @@ target_compile_definitions(test_decals PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_decals PRIVATE JahshakaEngine)
 add_dependencies(test_decals JahshakaEngineMedia)
-jah_gpu_row(decals.engine CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(decals.engine SHIP CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(decals.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE LOD SWITCH BAND IS THE PASS'S, NOT THE PROCESS'S (fork 5230c9390+8282f6d70 (was 0075) as
@@ -238,7 +239,7 @@ target_compile_definitions(test_engine_record_determinism PRIVATE
 target_link_libraries(test_engine_record_determinism PRIVATE JahshakaEngine)
 add_dependencies(test_engine_record_determinism JahshakaEngineMedia)
 # Two engines in sequence (one per child process: Root is a singleton), never at once: the engine class's slots cover it.
-jah_gpu_row(frame.record_determinism CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
+jah_gpu_row(frame.record_determinism SHIP CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
 set_tests_properties(frame.record_determinism PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -257,7 +258,7 @@ target_compile_definitions(test_engine_message_order PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_message_order PRIVATE JahshakaEngine)
 add_dependencies(test_engine_message_order JahshakaEngineMedia)
-jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_message_order
+jah_gpu_row(engine.message_order SHIP CLASS engine FRAMES 7 COMMAND test_engine_message_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(frame.record_determinism engine.message_order)   # the render thread's TSan arm (U3 decision 47)
@@ -275,7 +276,7 @@ target_compile_definitions(test_engine_interpolation PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
 add_dependencies(test_engine_interpolation JahshakaEngineMedia)
-jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+jah_gpu_row(frame.interpolation SHIP CLASS engine FRAMES 20 COMMAND test_engine_interpolation
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_gpu_row(frame.interpolation_apply CLASS engine FRAMES 64 COMMAND test_engine_interpolation --apply
@@ -294,7 +295,7 @@ target_compile_definitions(test_engine_drag_latency PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_drag_latency PRIVATE JahshakaEngine)
 add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
-jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
+jah_gpu_row(frame.drag_latency SHIP CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.runtime_pace — A HEADSET FASTER THAN THE PANEL IS PACED BY ITS RUNTIME (ENGINE-UPGRADE-U3 decision 53): free frames
@@ -349,7 +350,7 @@ target_compile_definitions(test_engine_error_door PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_error_door PRIVATE JahshakaEngine)
 add_dependencies(test_engine_error_door JahshakaEngineMedia)
-jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_door
+jah_gpu_row(engine.error_door SHIP CLASS engine FRAMES 620 COMMAND test_engine_error_door
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.texture_residency — A TEXTURE'S METADATA CACHE CHANGES NOTHING ON SCREEN (BUGS-1 item 13; preflight-photon-3 §G):
@@ -387,7 +388,7 @@ target_compile_definitions(test_engine_monitor_pop PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_monitor_pop PRIVATE JahshakaEngine)
 add_dependencies(test_engine_monitor_pop JahshakaEngineMedia)
-jah_gpu_row(frame.monitor_pop CLASS engine FRAMES 280 COMMAND test_engine_monitor_pop
+jah_gpu_row(frame.monitor_pop SHIP CLASS engine FRAMES 280 COMMAND test_engine_monitor_pop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.monitor_pop PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(engine.error_door frame.monitor_pop)
@@ -552,7 +553,7 @@ set_tests_properties(engine.gpu_walk_parity PROPERTIES TIMEOUT 60 LABELS "engine
 # the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
 # RAY-FEED-OBSERVER-1: the ray tier live on the view, the ray feed's traced set folded into the digest (a re-level, an
 # alpha slot, a rigged slot and a mesh swap in the scene); its lane halves owe the ordered body for <= 10 % of the movers.
-jah_gpu_row(engine.gpuscene_identity CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
+jah_gpu_row(engine.gpuscene_identity SHIP CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"
     JAHSHAKA_TEST_FRAMES 18)   # 1 + 6 warm + 10 + 1
@@ -594,6 +595,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)
 
     jahshaka_engine_test(test_engine_asan)
+    jah_ship_row(test_engine_asan)   # THE SHIP SET (TEST-CUT-1)
     target_link_libraries(test_engine_asan PRIVATE JahshakaEngineAsan)
     # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.

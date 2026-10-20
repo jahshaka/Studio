@@ -17,5 +17,6 @@ target_include_directories(test_shell_contract PRIVATE
 target_link_libraries(test_shell_contract PRIVATE Qt6::Widgets)
 add_test(NAME shell.contract COMMAND test_shell_contract
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(shell.contract)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(shell.contract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 jah_no_display(shell.contract)

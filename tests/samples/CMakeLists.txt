@@ -58,6 +58,7 @@ foreach(SAMPLE IN LISTS _samples)
         LABELS "scripting"
         TIMEOUT 480)
 endforeach()
+jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.cleanstart.Particles samples.cleanstart.Physics samples.cleanstart.Showroom samples.cleanstart.Showroom_2 samples.cleanstart.Skeletal_Animation samples.cleanstart.Tornado samples.cleanstart.World_Background)   # THE SHIP SET (TEST-CUT-1)
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
 # archives imported into ONE home and opened back to back in ONE process — the
@@ -82,7 +83,7 @@ set_tests_properties(samples.session PROPERTIES
 # across boots (ATOM-DECODE-CLASS-1 recorded two). Ten boots, each on a virgin data root, the
 # scene's offscreen picture after 600 fixed-clock frames, byte-identical (the runner:
 # scripts/mirror_room_boots.sh). 251 s measured (25 s a boot): STAGE-CLOSE.
-jah_gpu_row(samples.mirror_room_boots CLASS app TIER document
+jah_gpu_row(samples.mirror_room_boots SHIP CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 10
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

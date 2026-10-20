@@ -179,7 +179,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_include_directories(test_window_render_thread PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
     target_link_libraries(test_window_render_thread PRIVATE JahshakaEngine Qt6::Widgets X11)
     add_dependencies(test_window_render_thread JahshakaEngineMedia)
-    jah_gpu_row(view.window_on_render_thread CLASS engine FRAMES 120 COMMAND test_window_render_thread
+    jah_gpu_row(view.window_on_render_thread SHIP CLASS engine FRAMES 120 COMMAND test_window_render_thread
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(view.window_on_render_thread PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
@@ -1540,7 +1540,7 @@ target_compile_definitions(test_space_docks PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
 file(MAKE_DIRECTORY ${_space_docks_home}/run)
-jah_gpu_row(ui.space_docks CLASS app TIER low NEEDS NONE COMMAND test_space_docks
+jah_gpu_row(ui.space_docks SHIP CLASS app TIER low NEEDS NONE COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES JAHSHAKA_TEST_FRAMES 631)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.space_docks PROPERTIES

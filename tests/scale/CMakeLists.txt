@@ -246,7 +246,7 @@ jah_gpu_row(scale.library.fixture CLASS app TIER low NEEDS NONE COMMAND test_sca
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(scale.library.fixture PROPERTIES TIMEOUT ${SCALE_T_LIBRARY_FIXTURE} LABELS "scale"
                      FIXTURES_SETUP scale_library_template)
-jah_gpu_exclusive_test(NAME scale.library CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
+jah_gpu_exclusive_test(NAME scale.library SHIP CLASS app TIER low NEEDS NONE RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # W14 IS CLOSED (D11-LIBRARY-SCALE): its row is a BAR, not a target.
 # SKIP (77), SAID, where the counted bars cannot count: app.databaseReads is unavailable when the Qt

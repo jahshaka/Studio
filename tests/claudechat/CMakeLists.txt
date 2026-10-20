@@ -22,6 +22,7 @@ target_link_libraries(test_claude_chat PRIVATE Qt6::Widgets)
 # (its flake was a /proc read, not GPU time).
 add_test(NAME claude.chat COMMAND test_claude_chat
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+jah_ship_row(claude.chat)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(claude.chat PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CLAUDECHAT_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
     TIMEOUT 120 LABELS "scripting")
