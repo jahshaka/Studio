@@ -12,10 +12,13 @@
 //       (A)'s triangles - a mesh authored in centimetres is cut exactly as the same object authored in metres;
 //   (d) THE DRAWN CLUSTERS ARE THE RULE'S: each instance's drawn triangles = the C++ cut over the probe's verdicts;
 //   (e) THE PIXELS ARE THE ID IMAGE'S: each instance's counted pixels = its slot's pixels in the id image read back;
-//   (f) THE DENSITY VIEW: every pixel of each sphere is painted the class of its BASE mesh's level-0 triangles per
-//       visible pixel (the probe's figure), and atomStatus().density says the same pixels and classes;
+//   (f) THE DENSITY VIEW, A brought near and B sent far (two classes): every pixel of each sphere is painted the class
+//       of its BASE mesh's level-0 triangles per visible pixel (the probe's figure), at least two classes are painted,
+//       and atomStatus().density says the same pixels and classes; and with the
+//       count's compute jobs missing (a test door) it paints nothing and reports no figures (BUGS-1 item 6);
 //   (g) THE PROBE IS ONE FRAME: the cut job's probe permutation is gone the frame after (no group is recorded twice
-//       and a second read without an arming answers "not armed");
+//       and a second read without an arming answers "not armed"); a probe DISARMED before its frame records no later
+//       frame (BUGS-1 item 7, the verb's timeout);
 //   (h) THE TIER'S THRESHOLD (ATOM-3 stage 1): at the World Mode's 1 / 2 / 3 px the drawn triangles fall strictly.
 // FRAMES, NEVER TIME: every reading follows a counted frame.
 // The engine's private headers BEFORE the document's (Qt's keyword macros - emit, slots - would rewrite them).
@@ -313,6 +316,18 @@ int main(int argc, char **argv)
     AtomCutProbe again;
     CHECK(scene->atomCutProbe(again) && !again.valid && again.error.find("not armed") != std::string::npos,
           "(g) a read without an arming answers 'not armed'");
+    // (g') A DISARMED PROBE RECORDS NOTHING (BUGS-1 item 7: world.atomCutProbe's timeout disarms): armed, taken back
+    // before any frame, then two frames drawn - the read answers 'not armed', no later frame took the arming.
+    {
+        CHECK(scene->armAtomCutProbe(), "(g') the probe arms");
+        scene->disarmAtomCutProbe();
+        enginetest::frames(e, 2);
+        AtomCutProbe late;
+        const bool lateAnswered = scene->atomCutProbe(late);   // read before the message is formatted
+        CHECK_MSG(lateAnswered && !late.valid && late.error.find("not armed") != std::string::npos,
+                  "(g') a disarmed probe records no later frame: the read answers '%s' (valid %d)", late.error.c_str(),
+                  int(late.valid));
+    }
 
     // (c) the units: (B) is (A) in centimetres - B moved to where A stood (and A to where B stood), probed again,
     // so each group of B is judged from exactly the eye and place each group of A was
@@ -353,7 +368,10 @@ int main(int argc, char **argv)
     scene->setNodeTransform(a, Vec3(-0.8f, 0.0f, 0.0f), Quat(), Vec3(1, 1, 1));
     scene->setNodeTransform(b, Vec3(0.8f, 0.0f, 0.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
 
-    // (f) the density view
+    // (f) the density view - over TWO CLASSES (BUGS-1 item 9: A and B are one DAG at one distance, one class): A
+    // brought near (its 8,192 triangles over many pixels: under one a pixel) and B sent far (over four a pixel)
+    scene->setNodeTransform(a, Vec3(-0.35f, 0.0f, 6.6f), Quat(), Vec3(1, 1, 1));
+    scene->setNodeTransform(b, Vec3(2.0f, 0.0f, -25.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
     scene->setAtomView(AtomView::Density);
     enginetest::frames(e, 4);
     Image img;
@@ -383,13 +401,41 @@ int main(int argc, char **argv)
     CHECK_MSG(total > 1000u && wrong == 0u,
               "(f) every pixel of the spheres is painted its object's class (%u of %u wrong, %u painted)", wrong, total,
               painted);
+    const unsigned classesPainted = (classPx[0] ? 1u : 0u) + (classPx[1] ? 1u : 0u) + (classPx[2] ? 1u : 0u);
+    CHECK_MSG(classesPainted >= 2u,
+              "(f) ...over TWO classes at least (the near sphere's and the far one's: %u / %u / %u px green / yellow / red)",
+              classPx[0], classPx[1], classPx[2]);
     CHECK_MSG(st.densityValid && st.densityPixels == total && st.densityObjects == 2u &&
                   st.densityClassPixels[0] == classPx[0] && st.densityClassPixels[1] == classPx[1] &&
                   st.densityClassPixels[2] == classPx[2],
               "(f) atomStatus' density says the same (valid %d, %u px in %u objects; classes %u/%u/%u, the image's %u/%u/%u)",
               int(st.densityValid), st.densityPixels, st.densityObjects, st.densityClassPixels[0],
               st.densityClassPixels[1], st.densityClassPixels[2], classPx[0], classPx[1], classPx[2]);
+    // (f') THE DENSITY FAIL-SAFE (BUGS-1 item 6): the count's compute jobs missing (the test door "atom.densityJobsMissing",
+    // as on a tree whose media did not stage them) - the frames paint NOTHING over the spheres and report no figures,
+    // never the table the frames before them wrote.
+    {
+        e->setArm("atom.densityJobsMissing", 1.0);
+        enginetest::frames(e, 4);
+        Image miss;
+        const bool read = view->readPixels(miss) && miss.width == kW && miss.height == kH;
+        const AtomDrawStatus ms = scene->atomDrawStatus();
+        unsigned paintedMiss = 0, spherePx = 0;
+        for (size_t i = 0; read && i < ids2.size(); ++i) {
+            if (ids2[i] == AtomId::kEmpty) continue;
+            const uint32_t sl = ids2[i] & AtomId::kSlotMask;
+            if (sl != sA && sl != sB) continue;
+            ++spherePx;
+            if (classOf(&miss.rgba[i * 4u]) >= 0) ++paintedMiss;
+        }
+        e->setArm("atom.densityJobsMissing", 0.0);
+        CHECK_MSG(read && spherePx > 1000u && paintedMiss == 0u && !ms.densityValid,
+                  "(f') THE DENSITY FAIL-SAFE: with the count's jobs missing %u of %u sphere pixels are painted a class "
+                  "(0 wanted) and the figures are %s", paintedMiss, spherePx, ms.densityValid ? "STILL VALID" : "gone");
+    }
     scene->setAtomView(AtomView::Off);
+    scene->setNodeTransform(a, Vec3(-0.8f, 0.0f, 0.0f), Quat(), Vec3(1, 1, 1));
+    scene->setNodeTransform(b, Vec3(0.8f, 0.0f, 0.0f), Quat(), Vec3(0.01f, 0.01f, 0.01f));
     enginetest::frames(e, 2);
     AtomDrawStatus off = scene->atomDrawStatus();
     CHECK(!off.densityValid, "(f) the density figures are gone with the view");

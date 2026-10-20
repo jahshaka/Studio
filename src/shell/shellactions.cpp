@@ -145,7 +145,9 @@ void define(ActionHost &actions, MainWindow &w)
     // F6 — THE ATOM VIEW, cycled Off -> Triangles -> Levels -> Buckets -> Objects
     // -> Density -> Off (the View Options sub-menu picks one directly).
     row("view.atomView", "Cycle Atom View", "View", QKeySequence(Qt::Key_F6), any,
-            [&w]() { w.editorPage()->setAtomViewMode((w.editorPage()->atomViewMode() + 1) % 6); });
+            [&w]() {
+                w.editorPage()->setAtomViewMode((w.editorPage()->atomViewMode() + 1) % jahshaka::engine::kAtomViewCount);
+            });
     // F7 — THE PHOTON VIEW, cycled Off -> Voxels -> ... -> Ray Hits -> Gather Hits -> Off through
     // the modes that can paint here (the View Options sub-menu picks one directly).
     row("view.photonView", "Cycle Photon View", "View", QKeySequence(Qt::Key_F7), any,

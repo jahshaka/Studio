@@ -1005,6 +1005,8 @@ gi.metal_bounce_route 6.40  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.1: th
 gi.metal_bounce_gate 20.28  merge 2026-10-19 (ENGINE-POLISH-PHOTON-1's fix round: the movers' gate on a metal's card; 573 frames, the gate arms settle 72 — the lowest of three runs beside ATOM-1's gate; over the fixture budget, labelled measure until the row is rewritten to it)
 gi.march_inside 4.58  solo 2026-10-18 (ENGINE-UPGRADE-U5 decision 22.2: the inside fraction, two open quads and a solid at 32/64/128; n=1)
 shadow.caster_route 6.10  solo 2026-10-19 (ATOM-3 stage 2: the cutout through the masked range, + its level-0 reference; n=1, 65 frames)
+shadow.caster_route_lamps 5.08  solo, the card lock held, :79 (BUGS-1 item 12, 2026-10-20; 46 frames)
+shadow.caster_route_reflect 2.47  solo, the card lock held, :79 (BUGS-1 item 12, 2026-10-20; 52 frames)
 atom.view_colour 1.08  solo 2026-10-19 (ENGINE-POLISH-ATOM-1 stage 6: three spheres under the triangles view, one delete; n=2)
 atom.cut_probe 1.21  solo 2026-10-19 (ATOM-3 stage 1: + (h), three probes at 1/2/3 px; n=1, 33 frames)
 atom.masked_id 2.77  solo 2026-10-19 (ATOM-3 stage 2: a cut-out plane, its opaque twin, minified against its level 0; n=1, 82 frames)

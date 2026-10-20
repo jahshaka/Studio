@@ -1815,7 +1815,11 @@ QVariantMap WorldApi::atomCutProbe(const QVariantMap &params)
             host.viewport->renderFrames(1);
             answered = es->atomCutProbe(p);
         }
-        if (!answered) p.error = "no frame of the viewport recorded the cut in 8 frames";
+        if (!answered) {
+            // GIVEN UP: the arming is taken back, or a later frame would record a probe nobody reads (BUGS-1 item 7)
+            es->disarmAtomCutProbe();
+            p.error = "no frame of the viewport recorded the cut in 8 frames";
+        }
     }
     // THE NAMES ARE THE DOCUMENT'S: one reverse map from the mirror (appapi's renderStats pattern).
     QHash<jahshaka::engine::NodeId, QString> docNames;
@@ -2012,7 +2016,7 @@ bool WorldApi::setAtomDraw(bool on)
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
     es->setAtomDrawEnabled(on);
-    return es->atomDrawStatus().on;
+    return es->atomDrawOn();
 }
 
 bool WorldApi::setAtomOcclusion(bool on)
@@ -2023,12 +2027,14 @@ bool WorldApi::setAtomOcclusion(bool on)
     jahshaka::engine::Scene *es = host.viewport->engineScene();
     if (!es) return false;
     es->setAtomOcclusionEnabled(on);
-    return on && es->atomDrawStatus().on;
+    return on && es->atomDrawOn();
 }
 
 namespace {
 const char *const kAtomViewNames[] = { "off", "triangles", "levels", "buckets", "objects", "density" };
-constexpr int kAtomViewCount = int(sizeof(kAtomViewNames) / sizeof(kAtomViewNames[0]));
+using jahshaka::engine::kAtomViewCount;
+static_assert(int(sizeof(kAtomViewNames) / sizeof(kAtomViewNames[0])) == kAtomViewCount,
+              "one name per AtomView, in its order");
 }
 
 bool WorldApi::setAtomView(const QString &view)
