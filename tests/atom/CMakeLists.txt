@@ -171,6 +171,18 @@ jah_fresh_home_fixture(atom.pass_table.fresh_home atomPassTableHome "${_pt_home}
 set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTableHome)
 
 set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+# atom.hidden_cut — THE ID PASS CULLS WHAT A STOCK WALL HIDES (ATOM-4 stage 0; RE-REGISTERED by ATOM-8 stage 1, the law every
+# occlusion stage is held to): a front-culled (stock) wall in front of 30 Atom spheres it hides wholly, three lockstep
+# worlds (the occlusion, the same chain with no history, the door shut), both chain shapes (no prepass / the SSR prepass):
+# the FIRST list's and the LATE list's draws behind the wall are 0, the depth test rejects the whole field, the ids the
+# picture shows equal the history-less twin's word for word and the picture the door-shut world's byte for byte. ATOM-8's
+# base number for the occlusion rows, measured by its stage 0 instruments: 53.8 % of the Bistro Exterior law88 frame
+# (98,318 of 182,807 triangles at High, 924 x 565) is drawn for objects with no visible pixel.
+add_executable(test_atom_hidden_cut test_atom_hidden_cut.cpp)
+jah_atom_engine_target(test_atom_hidden_cut)
+jah_gpu_row(atom.hidden_cut CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.hidden_cut PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # atom.instruments_honest (ATOM-8 stage 0; the builder's row) — THE ATOM INSTRUMENTS TELL THE TRUTH: one baked 20 k sphere
 # twice, the front one hiding the back one, the occlusion shut (the back one drawn and hidden): the density view = the cut's
