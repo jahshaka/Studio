@@ -172,6 +172,35 @@ set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTabl
 
 set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 
+# atom.instruments_honest (ATOM-8 stage 0; the builder's row) — THE ATOM INSTRUMENTS TELL THE TRUTH: one baked 20 k sphere
+# twice, the front one hiding the back one, the occlusion shut (the back one drawn and hidden): the density view = the cut's
+# drawn triangles over visible pixels (it was the base mesh's level 0), world.atomStatus's drawnHiddenTriangles = the back
+# object's drawn triangles in the Density and Triangles modes (none Off), the probe's distinctClustersVisible 0 for the back
+# object (its clusters share mesh-wide ids with the front one's visible ones) and in (0, drawn] for the front one. RED at
+# the base: the density table held level-0 / visible, and neither the hidden figure nor the visible clusters existed.
+add_executable(test_atom_instruments test_atom_instruments.cpp cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_source_files_properties(test_atom_instruments.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+set_target_properties(test_atom_instruments PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_atom_instruments PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src ${CMAKE_CURRENT_SOURCE_DIR}
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_atom_instruments PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    CLUSTER_FIXTURE_DIR="${CMAKE_CURRENT_BINARY_DIR}/cluster-fixtures"
+    CLUSTER_TEST_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
+target_link_libraries(test_atom_instruments PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_atom_instruments JahshakaEngineMedia)
+jah_gpu_row(atom.instruments_honest CLASS engine FRAMES 32 COMMAND test_atom_instruments
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.instruments_honest PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.

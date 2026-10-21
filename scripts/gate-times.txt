@@ -19,6 +19,7 @@ archive.responsive.timing 49.60  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing.fresh_home 0.02  quiet n=3
 assets.engine 2.81  quiet n=45
 atom.component_asan 9.07  spec EU-2 stage 3 (2026-10-14)
+atom.instruments_honest 2.67  solo, the card lock held, :71 (ATOM-8 stage 0, 2026-10-21)
 atom.pass_table 42.85  solo, the card lock held, :77, cold shader cache after the fork pin bump (BUGS-1 item 1, 2026-10-19)
 atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)

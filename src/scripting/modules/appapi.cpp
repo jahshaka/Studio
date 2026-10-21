@@ -434,9 +434,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "snapshots them per camera at the end of that camera's pass, so with two on-screen views the "
           "second includes the first). A CALL SUBSCRIBES THEM: recording costs integer adds per draw call "
           "and runs only for the 120 rendered frames after a call (and while the F3 overlay shows or a "
-          "capture records), so the first call after a lapse reports metricsRecording=false with zeroed "
-          "counters. A caller that wants a span counted calls once BEFORE the span and checks "
-          "metricsRecording on the read after it. "
+          "capture records), so the first call after a lapse reports metricsRecording=false and NO NUMBER for "
+          "the counters that frame did not count — `submittedTriangles`, `draws`, `batches`, `vertices` and "
+          "`instances` are null, never a 0 that reads as a measurement (an editor.screenshot renders its own "
+          "frames, up to thousands for a settled capture, so a script that shoots between two reads lets the "
+          "120 lapse) — and the call re-subscribes: the next read after a rendered frame has them. A caller "
+          "that wants a span counted calls once BEFORE the span and checks metricsRecording on the read after "
+          "it. "
           "`incompletePsoRequests` is how many pipeline objects the last frame GAVE UP on for "
           "running out of its compile budget — objects using one do not appear that frame. It "
           "is ALWAYS 0 here and that is deliberate (THREADING_ADOPTION_SPEC.md P4, decision "
@@ -1755,12 +1759,18 @@ QVariantMap AppApi::renderStats()
                                    : iris::ScenePtr();
     out.insert("sceneTriangles",
                QVariant::fromValue(qulonglong(scenestats::sceneGeometry(doc).triangles)));
-    out.insert("draws", QVariant::fromValue(qulonglong(s.draws)));
-    out.insert("batches", QVariant::fromValue(qulonglong(s.batches)));
+    // THE GEOMETRY COUNTERS ONLY WHERE THE FRAME COUNTED THEM (ATOM-8 stage 0, R10): the lease above lapses 120
+    // rendered frames after the last call, and the snapshot of an uncounted frame holds zeros — null, as the F3
+    // overlay prints "-" (statsrows' `counted`), never a 0 that reads as a measurement.
+    const auto counted = [&](unsigned long long v) {
+        return s.metricsRecording ? QVariant::fromValue(qulonglong(v)) : QVariant();
+    };
+    out.insert("draws", counted(s.draws));
+    out.insert("batches", counted(s.batches));
     // …and what the RENDERER submitted, across every pass. Renamed from
     // `triangles`, which is what the F3 row used to call it and what the owner
     // read as his scene's content (owner review 2026-09-18, R4a).
-    out.insert("submittedTriangles", QVariant::fromValue(qulonglong(s.triangles)));
+    out.insert("submittedTriangles", counted(s.triangles));
     // The per-pass breakdown of that total, from the render monitor's own pass
     // rows. Empty unless a capture is recording — see the verb's doc.
     out.insert("perPass", FrameMonitor::instance().lastFramePasses());
@@ -1803,8 +1813,8 @@ QVariantMap AppApi::renderStats()
         }
         out.insert("perObject", rows);
     }
-    out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
-    out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
+    out.insert("vertices", counted(s.vertices));
+    out.insert("instances", counted(s.instances));
     // THE COUNTS' LAG (ATOM S3-DRAW): where the visibility buffer draws, its share of
     // the geometry counts is read back from the GPU cull once the frame has retired,
     // so after a change the counts settle this many frames later (0: CPU-counted).
