@@ -137,3 +137,63 @@ set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 
+
+# gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1):
+# an open court keeps >= 1 probe at Medium, a bare floor 0, a sealed room its whole grid.
+add_executable(test_gi_probe_court test_gi_probe_court.cpp)
+set_target_properties(test_gi_probe_court PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_probe_court PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_probe_court PRIVATE JahshakaEngine)
+add_dependencies(test_gi_probe_court JahshakaEngineMedia)
+jah_gpu_row(gi.probe_court CLASS engine COMMAND test_gi_probe_court
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
+
+# gi.voxel_two_sided — A TWO-SIDED SHEET COVERS BOTH HALVES OF ITS VOXELS (PHOTON-5 stage 2): the shade
+# under a single-winding CULL_NONE sheet equals the two-winding reference within 2 % on the voxel route.
+add_executable(test_gi_voxel_two_sided test_gi_voxel_two_sided.cpp)
+set_target_properties(test_gi_voxel_two_sided PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_two_sided PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_two_sided PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_two_sided JahshakaEngineMedia)
+jah_gpu_row(gi.voxel_two_sided CLASS engine COMMAND test_gi_voxel_two_sided
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_two_sided PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.voxel_two_sided PROPERTIES JAHSHAKA_TEST_FRAMES 96)
+
+# gi.bounce_residual — BOUNCES TO A RESIDUAL (PHOTON-5 stage 5): an enclosed room lit through one window; the far
+# corner's indirect at High against the series' limit measured in the same process.
+add_executable(test_gi_bounce_residual test_gi_bounce_residual.cpp)
+set_target_properties(test_gi_bounce_residual PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_bounce_residual PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_bounce_residual PRIVATE JahshakaEngine)
+add_dependencies(test_gi_bounce_residual JahshakaEngineMedia)
+jah_gpu_row(gi.bounce_residual CLASS engine COMMAND test_gi_bounce_residual
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.bounce_residual PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.bounce_residual PROPERTIES JAHSHAKA_TEST_FRAMES 272)

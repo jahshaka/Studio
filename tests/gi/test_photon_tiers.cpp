@@ -285,7 +285,7 @@ static void testEpic()
     CHECK(ep.gather.stride * 2u == hi.gather.stride, "...and four times the gather's probes");
     CHECK(worldmodes::photonBounces(PhotonTier::Epic) == 3 &&
               worldmodes::photonBounces(PhotonTier::High) == 1,
-          "...and its own bounce column");
+          "...and its own bounce column (the MINIMUM: the series adds passes to a residual, PHOTON-5)");
 }
 
 static void testProbeBudget()
