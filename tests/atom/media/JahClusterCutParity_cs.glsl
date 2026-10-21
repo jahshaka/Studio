@@ -2,7 +2,8 @@
 // harness only): runs the cluster cut's GLSL half — the product pieces
 // JahLevelRule_piece_cs.any (the one currency and the column scale) and
 // JahClusterCut.glsl, included by name — over one mesh's DAG tables for N views,
-// one thread per (view, cluster), and writes 1 where the rule draws the cluster.
+// one thread per (view, cluster), and writes bit 0 where the rule draws the cluster
+// and bit 1 where the ROOT CUT does (jahClusterRootDrawn; view-independent).
 // engine.lod_rule_parity (archived: archive/tests/engine) compares that set with the C++ half's (Types.h
 // clusterCut) to the bit.
 @insertpiece( SetCrossPlatformSettings )
@@ -48,5 +49,6 @@ void main()
 	bool isLevel0 = range.w == 0xFFFFFFFFu;
 	bool own = jahParityAffordable( range.z, v );
 	bool refined = isLevel0 ? false : jahParityAffordable( range.w, v );
-	drawn[id] = jahClusterDrawn( own, isLevel0, refined ) ? 1u : 0u;
+	bool root = jahClusterRootDrawn( groups[range.z].error, isLevel0, isLevel0 ? 0.0 : groups[range.w].error.x );
+	drawn[id] = ( jahClusterDrawn( own, isLevel0, refined ) ? 1u : 0u ) | ( root ? 2u : 0u );
 }

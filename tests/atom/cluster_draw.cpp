@@ -180,7 +180,7 @@ bool GpuCut::init(Engine *, std::string &err)
 
 bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<MeshCluster> &clusters,
                  const std::vector<ClusterCutView> &views, std::vector<unsigned char> &drawn,
-                 std::string &err)
+                 std::string &err, std::vector<unsigned char> *rootDrawn)
 {
     drawn.clear();
     if (!mJob) { err = "GpuCut not initialised"; return false; }
@@ -190,10 +190,11 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
     Ogre::HlmsCompute *hc = Ogre::Root::getSingleton().getHlmsManager()->getComputeHlms();
 
     std::vector<GpuGroup> g(groups.size());
+    const std::vector<unsigned> produced = clusterProducedCounts(clusters, groups.size());   // the upload's error[3]
     for (size_t i = 0; i < groups.size(); ++i) {
         const MeshClusterGroup &s = groups[i];
         g[i] = GpuGroup{ { s.centre[0], s.centre[1], s.centre[2], s.radius },
-                         { s.error, s.estimate, float(s.depth), 0.0f } };
+                         { s.error, s.estimate, float(s.depth), float(produced[i]) } };
     }
     std::vector<GpuCluster> c(clusters.size());
     for (size_t i = 0; i < clusters.size(); ++i) {
@@ -237,7 +238,11 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
         Ogre::AsyncTicketPtr ticket = bOut->readRequest(0, total);
         const unsigned *res = reinterpret_cast<const unsigned *>(ticket->map());
         drawn.resize(total);
-        for (unsigned i = 0; i < total; ++i) drawn[i] = res[i] ? 1u : 0u;
+        for (unsigned i = 0; i < total; ++i) drawn[i] = (res[i] & 1u) ? 1u : 0u;
+        if (rootDrawn) {
+            rootDrawn->resize(total);
+            for (unsigned i = 0; i < total; ++i) (*rootDrawn)[i] = (res[i] & 2u) ? 1u : 0u;
+        }
         ticket->unmap();
     } catch (Ogre::Exception &e) {
         err = e.getFullDescription();
