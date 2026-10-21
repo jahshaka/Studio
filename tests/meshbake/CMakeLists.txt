@@ -118,6 +118,17 @@ set_tests_properties(bake.dag_reaches_root PROPERTIES
 jah_no_display(bake.dag_reaches_root)
 jah_ship_row(bake.dag_reaches_root)   # THE SHIP SET: the DAG build's end-to-end row (ATOM-6)
 
+# bake.locked_positions_kept (ATOM-7 stage 2; the builder's row — 1.6 s): A LOCKED POSITION SURVIVES. The card soup, the
+# kit-bash and a rough faceted sheet (96 x 96 cells with UV charts: long group borders, sliver fans) bake with no group
+# losing a position its level locked — clusterlod's report sums to 0 and so do the positions the DAG's own clusters say
+# were lost (recomputed), each within its group's error (max d/err <= 1). Red before the verify's rule 4: the rough sheet
+# lost 2 positions at d3 (at the stage-1 tip; the soup and the kit-bash lose none there).
+add_test(NAME bake.locked_positions_kept COMMAND $<TARGET_FILE:test_mesh_bake> --locked-positions-kept
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.locked_positions_kept PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.locked_positions_kept)
+
 # meshbake.archive_bakes (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every
 # model it brings (archives carry no bakes), so a fresh library that imports the
 # shipped samples opens them from bakes with ZERO parses; and with the bakes gone

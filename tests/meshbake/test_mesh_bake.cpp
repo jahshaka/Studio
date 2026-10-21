@@ -2369,6 +2369,39 @@ iris::MeshPtr kitBash()
     return meshFromArrays(p, n, uv, idx);
 }
 
+/// A rough sheet (ATOM-7 stage 2): a 96 x 96 grid of 5 cm cells, random diagonals, a height field of random 1-30 cm
+/// steps, every cell faceted (its own normal: an attribute seam on every cell edge, the flat-shaded kit-bash) and a UV
+/// chart per 8 x 8 block — one welded component with long group borders and many sliver fans — deterministic.
+iris::MeshPtr roughSheet()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 4242u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    const int N = 96;
+    std::vector<float> h((N + 1) * (N + 1));
+    for (float &z : h) z = 0.01f + 0.29f * rnd();
+    // per cell its own four corners (a UV chart per 8 x 8 block: twins along the block lines)
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x) {
+            const unsigned base = unsigned(p.size() / 3);
+            const int cx[4] = { x, x + 1, x + 1, x }, cy[4] = { y, y, y + 1, y + 1 };
+            for (int k = 0; k < 4; ++k) {
+                p.insert(p.end(), { cx[k] * 0.05f, cy[k] * 0.05f, h[size_t(cy[k] * (N + 1) + cx[k])] });
+                // FACETED: every cell its own normal (a flat-shaded kit-bash: an attribute seam on every cell edge)
+                const float sx = h[size_t(y * (N + 1) + x + 1)] - h[size_t(y * (N + 1) + x)];
+                const float sy = h[size_t((y + 1) * (N + 1) + x)] - h[size_t(y * (N + 1) + x)];
+                const float nl = std::sqrt(sx * sx + sy * sy + 0.0025f);
+                n.insert(n.end(), { -sx / nl, -sy / nl, 0.05f / nl });
+                const float u = float(cx[k] - (x / 8) * 8) / 8.0f + float(x / 8), v = float(cy[k] - (y / 8) * 8) / 8.0f;
+                uv.insert(uv.end(), { u, v });
+            }
+            if (rnd() < 0.5f) idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+            else              idx.insert(idx.end(), { base, base + 1, base + 3, base + 1, base + 2, base + 3 });
+        }
+    return meshFromArrays(p, n, uv, idx);
+}
+
 }   // namespace dagroot
 
 static int dagReachesRoot()
@@ -2474,6 +2507,45 @@ static int dagReachesRoot()
     return failures ? 1 : 0;
 }
 
+/// `--locked-positions-kept` (ATOM-7 stage 2, the row bake.locked_positions_kept): A LOCKED POSITION SURVIVES — the
+/// kit-bash (200 closed boxes on a grid: many group borders) and the card soup bake with no group losing a position
+/// its level locked (clusterlod's own report, `lockedDroppedByDepth`, sums to 0) and THE PROOF STAT: the positions the
+/// DAG itself says were lost (recomputed from its cluster indices: a group's input positions shared with another group
+/// of its depth or with an earlier terminal group, absent from its output) — 0, and any one within its group's stored
+/// error (max d/err <= 1: a lost position past its group's error is a crack wider than the law).
+static int lockedPositionsKept()
+{
+    struct Case { const char *name; iris::MeshPtr mesh; };
+    const Case cases[] = { { "card soup (2,000 quads)", dagroot::cardSoup() },
+                           { "kit-bash (200 closed boxes)", dagroot::kitBash() },
+                           { "rough sheet (96 x 96, UV charts)", dagroot::roughSheet() } };
+    for (const Case &cs : cases) {
+        iris::MeshBake::ClusterDagStats st;
+        iris::MeshBake::buildClusterDag(cs.mesh, &st);
+        int lost = 0;
+        std::printf("== %s: lost locked positions by depth (clusterlod's report):", cs.name);
+        for (int d = 0; d < st.lockedDroppedByDepth.size(); ++d) {
+            lost += st.lockedDroppedByDepth.at(d);
+            std::printf(" d%d %d", d, st.lockedDroppedByDepth.at(d));
+        }
+        std::printf(" — total %d in %d groups; recomputed from the DAG %d, max d/err %.4g, past their error %d; "
+                    "lock retries %d, unconverged %d\n", lost, st.lockDroppedGroups, st.lockedLostPositions,
+                    double(st.lockedLostMaxRatio), st.lockedLostPastError, st.groupRetries, st.groupsUnconverged);
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: no group loses a locked position (%d)", cs.name, lost);
+        CHECK_LOUD(lost == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the DAG's own clusters lose none either (%d recomputed)", cs.name,
+                      st.lockedLostPositions);
+        CHECK_LOUD(st.lockedLostPositions == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: every lost position within its group's error (max d/err %.4g <= 1)", cs.name,
+                      double(st.lockedLostMaxRatio));
+        CHECK_LOUD(st.lockedLostMaxRatio <= 1.0f, msg);
+    }
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
 /// `--dag-levels <model> <out.tsv> [threads] [--exhaustive] [--mesh i,j]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
 /// DAG from now on): every mesh of the file through the bake's own DAG build, and per depth (a level = what a cut at that
 /// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones,
@@ -2506,7 +2578,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
     int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, madeTerminal = 0, retries = 0,
         unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0, repruneGroups = 0,
-        keptEarlier = 0, handOnRecomputed = 0;
+        keptEarlier = 0, handOnRecomputed = 0, lockedLostRecomputed = 0, lockedLostPast = 0;
+    float lockedLostMax = 0.0f;
     double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
     std::vector<int> lostByDepth;   // locked positions lost, per depth (the post-sprint audit's numbers)
     QElapsedTimer wall; wall.start();
@@ -2534,6 +2607,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
         prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked; repruneGroups += st.repruneGroups;
         keptEarlier += st.groupsKeptEarlier; handOnRecomputed += st.handOnRecomputed;
+        lockedLostRecomputed += st.lockedLostPositions; lockedLostPast += st.lockedLostPastError;
+        lockedLostMax = std::max(lockedLostMax, st.lockedLostMaxRatio);
         // level-0 components by welded position
         const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
         std::vector<unsigned> comp;   // per vertex
@@ -2667,8 +2742,11 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
                 stuck, madeTerminal, retries, unconverged, lockDroppedGroups, emptyGroups, prunedGroups, prunedRelocked,
                 repruneGroups, keptEarlier, handOnRecomputed);
     std::printf("  locked positions lost per depth:");
-    for (size_t d = 0; d < lostByDepth.size(); ++d) std::printf(" d%zu %d", d, lostByDepth[d]);
-    std::printf("\n");
+    int lostTotal = 0;
+    for (size_t d = 0; d < lostByDepth.size(); ++d) { std::printf(" d%zu %d", d, lostByDepth[d]); lostTotal += lostByDepth[d]; }
+    std::printf(" (total %d)\n", lostTotal);
+    std::printf("  locked-lost max d/err %.4g over %d positions recomputed from the DAG (%d past their group's error)\n",
+                double(lockedLostMax), lockedLostRecomputed, lockedLostPast);
     std::printf("  DAG build wall %lld ms (clodBuild %.0f, of which the verify %.0f over %d retries; measure %.0f; summed)\n",
                 qint64(wall.elapsed()), buildMs, verifyMs, retries, measureMs);
     return 0;
@@ -3603,6 +3681,7 @@ int main(int argc, char **argv)
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
     }
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--locked-positions-kept")) return lockedPositionsKept();
     if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
         // [threads] [--exhaustive] [--mesh i,j,...]
         int threads = 4;
