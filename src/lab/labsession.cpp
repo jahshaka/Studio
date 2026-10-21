@@ -255,6 +255,9 @@ bool Session::probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &
     sum.groupsDropped = p.groupsDropped;
     sum.tolerance = p.tolerance;
     sum.viewportHeight = p.viewportHeight;
+    mProbed = true;
+    mLastProbe = sum;
+    mLastProbeFrame = mFrames;
     return true;
 }
 
@@ -536,7 +539,17 @@ std::string Session::statusJson()
       << ",\"draws\":" << rs.draws << ",\"batches\":" << rs.batches << ",\"triangles\":" << rs.triangles
       << ",\"vertices\":" << rs.vertices << ",\"instances\":" << rs.instances
       << ",\"gpuCountLagFrames\":" << rs.gpuCountLagFrames << "}";
-    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << "}}";
+    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << "}";
+    // THE LAST CUT PROBE (`probe` / `measure`): the drawn triangles of its frame summed over the objects, and those of
+    // the objects with no visible pixel — the hidden share's numerator (the probe's frame, said beside the status's)
+    if (mProbed)
+        o << ",\"probe\":{\"frame\":" << mLastProbeFrame << ",\"objects\":" << mLastProbe.objects
+          << ",\"atomPixels\":" << mLastProbe.atomPixels << ",\"drawnTriangles\":" << mLastProbe.drawnTriangles
+          << ",\"hiddenTriangles\":" << mLastProbe.hiddenTriangles << ",\"groupsDropped\":" << mLastProbe.groupsDropped
+          << ",\"tolerance\":" << mLastProbe.tolerance << ",\"viewportHeight\":" << mLastProbe.viewportHeight << "}";
+    else
+        o << ",\"probe\":null";
+    o << "}";
     return o.str();
 }
 

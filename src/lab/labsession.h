@@ -98,7 +98,10 @@ private:
     Jlab mJlab;                 ///< what the session was opened from (a .jlab or a file)
     const envs::Env *mEnv = nullptr;        ///< the generated environment, when the session is one
     std::unique_ptr<envs::Built> mBuilt;    ///< ...and what its build made (the feature table the closed form reads)
-    std::vector<std::pair<unsigned long long, QString>> mNodeNames;   ///< engine node id -> document node name
+    std::vector<std::pair<unsigned long long, QString>> mNodeNames;
+    bool mProbed = false;                   ///< a probe has answered (the status carries its summary)
+    AtomCutProbeSummary mLastProbe;
+    unsigned long long mLastProbeFrame = 0;   ///< engine node id -> document node name
 
     // THE LAB'S STATE — what it pushed (the host keeps what it set; the engine has no getters for these)
     int mAtomView = 0;

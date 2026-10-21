@@ -41,3 +41,12 @@ add_test(NAME lab.env_expectation_printed
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.env_expectation_printed PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.env_expectation_printed)
+
+# lab.dolly_matches_probe (stage 3) — scripts/lab/dolly.sh on the kit-bashed box set at two stops: the dolly's table
+# equals the engine's AtomDrawStatus at each stop (cut triangles, clusters, occluded objects) and the cut probe's drawn
+# triangles equal that cut, +- 0. On the rig's display; the dolly takes the card's lock (re-entrant under a holder).
+jah_gpu_row(lab.dolly_matches_probe CLASS engine FRAMES 30
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/dolly_matches_probe.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/dolly_matches_probe
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.dolly_matches_probe PROPERTIES TIMEOUT 60 LABELS "lab")
