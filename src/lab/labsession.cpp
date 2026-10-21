@@ -699,7 +699,11 @@ bool Session::exec(const Command &c)
         }
     } else if (c.verb == "measure") {
         if (!mEnv) { ok = false; std::printf("LAB REFUSED measure: the session is not an environment (--env)\n"); }
-        else {
+        else if (!mEnv->atom) {
+            ok = false;
+            std::printf("LAB REFUSED measure: %s's laws (the bounce residual, the keep rule) are read from Photon's own "
+                        "status, not the cut probe — the Photon spec measures them\n", mEnv->name);
+        } else {
             const double d = std::strtod(a0.c_str(), nullptr);
             envCamera(d);
             execLine("settle", "measure");
