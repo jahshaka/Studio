@@ -24,7 +24,7 @@ namespace envs {
 
 namespace {
 
-struct Kind { unsigned cards; float half, radius, y; };
+struct Kind { unsigned cards = 0; float half = 0.0f, radius = 0.0f, y = 0.0f; };
 constexpr Kind kKinds[2] = { { 3000, 0.2f, 2.5f, 5.0f }, { 8000, 0.6f, 5.0f, 8.0f } };
 
 Built build(unsigned seed, bool bake)

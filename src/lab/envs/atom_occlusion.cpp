@@ -28,7 +28,7 @@ namespace {
 
 constexpr float kHalfWidth = 15.0f, kWallH = 8.0f, kGap0 = 4.0f, kGap1 = 7.0f;
 
-struct Rect { float x0, y0, x1, y1; bool empty() const { return x1 <= x0 || y1 <= y0; } };
+struct Rect { float x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f; bool empty() const { return x1 <= x0 || y1 <= y0; } };
 
 Built build(unsigned seed, bool bake)
 {

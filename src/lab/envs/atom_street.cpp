@@ -31,7 +31,7 @@ namespace {
 constexpr int kFacades = 40, kVariants = 8;
 constexpr float kWidth = 20.0f, kHeight = 12.0f, kStreetHalf = 8.0f;
 
-struct Shell { iris::Vec3 c, h; float error; };
+struct Shell { iris::Vec3 c, h; float error = 0.0f; };
 
 std::vector<Shell> facadeShells(unsigned seed)
 {
