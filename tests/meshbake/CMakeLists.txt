@@ -194,3 +194,22 @@ add_test(NAME bake.cut_curve COMMAND $<TARGET_FILE:test_mesh_bake> --cut-curve-l
 set_tests_properties(bake.cut_curve PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.cut_curve)
+
+# bake.objective_is_geometry (ATOM-UPGRADE stage 1; the builder's row): THE RANKING CANNOT WRECK GEOMETRY THE QUADRIC
+# PRICES CHEAP. The kit-bashed box set (2 x 2 faces) and a curved facade (a 10 m shell with an 8 x 6 UV atlas), in
+# Bistro's units and atlas range, bake as shipped and positions-only; at every depth the shipped DAG's stored error is at
+# most 2x the position quadric's. Red at the base (the facade 35x at depth 0: the UV weight ranked the collapses).
+add_test(NAME bake.objective_is_geometry COMMAND $<TARGET_FILE:test_mesh_bake> --objective-is-geometry
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.objective_is_geometry PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.objective_is_geometry)
+
+# bake.terms_exact (ATOM-UPGRADE stage 1; the builder's row): THE MEASUREMENT IS EXACT BOTH WAYS. On the curved shell
+# (a quarter sphere, 6,144 triangles) every group's measured bound is within 1.1x of the dense reference. Red at the
+# base (1.25: the sampled terms' margin).
+add_test(NAME bake.terms_exact COMMAND $<TARGET_FILE:test_mesh_bake> --terms-exact
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.terms_exact PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.terms_exact)

@@ -105,7 +105,7 @@
 #include "irisgl/import/scenesource.h"
 #include "irisgl/import/clipfileinfo.h"
 #include "../support/timingbars.h"
-#include "cutcurve_stock.h"
+#include "upgrade_rows.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -2216,19 +2216,19 @@ static void printDagTerms(const QString &label, const iris::MeshBake::ClusterDag
     std::sort(all.begin(), all.end(), [](const Row *a, const Row *b) {
         return a->bound / a->estimate > b->bound / b->estimate;
     });
-    std::printf("      worst groups: depth  R-verts S-tris  estimate   sampled    vertex     facet     bound   ref      x  drop cap\n");
+    std::printf("      worst groups: depth  R-verts S-tris  estimate    vertex     facet     bound   ref      x  drop cap\n");
     for (size_t i = 0; i < all.size() && i < 10; ++i) {
         const Row *r = all[i];
-        std::printf("                    %5d %8d %6d %9.5f %9.5f %9.5f %9.5f %9.5f %7.4f %5.2f %4d %3d\n", r->depth,
-                    r->regionVertices, r->simplifiedTriangles, double(r->estimate), double(r->sampled),
+        std::printf("                    %5d %8d %6d %9.5f %9.5f %9.5f %9.5f %7.4f %5.2f %4d %3d\n", r->depth,
+                    r->regionVertices, r->simplifiedTriangles, double(r->estimate),
                     double(r->vertex), double(r->facet), double(r->bound), double(r->reference),
                     double(r->bound / r->estimate), r->islandsDropped, r->capBound ? 1 : 0);
     }
     for (const Row &r : st.groupTerms)
         if (r.reference > r.bound * (1.0f + 1e-6f) + 1e-9f && r.bound != FLT_MAX)
-            std::printf("      UNDER ITS REFERENCE: depth %d R %d S %d estimate %.5f sampled %.5f vertex %.5f "
+            std::printf("      UNDER ITS REFERENCE: depth %d R %d S %d estimate %.5f vertex %.5f "
                         "facet %.5f bound %.5f reference %.5f\n", r.depth, r.regionVertices,
-                        r.simplifiedTriangles, double(r.estimate), double(r.sampled), double(r.vertex),
+                        r.simplifiedTriangles, double(r.estimate), double(r.vertex),
                         double(r.facet), double(r.bound), double(r.reference));
 }
 
@@ -2252,8 +2252,8 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
         // lock after their last attempt are charged by the measurement — their
         // stored error is the measured one; `x worst` above is that charge over
         // the group's own estimate (the lock's bar is kDagLockFactor = 2).
-        std::printf("      lock: %d retries, %d unconverged, %d made terminal, %d vertices locked\n",
-                    st.groupRetries, st.groupsUnconverged, st.groupsMadeTerminal, st.lockedVertices);
+        std::printf("      lock: %d retries, %d unconverged, %d vertices locked; offending facets: rule 2 %d, rule 5 %d\n",
+                    st.groupRetries, st.groupsUnconverged, st.lockedVertices, st.rule2Offenders, st.rule5Offenders);
         // THE STORED ERRORS per depth (what the cut reads), from the DAG itself.
         std::map<int, std::vector<float>> stored;
         for (const auto &g : meshes.at(i)->clusterDag.groups)
@@ -2418,9 +2418,9 @@ static int dagReachesRoot()
         iris::MeshBake::buildClusterDag(cs.mesh, &st);
         const iris::MeshClusterDag &dag = cs.mesh->clusterDag;
         std::printf("== %s: %d clusters, %d groups, depth %d, %lld ms; pruned groups %d, empty %d, pruned re-locked %d; "
-                    "lock retries %d, made terminal by the lock %d, unconverged %d\n",
+                    "lock retries %d, unconverged %d\n",
                     cs.name, dag.clusters.size(), dag.groups.size(), st.depth, qint64(t.elapsed()), st.prunedGroups,
-                    st.emptyGroups, st.prunedRelocked, st.groupRetries, st.groupsMadeTerminal, st.groupsUnconverged);
+                    st.emptyGroups, st.prunedRelocked, st.groupRetries, st.groupsUnconverged);
         CHECK_LOUD(!dag.isEmpty(), "the mesh has a DAG");
         if (dag.isEmpty()) continue;
         // the extent: the largest AABB axis of the positions
@@ -2559,7 +2559,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
 {
     iris::MeshBake::setBakeThreads(threads);
     const QString arm = QStringLiteral("shipped");
-    const iris::MeshBake::ClusterDagVariant variant = iris::MeshBake::ClusterDagVariant::Shipped;
     Assimp::Importer importer;
     const aiScene *scene = iris::readSceneFile(importer, path, iris::ImportFlags::Canonical);
     const QList<iris::MeshPtr> meshes = testmesh::fromScene(scene);
@@ -2577,7 +2576,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
     out.write("mesh\tname\tl0\tcoarsest\tcoarsestSmallComp\tcomps\tcompsUnder12\tdepth\tgroups\ttrisIn\tterminal\t"
               "lockDropped\terrMax\terrMed\testMax\tislandsDropped\tdropExtMax\tareaFrac\tmaterial\tunconverged\terrMaxOutcome\n");
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
-    int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, madeTerminal = 0, retries = 0,
+    int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, rule2 = 0, rule5 = 0, retries = 0,
         unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0, repruneGroups = 0,
         keptEarlier = 0, handOnRecomputed = 0, lockedLostRecomputed = 0, lockedLostPast = 0;
     float lockedLostMax = 0.0f;
@@ -2592,7 +2591,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         iris::MeshBake::ClusterDagStats st;
         st.wantTerms = true;
         st.exhaustiveMeasure = exhaustive;
-        iris::MeshBake::buildClusterDag(m, &st, variant);
+        iris::MeshBake::buildClusterDag(m, &st);
         const iris::MeshClusterDag &dag = m->clusterDag;
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
         const size_t nIdx = (!ib.isNull() && ib->data) ? size_t(ib->dataSize) / sizeof(unsigned) : 0u;
@@ -2602,7 +2601,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         }
         ++dagMeshes;
         buildMs += st.buildMs; measureMs += st.measureMs; verifyMs += st.verifyMs;
-        madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
+        rule2 += st.rule2Offenders; rule5 += st.rule5Offenders; retries += st.groupRetries;
         for (int d = 0; d < st.lockedDroppedByDepth.size(); ++d) {
             if (int(lostByDepth.size()) <= d) lostByDepth.resize(size_t(d) + 1, 0);
             lostByDepth[size_t(d)] += st.lockedDroppedByDepth.at(d);
@@ -2740,10 +2739,10 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
     std::printf("  COARSEST TOTAL %llu (DAG %llu + DAG-less %llu); chains ending above 128: %d holding %llu, of which on "
                 "level-0 components under 12 tris: %llu\n", coarsestAll, coarsestAll - coarsestDagLess, coarsestDagLess,
                 endAbove128, lateCoarsest, smallInLate);
-    std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; lock retries %d, "
+    std::printf("  terminal (stuck) groups %d; offending facets rule 2 %d, rule 5 %d; lock retries %d, "
                 "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
                 "relocked %d; re-pruned (clause 2) groups %d; kept an earlier attempt %d (hand-on recomputed %d)\n",
-                stuck, madeTerminal, retries, unconverged, lockDroppedGroups, emptyGroups, prunedGroups, prunedRelocked,
+                stuck, rule2, rule5, retries, unconverged, lockDroppedGroups, emptyGroups, prunedGroups, prunedRelocked,
                 repruneGroups, keptEarlier, handOnRecomputed);
     std::printf("  locked positions lost per depth:");
     int lostTotal = 0;
@@ -2771,74 +2770,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
 // group, else its terminal clusters (a DAG-less mesh draws level 0 at every E).
 namespace cutcurve
 {
-
-using Dag = StockDag;
-
-Dag fromMesh(const iris::MeshClusterDag &dag)
-{
-    Dag d;
-    for (const auto &g : dag.groups) { d.groupError.push_back(g.error); d.groupDepth.push_back(g.depth); }
-    for (const auto &c : dag.clusters) {
-        d.clusterGroup.push_back(c.group);
-        d.clusterRefined.push_back(c.refined);
-        d.clusterTriangles.push_back(int(c.triangleCount));
-    }
-    return d;
-}
-
-/// The triangles drawn when a group is affordable iff `afford(error)`.
-template <typename F> long long cut(const Dag &d, F afford)
-{
-    long long tris = 0;
-    for (size_t c = 0; c < d.clusterGroup.size(); ++c) {
-        const int g = d.clusterGroup[c], r = d.clusterRefined[c];
-        if (g < 0 || size_t(g) >= d.groupError.size() || afford(d.groupError[size_t(g)])) continue;
-        if (r < 0 || (size_t(r) < d.groupError.size() && afford(d.groupError[size_t(r)]))) tris += d.clusterTriangles[c];
-    }
-    return tris;
-}
-long long cutAt(const Dag &d, float E) { return cut(d, [E](float e) { return e < E; }); }
-long long cutTop(const Dag &d) { return cut(d, [](float e) { return e != FLT_MAX; }); }
-
-const float *positionsOf(const iris::MeshPtr &m, size_t *nv, int *comps)
-{
-    for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
-        if (!vb || !vb->data || vb->dataSize <= 0) continue;
-        const QList<iris::VertexAttribute> a = vb->vertexLayout.getAttribs();
-        if (a.isEmpty() || a.first().usage != iris::VertexAttribUsage::Position) continue;
-        if (a.size() != 1 || a.first().count < 3) return nullptr;   // interleaved: not a layout the bake reads
-        *comps = a.first().count;
-        *nv = size_t(vb->dataSize) / (sizeof(float) * size_t(*comps));
-        return reinterpret_cast<const float *>(vb->data);
-    }
-    return nullptr;
-}
-
-/// The POSONLY arm's subject: the mesh's positions and indices, nothing else.
-iris::MeshPtr positionsOnly(const iris::MeshPtr &src)
-{
-    size_t nv = 0;
-    int pc = 3;
-    const float *p = positionsOf(src, &nv, &pc);
-    const iris::IndexBufferPtr sib = src->getIndexBuffer();
-    if (!p || sib.isNull() || !sib->data) return iris::MeshPtr();
-    std::vector<float> xyz(nv * 3);
-    for (size_t v = 0; v < nv; ++v) for (int k = 0; k < 3; ++k) xyz[v * 3 + size_t(k)] = p[v * size_t(pc) + size_t(k)];
-    iris::MeshPtr m = iris::Mesh::create();
-    iris::VertexLayout layout;
-    layout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, 12);
-    auto vb = iris::VertexBuffer::create(layout);
-    vb->setData(xyz.data(), unsigned(xyz.size() * sizeof(float)));
-    m->addVertexBuffer(vb);
-    auto ib = iris::IndexBuffer::create();
-    ib->setData(sib->data, unsigned(sib->dataSize));
-    m->setIndexBuffer(ib);
-    m->usesIndexBuffer = true;
-    m->numVerts = int(nv);
-    m->numFaces = int(size_t(sib->dataSize) / 12u);
-    m->primitiveMode = iris::PrimitiveMode::Triangles;
-    return m;
-}
 
 enum class Arm { Shipped, PosOnly, Stock };
 
@@ -2870,42 +2801,6 @@ Dag build(const iris::MeshPtr &mesh, Arm arm, bool dense, iris::MeshBake::Cluste
 
 /// The E ladder of the verb, in mesh units (A §2c's columns).
 const float kLadder[] = { 2.0f, 4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 128.0f };
-
-/// 30 OVERLAPPING BOXES WITH HARD UV SEAMS (the spec's kit-bashed box set): 12 triangles each, every face its own
-/// four vertices, its own normal and its own UV chart (a seam on every edge), sizes 0.2-1 m, centres inside a 1.5 m
-/// cube so the boxes interpenetrate like kit-bashed facade pieces; deterministic. 360 triangles: one DAG group of
-/// three leaves at depth 0.
-iris::MeshPtr kitBashedBoxSet()
-{
-    std::vector<float> p, n, uv;
-    std::vector<unsigned> idx;
-    unsigned seed = 3030u;
-    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
-    const int faces[6][3] = { { 0, 0, 1 }, { 0, 0, -1 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
-    for (int b = 0; b < 30; ++b) {
-        const float c[3] = { 1.5f * rnd(), 1.5f * rnd(), 1.5f * rnd() };
-        const float h[3] = { 0.1f + 0.4f * rnd(), 0.1f + 0.4f * rnd(), 0.1f + 0.4f * rnd() };
-        for (int f = 0; f < 6; ++f) {
-            const int *fa = faces[f];
-            const int axis = fa[0] ? 0 : (fa[1] ? 1 : 2);
-            const int a = (axis + 1) % 3, bb = (axis + 2) % 3;
-            const unsigned base = unsigned(p.size() / 3);
-            const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
-            const float chartU = float((b * 6 + f) % 16), chartV = float((b * 6 + f) / 16);
-            for (const auto &k : corners) {
-                float v[3] = { c[0], c[1], c[2] };
-                v[axis] += h[axis] * float(fa[axis]);
-                v[a] += h[a] * k[0];
-                v[bb] += h[bb] * k[1];
-                p.insert(p.end(), { v[0], v[1], v[2] });
-                n.insert(n.end(), { float(fa[0]), float(fa[1]), float(fa[2]) });
-                uv.insert(uv.end(), { chartU + 0.5f + 0.45f * k[0], chartV + 0.5f + 0.45f * k[1] });
-            }
-            idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
-        }
-    }
-    return dagroot::meshFromArrays(p, n, uv, idx);
-}
 
 }   // namespace cutcurve
 
@@ -2986,6 +2881,25 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
             for (size_t k = 0; k < row.size(); ++k) s[k + 1] += row[k];
             if (key == it.cls && it.cls == QStringLiteral("all")) break;
         }
+        if (arm != Arm::Stock && !d.clusterGroup.empty()) {
+            // THE DEPTH-0 LOCK REFERENCE against the group's own measurement (stage 1's check: clusterlod's estimate
+            // at depth 0 within 1.5x of the measured, at the median), the verify's rule-2/5 offending facets and
+            // the unconverged groups
+            std::vector<double> r0;
+            for (int g = 0; g < st.groupTerms.size(); ++g) {
+                const auto &t = st.groupTerms.at(g);
+                if (t.depth == 0 && t.bound > 0.0f && t.bound != FLT_MAX && t.estimate != FLT_MAX) {
+                    r0.push_back(double(t.estimate) / double(t.bound));
+                    std::printf("d0\t%d\t%d\t%.6g\t%.6g\t%.4f\n", it.index, g, double(t.estimate), double(t.bound),
+                                r0.back());
+                }
+            }
+            std::sort(r0.begin(), r0.end());
+            std::printf("diag\t%d\td0 estimate/measured median %.3f (n %zu)\trule2 %d rule5 %d\tunconverged %d\tretries %d\t"
+                        "build %.0f ms (verify %.0f) measure %.0f ms\n",
+                        it.index, r0.empty() ? 0.0 : r0[r0.size() / 2], r0.size(), st.rule2Offenders, st.rule5Offenders,
+                        st.groupsUnconverged, st.groupRetries, st.buildMs, st.verifyMs, st.measureMs);
+        }
         if (dense && arm != Arm::Stock) {
             std::vector<double> rb;
             for (int g = 0; g < st.groupTerms.size(); ++g) {
@@ -2993,8 +2907,11 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
                 if (t.reference <= 0.0f || t.bound == FLT_MAX || t.stored == FLT_MAX) continue;
                 const double b = double(t.bound) / double(t.reference), s = double(t.stored) / double(t.reference);
                 rb.push_back(b);
-                std::printf("ref\t%d\t%d\t%d\t%.6g\t%.6g\t%.6g\t%.4f\t%.4f\n", it.index, g, t.depth, double(t.bound),
-                            double(t.stored), double(t.reference), b, s);
+                // the term that set the bound: the removed-vertex term, a facet walk, a dropped island's extent
+                const char *by = t.bound == t.vertex ? "vertex" : t.bound == t.droppedMaxExtent ? "island"
+                               : t.bound == t.facet ? "facet" : "floor";
+                std::printf("ref\t%d\t%d\t%d\t%.6g\t%.6g\t%.6g\t%.4f\t%.4f\t%s\n", it.index, g, t.depth, double(t.bound),
+                            double(t.stored), double(t.reference), b, s, by);
             }
             std::sort(rb.begin(), rb.end());
             if (!rb.empty())
@@ -3009,51 +2926,6 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
         std::printf("\t%lld\n", qint64(wall.elapsed()));
     }
     return 0;
-}
-
-/// `--cut-curve-law` (the row bake.cut_curve, ATOM-UPGRADE stage 0): THE CUT CURVE OF A MESH IS MONOTONE AND ENDS
-/// EMPTY — on the kit-bashed box set (30 overlapping boxes, hard UV seams) the shipped DAG's cut at E = extent x 2^-k
-/// (k = 12 .. 0) never grows as E grows, and once every finite group is affordable it draws nothing (the empty top:
-/// a thing under a pixel stops drawing — the spec's law, stage 5's). The curve is printed.
-static int cutCurveLaw()
-{
-    using namespace cutcurve;
-    const iris::MeshPtr mesh = kitBashedBoxSet();
-    float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-    size_t nv = 0; int pc = 3;
-    const float *p = positionsOf(mesh, &nv, &pc);
-    for (size_t v = 0; p && v < nv; ++v)
-        for (int k = 0; k < 3; ++k) { lo[k] = std::min(lo[k], p[v * 3 + size_t(k)]); hi[k] = std::max(hi[k], p[v * 3 + size_t(k)]); }
-    const float extent = std::sqrt((hi[0] - lo[0]) * (hi[0] - lo[0]) + (hi[1] - lo[1]) * (hi[1] - lo[1]) +
-                                   (hi[2] - lo[2]) * (hi[2] - lo[2]));
-    iris::MeshBake::ClusterDagStats st;
-    double ms = 0.0;
-    const Dag d = build(mesh, Arm::Shipped, false, &st, &ms);
-    const long long l0 = (long long)(nv ? mesh->getIndexBuffer()->dataSize / 12 : 0);
-    std::printf("== kit-bashed box set: %lld tris, extent %.3f, %zu groups, %zu clusters, %.0f ms\n", l0, double(extent),
-                d.groupError.size(), d.clusterGroup.size(), ms);
-    std::printf("   cut curve (E / extent -> triangles):");
-    bool monotone = true;
-    long long prev = -1;
-    for (int k = 12; k >= 0; --k) {
-        const float E = extent / float(1 << k);
-        const long long t = d.clusterGroup.empty() ? l0 : cutAt(d, E);
-        std::printf(" 2^-%d %lld", k, t);
-        if (prev >= 0 && t > prev) monotone = false;
-        prev = t;
-    }
-    const long long top = d.clusterGroup.empty() ? l0 : cutTop(d);
-    if (prev >= 0 && top > prev) monotone = false;
-    std::printf(" | top %lld\n", top);
-    char msg[200];
-    CHECK_LOUD(!d.clusterGroup.empty(), "the box set has a DAG");
-    std::snprintf(msg, sizeof(msg), "the cut curve never grows as E grows");
-    CHECK_LOUD(monotone, msg);
-    std::snprintf(msg, sizeof(msg), "the curve ends at the empty top (top cut %lld triangles == 0)", top);
-    CHECK_LOUD(top == 0, msg);
-    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
-    else          std::printf("ALL %d CHECKS PASSED\n", checks);
-    return failures ? 1 : 0;
 }
 
 /// `--dag-depths <model>...`: THE DAG'S TRIANGLES PER DEPTH (ENGINE-POLISH-ATOM-1 stage 6, the owner's "far = near
@@ -3170,9 +3042,9 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
     for (int k = 0; k < st.retryHistogram.size(); ++k)
         histogram += QStringLiteral(" %1:%2").arg(k).arg(st.retryHistogram[k]);
     std::printf("   %s: the DAG's lock re-simplified %d time(s) (groups by retries:%s), %d vertices locked, "
-                "%d group(s) made terminal, %d still past the bound; %lld ms for the whole DAG (verify %.0f ms)\n",
+                "%d still past the bound; %lld ms for the whole DAG (verify %.0f ms)\n",
                 qUtf8Printable(name), st.groupRetries, qUtf8Printable(histogram), st.lockedVertices,
-                st.groupsMadeTerminal, st.groupsUnconverged, (long long)bakeMs, st.verifyMs);
+                st.groupsUnconverged, (long long)bakeMs, st.verifyMs);
     const float floorBound = maxAxis * 1e-5f;
     int checked = 0, dishonest = 0, loose = 0, drops = 0, oversize = 0;
     double worstRef = 0.0, worstX = 0.0;
@@ -3984,7 +3856,9 @@ int main(int argc, char **argv)
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
     }
-    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve-law")) return cutCurveLaw();
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve-law")) return cutcurve::cutCurveLaw();
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--objective-is-geometry")) return cutcurve::objectiveIsGeometry();
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--terms-exact")) return cutcurve::termsExact();
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve")) {
         QString meshesArg, armName = QStringLiteral("shipped");
         bool dense = false;
