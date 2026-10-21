@@ -13,6 +13,16 @@ add_executable(jahlab
     labscene.cpp
     labsession.cpp
     labwindow.cpp
+    envs/envbuild.cpp
+    envs/catalogue.cpp
+    envs/atom_street.cpp
+    envs/atom_arcade.cpp
+    envs/atom_forest.cpp
+    envs/atom_occlusion.cpp
+    envs/atom_small.cpp
+    envs/atom_flat.cpp
+    envs/photon_room.cpp
+    envs/photon_court.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(jahlab PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

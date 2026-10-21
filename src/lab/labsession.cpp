@@ -157,13 +157,127 @@ bool Session::boot(std::string &error)
     return true;
 }
 
+bool Session::loadEnv(const std::string &name, std::string &error)
+{
+    mEnv = envs::find(name);
+    if (!mEnv) { error = "no environment '" + name + "' (jahlab --env-list)"; return false; }
+    mBuilt.reset(new envs::Built(mEnv->build(mOpt.seed, true)));
+    // THE ENVIRONMENT IS THE DOCUMENT: the mirror takes the built scene in place of the empty one boot made
+    mDoc = mBuilt->doc;
+    mMirror->setSource(mDoc);
+    mDoc->setCamera(mCamera.node());
+    mSceneTriangles = mBuilt->triangles;
+    mJlab.file.clear();
+    mJlab.env = QString::fromStdString(name);
+    mJlab.seed = mOpt.seed;
+    std::printf("LAB ENV %s seed %u: %u meshes, %u instances, %s triangles, %zu features | build %.0f ms (bake %.0f ms) | "
+                "hash %s\n", mEnv->name, mOpt.seed, mBuilt->meshes, mBuilt->instances, grouped(mBuilt->triangles).c_str(),
+                mBuilt->features.size(), mBuilt->buildMs, mBuilt->bakeMs, mBuilt->hash.left(16).constData());
+    std::fflush(stdout);
+    if (!mOpt.tier.isEmpty()) {
+        bool ok = false;
+        const worldmodes::Mode m = worldmodes::modeFromName(mOpt.tier, &ok);
+        if (!ok || m == worldmodes::Mode::Custom) { error = "unknown tier '" + mOpt.tier.toStdString() + "'"; return false; }
+        mTier = int(m);
+        worldmodes::setMode(mDoc, m);
+    }
+    if (mOpt.hasCamera) mCamera.set(mOpt.camPos, mOpt.camTarget);
+    else if (!mJlab.hasCamera) envCamera(envs::stops().front());
+    return true;
+}
+
+bool Session::envCamera(double d)
+{
+    if (!mEnv) return false;
+    iris::Vec3 eye, target;
+    mEnv->stop(d, eye, target);
+    mCamera.node()->farClip = mEnv->farClip;
+    mCamera.setExtent(float(d) + 50.0f);
+    mCamera.set(eye, target);
+    return true;
+}
+
+envs::Optics Session::optics() const
+{
+    envs::Optics o;
+    o.eye = mCamera.position();
+    o.target = mCamera.target();
+    o.fovYDegrees = mCamera.node()->angle;
+    const unsigned w = mInput.width ? mInput.width : mOpt.width, h = mInput.height ? mInput.height : mOpt.height;
+    o.aspect = float(w) / float(h);
+    o.heightPixels = float(h);
+    o.tolerance = float(std::max(1, mDoc->atomPixelError));
+    o.farClip = mCamera.node()->farClip;
+    return o;
+}
+
+void Session::nameEngineNodes()
+{
+    mNodeNames.clear();
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (const NodeId id = mMirror->engineNode(n.data())) mNodeNames.push_back({ (unsigned long long)id, n->getName() });
+        for (const iris::SceneNodePtr &c : n->children()) walk(c);
+    };
+    walk(mDoc->getRootNode());
+    std::sort(mNodeNames.begin(), mNodeNames.end());
+}
+
+bool Session::probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &sum)
+{
+    out.clear();
+    sum = AtomCutProbeSummary();
+    if (!mScene->armAtomCutProbe()) { std::printf("LAB PROBE refused: no view carries the id pass\n"); return false; }
+    AtomCutProbe p;
+    bool ok = false;
+    for (int i = 0; i < 8 && !ok && !mQuit; ++i) {
+        frame();
+        ok = mScene->atomCutProbe(p) && p.valid;
+    }
+    if (!ok) {
+        mScene->disarmAtomCutProbe();
+        std::printf("LAB PROBE: no reading (%s)\n", p.error.c_str());
+        return false;
+    }
+    if (mNodeNames.empty()) nameEngineNodes();
+    for (const AtomCutProbeObject &o : p.objects) {
+        envs::ObjectReading r;
+        const auto it = std::lower_bound(mNodeNames.begin(), mNodeNames.end(), std::make_pair((unsigned long long)o.node, QString()));
+        if (it != mNodeNames.end() && it->first == (unsigned long long)o.node) r.name = it->second;
+        r.drawnTriangles = o.drawnTriangles;
+        r.pixels = o.pixels;
+        r.drawnClusters = o.drawnClusters;
+        sum.drawnTriangles += o.drawnTriangles;
+        if (o.pixels == 0) sum.hiddenTriangles += o.drawnTriangles;
+        out.push_back(r);
+    }
+    sum.atomPixels = p.atomPixels;
+    sum.objects = unsigned(p.objects.size());
+    sum.groupsDropped = p.groupsDropped;
+    sum.tolerance = p.tolerance;
+    sum.viewportHeight = p.viewportHeight;
+    return true;
+}
+
 bool Session::load(std::string &error)
 {
+    if (!mOpt.env.isEmpty()) return loadEnv(mOpt.env.toStdString(), error);
     QString path = mOpt.file;
     if (path.endsWith(QStringLiteral(".jlab"), Qt::CaseInsensitive)) {
         QString err;
         if (!readJlab(path, mJlab, err)) { error = err.toStdString(); return false; }
-        if (!mJlab.env.isEmpty()) { error = "environments arrive with stage 2 (--env)"; return false; }
+        if (!mJlab.env.isEmpty()) {
+            mOpt.seed = mJlab.seed;
+            const Jlab saved = mJlab;
+            if (!loadEnv(mJlab.env.toStdString(), error)) return false;
+            mJlab.hasCamera = saved.hasCamera; mJlab.camPos = saved.camPos; mJlab.camTarget = saved.camTarget;
+            mJlab.view = saved.view; mJlab.gi = saved.gi; mJlab.occlusion = saved.occlusion; mJlab.draw = saved.draw;
+            mJlab.overlay = saved.overlay;
+            if (mJlab.hasCamera) mCamera.set(mJlab.camPos, mJlab.camTarget);
+            bool ok = false;
+            const worldmodes::Mode m = worldmodes::modeFromName(mOpt.tier.isEmpty() ? mJlab.tier : mOpt.tier, &ok);
+            if (ok && m != worldmodes::Mode::Custom) { mTier = int(m); worldmodes::setMode(mDoc, m); }
+            return true;
+        }
         path = mJlab.file;
     } else {
         mJlab = Jlab();
@@ -228,7 +342,8 @@ bool Session::load(std::string &error)
 void Session::setTitle()
 {
     if (!mWindow.isOpen()) return;
-    const QString name = QFileInfo(mJlab.file).fileName();
+    const QString name = mJlab.env.isEmpty() ? QFileInfo(mJlab.file).fileName()
+                                             : mJlab.env + QStringLiteral(" (seed %1)").arg(mJlab.seed);
     mWindow.setTitle("jahlab - " + name.toStdString() + " - " + tierName(mTier) + " - view " +
                      atomViewNames()[size_t(mAtomView)]);
 }
@@ -541,11 +656,67 @@ bool Session::exec(const Command &c)
             j.sunIntensity = s.staticCast<iris::LightNode>()->intensity;
         }
         QString path = a0.empty() ? QDir(mOpt.dataRoot).filePath(QStringLiteral("jlab/") +
-                                                                  QFileInfo(mJlab.file).completeBaseName() + ".jlab")
+                                                                  (mJlab.env.isEmpty() ? QFileInfo(mJlab.file).completeBaseName()
+                                                                                       : mJlab.env + QStringLiteral("-seed") + QString::number(mOpt.seed)) + ".jlab")
                                   : QString::fromStdString(a0);
         QString err;
         ok = writeJlab(path, j, err);
         std::printf(ok ? "LAB SAVED %s\n" : "LAB SAVE FAILED %s\n", qPrintable(ok ? path : err));
+    } else if (c.verb == "envcam") {
+        if (!mEnv) { ok = false; std::printf("LAB REFUSED envcam: the session is not an environment (--env)\n"); }
+        else envCamera(std::strtod(a0.c_str(), nullptr));
+    } else if (c.verb == "probe") {
+        std::vector<envs::ObjectReading> rd;
+        AtomCutProbeSummary sum;
+        ok = probe(rd, sum);
+        if (ok) {
+            std::printf("LAB PROBE %u objects, %u Atom pixels, %llu drawn triangles, %llu of them by objects with no "
+                        "visible pixel (tolerance %.2f px, %0.f rows)\n", sum.objects, sum.atomPixels,
+                        sum.drawnTriangles, sum.hiddenTriangles, sum.tolerance, sum.viewportHeight);
+            if (!a0.empty()) {
+                QString path = QString::fromStdString(a0);
+                if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+                std::ofstream out(path.toStdString(), std::ios::app);
+                for (const envs::ObjectReading &r : rd)
+                    out << mFrames << "\t" << r.name.toStdString() << "\t" << r.drawnTriangles << "\t" << r.drawnClusters
+                        << "\t" << r.pixels << "\n";
+                ok = bool(out);
+            }
+        }
+    } else if (c.verb == "measure") {
+        if (!mEnv) { ok = false; std::printf("LAB REFUSED measure: the session is not an environment (--env)\n"); }
+        else {
+            const double d = std::strtod(a0.c_str(), nullptr);
+            envCamera(d);
+            execLine("settle", "measure");
+            std::vector<envs::ObjectReading> rd;
+            AtomCutProbeSummary sum;
+            ok = probe(rd, sum);
+            const envs::Optics o = optics();
+            const std::vector<envs::Prediction> pred = mEnv->expect(*mBuilt, o);
+            QString path;
+            if (c.args.size() > 1) {
+                path = QString::fromStdString(c.args[1]);
+                if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+            }
+            const bool header = !path.isEmpty() && !QFileInfo::exists(path);
+            std::ofstream out;
+            if (!path.isEmpty()) out.open(path.toStdString(), std::ios::app);
+            if (header)
+                out << "env\tseed\ttier\ttolerance_px\tstop_m\tquantity\tpredicted\tmeasured\tmeasured_over_predicted"
+                       "\tdrawn_triangles_all\thidden_object_triangles\tatom_pixels\tframe\n";
+            for (const envs::Prediction &pr : pred) {
+                const double m = ok ? envs::measured(*mBuilt, pr.quantity, rd) : -1.0;
+                const double ratio = pr.value > 0 ? m / pr.value : 0.0;
+                std::printf("LAB MEASURE %s seed %u stop %.0f m: %s predicted %.0f measured %.0f (x%.3f) — %s\n",
+                            mEnv->name, mOpt.seed, d, pr.quantity.c_str(), pr.value, m, ratio, pr.note.c_str());
+                if (out)
+                    out << mEnv->name << "\t" << mOpt.seed << "\t" << tierName(mTier) << "\t" << o.tolerance << "\t" << d
+                        << "\t" << pr.quantity << "\t" << pr.value << "\t" << m << "\t" << ratio << "\t"
+                        << sum.drawnTriangles << "\t" << sum.hiddenTriangles << "\t" << sum.atomPixels << "\t" << mFrames
+                        << "\n";
+            }
+        }
     } else if (c.verb == "help") {
         std::printf("%s", helpText().c_str());
     } else if (c.verb == "echo") {

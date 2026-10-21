@@ -377,8 +377,7 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
     // THE BASIC TEMPLATE'S VALUES (src/services/scenetemplate.h:76-86, defaultfloormaterial.h:56-99,
     // scenetemplatebuilder.cpp:126-221) — the document half, without the store: Studio's builder pins the tile and
     // writes asset rows the lab has no database for.
-    constexpr float kFloorSize = 100.0f, kFloorThickness = 1.0f, kSunPitchDegrees = 40.0f;
-    const iris::Vec3 kSunPosition(4.0f, 4.0f, 0.0f);
+    constexpr float kFloorSize = 100.0f, kFloorThickness = 1.0f;
     worldmodes::setMode(doc, worldmodes::Mode::Epic);   // a new scene starts on Epic (POST_CHAIN_SPEC §12 decision 8)
 
     // THE FLOOR: the shipped cube (a 2 m cube about its centre) through the same bake as any model.
@@ -410,7 +409,14 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
         floor->setMaterial(m);
     }
     doc->getRootNode()->addChild(floor);
+    addSkyAndLights(doc, wantSun);
+    return true;
+}
 
+void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
+{
+    constexpr float kSunPitchDegrees = 40.0f;
+    const iris::Vec3 kSunPosition(4.0f, 4.0f, 0.0f);
     if (wantSun) {
         auto sun = iris::LightNode::create();
         sun->setLightType(iris::LightType::Directional);
@@ -472,6 +478,7 @@ bool readJlab(const QString &path, Jlab &j, QString &error)
     const QString dir = QFileInfo(path).absolutePath();
     if (o.contains("file")) j.file = QDir(dir).absoluteFilePath(o["file"].toString());
     j.env = o["env"].toString();
+    j.seed = unsigned(o["seed"].toInt(1));
     if (j.file.isEmpty() && j.env.isEmpty()) { error = QStringLiteral("%1 names no file and no env").arg(path); return false; }
     if (o.contains("camera")) {
         const QJsonObject c = o["camera"].toObject();
@@ -499,7 +506,7 @@ bool writeJlab(const QString &path, const Jlab &j, QString &error)
 {
     QJsonObject o;
     if (!j.file.isEmpty()) o["file"] = j.file;
-    if (!j.env.isEmpty()) o["env"] = j.env;
+    if (!j.env.isEmpty()) { o["env"] = j.env; o["seed"] = int(j.seed); }
     if (j.hasCamera) o["camera"] = QJsonObject{ { "position", vec3Json(j.camPos) }, { "target", vec3Json(j.camTarget) } };
     o["tier"] = j.tier;
     o["views"] = QJsonObject{ { "atom", j.view }, { "gi", j.gi }, { "occlusion", j.occlusion }, { "draw", j.draw },

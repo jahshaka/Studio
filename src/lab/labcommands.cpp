@@ -25,6 +25,12 @@ const std::vector<VerbDoc> &verbs()
         { "status", "status [file]", 0, 1,
           "the engine's AtomDrawStatus + RenderStats + the lab's state as ONE JSON line, appended to <file> (stdout without one)" },
         { "save", "save [file.jlab]", 0, 1, "the session as a .jlab (file or env, camera, tier, view, gi, occlusion, sun)" },
+        { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
+        { "probe", "probe [file]", 0, 1,
+          "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object (appended to file)" },
+        { "measure", "measure D [file.tsv]", 1, 2,
+          "an environment's stop D: the camera, settle, the probe, and each predicted quantity beside the measured one "
+          "(a TSV row each: env, seed, tier, stop, quantity, predicted, measured)" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
         { "quit", "quit", 0, 0, "end the run" },
@@ -126,6 +132,7 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         };
         if (out.verb == "frames" && !number(0, 0, true)) return false;
         if (out.verb == "settle" && !number(0, 1, true)) return false;
+        if ((out.verb == "envcam" || out.verb == "measure") && !number(0, 0, false)) return false;
         return true;
     }
     error = "'" + line + "': unknown command '" + out.verb + "' (help lists them)";
@@ -136,13 +143,18 @@ std::string helpText()
 {
     std::ostringstream o;
     o << "jahlab - the engine-only harness (Atom + Photon + the core engine, no Studio)\n\n"
-         "usage: jahlab [flags] <scene.fbx|.obj|.gltf|.glb|.jlab>\n\n"
+         "usage: jahlab [flags] <scene.fbx|.obj|.gltf|.glb|.jlab>   |   jahlab [flags] --env <name>\n\n"
          "flags:\n"
          "  --data-root <dir>   bakes, shots, .jlab saves and the shader cache (default ~/.local/share/jahlab)\n"
          "  --headless          render OFFSCREEN (a Vulkan offscreen view, no window; Ogre-Next's Vulkan still opens an X\n"
          "                      connection at boot, so DISPLAY must name a server — the rig's Xvfb)\n"
          "  --script <file>     run the file's command lines after the load (then stdin, unless --no-stdin)\n"
          "  --no-stdin          do not read commands from stdin\n"
+         "  --env <name>        a generated test environment instead of a file (--env-list: the catalogue)\n"
+         "  --seed N            the environment's seed (default 1)\n"
+         "  --env-list          the catalogue: each environment, its law and its prediction at 22/88/177/354 m; exits\n"
+         "  --env-check         every environment built (timed, <= 5 s) and rebuilt: the same seed, the same triangles and\n"
+         "                      scene hash, another seed another hash; exits 0 green, 1 red\n"
          "  --bake-only         bake the file into the data root (or find its bake) and exit: CPU only, no engine\n"
          "  --camera x,y,z,tx,ty,tz   the camera at the start\n"
          "  --tier low|medium|high|epic   the World Mode at the start (default epic, a new scene's)\n"

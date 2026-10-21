@@ -25,3 +25,19 @@ jah_gpu_row(lab.commands_are_one_parser CLASS engine FRAMES 45
             ${CMAKE_CURRENT_BINARY_DIR}/work/commands_are_one_parser
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.commands_are_one_parser PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.envs_build (stage 2) — `jahlab --env-check`: every test environment builds (its meshes through the bake's stages)
+# under 5 s, and rebuilds deterministically: the same seed gives the same triangle count and the same scene hash, the
+# next seed another hash. CPU only.
+add_test(NAME lab.envs_build COMMAND $<TARGET_FILE:jahlab> --env-check WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.envs_build PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.envs_build)
+
+# lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
+# expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME lab.env_expectation_printed
+         COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/env_expectation_printed.py $<TARGET_FILE:jahlab>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.env_expectation_printed PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.env_expectation_printed)

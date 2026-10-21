@@ -51,6 +51,10 @@ iris::SceneNodePtr loadModel(const QString &path, const QString &dataRoot, LoadR
 bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QString &dataRoot, bool wantSun,
                    QString &error);
 
+/// The Basic template's sky and lights alone (no floor): the realistic sky and the height fog, the Sky Light, the default
+/// sun when `wantSun` — what every generated environment stands under (envs/env.h).
+void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun);
+
 /// True when `node`'s subtree holds a directional light.
 bool hasDirectional(const iris::SceneNodePtr &node);
 /// The scene's mesh bounds in world space (min, max); false when it holds no mesh.
@@ -61,6 +65,7 @@ struct Jlab
 {
     QString file;                 ///< the model, absolute
     QString env;                  ///< a generated environment's name (stage 2), instead of a file
+    unsigned seed = 1;            ///< ...and its seed
     bool hasCamera = false;
     iris::Vec3 camPos, camTarget;
     QString tier = QStringLiteral("epic");

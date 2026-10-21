@@ -13,6 +13,7 @@
 #include "labcommands.h"
 #include "labscene.h"
 #include "labwindow.h"
+#include "envs/env.h"
 
 #include <QString>
 
@@ -26,9 +27,19 @@ namespace jahshaka { namespace engine { class Engine; class Scene; class View; }
 
 namespace lab {
 
+/// the probe's frame-wide numbers the lab prints beside its per-object rows
+struct AtomCutProbeSummary
+{
+    unsigned atomPixels = 0, objects = 0, groupsDropped = 0;
+    float tolerance = 0.0f, viewportHeight = 0.0f;
+    unsigned long long drawnTriangles = 0, hiddenTriangles = 0;   ///< all drawn / drawn by objects with no visible pixel
+};
+
 struct Options
 {
     QString file;              ///< a model or a .jlab
+    QString env;               ///< a generated environment (envs/env.h), instead of a file
+    unsigned seed = 1;         ///< the environment's seed
     QString script;
     QString dataRoot;
     QString binDir;            ///< the binary's directory (media, app/content)
@@ -66,6 +77,13 @@ private:
     void setTitle();
     void readStdinLines();
     bool setView(int mode);
+    bool loadEnv(const std::string &name, std::string &error);
+    /// the environment's dolly camera at stop d (its far clip too)
+    bool envCamera(double d);
+    /// the cut probe of the next drawn frame, per object name (false: no id pass / never answered)
+    bool probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &sum);
+    envs::Optics optics() const;
+    void nameEngineNodes();
     double msSinceStart() const;
 
     Options mOpt;
@@ -78,6 +96,9 @@ private:
     LabWindow mWindow;
     WindowInput mInput;
     Jlab mJlab;                 ///< what the session was opened from (a .jlab or a file)
+    const envs::Env *mEnv = nullptr;        ///< the generated environment, when the session is one
+    std::unique_ptr<envs::Built> mBuilt;    ///< ...and what its build made (the feature table the closed form reads)
+    std::vector<std::pair<unsigned long long, QString>> mNodeNames;   ///< engine node id -> document node name
 
     // THE LAB'S STATE — what it pushed (the host keeps what it set; the engine has no getters for these)
     int mAtomView = 0;
