@@ -105,6 +105,7 @@
 #include "irisgl/import/scenesource.h"
 #include "irisgl/import/clipfileinfo.h"
 #include "../support/timingbars.h"
+#include "cutcurve_stock.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -2757,6 +2758,304 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
     return 0;
 }
 
+// ---- THE CUT CURVE (ATOM-UPGRADE stage 0; SPECS/ATOM_UPGRADE_SPEC.md) --------------------------------------------
+//
+// THE INSTRUMENT THE UPGRADE IS JUDGED BY: the triangles a cut of a mesh's DAG draws when every group whose stored
+// error is under E is affordable — the runtime's own rule (JahClusterCut.glsl: a cluster is drawn iff its own group is
+// NOT affordable and it is a leaf or its producer IS), with no frustum and no occlusion, i.e. what the screen pays at
+// the distance where E mesh units project to the tier's pixel (A §2c: E = 16 at 1 px of 1080 rows = 334 m on Bistro's
+// 0.016 node scale). Three arms: SHIPPED (the bake as it writes), POSONLY (the same bake on a copy of the mesh with
+// its positions alone: no attributes for the simplifier, clusterlod's estimate the position quadric) and STOCK
+// (upstream clusterlod unpatched, positions only, its quadric stored — a reference, never a product path:
+// cutcurve_stock.cpp). "top" = the cut once every finite group is affordable: 0 when the chain ends in an empty
+// group, else its terminal clusters (a DAG-less mesh draws level 0 at every E).
+namespace cutcurve
+{
+
+using Dag = StockDag;
+
+Dag fromMesh(const iris::MeshClusterDag &dag)
+{
+    Dag d;
+    for (const auto &g : dag.groups) { d.groupError.push_back(g.error); d.groupDepth.push_back(g.depth); }
+    for (const auto &c : dag.clusters) {
+        d.clusterGroup.push_back(c.group);
+        d.clusterRefined.push_back(c.refined);
+        d.clusterTriangles.push_back(int(c.triangleCount));
+    }
+    return d;
+}
+
+/// The triangles drawn when a group is affordable iff `afford(error)`.
+template <typename F> long long cut(const Dag &d, F afford)
+{
+    long long tris = 0;
+    for (size_t c = 0; c < d.clusterGroup.size(); ++c) {
+        const int g = d.clusterGroup[c], r = d.clusterRefined[c];
+        if (g < 0 || size_t(g) >= d.groupError.size() || afford(d.groupError[size_t(g)])) continue;
+        if (r < 0 || (size_t(r) < d.groupError.size() && afford(d.groupError[size_t(r)]))) tris += d.clusterTriangles[c];
+    }
+    return tris;
+}
+long long cutAt(const Dag &d, float E) { return cut(d, [E](float e) { return e < E; }); }
+long long cutTop(const Dag &d) { return cut(d, [](float e) { return e != FLT_MAX; }); }
+
+const float *positionsOf(const iris::MeshPtr &m, size_t *nv, int *comps)
+{
+    for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
+        if (!vb || !vb->data || vb->dataSize <= 0) continue;
+        const QList<iris::VertexAttribute> a = vb->vertexLayout.getAttribs();
+        if (a.isEmpty() || a.first().usage != iris::VertexAttribUsage::Position) continue;
+        if (a.size() != 1 || a.first().count < 3) return nullptr;   // interleaved: not a layout the bake reads
+        *comps = a.first().count;
+        *nv = size_t(vb->dataSize) / (sizeof(float) * size_t(*comps));
+        return reinterpret_cast<const float *>(vb->data);
+    }
+    return nullptr;
+}
+
+/// The POSONLY arm's subject: the mesh's positions and indices, nothing else.
+iris::MeshPtr positionsOnly(const iris::MeshPtr &src)
+{
+    size_t nv = 0;
+    int pc = 3;
+    const float *p = positionsOf(src, &nv, &pc);
+    const iris::IndexBufferPtr sib = src->getIndexBuffer();
+    if (!p || sib.isNull() || !sib->data) return iris::MeshPtr();
+    std::vector<float> xyz(nv * 3);
+    for (size_t v = 0; v < nv; ++v) for (int k = 0; k < 3; ++k) xyz[v * 3 + size_t(k)] = p[v * size_t(pc) + size_t(k)];
+    iris::MeshPtr m = iris::Mesh::create();
+    iris::VertexLayout layout;
+    layout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, 12);
+    auto vb = iris::VertexBuffer::create(layout);
+    vb->setData(xyz.data(), unsigned(xyz.size() * sizeof(float)));
+    m->addVertexBuffer(vb);
+    auto ib = iris::IndexBuffer::create();
+    ib->setData(sib->data, unsigned(sib->dataSize));
+    m->setIndexBuffer(ib);
+    m->usesIndexBuffer = true;
+    m->numVerts = int(nv);
+    m->numFaces = int(size_t(sib->dataSize) / 12u);
+    m->primitiveMode = iris::PrimitiveMode::Triangles;
+    return m;
+}
+
+enum class Arm { Shipped, PosOnly, Stock };
+
+/// One mesh through one arm. `st` (shipped and posonly) carries the bake's report; `dense` asks for the dense
+/// reference per group (shipped and posonly).
+Dag build(const iris::MeshPtr &mesh, Arm arm, bool dense, iris::MeshBake::ClusterDagStats *st, double *ms)
+{
+    QElapsedTimer t; t.start();
+    Dag d;
+    if (arm == Arm::Stock) {
+        size_t nv = 0; int pc = 3;
+        const float *p = positionsOf(mesh, &nv, &pc);
+        const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+        const size_t ni = (!ib.isNull() && ib->data) ? size_t(ib->dataSize) / sizeof(unsigned) : 0u;
+        // the bake's own floor: a mesh under two leaves gets no DAG in any arm (draws level 0)
+        if (p && ni / 3 >= 256) stockBuild(p, nv, size_t(pc) * sizeof(float), reinterpret_cast<const unsigned *>(ib->data), ni, d);
+    } else {
+        const iris::MeshPtr subject = arm == Arm::PosOnly ? positionsOnly(mesh) : mesh;
+        if (!subject.isNull()) {
+            st->wantTerms = true;
+            st->denseReference = dense;
+            iris::MeshBake::buildClusterDag(subject, st);
+            d = fromMesh(subject->clusterDag);
+        }
+    }
+    *ms = double(t.elapsed());
+    return d;
+}
+
+/// The E ladder of the verb, in mesh units (A §2c's columns).
+const float kLadder[] = { 2.0f, 4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 128.0f };
+
+/// 30 OVERLAPPING BOXES WITH HARD UV SEAMS (the spec's kit-bashed box set): 12 triangles each, every face its own
+/// four vertices, its own normal and its own UV chart (a seam on every edge), sizes 0.2-1 m, centres inside a 1.5 m
+/// cube so the boxes interpenetrate like kit-bashed facade pieces; deterministic. 360 triangles: one DAG group of
+/// three leaves at depth 0.
+iris::MeshPtr kitBashedBoxSet()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 3030u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    const int faces[6][3] = { { 0, 0, 1 }, { 0, 0, -1 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
+    for (int b = 0; b < 30; ++b) {
+        const float c[3] = { 1.5f * rnd(), 1.5f * rnd(), 1.5f * rnd() };
+        const float h[3] = { 0.1f + 0.4f * rnd(), 0.1f + 0.4f * rnd(), 0.1f + 0.4f * rnd() };
+        for (int f = 0; f < 6; ++f) {
+            const int *fa = faces[f];
+            const int axis = fa[0] ? 0 : (fa[1] ? 1 : 2);
+            const int a = (axis + 1) % 3, bb = (axis + 2) % 3;
+            const unsigned base = unsigned(p.size() / 3);
+            const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+            const float chartU = float((b * 6 + f) % 16), chartV = float((b * 6 + f) / 16);
+            for (const auto &k : corners) {
+                float v[3] = { c[0], c[1], c[2] };
+                v[axis] += h[axis] * float(fa[axis]);
+                v[a] += h[a] * k[0];
+                v[bb] += h[bb] * k[1];
+                p.insert(p.end(), { v[0], v[1], v[2] });
+                n.insert(n.end(), { float(fa[0]), float(fa[1]), float(fa[2]) });
+                uv.insert(uv.end(), { chartU + 0.5f + 0.45f * k[0], chartV + 0.5f + 0.45f * k[1] });
+            }
+            idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+        }
+    }
+    return dagroot::meshFromArrays(p, n, uv, idx);
+}
+
+}   // namespace cutcurve
+
+/// `--cut-curve <model> [--meshes <list file | i,j,...>] [--arm shipped|posonly|stock] [--dense-reference]
+/// [--threads N]`: THE CUT CURVE (ATOM-UPGRADE stage 0) — per mesh (every mesh of the file, or the list's: a file of
+/// `index<TAB>class<TAB>name` lines, '#' comments, e.g. spikes/atom-upgrade/spenders.txt), the triangles a cut draws at
+/// E = 2, 4, 8, 16, 32, 64, 128 mesh units and at the top (every finite group affordable), summed per class and over
+/// all. `--dense-reference` (shipped/posonly) adds one `ref` row per group: its own bound, its stored error, the dense
+/// reference (8x samples against the whole level 0, no margin) and the two ratios, and a `refsum` row per mesh. TSV on
+/// stdout; a measurement — nothing is written.
+static int cutCurveTool(const QString &path, const QString &meshesArg, const QString &armName, bool dense, int threads)
+{
+    using namespace cutcurve;
+    const Arm arm = armName == QStringLiteral("posonly") ? Arm::PosOnly : armName == QStringLiteral("stock") ? Arm::Stock
+                                                                                                           : Arm::Shipped;
+    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock")) {
+        std::printf("FAIL: --arm %s (shipped|posonly|stock)\n", qUtf8Printable(armName));
+        return 1;
+    }
+    iris::MeshBake::setBakeThreads(threads);
+    Assimp::Importer importer;
+    const aiScene *scene = iris::readSceneFile(importer, path, iris::ImportFlags::Canonical);
+    const QList<iris::MeshPtr> meshes = testmesh::fromScene(scene);
+    if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
+    std::vector<QString> names(size_t(meshes.size()));
+    std::function<void(const aiNode *)> walk = [&](const aiNode *nd) {
+        for (unsigned k = 0; k < nd->mNumMeshes; ++k)
+            if (nd->mMeshes[k] < names.size() && names[nd->mMeshes[k]].isEmpty())
+                names[nd->mMeshes[k]] = QString::fromUtf8(nd->mName.C_Str());
+        for (unsigned c = 0; c < nd->mNumChildren; ++c) walk(nd->mChildren[c]);
+    };
+    walk(scene->mRootNode);
+    struct Item { int index; QString cls; };
+    std::vector<Item> items;
+    if (meshesArg.isEmpty()) {
+        for (int i = 0; i < meshes.size(); ++i) items.push_back({ i, QStringLiteral("all") });
+    } else if (QFileInfo(meshesArg).isFile()) {
+        QFile f(meshesArg);
+        if (!f.open(QIODevice::ReadOnly)) { std::printf("FAIL: %s\n", qUtf8Printable(meshesArg)); return 1; }
+        for (const QByteArray &raw : f.readAll().split('\n')) {
+            const QString line = QString::fromUtf8(raw).trimmed();
+            if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+            const QStringList cols = line.split(QLatin1Char('\t'));
+            items.push_back({ cols.at(0).toInt(), cols.size() > 1 ? cols.at(1) : QStringLiteral("listed") });
+        }
+    } else {
+        for (const QString &s : meshesArg.split(QLatin1Char(','))) items.push_back({ s.toInt(), QStringLiteral("listed") });
+    }
+    constexpr int kE = int(sizeof(kLadder) / sizeof(kLadder[0]));
+    std::printf("# cut-curve %s arm %s, %d threads; a group is affordable at E iff its stored error < E (mesh units)\n",
+                qUtf8Printable(QFileInfo(path).fileName()), qUtf8Printable(armName), threads);
+    std::printf("mesh\tclass\tname\tl0\tgroups\tdepth");
+    for (float E : kLadder) std::printf("\tE%g", double(E));
+    std::printf("\ttop\tms\n");
+    std::map<QString, std::vector<long long>> sums;
+    QElapsedTimer wall; wall.start();
+    for (const Item &it : items) {
+        if (it.index < 0 || it.index >= meshes.size()) { std::printf("FAIL: mesh %d out of range\n", it.index); return 1; }
+        const iris::MeshPtr &m = meshes.at(it.index);
+        const iris::IndexBufferPtr ib = m->getIndexBuffer();
+        const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
+        iris::MeshBake::ClusterDagStats st;
+        double ms = 0.0;
+        const Dag d = build(m, arm, dense && arm != Arm::Stock, &st, &ms);
+        int maxDepth = -1;
+        for (int g : d.groupDepth) maxDepth = std::max(maxDepth, g);
+        std::vector<long long> row;
+        for (float E : kLadder) row.push_back(d.clusterGroup.empty() ? l0 : cutAt(d, E));
+        row.push_back(d.clusterGroup.empty() ? l0 : cutTop(d));
+        std::printf("%d\t%s\t%s\t%lld\t%zu\t%d", it.index, qUtf8Printable(it.cls), qUtf8Printable(names[size_t(it.index)]), l0,
+                    d.groupError.size(), maxDepth + 1);
+        for (long long v : row) std::printf("\t%lld", v);
+        std::printf("\t%.0f\n", ms);
+        for (const QString &key : { it.cls, QStringLiteral("all") }) {
+            std::vector<long long> &s = sums[key];
+            if (s.empty()) s.assign(size_t(kE) + 2, 0);
+            s[0] += l0;
+            for (size_t k = 0; k < row.size(); ++k) s[k + 1] += row[k];
+            if (key == it.cls && it.cls == QStringLiteral("all")) break;
+        }
+        if (dense && arm != Arm::Stock) {
+            std::vector<double> rb;
+            for (int g = 0; g < st.groupTerms.size(); ++g) {
+                const auto &t = st.groupTerms.at(g);
+                if (t.reference <= 0.0f || t.bound == FLT_MAX || t.stored == FLT_MAX) continue;
+                const double b = double(t.bound) / double(t.reference), s = double(t.stored) / double(t.reference);
+                rb.push_back(b);
+                std::printf("ref\t%d\t%d\t%d\t%.6g\t%.6g\t%.6g\t%.4f\t%.4f\n", it.index, g, t.depth, double(t.bound),
+                            double(t.stored), double(t.reference), b, s);
+            }
+            std::sort(rb.begin(), rb.end());
+            if (!rb.empty())
+                std::printf("refsum\t%d\tgroups %zu\tbound/reference median %.3f p90 %.3f max %.3f\n", it.index, rb.size(),
+                            rb[rb.size() / 2], rb[std::min(rb.size() - 1, size_t(0.9 * double(rb.size())))], rb.back());
+        }
+        std::fflush(stdout);
+    }
+    for (const auto &kv : sums) {
+        std::printf("SUM\t%s\t-\t%lld\t-\t-", qUtf8Printable(kv.first), kv.second[0]);
+        for (size_t k = 1; k < kv.second.size(); ++k) std::printf("\t%lld", kv.second[k]);
+        std::printf("\t%lld\n", qint64(wall.elapsed()));
+    }
+    return 0;
+}
+
+/// `--cut-curve-law` (the row bake.cut_curve, ATOM-UPGRADE stage 0): THE CUT CURVE OF A MESH IS MONOTONE AND ENDS
+/// EMPTY — on the kit-bashed box set (30 overlapping boxes, hard UV seams) the shipped DAG's cut at E = extent x 2^-k
+/// (k = 12 .. 0) never grows as E grows, and once every finite group is affordable it draws nothing (the empty top:
+/// a thing under a pixel stops drawing — the spec's law, stage 5's). The curve is printed.
+static int cutCurveLaw()
+{
+    using namespace cutcurve;
+    const iris::MeshPtr mesh = kitBashedBoxSet();
+    float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+    size_t nv = 0; int pc = 3;
+    const float *p = positionsOf(mesh, &nv, &pc);
+    for (size_t v = 0; p && v < nv; ++v)
+        for (int k = 0; k < 3; ++k) { lo[k] = std::min(lo[k], p[v * 3 + size_t(k)]); hi[k] = std::max(hi[k], p[v * 3 + size_t(k)]); }
+    const float extent = std::sqrt((hi[0] - lo[0]) * (hi[0] - lo[0]) + (hi[1] - lo[1]) * (hi[1] - lo[1]) +
+                                   (hi[2] - lo[2]) * (hi[2] - lo[2]));
+    iris::MeshBake::ClusterDagStats st;
+    double ms = 0.0;
+    const Dag d = build(mesh, Arm::Shipped, false, &st, &ms);
+    const long long l0 = (long long)(nv ? mesh->getIndexBuffer()->dataSize / 12 : 0);
+    std::printf("== kit-bashed box set: %lld tris, extent %.3f, %zu groups, %zu clusters, %.0f ms\n", l0, double(extent),
+                d.groupError.size(), d.clusterGroup.size(), ms);
+    std::printf("   cut curve (E / extent -> triangles):");
+    bool monotone = true;
+    long long prev = -1;
+    for (int k = 12; k >= 0; --k) {
+        const float E = extent / float(1 << k);
+        const long long t = d.clusterGroup.empty() ? l0 : cutAt(d, E);
+        std::printf(" 2^-%d %lld", k, t);
+        if (prev >= 0 && t > prev) monotone = false;
+        prev = t;
+    }
+    const long long top = d.clusterGroup.empty() ? l0 : cutTop(d);
+    if (prev >= 0 && top > prev) monotone = false;
+    std::printf(" | top %lld\n", top);
+    char msg[200];
+    CHECK_LOUD(!d.clusterGroup.empty(), "the box set has a DAG");
+    std::snprintf(msg, sizeof(msg), "the cut curve never grows as E grows");
+    CHECK_LOUD(monotone, msg);
+    std::snprintf(msg, sizeof(msg), "the curve ends at the empty top (top cut %lld triangles == 0)", top);
+    CHECK_LOUD(top == 0, msg);
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
 /// `--dag-depths <model>...`: THE DAG'S TRIANGLES PER DEPTH (ENGINE-POLISH-ATOM-1 stage 6, the owner's "far = near
 /// polygons"): every mesh of every file through the bake's own DAG build (MeshBake::buildClusterDag - a mesh under its
 /// floor gets none: the engine draws such a mesh from a flat DAG over level 0, its every triangle at depth 0), the
@@ -3684,6 +3983,21 @@ int main(int argc, char **argv)
                     only.insert(n.toInt());
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve-law")) return cutCurveLaw();
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve")) {
+        QString meshesArg, armName = QStringLiteral("shipped");
+        bool dense = false;
+        int threads = 4;
+        for (int a = 3; a < argc; ++a) {
+            const QString arg = QString::fromLocal8Bit(argv[a]);
+            if (arg == QStringLiteral("--meshes") && a + 1 < argc) meshesArg = QString::fromLocal8Bit(argv[++a]);
+            else if (arg == QStringLiteral("--arm") && a + 1 < argc) armName = QString::fromLocal8Bit(argv[++a]);
+            else if (arg == QStringLiteral("--threads") && a + 1 < argc) threads = QString::fromLocal8Bit(argv[++a]).toInt();
+            else if (arg == QStringLiteral("--dense-reference")) dense = true;
+            else { std::printf("FAIL: --cut-curve: unknown argument %s\n", qUtf8Printable(arg)); return 1; }
+        }
+        return cutCurveTool(QString::fromLocal8Bit(argv[2]), meshesArg, armName, dense, threads);
     }
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--locked-positions-kept")) return lockedPositionsKept();
