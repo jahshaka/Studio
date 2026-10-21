@@ -11,7 +11,9 @@ For more information see the LICENSE file
 
 #include "services/openreads.h"
 
+#include <QDebug>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QSqlQuery>
 #include <QUuid>
 
@@ -89,7 +91,13 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
     }
     if (!blob.isEmpty()) {
         LoadTimeline::Accumulate json(QStringLiteral("worker:sceneJson"));
-        reads.projectObj = QJsonDocument::fromJson(blob).object();
+        QJsonParseError error;
+        const QJsonDocument doc = QJsonDocument::fromJson(blob, &error);
+        // A blob that does not parse opens as an empty world, as the reader always did — said once, by name.
+        if (error.error != QJsonParseError::NoError || !doc.isObject())
+            qWarning("open: the scene blob of project %s does not parse (%s at %d) — it opens empty",
+                     qUtf8Printable(reads.projectGuid), qUtf8Printable(error.errorString()), error.offset);
+        reads.projectObj = doc.object();
         reads.found = true;
     }
 
