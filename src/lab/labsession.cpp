@@ -208,6 +208,7 @@ envs::Optics Session::optics() const
     o.heightPixels = float(h);
     o.tolerance = float(std::max(1, mDoc->atomPixelError));
     o.farClip = mCamera.node()->farClip;
+    o.footprint = mOpt.footprint;
     return o;
 }
 
@@ -715,11 +716,12 @@ bool Session::exec(const Command &c)
             const bool header = !path.isEmpty() && !QFileInfo::exists(path);
             std::ofstream out;
             if (!path.isEmpty()) out.open(path.toStdString(), std::ios::app);
+            out.precision(12);   // a count above a million keeps every digit (the stream's default 6 does not)
             if (header)
                 out << "env\tseed\ttier\ttolerance_px\tstop_m\tquantity\tpredicted\tmeasured\tmeasured_over_predicted"
                        "\tdrawn_triangles_all\thidden_object_triangles\tatom_pixels\tframe\n";
             for (const envs::Prediction &pr : pred) {
-                const double m = ok ? envs::measured(*mBuilt, pr.quantity, rd) : -1.0;
+                const double m = ok ? envs::measured(*mBuilt, pr, rd) : -1.0;
                 const double ratio = pr.value > 0 ? m / pr.value : 0.0;
                 std::printf("LAB MEASURE %s seed %u stop %.0f m: %s predicted %.0f measured %.0f (x%.3f) — %s\n",
                             mEnv->name, mOpt.seed, d, pr.quantity.c_str(), pr.value, m, ratio, pr.note.c_str());

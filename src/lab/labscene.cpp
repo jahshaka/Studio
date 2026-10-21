@@ -316,6 +316,7 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     // written by MeshNode::loadAsSceneFragment but NOT by MeshBake::buildFragment (meshbake.cpp buildFragmentNode sets
     // no cull) — the app's node keeps it through its stored definition. The lab records the meshes whose material
     // says two-sided and sets the nodes' cull after the build (a finding for irisgl/import: buildFragment's gap).
+    // DELETE THIS COPY when part A's MeshBake::buildFragment sets the flag itself.
     QSet<const iris::Mesh *> twoSided;
     iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided](iris::MeshPtr mesh, iris::MeshMaterialData &d) {
         if (d.twoSided && mesh) twoSided.insert(mesh.data());

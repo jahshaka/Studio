@@ -83,7 +83,7 @@ lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2
 lab.commands_are_one_parser 2.66  solo, the card lock held, :73 (LAB-1 stage 1, 2026-10-22)
 lab.dolly_matches_probe 1.99  solo, the card lock held, :73 (LAB-1 stage 3, 2026-10-22; the lab run itself, dolly.sh + the box set at two stops)
 lab.env_expectation_printed 0.17  solo, CPU (LAB-1 stage 2, 2026-10-22)
-lab.envs_build 4.79  solo, CPU (LAB-1 stage 2, 2026-10-22; the eight builds + their rebuilds)
+lab.envs_build 4.64  solo, CPU (LAB-1 stage 2 read, 2026-10-22; the eight checks in parallel, each baked twice)
 library.model 7.20  ship 3a0422b4e (2026-10-13)
 lights.falloff 1.46  quiet n=43
 lod.padding_untouched 0.00  ship 3a0422b4e (2026-10-13)

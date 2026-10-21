@@ -15,8 +15,10 @@
 #include "irisgl/import/meshbake.h"
 
 #include <QColor>
+#include <QHash>
 
 #include <algorithm>
+#include <functional>
 #include <chrono>
 #include <cmath>
 
@@ -52,6 +54,46 @@ bool Optics::inFrustum(const iris::Vec3 &c, float r) const
     const float ty = std::tan(fovYDegrees * float(M_PI) / 360.0f), tx = ty * aspect;
     const float y = std::fabs(iris::Vec3::dotProduct(v, up)), x = std::fabs(iris::Vec3::dotProduct(v, right));
     return y - r * std::sqrt(1.0f + ty * ty) <= z * ty && x - r * std::sqrt(1.0f + tx * tx) <= z * tx;
+}
+
+bool Optics::straddles(const iris::Vec3 &c, float r) const
+{
+    if (!inFrustum(c, r)) return false;
+    iris::Vec3 f = (target - eye).normalized();
+    const iris::Vec3 right = iris::Vec3::crossProduct(f, iris::Vec3(0, 1, 0)).normalized();
+    const iris::Vec3 up = iris::Vec3::crossProduct(right, f);
+    const iris::Vec3 v = c - eye;
+    const float z = iris::Vec3::dotProduct(v, f);
+    const float ty = std::tan(fovYDegrees * float(M_PI) / 360.0f), tx = ty * aspect;
+    const float y = std::fabs(iris::Vec3::dotProduct(v, up)), x = std::fabs(iris::Vec3::dotProduct(v, right));
+    const bool inside = z - r >= 0.1f && z + r <= farClip && y + r * std::sqrt(1.0f + ty * ty) <= z * ty &&
+                        x + r * std::sqrt(1.0f + tx * tx) <= z * tx;
+    return !inside;
+}
+
+float largestIslandDiagonal(const Arrays &a)
+{
+    const size_t nv = a.p.size() / 3;
+    std::vector<size_t> parent(nv);
+    for (size_t i = 0; i < nv; ++i) parent[i] = i;
+    const std::function<size_t(size_t)> root = [&](size_t i) {
+        while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+    };
+    const auto join = [&](size_t x, size_t y) { x = root(x); y = root(y); if (x != y) parent[y] = x; };
+    QHash<QByteArray, size_t> weld;   // the position's bytes -> the first vertex there
+    for (size_t i = 0; i < nv; ++i) {
+        const QByteArray key(reinterpret_cast<const char *>(&a.p[i * 3]), 3 * int(sizeof(float)));
+        const auto it = weld.constFind(key);
+        if (it == weld.constEnd()) weld.insert(key, i);
+        else join(it.value(), i);
+    }
+    for (size_t t = 0; t + 2 < a.idx.size(); t += 3) { join(a.idx[t], a.idx[t + 1]); join(a.idx[t], a.idx[t + 2]); }
+    QHash<size_t, iris::AABB> boxes;
+    for (size_t i = 0; i < nv; ++i) boxes[root(i)].merge(iris::Vec3(a.p[i * 3], a.p[i * 3 + 1], a.p[i * 3 + 2]));
+    float best = 0.0f;
+    for (const iris::AABB &b : boxes) best = std::max(best, (b.getMax() - b.getMin()).length());
+    return best;
 }
 
 // ---- arrays ------------------------------------------------------------------------------------------------------
@@ -147,7 +189,8 @@ void boxBounds(const iris::Vec3 &centre, const iris::Vec3 &half, const iris::Vec
 
 // ---- the builder -------------------------------------------------------------------------------------------------
 
-Builder::Builder(const char *env, unsigned seed, bool bake) : mHash(QCryptographicHash::Sha256), mBake(bake)
+Builder::Builder(const char *env, unsigned seed, bool bake)
+    : mHash(QCryptographicHash::Sha256), mBakeHash(QCryptographicHash::Sha256), mBake(bake)
 {
     mStartMs = nowMs();
     mBuilt.doc = iris::Scene::create();
@@ -193,6 +236,17 @@ iris::MeshPtr Builder::mesh(const Arrays &a)
         iris::MeshBake::buildSdf(m);
         iris::MeshBake::buildClusterDag(m);
         mBuilt.bakeMs += nowMs() - t0;
+        // THE BAKE'S PRODUCTS, hashed: the chain's levels and the DAG (its clusters and groups are padding-free PODs)
+        for (const QVector<quint32> &level : m->lodIndices)
+            mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(level.constData()), level.size() * qsizetype(sizeof(quint32))));
+        const iris::MeshClusterDag &dag = m->clusterDag;
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.clusters.constData()),
+                                         dag.clusters.size() * qsizetype(sizeof(iris::MeshClusterDag::Cluster))));
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.groups.constData()),
+                                         dag.groups.size() * qsizetype(sizeof(iris::MeshClusterDag::Group))));
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.vertices.constData()),
+                                         dag.vertices.size() * qsizetype(sizeof(quint32))));
+        mBakeHash.addData(dag.triangles);
     }
     return m;
 }
@@ -243,6 +297,7 @@ Built Builder::finish()
     addSkyAndLights(mBuilt.doc, true);
     mBuilt.doc->getRootNode()->applyStaticDefaults();
     mBuilt.hash = mHash.result().toHex();
+    if (mBake) mBuilt.bakeHash = mBakeHash.result().toHex();
     mBuilt.buildMs = nowMs() - mStartMs;
     return mBuilt;
 }
@@ -274,11 +329,12 @@ iris::MeshPtr unitBox(Builder &b)
 
 // ---- the closed forms --------------------------------------------------------------------------------------------
 
-double predictedTriangles(const Built &b, const Optics &o, const QString &role)
+double predictedTriangles(const Built &b, const Optics &o, const QString &role, const QSet<int> &excludedObjects)
 {
     double total = 0.0;
     for (const Feature &f : b.features) {
         if (!role.isEmpty() && (f.object < 0 || b.objects[size_t(f.object)].role != role)) continue;
+        if (excludedObjects.contains(f.object)) continue;
         switch (f.kind) {
         case Feature::Fixed:
             if (o.inFrustum(f.centre, f.radius)) total += f.triangles;
@@ -313,14 +369,15 @@ double predictedTriangles(const Built &b, const Optics &o, const QString &role)
             break;
         }
         case Feature::Canopy: {
-            // THE MERGED-CARD LAW: while a card's size projects to >= tolerance pixels every card stays (2 triangles
-            // each); past that distance d_c = cardSize x pixelScale / tolerance the cards merge into cards of one
-            // `tolerance` pixel each, and a canopy of fixed area needs (d_c / d)^2 of them — a quarter per doubling,
-            // continuous at d_c (never a step)
-            if (!o.inFrustum(f.centre, f.radius)) break;
+            // THE REPRESENTED-SURFACE RULE IN A DENSE SOUP: a removed card is charged its distance to ANY remaining
+            // surface — in a dense canopy the gap to its nearest neighbour (centimetres), not its own size — so the
+            // canopy draws 2 triangles per card whose nearest-neighbour gap (the centre-to-centre distance, an upper
+            // bound of the surface gap) is >= the view's error at the canopy: monotone in D, never a step
+            if (!o.inFrustum(f.centre, f.radius) || !f.gaps) break;
             const double d = std::max(0.1, double((f.centre - o.eye).length() - f.radius));
-            const double dc = double(f.cardSize) * o.pixelScale() / double(o.tolerance);
-            total += 2.0 * double(f.cards) * std::min(1.0, (dc / d) * (dc / d));
+            const float e = float(o.allowed(d));
+            const auto first = std::lower_bound(f.gaps->begin(), f.gaps->end(), e);
+            total += 2.0 * double(f.gaps->end() - first);
             break;
         }
         }
@@ -328,19 +385,21 @@ double predictedTriangles(const Built &b, const Optics &o, const QString &role)
     return total;
 }
 
-double measured(const Built &b, const std::string &q, const std::vector<ObjectReading> &readings)
+double measured(const Built &b, const Prediction &p, const std::vector<ObjectReading> &readings)
 {
+    const std::string &q = p.quantity;
     QHash<QString, QString> roleOf;
     for (const Object &o : b.objects) roleOf.insert(o.name, o.role);
     double v = 0.0;
     for (const ObjectReading &r : readings) {
         const auto it = roleOf.constFind(r.name);
         if (it == roleOf.constEnd()) continue;   // not the environment's (nothing else draws, but say so by name)
+        if (p.excluded.contains(r.name)) continue;
         const QString &role = it.value();
         if (q == "triangles") v += double(r.drawnTriangles);
         else if (q == "objects" && role == "prop" && r.drawnTriangles > 0) v += 1.0;
         else if (q == "visibleObjects" && role == "building" && r.pixels > 0) v += 1.0;
-        else if (q.rfind("hiddenDrawn", 0) == 0 && role == "building" && r.drawnTriangles > 0 && r.pixels == 0) v += 1.0;
+        else if (q == "hiddenDrawn" && role == "building" && r.drawnTriangles > 0 && r.pixels == 0) v += 1.0;
     }
     return v;
 }

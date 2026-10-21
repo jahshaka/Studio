@@ -6,18 +6,22 @@
 // wall square on, the eye 1.7 m up at (0, 1.7, d), looking straight down -Z (no pitch: the wall's face projects to two
 // axis-aligned screen rectangles, the covered region C).
 //
-// THE EXPECTATION — THE HIDDEN SHARE. A building whose screen rectangle B lies inside C is hidden (the roofline is C's
-// top edge, the gap and the wall's ends its sides); one that reaches over the roofline, into the gap or past an end is
-// visible (`visibleObjects`). The depth test is CONSERVATIVE by one pyramid texel: an instance is tested at the mip
-// where its rectangle spans at most F texels (texel t = 2^ceil(log2(max(w, h) / F)) pixels) and the rectangle is read
-// rounded OUT to that mip's texels, so a hidden building whose rounded rectangle still reaches past C's edge reads the
-// sky's (or the farther building's) depth there and is DRAWN though hidden — the "hidden drawn" count, predicted per
-// footprint F = 4 and F = 8 texels (`hiddenDrawn@4`, `hiddenDrawn@8`): only the buildings within one texel of the
-// roofline, the gap's reveal or an end. Measured: a building the cut drew with no visible pixel (the cut probe).
+// THE EXPECTATION — THE HIDDEN SHARE, with MUTUAL HIDING (the stage-2 read). With no pitch every box's screen
+// rectangle is axis-aligned and every front face is at one depth, so the truth is exact: a building is HIDDEN iff its
+// rectangle lies inside the UNION of the occluders' rectangles — the wall's two parts, the ground in front of the wall
+// (the rows below the wall's foot) and every building wholly NEARER
+// (its far face in front of this one's near face; the generator forbids overlapping volumes) — and VISIBLE otherwise
+// (`visibleObjects`). THE DEPTH TEST IS CONSERVATIVE BY ONE PYRAMID TEXEL: the instance is tested at the mip where its
+// rectangle is at most F texels per axis (F = the footprint: 2 at this base, JahCullTest_cs.glsl:325-336, `--footprint
+// N`), every texel it touches read — the rectangle rounded OUT to that mip's texels; a hidden building whose rounded
+// rectangle still reaches past the occluders' union reads a farther depth there and is DRAWN though hidden
+// (`hiddenDrawn`). Measured: a building the cut drew with no visible pixel (the cut probe).
 // WHAT IT DOES NOT MODEL: the previous frame's pyramid (the dolly settles first), the late list's re-test, the boxes'
-// near-plane cases, buildings occluding buildings (counted visible or hidden against the wall alone).
+// near-plane cases, the occluders' side faces (a nearer box's side face covers more than its front rectangle: the
+// prediction is the conservative side).
 #include "envbuild.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -50,9 +54,22 @@ Built build(unsigned seed, bool bake)
     unit.box(iris::Vec3(0, 0.5f, 0), iris::Vec3(0.5f, 0.5f, 0.5f));
     const iris::MeshPtr box = b.mesh(unit);
     const auto brick = b.material(0.55f, 0.35f, 0.28f);
+    // NO TWO VOLUMES OVERLAP (with 0.5 m between footprints), so "wholly nearer" is a total order on any two that
+    // share screen space: a placement that overlaps an earlier one is drawn again (the same LCG: deterministic)
+    std::vector<std::pair<iris::Vec3, iris::Vec3>> placed;   // footprint min / max (x, -, z)
     for (int i = 0; i < 20; ++i) {
-        const float wd = r.range(3, 6), dp = r.range(3, 6), h = r.range(4, 16);
-        const float x = r.range(-14.0f + wd * 0.5f, 14.0f - wd * 0.5f), behind = r.range(2, 60);
+        float wd = 0, dp = 0, h = 0, x = 0, behind = 0;
+        for (int attempt = 0; attempt < 500; ++attempt) {
+            wd = r.range(3, 6); dp = r.range(3, 6); h = r.range(4, 16);
+            x = r.range(-14.0f + wd * 0.5f, 14.0f - wd * 0.5f); behind = r.range(2, 60);
+            const float z0 = -0.5f - behind - dp, z1 = -0.5f - behind;
+            bool clash = false;
+            for (const auto &q : placed)
+                clash = clash || (x - wd * 0.5f < q.second.x() + 0.5f && x + wd * 0.5f > q.first.x() - 0.5f &&
+                                  z0 < q.second.z() + 0.5f && z1 > q.first.z() - 0.5f);
+            if (!clash) break;
+        }
+        placed.push_back({ iris::Vec3(x - wd * 0.5f, 0, -0.5f - behind - dp), iris::Vec3(x + wd * 0.5f, 0, -0.5f - behind) });
         const iris::Vec3 pos(x, 0, -0.5f - behind - dp * 0.5f);
         const int o = b.instance(box, QStringLiteral("building-%1").arg(i), QStringLiteral("building"), pos, 0.0f,
                                  iris::Vec3(wd, h, dp), brick);
@@ -103,41 +120,80 @@ Rect project(const Optics &o, const iris::Vec3 &mn, const iris::Vec3 &mx)
     return r;
 }
 
-bool inside(const Rect &b, const Rect &c) { return b.x0 >= c.x0 && b.x1 <= c.x1 && b.y0 >= c.y0 && b.y1 <= c.y1; }
+/// true when the rectangle `b` lies inside the union of `cover` (exact: the cells of b cut by every cover edge)
+bool covered(const Rect &b, const std::vector<Rect> &cover)
+{
+    if (b.empty()) return true;
+    std::vector<float> xs{ b.x0, b.x1 }, ys{ b.y0, b.y1 };
+    for (const Rect &c : cover) {
+        if (c.x0 > b.x0 && c.x0 < b.x1) xs.push_back(c.x0);
+        if (c.x1 > b.x0 && c.x1 < b.x1) xs.push_back(c.x1);
+        if (c.y0 > b.y0 && c.y0 < b.y1) ys.push_back(c.y0);
+        if (c.y1 > b.y0 && c.y1 < b.y1) ys.push_back(c.y1);
+    }
+    std::sort(xs.begin(), xs.end());
+    std::sort(ys.begin(), ys.end());
+    for (size_t i = 0; i + 1 < xs.size(); ++i)
+        for (size_t j = 0; j + 1 < ys.size(); ++j) {
+            if (xs[i + 1] - xs[i] <= 0.0f || ys[j + 1] - ys[j] <= 0.0f) continue;
+            const float cx = 0.5f * (xs[i] + xs[i + 1]), cy = 0.5f * (ys[j] + ys[j + 1]);
+            bool in = false;
+            for (const Rect &c : cover) in = in || (cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1);
+            if (!in) return false;
+        }
+    return true;
+}
 
 std::vector<Prediction> expect(const Built &b, const Optics &o)
 {
-    const Rect left = project(o, iris::Vec3(-kHalfWidth, 0, 0), iris::Vec3(kGap0, kWallH, 0));
-    const Rect right = project(o, iris::Vec3(kGap1, 0, 0), iris::Vec3(kHalfWidth, kWallH, 0));
-    int visible = 0, kept4 = 0, kept8 = 0, hidden = 0;
+    // the wall's two BOXES (front and back faces: the gap's side faces narrow the gap seen off-axis)
+    std::vector<Rect> wall = { project(o, iris::Vec3(-kHalfWidth, 0, -0.5f), iris::Vec3(kGap0, kWallH, 0)),
+                               project(o, iris::Vec3(kGap1, 0, -0.5f), iris::Vec3(kHalfWidth, kWallH, 0)) };
+    // THE GROUND IN FRONT OF THE WALL is nearer than every building: the screen below the wall's foot (its rows)
+    {
+        const Rect foot = project(o, iris::Vec3(-1000.0f, 0, 0), iris::Vec3(1000.0f, 0, 0));
+        const float H = o.heightPixels, W = H * o.aspect;
+        if (foot.y1 < H) wall.push_back(Rect{ 0.0f, foot.y0, W, H });
+    }
+    struct Box { Rect r; float nearZ = 0, farZ = 0; };   // distances along the view (larger = farther)
+    std::vector<Box> boxes;
     for (const Object &obj : b.objects) {
         if (obj.role != "building") continue;
-        const Rect r = project(o, obj.boxMin, obj.boxMax);
-        if (r.empty()) continue;
-        const bool covered = inside(r, left) || inside(r, right);
-        if (!covered) { ++visible; continue; }
-        ++hidden;
-        for (int F : { 4, 8 }) {
-            const float side = std::max(r.x1 - r.x0, r.y1 - r.y0);
-            const float t = std::pow(2.0f, std::max(0.0f, std::ceil(std::log2(std::max(1.0f, side / float(F))))));
-            const Rect g{ std::floor(r.x0 / t) * t, std::floor(r.y0 / t) * t, std::ceil(r.x1 / t) * t, std::ceil(r.y1 / t) * t };
-            if (!(inside(g, left) || inside(g, right))) (F == 4 ? kept4 : kept8)++;
-        }
+        boxes.push_back({ project(o, obj.boxMin, obj.boxMax), o.eye.z() - obj.boxMax.z(), o.eye.z() - obj.boxMin.z() });
     }
-    char note[160];
-    std::snprintf(note, sizeof note, "%d of the buildings in view hidden behind the wall", hidden);
-    return { { "visibleObjects", double(visible), "buildings reaching over the roofline, into the gap or past an end" },
-             { "hiddenDrawn@4", double(kept4), note },
-             { "hiddenDrawn@8", double(kept8), note },
+    const float F = float(std::max(1, o.footprint));
+    int visible = 0, hidden = 0, drawnHidden = 0;
+    for (size_t i = 0; i < boxes.size(); ++i) {
+        const Rect &r = boxes[i].r;
+        if (r.empty()) continue;   // off screen
+        std::vector<Rect> cover = wall;   // the wall stands in front of every building
+        for (size_t j = 0; j < boxes.size(); ++j)
+            if (j != i && !boxes[j].r.empty() && boxes[j].farZ < boxes[i].nearZ) cover.push_back(boxes[j].r);
+        if (!covered(r, cover)) { ++visible; continue; }
+        ++hidden;
+        // the test's mip: the rectangle at most F texels per axis; the texels it touches, every one (floor .. floor)
+        const float widest = std::max(r.x1 - r.x0, r.y1 - r.y0);
+        const float t = std::pow(2.0f, std::max(0.0f, std::ceil(std::log2(std::max(widest, 1.0f) / F))));
+        const Rect g{ std::floor(r.x0 / t) * t, std::floor(r.y0 / t) * t, (std::floor(r.x1 / t) + 1.0f) * t,
+                      (std::floor(r.y1 / t) + 1.0f) * t };
+        const float H = o.heightPixels, W = H * o.aspect;
+        const Rect gc{ std::max(g.x0, 0.0f), std::max(g.y0, 0.0f), std::min(g.x1, W), std::min(g.y1, H) };
+        if (!covered(gc, cover)) ++drawnHidden;
+    }
+    char note[200];
+    std::snprintf(note, sizeof note, "%d of the buildings in view hidden (the wall and nearer buildings); footprint %d "
+                  "texels", hidden, o.footprint);
+    return { { "visibleObjects", double(visible), "buildings not inside the union of the wall and the nearer buildings" },
+             { "hiddenDrawn", double(drawnHidden), note },
              { "triangles", predictedTriangles(b, o), "every object in the frustum (no occlusion in this sum)" } };
 }
 
 std::string describe()
 {
     return "atom-occlusion: a 30 x 8 m wall with a 3 m gap and 20 buildings behind it at 2-60 m. Predicts THE HIDDEN "
-           "SHARE: the buildings visible over the roofline, through the gap or past an end, and the HIDDEN buildings "
-           "the conservative depth test still draws — those whose rectangle, rounded out to the pyramid texel at which "
-           "it spans 4 (or 8) texels, still reaches past the wall's edge: hiddenDrawn@4 / @8 per stop.";
+           "SHARE: the buildings visible past the wall AND the nearer buildings (mutual hiding, exact without pitch), and "
+           "the HIDDEN buildings the conservative depth test still draws — those whose rectangle, rounded out to the "
+           "texels of the mip where it spans the footprint (2 at this base), reaches past the occluders: hiddenDrawn.";
 }
 
 }   // namespace

@@ -6,10 +6,12 @@
 // A 120 m ground quad.
 //
 // THE EXPECTATION — THE EMPTY-TOP LAW. A whole object has nothing beside it to remain: its DAG's top is EMPTY (ATOM-6's
-// prune), reached at the error of the whole object, its bounding-box diagonal e = size x diag(unit box). So a prop
-// stops drawing past D = e x 1303.7 / tolerance and draws (some level of) itself before: `objects` = the props in view
-// with e x 1303.7 / D >= tolerance, `triangles` = the same props' full counts (an upper bound: a prop above the pixel
-// may already draw a coarser level). The dolly: eye (0, 6, 50 + d) looking at the field's centre.
+// prune), reached at the error of its LARGEST welded island's extent (the stage-2 read: the DAG charges a wholly
+// dropped island its extent — the lamp's post 0.81 x size, not the whole lamp's 1.09; the sign's panel 0.81, not 1.22;
+// the bolt is one island). So a prop stops drawing past D = e x 1303.7 / tolerance and draws (some level of) itself
+// before: `objects` = the props in view with e x 1303.7 / D >= tolerance, `triangles` = the same props' full counts (an
+// upper bound: a prop above the pixel may already draw a coarser level). The dolly: eye (0, 6, 50 + d) looking at the
+// field's centre.
 // WHAT IT DOES NOT MODEL: a prop's intermediate levels (the bound above), the ground's occlusion of the props' feet.
 #include "envbuild.h"
 
@@ -68,12 +70,13 @@ Built build(unsigned seed, bool bake)
     Arrays kinds[3];
     lamp(kinds[0]); bolt(kinds[1]); sign(kinds[2]);
     iris::MeshPtr meshes[3];
-    float diag[3];
+    float diag[3], island[3];
     unsigned tris[3];
     for (int k = 0; k < 3; ++k) {
         meshes[k] = b.mesh(kinds[k]);
         const iris::AABB bb = meshes[k]->getAABB();
         diag[k] = (bb.getMax() - bb.getMin()).length();
+        island[k] = largestIslandDiagonal(kinds[k]);
         tris[k] = kinds[k].triangles();
     }
     const iris::PbrMaterialPtr mats[3] = { b.material(0.2f, 0.2f, 0.22f), b.material(0.6f, 0.6f, 0.62f, 0.5f),
@@ -90,7 +93,7 @@ Built build(unsigned seed, bool bake)
         f.object = o;
         f.centre = pos + iris::Vec3(0, size * 0.5f, 0);
         f.radius = 0.5f * diag[k] * size;
-        f.error = diag[k] * size;
+        f.error = island[k] * size;   // the largest island's extent: the empty top's charge
         f.triangles = tris[k];
         b.feature(f);
     }
@@ -122,15 +125,15 @@ std::vector<Prediction> expect(const Built &b, const Optics &o)
         const double d = std::max(0.1, double((f.centre - o.eye).length() - f.radius));
         if (double(f.error) >= o.allowed(d)) objects += 1;
     }
-    return { { "objects", objects, "props in view whose bounding-box diagonal projects to >= tolerance px" },
+    return { { "objects", objects, "props in view whose largest island's extent projects to >= tolerance px" },
              { "triangles", predictedTriangles(b, o), "those props' full counts + the ground (an upper bound)" } };
 }
 
 std::string describe()
 {
     return "atom-small: 2,000 props under 256 triangles (lamps, bolts, signs) of 0.05-1 m over 100 m. Predicts THE "
-           "EMPTY-TOP LAW: a whole object's DAG top is empty at its bounding-box diagonal e, so a prop stops drawing "
-           "past D = e x 1303.7 / tolerance — the drawn-object count per stop in closed form.";
+           "EMPTY-TOP LAW: a whole object's DAG top is empty at its LARGEST ISLAND's extent e (the post 0.81, the panel "
+           "0.81 x size), so a prop stops drawing past D = e x 1303.7 / tolerance — the drawn-object count per stop.";
 }
 
 }   // namespace

@@ -31,7 +31,7 @@ QString binaryDir()
 
 /// --env-list: the catalogue, each environment's law and its prediction at the dolly's stops (CPU only: the geometry and
 /// its feature table, no bake, no engine) under the default optics (1920 x 1080, 45 degrees, Epic's 1 px).
-int envList(unsigned seed)
+int envList(unsigned seed, int footprint)
 {
     using namespace lab::envs;
     for (const Env &e : catalogue()) {
@@ -42,32 +42,40 @@ int envList(unsigned seed)
             Optics o;
             e.stop(d, o.eye, o.target);
             o.farClip = e.farClip;
+            o.footprint = footprint;
             for (const Prediction &p : e.expect(b, o))
-                std::printf("  EXPECT %s d=%.0f m: %s = %.4g  (%s)\n", e.name, d, p.quantity.c_str(), p.value, p.note.c_str());
+                std::printf("  EXPECT %s d=%.0f m: %s = %.10g  (%s)\n", e.name, d, p.quantity.c_str(), p.value, p.note.c_str());
         }
         std::printf("\n");
     }
     return 0;
 }
 
-/// --env-check: every environment built whole (timed: under 5 s), rebuilt with the same seed (the same triangles, the
-/// same scene hash) and with the next seed (another hash — the seed reaches the geometry).
-int envCheck(unsigned seed)
+/// --env-check [--env NAME]: every environment (or the one named) built whole and baked (timed: under 5 s), rebuilt
+/// and baked AGAIN with the same seed — the same triangles, the same scene hash AND the same bake hash (the bake pool's
+/// threaded output inside the determinism check) — and built with the next seed (another scene hash: the seed reaches
+/// the geometry).
+int envCheck(unsigned seed, const std::string &only)
 {
     using namespace lab::envs;
-    int bad = 0;
+    int bad = 0, n = 0;
     for (const Env &e : catalogue()) {
+        if (!only.empty() && only != e.name) continue;
+        ++n;
         const Built a = e.build(seed, true);
-        const Built again = e.build(seed, false);
+        const Built again = e.build(seed, true);
         const Built other = e.build(seed + 1, false);
         const bool fast = a.buildMs <= 5000.0, same = a.hash == again.hash && a.triangles == again.triangles,
-                   seeded = a.hash != other.hash;
-        std::printf("ENV-CHECK %-15s build %6.0f ms (bake %6.0f ms)%s | %8llu triangles, hash %s | rebuilt %s | seed+1 %s\n",
-                    e.name, a.buildMs, a.bakeMs, fast ? "" : " OVER 5 s", a.triangles, a.hash.left(16).constData(),
-                    same ? "identical" : "DIFFERS", seeded ? "another hash" : "THE SAME HASH (the seed reaches nothing)");
-        bad += !(fast && same && seeded);
+                   baked = a.bakeHash == again.bakeHash, seeded = a.hash != other.hash;
+        std::printf("ENV-CHECK %-15s build %6.0f ms (bake %6.0f ms)%s | %8llu triangles, hash %s | rebuilt %s | bake %s%s%s "
+                    "| seed+1 %s\n", e.name, a.buildMs, a.bakeMs, fast ? "" : " OVER 5 s", a.triangles,
+                    a.hash.left(16).constData(), same ? "identical" : "DIFFERS", a.bakeHash.left(16).constData(),
+                    baked ? " = rebaked" : " != REBAKED ", baked ? "" : again.bakeHash.left(16).constData(),
+                    seeded ? "another hash" : "THE SAME HASH (the seed reaches nothing)");
+        bad += !(fast && same && baked && seeded);
     }
-    std::printf("ENV-CHECK %s (%d of %zu red)\n", bad ? "FAILED" : "PASSED", bad, catalogue().size());
+    if (n == 0) { std::printf("ENV-CHECK: no environment '%s'\n", only.c_str()); return 1; }
+    std::printf("ENV-CHECK %s (%d of %d red)\n", bad ? "FAILED" : "PASSED", bad, n);
     return bad ? 1 : 0;
 }
 
@@ -104,6 +112,7 @@ int main(int argc, char **argv)
         else if (a == "--env") { const char *v = next(); if (!v) return usage("--env needs a name (--env-list)"); opt.env = QString::fromLocal8Bit(v); }
         else if (a == "--seed") { const char *v = next(); char *end = nullptr; if (!v) return usage("--seed needs a number"); opt.seed = unsigned(std::strtoul(v, &end, 10)); if (!end || *end) return usage("--seed needs a number"); }
         else if (a == "--env-list") envListWanted = true;
+        else if (a == "--footprint") { const char *v = next(); if (!v || std::atoi(v) < 1) return usage("--footprint needs texels >= 1"); opt.footprint = std::atoi(v); }
         else if (a == "--env-check") envCheckWanted = true;
         else if (a == "--data-root") { const char *v = next(); if (!v) return usage("--data-root needs a directory"); opt.dataRoot = QDir(QString::fromLocal8Bit(v)).absolutePath(); }
         else if (a == "--script") { const char *v = next(); if (!v) return usage("--script needs a file"); opt.script = QString::fromLocal8Bit(v); }
@@ -119,8 +128,8 @@ int main(int argc, char **argv)
         else if (opt.file.isEmpty()) opt.file = QString::fromLocal8Bit(argv[i]);
         else return usage("one scene file only");
     }
-    if (envListWanted) return envList(opt.seed);
-    if (envCheckWanted) return envCheck(opt.seed);
+    if (envListWanted) return envList(opt.seed, opt.footprint);
+    if (envCheckWanted) return envCheck(opt.seed, opt.env.toStdString());
     if (!opt.env.isEmpty() && !opt.file.isEmpty()) return usage("a file or --env, not both");
     if (!opt.env.isEmpty() && !lab::envs::find(opt.env.toStdString())) return usage("no such environment (--env-list)");
     if (opt.file.isEmpty() && opt.env.isEmpty()) return usage("no scene file (or --env <name>)");

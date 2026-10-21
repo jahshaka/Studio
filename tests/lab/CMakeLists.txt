@@ -26,10 +26,11 @@ jah_gpu_row(lab.commands_are_one_parser CLASS engine FRAMES 45
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.commands_are_one_parser PROPERTIES TIMEOUT 60 LABELS "lab")
 
-# lab.envs_build (stage 2) — `jahlab --env-check`: every test environment builds (its meshes through the bake's stages)
-# under 5 s, and rebuilds deterministically: the same seed gives the same triangle count and the same scene hash, the
-# next seed another hash. CPU only.
-add_test(NAME lab.envs_build COMMAND $<TARGET_FILE:jahlab> --env-check WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# lab.envs_build (stage 2) — `jahlab --env-check` per environment, the eight in parallel (envs_build.sh): each builds
+# (its meshes through the bake's stages) under 5 s, and rebuilds AND re-bakes deterministically: the same seed gives
+# the same triangle count, scene hash and bake hash (the bake pool's threaded output), the next seed another hash. CPU.
+add_test(NAME lab.envs_build COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/envs_build.sh $<TARGET_FILE:jahlab>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.envs_build PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.envs_build)
 

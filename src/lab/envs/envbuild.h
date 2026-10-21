@@ -65,11 +65,15 @@ public:
 
 private:
     QCryptographicHash mHash;
+    QCryptographicHash mBakeHash;
     Built mBuilt;
     bool mBake;
     double mStartMs;
 };
 
+/// THE EMPTY TOP'S ERROR for a whole object (env.h): the largest WELDED island's bounding-box diagonal — vertices
+/// welded by position, triangles joined through shared vertices — of these arrays, unscaled.
+float largestIslandDiagonal(const Arrays &a);
 /// a unit box mesh (x, z in [-0.5, 0.5], y in [0, 1]) for scaled instances
 iris::MeshPtr unitBox(Builder &b);
 /// an instance of `unit` filling the world box [mn, mx], role "subject", recorded as a Fixed 12-triangle feature

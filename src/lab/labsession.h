@@ -40,6 +40,7 @@ struct Options
     QString file;              ///< a model or a .jlab
     QString env;               ///< a generated environment (envs/env.h), instead of a file
     unsigned seed = 1;         ///< the environment's seed
+    int footprint = 2;         ///< the occlusion test's footprint in texels the expectations assume (envs/env.h Optics)
     QString script;
     QString dataRoot;
     QString binDir;            ///< the binary's directory (media, app/content)
