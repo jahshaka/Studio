@@ -181,6 +181,13 @@ static void clusterCutParity(Engine *e)
     const float tols[5] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f };
     const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
     unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
+    // THE ROOT CUT (ATOM-7 stage 4): the device's jahClusterRootDrawn against Types.h clusterRootDrawn at every
+    // (view, cluster); on a terminal-top mesh (no finite group without output) it must be the rule it replaced
+    // (own group terminal, a leaf or produced by a finite group), on the empty-top fixture exactly the members of
+    // the empty groups — the last non-empty groups' clusters — and never nothing.
+    unsigned long long rootEvaluated = 0, rootMismatched = 0, rootOldDiffers = 0, emptyTopRootClusters = 0,
+                       emptyTopRootWrong = 0;
+    size_t terminalTopMeshes = 0;
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
@@ -204,13 +211,42 @@ static void clusterCutParity(Engine *e)
                     views.push_back(v);
                 }
         }
-        std::vector<unsigned char> drawn;
-        if (!gpu.run(f.data.clusterGroups, f.data.clusters, views, drawn, err)) {
+        std::vector<unsigned char> drawn, rootDrawn;
+        if (!gpu.run(f.data.clusterGroups, f.data.clusters, views, drawn, err, &rootDrawn)) {
             std::printf("FAIL: %s: the device run: %s\n", m.first.c_str(), err.c_str());
             ++failures;
             continue;
         }
         const size_t nc = f.data.clusters.size();
+        {
+            const std::vector<unsigned> produced = clusterProducedCounts(f.data.clusters, f.data.clusterGroups.size());
+            bool emptyGroups = false;
+            for (size_t g = 0; g < produced.size(); ++g)
+                if (produced[g] == 0u && f.data.clusterGroups[g].error < kClusterTerminal) emptyGroups = true;
+            size_t rootCount = 0;
+            for (size_t c = 0; c < nc; ++c) {
+                const MeshCluster &cl = f.data.clusters[c];
+                const bool cpu = clusterRootDrawn(cl, f.data.clusterGroups, produced);
+                rootCount += cpu ? 1u : 0u;
+                for (size_t vi = 0; vi < views.size(); ++vi) {
+                    ++rootEvaluated;
+                    if ((rootDrawn[vi * nc + c] != 0) != cpu) ++rootMismatched;
+                }
+                const bool old = f.data.clusterGroups[size_t(cl.group)].error >= kClusterTerminal &&
+                                 (cl.refined < 0 || f.data.clusterGroups[size_t(cl.refined)].error < kClusterTerminal);
+                if (!emptyGroups && old != cpu) ++rootOldDiffers;
+                if (emptyTop(m.first)) {
+                    const bool member = produced[size_t(cl.group)] == 0u &&
+                                        f.data.clusterGroups[size_t(cl.group)].error < kClusterTerminal &&
+                                        (cl.refined < 0 || f.data.clusterGroups[size_t(cl.refined)].error < kClusterTerminal);
+                    if (member != cpu) ++emptyTopRootWrong;
+                    emptyTopRootClusters += cpu ? 1u : 0u;
+                }
+            }
+            if (!emptyGroups) ++terminalTopMeshes;
+            std::printf("   %-16s the root cut: %zu clusters (%s)\n", m.first.c_str(), rootCount,
+                        emptyGroups ? "empty groups" : "terminal top");
+        }
         unsigned long long meshBad = 0, meshNear = 0, meshNearBad = 0;
         size_t distinct = 0;
         std::vector<unsigned> cut, previous;
@@ -257,6 +293,15 @@ static void clusterCutParity(Engine *e)
                   "of a threshold",
                   evaluated, drawnTotal, mismatched + nearMismatched, nearMismatched, nearThreshold);
     CHECK(mismatched == 0u && nearMismatched == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "THE ROOT CUT (ATOM-7): the device's jahClusterRootDrawn = Types.h clusterRootDrawn "
+                  "at %llu (view, cluster) answers (%llu differ)", rootEvaluated, rootMismatched);
+    CHECK(rootEvaluated > 0u && rootMismatched == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "the root cut on the %zu terminal-top meshes is the rule it replaced (%llu clusters "
+                  "differ)", terminalTopMeshes, rootOldDiffers);
+    CHECK(terminalTopMeshes >= 4u && rootOldDiffers == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "the empty top: the root cut draws the last non-empty groups' %llu clusters (%llu "
+                  "wrong), never nothing", emptyTopRootClusters, emptyTopRootWrong);
+    CHECK(emptyTopRootClusters > 0u && emptyTopRootWrong == 0u, msg);
 }
 
 // ---- THE FIFTH COPY: THE PRODUCT'S CUT (ATOM-CLUSTER-CUT) --------------------------

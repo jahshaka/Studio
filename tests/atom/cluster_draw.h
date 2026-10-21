@@ -72,10 +72,10 @@ class GpuCut
 public:
     bool init(Engine *engine, std::string &err);
     /// `drawn[v * clusters.size() + c]` = 1 where the GLSL rule draws cluster c
-    /// for view v.
+    /// for view v; `rootDrawn` (when asked) the same for the ROOT CUT (jahClusterRootDrawn).
     bool run(const std::vector<MeshClusterGroup> &groups, const std::vector<MeshCluster> &clusters,
              const std::vector<ClusterCutView> &views, std::vector<unsigned char> &drawn,
-             std::string &err);
+             std::string &err, std::vector<unsigned char> *rootDrawn = nullptr);
 private:
     Ogre::HlmsComputeJob *mJob = nullptr;
 };
