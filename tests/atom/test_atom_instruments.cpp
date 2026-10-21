@@ -13,7 +13,12 @@
 //       mode, and no figure with the view Off;
 //   (c) THE VISIBLE CLUSTERS: the probe's distinctClustersVisible is 0 for the back object (whose clusters share
 //       their mesh-wide ids with the front one's visible clusters: the bitmap is per INSTANCE) and > 0 for the
-//       front one, never more than it drew.
+//       front one, never more than it drew. A SECOND baked mesh (a bumped round bar, created first, standing beside
+//       the spheres in view) puts the sphere's DAG at a first cluster dag.x != 0, so the count side's bit
+//       (prefix + the id's local index) and the record side's (prefix + global - dag.x) must agree for (c) to hold;
+//   (d) THE GROW (the stage 0 read's use-after-free): with the Triangles view on, objects added past the GPU scene's
+//       slot capacity re-create the count buffer under the outstanding read — no crash, the status read at once,
+//       and the figure valid again within the frames in flight (Ogre's dynamic-buffer multiplier + 1).
 // Frames, never time: the engine's fixed clock.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/EngineInspect.h"
@@ -28,6 +33,7 @@
 
 #include <QCoreApplication>
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -88,7 +94,16 @@ int main(int argc, char **argv)
     pp.albedo = Colour(0.7f, 0.3f, 0.2f);
     pp.roughness = 0.4f;
     const MaterialId mat = s->createPbrMaterial(pp);
+    clusterfix::Fixture bx;
+    if (!clusterfix::bake(bx, clusterfix::roundBar(4.0f, 0.4f, 40, 24, 0.15f), "round-bar") || bx.data.clusters.empty()) {
+        std::printf("FAIL: the second fixture did not bake\n");
+        return 1;
+    }
+    const MeshId barMesh = s->createMesh(bx.data);   // FIRST: the sphere's DAG starts after the bar's
     const MeshId mesh = s->createMesh(fx.data);
+    const NodeId barNode = s->createNode();
+    s->setNodeTransform(barNode, Vec3(-9.0f, -2.0f, -30.0f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
+    s->attachMesh(barNode, barMesh, mat);
     const NodeId front = s->createNode(), back = s->createNode();
     s->setNodeTransform(front, Vec3(0.0f, 0.0f, -40.0f), Quat(), Vec3(8.0f, 8.0f, 8.0f));   // r 4 m at 40 m
     s->attachMesh(front, mesh, mat);
@@ -113,13 +128,23 @@ int main(int argc, char **argv)
         }
     }
     CHECK_MSG(probed, "the cut probe read one frame back (%s)", p.error.c_str());
-    const AtomCutProbeObject *fo = nullptr, *bo = nullptr;
+    const AtomCutProbeObject *fo = nullptr, *bo = nullptr, *ro = nullptr;
     for (const AtomCutProbeObject &o : p.objects) {
         if (o.node == front) fo = &o;
         if (o.node == back) bo = &o;
+        if (o.node == barNode) ro = &o;
     }
-    CHECK(fo && bo, "both objects are in the probe (the shut door drew both)");
-    if (!fo || !bo) { std::printf("FAILED\n"); return 1; }
+    CHECK(fo && bo && ro, "the three objects are in the probe (the shut door drew them)");
+    if (!fo || !bo || !ro) { std::printf("FAILED\n"); return 1; }
+    {
+        const detail::GpuScene &gs = static_cast<detail::OgreScene *>(s)->gpuScene();
+        const unsigned dagSphere = gs.meshEntry(fo->meshEntry).dag[0], dagBar = gs.meshEntry(ro->meshEntry).dag[0];
+        std::printf("   the meshes' first clusters: sphere %u, bar %u\n", dagSphere, dagBar);
+        CHECK_MSG(dagSphere != 0u && fo->meshEntry == bo->meshEntry,
+                  "the fixture: the shared sphere's DAG starts past cluster 0 (%u) - local != global", dagSphere);
+    }
+    std::printf("   bar:   slot %u, drawn %llu tris / %u clusters, pixels %u, visible clusters %u\n", ro->slot,
+                ro->drawnTriangles, ro->drawnClusters, ro->pixels, ro->visibleClusters);
     std::printf("   front: slot %u, level 0 %llu, drawn %llu tris / %u clusters, pixels %u, visible clusters %u\n",
                 fo->slot, fo->level0Triangles, fo->drawnTriangles, fo->drawnClusters, fo->pixels, fo->visibleClusters);
     std::printf("   back:  slot %u, level 0 %llu, drawn %llu tris / %u clusters, pixels %u, visible clusters %u\n",
@@ -138,12 +163,17 @@ int main(int argc, char **argv)
     const float level0 = fo->pixels ? float(fo->level0Triangles) / float(fo->pixels) : 0.0f;
     std::printf("   the density table: front %.6f (drawn/visible %.6f, level-0/visible %.6f), back %.6f\n", double(tf),
                 double(want), double(level0), double(tb));
-    CHECK_MSG(read && tf == want, "(a) the density view at the front object = drawn / visible (%.6f, want %.6f)",
-              double(tf), double(want));
+    // WITHIN 4 ULP (the read's (b)): Vulkan allows 2.5 ULP on a shader's division; the law is the same quantity.
+    uint32_t bt = 0u, bw = 0u;
+    std::memcpy(&bt, &tf, 4u);
+    std::memcpy(&bw, &want, 4u);
+    const uint32_t ulps = bt > bw ? bt - bw : bw - bt;
+    CHECK_MSG(read && ulps <= 4u, "(a) the density view at the front object = drawn / visible (%.6f, want %.6f, %u ulp)",
+              double(tf), double(want), ulps);
     CHECK_MSG(read && tb == 0.0f, "(a) the back object's density entry is 0 (no pixel; %.6f)", double(tb));
 
     // ---- (b) THE HIDDEN SHARE, in Density then Triangles, none with the view Off ----
-    const unsigned long long all = fo->drawnTriangles + bo->drawnTriangles;
+    const unsigned long long all = fo->drawnTriangles + bo->drawnTriangles + ro->drawnTriangles;
     {
         const AtomDrawStatus st = s->atomDrawStatus();
         std::printf("   density mode: hidden %llu of %llu (valid %d)\n", st.drawnHiddenTriangles,
@@ -172,6 +202,37 @@ int main(int argc, char **argv)
     CHECK_MSG(fo->visibleClusters > 0u && fo->visibleClusters <= fo->drawnClusters,
               "(c) the front object's distinctClustersVisible is in (0, drawn] (%u of %u)", fo->visibleClusters,
               fo->drawnClusters);
+    CHECK_MSG(ro->pixels > 0u && ro->visibleClusters > 0u && ro->visibleClusters <= ro->drawnClusters,
+              "(c) the bar's (dag.x 0) distinctClustersVisible is in (0, drawn] (%u of %u, %u px)", ro->visibleClusters,
+              ro->drawnClusters, ro->pixels);
+
+    // ---- (d) THE GROW under the Triangles view ----
+    s->setAtomView(AtomView::Triangles);
+    enginetest::frames(e, 6);
+    {
+        detail::GpuScene &gs = static_cast<detail::OgreScene *>(s)->gpuScene();
+        const unsigned cap = gs.slotCapacity(), count = gs.slotCount();
+        CHECK_MSG(s->atomDrawStatus().hiddenValid, "(d) the figure before the grow (slots %u of capacity %u)", count, cap);
+        for (unsigned k = count; k <= cap; ++k) {   // one past the capacity: the table grows, the count buffer with it
+            const NodeId n = s->createNode();
+            s->setNodeTransform(n, Vec3(0.0f, 0.0f, -70.0f - float(k)), Quat(), Vec3(0.5f, 0.5f, 0.5f));
+            s->attachMesh(n, mesh, mat);
+        }
+        enginetest::frames(e, 1);
+        const AtomDrawStatus st1 = s->atomDrawStatus();   // the grow's frame: read, valid or not
+        int settle = 0;
+        bool valid = st1.hiddenValid;
+        while (!valid && settle < 4) {
+            enginetest::frames(e, 1);
+            ++settle;
+            valid = s->atomDrawStatus().hiddenValid;
+        }
+        std::printf("   the grow: capacity %u -> %u, the figure valid again after %d frame(s)\n", cap, gs.slotCapacity(),
+                    settle);
+        CHECK_MSG(gs.slotCapacity() > cap && valid,
+                  "(d) past the slot capacity (%u -> %u): no crash, the figure valid again within the frames in flight "
+                  "(%d)", cap, gs.slotCapacity(), settle);
+    }
 
     view->setScene(nullptr);
     e->destroyView(view);

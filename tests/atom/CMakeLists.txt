@@ -176,8 +176,11 @@ set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITI
 # twice, the front one hiding the back one, the occlusion shut (the back one drawn and hidden): the density view = the cut's
 # drawn triangles over visible pixels (it was the base mesh's level 0), world.atomStatus's drawnHiddenTriangles = the back
 # object's drawn triangles in the Density and Triangles modes (none Off), the probe's distinctClustersVisible 0 for the back
-# object (its clusters share mesh-wide ids with the front one's visible ones) and in (0, drawn] for the front one. RED at
-# the base: the density table held level-0 / visible, and neither the hidden figure nor the visible clusters existed.
+# object (its clusters share mesh-wide ids with the front one's visible ones) and in (0, drawn] for the front one and for a
+# second baked mesh (which moves the sphere's DAG past cluster 0: the two bit arithmetics must agree); and a slot-capacity
+# grow under the Triangles view (the count buffer re-created under its outstanding read) neither crashes nor loses the
+# figure past the frames in flight. RED at the base: the density table held level-0 / visible, and neither the hidden
+# figure nor the visible clusters existed.
 add_executable(test_atom_instruments test_atom_instruments.cpp cluster_fixtures.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_source_files_properties(test_atom_instruments.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
@@ -197,7 +200,7 @@ target_compile_definitions(test_atom_instruments PRIVATE
     CLUSTER_TEST_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
 target_link_libraries(test_atom_instruments PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_atom_instruments JahshakaEngineMedia)
-jah_gpu_row(atom.instruments_honest CLASS engine FRAMES 32 COMMAND test_atom_instruments
+jah_gpu_row(atom.instruments_honest CLASS engine FRAMES 41 COMMAND test_atom_instruments
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.instruments_honest PROPERTIES TIMEOUT 60 LABELS "engine")
 
