@@ -2580,6 +2580,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0, repruneGroups = 0,
         keptEarlier = 0, handOnRecomputed = 0, lockedLostRecomputed = 0, lockedLostPast = 0;
     float lockedLostMax = 0.0f;
+    long long handOnQueries = 0;
+    double recomputeMs = 0.0;
     double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
     std::vector<int> lostByDepth;   // locked positions lost, per depth (the post-sprint audit's numbers)
     QElapsedTimer wall; wall.start();
@@ -2609,6 +2611,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         keptEarlier += st.groupsKeptEarlier; handOnRecomputed += st.handOnRecomputed;
         lockedLostRecomputed += st.lockedLostPositions; lockedLostPast += st.lockedLostPastError;
         lockedLostMax = std::max(lockedLostMax, st.lockedLostMaxRatio);
+        handOnQueries += st.handOnQueries; recomputeMs += st.recomputeMs;
         // level-0 components by welded position
         const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
         std::vector<unsigned> comp;   // per vertex
@@ -2749,6 +2752,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
                 double(lockedLostMax), lockedLostRecomputed, lockedLostPast);
     std::printf("  DAG build wall %lld ms (clodBuild %.0f, of which the verify %.0f over %d retries; measure %.0f; summed)\n",
                 qint64(wall.elapsed()), buildMs, verifyMs, retries, measureMs);
+    std::printf("  the verify's hand-on: %lld closest queries; the winners' recomputed hand-ons %.0f ms (%.1f %% of the verify)\n",
+                handOnQueries, recomputeMs, verifyMs > 0.0 ? 100.0 * recomputeMs / verifyMs : 0.0);
     return 0;
 }
 
