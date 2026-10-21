@@ -2438,6 +2438,25 @@ static int dagReachesRoot()
         std::printf("   area per level (of level 0's):");
         for (const auto &kv : area) std::printf(" d%d %.2f", kv.first, area.at(0) > 0.0 ? kv.second / area.at(0) : 0.0);
         std::printf("\n");
+        // per depth (ATOM-7): the groups, their input triangles, the largest stored error, how the prune and the verify went
+        {
+            struct D { int groups = 0, pruned = 0, repruned = 0, unconverged = 0; unsigned long long tris = 0; float err = 0.0f; };
+            std::map<int, D> per;
+            for (const auto &c : dag.clusters) per[int(dag.groups.at(c.group).depth)].tris += c.triangleCount;
+            for (int g = 0; g < dag.groups.size(); ++g) {
+                D &d = per[int(dag.groups.at(g).depth)];
+                ++d.groups;
+                if (dag.groups.at(g).error != FLT_MAX) d.err = std::max(d.err, dag.groups.at(g).error);
+                const quint32 f = g < st.groupSimplifyFlags.size() ? st.groupSimplifyFlags.at(g) : 0u;
+                if (f & 2u) ++d.pruned;
+                if (f & 4u) ++d.repruned;
+                if (g < st.groupVerifyOutcome.size() && st.groupVerifyOutcome.at(g) == 2) ++d.unconverged;
+            }
+            for (const auto &kv : per)
+                std::printf("   d%d: %d groups, %llu input tris, errMax %.4g, pruned %d, clause-2 %d, unconverged %d\n",
+                            kv.first, kv.second.groups, kv.second.tris, double(kv.second.err), kv.second.pruned,
+                            kv.second.repruned, kv.second.unconverged);
+        }
         char msg[200];
         std::snprintf(msg, sizeof(msg), "%s: the coarsest cut is empty or one cluster (%llu <= 128)", cs.name, coarsest);
         CHECK_LOUD(coarsest <= 128ull, msg);
@@ -2486,7 +2505,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
               "lockDropped\terrMax\terrMed\testMax\tislandsDropped\tdropExtMax\tareaFrac\tmaterial\tunconverged\terrMaxOutcome\n");
     unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
     int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, madeTerminal = 0, retries = 0,
-        unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0, repruneGroups = 0;
+        unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0, repruneGroups = 0,
+        keptEarlier = 0, handOnRecomputed = 0;
     double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
     std::vector<int> lostByDepth;   // locked positions lost, per depth (the post-sprint audit's numbers)
     QElapsedTimer wall; wall.start();
@@ -2513,6 +2533,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
         }
         unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
         prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked; repruneGroups += st.repruneGroups;
+        keptEarlier += st.groupsKeptEarlier; handOnRecomputed += st.handOnRecomputed;
         // level-0 components by welded position
         const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
         std::vector<unsigned> comp;   // per vertex
@@ -2642,8 +2663,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, b
                 endAbove128, lateCoarsest, smallInLate);
     std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; lock retries %d, "
                 "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
-                "relocked %d; re-pruned (clause 2) groups %d\n", stuck, madeTerminal, retries, unconverged,
-                lockDroppedGroups, emptyGroups, prunedGroups, prunedRelocked, repruneGroups);
+                "relocked %d; re-pruned (clause 2) groups %d; kept an earlier attempt %d (hand-on recomputed %d)\n",
+                stuck, madeTerminal, retries, unconverged, lockDroppedGroups, emptyGroups, prunedGroups, prunedRelocked,
+                repruneGroups, keptEarlier, handOnRecomputed);
     std::printf("  locked positions lost per depth:");
     for (size_t d = 0; d < lostByDepth.size(); ++d) std::printf(" d%zu %d", d, lostByDepth[d]);
     std::printf("\n");
