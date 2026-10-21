@@ -8,6 +8,8 @@
 # Document-side by construction: no engine, no display.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
+    # the cut curve's STOCK arm: upstream clusterlod unpatched, renamed (ATOM-UPGRADE stage 0; a reference, never a product path)
+    cutcurve_stock.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/primitiveseed.cpp
@@ -51,7 +53,9 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/engine/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # meshoptimizer.h for the stock arm (its entry points are libIrisGL's exported ones)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/meshoptimizer/src)
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     # the Stanford dragon tests/atom extracts at configure time (atom.lod_bound_bar (archived: archive/tests/atom))
@@ -180,3 +184,13 @@ set_tests_properties(bake.locked_positions_kept PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.locked_positions_kept)
 jah_ship_row(bake.locked_positions_kept)   # THE SHIP SET: the border-crack law's end-to-end row (ATOM-7; the lead's promotion at the merge)
+
+# bake.cut_curve (ATOM-UPGRADE stage 0; the builder's row): THE CUT CURVE IS MONOTONE AND ENDS EMPTY. The kit-bashed box
+# set (30 overlapping boxes, 360 triangles, hard UV seams) bakes to a DAG whose cut — the runtime's rule over the stored
+# errors, `test_mesh_bake --cut-curve`'s count — never grows as E grows and, once every finite group is affordable,
+# draws nothing (the empty top: stage 5's law). Red at the base. A CPU row: FRAMES 0.
+add_test(NAME bake.cut_curve COMMAND $<TARGET_FILE:test_mesh_bake> --cut-curve-law
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.cut_curve PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.cut_curve)
