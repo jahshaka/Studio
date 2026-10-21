@@ -1,7 +1,7 @@
 // atom.cluster_occlusion — THE ID PASS CULLS HIDDEN CLUSTERS, NOT ONLY HIDDEN OBJECTS (ATOM-8 stage 2; SPECS/ATOM_8_SPEC.md).
 //
 // Bistro's two measured classes as one fixture: a FRONT facade (an Atom wall, 20 x 10 m, 20 m in front of the eye at
-// street height) hides a BACK facade (24 x 13 m at 30 m) whose box reaches the SKY above the front one's roofline and
+// street height) hides a BACK facade (24 x 13.8 m at 30 m) whose box reaches the SKY above the front one's roofline and
 // whose box OVERLAPS the front one's in depth (a balcony quad far to the side, outside the view, 12 m from the eye) -
 // so the per-OBJECT test can never reject it. Both facades are flat-DAG meshes cut into 8 x 8-quad tiles (one
 // 128-triangle cluster a tile, each with its own box). Three worlds in lockstep, built alike (every slot and cluster
@@ -109,7 +109,11 @@ static void buildWorld(World &w)
     const MeshId frontMesh = s->createMesh(facade(20.0f, 10.0f, 64, 32, false, 0.0f, 0.0f));
     // THE BACK FACADE: taller than the front one (its rectangle reaches the sky over the front roofline), its balcony
     // quad 40 m to the side and 18 m in front of it (its box's nearest point in front of the front wall).
-    const MeshId backMesh = s->createMesh(facade(24.0f, 13.0f, 64, 32, true, 40.0f, 18.0f));
+    // Its roofline 13.8 m: 0.403 of the depth above the eye against the front one's 0.415 - hidden, ~8 px below the
+    // front roofline, so the top row's boxes read a sky texel at the cluster footprint's mip (the sky class at rest:
+    // the stage 2 read's (a), no longer vacuous). Not 16 m: past 1.7 + 30 x 0.415 = 14.15 m the back facade's top
+    // shows above the front one, and the class asked for is a HIDDEN cluster kept by the sky under its box.
+    const MeshId backMesh = s->createMesh(facade(24.0f, 13.8f, 64, 32, true, 40.0f, 18.0f));
     w.front = s->createNode();
     s->setNodeTransform(w.front, Vec3(0.0f, 0.0f, -20.0f), Quat(), Vec3(1.0f, 1.0f, 1.0f));
     s->attachMesh(w.front, frontMesh, fm);
@@ -247,9 +251,9 @@ int main()
                   "the fixture: the front facade draws (%u px)", a.frontPixels);
         CHECK_MSG(a.valid && a.backPixels == 0u, "the fixture: the back facade shows no pixel (%u)", a.backPixels);
         CHECK_MSG(a.valid && st.cutRejected > 0u, "(a) the first cut rejects back clusters (%u)", st.cutRejected);
-        CHECK_MSG(a.valid && a.backFirst == a.backSky,
-                  "(a) the first list draws of the back facade only its sky-class clusters (%llu of which sky %llu)",
-                  a.backFirst, a.backSky);
+        CHECK_MSG(a.valid && a.backSky > 0u && a.backFirst == a.backSky,
+                  "(a) the first list draws of the back facade only its sky-class clusters - the roofline row, some - "
+                  "(%llu of which sky %llu)", a.backFirst, a.backSky);
     }
 
     // ---- (b) (c) (d) THE REVEAL CYCLE ----
