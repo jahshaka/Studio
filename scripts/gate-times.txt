@@ -62,6 +62,7 @@ gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
+gi.voxel_two_sided 3.60  solo 2026-10-21 (PHOTON-5 stage 2)
 gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 gpu.cutout_soak.tornado 36.65  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
