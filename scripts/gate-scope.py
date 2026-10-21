@@ -1348,7 +1348,7 @@ class Selection:
             return
         m_patch = re.match(r"^(irisgl/thirdparty/([^/]+)-patches)/.+\.patch$", p)
         if m_patch:
-            # A VENDORED COMPONENT'S PATCH STACK (assimp-patches/, meshoptimizer-clusterlod-patches/),
+            # A VENDORED COMPONENT'S PATCH STACK (assimp-patches/, bullet-patches/),
             # applied at configure: it reaches what the files it patches reach — the vendored file
             # itself, or its staged copy (<build>/…/vendor-patched/<component>/…), whichever the
             # build graph compiles

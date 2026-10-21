@@ -53,11 +53,9 @@ iris::MeshPtr bar(float length, float width, int segments, int around);
 /// case where every coarser level costs real error everywhere.
 iris::MeshPtr roundBar(float length, float radius, int segments, int around, float bump = 0.0f);
 
-/// Bake `mesh` (chain + DAG, `variant`) and hand it across. False when the
-/// hand-off produced nothing.
-bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name,
-          iris::MeshBake::ClusterDagVariant variant = iris::MeshBake::ClusterDagVariant::Shipped,
-          bool wantRegions = false);
+/// Bake `mesh` (chain + DAG) and hand it across. False when the hand-off produced nothing. `wantRegions`: the
+/// DAG's level-0 provenance per cluster (f.stats.clusterRegions).
+bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name, bool wantRegions = false);
 
 /// The shipped content this lane measures: the sixteen primitives (the ones the
 /// bake gives a DAG — two leaves of triangles or more) + the two shipped

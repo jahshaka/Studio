@@ -182,8 +182,7 @@ iris::MeshPtr roundBar(float length, float radius, int segments, int around, flo
     return meshFromArrays(pos, nrm, uv, idx);
 }
 
-bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name,
-          iris::MeshBake::ClusterDagVariant variant, bool wantRegions)
+bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name, bool wantRegions)
 {
     f = Fixture();
     f.name = name;
@@ -193,8 +192,9 @@ bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name,
     // it here. The DAG is always rebuilt: the stats (and the provenance, when
     // asked) are what the suites read, and the build is deterministic.
     if (mesh->lodIndices.isEmpty()) iris::MeshBake::buildLodChain(mesh);
-    f.stats.wantRegions = wantRegions;
-    iris::MeshBake::buildClusterDag(mesh, &f.stats, variant);
+    iris::MeshBake::ClusterDagOptions options;
+    options.wantRegions = wantRegions;
+    iris::MeshBake::buildClusterDag(mesh, &f.stats, options);
     if (!SceneMirror::toMeshData(mesh.data(), f.data)) return false;
     f.triangles = f.data.indices.size() / 3;
     float lo[3] = { 1e30f, 1e30f, 1e30f }, hi[3] = { -1e30f, -1e30f, -1e30f };

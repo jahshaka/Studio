@@ -6,7 +6,7 @@
 #                                  vendored code pinned from elsewhere: assimp, bullet3, zip, the Ogre fork,
 #                                  meshoptimizer), its git-IGNORED build output (the Ogre install,
 #                                  thirdparty/ogre-next-install: build-ogre.sh's product, in no commit) and .git.
-#                                  The in-tree vendored directories (meshoptimizer-clusterlod, the *-patches
+#                                  The in-tree vendored directories (the *-patches
 #                                  stacks) ARE walked: they are files of this tree, and a copy could land there.
 #   submodule_paths <repo-dir>     prints <repo-dir>/<path> for each .gitmodules entry.
 #   ignored_paths <repo-dir>       prints the git-ignored files and directories of <repo-dir> (build output).

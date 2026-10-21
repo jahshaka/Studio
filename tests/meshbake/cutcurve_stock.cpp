@@ -1,11 +1,12 @@
 // THE CUT CURVE'S STOCK ARM (ATOM-UPGRADE stage 0; `test_mesh_bake --cut-curve <model> --arm stock`).
 //
-// A REFERENCE ARM, NEVER A PRODUCT PATH: the vendored clusterlod.h as upstream ships it (no patch of
-// irisgl/thirdparty/meshoptimizer-clusterlod-patches/ applied), positions only, the quadric error it stores
+// A REFERENCE ARM, NEVER A PRODUCT PATH: upstream's clusterlod.h as meshoptimizer v1.2 ships it (its demo/ copy,
+// byte-identical to the copy the old bake vendored; ATOM-2 deleted that copy and its patches), positions only, the
+// quadric error it stores
 // (upstream's own monotone merge), no measurement — the bound on what the simplifier alone would give
 // (ATOM_PIPELINE_AUDIT_2026-10-21_A_BAKE.md §2c, the STOCK row). Every public name is renamed so this TU cannot
-// interpose on the patched copy libIrisGL compiles: the two clodBuild's never meet. meshoptimizer's own
-// entry points are libIrisGL's (one simplifier, exported from the shared library).
+// collide with anything else in the binary. Its meshoptimizer entry points come from the meshoptimizer target the
+// test links (tests/meshbake/CMakeLists.txt): the clusterizer and the partitioner are no longer in libIrisGL.
 #define clodConfig stock_clodConfig
 #define clodMesh stock_clodMesh
 #define clodBounds stock_clodBounds
@@ -23,7 +24,7 @@
 #include <assert.h>
 #include "meshoptimizer.h"
 #define CLUSTERLOD_IMPLEMENTATION
-#include "irisgl/thirdparty/meshoptimizer-clusterlod/clusterlod.h"
+#include "irisgl/thirdparty/meshoptimizer/demo/clusterlod.h"   // upstream as shipped: meshoptimizer v1.2's demo copy
 
 #include "cutcurve_stock.h"
 

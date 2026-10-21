@@ -343,7 +343,7 @@ static void productCutParity(Engine *e, View *view)
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
-        if (!clusterfix::bake(f, m.second, m.first, iris::MeshBake::ClusterDagVariant::Shipped, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
+        if (!clusterfix::bake(f, m.second, m.first, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
         if (emptyTop(m.first)) makeTopEmpty(f);
         // THE GROUPS WITH NO OUTPUT CLUSTERS (the empty groups): where one is affordable its members' regions
         // are covered by nothing — the object vanishes there, which is the empty group's meaning.

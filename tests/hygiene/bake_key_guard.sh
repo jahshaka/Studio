@@ -87,7 +87,10 @@ if [ -z "$hashed" ]; then
     echo "      the producer half of the bake key is gone or was renamed."
     failures=$((failures + 1))
 else
-    for must in import/meshbake.cpp import/meshbake.h; do
+    # the serializer, its declarations and the cluster DAG's builder (ATOM-2: its own TUs, import/atomdag/)
+    for must in import/meshbake.cpp import/meshbake.h import/bakeshared.h import/atomdag/build.cpp import/atomdag/measure.cpp \
+                import/atomdag/ladder.cpp import/atomdag/simplify.cpp import/atomdag/groups.cpp import/atomdag/leaves.cpp \
+                import/atomdag/adjacency.cpp; do
         if ! printf '%s\n' "$hashed" | grep -qx "$must"; then
             echo "FAIL: $must is not in the producer hash. The serializer must always be"
             echo "      hashed — nothing else can notice that the written bytes changed."

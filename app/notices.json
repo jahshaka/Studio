@@ -63,15 +63,6 @@
       "file": "LICENSE.md"
     },
     {
-      "id": "meshoptimizer-clusterlod",
-      "name": "meshoptimizer (cluster LOD branch)",
-      "role": "The cluster-level-of-detail work from the same project, vendored beside it for the Atom program.",
-      "homepage": "https://github.com/zeux/meshoptimizer",
-      "licence": "MIT",
-      "path": "irisgl/thirdparty/meshoptimizer-clusterlod",
-      "file": "LICENSE.md"
-    },
-    {
       "id": "zip",
       "name": "zip",
       "role": "Reads and writes the .zip containers projects are exported and imported as.",

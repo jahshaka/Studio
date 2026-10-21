@@ -1,0 +1,428 @@
+// ATOM-2 part A's rows and fixtures (SPECS/ATOM_2_SPEC.md stage 1). Included by test_mesh_bake.cpp after its CHECK
+// macros, its dagroot:: fixtures and the cutcurve:: helpers; each row is a verb (`--atom2 <row>`), CPU only.
+//
+//   atom2.adjacency_by_position  two coincident unindexed vertices are one adjacency node; a flipped duplicate is not
+//   atom2.borders_move           a group's lock set is exactly its recomputed external positions: a level-k border
+//                                both sides of which share a group at k+1 is NOT locked there
+//   atom2.ladder_never_forced    every reduction's measured step is within 2x its children's error; a group that
+//                                cannot reduce is carried and the chain still ends
+//   atom2.ends_empty             a 100-triangle prop is one leaf + an empty top, vanishing past its extent; every
+//                                fixture's root is non-empty before the top and the top cut draws nothing
+//   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
+//   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
+
+#include "import/atomdag/adjacency.h"
+
+namespace atom2
+{
+
+using iris::MeshClusterDag;
+
+/// A closed ring prop: 10 segments around, 5 around the tube = 100 triangles; the last ring and the last segment
+/// wrap BY INDEX (ENGINE.md "PROCEDURAL SEAMS DO NOT WELD"). Smooth normals, a UV per vertex.
+inline iris::MeshPtr prop100()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    const int segs = 10, sides = 5;
+    const float R = 0.5f, r = 0.12f, pi = 3.14159265358979f;
+    for (int s = 0; s < segs; ++s)
+        for (int t = 0; t < sides; ++t) {
+            const float a = 2.0f * pi * float(s) / float(segs), b = 2.0f * pi * float(t) / float(sides);
+            const float cx = std::cos(a), cz = std::sin(a);
+            const float nx = std::cos(b) * cx, ny = std::sin(b), nz = std::cos(b) * cz;
+            p.insert(p.end(), { (R + r * std::cos(b)) * cx, r * std::sin(b), (R + r * std::cos(b)) * cz });
+            n.insert(n.end(), { nx, ny, nz });
+            uv.insert(uv.end(), { float(s) / float(segs), float(t) / float(sides) });
+        }
+    const auto id = [&](int s, int t) { return unsigned((s % segs) * sides + (t % sides)); };
+    for (int s = 0; s < segs; ++s)
+        for (int t = 0; t < sides; ++t)
+            idx.insert(idx.end(), { id(s, t), id(s + 1, t), id(s + 1, t + 1), id(s, t), id(s + 1, t + 1), id(s, t + 1) });
+    return dagroot::meshFromArrays(p, n, uv, idx);
+}
+
+/// The Bistro-units kit-bashed box set (copied from ATOM-UPGRADE's WIP fa369aa45, tests/meshbake/upgrade_rows.h): 30
+/// overlapping boxes, 62.5 units a metre, every face an `n` x `n` grid of quads with its own normal and its own chart
+/// in [0.05, 0.95] (a hard seam on every box edge). n = 1: 360 triangles; n = 4: 5,760.
+inline iris::MeshPtr bistroBoxSet(int n)
+{
+    std::vector<float> p, nrm, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 3030u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    const int faces[6][3] = { { 0, 0, 1 }, { 0, 0, -1 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
+    const float unit = 62.5f;
+    for (int b = 0; b < 30; ++b) {
+        const float c[3] = { unit * 1.5f * rnd(), unit * 1.5f * rnd(), unit * 1.5f * rnd() };
+        const float h[3] = { unit * (0.1f + 0.4f * rnd()), unit * (0.1f + 0.4f * rnd()), unit * (0.1f + 0.4f * rnd()) };
+        for (int f = 0; f < 6; ++f) {
+            const int *fa = faces[f];
+            const int axis = fa[0] ? 0 : (fa[1] ? 1 : 2);
+            const int a = (axis + 1) % 3, bb = (axis + 2) % 3;
+            const unsigned base = unsigned(p.size() / 3);
+            for (int j = 0; j <= n; ++j)
+                for (int i = 0; i <= n; ++i) {
+                    const float s = 2.0f * float(i) / float(n) - 1.0f, t = 2.0f * float(j) / float(n) - 1.0f;
+                    float v[3] = { c[0], c[1], c[2] };
+                    v[axis] += h[axis] * float(fa[axis]);
+                    v[a] += h[a] * s;
+                    v[bb] += h[bb] * t;
+                    p.insert(p.end(), { v[0], v[1], v[2] });
+                    nrm.insert(nrm.end(), { float(fa[0]), float(fa[1]), float(fa[2]) });
+                    uv.insert(uv.end(), { 0.5f + 0.45f * s, 0.5f + 0.45f * t });
+                }
+            for (int j = 0; j < n; ++j)
+                for (int i = 0; i < n; ++i) {
+                    const unsigned q = base + unsigned(j * (n + 1) + i);
+                    idx.insert(idx.end(), { q, q + 1, q + unsigned(n) + 2, q, q + unsigned(n) + 2, q + unsigned(n) + 1 });
+                }
+        }
+    }
+    return dagroot::meshFromArrays(p, nrm, uv, idx);
+}
+
+/// A CURVED SHELL (copied from fa369aa45): a quarter sphere of `radius`, a 64 x 48 grid, smooth normals; with
+/// `chartsU` x `chartsV` > 1 an ATLAS (a hard UV seam along every chart border, positions welded across it). 6,144 tris.
+inline iris::MeshPtr curvedShell(float radius, int chartsU, int chartsV)
+{
+    std::vector<float> p, nrm, uv;
+    std::vector<unsigned> idx;
+    const int nu = 64, nv = 48, cw = nu / chartsU, ch = nv / chartsV;
+    const float pi = 3.14159265358979f;
+    std::map<std::array<int, 4>, unsigned> ids;
+    const auto vertex = [&](int i, int j, int ci, int cj) {
+        const std::array<int, 4> key = { i, j, ci, cj };
+        const auto it = ids.find(key);
+        if (it != ids.end()) return it->second;
+        const float lon = (float(i) / float(nu) - 0.5f) * 0.5f * pi, lat = (float(j) / float(nv) - 0.5f) * (80.0f / 180.0f) * pi;
+        const float x = std::cos(lat) * std::cos(lon), y = std::sin(lat), z = std::cos(lat) * std::sin(lon);
+        p.insert(p.end(), { radius * x, radius * y, radius * z });
+        nrm.insert(nrm.end(), { x, y, z });
+        if (chartsU * chartsV > 1)
+            uv.insert(uv.end(), { 0.05f + 0.9f * float(i - ci * cw) / float(cw), 0.05f + 0.9f * float(j - cj * ch) / float(ch) });
+        else
+            uv.insert(uv.end(), { float(i) / float(nu), float(j) / float(nv) });
+        const unsigned id = unsigned(p.size() / 3 - 1);
+        ids.emplace(key, id);
+        return id;
+    };
+    for (int j = 0; j < nv; ++j)
+        for (int i = 0; i < nu; ++i) {
+            const int ci = i / cw, cj = j / ch;
+            const unsigned a = vertex(i, j, ci, cj), b = vertex(i + 1, j, ci, cj), c = vertex(i + 1, j + 1, ci, cj),
+                           d = vertex(i, j + 1, ci, cj);
+            idx.insert(idx.end(), { a, b, c, a, c, d });
+        }
+    return dagroot::meshFromArrays(p, nrm, uv, idx);
+}
+
+struct Subject { const char *name; iris::MeshPtr mesh; };
+
+/// The stage's fixture set: the kit-bashed box set (Bistro units, n = 4), the curved shell with a 4 x 3 atlas (10 m in
+/// Bistro units), the card soup, the kit-bash, the rough sheet and the 100-triangle prop.
+inline std::vector<Subject> fixtures()
+{
+    return { { "box set (30 boxes, 4x4 faces, Bistro units)", bistroBoxSet(4) },
+             { "curved shell (10 m, 4x3 atlas)", curvedShell(625.0f, 4, 3) },
+             { "card soup (2,000 cards)", dagroot::cardSoup() },
+             { "kit-bash (200 closed boxes)", dagroot::kitBash() },
+             { "rough sheet (96 x 96, UV charts)", dagroot::roughSheet() },
+             { "prop (a 100-triangle ring)", prop100() } };
+}
+
+/// The DAG's own reading: per cluster its birth level and the level its group forms at.
+struct Reading
+{
+    std::vector<int> born, dies;
+    int maxDepth = 0;
+    explicit Reading(const MeshClusterDag &dag)
+    {
+        for (const auto &g : dag.groups) maxDepth = std::max(maxDepth, int(g.depth));
+        for (const auto &c : dag.clusters) {
+            born.push_back(c.refined < 0 ? 0 : int(dag.groups.at(c.refined).depth) + 1);
+            dies.push_back(int(dag.groups.at(c.group).depth));
+        }
+    }
+};
+
+/// Weld ids by exact position (±0 folded) — the test's own, not the builder's.
+inline std::vector<unsigned> weldOf(const iris::MeshPtr &mesh)
+{
+    size_t nv = 0; int pc = 3;
+    const float *p = cutcurve::positionsOf(mesh, &nv, &pc);
+    std::map<std::array<float, 3>, unsigned> first;
+    std::vector<unsigned> w(nv);
+    for (size_t v = 0; v < nv; ++v) {
+        std::array<float, 3> k = { p[v * size_t(pc)], p[v * size_t(pc) + 1], p[v * size_t(pc) + 2] };
+        for (float &f : k) if (f == 0.0f) f = 0.0f;
+        w[v] = first.emplace(k, unsigned(v)).first->second;
+    }
+    return w;
+}
+
+/// The EXTERNAL positions of DAG group `g`, recomputed from the DAG: the endpoints of its members' edges whose twin
+/// lies in a cluster of the level's pool (born at or before the level, not yet merged) outside the group.
+inline std::vector<unsigned> externalOf(const MeshClusterDag &dag, const Reading &rd, const std::vector<unsigned> &weld,
+                                        int g, std::vector<int> *membersOut = nullptr)
+{
+    const int L = dag.groups.at(g).depth;
+    std::map<std::pair<unsigned, unsigned>, std::vector<int>> edgeOwners;   // directed edge -> clusters holding it
+    std::vector<int> members;
+    for (int c = 0; c < dag.clusters.size(); ++c) {
+        if (rd.born[size_t(c)] > L || rd.dies[size_t(c)] < L) continue;
+        const auto &C = dag.clusters.at(c);
+        if (C.group == g) members.push_back(c);
+        for (int t = 0; t < int(C.triangleCount); ++t)
+            for (int k = 0; k < 3; ++k) {
+                const unsigned a = weld[dag.vertexOf(C, t, k)], b = weld[dag.vertexOf(C, t, (k + 1) % 3)];
+                if (a != b) edgeOwners[{ a, b }].push_back(c);
+            }
+    }
+    std::vector<unsigned> ext;
+    for (int c : members) {
+        const auto &C = dag.clusters.at(c);
+        for (int t = 0; t < int(C.triangleCount); ++t)
+            for (int k = 0; k < 3; ++k) {
+                const unsigned a = weld[dag.vertexOf(C, t, k)], b = weld[dag.vertexOf(C, t, (k + 1) % 3)];
+                const auto it = edgeOwners.find({ b, a });
+                if (it == edgeOwners.end()) continue;
+                for (int o : it->second)
+                    if (dag.clusters.at(o).group != g) { ext.push_back(a); ext.push_back(b); break; }
+            }
+    }
+    std::sort(ext.begin(), ext.end());
+    ext.erase(std::unique(ext.begin(), ext.end()), ext.end());
+    if (membersOut) *membersOut = members;
+    return ext;
+}
+
+inline int finish()
+{
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
+inline int adjacencyByPosition()
+{
+    using namespace iris::atomdag;
+    // A (0 1 2), B shares A's edge 1-2 through its own coincident vertices 3 (= 2's position) and 4 (= 1's), reversed
+    // (a twin); C repeats A's edge 1-2 in the SAME direction (a flipped duplicate: never a twin of A); D is a third
+    // triangle on the reversed edge (an edge shared by more than two keeps every link).
+    const std::vector<float> pos = { 0, 0, 0,  1, 0, 0,  0, 1, 0,     // 0 1 2
+                                     0, 1, 0,  1, 0, 0,  1, 1, 0,     // 3 (=2) 4 (=1) 5
+                                     1, 0, 0,  0, 1, 0, -1, 1, 1,     // 6 (=1) 7 (=2) 8
+                                     0, 1, 0,  1, 0, 0,  1, 1, -1 };  // 9 (=2) 10 (=1) 11
+    const std::vector<unsigned> tris = { 0, 1, 2,  3, 4, 5,  6, 7, 8,  9, 10, 11 };
+    MeshView view;
+    view.positions = pos.data();
+    view.nv = pos.size() / 3;
+    const std::vector<unsigned> weld = weldByPosition(view);
+    CHECK_LOUD(weld[3] == weld[2] && weld[4] == weld[1] && weld[6] == weld[1] && weld[7] == weld[2],
+               "coincident unindexed vertices are one adjacency node (one weld id)");
+    CHECK_LOUD(weld[5] != weld[8], "distinct positions stay distinct");
+    EdgeTable table;
+    table.build(tris.data(), tris.size() / 3, weld);
+    std::set<unsigned> twinsOfA;
+    table.forTwins(weld[1], weld[2], [&](unsigned t, unsigned) { twinsOfA.insert(t); });
+    std::printf("   A's edge 1->2 is twinned by triangles:");
+    for (unsigned t : twinsOfA) std::printf(" %u", t);
+    std::printf("\n");
+    CHECK_LOUD(twinsOfA.count(1u) == 1, "B (the reversed edge through coincident vertices) is A's twin");
+    CHECK_LOUD(twinsOfA.count(3u) == 1, "D (a third triangle on the reversed edge) keeps its link");
+    CHECK_LOUD(twinsOfA.count(2u) == 0, "C (the same direction: a flipped duplicate) is not linked");
+    CHECK_LOUD(twinsOfA.count(0u) == 0, "a triangle is never its own twin");
+    // A seam inside a real mesh: the curved shell's 4 x 3 atlas splits vertices along every chart border; its leaves
+    // must still be built across the seams (a cluster holding triangles of two charts exists).
+    const iris::MeshPtr shell = curvedShell(625.0f, 4, 3);
+    iris::MeshBake::buildClusterDag(shell);
+    const MeshClusterDag &dag = shell->clusterDag;
+    const std::vector<unsigned> w = weldOf(shell);
+    int crossing = 0;
+    for (const auto &c : dag.clusters) {
+        if (c.refined >= 0) continue;
+        // two vertex ids at ONE position inside one leaf: the leaf spans a UV seam (the atlas splits ids, not positions)
+        std::set<unsigned> ids, welds;
+        for (int t = 0; t < int(c.triangleCount); ++t) for (int k = 0; k < 3; ++k) ids.insert(dag.vertexOf(c, t, k));
+        for (unsigned v : ids) welds.insert(w[v]);
+        if (welds.size() < ids.size()) ++crossing;   // two ids at one position inside one leaf: it spans a seam
+    }
+    std::printf("   curved shell (4x3 atlas): %d leaves, %d of them span a UV seam\n",
+                int(std::count_if(dag.clusters.begin(), dag.clusters.end(), [](const auto &c) { return c.refined < 0; })),
+                crossing);
+    CHECK_LOUD(crossing > 0, "leaves are built across UV seams (adjacency by position)");
+    return finish();
+}
+
+inline int bordersMove()
+{
+    int mergedBorders = 0;
+    for (const Subject &s : fixtures()) {
+        iris::MeshBake::ClusterDagStats st;
+        iris::MeshBake::ClusterDagOptions opt;
+        opt.wantGroups = opt.wantLocks = true;
+        iris::MeshBake::buildClusterDag(s.mesh, &st, opt);
+        const MeshClusterDag &dag = s.mesh->clusterDag;
+        if (dag.isEmpty()) { CHECK_LOUD(false, "the fixture has a DAG"); continue; }
+        const Reading rd(dag);
+        const std::vector<unsigned> weld = weldOf(s.mesh);
+        int compared = 0, mismatched = 0, merged = 0;
+        for (const iris::atomdag::GroupRecord &r : st.records) {
+            if (r.dagGroup < 0 || r.kind == 2) continue;
+            std::vector<int> members;
+            const std::vector<unsigned> ext = externalOf(dag, rd, weld, r.dagGroup, &members);
+            // the builder's lock set uses ITS weld (the first vertex at a position): translate both to positions
+            std::set<unsigned> mine(ext.begin(), ext.end()), theirs;
+            for (unsigned w : r.external) theirs.insert(weld[w]);
+            ++compared;
+            if (mine != theirs) ++mismatched;
+            // a border of the level below inside this group: two members produced by DIFFERENT groups sharing an edge
+            std::set<int> producers;
+            for (int c : members) producers.insert(dag.clusters.at(c).refined);
+            if (producers.size() > 1 && *producers.begin() >= 0) ++merged;
+        }
+        mergedBorders += merged;
+        std::printf("== %s: %d groups compared, %d lock sets differ from the recomputed external set; %d groups merge "
+                    "clusters of different producers (an old border now interior)\n", s.name, compared, mismatched, merged);
+        char msg[240];
+        std::snprintf(msg, sizeof(msg), "%s: every group locks exactly its recomputed external positions (%d differ)",
+                      s.name, mismatched);
+        CHECK_LOUD(mismatched == 0, msg);
+    }
+    CHECK_LOUD(mergedBorders > 0, "a level-k border falls inside a level-k+1 group somewhere (and is not locked there)");
+    return finish();
+}
+
+inline int ladderNeverForced()
+{
+    int carriedAll = 0;
+    for (const Subject &s : fixtures()) {
+        iris::MeshBake::ClusterDagStats st;
+        iris::MeshBake::ClusterDagOptions opt;
+        opt.wantGroups = true;
+        iris::MeshBake::buildClusterDag(s.mesh, &st, opt);
+        const MeshClusterDag &dag = s.mesh->clusterDag;
+        int over = 0, reductions = 0, carried = 0;
+        float worst = 0.0f;
+        for (const iris::atomdag::GroupRecord &r : st.records) {
+            if (r.kind == 1) { ++carried; continue; }
+            if (r.kind != 0) continue;
+            ++reductions;
+            const float law = std::max(2.0f * r.childError, r.depth0Estimate >= 0.0f ? 2.0f * r.depth0Estimate : 0.0f);
+            const float allowed = std::max(law, r.budget);   // the budget is the law (or the arithmetic floor)
+            if (r.childError > 0.0f) worst = std::max(worst, r.step / r.childError);
+            if (r.step > allowed * (1.0f + 1e-6f) || r.budget > std::max(law, 1e-30f) * (1.0f + 1e-6f) + 1e-6f * allowed) ++over;
+        }
+        carriedAll += carried;
+        const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
+        std::printf("== %s: %d reductions, %d carried, %d retries, %d levels (%d all carried); worst step / children "
+                    "%.3f; top cut %lld\n", s.name, reductions, carried, st.retries, st.levels, st.levelsAllCarried,
+                    double(worst), top);
+        char msg[240];
+        std::snprintf(msg, sizeof(msg), "%s: every reduction's step within 2x its children's error (%d over)", s.name, over);
+        CHECK_LOUD(over == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the chain ends (the top cut draws nothing: %lld)", s.name, top);
+        CHECK_LOUD(!dag.isEmpty() && top == 0, msg);
+    }
+    std::printf("   carried groups over the set: %d\n", carriedAll);
+    CHECK_LOUD(carriedAll > 0, "some group could not reduce within its budget and was carried (the chains still ended)");
+    return finish();
+}
+
+inline int endsEmpty()
+{
+    const iris::MeshPtr prop = prop100();
+    iris::MeshBake::ClusterDagStats st;
+    iris::MeshBake::buildClusterDag(prop, &st);
+    const MeshClusterDag &dag = prop->clusterDag;
+    const cutcurve::Dag d = cutcurve::fromMesh(dag);
+    const float topError = dag.groups.isEmpty() ? 0.0f : dag.groups.last().error;
+    std::printf("== prop: %d clusters, %d groups, top error %.4g (the ring's diagonal %.4g); cut below it %lld, above "
+                "it %lld\n", dag.clusters.size(), dag.groups.size(), double(topError), double(st.rootError),
+                cutcurve::cutAt(d, topError * 0.999f), cutcurve::cutAt(d, topError * 1.001f));
+    CHECK_LOUD(dag.clusters.size() == 1 && dag.groups.size() == 1, "a 100-triangle prop is one leaf and one group");
+    CHECK_LOUD(dag.clusters.size() == 1 && dag.clusters.at(0).triangleCount == 100, "the leaf holds the 100 triangles");
+    CHECK_LOUD(cutcurve::cutAt(d, topError * 0.999f) == 100, "under its extent the prop draws whole");
+    CHECK_LOUD(cutcurve::cutAt(d, topError * 1.001f) == 0, "past its extent it draws nothing (the empty top)");
+    for (const Subject &s : fixtures()) {
+        iris::MeshBake::ClusterDagStats fs;
+        iris::MeshBake::buildClusterDag(s.mesh, &fs);
+        const cutcurve::Dag fd = cutcurve::fromMesh(s.mesh->clusterDag);
+        std::printf("   %s: root %d triangles before the top (error %.4g), top cut %lld\n", s.name, fs.rootTriangles,
+                    double(fs.rootError), cutcurve::cutTop(fd));
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: the root is non-empty before the empty top", s.name);
+        CHECK_LOUD(fs.rootTriangles > 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the top cut draws nothing", s.name);
+        CHECK_LOUD(cutcurve::cutTop(fd) == 0, msg);
+    }
+    return finish();
+}
+
+inline int lockedPositionsKeptLaw(const std::vector<Subject> &subjects)
+{
+    for (const Subject &s : subjects) {
+        iris::MeshBake::buildClusterDag(s.mesh);
+        const MeshClusterDag &dag = s.mesh->clusterDag;
+        if (dag.isEmpty()) { CHECK_LOUD(false, "the fixture has a DAG"); continue; }
+        const Reading rd(dag);
+        const std::vector<unsigned> weld = weldOf(s.mesh);
+        int groupsChecked = 0, lost = 0, lockedTotal = 0;
+        for (int g = 0; g < dag.groups.size(); ++g) {
+            const std::vector<unsigned> ext = externalOf(dag, rd, weld, g);
+            if (ext.empty()) continue;
+            ++groupsChecked;
+            lockedTotal += int(ext.size());
+            std::set<unsigned> out;
+            for (const auto &c : dag.clusters) {
+                if (c.refined != g) continue;
+                for (int t = 0; t < int(c.triangleCount); ++t) for (int k = 0; k < 3; ++k) out.insert(weld[dag.vertexOf(c, t, k)]);
+            }
+            for (unsigned w : ext) if (!out.count(w)) ++lost;
+        }
+        std::printf("== %s: %d groups with a locked border (%d positions); positions their outputs lost: %d\n", s.name,
+                    groupsChecked, lockedTotal, lost);
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: no group loses a position its level locked (%d)", s.name, lost);
+        CHECK_LOUD(lost == 0, msg);
+    }
+    return finish();
+}
+
+inline int oneStepDriftBound()
+{
+    for (const Subject &s : fixtures()) {
+        iris::MeshBake::buildClusterDag(s.mesh);
+        const QVector<iris::MeshBake::DagDriftRow> rows = iris::MeshBake::dagDrift(s.mesh);
+        int over = 0;
+        float worst = 0.0f;
+        std::printf("== %s: depth tris drift stored:", s.name);
+        for (const auto &r : rows) {
+            std::printf(" | d%d %d %.4g %.4g", r.depth, r.triangles, double(r.drift), double(r.stored));
+            if (r.depth == 0 || r.triangles == 0) continue;
+            if (r.stored > 0.0f) worst = std::max(worst, r.drift / r.stored);
+            if (r.drift > 2.0f * r.stored * (1.0f + 1e-5f)) ++over;
+        }
+        std::printf("\n   worst drift / stored %.3f\n", double(worst));
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: the drift from level 0 is within 2x the stored error at every depth (%d over)",
+                      s.name, over);
+        CHECK_LOUD(over == 0, msg);
+    }
+    return finish();
+}
+
+inline int run(const QString &row)
+{
+    if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
+    if (row == QStringLiteral("borders_move")) return bordersMove();
+    if (row == QStringLiteral("ladder_never_forced")) return ladderNeverForced();
+    if (row == QStringLiteral("ends_empty")) return endsEmpty();
+    if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
+    if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
+    std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
+    return 1;
+}
+
+}   // namespace atom2
