@@ -23,10 +23,10 @@ struct Command
 /// One verb of the grammar: its name, its argument shape (words after the verb) and what it does.
 struct VerbDoc
 {
-    const char *verb;
-    const char *usage;   ///< the line's shape, e.g. "view triangles|levels|density|objects|buckets|off|next"
-    int minArgs, maxArgs;
-    const char *what;
+    const char *verb = nullptr;
+    const char *usage = nullptr;   ///< the line's shape, e.g. "view triangles|levels|density|objects|buckets|off|next"
+    int minArgs = 0, maxArgs = 0;
+    const char *what = nullptr;
 };
 const std::vector<VerbDoc> &verbs();
 

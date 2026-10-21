@@ -23,6 +23,8 @@
 #   src/services/meshbakestore.cpp          bake BUILDS: a stale/absent bake rebuilt
 #                                           from its source on a worker
 #   src/ui/dialogs/importsettingsdialog.cpp the import dialog's light pre-read
+#   src/lab/labscene.cpp                    jahlab's import (LAB-1): the first open of a file parses and BAKES it into
+#                                           the lab's data root; every later open reads the bake
 # White-box test suites (tests/) are not covered: a suite's fixture parse is
 # tests/support/testmesh.h, with no library behind it.
 #
@@ -36,7 +38,7 @@ cd "$ROOT" || { echo "source.assimp_import_only: no such root $ROOT"; exit 1; }
 # Assimp::Importer, plus the Studio wrappers the importers call.
 ENTRY='GraphicsHelper::load|ModelSceneInfo::(read|fromSource)\b|ClipFileInfo::read[[:space:]]*\(|ModelPreRead::read|readDeclaredUnitScale[[:space:]]*\(|loadAsSceneFragment[[:space:]]*\(|MeshBake::build(Clip)?From(File|Scene)[[:space:]]*\(|readSceneFile[[:space:]]*\(|animfile::(read|isAnimationFile)[[:space:]]*\(|extractTexturesAndMaterialFromMesh[[:space:]]*\(|iris::SceneSource\b|Assimp::Importer'
 
-ALLOWED='^(irisgl/import/|irisgl/document/scenegraph/meshnode\.(cpp|h):|src/services/import/|src/services/assethelper\.(cpp|h):|src/services/animationfile\.(cpp|h):|src/services/meshbakestore\.cpp:|src/ui/dialogs/importsettingsdialog\.cpp:)'
+ALLOWED='^(irisgl/import/|irisgl/document/scenegraph/meshnode\.(cpp|h):|src/services/import/|src/services/assethelper\.(cpp|h):|src/services/animationfile\.(cpp|h):|src/services/meshbakestore\.cpp:|src/ui/dialogs/importsettingsdialog\.cpp:|src/lab/labscene\.cpp:)'
 
 # A CALL, not a mention: comments name these all the time. A line whose first
 # non-blank characters open a comment is prose.
