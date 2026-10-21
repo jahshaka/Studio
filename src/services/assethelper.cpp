@@ -24,7 +24,7 @@ For more information see the LICENSE file
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
-#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/meshmaterial.h"
 #include "irisgl/core/logger.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -232,7 +232,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         // phase 0; serialization handles "pbr" natively).
         //
         // ONE CONVERSION, NOT TWO (2026-09-08). This used to be a SECOND copy
-        // of BuiltinMaterials::fromMeshData, and it had drifted: it set
+        // of iris::materialFromMeshData, and it had drifted: it set
         // emissiveColor but never emissiveIntensity, so every model imported
         // through the pipeline — this is the pipeline's own path — got a white
         // emissive colour multiplied by intensity 0, and no import could carry
@@ -241,11 +241,11 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         if (data.hasPbr) {
             if (isFile(data.baseColorTexture))
                 hasEmbeddedTexture = hasEmbeddedTexture || data.hasEmbeddedDiffTexture;
-            return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
+            return iris::MaterialPtr(iris::materialFromMeshData(data));
         }
 
         // No pbrMetallicRoughness in the source: the legacy Blinn fields go
-        // through the shared conversion (io/builtinmaterials.h) instead of the
+        // through the shared conversion (irisgl/document/materials/meshmaterial.h) instead of the
         // Default.shader CustomMaterial this used to build. An embedded diffuse
         // texture still neutralises the colour — the importer reports a tint AND the
         // baked texture, and multiplying them darkened every embedded-texture
@@ -254,7 +254,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             hasEmbeddedTexture = true;
             data.diffuseColor = QColor(255, 255, 255);
         }
-        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
+        return iris::MaterialPtr(iris::materialFromMeshData(data));
     }, ssource, nullptr, extractDir, xf);
 
     // Import-time metadata (ASSET_DRAWERS_SPEC addendum): count from the

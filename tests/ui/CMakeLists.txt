@@ -49,7 +49,7 @@ endif()
 # The unification's promise is a UI one ("one switch, engine picks the
 # techniques, hide the settings it consumes"), so it is asserted on the REAL
 # widget: how many rows it puts on the visible surface, that the disclosure
-# hides the rest, and that every gesture writes through services/worldmodes
+# hides the rest, and that every gesture writes through irisgl/document/scenegraph/worldmodes
 # into the document instead of inventing panel state. Offscreen, no display.
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,6 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     # selection service, so the suites link it rather than a stub of it.
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
     # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
@@ -282,7 +281,6 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
     # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp

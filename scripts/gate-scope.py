@@ -375,6 +375,9 @@ AREA_RULES = [
       "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
       "atom", "compute"],
      ["assets", "avatar", "anim"]),
+    # THE WORLD MODES' TABLE, MOVED DOWN (LAB-1): irisgl/document/scenegraph/worldmodes.* is the file the line below
+    # (src/services/worldmodes.) names at the ranges before the move — the same reach, ahead of the irisgl/document rules
+    (r"^irisgl/document/scenegraph/worldmodes\.", ["hdr", "ssr", "looks", "*picture"], []),
     (r"^irisgl/document/(physics|animation)/",
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
       "*headless-scripts"], ["node", "anim", "avatar", "player", "scene"]),
@@ -542,7 +545,7 @@ def product_paths(paths):
 # what it reaches; it never selects the pair by itself.
 ALWAYS_ON_CODE = ["api.contract"]   # (app.startup_quiet, its pair, was archived by TEST-CUT-1)
 # the Studio paths that sit on the subsystem table (their AREA_RULES line is their whole reach — no build graph)
-STUDIO_TABLE_PATHS = (r"^src/services/worldmodes\.",)
+STUDIO_TABLE_PATHS = (r"^src/services/worldmodes\.", r"^irisgl/document/scenegraph/worldmodes\.")
 HARNESS_PATHS = re.compile(r"^(tests/support/|tests/CMakeLists\.txt$|tests/cmake/)")
 # THE TOOLING ROWS ARE THE TOOLS' (TESTING-SPEED-A item 5): the `hygiene` and `tooling` labelled rows (the lints, the
 # selector's and the judge's own suites, pool.runner) are selected by a change under these paths ONLY — never by a

@@ -807,6 +807,8 @@ add_subdirectory(skeletal)
 add_subdirectory(gi)
 add_subdirectory(compute)
 add_subdirectory(atom)
+# jahlab, the engine-only harness (LAB-1, src/lab): its boot + bake-cache law and its one command parser.
+add_subdirectory(lab)
 add_subdirectory(lights)
 add_subdirectory(shadow)
 add_subdirectory(planar)

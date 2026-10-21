@@ -20,7 +20,7 @@ For more information see the LICENSE file
 // CAMERA_LENS_SPEC §5: the override slots the DOCUMENT declares are joined to
 // the World rows' labels, ranges and availability here — one table for both
 // panels and both verbs, so a camera can never offer a row the world does not.
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"

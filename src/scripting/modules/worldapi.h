@@ -26,7 +26,7 @@ For more information see the LICENSE file
 #include "commands/worldmodecommand.h"
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/irisglfwd.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 class WorldApi : public ApiModule
 {

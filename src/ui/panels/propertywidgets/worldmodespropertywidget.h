@@ -18,7 +18,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 class ComboBoxWidget;
 class CheckBoxWidget;
@@ -30,7 +30,7 @@ struct StudioServices;
  * scalability tier (Low / Medium / High / Epic) and every quality row it
  * resolves, with per-row pins that survive mode switches.
  *
- * GENERATED FROM THE REGISTRY (src/services/worldmodes.h), the way the
+ * GENERATED FROM THE REGISTRY (irisgl/document/scenegraph/worldmodes.h), the way the
  * Preferences shortcuts page is generated from ShortcutRegistry: this file
  * knows no row by name, so a new quality row is a table entry and nothing here
  * changes. Rows whose renderer support has not landed render disabled.

@@ -62,7 +62,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/vrworld.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"

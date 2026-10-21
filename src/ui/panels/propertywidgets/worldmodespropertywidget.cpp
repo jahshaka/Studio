@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "commands/worldmodecommand.h"
 #include "services/services.h"
 #include "services/undoservice.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"

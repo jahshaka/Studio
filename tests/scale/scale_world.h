@@ -8,7 +8,7 @@
 // part that closes a wall turns its row into a bar.
 //
 // THE WORLD IS A DOCUMENT, pushed through the product's SceneMirror, lit through
-// the product's own tier tables (services/worldmodes: setPhoton + setMode) — so
+// the product's own tier tables (irisgl/document/scenegraph/worldmodes: setPhoton + setMode) — so
 // what a suite measures is what the editor would render for the same scene, the
 // tier's GI, post chain and ray tier included, not a hand-set GiParams. It is
 // BUILT AT TEST TIME (no fixture file in the repo) at the engine boundary, never
@@ -23,7 +23,7 @@
 #include "irisgl/core/math/vec.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 #include <QString>
 

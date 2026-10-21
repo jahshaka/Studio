@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/lookstackeditor.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 #include "ui/panels/propertywidgets/rowundo.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"

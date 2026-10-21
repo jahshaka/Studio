@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "commands/worldmodecommand.h"
 
 #include "irisgl/document/scenegraph/scene.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene)
 {

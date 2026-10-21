@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/defaultfloormaterial.h"
 #include "services/scenenodehelper.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 namespace scenetemplate {
 

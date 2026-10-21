@@ -32,7 +32,7 @@ fi
 
 # 2. THE TWO SETTERS refuse it — the guard INSIDE each body and BEFORE its first insert (a guard
 #    elsewhere in the file, or one after the insert, does not count).
-setter_report=$(python3 - src/services/worldmodes.cpp <<'PYEOF'
+setter_report=$(python3 - irisgl/document/scenegraph/worldmodes.cpp <<'PYEOF'
 import re, sys
 src = open(sys.argv[1]).read()
 bad = []

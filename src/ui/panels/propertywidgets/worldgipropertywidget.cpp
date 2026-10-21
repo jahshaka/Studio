@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "services/editgate.h"
 
 #include "irisgl/document/scenegraph/scene.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 
 #include "ui/controls/checkboxwidget.h"

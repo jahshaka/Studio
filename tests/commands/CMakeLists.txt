@@ -21,7 +21,6 @@ add_executable(test_structural_undo
     # The sun PIN is an ordinary World-panel row now (SKY_LIGHT_SPEC.md §5:
     # SunLightLinkCommand is deleted with the sky's steering).
     ${CMAKE_SOURCE_DIR}/src/commands/scenepropertycommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
     # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp)
