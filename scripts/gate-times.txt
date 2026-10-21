@@ -79,6 +79,8 @@ import.shutdown 33.63  quiet n=43
 import.shutdown.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 importer.meshformats 1.76  quiet n=42
 input.actions 0.00  ship 3a0422b4e (2026-10-13)
+lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2026-10-22; 11.38 s on the run that warmed the shared cache)
+lab.commands_are_one_parser 2.66  solo, the card lock held, :73 (LAB-1 stage 1, 2026-10-22)
 library.model 7.20  ship 3a0422b4e (2026-10-13)
 lights.falloff 1.46  quiet n=43
 lod.padding_untouched 0.00  ship 3a0422b4e (2026-10-13)
