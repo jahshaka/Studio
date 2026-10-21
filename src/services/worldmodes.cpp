@@ -45,7 +45,9 @@ int planarBudgetOf(const iris::ScenePtr &s)
 
 /// THE PHOTON TIER TABLE (worldmodes.h's comment is the readable form). Per
 /// tier: technique (GiMode ordinal), quality (GiQuality ordinal), ddgi (0/1),
-/// bounces (total, 1..4). Owner option (b), 2026-09-09; the fifth column
+/// bounces (the MINIMUM total, 1..4 - PHOTON-5: each cascade adds passes until its measured
+/// bounce series is within 2 % of its limit, up to eight; PhotonComponent::cascadeBounces).
+/// Owner option (b), 2026-09-09; the fifth column
 /// (dynamic probes) was deleted with the feature by lane R2, 2026-09-12.
 ///
 /// ONE SOURCE. The four Photon-tiered rows buildRows() declares take their
@@ -82,7 +84,7 @@ const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 1, 0 },   // VCT, 2 cascades @ 64^3, the field on, no probes
     /* Medium */ { 1, 1, 1, 0 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
     /* High   */ { 2, 2, 1, 0 },   // the hybrid (rays where the scene traces, else probes), the chain's High table
-    /* Epic   */ { 2, 3, 3, 0 },   // the Epic row (4x the gather's probes) plus 3 bounces
+    /* Epic   */ { 2, 3, 3, 0 },   // the Epic row (4x the gather's probes), at least 3 bounces
 };
 int photonFieldColumn(const PhotonRow &r)
 {
@@ -1045,12 +1047,15 @@ QVector<Row> buildRows()
         photonColumns(r, 3);
         // GENERATED: "128^3 at High/Epic" named one resolution for a chain
         // whose four cascades are 128, 128, 64 and 64 (render audit A5).
-        r.cost = QStringLiteral("Total light bounces, 1-4. Each bounce past the first is another "
-                                "light-propagation pass over EVERY voxel volume on every "
-                                "re-solve — at High and Epic that is a chain at %1 voxels per "
-                                "axis — and the irradiance field is fed from those volumes, so "
-                                "the extra bounces reach the probe-stored diffuse too. Epic's "
-                                "column: %2; every other tier %3.")
+        r.cost = QStringLiteral("The fewest light bounces, 1-4. The renderer measures how fast each "
+                                "voxel volume's bounces fade and adds passes until what is left is "
+                                "under 2 % of the first bounce (an enclosed room takes more, an open "
+                                "scene one; at most eight); this is the floor under that. Each bounce "
+                                "past the first is another light-propagation pass over the voxel "
+                                "volume on every re-solve — at High and Epic that is a chain at %1 "
+                                "voxels per axis — and the irradiance field is fed from those "
+                                "volumes, so the extra bounces reach the probe-stored diffuse too. "
+                                "Epic's column: %2; every other tier %3.")
                      .arg(photonTierVoxelPhrase(PhotonTier::High))
                      .arg(photonBounces(PhotonTier::Epic))
                      .arg(photonBounces(PhotonTier::Low));
