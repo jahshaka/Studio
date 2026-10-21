@@ -121,11 +121,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "dock's top-left corner in the WINDOW's coordinates, for a rig that has to put a "
           "real pointer on a real panel.",
           Needs::Window },
-        { "openTimings", "app.openTimings() -> [{stage, ms, items?, label?}]",
+        { "openTimings", "app.openTimings() -> [{stage, ms, items?, thread?, label?}]",
           "The millisecond ledger of the most recent scene open (services/loadtimeline.h): one entry per stage, "
           "the first entry being {stage:'total', ms, label}, plus 'counter:*' entries for the work that "
-          "accumulates inside the stages (assimp parses, database sweeps, the engine push). Empty before "
-          "the first open of the session.",
+          "accumulates inside the stages (bake reads, database reads, the engine push) with `items` and "
+          "`thread` — 'ui' when the UI thread paid for all of it, 'worker' when a worker did, 'both' when "
+          "each paid a part (an open's catalog reads, its scene blob and its bake plan are the runner "
+          "worker's: counter:db:sessionRows counts the session registration's queries, one per asset type). "
+          "Empty before the first open of the session.",
           Needs::Document },
         { "openStats", "app.openStats({reset:false}) -> {uiThreadParses, uiThreadParseMs, "
           "uiThreadResourceParses, uiThreadResourceParseMs, workerParses, workerParseMs, "

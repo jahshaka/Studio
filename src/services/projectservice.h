@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include <QHash>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -167,21 +168,15 @@ public:
     /// The open's pinned cascade rows past the renderer's table (SceneReader).
     int cascadeRowsDropped() const { return mCascadeRowsDropped; }
 
-    /// The reader half of openProject: reads the scene blob into a document
-    /// scene. editorData is an output parameter exactly as SceneReader hands
-    /// it over. `prewarm` (optional) carries the BAKES a worker thread already
-    /// read (irisgl/import/meshprewarm.h); the reader never parses a model.
-    iris::ScenePtr readProjectScene(std::unique_ptr<EditorData> *editorData,
-                                    const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
-
-    /// The open PLAN for the threaded path: every model file the project's
-    /// scene blob references, CAS-resolved. DB work, so it runs on the thread
-    /// that owns the default connection — the caller's.
-    QStringList plannedModelPaths() const;
-    /// The animation CLIP FILES the blob's skeletal clips name (SceneReader::
-    /// collectClipSources) — the open rebuilds their stale clip bakes with the
-    /// models' (SHIPPED-BAKES-1).
-    QStringList plannedClipPaths() const;
+    /// The reader half of an open: builds the document scene from the scene
+    /// blob the open runner's worker already read and parsed (`projectObj`,
+    /// services/openreads.h — every open's catalog reads are the worker's).
+    /// editorData is an output parameter exactly as SceneReader hands it over.
+    /// `prewarm` carries the BAKES a worker thread already read
+    /// (irisgl/import/meshprewarm.h); the reader never parses a model.
+    iris::ScenePtr readProjectScene(const QJsonObject &projectObj,
+                                    std::unique_ptr<EditorData> *editorData,
+                                    const iris::MeshPrewarmPtr &prewarm);
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
     /// thumbnail refreshes only when a viewport can render one.

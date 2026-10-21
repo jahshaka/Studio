@@ -301,6 +301,7 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/openreads.cpp
     src/services/projectmembership.cpp
     src/services/defaultfloormaterial.cpp
     src/services/materialdefaults.cpp

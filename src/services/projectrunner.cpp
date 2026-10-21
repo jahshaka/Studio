@@ -29,6 +29,8 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/openreads.h"
+#include "services/projectassets.h"
 #include "services/projectarchiver.h"
 #include "services/projectservice.h"
 #include "services/sceneextents.h"
@@ -45,6 +47,10 @@ static const int kOpenWaitBudgetMs = 90000;
 /// a five-millisecond sleep per turn would add five to every slice of every
 /// scripted open; one keeps the wait honest (measured: ~15 slices).
 static const int kOpenWaitIdleMs = 1;
+/// One turn of the threaded open's session registration (OPEN-PATH-1): the
+/// AssetManager entries built until this many milliseconds have gone, then a
+/// boundary frame — sized by time, never by a count of assets.
+static const qint64 kRegistrationTurnMs = 50;
 
 ProjectRunner::ProjectRunner(Database *db, Project *project, ProjectService *projectService,
                              SettingsManager *settings, IEditorViewport *viewport, Host *host,
@@ -76,11 +82,41 @@ void ProjectRunner::stageBegin()
 	mHost->teardownWorld();
 }
 
-void ProjectRunner::stageRead(const iris::MeshPrewarmPtr &prewarm)
+void ProjectRunner::stageRead(const iris::MeshPrewarmPtr &prewarm, const openreads::Reads &reads)
 {
 	LoadTimeline::mark(QStringLiteral("readProjectScene"));
 	mPendingEditorData.reset();
-	mPendingScene = mProjectService->readProjectScene(&mPendingEditorData, prewarm);
+	mPendingScene = mProjectService->readProjectScene(reads.projectObj, &mPendingEditorData, prewarm);
+}
+
+void ProjectRunner::stageRegistrationsBegin(const openreads::Reads &reads)
+{
+	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
+	AssetManager::clearAssetList();
+	mSessionRows = reads.sessionRows();
+	mSessionAt = 0;
+}
+
+bool ProjectRunner::stageRegistrationsStep(qint64 budgetMs)
+{
+	// THE SESSION SET'S ENTRIES FROM THE ROWS THE WORKER READ (OPEN-PATH-1): no
+	// catalog read here, only the AssetManager entries — in turns of about
+	// `budgetMs` each (a boundary frame between two), never a count of assets.
+	QElapsedTimer turn;
+	turn.start();
+	const int n = mSessionRows.size();
+	while (mSessionAt < n) {
+		ProjectAssets::registerSessionRow(mSessionRows.at(mSessionAt++));
+		if (budgetMs >= 0 && turn.elapsed() >= budgetMs) break;
+	}
+	if (mSessionAt < n) {
+		mHost->showOpenProgress(45 + (10 * mSessionAt) / qMax(1, n),
+		                        tr("Preparing assets (%1 of %2)…").arg(mSessionAt).arg(n));
+		return false;
+	}
+	LoadTimeline::add(QStringLiteral("sessionAssets"), 0.0, n);
+	mSessionRows.clear();
+	return true;
 }
 
 void ProjectRunner::stageBind(bool playMode)
@@ -104,25 +140,7 @@ void ProjectRunner::stageReveal(bool playMode)
 	LoadTimeline::end();
 }
 
-QStringList ProjectRunner::plannedOpenModelPaths()
-{
-	// Every model file this open will need, resolved on the thread that owns
-	// the database connection: the session membership's Objects and the
-	// scene blob's mesh sources. ONE definition, used by the threaded open's
-	// plan and by the synchronous open's prewarm.
-	QStringList paths = mHost->plannedSessionModelPaths();
-	if (mProjectService)
-		for (const QString &path : mProjectService->plannedModelPaths())
-			if (!paths.contains(path)) paths.append(path);
-	return paths;
-}
-
-QStringList ProjectRunner::plannedOpenClipPaths()
-{
-	return mProjectService ? mProjectService->plannedClipPaths() : QStringList();
-}
-
-iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
+iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 {
 	// THE BAKE READS, OFF THIS THREAD, WITH THE CALLER STILL BLOCKED
 	// (OPEN-ASSIMP-1; since FORWARD-ONLY-1 the worker only ever READS BAKES —
@@ -135,8 +153,9 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
 	// 1 872 ms unbroken UI-thread block for Matcaps, 986 / 1 998 for World
 	// Background, 391 / 1 104 for Skeletal Animation.
 	//
-	// So the plan is resolved here (database work, per-thread connection), the
-	// files are read on a worker, and this thread PUMPS while it waits — user
+	// So the catalog reads and the files are a worker's (the reads on a
+	// connection of its own: services/openreads.h), and this thread PUMPS while
+	// it waits — user
 	// input excluded, the pattern ProjectArchiver and SceneOpenRunner already
 	// use. The window keeps painting and answering its heartbeat through the
 	// second that used to freeze it, and the stages below then run back to
@@ -164,43 +183,58 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
 	// pass with the parse hoisted and the install left alone. The defect is
 	// real and is reported; it is not this lane's to fix under it.
 	auto prewarm = std::make_shared<iris::MeshPrewarm>();
-	const QStringList modelPaths = plannedOpenModelPaths();
-	const QStringList clipPaths = plannedOpenClipPaths();
-	if (modelPaths.isEmpty() && clipPaths.isEmpty()) return prewarm;
+
+	// THE READS, ON A WORKER WITH A CONNECTION OF ITS OWN (OPEN-PATH-1): the
+	// session set, the scene blob and its sources, the stale bakes — the same
+	// reads the threaded open's runner makes (services/openreads.h).
+	QVector<MeshBakeStore::BakeJob> stale;
+	runPumped([&reads, &stale, project = mProject]() {
+		openreads::ReadConnection conn(reads.dbPath);
+		openreads::readPlan(conn.db(), project, reads);
+		openreads::readSession(conn.db(), reads);
+		stale = MeshBakeStore::staleJobsFor(conn.db(), reads.root, reads.modelPaths + reads.clipPaths);
+	});
+	if (reads.modelPaths.isEmpty() && reads.clipPaths.isEmpty()) return prewarm;
 
 	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
 	// D1): a bake is a cache of the parse, and a build that changed the code
 	// producing it rebuilds it — on a worker, this thread pumping, with the
 	// open's progress up — before anything reads. Never a parse on the open.
 	// ...the clip files' CLIP bakes with them (SHIPPED-BAKES-1).
-	MeshBakeStore::rebuildPumped(
-	    MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(),
-	                                modelPaths + clipPaths),
-	    [this](int i, int n) {
-		    mHost->showOpenProgress(5 + (20 * i) / qMax(1, n),
-		                            tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
-	    });
+	MeshBakeStore::rebuildPumped(stale, [this](int i, int n) {
+		mHost->showOpenProgress(5 + (20 * i) / qMax(1, n),
+		                        tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
+	});
 
-	LoadTimeline::mark(QStringLiteral("plan"));
-	QVector<iris::PrewarmItem> plan;
-	plan.reserve(modelPaths.size());
-	for (const QString &path : modelPaths) plan.append(MeshBakeStore::planFor(path));
-
-	std::atomic<bool> done { false };
-	QFuture<void> future = QtConcurrent::run([plan, prewarm, &done]() {
-		// THE FLAG IS FLIPPED BY A SCOPE GUARD, not by the last statement: a
-		// throw out of a parse (assimp's importers do throw) would otherwise
-		// leave `done` false and this thread pumping for the whole budget
-		// before the future rethrew — ninety seconds of "nothing is wrong".
-		struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
+	LoadTimeline::mark(QStringLiteral("parse(worker)"));
+	runPumped([&reads, prewarm]() {
+		openreads::ReadConnection conn(reads.dbPath);
+		QVector<iris::PrewarmItem> plan;
+		{
+			LoadTimeline::Accumulate planning(QStringLiteral("worker:plan"));
+			plan.reserve(reads.modelPaths.size());
+			for (const QString &path : reads.modelPaths)
+				plan.append(MeshBakeStore::planFor(conn.db(), reads.root, path));
+		}
 		for (const iris::PrewarmItem &item : plan) {
-			// Named "assimp" for continuity of the ledger; it is a bake read.
-			LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
+			LoadTimeline::Accumulate read(QStringLiteral("worker:bakeRead"));
 			prewarm->parse(item);
 		}
 	});
-	LoadTimeline::mark(QStringLiteral("parse(worker)"));
+	LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, prewarm->bakedCount());
+	return prewarm;
+}
 
+void ProjectRunner::runPumped(const std::function<void()> &work)
+{
+	std::atomic<bool> done { false };
+	QFuture<void> future = QtConcurrent::run([&work, &done]() {
+		// THE FLAG IS FLIPPED BY A SCOPE GUARD, not by the last statement: a
+		// throw out of the work would otherwise leave `done` false and this
+		// thread pumping for the whole budget before the future rethrew.
+		struct Finish { std::atomic<bool> &flag; ~Finish() { flag.store(true); } } finish{ done };
+		work();
+	});
 	QElapsedTimer waited;
 	waited.start();
 	while (!done.load() && waited.elapsed() < kOpenWaitBudgetMs) {
@@ -210,16 +244,13 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped()
 		if (done.load()) break;
 		QThread::msleep(static_cast<unsigned long>(kOpenWaitIdleMs));
 	}
-	// The join is not optional: the worker writes into `prewarm` and into two
-	// stack locals. A budget this large (90 s against a worst measured parse
-	// of ~1.1 s) is a deadlock guard, and blocking without the pump is still
-	// better than reading a half-filled prewarm.
+	// The join is not optional: the work writes into the caller's locals. A
+	// budget this large is a deadlock guard, and blocking without the pump is
+	// still better than reading a half-filled result.
 	if (!done.load())
-		qWarning("project open: the model parse is still running after %d ms — waiting for it "
+		qWarning("project open: the open's worker is still running after %d ms — waiting for it "
 		         "without pumping", kOpenWaitBudgetMs);
 	future.waitForFinished();
-	LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, prewarm->bakedCount());
-	return prewarm;
 }
 
 void ProjectRunner::open(bool playMode)
@@ -242,19 +273,18 @@ void ProjectRunner::open(bool playMode)
 		mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
 	}
 
-	// The models, parsed on a worker while this thread pumps (above).
-	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped();
+	// The reads and the bakes, on a worker while this thread pumps (above).
+	LoadTimeline::mark(QStringLiteral("plan"));
+	openreads::Reads reads = openreads::prepare(mProject);
+	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped(reads);
 
 	stageBegin();
-	// The session registrations, in the threaded open's order and with the
-	// worker's models in hand — this is the "synchronous preload" that used to
-	// run in ProjectService::prepareOpen BEFORE the open and parse every
-	// pinned Object on this thread (deleted with this change).
-	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
-	AssetManager::clearAssetList();
-	mHost->registerSessionAssets();
+	// The session registrations, in the threaded open's order, from the rows
+	// the worker read — at once: this caller is blocked anyway.
+	stageRegistrationsBegin(reads);
+	stageRegistrationsStep(-1);
 
-	stageRead(prewarm);
+	stageRead(prewarm, reads);
 	stageBind(playMode);
 	LoadTimeline::mark(QStringLiteral("assetWidget.trigger"));
 	mHost->buildPanels(false);
@@ -407,38 +437,41 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// nothing has presented in between).
 	mViewport->beginSceneLoad(mProject ? mProject->getProjectName() : QString());
 
-	// ---- plan: the DB half, here, on the thread that owns the connection ----
+	// ---- the reads: the runner's workers, connections of their own ---------
+	// (OPEN-PATH-1 stage 2, services/openreads.h): the session set's Object
+	// rows, the scene blob and its sources and the bake plan on the runner's
+	// worker, the set's other types on a second one beside the bake read.
 	LoadTimeline::mark(QStringLiteral("plan"));
-	const QStringList modelPaths = plannedOpenModelPaths();
+	auto reads = std::make_shared<openreads::Reads>(openreads::prepare(mProject));
 
 	startRunnerIfNeeded();
 
+	SceneOpenRunner::Reads workerReads;
+	workerReads.dbPath = reads->dbPath;
+	workerReads.root = reads->root;
+	workerReads.plan = [reads, project = mProject](QSqlDatabase &conn, QStringList *models,
+	                                               QStringList *clips) {
+		openreads::readPlan(conn, project, *reads);
+		*models = reads->modelPaths;
+		*clips = reads->clipPaths;
+	};
+	workerReads.side = [reads](QSqlDatabase &conn) { openreads::readSession(conn, *reads); };
+
 	// ---- install: UI-thread slices, one per event-loop turn ----------------
 	//
-	// The session hydration is spread over SEVERAL turns: it is the one
-	// install step whose cost grows with the project (49 assets in the
-	// Showroom sample), and a single 200 ms slice plus an engine frame is
-	// most of the responsiveness budget on its own.
-	const QStringList sessionGuids = mHost->sessionAssetGuids();
-	const int kAssetsPerSlice = 8;
-
+	// The session entries are built from the rows the workers read, in turns of
+	// ~50 ms (kRegistrationTurnMs) with a boundary frame between two — they were
+	// slices of 8 assets that each read the catalog three times per asset (539
+	// assets on Bistro Exterior: 68 slices, 2.4 s with their frames).
 	QVector<SceneOpenRunner::Slice> slices;
-	slices.append({ QStringLiteral("Preparing assets…"), 45, [this]() {
+	slices.append({ QStringLiteral("Preparing assets…"), 45, [this, reads]() {
 		stageBegin();
-		LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
-		AssetManager::clearAssetList();
+		stageRegistrationsBegin(*reads);
 	} });
-	for (int at = 0; at < sessionGuids.size(); at += kAssetsPerSlice) {
-		const QStringList batch = sessionGuids.mid(at, kAssetsPerSlice);
-		const int pct = 45 + (10 * (at + batch.size())) / qMax(1, sessionGuids.size());
-		slices.append({ QStringLiteral("Preparing assets (%1 of %2)…")
-		                    .arg(at + batch.size()).arg(sessionGuids.size()),
-		                pct, [this, batch]() {
-			mHost->registerSessionAssetGuids(batch);
-		} });
-	}
+	slices.append({ QStringLiteral("Preparing assets…"), 50, {},
+	                [this]() { return stageRegistrationsStep(kRegistrationTurnMs); } });
 	slices.append({ QStringLiteral("Reading the scene…"), 60,
-	                [this]() { stageRead(mRunner->prewarm()); } });
+	                [this, reads]() { stageRead(mRunner->prewarm(), *reads); } });
 	slices.append({ QStringLiteral("Binding the scene…"), 65,
 	                [this, playMode]() { stageBind(playMode); } });
 	slices.append({ QStringLiteral("Building the asset panel…"), 70, [this]() {
@@ -513,7 +546,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { stageReveal(playMode); } });
 
-	mRunner->setPlan(modelPaths, plannedOpenClipPaths(), slices,
+	mRunner->setPlan(workerReads, slices,
 	                 mProject ? mProject->getProjectName() : QStringLiteral("scene"));
 	mRunner->start();
 }
@@ -690,7 +723,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         }
     } });
 
-    mRunner->setPlan(QStringList(), QStringList(), slices,
+    mRunner->setPlan(SceneOpenRunner::Reads(), slices,
                      filename.isEmpty() ? QStringLiteral("scene") : filename);
     mRunner->start();
 }

@@ -440,10 +440,6 @@ private:
     bool revealWorld(bool playMode) override;
     void prepareClose() override;
     void closeWorld(bool reopenInPlace) override;
-    QStringList plannedSessionModelPaths() override;
-    QStringList sessionAssetGuids() override;
-    void registerSessionAssets() override;
-    void registerSessionAssetGuids(const QStringList &guids) override;
     void showOpenProgress(int percent, const QString &text) override;
     void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;

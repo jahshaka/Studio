@@ -122,32 +122,95 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     return result;
 }
 
-QString ProjectAssets::objectSourcePath(const QString &guid, Database *db, Project *project)
-{
-    if (!db || !project || project->getProjectGuid().isEmpty()) return QString();
-    const auto record = db->fetchAsset(guid);
-    if (record.guid.isEmpty()) return QString();
-    if (static_cast<ModelTypes>(record.type) != ModelTypes::Object) return QString();
-    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                   project->getProjectGuid(), guid);
-}
-
 bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Project *project)
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     if (sessionHas(guid)) return true;
     const auto memberRecord = db->fetchAsset(guid);
     if (memberRecord.guid.isEmpty()) return false;
+    SessionRow row;
+    row.guid = guid;
+    row.type = memberRecord.type;
+    row.name = memberRecord.name;
+    row.asset = memberRecord.asset;
+    row.path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                       project->getProjectGuid(), guid);
+    return registerSessionRow(row);
+}
 
-    QSqlDatabase conn = QSqlDatabase::database();
-    const QString root = AssetStorePaths::root();
-    const QString projectGuid = project->getProjectGuid();
-    const QString member = guid;
-    const QString path = AssetCas::resolvePinned(conn, root, projectGuid, member);
+QVector<int> ProjectAssets::sessionTypes()
+{
+    // The open's order: the four legacy membership types first (as the
+    // per-type membership sweep always listed them), then the types only a pin
+    // can bring.
+    return { static_cast<int>(ModelTypes::File), static_cast<int>(ModelTypes::Texture),
+             static_cast<int>(ModelTypes::ParticleSystem), static_cast<int>(ModelTypes::Material),
+             static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Music) };
+}
 
-    switch (static_cast<ModelTypes>(memberRecord.type)) {
+QVector<ProjectAssets::SessionRow> ProjectAssets::readSessionRows(QSqlDatabase conn, const QString &root,
+                                                                  const QString &projectGuid, int type,
+                                                                  int *queries)
+{
+    QVector<SessionRow> rows;
+    if (projectGuid.isEmpty()) return rows;
+    // THE MEMBERSHIP: the project's pins of this type, and — for the legacy
+    // membership types only — the rows the project owns (assets.project_guid).
+    // Objects and music are members by pin alone, as they always were.
+    const auto t = static_cast<ModelTypes>(type);
+    const bool legacy = t == ModelTypes::File || t == ModelTypes::Texture ||
+                        t == ModelTypes::ParticleSystem || t == ModelTypes::Material;
+    // THE BYTES, IN THE SAME STATEMENT (AssetCas::resolvePinned, batched): the
+    // pinned object when the pin names one the files table knows, else the
+    // library source (asset_files, the 'source' role first, then by name).
+    // Existence on disk is checked below, exactly as the resolver does.
+    QSqlQuery query(conn);
+    query.prepare(QStringLiteral(
+        "SELECT A.guid, A.name, A.asset, PA.asset_guid IS NOT NULL, PF.oid, PF.ext, "
+        "  (SELECT AF.oid FROM asset_files AF WHERE AF.asset_guid = A.guid "
+        "     ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name LIMIT 1), "
+        "  (SELECT F.ext FROM asset_files AF LEFT JOIN files F ON F.oid = AF.oid WHERE AF.asset_guid = A.guid "
+        "     ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name LIMIT 1) "
+        "FROM assets A "
+        "LEFT JOIN project_assets PA ON PA.asset_guid = A.guid AND PA.project_guid = ? "
+        "LEFT JOIN files PF ON PF.oid = PA.oid_pin AND PA.oid_pin <> '' "
+        "WHERE A.type = ? AND (PA.asset_guid IS NOT NULL OR (? AND A.project_guid = ?)) "
+        "ORDER BY PA.asset_guid IS NOT NULL, A.rowid"));
+    query.addBindValue(projectGuid);
+    query.addBindValue(type);
+    query.addBindValue(legacy ? 1 : 0);
+    query.addBindValue(projectGuid);
+    if (queries) ++*queries;
+    if (!query.exec()) return rows;
+    while (query.next()) {
+        SessionRow row;
+        row.guid = query.value(0).toString();
+        if (row.guid.isEmpty()) continue;
+        row.type = type;
+        row.name = query.value(1).toString();
+        if (t == ModelTypes::ParticleSystem) row.asset = query.value(2).toByteArray();
+        if (query.value(3).toBool() && !query.value(4).isNull()) {
+            const QString pinned = AssetStorePaths::objectPathIn(root, query.value(4).toString(),
+                                                                 query.value(5).toString());
+            if (QFileInfo::exists(pinned)) row.path = pinned;
+        }
+        if (row.path.isEmpty() && !query.value(6).isNull()) {
+            const QString source = AssetStorePaths::objectPathIn(root, query.value(6).toString(),
+                                                                 query.value(7).toString());
+            if (QFileInfo::exists(source)) row.path = source;
+        }
+        rows.append(row);
+    }
+    return rows;
+}
+
+bool ProjectAssets::registerSessionRow(const SessionRow &row)
+{
+    if (row.guid.isEmpty()) return false;
+    if (sessionHas(row.guid)) return true;
+    switch (static_cast<ModelTypes>(row.type)) {
         case ModelTypes::Object: {
-            if (path.isEmpty()) break;
+            if (row.path.isEmpty()) break;
             // A REGISTRATION, NOT A COPY OF THE MODEL (BISTRO-ENGINE-1 stage 5d).
             // This used to build the object's whole node fragment from its bake —
             // every node and material, again, after the scene reader had already
@@ -158,33 +221,33 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Proj
             // by whoever places it (libraryasset::fromLibrary, the scene reader),
             // from its bake, when it is placed.
             auto asset = std::make_unique<AssetNodeObject>();
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
-            asset->path = path;
+            asset->assetGuid = row.guid;
+            asset->fileName = row.name;
+            asset->path = row.path;
             AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::Texture: {
             auto asset = std::make_unique<AssetTexture>();
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
-            asset->path = path;
+            asset->assetGuid = row.guid;
+            asset->fileName = row.name;
+            asset->path = row.path;
             AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::Music: {
             auto asset = std::make_unique<AssetMusic>();
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
-            asset->path = path;
+            asset->assetGuid = row.guid;
+            asset->fileName = row.name;
+            asset->path = row.path;
             AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::File: {
             auto asset = std::make_unique<AssetFile>();
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
-            asset->path = path;
+            asset->assetGuid = row.guid;
+            asset->fileName = row.name;
+            asset->path = row.path;
             AssetManager::addAsset(std::move(asset));
             break;
         }
@@ -207,17 +270,16 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Proj
             // and that reader now resolves through SceneEditService (which
             // parses the one material a gesture actually touches, once).
             auto asset = std::make_unique<AssetMaterial>();
-            asset->assetGuid = member;
-            asset->fileName = memberRecord.name;
+            asset->assetGuid = row.guid;
+            asset->fileName = row.name;
             AssetManager::addAsset(std::move(asset));
             break;
         }
         case ModelTypes::ParticleSystem: {
             auto asset = std::make_unique<AssetParticleSystem>();
-            asset->assetGuid = member;
-            asset->fileName = QFileInfo(memberRecord.name).baseName();
-            asset->setValue(QVariant::fromValue(
-                QJsonDocument::fromJson(db->fetchAssetData(member)).object()));
+            asset->assetGuid = row.guid;
+            asset->fileName = QFileInfo(row.name).baseName();
+            asset->setValue(QVariant::fromValue(QJsonDocument::fromJson(row.asset).object()));
             AssetManager::addAsset(std::move(asset));
             break;
         }

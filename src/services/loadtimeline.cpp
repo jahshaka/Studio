@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QMap>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QThread>
 #include <QVariantMap>
 #include <QVector>
 
@@ -34,6 +35,8 @@ struct Counter
 {
     double ms = 0.0;
     int    items = 0;
+    /// WHICH THREAD PAID (OPEN-PATH-1): adds made on the thread that began the run, and the others (a worker's).
+    int    uiAdds = 0, workerAdds = 0;
 };
 
 struct Run
@@ -41,6 +44,7 @@ struct Run
     bool           running = false;
     QString        label;
     QElapsedTimer  wall;
+    QThread       *owner = nullptr;   ///< the thread that called begin()
     qint64         stageStartNs = 0;
     QVector<Stage> stages;
     QMap<QString, Counter> counters;
@@ -102,6 +106,7 @@ void begin(const QString &label)
         r.counters.clear();
         r.wall.start();
         r.stageStartNs = 0;
+        r.owner = QThread::currentThread();
     }
     // AN OPEN IN FLIGHT IS A COMPILE WINDOW (services/livecompiles.h): what it
     // compiles is its own, and what came before it is settled first.
@@ -125,6 +130,7 @@ void add(const QString &counter, double ms, int items)
     Counter &c = r.counters[counter];
     c.ms += ms;
     c.items += items;
+    (QThread::currentThread() == r.owner ? c.uiAdds : c.workerAdds) += 1;
 }
 
 void setStatsProvider(std::function<QStringList()> provider)
@@ -181,11 +187,15 @@ void end()
             entry["stage"] = QStringLiteral("counter:") + it.key();
             entry["ms"] = it.value().ms;
             entry["items"] = it.value().items;
+            const QString thread = it.value().workerAdds == 0 ? QStringLiteral("ui")
+                                   : it.value().uiAdds == 0   ? QStringLiteral("worker")
+                                                              : QStringLiteral("both");
+            entry["thread"] = thread;
             out.append(entry);
-            line += QStringLiteral("\n[open-profile]   (of which) %1 %2 ms over %3")
-                        .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items);
-            blockLines << QStringLiteral("(of which) %1 %2 ms over %3")
-                              .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items);
+            line += QStringLiteral("\n[open-profile]   (of which) %1 %2 ms over %3 [%4]")
+                        .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items).arg(thread);
+            blockLines << QStringLiteral("(of which) %1 %2 ms over %3 [%4]")
+                              .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items).arg(thread);
         }
         lastRunStore() = out;
         provider = statsProvider();

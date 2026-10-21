@@ -46,10 +46,13 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
+#include "services/openreads.h"
+#include "services/projectassets.h"
 #include "services/scenetemplate.h"
 
 class Database;
@@ -94,11 +97,6 @@ public:
         /// The close's whole teardown, the open's drain already done.
         /// `reopenInPlace` = the first half of an open: the page stays.
         virtual void closeWorld(bool reopenInPlace) = 0;
-        /// The project's session membership (the Desktop page's).
-        virtual QStringList plannedSessionModelPaths() = 0;
-        virtual QStringList sessionAssetGuids() = 0;
-        virtual void registerSessionAssets() = 0;
-        virtual void registerSessionAssetGuids(const QStringList &guids) = 0;
         virtual void showOpenProgress(int percent, const QString &text) = 0;
         /// THE OPEN'S COMPILE LINE (SHADER-WARM-2): "Compiling shaders — n",
         /// called from INSIDE the warm-up frame after each shader it compiles on
@@ -200,13 +198,16 @@ private:
     void startCreateRun(const QString &guid, const QString &filename, const QString &projectPath,
                         SceneTemplate kind);
     void stageBegin();
-    void stageRead(const iris::MeshPrewarmPtr &prewarm);
+    void stageRead(const iris::MeshPrewarmPtr &prewarm, const openreads::Reads &reads);
     void stageBind(bool playMode);
     void stageReveal(bool playMode);
-    QStringList plannedOpenModelPaths();
-    /// The clip files the open's scene names (ProjectService::plannedClipPaths).
-    QStringList plannedOpenClipPaths();
-    iris::MeshPrewarmPtr prewarmModelsPumped();
+    /// The session registration from the worker's rows (OPEN-PATH-1): begin takes the rows, each step
+    /// builds entries until `budgetMs` has gone (-1 = all of them) and answers whether it is done.
+    void stageRegistrationsBegin(const openreads::Reads &reads);
+    bool stageRegistrationsStep(qint64 budgetMs);
+    /// The blocking open's reads and bake reads, on workers while this thread pumps.
+    iris::MeshPrewarmPtr prewarmModelsPumped(openreads::Reads &reads);
+    void runPumped(const std::function<void()> &work);
 
     Database *mDb = nullptr;
     Project *mProject = nullptr;
@@ -219,6 +220,9 @@ private:
     /// viewport knows whether it drew.
     unsigned mSliceBoundaryFrames = 0;
     iris::ScenePtr mPendingScene;
+    /// The session rows being registered and the next one (stageRegistrationsStep).
+    QVector<ProjectAssets::SessionRow> mSessionRows;
+    int mSessionAt = 0;
     std::unique_ptr<EditorData> mPendingEditorData;
     /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
     /// Created on first use; the shutdown order's step 2 cancels and joins it

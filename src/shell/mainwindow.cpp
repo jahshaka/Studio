@@ -1082,26 +1082,6 @@ void MainWindow::buildPanels(bool fresh)
     }
 }
 
-QStringList MainWindow::plannedSessionModelPaths()
-{
-    return pmContainer ? pmContainer->plannedSessionModelPaths() : QStringList();
-}
-
-QStringList MainWindow::sessionAssetGuids()
-{
-    return pmContainer ? pmContainer->sessionAssetGuids() : QStringList();
-}
-
-void MainWindow::registerSessionAssets()
-{
-    if (pmContainer) pmContainer->registerProjectSessionAssets();
-}
-
-void MainWindow::registerSessionAssetGuids(const QStringList &guids)
-{
-    if (pmContainer) pmContainer->registerSessionAssetGuids(guids);
-}
-
 void MainWindow::showOpenProgress(int percent, const QString &text)
 {
     if (pmContainer) pmContainer->showOpenProgress(percent, text);

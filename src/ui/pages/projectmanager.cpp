@@ -69,7 +69,6 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/ogresamples.h"
 #include <QSqlDatabase>
-#include "services/projectassets.h"
 #include "services/loadtimeline.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -1340,69 +1339,6 @@ void ProjectManager::hideOpenProgress()
 	// Back to the legacy behaviour for the remaining synchronous flows
 	// (archive import) that repaint by pumping.
 	progressDialog->setPumpsEventLoop(true);
-}
-
-QStringList ProjectManager::plannedSessionModelPaths()
-{
-    // Same membership sweep as registerProjectSessionAssets, resolved to the
-    // Object files only — the plan the prewarm worker parses.
-    // Only PIN rows can carry an Object (registerProjectSessionAssets never
-    // registers legacy per-project Object/Mesh rows — see its comment), so the
-    // pin union is the whole plan.
-    QStringList paths;
-    const QString projectGuid = project->getProjectGuid();
-    for (const auto &asset : db->fetchProjectPinnedAssets(projectGuid)) {
-        const QString path = ProjectAssets::objectSourcePath(asset.guid, db, project);
-        if (!path.isEmpty() && !paths.contains(path)) paths.append(path);
-    }
-    return paths;
-}
-
-void ProjectManager::registerProjectSessionAssets()
-{
-	registerSessionAssetGuids(sessionAssetGuids());
-}
-
-void ProjectManager::registerSessionAssetGuids(const QStringList &guids)
-{
-	for (const QString &guid : guids)
-		ProjectAssets::registerSessionAsset(guid, db, project);
-	LoadTimeline::add(QStringLiteral("sessionAssets"), 0.0, guids.size());
-}
-
-QStringList ProjectManager::sessionAssetGuids()
-{
-	// Session AssetManager registrations for the opening project — every
-	// guid goes through ProjectAssets::registerSessionAsset, THE one
-	// hydration routine (IMAGE_PLANE_SPEC §6; bytes CAS-resolved pin-first).
-	// Two membership shapes exist:
-	//   - legacy per-project rows (assets.project_guid = this project),
-	//     collected by type below. Object/Mesh rows deliberately stay
-	//     unregistered (not pre-parsed; the readers load them on demand —
-	//     see loadProjectAssets).
-	//   - pin rows (project_assets) — the pin world's ONLY membership shape.
-	//     Before this union they were registered exclusively by the ADDING
-	//     session (ProjectAssets::addToProject), so after a project reopen
-	//     the panel listed them but the viewport's AssetManager lookups
-	//     missed (material drag no-op — the §6 defect).
-	const QString projectGuid = project->getProjectGuid();
-
-	QStringList guids;
-	LoadTimeline::Accumulate membershipQueries(QStringLiteral("db:membership"));
-	for (const int type : { static_cast<int>(ModelTypes::File),
-	                        static_cast<int>(ModelTypes::Texture),
-	                        static_cast<int>(ModelTypes::ParticleSystem),
-	                        static_cast<int>(ModelTypes::Material) }) {
-		for (const auto &asset : db->fetchAssetsByType(type, projectGuid))
-			guids.append(asset.guid);
-	}
-	// The pin union — members hydrate exactly as the adding session did
-	// (pinned Objects included: their bin drags need the session entry).
-	for (const auto &asset : db->fetchProjectPinnedAssets(projectGuid))
-		guids.append(asset.guid);
-
-	membershipQueries.stop();
-	return guids;
 }
 
 void ProjectManager::updateTile(const QString &id, const QByteArray &arr)

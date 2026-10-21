@@ -112,3 +112,34 @@ jah_gpu_row(open.streams_to_the_end CLASS app TIER low NEEDS NONE TEST_WINDOW FR
 set_tests_properties(open.streams_to_the_end PROPERTIES
     ENVIRONMENT "HOME=${_streams_home};JAHSHAKA_DATA_ROOT=${_streams_home}/.local/share/Jahshaka"
     TIMEOUT 60 LABELS "openasync")
+
+# open.first_frame_work — THE WORK BEFORE AN OPEN'S FIRST WORLD FRAME IS OFF THE UI THREAD (OPEN-PATH-1 stage 2; the law
+# is the script's head): the same generated project with 100 materials and 100 textures beside the model, opened by the
+# threaded runner — the session registration's queries one per asset type, the plan / membership / blob a worker's,
+# and the same session set and node count as the blocking open. RED at the base (no db:sessionRows; the blob and the
+# plan the UI thread's). FRAMES 478: the B3 meter over one run on this tree.
+set(_first_materials 100)
+set(_first_model ${CMAKE_CURRENT_BINARY_DIR}/first-frame/many-meshes-${_streams_meshes}x${_streams_triangles}m${_first_materials}.obj)
+if(NOT EXISTS ${_first_model})
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/first-frame)
+    execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/make_many_meshes.py
+                            ${_first_model} ${_streams_meshes} ${_streams_triangles} ${_first_materials}
+                    RESULT_VARIABLE _first_rc)
+    if(NOT _first_rc EQUAL 0)
+        message(FATAL_ERROR "open.first_frame_work: make_many_meshes.py failed (${_first_rc})")
+    endif()
+endif()
+set(OPEN_FIRST_MODEL ${_first_model})
+set(OPEN_FIRST_MESHES ${_streams_meshes})
+set(OPEN_FIRST_MATERIALS ${_first_materials})
+configure_file(e2e_open_first_frame.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_first_frame.js @ONLY)
+set(_first_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-first-frame)
+file(MAKE_DIRECTORY ${_first_home}/run)
+jah_gpu_row(open.first_frame_work CLASS app TIER low NEEDS NONE TEST_WINDOW FRAMES 478
+         COMMAND ${JAH_FRESH_HOME} --warm ${_first_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_first_frame.js
+         WORKING_DIRECTORY ${_first_home}/run)
+set_tests_properties(open.first_frame_work PROPERTIES
+    ENVIRONMENT "HOME=${_first_home};JAHSHAKA_DATA_ROOT=${_first_home}/.local/share/Jahshaka"
+    TIMEOUT 60 LABELS "openasync")
