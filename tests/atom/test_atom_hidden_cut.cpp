@@ -376,6 +376,10 @@ static void runShape(World &on, World &ref, World &shut, int ssr, const char *sh
     CHECK_MSG(lc.valid && lc.late == 0u,
               "%s: (b) the LATE list draws none of them either - culled, not moved (%u of %zu)", shape, lc.late,
               on.field.size());
+    // ...AND NOT AS CLUSTERS (ATOM-8 stage 1's read): the late pass's per-cluster draws write no probe record, so (b)
+    // alone cannot see them; the still camera reveals nothing - the late pass draws no cluster.
+    CHECK_MSG(so.cutLateClusters == 0u,
+              "%s: (b) the late pass draws no rejected cluster either (cutLateClusters %u)", shape, so.cutLateClusters);
     CHECK_MSG(so.occluded == unsigned(on.field.size()),
               "%s: (c) the frame's depth test rejects every hidden sphere (occluded %u of %zu)", shape, so.occluded,
               on.field.size());

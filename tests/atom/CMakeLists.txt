@@ -184,6 +184,21 @@ jah_gpu_row(atom.hidden_cut CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.hidden_cut PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# atom.cluster_occlusion (ATOM-8 stage 2; the builder's row) — THE ID PASS CULLS HIDDEN CLUSTERS: a front Atom facade hiding a
+# taller back one whose box overlaps the front's (Bistro's two measured classes: the sky over the roofline, the kit-bash
+# overlap), three lockstep worlds (the occlusion, no history, the door shut): at rest the first list draws of the back facade
+# only its sky-class clusters; on every reveal (the camera teleported past the front facade's edge) the late pass draws the
+# rejected clusters and the picture equals the door-shut world's byte for byte on that very frame; ids word-equal; no
+# overflow. The base (engine.arm atom.clusterOcclusion 0, the objects' own test) is printed: the whole back facade drawn.
+# The base number of the occlusion rows (ATOM-8 stage 0): 53.8 % of Bistro Exterior's law88 frame was drawn for objects
+# with no visible pixel.
+add_executable(test_atom_cluster_occlusion test_atom_cluster_occlusion.cpp)
+set_source_files_properties(test_atom_cluster_occlusion.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+jah_atom_engine_target(test_atom_cluster_occlusion)
+jah_gpu_row(atom.cluster_occlusion CLASS engine FRAMES 145 COMMAND test_atom_cluster_occlusion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.cluster_occlusion PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # atom.instruments_honest (ATOM-8 stage 0; the builder's row) — THE ATOM INSTRUMENTS TELL THE TRUTH: one baked 20 k sphere
 # twice, the front one hiding the back one, the occlusion shut (the back one drawn and hidden): the density view = the cut's
 # drawn triangles over visible pixels (it was the base mesh's level 0), world.atomStatus's drawnHiddenTriangles = the back
