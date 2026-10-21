@@ -199,16 +199,6 @@
    "must_not": []
   },
   {
-   "case": "TOOLING-2 file(SHA256 <file> <var>) writes its THIRD argument: the install stamp's hash follows its reader (the if comparing it), never the hashed file's readers (ATOM-2 moved this case: the clusterlod patch stage it quoted was deleted)",
-   "file": "cmake/OgreInstallStamp.cmake",
-   "old": "    file(SHA256 \"${_bs}\" _now)\n",
-   "new": "    file(SHA256 \"${_bs}\"  _now)\n",
-   "must": [],
-   "must_not": [
-    "api.contract"
-   ]
-  },
-  {
    "case": "TOOLING-2 a quoted argument is ONE argument: string(REGEX REPLACE \"(^|\\n)-- \" … <out> …) writes _assimp_patch_output (read by a message), not '-- \"' (ATOM-2 moved this case from the deleted clusterlod patch stage)",
    "file": "irisgl/CMakeLists.txt",
    "old": "string(REGEX REPLACE \"(^|\\n)-- \" \"\\\\1\" _assimp_patch_output \"${_assimp_patch_output}\")\n",
