@@ -1197,6 +1197,17 @@ public:
         /// sync left for later, and every such deferral, ever.
         quint64 attachesOwed = 0;
         quint64 attachesDeferred = 0;
+        /// THE STREAM'S SHAPE since the world was bound (OPEN-PATH-1): the syncs that built a
+        /// new mesh, the meshes and vertices built in all, the most ONE sync built, and the
+        /// FRAMES from the first that drew a mesh of the world to the first whose sync left
+        /// none owed (`streamLanded` once that frame has been drawn).
+        quint64 attachSyncs = 0;
+        quint64 meshesBuilt = 0;
+        quint64 verticesBuilt = 0;
+        quint64 largestSyncMeshes = 0;
+        quint64 largestSyncVertices = 0;
+        quint64 streamFrames = 0;
+        bool streamLanded = false;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the
@@ -1558,8 +1569,11 @@ public:
     /// The two halves of primeSceneSync, so a threaded open can spend them on
     /// SEPARATE event-loop turns (the window keeps pumping between them):
     /// geometry = the mesh/material/texture uploads (SceneMirror::sync), and
-    /// environment = sky, world settings and the camera. Calling
-    /// primeSceneSync() is exactly calling both, in this order.
+    /// environment = sky, world settings and the camera. Each builds ONE
+    /// FRAME'S SHARE of the meshes (the threaded open streams the rest on its
+    /// boundary frames and the driver's ticks); primeSceneSync() — the
+    /// blocking open's, whose caller is promised a loaded world — builds the
+    /// geometry share and then everything the environment sync finds owed.
     virtual void primeSceneGeometry() {}
     virtual void primeSceneEnvironment() {}
     /// The third half (SHADER_CACHE_SPEC.md §5): compile the shaders the newly

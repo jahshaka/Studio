@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "irisgl/core/logger.h"
 #include "services/assetstorepaths.h"
+#include "services/openreads.h"
 #include <QSqlDatabase>
 
 SceneOpenRunner::SceneOpenRunner(Database *db, Project *project, QObject *parent)
@@ -36,23 +37,18 @@ SceneOpenRunner::~SceneOpenRunner()
 {
     // A live worker writes into mPrewarm and re-enters the atomics — it must
     // be gone before we are. It never waits on the UI thread, so this join is
-    // bounded by one file's parse.
+    // bounded by one file's read (and the side reads by their queries).
     requestAbort();
     if (mFuture.isValid() && !mFuture.isFinished()) mFuture.waitForFinished();
+    if (mSideFuture.isValid() && !mSideFuture.isFinished()) mSideFuture.waitForFinished();
 }
 
-void SceneOpenRunner::setPlan(const QStringList &modelPaths, const QStringList &clipPaths,
-                              const QVector<Slice> &slices, const QString &label)
+void SceneOpenRunner::setPlan(const Reads &reads, const QVector<Slice> &slices, const QString &label)
 {
-    // The bake PLAN is resolved HERE, on the UI thread that owns the database
-    // connection (MESH_BAKE_SPEC phase 1): the worker only ever reads files.
-    mModelPaths = modelPaths;
-    mRebuild = MeshBakeStore::staleJobsFor(QSqlDatabase::database(), AssetStorePaths::root(),
-                                           modelPaths + clipPaths);
-    mRebuildDone = mRebuild.isEmpty();
+    mReads = reads;
+    mModelPaths.clear();
     mPlan.clear();
-    mPlan.reserve(modelPaths.size());
-    for (const QString &path : modelPaths) mPlan.append(MeshBakeStore::planFor(path));
+    mRebuild.clear();
     mSlices = slices;
     mLabel = label;
     mNextSlice = 0;
@@ -65,65 +61,92 @@ void SceneOpenRunner::start()
 {
     mRunning.store(true);
     emit progress(5, QStringLiteral("Reading %1…").arg(mLabel));
-    if (mModelPaths.isEmpty() && mRebuildDone) {
-        // Nothing to parse: go straight to the slices, still one per turn.
+    if (!mReads.plan) {
+        // Nothing to read: go straight to the slices, still one per turn.
         mParsed.store(true);
         QTimer::singleShot(0, this, [this]() { runNextSlice(); });
         return;
     }
+    // THE SIDE READS FROM THE START, beside the plan and the bake read (finishWorker joins them).
+    if (mReads.side)
+        mSideFuture = QtConcurrent::run([this]() {
+            openreads::ReadConnection conn(mReads.dbPath);
+            if (!mAborted.load()) mReads.side(conn.db());
+        });
     mFuture = QtConcurrent::run([this]() { runWorker(); });
 }
 
 void SceneOpenRunner::runWorker()
 {
-    // THE STALE BAKES FIRST (D1): rebuilt here, committed and re-planned on
-    // the UI thread (the catalog), then this worker is started again for the
-    // prewarm proper.
-    if (!mRebuildDone) {
-        auto results = std::make_shared<QVector<MeshBakeStore::BakeResult>>();
-        const int n = mRebuild.size();
-        for (int i = 0; i < n; ++i) {
-            if (mAborted.load()) break;
-            QMetaObject::invokeMethod(this, [this, i, n]() {
-                emit progress(5 + (20 * i) / qMax(1, n),
-                              QStringLiteral("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
-            }, Qt::QueuedConnection);
-            results->append(MeshBakeStore::runBake(mRebuild.at(i)));
+    QStringList clips;
+    {
+        openreads::ReadConnection conn(mReads.dbPath);
+        mReads.plan(conn.db(), &mModelPaths, &clips);
+        mRebuild = MeshBakeStore::staleJobsFor(conn.db(), mReads.root, mModelPaths + clips);
+        if (mRebuild.isEmpty() || mAborted.load()) {
+            readBakes(conn.db());
+            finishWorker();
+            return;
         }
-        QMetaObject::invokeMethod(this, [this, results]() {
-            QSqlDatabase conn = QSqlDatabase::database();
-            const QString root = AssetStorePaths::root();
-            for (MeshBakeStore::BakeResult &result : *results) {
-                QString error;
-                if (!MeshBakeStore::commitBake(conn, root, result, &error))
-                    irisLog(QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
-            }
-            mRebuildDone = true;
-            mRebuild.clear();
-            mPlan.clear();
-            for (const QString &path : mModelPaths) mPlan.append(MeshBakeStore::planFor(path));
-            if (mAborted.load()) { runNextSlice(); return; }
-            mFuture = QtConcurrent::run([this]() { runWorker(); });
+    }
+    // THE STALE BAKES FIRST (D1): rebuilt here, committed on the UI thread (the
+    // catalog's writer), then this runner reads on a fresh worker.
+    auto results = std::make_shared<QVector<MeshBakeStore::BakeResult>>();
+    const int n = mRebuild.size();
+    for (int i = 0; i < n; ++i) {
+        if (mAborted.load()) break;
+        QMetaObject::invokeMethod(this, [this, i, n]() {
+            emit progress(5 + (20 * i) / qMax(1, n),
+                          QStringLiteral("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
         }, Qt::QueuedConnection);
-        return;
+        results->append(MeshBakeStore::runBake(mRebuild.at(i)));
+    }
+    QMetaObject::invokeMethod(this, [this, results]() {
+        QSqlDatabase conn = QSqlDatabase::database();
+        const QString root = AssetStorePaths::root();
+        for (MeshBakeStore::BakeResult &result : *results) {
+            QString error;
+            if (!MeshBakeStore::commitBake(conn, root, result, &error))
+                irisLog(QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
+        }
+        mRebuild.clear();
+        mFuture = QtConcurrent::run([this]() {
+            openreads::ReadConnection read(mReads.dbPath);
+            readBakes(read.db());
+            finishWorker();
+        });
+    }, Qt::QueuedConnection);
+}
+
+void SceneOpenRunner::readBakes(QSqlDatabase &conn)
+{
+    {
+        LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));
+        mPlan.clear();
+        mPlan.reserve(mModelPaths.size());
+        for (const QString &path : mModelPaths)
+            mPlan.append(MeshBakeStore::planFor(conn, mReads.root, path));
     }
     const int total = mPlan.size();   // the array indexed below, not its source
     for (int i = 0; i < total; ++i) {
         if (mAborted.load()) break;
-        const iris::PrewarmItem &item = mPlan.at(i);
         {
-            // Named "assimp" for continuity of the ledger, but a bake hit
-            // never reaches assimp — worker:bakeHits is the split.
-            LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
-            mPrewarm->parse(item);
+            LoadTimeline::Accumulate read(QStringLiteral("worker:bakeRead"));
+            mPrewarm->parse(mPlan.at(i));
         }
         const int pct = 5 + (35 * (i + 1)) / total;
         QMetaObject::invokeMethod(this, [this, pct, total, i]() {
             emit progress(pct, QStringLiteral("Loading models (%1 of %2)…").arg(i + 1).arg(total));
         }, Qt::QueuedConnection);
     }
-    mParsed.store(true);
     LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, mPrewarm->bakedCount());
+}
+
+void SceneOpenRunner::finishWorker()
+{
+    // The side reads are the slices' input too: joined here, on the worker, never on the UI thread.
+    if (mSideFuture.isValid()) mSideFuture.waitForFinished();
+    mParsed.store(true);
     // Hand back through the event loop — NOT a blocking connection: a UI loop
     // that stopped pumping (the app quitting) must never be able to strand
     // this worker (the import.shutdown zombie).
@@ -156,16 +179,24 @@ void SceneOpenRunner::runNextSlice()
     }
     if (mNextSlice >= mSlices.size()) {
         crossSliceBoundary();
+        // The run's reads (the parsed scene blob, the session rows) go with it: nothing reads them after the
+        // last slice, and the next setPlan would only replace them.
+        mReads = Reads();
+        mSlices.clear();
+        mNextSlice = 0;
         mRunning.store(false);
         emit finished(false);
         return;
     }
 
-    const Slice slice = mSlices.at(mNextSlice++);
+    const Slice slice = mSlices.at(mNextSlice);
     emit progress(slice.percent, slice.label);
     QElapsedTimer sliceTimer;
     sliceTimer.start();
-    if (slice.run) slice.run();
+    bool done = true;
+    if (slice.step) done = slice.step();
+    else if (slice.run) slice.run();
+    if (done) ++mNextSlice;
     const double ms = double(sliceTimer.nsecsElapsed()) / 1.0e6;
     // A slice IS a block of UI-thread time: if one grows past the
     // responsiveness budget it has to be split, and this is how that gets

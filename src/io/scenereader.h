@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QMap>
 #include <QVector>
+#include <QSqlDatabase>
 
 #include "data/project.h"
 
@@ -52,6 +53,9 @@ class SceneReader : public AssetIOBase
     /// the Bistro Exterior's 1,592 mesh nodes, one source. Nothing writes the
     /// catalog while one read runs (it is one call on one thread).
     QHash<QString, QString> mResolvedPaths;
+    /// The catalog connection (setConnection); invalid = the thread's default.
+    QSqlDatabase mConn;
+    QSqlDatabase conn() const { return mConn.isValid() ? mConn : QSqlDatabase::database(); }
     mutable QHash<QString, QString> mSettingsHashes;
     QString settingsHash(const QString &filePath, const QString &assetGuid) const;
 
@@ -89,6 +93,12 @@ public:
 		this->handle = db;
 	}
 
+	/// THE CONNECTION THE CATALOG IS READ THROUGH for the guid resolutions and the
+	/// clip-type checks (OPEN-PATH-1): the default connection unless set — an open's
+	/// PLAN runs collectMeshSources / collectClipSources on the runner's worker
+	/// with that worker's own connection (services/openreads.h).
+	void setConnection(QSqlDatabase conn) { mConn = conn; mResolvedPaths.clear(); }
+
 	/// Model files already parsed on another thread (irisgl/import/meshprewarm.h).
 	/// When a mesh source is in here the reader consumes the prewarmed parse
 	/// instead of parsing again — the whole point of the threaded open. Null
@@ -114,7 +124,7 @@ public:
     /// FALSE MEANS "resolve by the open project's PIN", which is what a project
     /// load means, and it is only ever turned on by setLibrarySource() below.
     /// It was left indeterminate until UNINIT-SWEEP-1, and the readers that do
-    /// not call either setter reached it: ProjectService::plannedModelPaths
+    /// not call either setter reached it: the open's plan (now openreads::readPlan)
     /// builds a reader, sets the handle and the project and asks
     /// collectMeshSources for the THREADED OPEN'S PREWARM PLAN — so a byte that
     /// happened to read true planned the prewarm by LIBRARY SOURCE while
@@ -148,6 +158,10 @@ public:
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,
                              std::unique_ptr<EditorData> *editorData = nullptr);
+    /// The same read from a blob already parsed into JSON (the open runner's worker
+    /// reads and parses the blob; the document is built here, on the caller's thread).
+    iris::ScenePtr readScene(const QString &projectPath, QJsonObject projectObj,
+                             std::unique_ptr<EditorData> *editorData);
     iris::ScenePtr readScene(QJsonObject &projectObj);
     /// The scene's saved editor state, OWNED by the caller (LEAK-1: a bare
     /// `new` handed down to the viewport, which never freed it); null for none.

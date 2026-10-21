@@ -20,11 +20,12 @@ For more information see the LICENSE file
 // (app.openTimings()). It is ALWAYS on — the cost is one QElapsedTimer read
 // per stage, and an open that is not measured is an open nobody can defend.
 //
-// Aggregating counters (assimp parses, session registrations) accumulate
+// Aggregating counters (bake reads, session registrations) accumulate
 // through add() from wherever they happen and are folded into the run when it
 // ends. Thread affinity: the timeline belongs to the thread that called
-// begin(); add() may be called from a worker between begin() and end() ONLY
-// while the owning thread is blocked waiting on it (the open runner's shape).
+// begin(); add() may be called from a worker between begin() and end() (the
+// open runner's reads — mutex-guarded), and each counter records WHICH thread
+// paid for it: `thread` in lastRun() is "ui", "worker" or "both".
 //
 // Stage names are stable strings — the profiling table in the lane report and
 // the heartbeat e2e both read them.
@@ -66,7 +67,8 @@ double elapsedMs();
 
 /// The last completed run as a script-friendly list of
 /// {stage, ms} maps, with the run's label/total as the first entry
-/// ({stage:"total", ms:<wall clock>, label:"..."}).
+/// ({stage:"total", ms:<wall clock>, label:"..."}); a counter's entry is
+/// {stage:"counter:<name>", ms, items, thread:"ui"|"worker"|"both"}.
 QVariantList lastRun();
 
 /// Scoped stage-accumulator helper: adds its lifetime to `counter`.

@@ -325,6 +325,7 @@ public:
     qulonglong coversPresented() const override { return mCoversPresented; }
     QString loadingIndicator() const override { return mStream.line; }
     void coverIfNotPresenting() override;
+    void primeSceneSync() override;
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
     unsigned warmUpShaders(const std::function<void(unsigned)> &onCompile = {}) override;
@@ -481,8 +482,15 @@ protected:
     void viewRecreated() override;
 
 private:
+    /// The environment sync of the open's primes: one frame's share of meshes on the threaded route
+    /// (primeSceneEnvironment), the whole remainder on the blocking one (primeSceneSync).
+    void primeEnvironment(bool budgeted);
     /// Driver frames left in the streaming window (kStreamFramesAfterReveal).
     int mStreamFramesLeft = 0;
+    /// The frames this world's meshes took to arrive (MirrorStats::streamFrames), counted by syncFrame;
+    /// reset with the mirror, which is made with each world.
+    struct StreamTally { quint64 frames = 0; bool landed = false; };
+    StreamTally mStreamTally;
     /// THE COVER PREFERENCE, LATCHED FOR THE LENGTH OF ONE LOAD
     /// (services/loadingcover.h, OPEN_COVER_SPEC §3). Read ONCE, in
     /// `beginSceneLoad`: a preference toggled mid-load must not make the panel

@@ -23,20 +23,17 @@ For more information see the LICENSE file
 //
 // So the split is drawn where the evidence puts it:
 //
-//   plan   (UI thread)  — the DB reads: the scene blob, the project's asset
-//                         membership, and the CAS paths of every model the
-//                         blob and the membership reference. Measured in
-//                         single-digit milliseconds; and it CANNOT move,
-//                         because Database's methods all run through the
-//                         implicit default QSqlDatabase connection, which is
-//                         bound to the thread that opened it. ImportBatchRunner
-//                         reached the same conclusion and hops its DB half back
-//                         to the UI thread rather than opening a second
-//                         connection; this follows that precedent.
-//   parse  (worker)     — assimp, on every planned model file, into a
-//                         MeshPrewarm. Pure file work: no DB, no AssetManager,
-//                         no Qt widgets, no engine. This is the second that
-//                         used to freeze the window.
+//   reads  (worker)     — the catalog reads (OPEN-PATH-1 stage 2): the scene
+//                         blob, the project's session set, the CAS paths of
+//                         every model the blob and the set reference, the bake
+//                         plan — on a READ-ONLY CONNECTION OF THE WORKER'S OWN
+//                         to the library file (services/openreads.h), and the
+//                         session set's other types on a second worker beside
+//                         the bake read. They were the UI thread's (Database's
+//                         default connection is bound to it): 2.4 s of Bistro
+//                         Exterior's open before its first frame.
+//   bake read (worker)  — every planned model's bake, into a MeshPrewarm. Pure
+//                         file work: no AssetManager, no widgets, no engine.
 //   install(UI thread,  — session registrations, the document read, the panels,
 //           SLICED)       the engine push, the page switch. Each slice is a
 //                         separate event-loop turn (the ImportTailQueue
@@ -83,14 +80,26 @@ public:
         QString label;              ///< shown in the progress dialog
         int     percent = 0;        ///< dialog value when this slice starts
         std::function<void()> run;
+        /// A SLICE THAT TAKES SEVERAL TURNS (OPEN-PATH-1): called instead of `run`, once per
+        /// event-loop turn (a boundary frame after each), until it answers true.
+        std::function<bool()> step;
     };
 
-    /// Queue an open. `meshGuidPaths` is the prewarm plan (already
-    /// CAS-resolved on the UI thread); `slices` is the install.
-    /// `clipPaths` are the clip files the scene names: their stale CLIP bakes
-    /// are rebuilt with the models' (SHIPPED-BAKES-1); they are not prewarmed.
-    void setPlan(const QStringList &modelPaths, const QStringList &clipPaths,
-                 const QVector<Slice> &slices, const QString &label);
+    /// WHAT THE WORKERS READ (OPEN-PATH-1 stage 2). `plan` runs first on the worker with a read-only
+    /// connection of its own to `dbPath` and answers the model files to read and the clip files whose
+    /// stale CLIP bakes are rebuilt with the models' (SHIPPED-BAKES-1; not prewarmed); `side` runs on a
+    /// second worker with its own connection from the start, beside the plan and the bake read, and the
+    /// slices wait for both. Empty `plan` = nothing to read (a create): the slices run at once.
+    struct Reads
+    {
+        QString dbPath;
+        QString root;
+        std::function<void(QSqlDatabase &conn, QStringList *models, QStringList *clips)> plan;
+        std::function<void(QSqlDatabase &conn)> side;
+    };
+
+    /// Queue an open: the reads, then `slices` (the install).
+    void setPlan(const Reads &reads, const QVector<Slice> &slices, const QString &label);
 
     /// WHAT RUNS BETWEEN TWO SLICES, AND WHY THIS EXISTS (lane OPEN-FRAMES-1,
     /// 2026-09-15).
@@ -158,23 +167,25 @@ signals:
     void finished(bool aborted);
 
 private:
-    void runWorker();     ///< worker-thread body
+    void runWorker();     ///< worker-thread body: the plan, the stale bakes, the bake read
+    void readBakes(QSqlDatabase &conn);   ///< worker: the bake plan + the bake read
+    void finishWorker();  ///< worker: joins the side reads, hands back to the UI thread
     void runNextSlice();  ///< UI thread, one slice per event-loop turn
     void crossSliceBoundary();   ///< see setSliceBoundary
 
     Database *db = nullptr;
     Project *project;
 
+    Reads mReads;
     QStringList mModelPaths;
-    /// The same paths with their bakes resolved (MESH_BAKE_SPEC phase 1),
-    /// filled by setPlan on the UI thread because bake lookup is a database
-    /// query and QSqlDatabase connections are per-thread.
+    /// The same paths with their bakes resolved (MESH_BAKE_SPEC phase 1), on the
+    /// worker's own connection.
     QVector<iris::PrewarmItem> mPlan;
     /// STALE BAKES of the planned models (FORWARD-ONLY-1 D1): rebuilt from the
-    /// store's own sources on the worker BEFORE the prewarm reads, then
-    /// committed and re-planned on the UI thread. Never a parse on the open.
+    /// store's own sources on the worker BEFORE the prewarm reads, committed on
+    /// the UI thread (the catalog's writer), re-planned on the worker. Never a
+    /// parse on the open.
     QVector<MeshBakeStore::BakeJob> mRebuild;
-    bool mRebuildDone = false;
     QVector<Slice> mSlices;
     QString mLabel;
     int mNextSlice = 0;
@@ -183,6 +194,7 @@ private:
     std::function<void()> mSliceBoundary;
     unsigned mBoundaryRuns = 0;
     QFuture<void> mFuture;
+    QFuture<void> mSideFuture;   ///< Reads::side, started with the run
     std::atomic<bool> mRunning { false };
     std::atomic<bool> mAborted { false };
     std::atomic<bool> mParsed { false };

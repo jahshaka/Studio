@@ -715,7 +715,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "ignores it, and \"No world open\" is not a load and always shows. ONE THING IT CANNOT DO, said here because it is measured and surprising: a world opened while the editor page is already showing one leaves the PREVIOUS world's last frame on screen for the length of the load whatever this preference says. A viewport with no world bound PRESENTS NOTHING (the engine destroys the view's workspace with its scene), so after the teardown no cover can be put there either — that is also why \"No world open\" is never actually drawn. The fix is engine-side (a scene-less view drawing its own background, STALE-VIEW-1). Every Desktop route — every create, every tile — is unaffected: its viewport is hidden for the load and the frames it reveals are the new world's. With no argument "
           "this reads; with one it writes and returns the new value.",
           Needs::Window },
-        { "mirrorStats", "editor.mirrorStats() -> {available, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode, attachesOwed, attachesDeferred, attachSyncs, meshesBuilt, verticesBuilt, largestSyncMeshes, largestSyncVertices, streamFrames, streamLanded}",
           "What the editor viewport's document->engine mirror has had to do. (When the renderer's GLOBAL "
           "ILLUMINATION answers a change — its configuration pushes, re-solves and cheap light re-injections — "
           "is the RENDERER's own scheduler and is reported by world.giStatus().scheduler.)\n\n"
@@ -771,7 +771,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`attachesOwed` is how many mesh nodes the last sync left without their mesh — the "
           "frames a user watches build new meshes up to a cost budget (vertices and indices) "
           "and leave the rest for the next frame — and `attachesDeferred` counts every such "
-          "deferral since the world was bound (the mirror is made with each world).\n\n"
+          "deferral since the world was bound (the mirror is made with each world). THE STREAM'S "
+          "SHAPE, since the same bind (OPEN-PATH-1): `attachSyncs` is how many syncs built at least one "
+          "new mesh, `meshesBuilt` and `verticesBuilt` what they built in all, `largestSyncMeshes` and "
+          "`largestSyncVertices` the most ONE sync built — the budget's own law bounds them (a budgeted "
+          "sync stops at its share, the first mesh always built; a script's editor.frame, unbudgeted, "
+          "builds everything it sees) — and `streamFrames` the FRAMES from the first that drew a mesh of "
+          "the world to the first whose sync left none owed, `streamLanded` true once that frame is "
+          "drawn: an open that streams its world in shows many frames here, one that attached it in a "
+          "single sync shows few.\n\n"
           "`available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
@@ -3052,6 +3060,13 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("walkMode", s.walkMode.isEmpty() ? QStringLiteral("none") : s.walkMode);
     out.insert("attachesOwed", QVariant::fromValue(s.attachesOwed));
     out.insert("attachesDeferred", QVariant::fromValue(s.attachesDeferred));
+    out.insert("attachSyncs", QVariant::fromValue(s.attachSyncs));
+    out.insert("meshesBuilt", QVariant::fromValue(s.meshesBuilt));
+    out.insert("verticesBuilt", QVariant::fromValue(s.verticesBuilt));
+    out.insert("largestSyncMeshes", QVariant::fromValue(s.largestSyncMeshes));
+    out.insert("largestSyncVertices", QVariant::fromValue(s.largestSyncVertices));
+    out.insert("streamFrames", QVariant::fromValue(s.streamFrames));
+    out.insert("streamLanded", s.streamLanded);
     return out;
 }
 

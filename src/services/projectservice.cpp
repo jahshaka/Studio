@@ -330,50 +330,19 @@ bool ProjectService::removeProject(const QString &guid)
     return true;
 }
 
-iris::ScenePtr ProjectService::readProjectScene(std::unique_ptr<EditorData> *editorData,
+iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
+                                                std::unique_ptr<EditorData> *editorData,
                                                 const iris::MeshPrewarmPtr &prewarm)
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);
     reader->setDatabaseHandle(db);
     reader->setProject(project);
     reader->setPrewarm(prewarm);
-
-    QByteArray blob;
-    {
-        LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
-        blob = db->getSceneBlobGlobal(project->getProjectGuid());
-    }
-    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob, editorData);
+    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), projectObj, editorData);
     mMissingModels = reader->missingModels();
     mMissingClips = reader->missingClips();
     mCascadeRowsDropped = reader->cascadeRowsDropped();
     return scene;
-}
-
-QStringList ProjectService::plannedModelPaths() const
-{
-    if (!db || !project || project->getProjectGuid().isEmpty()) return QStringList();
-    SceneReader reader;
-    reader.setDatabaseHandle(db);
-    reader.setProject(project);
-    QJsonObject projectObj;
-    {
-        LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
-        projectObj = QJsonDocument::fromJson(
-                         db->getSceneBlobGlobal(project->getProjectGuid())).object();
-    }
-    return reader.collectMeshSources(projectObj);
-}
-
-QStringList ProjectService::plannedClipPaths() const
-{
-    if (!db || !project || project->getProjectGuid().isEmpty()) return QStringList();
-    SceneReader reader;
-    reader.setDatabaseHandle(db);
-    reader.setProject(project);
-    const QJsonObject projectObj =
-        QJsonDocument::fromJson(db->getSceneBlobGlobal(project->getProjectGuid())).object();
-    return reader.collectClipSources(projectObj);
 }
 
 // THE SCENE SAVE IS ALREADY CRASH-ATOMIC — DO NOT "FIX" IT INTO SOMETHING THAT

@@ -1,0 +1,83 @@
+// open.first_frame_work — THE WORK BEFORE AN OPEN'S FIRST WORLD FRAME IS OFF THE UI THREAD (OPEN-PATH-1 stage 2).
+//
+// The generated project of open.streams_to_the_end, with MATERIALS materials and as many textures (the materials ride
+// the model; the textures are session assets of their own: a set of 1 + MATERIALS), opened by the threaded runner. The law, read from the open's own ledger
+// (app.openTimings: every counter records the thread that paid for it):
+//   * the session registration's catalog queries are ONE PER ASSET TYPE for the whole set (counter:db:sessionRows,
+//     items = the statements issued; ProjectAssets::sessionTypes() has six) — they were three per asset;
+//   * the plan (worker:plan), the membership (db:sessionRows) and the scene blob (db:sceneBlob) are paid by a WORKER;
+//   * the open's result is the same: the session set and the node count of the threaded open equal the blocking
+//     open's (project.open, the same reads at once) — and both are printed, for the base's.
+// RED at the base: no counter:db:sessionRows (the registration read three statements per asset on the UI thread),
+// db:sceneBlob and the plan the UI thread's.
+var MODEL = "@OPEN_FIRST_MODEL@";
+var MESHES = @OPEN_FIRST_MESHES@;
+var MATERIALS = @OPEN_FIRST_MATERIALS@;
+var TYPES = 6;   // ProjectAssets::sessionTypes(): File, Texture, ParticleSystem, Material, Object, Music
+
+var failures = 0;
+function ok(cond, msg) {
+    if (cond) { console.log("ok:   " + msg); }
+    else { console.log("FAIL: " + msg); ++failures; }
+}
+var J = JSON.stringify;
+
+function counter(timings, name) {
+    var hit = timings.filter(function (r) { return r.stage === "counter:" + name; });
+    return hit.length ? hit[0] : null;
+}
+function sessionSet() {
+    var rows = assets.list({ scope: "session" });
+    var guids = rows.map(function (r) { return r.guid; }).sort();
+    var byType = {};
+    rows.forEach(function (r) { byType[r.type] = (byType[r.type] || 0) + 1; });
+    var h = 0;
+    var s = guids.join(",");
+    for (var i = 0; i < s.length; ++i) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return { count: guids.length, hash: h, byType: byType };
+}
+
+// ---- the fixture ---------------------------------------------------------------------------------------------------
+var guid = project.create("Open First Frame", { template: "empty" });
+var asset = assets.import(MODEL, { maxCards: 0 });
+assets.addToProject(asset);
+var root = assets.addToScene(asset, { position: { x: 0, y: 0, z: 0 } });
+ok(scene.nodes({ subtree: root }).filter(function (n) { return n.type === "mesh"; }).length === MESHES,
+   "the fixture placed " + MESHES + " mesh nodes");
+ok(project.save() === true && project.close() === true, "the fixture saved and closed");
+
+// ---- the threaded open ---------------------------------------------------------------------------------------------
+ok(project.openAsync(guid) === true, "project.openAsync started the threaded open");
+var turns = 0;
+while (project.openState() === "opening" && ++turns < 200000) editor.viewportState();
+ok(project.openState() === "idle", "the open ran to the end");
+var t = app.openTimings();
+var threaded = { session: sessionSet(), nodes: scene.nodes().length };
+console.log("info: threaded open " + J(threaded));
+console.log("info: phases " + J(t.filter(function (r) { return r.stage.indexOf("counter:") !== 0; })
+                                  .map(function (r) { return r.stage + "=" + Math.round(r.ms); })));
+console.log("info: counters " + J(t.filter(function (r) { return /^counter:(db|worker|read|sessionAssets)/.test(r.stage); })));
+
+var rows = counter(t, "db:sessionRows");
+ok(!!rows, "the session registration's reads are counted (counter:db:sessionRows)");
+ok(!!rows && rows.items <= TYPES,
+   "ONE QUERY PER ASSET TYPE: " + (rows ? rows.items : "none") + " statements for " + threaded.session.count
+   + " session assets (<= " + TYPES + ")");
+ok(!!rows && rows.thread === "worker", "the membership is a worker's (" + (rows ? rows.thread : "none") + ")");
+var blob = counter(t, "db:sceneBlob");
+ok(!!blob && blob.thread === "worker" && blob.items === 1,
+   "the scene blob is read ONCE, by a worker (" + (blob ? blob.items + " on " + blob.thread : "none") + ")");
+var plan = counter(t, "worker:plan");
+ok(!!plan && plan.thread === "worker", "the plan is a worker's (" + (plan ? plan.thread : "none") + ")");
+ok(threaded.session.count >= 1 + MATERIALS,
+   "the session set holds the model and its " + MATERIALS + " textures (" + threaded.session.count + ")");
+
+// ---- the same world through the blocking open ----------------------------------------------------------------------
+ok(project.close() === true, "closed");
+project.open(guid);
+var blocking = { session: sessionSet(), nodes: scene.nodes().length };
+console.log("info: blocking open " + J(blocking));
+ok(J(blocking) === J(threaded), "the blocking open read the same session set and node count");
+
+if (failures) throw new Error(failures + " assertion(s) failed");
+console.log("open.first_frame_work: all assertions passed");

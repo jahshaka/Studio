@@ -71,7 +71,7 @@ struct CountedAsset : public AssetNodeObject
 
 /// Registers one "project session": a handful of assets, each pinning a real
 /// SceneNode subtree through its payload QVariant, exactly like the model
-/// assets ProjectAssets::registerProjectSessionAssets() creates.
+/// assets an open's session registration (ProjectAssets::registerSessionRow) creates.
 static QVector<QWeakPointer<iris::SceneNode>> openSession(int count)
 {
     QVector<QWeakPointer<iris::SceneNode>> watches;

@@ -405,7 +405,7 @@ void AssetWidget::flushPendingRefresh()
 void AssetWidget::trigger()
 {
     // NO clearAssetList() here (IMAGE_PLANE_SPEC §6): trigger() runs AFTER
-    // ProjectManager::registerProjectSessionAssets in every open flow
+    // the open's session registration (ProjectRunner::stageRegistrations*) in every open flow
     // (loadProjectAssets[Sync] → MainWindow::openProject → trigger), so a
     // clear at this point silently WIPED the session hydration — the
     // "material drag no-ops after reopen" defect. Every path here already

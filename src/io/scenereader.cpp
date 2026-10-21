@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/lightbindings.h"
 #include "services/loadtimeline.h"
+#include <QSqlQuery>
 #include "services/meshbakestore.h"
 #include "services/primitiveassets.h"
 
@@ -105,10 +106,19 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
                                       std::unique_ptr<EditorData> *editorData)
 {
+    QJsonObject projectObj;
+    {
+        LoadTimeline::Accumulate json(QStringLiteral("read:json"));
+        projectObj = QJsonDocument::fromJson(sceneBlob).object();
+    }
+    return readScene(projectPath, projectObj, editorData);
+}
+
+iris::ScenePtr SceneReader::readScene(const QString &projectPath, QJsonObject projectObj,
+                                      std::unique_ptr<EditorData> *editorData)
+{
     dir = projectPath;
 	useAlternativeLocation = false;
-    auto doc = QJsonDocument::fromJson(sceneBlob);
-    auto projectObj = doc.object();
 
     // FORMAT VERSION (src/io/sceneformat.h). v2 is what this build writes and
     // reads; no conversion from any other exists (FORWARD-ONLY-1). A blob of
@@ -120,8 +130,13 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                  "converted; keys it does not know are ignored.",
                  version, sceneformat::kVersion);
 
+    // THE PARSE'S OWN SPLIT (OPEN-PATH-1: profiled once, named in the open's ledger): the node walk
+    // (of which read:mesh / read:material / read:resolvePath), the editor block, the rest pose.
+    LoadTimeline::Accumulate nodes(QStringLiteral("read:nodes"));
     auto scene = readScene(projectObj);
+    nodes.stop();
 
+    LoadTimeline::Accumulate editorBlock(QStringLiteral("read:editorData"));
     if (editorData) *editorData = readEditorData(projectObj);
     // OUTLINER FOLDERS (SCENEGRAPH_SPEC §6b): read from the EDITOR section,
     // never from the node blocks. Read UNCONDITIONALLY — a project opened
@@ -129,7 +144,9 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     // come back with its folders, because the next save would otherwise write
     // an empty list over them.
     scenefolders::readEditorBlock(projectObj["editor"].toObject(), scene);
+    editorBlock.stop();
 
+    LoadTimeline::Accumulate pose(QStringLiteral("read:restPose"));
     for (auto node : scene->rootNode->children()) {
         node->applyDefaultPose();
         // SCENE_STATIC, re-derived on load (SCENEGRAPH_SPEC §6): the hint is
@@ -228,11 +245,11 @@ QString SceneReader::resolveAssetPathUncached(const QString &guid)
     // the project folder, i.e. the same fallback through another door. The
     // tile is a pinned store object now, like every texture, and all of it
     // went — the folder the first one joined against included.
-    QSqlDatabase conn = QSqlDatabase::database();
+    LoadTimeline::Accumulate resolve(QStringLiteral("read:resolvePath"));
     const QString root = AssetStorePaths::root();
     if (!useAlternativeLocation && project && !project->getProjectGuid().isEmpty())
-        return AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
-    return AssetCas::resolveSource(conn, root, guid);
+        return AssetCas::resolvePinned(conn(), root, project->getProjectGuid(), guid);
+    return AssetCas::resolveSource(conn(), root, guid);
 }
 
 QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
@@ -264,14 +281,20 @@ QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
 QStringList SceneReader::collectClipSources(const QJsonObject &projectObj)
 {
     QStringList out;
-    if (!handle) return out;
+    // A CLIP FILE IS AN ANIMATION ROW: the type read on this reader's connection
+    // (the open's plan runs this on the runner's worker).
+    QSqlQuery typeOf(conn());
+    typeOf.prepare(QStringLiteral("SELECT type FROM assets WHERE guid = ?"));
     std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &nodeObj) {
         for (const auto &anim : nodeObj.value(QLatin1String("animations")).toArray()) {
             const QJsonObject skel =
                 anim.toObject().value(QLatin1String("skeletalAnimation")).toObject();
             const QString guid = skel.value(QLatin1String("guid")).toString();
             if (guid.isEmpty()) continue;
-            if (handle->fetchAsset(guid).type != static_cast<int>(ModelTypes::Animation)) continue;
+            typeOf.bindValue(0, guid);
+            if (!typeOf.exec() || !typeOf.next() ||
+                typeOf.value(0).toInt() != static_cast<int>(ModelTypes::Animation))
+                continue;
             const QString path = resolveAssetPath(guid);
             if (!path.isEmpty() && !out.contains(path)) out.append(path);
         }
@@ -1237,9 +1260,11 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         // 2026-09-15: 5 per open of the Mirror Room sample, 6 per Showroom).
         // The eight shipped samples name the cube floor, a handful of other
         // primitives and the Teapot; each of them arrives with its LOD chain.
+        LoadTimeline::Accumulate meshRead(QStringLiteral("read:mesh"));
         auto mesh = source.startsWith(":")
                         ? PrimitiveAssets::mesh(source, handle)
                         : getMesh(source, meshIndex, nodeObj["mesh"].toString());
+        meshRead.stop();
 
         if (source.startsWith(":")) {
             meshNode->setMesh(mesh);
@@ -1259,8 +1284,10 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->meshIndex = meshIndex;
     }
 
+    LoadTimeline::Accumulate materialRead(QStringLiteral("read:material"));
     auto material = readMaterial(nodeObj);
     meshNode->setMaterial(material);
+    materialRead.stop();
 
     // ABSENT LEAVES MeshNode's OWN MODE (the reader-defaults law, I-5): the
     // fallback here was the string "back", i.e. FaceCullingMode::Back, while

@@ -1,0 +1,71 @@
+// open.streams_to_the_end — THE OPEN STREAMS UNDER ITS BUDGET TO THE END (OPEN-PATH-1 stage 1).
+//
+// A project of MESHES distinct small meshes (tests/openasync/make_many_meshes.py: each its own object, so every one is
+// an attach), opened by the threaded runner (project.openAsync) with the render driver LIVE (--script-live: the
+// driver ticks between this script's verbs, as it does for the owner). The budget's law (SceneMirror::setAttachBudget,
+// EngineSceneViewport::kAttachVerticesPerFrame): a budgeted sync stops building once its share is built, the first
+// mesh always is — so no sync builds more than SHARE + one mesh, and a world of V vertices needs at least
+// ceil(V / (SHARE + one mesh)) budgeted syncs. Two of the open's budgeted syncs are not frames (the geometry prime and
+// the environment prime, behind the runner's slices); every other is a FRAME (a boundary frame or a driver tick).
+// So, from the first frame that draws a mesh of the world to the first whose sync leaves none owed:
+//     frames >= ceil(V / (SHARE + P)) - 2,          largest sync <= SHARE + P vertices.
+// RED at the base: the environment prime was the open's one unbudgeted sync — it built every mesh the geometry share
+// left (measured: one sync of 1,354 meshes, 609,300 vertices) and its boundary frame drew them all at once (1 frame to
+// the landing, against the floor of 9).
+var MODEL = "@OPEN_STREAMS_MODEL@";
+var MESHES = @OPEN_STREAMS_MESHES@;
+var P = 3 * @OPEN_STREAMS_TRIANGLES@;    // vertices per mesh (separate triangles: nothing shared, nothing welded)
+var SHARE = 65536;                       // EngineSceneViewport::kAttachVerticesPerFrame
+var V = MESHES * P;
+
+var failures = 0;
+function ok(cond, msg) {
+    if (cond) { console.log("ok:   " + msg); }
+    else { console.log("FAIL: " + msg); ++failures; }
+}
+var J = JSON.stringify;
+
+ok(app.scriptPolicy().runPolicy === "live", "the render driver ticks between this script's verbs (--script-live)");
+
+// ---- the fixture: one model file of MESHES meshes, in a project of its own ---------------------------------------
+var guid = project.create("Open Streams", { template: "empty" });
+var asset = assets.import(MODEL, { maxCards: 0 });
+assets.addToProject(asset);
+var root = assets.addToScene(asset, { position: { x: 0, y: 0, z: 0 } });
+var meshNodes = scene.nodes({ subtree: root }).filter(function (n) { return n.type === "mesh"; }).length;
+ok(meshNodes === MESHES, "the fixture placed " + meshNodes + " mesh nodes (" + MESHES + " asked)");
+var nodesBefore = scene.nodes().length;
+ok(project.save() === true, "the fixture saved");
+ok(project.close() === true, "the fixture closed");
+
+// ---- the open, the owner's route --------------------------------------------------------------------------------
+ok(project.openAsync(guid) === true, "project.openAsync started the threaded open");
+var turns = 0;
+while (project.openState() === "opening" && ++turns < 200000) editor.mirrorStats();
+ok(project.openState() === "idle", "the open's slices ran to the end (" + turns + " poll turns)");
+var s = editor.mirrorStats();
+var polls = 0;
+while (!s.streamLanded && ++polls < 200000) s = editor.mirrorStats();
+console.log("info: " + J(s));
+ok(s.available === true && s.streamLanded === true, "the world landed: no mesh owed (" + polls + " polls after the slices)");
+
+var minFrames = Math.ceil(V / (SHARE + P)) - 2;
+console.log("info: V " + V + " vertices over " + MESHES + " meshes; " + s.streamFrames + " frames from the first world frame"
+            + " to the landing (the law's floor " + minFrames + "); the largest sync built " + s.largestSyncMeshes
+            + " meshes / " + s.largestSyncVertices + " vertices (the share " + SHARE + " + one mesh " + P + "); "
+            + s.attachSyncs + " syncs built meshes, " + s.meshesBuilt + " meshes / " + s.verticesBuilt + " vertices in all");
+ok(s.meshesBuilt >= MESHES, "every mesh of the world was built (" + s.meshesBuilt + ")");
+ok(s.largestSyncVertices <= SHARE + P,
+   "NO SYNC LEFT THE BUDGET: the largest built " + s.largestSyncVertices + " vertices (<= " + (SHARE + P) + ")");
+ok(s.streamFrames >= minFrames,
+   "THE WORLD STREAMED IN: " + s.streamFrames + " frames from the first world frame to the landing (>= " + minFrames + ")");
+
+// The open's result is the world that was saved.
+ok(project.current() && project.current().guid === guid, "the open project is the fixture");
+ok(scene.nodes().length === nodesBefore, "the opened scene has the saved node count (" + scene.nodes().length + " of "
+   + nodesBefore + ")");
+var t = app.openTimings();
+console.log("info: openTimings " + J(t.filter(function (r) { return /^(total|counter:mirror|counter:engine:environment)/.test(r.stage); })));
+
+if (failures) throw new Error(failures + " assertion(s) failed");
+console.log("open.streams_to_the_end: all assertions passed");

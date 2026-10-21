@@ -25,8 +25,11 @@ For more information see the LICENSE file
 // AssetView::addAssetItemToProject — the twin ~130-line transcriptions
 // (flat folder copies + Database::copyAsset clones) died with it.
 
+#include <QByteArray>
+#include <QSqlDatabase>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 
 
 class Database;
@@ -63,19 +66,42 @@ public:
     static Result addToProject(const QString &guid, Database *db, Project *project,
                                AddKind kind);
 
-    /// THE one session-hydration routine (IMAGE_PLANE_SPEC §6): registers the
-    /// AssetManager entry for `guid`, bytes resolved pin-first through the CAS
-    /// (AssetCas::resolvePinned falls back to the library source). Skips guids
-    /// already registered, unknown guids and types with no session shape.
-    /// Called by addToProject (the adding session) and by
-    /// ProjectManager::registerProjectSessionAssets (project open/reopen) so
-    /// the two sessions hydrate identically.
-    static bool registerSessionAsset(const QString &guid, Database *db, Project *project);
+    /// ONE SESSION ENTRY'S INPUTS, as the catalog holds them: the row's guid,
+    /// type and name, its bytes resolved pin-first (`path`, empty when it has
+    /// none on disk) and its definition (`asset`, read for the types whose
+    /// session entry carries it — a particle system).
+    struct SessionRow
+    {
+        QString guid;
+        int type = 0;
+        QString name;
+        QString path;
+        QByteArray asset;
+    };
 
-    /// The CAS-resolved path of `guid` when it is an Object row — the prewarm
-    /// PLAN for the session registrations, gathered before the worker starts.
-    /// Empty for every other type and for guids with no resolvable bytes.
-    static QString objectSourcePath(const QString &guid, Database *db, Project *project);
+    /// THE SESSION SET OF A PROJECT, ONE QUERY PER ASSET TYPE (OPEN-PATH-1): the
+    /// rows of `type` the project holds — its pins, and for the four legacy
+    /// membership types (File, Texture, ParticleSystem, Material) its own rows —
+    /// with the pinned bytes (else the library source) resolved in the same
+    /// statement and checked on disk here. Runs on ANY thread with a connection
+    /// of that thread (the open runner's worker: services/openreads.h); bumps
+    /// `*queries` by the statements it issued. `sessionTypes()` are the types
+    /// that have a session shape, in the order an open registers them.
+    static QVector<SessionRow> readSessionRows(QSqlDatabase conn, const QString &root,
+                                               const QString &projectGuid, int type,
+                                               int *queries = nullptr);
+    static QVector<int> sessionTypes();
+
+    /// THE one session-hydration routine (IMAGE_PLANE_SPEC §6): the AssetManager
+    /// entry for one row, built from what the catalog said (no reads here).
+    /// Skips a row already registered and a type with no session shape.
+    /// `registerSessionAsset` (addToProject's, one guid) and an open's batch
+    /// (readSessionRows on the worker, these on the UI thread) both end here, so
+    /// the two sessions hydrate identically.
+    static bool registerSessionRow(const SessionRow &row);
+
+    /// One guid's registration: its row read (UI thread) and registerSessionRow.
+    static bool registerSessionAsset(const QString &guid, Database *db, Project *project);
 
     /// Move the project's pin of `guid` to the asset's CURRENT source oid
     /// (the "Update to latest" affordance) and pin every member of the new
