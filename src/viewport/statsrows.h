@@ -76,6 +76,11 @@ struct Input
     int     lodObjects = 0;
     int     lodCoarser = 0;
     int     lodDeepest = 0;
+    /// THE ATOM CUT'S HIDDEN SHARE (ATOM-8 stage 0): while the Atom view shows Triangles (or Density), what the id
+    /// pass's cut drew and the triangles of it that belong to objects with no visible pixel. Row 6 exists only then.
+    bool    atomHiddenCounted = false;
+    quint64 atomDrawnTriangles = 0;
+    quint64 atomHiddenTriangles = 0;
 };
 
 /// A count with thousands separators, in the C locale so the rows read the
@@ -123,6 +128,15 @@ inline QStringList compose(const Input &in)
     if (in.lodObjects > 0)
         rows << QStringLiteral("LOD %1/%2 objects coarser   deepest L%3")
                     .arg(in.lodCoarser).arg(in.lodObjects).arg(in.lodDeepest);
+    // Row 6 — THE HIDDEN SHARE, beside the cut's total (the owner's instrument with the Atom view on): triangles the
+    // picture shows nowhere were still drawn, and the triangle view's colours cannot show them.
+    if (in.atomHiddenCounted) {
+        const double share = in.atomDrawnTriangles ? 100.0 * double(in.atomHiddenTriangles) / double(in.atomDrawnTriangles)
+                                                   : 0.0;
+        rows << QStringLiteral("Atom %1 tris drawn   %2 hidden (%3 %)")
+                    .arg(grouped(in.atomDrawnTriangles), grouped(in.atomHiddenTriangles))
+                    .arg(share, 0, 'f', 0);
+    }
     return rows;
 }
 

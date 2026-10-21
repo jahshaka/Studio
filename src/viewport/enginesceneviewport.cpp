@@ -4029,6 +4029,16 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
                     if (d.level > 0) ++in.lodCoarser;
                     in.lodDeepest = std::max(in.lodDeepest, int(d.level));
                 }
+                // THE HIDDEN SHARE with the Atom view's Triangles (or Density) mode on (ATOM-8 stage 0): the
+                // published frame's figure, read by the engine without a wait.
+                const jahshaka::engine::PublishedFrame::AtomHidden &ah = es->published().atomHidden;
+                const int av = mEngineAtomView;
+                if (ah.valid && (av == int(jahshaka::engine::AtomView::Triangles) ||
+                                 av == int(jahshaka::engine::AtomView::Density))) {
+                    in.atomHiddenCounted = true;
+                    in.atomDrawnTriangles = quint64(ah.drawn);
+                    in.atomHiddenTriangles = quint64(ah.hidden);
+                }
             }
             mStatsLines = statsrows::compose(in);
         }
