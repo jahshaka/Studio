@@ -577,8 +577,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     }
     // The view's pixel-error threshold: absent = the ctor's 1 px (trap 10); 1..8.
     scene->atomPixelError = qBound(1, sceneObj.value("atomPixelError").toInt(scene->atomPixelError), 8);
-    // The view's density cap: absent = the ctor's 1 (the exact rule, trap 10); 1..8.
-    scene->atomDensityCap = qBound(1, sceneObj.value("atomDensityCap").toInt(scene->atomDensityCap), 8);
     // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
     {
         const int sf = sceneObj.value("shadowFilterTier").toInt(scene->shadowFilterTier);

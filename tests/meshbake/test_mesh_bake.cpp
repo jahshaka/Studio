@@ -2269,6 +2269,383 @@ static int dagTerms(const QString &path, bool dense, const QSet<int> &only)
     return 0;
 }
 
+// ---- bake.dag_reaches_root (ATOM-6 stage 2c) ---------------------------------------------------
+//
+// THE CHAIN REACHES ITS ROOT ON CONTENT MADE OF SMALL PIECES. An edge collapse never removes a connected
+// component, so before ATOM-6 a group of leaf cards or closed boxes could not halve: it was terminal at depth 0
+// (or fell to the sloppy fallback) and the chain ended there (the Bistro's cypresses at 6,656 triangles). With
+// the bake's own prune (clusterlod patch 0004: the group's unlocked components removed whole, smallest island
+// first, charged their full extent) a CARD SOUP (2,000 quads in a 2 m sphere) and a KIT-BASH (200 closed
+// 12-triangle boxes on a grid) bake to DAGs whose coarsest cut is EMPTY or one cluster (<= 128 triangles), whose
+// stored errors are monotone up the DAG and under kMaxRelBound x the extent, and in which no group is terminal
+// for lack of a target (only the root may be). RED at the base: terminal at depth 0, the coarsest in the
+// thousands. The area per level is printed (the coverage, parked for the area-preserving item).
+namespace dagroot {
+
+iris::MeshPtr meshFromArrays(const std::vector<float> &positions, const std::vector<float> &normals,
+                             const std::vector<float> &uvs, const std::vector<unsigned> &indices)
+{
+    iris::MeshPtr m = iris::Mesh::create();
+    const auto add = [&](iris::VertexAttribUsage usage, const std::vector<float> &v, int comps) {
+        iris::VertexLayout layout;
+        layout.addAttrib(usage, iris::AttribTypeFloat, comps, comps * int(sizeof(float)));
+        auto vb = iris::VertexBuffer::create(layout);
+        vb->setData(const_cast<float *>(v.data()), unsigned(v.size() * sizeof(float)));
+        m->addVertexBuffer(vb);
+    };
+    add(iris::VertexAttribUsage::Position, positions, 3);
+    add(iris::VertexAttribUsage::Normal, normals, 3);
+    add(iris::VertexAttribUsage::TexCoord0, uvs, 2);
+    auto ib = iris::IndexBuffer::create();
+    ib->setData(const_cast<unsigned *>(indices.data()), unsigned(indices.size() * sizeof(unsigned)));
+    m->setIndexBuffer(ib);
+    m->usesIndexBuffer = true;
+    m->numVerts = int(positions.size() / 3);
+    m->numFaces = int(indices.size() / 3);
+    m->primitiveMode = iris::PrimitiveMode::Triangles;
+    return m;
+}
+
+/// 2,000 two-triangle cards, 10 cm, scattered and turned inside a sphere of radius 1 m (deterministic).
+iris::MeshPtr cardSoup()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 2024u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    for (int c = 0; c < 2000; ++c) {
+        float cx, cy, cz;
+        do { cx = rnd() * 2.0f - 1.0f; cy = rnd() * 2.0f - 1.0f; cz = rnd() * 2.0f - 1.0f; }
+        while (cx * cx + cy * cy + cz * cz > 1.0f);
+        // two orthonormal in-plane axes from a random normal
+        float nx = rnd() * 2.0f - 1.0f, ny = rnd() * 2.0f - 1.0f, nz = rnd() * 2.0f - 1.0f;
+        float nl = std::sqrt(nx * nx + ny * ny + nz * nz); if (nl < 1e-3f) { nx = 0; ny = 1; nz = 0; nl = 1; }
+        nx /= nl; ny /= nl; nz /= nl;
+        float ax = std::fabs(nx) < 0.9f ? 1.0f : 0.0f, ay = ax > 0.5f ? 0.0f : 1.0f, az = 0.0f;
+        float ux = ay * nz - az * ny, uy = az * nx - ax * nz, uz = ax * ny - ay * nx;
+        const float ul = std::sqrt(ux * ux + uy * uy + uz * uz); ux /= ul; uy /= ul; uz /= ul;
+        const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+        const float h = 0.05f;
+        const unsigned b = unsigned(p.size() / 3);
+        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (const auto &k : corners) {
+            p.insert(p.end(), { cx + h * (k[0] * ux + k[1] * vx), cy + h * (k[0] * uy + k[1] * vy), cz + h * (k[0] * uz + k[1] * vz) });
+            n.insert(n.end(), { nx, ny, nz });
+            uv.insert(uv.end(), { k[0] * 0.5f + 0.5f, k[1] * 0.5f + 0.5f });
+        }
+        idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
+    }
+    return meshFromArrays(p, n, uv, idx);
+}
+
+/// 200 closed boxes (12 triangles each, 24 vertices: a face's own normal), 10 cm, on a 20 x 10 grid 30 cm apart.
+iris::MeshPtr kitBash()
+{
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    const float h = 0.05f;
+    const int faces[6][3] = { { 0, 0, 1 }, { 0, 0, -1 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 } };
+    for (int gy = 0; gy < 10; ++gy)
+        for (int gx = 0; gx < 20; ++gx) {
+            const float c[3] = { gx * 0.3f, gy * 0.3f, 0.0f };
+            for (const auto &f : faces) {
+                // the face's two in-plane axes
+                int a = f[0] ? 1 : 0, bAxis = f[2] ? 1 : 2;
+                if (f[1]) { a = 0; bAxis = 2; }
+                const unsigned base = unsigned(p.size() / 3);
+                const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+                for (const auto &k : corners) {
+                    float v[3] = { c[0] + h * float(f[0]), c[1] + h * float(f[1]), c[2] + h * float(f[2]) };
+                    v[a] += h * k[0];
+                    v[bAxis] += h * k[1];
+                    p.insert(p.end(), { v[0], v[1], v[2] });
+                    n.insert(n.end(), { float(f[0]), float(f[1]), float(f[2]) });
+                    uv.insert(uv.end(), { k[0] * 0.5f + 0.5f, k[1] * 0.5f + 0.5f });
+                }
+                // winding is irrelevant to the DAG; two triangles per face
+                idx.insert(idx.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+            }
+        }
+    return meshFromArrays(p, n, uv, idx);
+}
+
+}   // namespace dagroot
+
+static int dagReachesRoot()
+{
+    // meshbake.cpp's safety net (lodchain::kMaxRelBound): no stored error past a quarter of the extent.
+    constexpr float kMaxRelBound = 0.25f;
+    struct Case { const char *name; iris::MeshPtr mesh; };
+    const Case cases[] = { { "card soup (2,000 quads, 4,000 tris)", dagroot::cardSoup() },
+                           { "kit-bash (200 closed boxes, 2,400 tris)", dagroot::kitBash() } };
+    for (const Case &cs : cases) {
+        iris::MeshBake::ClusterDagStats st;
+        QElapsedTimer t; t.start();
+        iris::MeshBake::buildClusterDag(cs.mesh, &st);
+        const iris::MeshClusterDag &dag = cs.mesh->clusterDag;
+        std::printf("== %s: %d clusters, %d groups, depth %d, %lld ms; pruned groups %d, empty %d, pruned re-locked %d; "
+                    "lock retries %d, made terminal by the lock %d, unconverged %d\n",
+                    cs.name, dag.clusters.size(), dag.groups.size(), st.depth, qint64(t.elapsed()), st.prunedGroups,
+                    st.emptyGroups, st.prunedRelocked, st.groupRetries, st.groupsMadeTerminal, st.groupsUnconverged);
+        CHECK_LOUD(!dag.isEmpty(), "the mesh has a DAG");
+        if (dag.isEmpty()) continue;
+        // the extent: the largest AABB axis of the positions
+        float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        const float *pos = nullptr;
+        for (const iris::VertexBufferPtr &vb : cs.mesh->getVertexBuffers())
+            if (!vb->vertexLayout.getAttribs().isEmpty() &&
+                vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position) {
+                pos = reinterpret_cast<const float *>(vb->data);
+                for (size_t i = 0; i < size_t(vb->dataSize) / sizeof(float); i += 3)
+                    for (int k = 0; k < 3; ++k) { lo[k] = std::min(lo[k], pos[i + k]); hi[k] = std::max(hi[k], pos[i + k]); }
+            }
+        const float extent = std::max(std::max(hi[0] - lo[0], hi[1] - lo[1]), hi[2] - lo[2]);
+        int maxDepth = 0;
+        for (const auto &g : dag.groups) maxDepth = std::max(maxDepth, int(g.depth));
+        std::vector<int> members(size_t(dag.groups.size()), 0);
+        unsigned long long coarsest = 0;
+        std::map<int, double> area;   // the level-d surface (a cluster lives from its birth to its group's depth)
+        bool monotone = true;
+        for (const auto &c : dag.clusters) {
+            ++members[size_t(c.group)];
+            const auto &g = dag.groups.at(c.group);
+            if (g.error == FLT_MAX) coarsest += c.triangleCount;
+            if (c.refined >= 0 && g.error < dag.groups.at(c.refined).error) monotone = false;
+            double a = 0.0;
+            for (int t = 0; t < c.triangleCount && pos; ++t) {
+                const float *p0 = pos + 3 * size_t(dag.vertexOf(c, t, 0)), *p1 = pos + 3 * size_t(dag.vertexOf(c, t, 1)),
+                            *p2 = pos + 3 * size_t(dag.vertexOf(c, t, 2));
+                const double ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2];
+                const double vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+                a += 0.5 * std::sqrt((uy * vz - uz * vy) * (uy * vz - uz * vy) + (uz * vx - ux * vz) * (uz * vx - ux * vz) +
+                                     (ux * vy - uy * vx) * (ux * vy - uy * vx));
+            }
+            const int born = c.refined < 0 ? 0 : int(dag.groups.at(c.refined).depth) + 1;
+            const int dies = g.error == FLT_MAX ? maxDepth + 1 : int(g.depth);
+            for (int d = born; d <= dies; ++d) area[d] += a;
+        }
+        int stuck = 0, overBound = 0;
+        float worst = 0.0f;
+        for (int g = 0; g < dag.groups.size(); ++g) {
+            const auto &G = dag.groups.at(g);
+            const bool root = g == dag.groups.size() - 1 && members[size_t(g)] == 1;
+            if (G.error == FLT_MAX) { if (!root) ++stuck; continue; }
+            worst = std::max(worst, G.error);
+            if (!(G.error <= kMaxRelBound * extent)) ++overBound;
+        }
+        std::printf("   coarsest cut %llu triangles; stuck groups %d; worst stored error %.4g (%.3f of the extent %.3g)\n",
+                    coarsest, stuck, double(worst), extent > 0.0f ? double(worst / extent) : 0.0, double(extent));
+        std::printf("   area per level (of level 0's):");
+        for (const auto &kv : area) std::printf(" d%d %.2f", kv.first, area.at(0) > 0.0 ? kv.second / area.at(0) : 0.0);
+        std::printf("\n");
+        char msg[200];
+        std::snprintf(msg, sizeof(msg), "%s: the coarsest cut is empty or one cluster (%llu <= 128)", cs.name, coarsest);
+        CHECK_LOUD(coarsest <= 128ull, msg);
+        std::snprintf(msg, sizeof(msg), "%s: no group is terminal for lack of a target (%d stuck)", cs.name, stuck);
+        CHECK_LOUD(stuck == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the stored errors are monotone up the DAG", cs.name);
+        CHECK_LOUD(monotone, msg);
+        std::snprintf(msg, sizeof(msg), "%s: every stored error under kMaxRelBound x the extent (%d over)", cs.name, overBound);
+        CHECK_LOUD(overBound == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the displacement lock re-locked no pruned piece (%d)", cs.name, st.prunedRelocked);
+        CHECK_LOUD(st.prunedRelocked == 0, msg);
+    }
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
+/// `--dag-levels <model> <out.tsv> [threads] [--exhaustive] [--mesh i,j]`: THE DAG PER MESH AND PER DEPTH (ATOM-6; the lead's measuring tool for the
+/// DAG from now on): every mesh of the file through the bake's own DAG build, and per depth (a level = what a cut at that
+/// depth everywhere draws, the terminal clusters carried up) the groups, the triangles, the terminal ones,
+/// the locked positions the results lost, the measured (stored) and estimated errors, the
+/// level-0 islands the groups dropped and the summed triangle area as a fraction of level 0's (one material per aiMesh); per
+/// mesh level 0, the coarsest cut (the clusters of the terminal groups — none when the top group is empty) and how much of it
+/// lies on level-0 components under 12 triangles; for the file the totals, the prune's account and the wall time. A
+/// measurement of the bake — nothing is written but the table.
+static int dagLevels(const QString &path, const QString &outPath, int threads, bool exhaustive, const QSet<int> &only)
+{
+    iris::MeshBake::setBakeThreads(threads);
+    const QString arm = QStringLiteral("shipped");
+    const iris::MeshBake::ClusterDagVariant variant = iris::MeshBake::ClusterDagVariant::Shipped;
+    Assimp::Importer importer;
+    const aiScene *scene = iris::readSceneFile(importer, path, iris::ImportFlags::Canonical);
+    const QList<iris::MeshPtr> meshes = testmesh::fromScene(scene);
+    if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
+    std::vector<QString> names(meshes.size());
+    std::function<void(const aiNode *)> walk = [&](const aiNode *n) {
+        for (unsigned k = 0; k < n->mNumMeshes; ++k)
+            if (n->mMeshes[k] < names.size() && names[n->mMeshes[k]].isEmpty())
+                names[n->mMeshes[k]] = QString::fromUtf8(n->mName.C_Str());
+        for (unsigned c = 0; c < n->mNumChildren; ++c) walk(n->mChildren[c]);
+    };
+    walk(scene->mRootNode);
+    QFile out(outPath);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) { std::printf("FAIL: %s\n", qUtf8Printable(outPath)); return 1; }
+    out.write("mesh\tname\tl0\tcoarsest\tcoarsestSmallComp\tcomps\tcompsUnder12\tdepth\tgroups\ttrisIn\tterminal\t"
+              "lockDropped\terrMax\terrMed\testMax\tislandsDropped\tdropExtMax\tareaFrac\tmaterial\n");
+    unsigned long long coarsestAll = 0, coarsestDagLess = 0, l0All = 0, smallInLate = 0, lateCoarsest = 0;
+    int dagMeshes = 0, dagLess = 0, endAbove128 = 0, stuck = 0, madeTerminal = 0, retries = 0,
+        unconverged = 0, lockDroppedGroups = 0, emptyGroups = 0, prunedGroups = 0, prunedRelocked = 0;
+    double buildMs = 0.0, measureMs = 0.0, verifyMs = 0.0;
+    std::vector<int> lostByDepth;   // locked positions lost, per depth (the post-sprint audit's numbers)
+    QElapsedTimer wall; wall.start();
+    for (int i = 0; i < meshes.size(); ++i) {
+        const iris::MeshPtr &m = meshes.at(i);
+        if (!only.isEmpty() && !only.contains(i)) continue;
+        iris::MeshBake::ClusterDagStats st;
+        st.wantTerms = true;
+        st.exhaustiveMeasure = exhaustive;
+        iris::MeshBake::buildClusterDag(m, &st, variant);
+        const iris::MeshClusterDag &dag = m->clusterDag;
+        const iris::IndexBufferPtr ib = m->getIndexBuffer();
+        const size_t nIdx = (!ib.isNull() && ib->data) ? size_t(ib->dataSize) / sizeof(unsigned) : 0u;
+        if (dag.clusters.isEmpty()) {
+            ++dagLess; coarsestDagLess += nIdx / 3u; coarsestAll += nIdx / 3u; l0All += nIdx / 3u;
+            continue;
+        }
+        ++dagMeshes;
+        buildMs += st.buildMs; measureMs += st.measureMs; verifyMs += st.verifyMs;
+        madeTerminal += st.groupsMadeTerminal; retries += st.groupRetries;
+        for (int d = 0; d < st.lockedDroppedByDepth.size(); ++d) {
+            if (int(lostByDepth.size()) <= d) lostByDepth.resize(size_t(d) + 1, 0);
+            lostByDepth[size_t(d)] += st.lockedDroppedByDepth.at(d);
+        }
+        unconverged += st.groupsUnconverged; lockDroppedGroups += st.lockDroppedGroups;
+        prunedGroups += st.prunedGroups; prunedRelocked += st.prunedRelocked;
+        // level-0 components by welded position
+        const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
+        std::vector<unsigned> comp;   // per vertex
+        std::vector<unsigned> compTris;
+        unsigned comps = 0, compsSmall = 0;
+        int pc = 3; size_t nv = 0;
+        const float *pos = nullptr;
+        {
+            for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
+                if (!vb || !vb->data || vb->dataSize <= 0) continue;
+                const QList<iris::VertexAttribute> attribs = vb->vertexLayout.getAttribs();
+                if (attribs.isEmpty() || attribs.first().usage != iris::VertexAttribUsage::Position) continue;
+                pc = attribs.first().count > 0 ? attribs.first().count : 3;
+                nv = size_t(vb->dataSize) / (sizeof(float) * size_t(pc));
+                pos = reinterpret_cast<const float *>(vb->data);
+                break;
+            }
+            std::vector<unsigned> parent(nv);
+            for (size_t v = 0; v < nv; ++v) parent[v] = unsigned(v);
+            std::function<unsigned(unsigned)> find = [&](unsigned x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+            std::map<std::array<float, 3>, unsigned> weld;
+            for (size_t v = 0; v < nv; ++v) {
+                const std::array<float, 3> k = { pos[v * pc], pos[v * pc + 1], pos[v * pc + 2] };
+                auto it = weld.emplace(k, unsigned(v)).first;
+                const unsigned a = find(unsigned(v)), b = find(it->second);
+                if (a != b) parent[std::max(a, b)] = std::min(a, b);
+            }
+            for (size_t t = 0; t + 2 < nIdx; t += 3) {
+                const unsigned a = find(idx[t]);
+                for (int k = 1; k < 3; ++k) { const unsigned b = find(idx[t + k]); if (b != a) parent[std::max(a, b)] = std::min(a, b); }
+            }
+            std::vector<unsigned> id(nv, ~0u);
+            comp.assign(nv, ~0u);
+            for (size_t v = 0; v < nv; ++v) { const unsigned r = find(unsigned(v)); if (id[r] == ~0u) id[r] = comps++; comp[v] = id[r]; }
+            compTris.assign(comps, 0u);
+            for (size_t t = 0; t + 2 < nIdx; t += 3) ++compTris[comp[idx[t]]];
+            for (unsigned c = 0; c < comps; ++c) if (compTris[c] > 0 && compTris[c] < 12) ++compsSmall;
+        }
+        unsigned long long l0 = 0, coarsest = 0, coarsestSmall = 0;
+        struct Lv { int groups = 0, terminal = 0, dropped = 0, islands = 0; unsigned long long tris = 0;
+                    double area = 0.0; std::vector<float> err; float est = 0.0f, dropExt = 0.0f; };
+        std::map<int, Lv> lv;
+        std::vector<int> memberCount(size_t(dag.groups.size()), 0);
+        for (const auto &c : dag.clusters) {
+            if (c.refined < 0) l0 += c.triangleCount;
+            if (c.group < 0 || c.group >= dag.groups.size()) continue;
+            ++memberCount[size_t(c.group)];
+            const auto &g = dag.groups.at(c.group);
+            if (g.error == FLT_MAX) {
+                coarsest += c.triangleCount;
+                for (int t = 0; t < c.triangleCount; ++t) {
+                    const quint32 v = dag.vertexOf(c, t, 0);
+                    if (v < comp.size() && compTris[comp[v]] < 12) ++coarsestSmall;
+                }
+            }
+        }
+        int maxDepth = 0;
+        for (const auto &g : dag.groups) maxDepth = std::max(maxDepth, int(g.depth));
+        // THE LEVEL-d SURFACE: a cluster lives from the level its producer made (0 for level 0) up to its own group's
+        // depth, or for ever when its group is terminal — so a level's triangles and area are what a cut at that
+        // depth everywhere draws (the terminal groups' clusters stay in every later level).
+        for (const auto &c : dag.clusters) {
+            if (c.group < 0 || c.group >= dag.groups.size()) continue;
+            const auto &g = dag.groups.at(c.group);
+            const int born = c.refined < 0 ? 0 : int(dag.groups.at(c.refined).depth) + 1;
+            const int dies = g.error == FLT_MAX ? maxDepth + 1 : int(g.depth);
+            double a = 0.0;
+            for (int t = 0; t < c.triangleCount && pos; ++t) {
+                const float *p0 = pos + size_t(dag.vertexOf(c, t, 0)) * size_t(pc);
+                const float *p1 = pos + size_t(dag.vertexOf(c, t, 1)) * size_t(pc);
+                const float *p2 = pos + size_t(dag.vertexOf(c, t, 2)) * size_t(pc);
+                const double ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2];
+                const double vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+                const double cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+                a += 0.5 * std::sqrt(cx * cx + cy * cy + cz * cz);
+            }
+            for (int d = born; d <= dies; ++d) { lv[d].tris += c.triangleCount; lv[d].area += a; }
+        }
+        // groups with no outputs (a whole group pruned away)
+        std::vector<int> outputsOf(size_t(dag.groups.size()), 0);
+        for (const auto &c : dag.clusters) if (c.refined >= 0 && c.refined < dag.groups.size()) ++outputsOf[size_t(c.refined)];
+        for (int g = 0; g < dag.groups.size(); ++g) {
+            const auto &G = dag.groups.at(g);
+            Lv &L = lv[G.depth];
+            ++L.groups;
+            const bool root = g == dag.groups.size() - 1 && G.error == FLT_MAX && memberCount[size_t(g)] == 1;
+            if (G.error == FLT_MAX) { if (!root) { ++L.terminal; ++stuck; } }
+            else {
+                L.err.push_back(G.error);
+                if (G.estimate != FLT_MAX) L.est = std::max(L.est, G.estimate);
+                if (outputsOf[size_t(g)] == 0) ++emptyGroups;   // the prune emptied it
+            }
+            if (g < st.groupLockedDropped.size()) L.dropped += int(st.groupLockedDropped.at(g));
+            if (g < st.groupTerms.size()) { L.islands += st.groupTerms.at(g).islandsDropped;
+                                            L.dropExt = std::max(L.dropExt, st.groupTerms.at(g).droppedMaxExtent); }
+        }
+        l0All += l0; coarsestAll += coarsest;
+        if (coarsest > 128) { ++endAbove128; lateCoarsest += coarsest; smallInLate += coarsestSmall; }
+        const double area0 = lv.count(0) ? lv[0].area : 0.0;
+        for (auto &kv : lv) {
+            Lv &L = kv.second;
+            std::sort(L.err.begin(), L.err.end());
+            const float emax = L.err.empty() ? -1.0f : L.err.back(), emed = L.err.empty() ? -1.0f : L.err[L.err.size() / 2];
+            out.write(QStringLiteral("%1\t%2\t%3\t%4\t%5\t%6\t%7\t%8\t%9\t%10\t%11\t%12\t%13\t%14\t%15\t%16\t%17")
+                          .arg(i).arg(names[size_t(i)]).arg(l0).arg(coarsest).arg(coarsestSmall).arg(comps).arg(compsSmall)
+                          .arg(kv.first).arg(L.groups).arg(L.tris).arg(L.terminal).arg(L.dropped)
+                          .arg(double(emax), 0, 'g', 5).arg(double(emed), 0, 'g', 5).arg(double(L.est), 0, 'g', 5)
+                          .arg(L.islands).arg(double(L.dropExt), 0, 'g', 5).toUtf8()
+                      + QStringLiteral("\t%1\t%2\n").arg(area0 > 0.0 ? L.area / area0 : 0.0, 0, 'f', 4)
+                            .arg(scene->mMeshes[i]->mMaterialIndex < scene->mNumMaterials
+                                     ? QString::fromUtf8(scene->mMaterials[scene->mMeshes[i]->mMaterialIndex]->GetName().C_Str())
+                                     : QString()).toUtf8());
+        }
+        (void)maxDepth;
+    }
+    std::printf("dag-levels %s (%s, %d threads): %d meshes with a DAG, %d without (%llu tris); level 0 %llu\n",
+                qUtf8Printable(QFileInfo(path).fileName()), qUtf8Printable(arm), threads, dagMeshes, dagLess,
+                coarsestDagLess, l0All);
+    std::printf("  COARSEST TOTAL %llu (DAG %llu + DAG-less %llu); chains ending above 128: %d holding %llu, of which on "
+                "level-0 components under 12 tris: %llu\n", coarsestAll, coarsestAll - coarsestDagLess, coarsestDagLess,
+                endAbove128, lateCoarsest, smallInLate);
+    std::printf("  terminal (stuck) groups %d, of which the lock made terminal %d; lock retries %d, "
+                "unconverged %d; groups that lost a locked position %d; empty groups %d; pruned groups %d, pruned vertices "
+                "relocked %d\n", stuck, madeTerminal, retries, unconverged, lockDroppedGroups, emptyGroups,
+                prunedGroups, prunedRelocked);
+    std::printf("  locked positions lost per depth:");
+    for (size_t d = 0; d < lostByDepth.size(); ++d) std::printf(" d%zu %d", d, lostByDepth[d]);
+    std::printf("\n");
+    std::printf("  DAG build wall %lld ms (clodBuild %.0f, of which the verify %.0f over %d retries; measure %.0f; summed)\n",
+                qint64(wall.elapsed()), buildMs, verifyMs, retries, measureMs);
+    return 0;
+}
+
 /// `--dag-depths <model>...`: THE DAG'S TRIANGLES PER DEPTH (ENGINE-POLISH-ATOM-1 stage 6, the owner's "far = near
 /// polygons"): every mesh of every file through the bake's own DAG build (MeshBake::buildClusterDag - a mesh under its
 /// floor gets none: the engine draws such a mesh from a flat DAG over level 0, its every triangle at depth 0), the
@@ -3196,6 +3573,21 @@ int main(int argc, char **argv)
                     only.insert(n.toInt());
         }
         return dagTerms(QString::fromLocal8Bit(argv[2]), dense, only);
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
+    if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
+        // [threads] [--exhaustive] [--mesh i,j,...]
+        int threads = 4;
+        bool exhaustive = false;
+        QSet<int> only;
+        for (int a = 4; a < argc; ++a) {
+            const QString arg = QString::fromLocal8Bit(argv[a]);
+            if (arg == QStringLiteral("--exhaustive")) exhaustive = true;
+            else if (arg == QStringLiteral("--mesh") && a + 1 < argc)
+                for (const QString &n : QString::fromLocal8Bit(argv[++a]).split(QLatin1Char(','))) only.insert(n.toInt());
+            else threads = arg.toInt();
+        }
+        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]), threads, exhaustive, only);
     }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-depths")) {
         QStringList paths;

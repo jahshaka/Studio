@@ -1087,7 +1087,6 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
         std::memcpy(v.eye, req.eye, sizeof(v.eye));
         const auto *applied = jahshaka::engine::inspect::scene(env.scene);
         v.tolerance = root ? 1e30f : applied->pixelTolerance() * applied->lodBias();
-        v.densityCap = root ? 1.0f : applied->densityCap();   // the id pass's cap (ATOM-5)
         v.projScaleY = req.projScaleY;
         v.viewportHeight = req.viewportHeight;
         // ...and the view's frustum, cluster by cluster, as the cut job tests it
