@@ -120,6 +120,7 @@ pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
 rigperf.smoke 1.47  quiet n=49
+rtreflect.history_detectors 3.93  solo 2026-10-21 (PHOTON-5 stage 4)
 samples.cleanstart.Matcaps 47.78  quiet n=50
 samples.cleanstart.Mirror_Room 46.42  quiet n=50
 samples.cleanstart.Particles 52.59  quiet n=46
