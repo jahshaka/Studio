@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -113,6 +114,11 @@ bool Session::boot(std::string &error)
     // needs an X server: Ogre-Next's VulkanXcbSupport connects to $DISPLAY at boot (measured: unset = "XCB: failed to
     // connect to the display server", then a refused config) — display 0 only means "no window of ours".
     cfg.headless = false;
+    if (mOpt.headless && !std::getenv("DISPLAY")) {
+        error = "--headless needs an X display: Ogre-Next's Vulkan connects to $DISPLAY at boot even for an offscreen "
+                "view (no window is made) - run it with DISPLAY=:NN of the rig's Xvfb";
+        return false;
+    }
     if (!mOpt.headless) {
         std::string werr;
         if (!mWindow.open(mOpt.width, mOpt.height, "jahlab", werr)) { error = werr; return false; }
@@ -167,10 +173,13 @@ bool Session::load(std::string &error)
     iris::SceneNodePtr model = loadModel(path, mOpt.dataRoot, r);
     if (!model) { error = r.error.toStdString(); return false; }
     std::printf("LAB LOAD %s: %s | %d meshes, %s triangles, %d file lights | hash %.0f ms, parse %.0f ms, bake %.0f ms, "
-                "read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions | %s\n",
-                qPrintable(QFileInfo(path).fileName()), r.baked ? "BAKED (cache miss)" : "CACHE HIT (no parse, no bake)",
+                "read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions, %.0f ms | %d two-sided nodes | %s\n",
+                qPrintable(QFileInfo(path).fileName()),
+                r.baked ? "BAKED (cache miss)" : r.parsed ? "BAKE HIT, PARSED (the sidecar was missing or stale)"
+                                                          : "CACHE HIT (no parse, no bake)",
                 r.meshes, grouped(r.triangles).c_str(), r.lights, r.hashMs, r.parseMs, r.bakeMs, r.readMs, r.fragmentMs,
-                r.texturesResolved, r.texturesMissing, r.textureNameCollisions, qPrintable(r.bakePath));
+                r.texturesResolved, r.texturesMissing, r.textureNameCollisions, r.texturesMs, r.twoSidedNodes,
+                qPrintable(r.bakePath));
     std::fflush(stdout);
     mSceneTriangles = r.triangles;
     QString werr;
@@ -375,13 +384,14 @@ std::string Session::statusJson()
     o.precision(9);
     o << "{\"lab\":{\"frame\":" << mFrames << ",\"ms\":" << msSinceStart() << ",\"file\":" << jstr(mJlab.file)
       << ",\"tier\":\"" << tierName(mTier) << "\",\"view\":\"" << atomViewNames()[size_t(mAtomView)]
-      << "\",\"gi\":" << (mGi ? "true" : "false") << ",\"occlusion\":" << (mOcclusion ? "true" : "false")
+      << "\",\"viewPaints\":" << (mAtomView == 0 || mScene->published().atomViewPaintable ? "true" : "false")
+      << ",\"gi\":" << (mGi ? "true" : "false") << ",\"occlusion\":" << (mOcclusion ? "true" : "false")
       << ",\"draw\":" << (mDraw ? "true" : "false") << ",\"sceneTriangles\":" << mSceneTriangles
       << ",\"camera\":{\"position\":[" << p.x() << "," << p.y() << "," << p.z() << "],\"target\":[" << t.x() << ","
       << t.y() << "," << t.z() << "]}}";
     o << ",\"atom\":{";
     bool first = true;
-    const auto f = [&](const char *k, double v) { o << (first ? "" : ",") << "\"" << k << "\":" << v; first = false; };
+    const auto f = [&](const char *k, unsigned long long v) { o << (first ? "" : ",") << "\"" << k << "\":" << v; first = false; };
     const auto b = [&](const char *k, bool v) { o << (first ? "" : ",") << "\"" << k << "\":" << (v ? "true" : "false"); first = false; };
     b("live", st.live); b("on", st.on);
     f("atomItems", st.atomItems); f("atomTwoSided", st.atomTwoSided); f("atomMasked", st.atomMasked);
@@ -394,13 +404,13 @@ std::string Session::statusJson()
     b("cutValid", st.cutValid); f("cutClusters", st.cutClusters); f("cutIndices", st.cutIndices);
     f("cutEvaluated", st.cutEvaluated); f("cutOverflow", st.cutOverflow); f("cutMissing", st.cutMissing);
     f("cutOverflowIndices", st.cutOverflowIndices); f("cutIndexBudget", st.cutIndexBudget);
-    f("cutTriangles", double(st.cutTriangles));
+    f("cutTriangles", st.cutTriangles);
     b("occlusion", st.occlusion); f("occluded", st.occluded); f("disoccluded", st.disoccluded);
     b("casterValid", st.casterValid); f("casterMaps", st.casterMaps); f("casterClusters", st.casterClusters);
     f("casterInstances", st.casterInstances); f("casterOverflow", st.casterOverflow); f("casterMissing", st.casterMissing);
-    f("casterIndexBudget", st.casterIndexBudget); f("casterTriangles", double(st.casterTriangles));
+    f("casterIndexBudget", st.casterIndexBudget); f("casterTriangles", st.casterTriangles);
     f("casterOccluded", st.casterOccluded); f("casterLateInstances", st.casterLateInstances);
-    f("casterLateOccluded", st.casterLateOccluded); f("casterLateTriangles", double(st.casterLateTriangles));
+    f("casterLateOccluded", st.casterLateOccluded); f("casterLateTriangles", st.casterLateTriangles);
     b("densityValid", st.densityValid); f("densityPixels", st.densityPixels); f("densityObjects", st.densityObjects);
     o << ",\"densityClassPixels\":[" << st.densityClassPixels[0] << "," << st.densityClassPixels[1] << ","
       << st.densityClassPixels[2] << "],\"densityDepthPixels\":[";
@@ -420,7 +430,11 @@ bool Session::execLine(const std::string &line, const char *source)
     Command c;
     std::string err;
     if (!parse(line, c, err)) {
-        if (!err.empty()) { std::printf("LAB REFUSED (%s) %s\n", source, err.c_str()); std::fflush(stdout); }
+        if (!err.empty()) {
+            std::printf("LAB REFUSED (%s) %s\n", source, err.c_str());
+            std::fflush(stdout);
+            if (std::string(source) == "script") mExit = 1;   // a script line the grammar refuses fails the run
+        }
         return err.empty();
     }
     c.source = source;
@@ -451,6 +465,9 @@ bool Session::exec(const Command &c)
             // THE APP'S TABLE (irisgl worldmodes::setMode, world.mode's call): every tier row, Photon at the tier's name
             worldmodes::setMode(mDoc, worldmodes::Mode(t));
             if (!mGi) worldmodes::setPhoton(mDoc, false, worldmodes::photonTier(mDoc));
+            if (mAtomView != 0 && t == int(worldmodes::Mode::Low))
+                std::printf("LAB NOTE the %s view paints nothing at Low (its view carries no id pass); the status says "
+                            "viewPaints false\n", atomViewNames()[size_t(mAtomView)].c_str());
             setTitle();
         }
     } else if (c.verb == "gi") {
@@ -580,7 +597,7 @@ int Session::run(const Options &opt)
         const iris::SceneNodePtr m = loadModel(mOpt.file, mOpt.dataRoot, r);
         std::printf("LAB BAKE-ONLY %s: %s | %d meshes, %s triangles, %d file lights | parse %.0f ms, bake %.0f ms, read "
                     "%.0f ms | maps %d resolved, %d missing | %s\n", qPrintable(QFileInfo(mOpt.file).fileName()),
-                    !m ? qPrintable(r.error) : r.baked ? "BAKED" : "CACHE HIT", r.meshes, grouped(r.triangles).c_str(),
+                    !m ? qPrintable(r.error) : r.baked ? "BAKED" : r.parsed ? "BAKE HIT, PARSED (the sidecar)" : "CACHE HIT", r.meshes, grouped(r.triangles).c_str(),
                     r.lights, r.parseMs, r.bakeMs, r.readMs, r.texturesResolved, r.texturesMissing, qPrintable(r.bakePath));
         return m ? 0 : 4;
     }
@@ -616,6 +633,12 @@ int Session::run(const Options &opt)
         }
         frame();
         readStdinLines();
+        if (!mWaitingSaid && mScriptLines.empty() && (!mOpt.readStdin || !mStdinOpen)) {
+            mWaitingSaid = true;
+            std::printf("LAB WAITING: no more commands (the script ended%s) — the window runs until Escape, the "
+                        "window's close or `quit`\n", mOpt.readStdin ? ", stdin is closed" : "");
+            std::fflush(stdout);
+        }
     }
     std::printf("LAB END frames %llu, %.0f ms, exit %d\n", mFrames, msSinceStart(), mExit);
     std::fflush(stdout);

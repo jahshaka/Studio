@@ -31,11 +31,14 @@ struct LoadReport
     bool ok = false;
     QString error;
     bool baked = false;            ///< true: parsed and baked now; false: the cache hit
+    bool parsed = false;           ///< true: the file was parsed (a bake, or a valid bake whose sidecar was missing)
     QString bakePath;
     double hashMs = 0, parseMs = 0, bakeMs = 0, readMs = 0, fragmentMs = 0;
     int meshes = 0, lights = 0;
     unsigned long long triangles = 0;   ///< level-0 triangles of every mesh of the fragment
     int texturesResolved = 0, texturesMissing = 0, textureNameCollisions = 0;   ///< the maps' names (TextureIndex)
+    double texturesMs = 0.0;       ///< the maps' name resolution (TextureIndex)
+    int twoSidedNodes = 0;   ///< nodes given FaceCullingMode::None from their material's twoSided flag
 };
 
 /// Loads `path` (FBX / OBJ / glTF / GLB...) through the bake cache under `dataRoot`. Null + report.error on failure.

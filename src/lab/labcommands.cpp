@@ -68,6 +68,13 @@ const std::vector<std::string> &tierNames()
     return n;
 }
 
+static std::string v_usage(const std::string &verb)
+{
+    for (const VerbDoc &v : verbs())
+        if (verb == v.verb) return v.usage;
+    return verb;
+}
+
 bool parse(const std::string &lineIn, Command &out, std::string &error)
 {
     error.clear();
@@ -105,6 +112,20 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
             }
             out.args = six;
         }
+        // NUMBERS ARE THE GRAMMAR'S: `frames abc` is a parse error, never 0 frames
+        const auto number = [&](size_t i, double lo, bool integer) {
+            if (i >= out.args.size()) return true;
+            char *end = nullptr;
+            const double v = std::strtod(out.args[i].c_str(), &end);
+            if (!end || *end || v < lo || (integer && v != double((long long)v))) {
+                error = "'" + line + "': '" + out.args[i] + "' is not " + (integer ? "a whole number" : "a number") +
+                        " >= " + std::to_string((long long)lo) + " (" + v_usage(out.verb) + ")";
+                return false;
+            }
+            return true;
+        };
+        if (out.verb == "frames" && !number(0, 0, true)) return false;
+        if (out.verb == "settle" && !number(0, 1, true)) return false;
         return true;
     }
     error = "'" + line + "': unknown command '" + out.verb + "' (help lists them)";

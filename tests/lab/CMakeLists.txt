@@ -19,11 +19,9 @@ set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
 # lab.commands_are_one_parser — a KEY (xdotool F2 x 2 on the window), a --script line and a stdin line each put the
 # scene on the Atom Levels view: the lab's status says levels three times, and the engine's presented frame (the frame
 # capture) is one picture byte for byte, unlike the `view off` frame between them. ~45 frames on the window.
-find_program(JAH_LAB_XDOTOOL xdotool)
-if(JAH_LAB_XDOTOOL)
-    jah_gpu_row(lab.commands_are_one_parser CLASS engine FRAMES 45
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/commands_are_one_parser.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/commands_are_one_parser
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(lab.commands_are_one_parser PROPERTIES TIMEOUT 60 LABELS "lab")
-endif()
+# (no xdotool on the box = the row FAILS by name — never silently absent)
+jah_gpu_row(lab.commands_are_one_parser CLASS engine FRAMES 45
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/commands_are_one_parser.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/commands_are_one_parser
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.commands_are_one_parser PROPERTIES TIMEOUT 60 LABELS "lab")

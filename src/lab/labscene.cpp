@@ -23,6 +23,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -133,43 +134,96 @@ int attachLights(const iris::SceneNodePtr &root, const QJsonArray &lights)
 
 /// THE BAKE'S TEXTURES BY NAME (meshbake.cpp:6340-6373: a bake records every map by its BARE file name — the app
 /// re-points them from the catalog's definition at open, AssetHelper::updateNodeMaterial). The lab has no catalog: it
-/// resolves a name against the bake's own extract directory (the embedded images and split maps the bake wrote) and
-/// then the model's folder tree — where MaterialHelper found them at the parse (materialhelper.cpp containedTexturePath:
-/// inside the model's directory). A name found twice in the tree resolves to the shallowest, and is counted.
+/// resolves a name ON DEMAND against, in this order, the bake's own extract directory (the embedded images and split
+/// maps the bake wrote), the model's folder and the model folder's immediate subfolders (a model's `Textures/` beside
+/// it — where MaterialHelper found them at the parse: inside the model's directory, materialhelper.cpp
+/// containedTexturePath). Each folder is listed once, when a name first needs it (memoised, lower-case names); a name
+/// found in two folders resolves to the first in that order (counted). The time it takes is the open's `maps ms`.
 struct TextureIndex
 {
-    QHash<QString, QString> byName;   ///< lower-case file name -> absolute path
+    QStringList dirs;                                  ///< the search order
+    QVector<QHash<QString, QString>> listed;           ///< per dir, built on first need
+    QVector<bool> isListed;
+    QHash<QString, QString> memo;                      ///< lower-case name -> path ("" = not found)
     int collisions = 0, resolved = 0, missing = 0;
-    void add(const QString &root, int maxDepth)
+    double ms = 0.0;
+    TextureIndex(const QString &extractDir, const QString &modelDir)
     {
-        std::function<void(const QString &, int)> walk = [&](const QString &dir, int depth) {
-            const QFileInfoList list = QDir(dir).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
-                                                               QDir::DirsLast | QDir::Name);
-            for (const QFileInfo &f : list) {
-                if (f.isDir()) { if (depth < maxDepth) walk(f.absoluteFilePath(), depth + 1); continue; }
-                const QString k = f.fileName().toLower();
-                if (byName.contains(k)) { ++collisions; continue; }
-                byName.insert(k, f.absoluteFilePath());
+        dirs << extractDir << modelDir;
+        for (const QFileInfo &d : QDir(modelDir).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name))
+            dirs << d.absoluteFilePath();
+        listed.resize(dirs.size());
+        isListed.fill(false, dirs.size());
+    }
+    QString find(const QString &lower)
+    {
+        const auto m = memo.constFind(lower);
+        if (m != memo.constEnd()) return m.value();
+        QString hit;
+        for (int i = 0; i < dirs.size(); ++i) {
+            if (!isListed[i]) {
+                for (const QFileInfo &f : QDir(dirs[i]).entryInfoList(QDir::Files)) listed[i].insert(f.fileName().toLower(), f.absoluteFilePath());
+                isListed[i] = true;
             }
-        };
-        if (!root.isEmpty() && QFileInfo(root).isDir()) walk(root, 0);
+            const auto it = listed[i].constFind(lower);
+            if (it == listed[i].constEnd()) continue;
+            if (hit.isEmpty()) hit = it.value();
+            else { ++collisions; break; }
+        }
+        memo.insert(lower, hit);
+        return hit;
     }
     void resolve(QString &name)
     {
         if (name.isEmpty() || QFileInfo(name).isAbsolute()) return;
-        const auto it = byName.constFind(QFileInfo(name).fileName().toLower());
-        if (it == byName.constEnd()) { ++missing; return; }
-        name = it.value();
+        const QString path = find(QFileInfo(name).fileName().toLower());
+        if (path.isEmpty()) { ++missing; return; }
+        name = path;
         ++resolved;
     }
     void resolve(iris::MeshMaterialData &d)
     {
+        const auto t0 = Clock::now();
         for (QString *t : { &d.diffuseTexture, &d.specularTexture, &d.normalTexture, &d.hightTexture,
                             &d.baseColorTexture, &d.metallicTexture, &d.roughnessTexture, &d.emissiveTexture,
                             &d.specularMapTexture })
             resolve(*t);
+        ms += msSince(t0);
     }
 };
+
+/// The sidecar (labscene.h): the bake's fingerprint and the file's lights; false when absent, unreadable or another
+/// bake's (a failed write can leave an old sidecar beside a new bake: a mismatch is a miss).
+bool readSidecar(const QString &path, const QString &fingerprint, QJsonArray &lights)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    if (o["fingerprint"].toString() != fingerprint) return false;
+    lights = o["lights"].toArray();
+    return true;
+}
+
+bool writeSidecar(const QString &path, const QString &fingerprint, const QJsonArray &lights)
+{
+    QJsonObject side;
+    side["fingerprint"] = fingerprint;
+    side["lights"] = lights;
+    const QString tmp = path + QStringLiteral(".tmp");
+    QFile f(tmp);
+    if (!f.open(QIODevice::WriteOnly) || f.write(QJsonDocument(side).toJson()) < 0) return false;
+    f.close();
+    QFile::remove(path);
+    return QFile::rename(tmp, path);
+}
+
+void removeCameras(const iris::SceneNodePtr &n)
+{
+    for (const iris::SceneNodePtr &c : n->children()) {
+        if (c->getSceneNodeType() == iris::SceneNodeType::Camera) n->removeChild(c);
+        else removeCameras(c);
+    }
+}
 
 unsigned long long trianglesOf(const iris::SceneNodePtr &n, int &meshes)
 {
@@ -209,24 +263,32 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     // because the fragment's materials name them by path
     const QString extractDir = r.bakePath + QStringLiteral(".files");
 
+    // WHAT THE CACHE HOLDS: the bake (its header names this fingerprint) and the sidecar (the same fingerprint). A
+    // missing or stale bake is a parse AND a bake; a valid bake with a missing or stale sidecar is a parse only (the
+    // file's lights come from the parse; the bake is not redone).
     MeshBake::Model model;
-    if (MeshBake::headerMatches(r.bakePath, fingerprint) && QFileInfo::exists(lightsPath)) {
+    QJsonArray lights;
+    const bool haveSidecar = readSidecar(lightsPath, fingerprint, lights);
+    if (MeshBake::headerMatches(r.bakePath, fingerprint)) {
         t0 = Clock::now();
         model = MeshBake::read(r.bakePath, fingerprint);
         r.readMs = msSince(t0);
     }
-    if (!model.valid) {
-        r.baked = true;
+    iris::SceneSource source;
+    if (!model.valid || !haveSidecar) {
         QDir().mkpath(extractDir);
         iris::MaterialHelper::takeContainmentWarnings();
         iris::MaterialHelper::takeMissingMaps();
         t0 = Clock::now();
-        iris::SceneSource source;
         if (!source.read(path, xf)) {
             r.error = QStringLiteral("could not parse %1: %2").arg(path, source.errorString());
             return {};
         }
         r.parseMs = msSince(t0);
+        r.parsed = true;
+    }
+    if (!model.valid) {
+        r.baked = true;
         std::printf("LAB BAKE %s (oid %s, %d bake threads) ...\n", qPrintable(fi.fileName()), qPrintable(oid.left(16)),
                     MeshBake::bakeThreads());
         std::fflush(stdout);
@@ -240,48 +302,57 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
             r.error = QStringLiteral("could not write the bake %1: %2").arg(r.bakePath, err);
             return {};
         }
-        // THE FILE'S LIGHTS, from the parse, into the sidecar (labscene.h): adopted onto a fragment of this parse's
-        // bake (the same node shape as loadAsSceneFragment's — adoptLightsAndCameras pairs by name), then recorded.
-        const iris::SceneNodePtr probe =
-            MeshBake::buildFragment(model, path, [](iris::MeshPtr, iris::MeshMaterialData &d) {
-                return iris::MaterialPtr(iris::materialFromMeshData(d));
-            });
-        if (probe) iris::adoptLightsAndCameras(source, probe);
-        QJsonObject side;
-        side["fingerprint"] = fingerprint;
-        side["lights"] = probe ? lightsOf(probe) : QJsonArray();
-        QFile lf(lightsPath + QStringLiteral(".tmp"));
-        if (!lf.open(QIODevice::WriteOnly) || lf.write(QJsonDocument(side).toJson()) < 0) {
-            r.error = QStringLiteral("could not write %1").arg(lightsPath);
-            return {};
-        }
-        lf.close();
-        QFile::remove(lightsPath);
-        QFile::rename(lightsPath + QStringLiteral(".tmp"), lightsPath);
         const QStringList missing = iris::MaterialHelper::takeMissingMaps();
         if (!missing.isEmpty())
             std::printf("LAB BAKE: %lld map(s) the file names were not found (first: %s)\n",
                         (long long)missing.size(), qPrintable(missing.first()));
     }
 
-    // THE FRAGMENT, every open the same way: the bake's node tree, its maps resolved by name (TextureIndex), the one
-    // material conversion, the file's lights.
+    // THE FRAGMENT, ONCE: the bake's node tree, its maps resolved by name (TextureIndex), the one material conversion,
+    // the source's two-sided flag on the nodes, the file's lights.
     t0 = Clock::now();
-    TextureIndex tex;
-    tex.add(extractDir, 0);
-    tex.add(fi.absolutePath(), 3);
-    iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex](iris::MeshPtr, iris::MeshMaterialData &d) {
+    TextureIndex tex(extractDir, fi.absolutePath());
+    // THE SOURCE'S TWO-SIDED FLAG (CULL-MODE-1: MeshMaterialData::twoSided -> the node's FaceCullingMode::None) is
+    // written by MeshNode::loadAsSceneFragment but NOT by MeshBake::buildFragment (meshbake.cpp buildFragmentNode sets
+    // no cull) — the app's node keeps it through its stored definition. The lab records the meshes whose material
+    // says two-sided and sets the nodes' cull after the build (a finding for irisgl/import: buildFragment's gap).
+    QSet<const iris::Mesh *> twoSided;
+    iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided](iris::MeshPtr mesh, iris::MeshMaterialData &d) {
+        if (d.twoSided && mesh) twoSided.insert(mesh.data());
         iris::MeshMaterialData resolved = d;
         tex.resolve(resolved);
         return iris::MaterialPtr(iris::materialFromMeshData(resolved));
     });
+    if (!node) { r.error = QStringLiteral("the bake of %1 holds no fragment").arg(path); return {}; }
     r.texturesResolved = tex.resolved;
     r.texturesMissing = tex.missing;
     r.textureNameCollisions = tex.collisions;
-    if (!node) { r.error = QStringLiteral("the bake of %1 holds no fragment").arg(path); return {}; }
-    QFile lf(lightsPath);
-    if (lf.open(QIODevice::ReadOnly))
-        r.lights = attachLights(node, QJsonDocument::fromJson(lf.readAll()).object()["lights"].toArray());
+    r.texturesMs = tex.ms;
+    std::function<void(const iris::SceneNodePtr &)> cull = [&](const iris::SceneNodePtr &n) {
+        if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            auto m = n.staticCast<iris::MeshNode>();
+            if (m->getMesh() && twoSided.contains(m->getMesh().data())) {
+                m->setFaceCullingMode(iris::FaceCullingMode::None);
+                ++r.twoSidedNodes;
+            }
+        }
+        for (const iris::SceneNodePtr &c : n->children()) cull(c);
+    };
+    if (!twoSided.isEmpty()) cull(node);
+    if (haveSidecar) {
+        r.lights = attachLights(node, lights);
+    } else {
+        // THE FILE'S LIGHTS FROM THE PARSE (irisgl/import/scenelights.h: adopted by name onto the fragment — the bake's
+        // node shape is loadAsSceneFragment's), its cameras dropped (the lab flies its own), recorded in the sidecar
+        // so every later open attaches the same lights without the parse
+        const iris::AdoptedSceneNodes adopted = iris::adoptLightsAndCameras(source, node);
+        removeCameras(node);
+        r.lights = adopted.lights;
+        if (!writeSidecar(lightsPath, fingerprint, lightsOf(node))) {
+            r.error = QStringLiteral("could not write %1").arg(lightsPath);
+            return {};
+        }
+    }
     r.fragmentMs = msSince(t0);
     r.triangles = trianglesOf(node, r.meshes);
     if (node->getName().isEmpty()) node->setName(fi.completeBaseName());
@@ -364,7 +435,6 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
     doc->shadowEnabled = true;
     doc->heightFog = iris::HeightFog();
     doc->heightFog.enabled = true;
-    return true;
 }
 
 bool worldBounds(const iris::ScenePtr &doc, iris::Vec3 &mn, iris::Vec3 &mx)

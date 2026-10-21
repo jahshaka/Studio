@@ -91,6 +91,7 @@ private:
     std::deque<std::string> mScriptLines;
     std::string mStdinBuf;
     bool mStdinOpen = true;
+    bool mWaitingSaid = false;
     std::chrono::steady_clock::time_point mStart;
 };
 
