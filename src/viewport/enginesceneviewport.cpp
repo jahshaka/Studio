@@ -902,6 +902,7 @@ bool EngineSceneViewport::ensureEngineScene()
     // (see there), and on this path there is nothing to drop — but the order has
     // to be the same one on both paths or that line reads a null.
     mMirror.reset(new SceneMirror(mEngineScene));
+    mStreamTally = {};
     // The Ground plane widget wears the default floor material (the shipped
     // checker, nothing pinned) — the same values the template floors wear, so
     // the two read as one ground.
@@ -2657,6 +2658,12 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
             views.views.push_back(rv);
         }
         mMirror->sync(views);
+        // THE STREAM, IN FRAMES (OPEN-PATH-1): from the first frame that draws a mesh of this world to the first
+        // whose sync leaves none owed — the frames a world takes to arrive under the attach budget.
+        if (!mStreamTally.landed && mMirror->attachTally().meshes > 0) {
+            ++mStreamTally.frames;
+            mStreamTally.landed = mMirror->attachesOwed() == 0;
+        }
         // ...and while meshes are still owed the world has not arrived: no
         // FIRST-TIME lighting arm over half a world (Scene::setLoading).
         if (mEngineScene) mEngineScene->setLoading(mArmHeld || mMirror->attachesOwed() > 0);
@@ -3371,6 +3378,14 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.walkMode = QString::fromLatin1(mMirror->walkMode());
     s.attachesOwed = mMirror->attachesOwed();
     s.attachesDeferred = mMirror->attachesDeferredTotal();
+    const SceneMirror::AttachTally &tally = mMirror->attachTally();
+    s.attachSyncs = tally.syncs;
+    s.meshesBuilt = tally.meshes;
+    s.verticesBuilt = tally.vertices;
+    s.largestSyncMeshes = tally.largestMeshes;
+    s.largestSyncVertices = tally.largestVertices;
+    s.streamFrames = mStreamTally.frames;
+    s.streamLanded = mStreamTally.landed;
     return s;
 }
 
@@ -4603,12 +4618,33 @@ void EngineSceneViewport::primeSceneGeometry()
     // stream in on the driver's ticks after the reveal.
     mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
     mMirror->sync();
+    mirror.stop();
+    // What the geometry slice left owed: the meshes the boundary frames and the driver's ticks still stream.
+    LoadTimeline::add(QStringLiteral("mirror:owedAfterGeometry"), 0.0, int(mMirror->attachesOwed()));
 }
 
 void EngineSceneViewport::primeSceneEnvironment()
 {
-    // The other half (see primeSceneGeometry): sky, world settings, camera.
-    // A separate event-loop turn in the threaded open.
+    // The other half (see primeSceneGeometry): sky, world settings, camera — the threaded open's own
+    // event-loop turn, and ONE FRAME'S SHARE OF MESHES like every sync of that route (OPEN-PATH-1): the
+    // attach budget is one-shot (SceneMirror clears it after a sync), so this sync used to attach every mesh
+    // the geometry share left — measured on Bistro Exterior, 1,359 nodes in one 0.94 s walk and a 3.6 s
+    // boundary frame, the open's 3-second freeze. The rest streams on the boundary frames and the driver's
+    // ticks after the reveal (finding 9, BUGS-7).
+    primeEnvironment(true);
+}
+
+void EngineSceneViewport::primeSceneSync()
+{
+    // THE BLOCKING OPEN'S PRIME (a script's project.open, whose caller is promised a loaded world): the
+    // geometry share, then an environment sync that builds the rest — a sync that is not a frame's stays
+    // unbudgeted, like editor.frame's and a screenshot's.
+    primeSceneGeometry();
+    primeEnvironment(false);
+}
+
+void EngineSceneViewport::primeEnvironment(bool budgeted)
+{
     if (!mScene || !view() || !mMirror || !mEngineScene) return;
     {
         // The sky, the world settings — and, at Epic, the VCT voxelize + light injection, the shadow atlas resize and
@@ -4620,8 +4656,11 @@ void EngineSceneViewport::primeSceneEnvironment()
         main.sky = true;
         main.camera = viewCamera();
         main.framingAspect = freeCameraFramingAspect();
+        if (budgeted) mMirror->setAttachBudget(kAttachVerticesPerFrame, kAttachIndicesPerFrame);
         mMirror->sync(SceneMirror::FrameViews{ { main } });
     }
+    // What the environment sync left owed: the meshes the boundary frames and the driver's ticks still stream.
+    LoadTimeline::add(QStringLiteral("mirror:owedAfterEnvironment"), 0.0, int(mMirror->attachesOwed()));
 }
 
 unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> &onCompile)
@@ -4764,6 +4803,7 @@ void EngineSceneViewport::clearScene()
     // also drops the request on detach; the host does not rely on that.
     if (view()) view()->setPip(jahshaka::engine::ViewPipDesc{});
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
+    mStreamTally = {};
     if (view()) {
         view()->setScene(nullptr);
         // The next project may not drive the background (only SINGLE_COLOR

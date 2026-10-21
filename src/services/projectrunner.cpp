@@ -373,6 +373,11 @@ void ProjectRunner::startRunnerIfNeeded()
 	// that SOMETHING turned the renderer's bookkeeping.
 	mRunner->setSliceBoundary([this]() {
 		LoadTimeline::Accumulate row(QStringLiteral("slice:boundaryFrame"));
+		// ...and the same frame under the stage whose slice it closes (OPEN-PATH-1): the
+		// 76 boundary frames of an open are one total above, and the one that matters is
+		// named here — "boundaryFrame:primeSceneEnvironment" is the frame after the
+		// environment sync, "boundaryFrame:primeSceneSync" the geometry slice's.
+		LoadTimeline::Accumulate stageRow(QStringLiteral("boundaryFrame:") + LoadTimeline::currentStage());
 		if (mViewport && mViewport->canRenderFrames()) {
 			mViewport->renderBoundaryFrame();
 			++mSliceBoundaryFrames;
@@ -449,6 +454,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 		mViewport->primeSceneEnvironment();
 		// THE WORLD IS INSTALLED: its first lighting arm builds on this slice's
 		// boundary frame, behind the open (BUGS-6 stage 1; the interface's note).
+		LoadTimeline::Accumulate arm(QStringLiteral("env:releaseLightingArm"));
 		mViewport->releaseLightingArm();
 	} });
 	// SHADER_CACHE_SPEC §5: build the world's shaders while the cover is still

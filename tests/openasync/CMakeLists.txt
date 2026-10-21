@@ -79,3 +79,36 @@ foreach(_row_frames
         set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
     endif()
 endforeach()
+
+# open.streams_to_the_end — THE OPEN STREAMS UNDER ITS BUDGET TO THE END (OPEN-PATH-1 stage 1; the law and its derivation
+# are the script's head). A project of 1,500 distinct small meshes (make_many_meshes.py: 150 separate triangles each,
+# 450 vertices, under the bake's LOD/cluster floor so the import is the parse) opened by the threaded runner with the
+# driver live: no sync builds more than its share, and the world arrives over >= ceil(V / (share + one mesh)) - 2
+# frames. RED at the base (the environment prime's unbudgeted sync built 1,354 meshes in one; 1 frame to the landing).
+# FRAMES 693: the B3 meter (spikes/testing-speed-b3/framecount) over one warm run on this tree.
+set(_streams_meshes 1500)
+set(_streams_triangles 150)
+set(_streams_model ${CMAKE_CURRENT_BINARY_DIR}/many-meshes-${_streams_meshes}x${_streams_triangles}.obj)
+if(NOT EXISTS ${_streams_model})
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/make_many_meshes.py
+                            ${_streams_model} ${_streams_meshes} ${_streams_triangles}
+                    RESULT_VARIABLE _streams_rc)
+    if(NOT _streams_rc EQUAL 0)
+        message(FATAL_ERROR "open.streams_to_the_end: make_many_meshes.py failed (${_streams_rc})")
+    endif()
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/make_many_meshes.py)
+set(OPEN_STREAMS_MODEL ${_streams_model})
+set(OPEN_STREAMS_MESHES ${_streams_meshes})
+set(OPEN_STREAMS_TRIANGLES ${_streams_triangles})
+configure_file(e2e_open_streams.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js @ONLY)
+set(_streams_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-streams)
+file(MAKE_DIRECTORY ${_streams_home}/run)
+jah_gpu_row(open.streams_to_the_end CLASS app TIER low NEEDS NONE TEST_WINDOW FRAMES 693
+         COMMAND ${JAH_FRESH_HOME} --warm ${_streams_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js --script-live
+         WORKING_DIRECTORY ${_streams_home}/run)
+set_tests_properties(open.streams_to_the_end PROPERTIES
+    ENVIRONMENT "HOME=${_streams_home};JAHSHAKA_DATA_ROOT=${_streams_home}/.local/share/Jahshaka"
+    TIMEOUT 60 LABELS "openasync")

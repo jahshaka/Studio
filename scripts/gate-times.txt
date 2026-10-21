@@ -97,6 +97,7 @@ meshbake.archive_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.document_to_engine 9.72  quiet n=43
 open.frames 38.81  quiet n=41
 open.frames.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+open.streams_to_the_end 20.62  solo 2026-10-21 (OPEN-PATH-1 stage 1: a warm run; 693 frames by the B3 meter)
 particles.document_to_engine 1.49  quiet n=43
 perf.offscreen_isolation 21.27  quiet n=42
 perf.offscreen_isolation.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
