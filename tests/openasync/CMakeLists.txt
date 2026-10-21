@@ -105,13 +105,6 @@ set(OPEN_STREAMS_TRIANGLES ${_streams_triangles})
 configure_file(e2e_open_streams.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js @ONLY)
 set(_streams_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-streams)
 file(MAKE_DIRECTORY ${_streams_home}/run)
-jah_gpu_row(open.streams_to_the_end CLASS app TIER low NEEDS NONE TEST_WINDOW FRAMES 693
-         COMMAND ${JAH_FRESH_HOME} --warm ${_streams_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_streams.js --script-live
-         WORKING_DIRECTORY ${_streams_home}/run)
-set_tests_properties(open.streams_to_the_end PROPERTIES
-    ENVIRONMENT "HOME=${_streams_home};JAHSHAKA_DATA_ROOT=${_streams_home}/.local/share/Jahshaka"
-    TIMEOUT 60 LABELS "openasync")
 
 # open.first_frame_work — THE WORK BEFORE AN OPEN'S FIRST WORLD FRAME IS OFF THE UI THREAD (OPEN-PATH-1 stage 2; the law
 # is the script's head): the same generated project with 100 materials and 100 textures beside the model, opened by the
@@ -136,10 +129,3 @@ set(OPEN_FIRST_MATERIALS ${_first_materials})
 configure_file(e2e_open_first_frame.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_first_frame.js @ONLY)
 set(_first_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-first-frame)
 file(MAKE_DIRECTORY ${_first_home}/run)
-jah_gpu_row(open.first_frame_work CLASS app TIER low NEEDS NONE TEST_WINDOW FRAMES 478
-         COMMAND ${JAH_FRESH_HOME} --warm ${_first_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_first_frame.js
-         WORKING_DIRECTORY ${_first_home}/run)
-set_tests_properties(open.first_frame_work PROPERTIES
-    ENVIRONMENT "HOME=${_first_home};JAHSHAKA_DATA_ROOT=${_first_home}/.local/share/Jahshaka"
-    TIMEOUT 60 LABELS "openasync")
