@@ -60,6 +60,7 @@ gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has 
 gi.cascades_asan 23.23  quiet n=41
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+gi.probe_court 4.27  solo 2026-10-21 (PHOTON-5 stage 1)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
 gi.voxel_two_sided 3.60  solo 2026-10-21 (PHOTON-5 stage 2)
