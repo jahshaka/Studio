@@ -52,6 +52,7 @@ void SceneOpenRunner::setPlan(const Reads &reads, const QVector<Slice> &slices, 
     mSlices = slices;
     mLabel = label;
     mNextSlice = 0;
+    mEmittedSlice = -1;
     mParsed.store(false);
     mAborted.store(false);
     mPrewarm = std::make_shared<iris::MeshPrewarm>();
@@ -190,7 +191,13 @@ void SceneOpenRunner::runNextSlice()
     }
 
     const Slice slice = mSlices.at(mNextSlice);
-    emit progress(slice.percent, slice.label);
+    // Once per SLICE, not per turn: a step slice re-enters here every turn and its own progress (the
+    // registration's 45 + 10 k / n) would otherwise be overwritten by the slice's start value each time —
+    // the bar stepped back and forth on every turn (the merge read).
+    if (mEmittedSlice != mNextSlice) {
+        emit progress(slice.percent, slice.label);
+        mEmittedSlice = mNextSlice;
+    }
     QElapsedTimer sliceTimer;
     sliceTimer.start();
     bool done = true;

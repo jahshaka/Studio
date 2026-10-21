@@ -188,6 +188,7 @@ private:
     QVector<MeshBakeStore::BakeJob> mRebuild;
     QVector<Slice> mSlices;
     QString mLabel;
+    int mEmittedSlice = -1;   ///< the slice whose start progress was emitted (a step slice re-enters per turn)
     int mNextSlice = 0;
 
     iris::MeshPrewarmPtr mPrewarm;

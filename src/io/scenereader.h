@@ -155,9 +155,6 @@ public:
     QString resolveAssetPath(const QString &guid);
     QString resolveAssetPathUncached(const QString &guid);
 
-    iris::ScenePtr readScene(const QString &projectPath,
-                             const QByteArray &sceneBlob,
-                             std::unique_ptr<EditorData> *editorData = nullptr);
     /// The same read from a blob already parsed into JSON (the open runner's worker
     /// reads and parses the blob; the document is built here, on the caller's thread).
     iris::ScenePtr readScene(const QString &projectPath, QJsonObject projectObj,

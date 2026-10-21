@@ -102,18 +102,6 @@ For more information see the LICENSE file
 // Where a key is an ENUM spelled as a string, the read is guarded by
 // `contains()` instead, for the same reason: the spelling of the default would
 // otherwise be a second copy of it.
-iris::ScenePtr SceneReader::readScene(const QString &projectPath,
-                                      const QByteArray &sceneBlob,
-                                      std::unique_ptr<EditorData> *editorData)
-{
-    QJsonObject projectObj;
-    {
-        LoadTimeline::Accumulate json(QStringLiteral("read:json"));
-        projectObj = QJsonDocument::fromJson(sceneBlob).object();
-    }
-    return readScene(projectPath, projectObj, editorData);
-}
-
 iris::ScenePtr SceneReader::readScene(const QString &projectPath, QJsonObject projectObj,
                                       std::unique_ptr<EditorData> *editorData)
 {

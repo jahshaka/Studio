@@ -3044,23 +3044,6 @@ QStringList Database::fetchProjectGuids(int desktop)
     return guids;
 }
 
-QByteArray Database::getSceneBlobGlobal(const QString &projectGuid) const
-{
-    QSqlQuery query;
-    query.prepare("SELECT scene FROM projects WHERE guid = ?");
-    query.addBindValue(projectGuid);
-
-    if (query.exec()) {
-        if (query.first()) {
-            return query.value(0).toByteArray();
-        }
-    } else {
-        irisLog("There was an error getting the scene blob! " + query.lastError().text());
-    }
-
-    return QByteArray();
-}
-
 Database::ExportCatalog Database::readExportCatalog(const QString &projectGuid)
 {
     // THE LIBRARY CONNECTION'S HALF (STUDIO-D1 item 4): reads only. The rows a

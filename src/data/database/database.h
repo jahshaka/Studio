@@ -768,7 +768,6 @@ public:
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
 
 
-    QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
 	/// Both return false when the UPDATE did not run (they used to be void and
 	/// had never worked — positional SQL bound by name, see the .cpp).
 	bool updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
