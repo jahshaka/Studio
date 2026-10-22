@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 
 #include <QSignalBlocker>

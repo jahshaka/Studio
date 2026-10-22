@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/vrworld.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 namespace {
 

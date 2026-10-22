@@ -66,7 +66,7 @@ For more information see the LICENSE file
 #include "services/framepacing.h"
 #include "services/jahlog.h"
 #include "services/testtier.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/sessionheader.h"
 
 

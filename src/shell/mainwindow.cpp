@@ -134,7 +134,7 @@ For more information see the LICENSE file
 #include "scripting/claude/claudeassistant.h"
 
 #include "services/shortcutregistry.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/testtier.h"
 #include "viewport/snapsettings.h"
 #include "viewport/cameraspeed.h"

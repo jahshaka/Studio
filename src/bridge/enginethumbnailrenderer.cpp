@@ -24,7 +24,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/properties/property.h"
 #include <QFileInfo>
-#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/meshmaterial.h"
 #include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/offscreenrenderscope.h"
@@ -352,13 +352,13 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
 //
 // It is the third copy of a conversion the tree had already reduced to one:
 // AssetHelper's import path and SceneEditService both call
-// BuiltinMaterials::fromMeshData, and the comment at assethelper.cpp:236
+// iris::materialFromMeshData, and the comment at assethelper.cpp:236
 // records what a SECOND copy already cost (emissiveIntensity dropped on every
 // import). There is nothing in a thumbnail that wants a different answer from
 // the scene, so it now asks the same function.
 iris::MaterialPtr EngineThumbnailRenderer::previewMaterialForMeshData(const iris::MeshMaterialData &data)
 {
-    return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
+    return iris::MaterialPtr(iris::materialFromMeshData(data));
 }
 
 // (previewMaterialFor and previewMaterials are GONE with HLMS_ADOPTION P4b.

@@ -6,7 +6,7 @@
 #include "data/settingsmanager.h"
 #include "jah_provenance.h"   // GIT_COMMIT_HASH
 #include "services/defaultfloormaterial.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/testtier.h"
 #include "bridge/secondarysurfacetonemap.h"
 #include "irisgl/document/scenegraph/scene.h"

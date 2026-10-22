@@ -19,7 +19,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/checkboxwidget.h"
 #include "ui/panels/propertywidgets/rowundo.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 // Every row here writes ONE world property and is undoable through
 // ScenePropertyCommand — a slider drag is one step (rowundo brackets it), a

@@ -23,7 +23,7 @@ For more information see the LICENSE file
 // world-level.
 //
 // GENERATED FROM THE SAME TWO TABLES the World > Post Process section is built
-// from (src/services/worldmodes.h — rows() filtered by postFxRowIds(), and
+// from (irisgl/document/scenegraph/worldmodes.h — rows() filtered by postFxRowIds(), and
 // postFxParams() for the continuous ones), intersected with the keys the
 // DOCUMENT will store (iris::cameraPostKeys). This file names no effect, no
 // range and no label; a row added to the world tables and to the document table

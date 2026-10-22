@@ -25,7 +25,7 @@ For more information see the LICENSE file
 //      read and written ON THE DOCUMENT, and how it is read and written on the
 //      resolved `Settings` a session runs with. The World panel's VR section
 //      and the two verbs are GENERATED from it, exactly as the World Mode
-//      section and `world.postFx` are generated from services/worldmodes.h.
+//      section and `world.postFx` are generated from irisgl/document/scenegraph/worldmodes.h.
 //      Neither consumer names a setting; adding one is a table entry.
 //
 //      IT IS NOT A worldmodes ROW, deliberately. That registry answers "how

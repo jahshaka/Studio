@@ -124,4 +124,16 @@ inline QString needsError(const QStringList &words)
 
 }   // namespace testtier
 
+#include "irisgl/irisglfwd.h"
+
+namespace worldmodes {
+/// THE PROCESS'S TEST TIER on a scene (src/services/testtier.cpp): setMode to the tier, then every
+/// switchable feature JAHSHAKA_TEST_NEEDS does not name OFF — Photon, bloom, SSAO, SMAA, the
+/// planar mirrors (TEST-NEEDS-1; WORLD-MODE-1 began it with the first two) — and Photon ON at
+/// the tier's own Photon tier when it is named. A pinned row is the document's and stays — the
+/// switch writes neither it nor its backing field (a pin on giMode leaves Photon as the
+/// document has it; the `photon` row is never pinned). A no-op in a process with no test tier.
+void applyTestTier(const iris::ScenePtr &scene);
+}   // namespace worldmodes
+
 #endif // TESTTIER_H

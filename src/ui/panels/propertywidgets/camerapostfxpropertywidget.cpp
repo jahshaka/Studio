@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 
 #include "irisgl/document/scenegraph/looks.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "ui/panels/propertywidgets/lookstackeditor.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"

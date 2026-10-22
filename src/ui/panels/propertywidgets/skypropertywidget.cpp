@@ -36,7 +36,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/services.h"
 #include "services/selectionservice.h"
 #include <QPointer>

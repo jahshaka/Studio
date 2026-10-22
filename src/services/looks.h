@@ -23,7 +23,7 @@ For more information see the LICENSE file
 // NOTHING IS RESTATED. A range appears in exactly one file (the document's),
 // and this table is keyed on the document's ids — so the panel, the verbs and
 // the generated docs cannot disagree with the renderer about what a number
-// means, which is the failure services/worldmodes.h exists to prevent for the
+// means, which is the failure irisgl/document/scenegraph/worldmodes.h exists to prevent for the
 // quality rows. The only thing that CAN drift is a missing label, and
 // looks::validate() (asserted by tests/services) catches exactly that.
 //

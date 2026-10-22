@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/controls/bladerow.h"
 #include "irisgl/irisglfwd.h"
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 class IEditorViewport;
 class CheckBoxWidget;
@@ -41,7 +41,7 @@ struct StudioServices;
  * effects), and the continuous parameters — exposure, bloom threshold, AO power
  * and radius — had no UI at all. `world.postFx` was the only way to reach them.
  *
- * GENERATED FROM THE REGISTRY, both halves (src/services/worldmodes.h): the
+ * GENERATED FROM THE REGISTRY, both halves (irisgl/document/scenegraph/worldmodes.h): the
  * on/off controls come from `rows()` filtered by `postFxRowIds()`, the
  * parameter rows from `postFxParams()`, and every parameter row is grouped
  * under the effect that owns it. This file names no effect and no range. Adding

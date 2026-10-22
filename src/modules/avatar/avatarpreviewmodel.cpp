@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/meshmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assethelper.h"
 #include "services/meshbakestore.h"
@@ -296,10 +296,10 @@ AvatarPreviewModel::prepareSubject(const SubjectSource &source)
         return prepared;
     }
     // The ONE material conversion every baked fragment takes
-    // (io/builtinmaterials.h); the stored definition re-points the textures
+    // (irisgl/document/materials/meshmaterial.h); the stored definition re-points the textures
     // at apply time.
     const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
-        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
+        return iris::MaterialPtr(iris::materialFromMeshData(data));
     };
     prepared->node = iris::MeshBake::buildFragment(*baked, prepared->path, makeMaterial);
     if (!prepared->node)

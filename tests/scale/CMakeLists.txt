@@ -39,8 +39,7 @@ set(JAH_SCALE_ASSET_CACHE_ROOT "$ENV{HOME}/Developer/testing/scale-cache" CACHE 
 set(_scale_world_sources
     ${CMAKE_CURRENT_SOURCE_DIR}/scale_world.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/scale_x11.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 
 function(jah_scale_target _t)
     set_target_properties(${_t} PROPERTIES

@@ -24,8 +24,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui)
 # "Traced" at a ray tier, the gather row, the tri-state resolved one way, Epic as a
 # quality row, the probe grid's VRAM budget arithmetic and the declared offscreen
 # picture table. Pure tables: no display.
-add_executable(test_photon_tiers test_photon_tiers.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+add_executable(test_photon_tiers test_photon_tiers.cpp)
 set_target_properties(test_photon_tiers PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON

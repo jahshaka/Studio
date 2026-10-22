@@ -399,7 +399,7 @@ set(SRCS
     src/ui/controls/sceneissuebar.cpp
     src/services/looks.cpp
     src/services/vrworld.cpp
-    src/services/worldmodes.cpp
+    src/services/testtier.cpp
     src/services/planarreflectors.cpp
     src/services/physicsconstraints.cpp
     src/services/ambienceservice.cpp
@@ -716,7 +716,6 @@ set(HEADERS
     src/services/selectionservice.h
     src/services/shortcutregistry.h
     src/services/vrworld.h
-    src/services/worldmodes.h
     src/services/testtier.h
     src/services/scenefolders.h
     src/services/planarreflectors.h
@@ -917,6 +916,9 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINAR
 set_property(SOURCE src/bridge/enginehost.cpp APPEND PROPERTY COMPILE_DEFINITIONS
     JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_OGRE_MEDIA_DIR_DEFAULT="${JAHSHAKA_MEDIA_DIR}/")
+
+# jahlab — the engine-only harness (LAB-1, src/lab/CMakeLists.txt): the engine + irisgl, nothing of Studio's src/.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/lab ${CMAKE_CURRENT_BINARY_DIR}/lab)
 
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.

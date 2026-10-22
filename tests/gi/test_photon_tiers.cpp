@@ -34,7 +34,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scene.h"
 
-#include "services/worldmodes.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 #include "jahshaka/engine/Types.h"
 
 #include "../support/documentgraph.h"
