@@ -2416,6 +2416,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     double msSum = 0.0;
     long long dagBytes = 0;
     std::map<int, int> depthHistogram;
+    std::map<int, long long> attemptHist;   // groups attempted (every pass) by their simplify count
+    std::map<int, long long> grantedHist;   // DAG reductions by ceil(log2(granted / children's stored)); -1 = leaves
+    long long countCarries = 0, budgetCarries = 0;
     std::vector<double> d0ratio;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2455,6 +2458,12 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
             L.pruned += r.pruned;
             L.islands += r.islandsDropped;
             if (r.kind == 0 || r.kind == 3) L.err.push_back(r.stored);
+            if (r.kind == 0 || r.kind == 1) ++attemptHist[std::min(r.attempts, 12)];
+            if (r.kind == 1) (r.countCarry ? countCarries : budgetCarries) += 1;
+            if (r.kind == 0)
+                ++grantedHist[r.childStored > 0.0f
+                                  ? std::max(1, int(std::ceil(std::log2(double(r.budget / r.childStored)) - 1e-4)))
+                                  : -1];
             if (r.kind == 0) {
                 if (r.budget > 0.0f) L.over = std::max(L.over, r.step / r.budget);
                 L.budget = std::max(L.budget, r.budget);
@@ -2496,6 +2505,18 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     if (!d0ratio.empty())
         std::printf("  depth-0 position-quadric estimate / measured step: median %.3f, p10 %.3f, p90 %.3f over %zu groups\n",
                     d0ratio[d0ratio.size() / 2], d0ratio[d0ratio.size() / 10], d0ratio[d0ratio.size() * 9 / 10], d0ratio.size());
+    std::printf("  carried groups by cause (every pass): cluster count %lld (asked the same budget), budget %lld (asked 2x)\n",
+                countCarries, budgetCarries);
+    std::printf("  groups attempted by simplify count (every pass, every shrink; 12 = 12+):");
+    long long aN = 0, aSum = 0;
+    for (const auto &kv : attemptHist) { std::printf(" %d:%lld", kv.first, kv.second); aN += kv.second; aSum += kv.second * kv.first; }
+    std::printf("  (mean %.2f)\n", aN ? double(aSum) / double(aN) : 0.0);
+    std::printf("  reductions by granted / children's stored, ceil(log2) (1 = within 2x, 2 = 4x, ...; L = leaves at 2x the "
+                "estimate):");
+    for (const auto &kv : grantedHist) {
+        if (kv.first < 0) std::printf(" L:%lld", kv.second); else std::printf(" %d:%lld", kv.first, kv.second);
+    }
+    std::printf("\n");
     std::printf("  DAG blob bytes %lld; meshes by their deepest group's depth:", dagBytes);
     for (const auto &kv : depthHistogram) std::printf(" d%d %d", kv.first, kv.second);
     std::printf("\n");
@@ -2519,11 +2540,11 @@ static int dagGroupsTool(const QString &path, int meshIndex, int threads)
     opt.wantGroups = true;
     iris::MeshBake::buildClusterDag(meshes.at(meshIndex), &st, opt);
     static const char *kinds[] = { "reduce", "carried", "top", "asis" };
-    std::printf("level\tkind\tgroup\tmembers\tin\tout\tchildren\tbudget\tstep\tstored\tremovedV\tlostF\taddedF\tisland\tlostLocked\t"
+    std::printf("level\tkind\tgroup\tmembers\tin\tout\tchildren\tgranted\tstep\tstored\tremovedV\tlostF\taddedF\tisland\tlostLocked\t"
                 "attempts\tpruned\tislands\twN\twUV\tdepth0Est\testimate\n");
     for (const iris::atomdag::GroupRecord &r : st.records)
         std::printf("%d\t%s\t%d\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%d\t%d\t%d\t%.4g\t%.4g\t%.5g\t%.5g\n",
-                    r.level, kinds[std::clamp(r.kind, 0, 3)], r.dagGroup, r.members, r.inTris, r.outTris, double(r.childError),
+                    r.level, kinds[std::clamp(r.kind, 0, 3)], r.dagGroup, r.members, r.inTris, r.outTris, double(r.childStored),
                     double(r.budget), double(r.step), double(r.stored), double(r.removedVertex), double(r.lostFacet),
                     double(r.addedFacet), double(r.droppedIsland), double(r.lostLocked), r.attempts, r.pruned,
                     r.islandsDropped, double(r.weightNormal), double(r.weightUv), double(r.depth0Estimate), double(r.estimate));
@@ -2871,28 +2892,26 @@ static void bakeDeterminism(const QString &part = QString())
     // caller's own first chunks, later = worker threads and nested jobs inside a
     // mesh's stages) must come back to buildFromScene as an invalid model — before,
     // a worker's throw was std::terminate — and the pool must then bake the same
-    // file whole, byte for byte. THE FEWEST WHOLE BAKES THE LAW NEEDS (ATOM-2 stage 2,
-    // the 60 s law; was a whole bake after every throw, eleven in all): per width the
-    // five throws, then ONE whole bake byte-identical to the reference — a pool any
-    // throw had left broken (a job still listed, a slot never freed) fails that bake.
+    // file whole, byte for byte — AFTER EACH THROW (a breakage one throw leaves must not be repaired by the next
+    // throw's bake). Under the 60 s law by fewer WIDTHS, never fewer comparisons (the stage-2 read): the reference at
+    // one thread, the five throws on the pool at the box's width (the worker threads and the nested jobs, where a
+    // throw used to be std::terminate; the caller's own chunks run there too), each followed by a whole bake
+    // byte-identical to the reference.
     {
         QTemporaryDir scratch;
         iris::MeshBake::setBakeThreads(1);
         const QByteArray reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
-        for (const int width : { 1, hardware }) {
-            iris::MeshBake::setBakeThreads(width);
-            for (const int n : { 1, 3, 40, 400, 2000 }) {
-                iris::MeshBake::failBakeAfterChunksForTest(n);
-                const iris::MeshBake::Model failed = iris::MeshBake::buildFromFile(twoPath, fp, scratch.path());
-                iris::MeshBake::failBakeAfterChunksForTest(0);
-                CHECK_LOUD(!failed.valid, qUtf8Printable(QStringLiteral(
-                    "%1 thread(s): a throw in unit %2 of the bake answers 'no bake' (and the process lives)")
-                    .arg(width == 1 ? 1 : hardware).arg(n)));
-            }
+        iris::MeshBake::setBakeThreads(hardware);
+        for (const int n : { 1, 3, 40, 400, 2000 }) {
+            iris::MeshBake::failBakeAfterChunksForTest(n);
+            const iris::MeshBake::Model failed = iris::MeshBake::buildFromFile(twoPath, fp, scratch.path());
+            iris::MeshBake::failBakeAfterChunksForTest(0);
+            CHECK_LOUD(!failed.valid, qUtf8Printable(QStringLiteral(
+                "%1 threads: a throw in unit %2 of the bake answers 'no bake' (and the process lives)").arg(hardware).arg(n)));
             const QByteArray again = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
             CHECK_LOUD(!reference.isEmpty() && again == reference, qUtf8Printable(QStringLiteral(
-                "%1 thread(s): ...and after the five throws the next bake is whole and byte-identical")
-                .arg(width == 1 ? 1 : hardware)));
+                "%1 threads: ...and after the throw in unit %2 the next bake is whole and byte-identical to one thread's")
+                .arg(hardware).arg(n)));
         }
         iris::MeshBake::setBakeThreads(0);
     }

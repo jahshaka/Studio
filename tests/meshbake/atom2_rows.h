@@ -1,11 +1,12 @@
-// ATOM-2 part A's rows and fixtures (SPECS/ATOM_2_SPEC.md stage 1). Included by test_mesh_bake.cpp after its CHECK
+// ATOM-2 part A's rows and fixtures (SPECS/ATOM_2_SPEC.md stages 1-3). Included by test_mesh_bake.cpp after its CHECK
 // macros, its dagroot:: fixtures and the cutcurve:: helpers; each row is a verb (`--atom2 <row>`), CPU only.
 //
 //   atom2.adjacency_by_position  two coincident unindexed vertices are one adjacency node; a flipped duplicate is not
 //   atom2.borders_move           a group's lock set is exactly its recomputed external positions: a level-k border
 //                                both sides of which share a group at k+1 is NOT locked there
-//   atom2.ladder_never_forced    every reduction's measured step is within 2x its children's error; a group that
-//                                cannot reduce is carried and the chain still ends
+//   atom2.ladder_never_forced    THE LAW (ladder.h), replayed from the records: every group's measured step is within
+//                                the budget it was granted, and every granted budget is at most 2x what its children
+//                                carried (stored or granted); a group that cannot reduce is carried, the chain ends
 //   atom2.ends_empty             a 100-triangle prop is one leaf + an empty top, vanishing past its extent; every
 //                                fixture's root is non-empty before the top and the top cut draws nothing
 //   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
@@ -326,44 +327,63 @@ inline int ladderNeverForced()
             CHECK_LOUD(false, m0);
             continue;
         }
-        // THE SPEC'S LAW, read off the DAG itself: every group's stored error <= 2 x the largest STORED error of the
-        // groups that produced its members (a group of leaves: 2 x the position quadric's estimate of its halving);
-        // the empty top (priced at the mesh's extent, a vanishing) and the groups merged as they were are not halvings.
-        std::vector<float> d0(size_t(dag.groups.size()), -1.0f);
-        std::vector<int> kindOf(size_t(dag.groups.size()), -1);
-        int reductions = 0, carried = 0;
+        // THE LAW (ladder.h), REPLAYED from the records in build order: every group (every pass, accepted or carried)
+        //   (a) is measured within the budget it was granted — the exact walk's value at most its 5 % bound above E;
+        //   (b) was granted at most 2 x max over its children of max(child's stored error, the budget the child was last
+        //       granted) — a group of leaves never granted one: 2 x the position quadric's estimate (floored);
+        // and an accepted group's stored error is max(its children's stored, a step within E) — read off the blob.
+        const float floorLen = st.floorLen;
+        std::vector<float> lastGranted(size_t(dag.clusters.size()), 0.0f);
+        const auto storedOf = [&](int c) {
+            const int r = dag.clusters.at(c).refined;
+            return r >= 0 ? dag.groups.at(r).error : 0.0f;
+        };
+        int reductions = 0, carried = 0, countCarried = 0, overA = 0, overB = 0, overStored = 0;
+        float worstA = 0.0f, worstB = 0.0f;
+        std::map<int, int> climb;   // reductions by ceil(log2(granted / children's stored)); 0 = leaves
         for (const iris::atomdag::GroupRecord &r : st.records) {
-            if (r.kind == 1) ++carried;
-            if (r.dagGroup >= 0) { d0[size_t(r.dagGroup)] = r.depth0Estimate; kindOf[size_t(r.dagGroup)] = r.kind; }
-            if (r.kind == 0) ++reductions;
+            if (r.kind == 2) continue;   // the empty top: a vanishing priced at the mesh's extent, not a halving
+            float childMax = 0.0f, childStored = 0.0f;
+            for (int m : r.memberClusters) {
+                childStored = std::max(childStored, storedOf(m));
+                childMax = std::max(childMax, std::max(storedOf(m), lastGranted[size_t(m)]));
+            }
+            const float bound = std::max(childMax > 0.0f ? 2.0f * childMax : 2.0f * std::max(r.depth0Estimate, 0.0f), floorLen);
+            if (bound > 0.0f) worstB = std::max(worstB, r.budget / bound);
+            if (r.budget > bound * (1.0f + 1e-5f)) ++overB;
+            if (r.kind == 0) {
+                ++reductions;
+                if (r.budget > 0.0f) worstA = std::max(worstA, r.measured / r.budget);
+                if (r.step > r.budget || r.measured > r.budget * 1.05f) ++overA;
+                const float e = dag.groups.at(r.dagGroup).error;
+                if (e > std::max(std::max(childStored, r.budget), floorLen) * (1.0f + 1e-6f)) ++overStored;
+                ++climb[childStored > 0.0f ? std::max(1, int(std::ceil(std::log2(double(r.budget / childStored)) - 1e-4))) : 0];
+            }
+            if (r.kind == 1) { ++carried; if (r.countCarry) ++countCarried; }
+            for (int m : r.memberClusters) lastGranted[size_t(m)] = r.budget;
         }
-        std::vector<float> childMax(size_t(dag.groups.size()), 0.0f);
-        for (const auto &c : dag.clusters)
-            if (c.refined >= 0) childMax[size_t(c.group)] = std::max(childMax[size_t(c.group)], dag.groups.at(c.refined).error);
-        const float floorLen = 1e-5f * extentOf(s.mesh);
-        int over = 0;
-        float worst = 0.0f;
-        for (int g = 0; g < dag.groups.size(); ++g) {
-            if (kindOf[size_t(g)] != 0) continue;
-            const float base = childMax[size_t(g)] > 0.0f ? childMax[size_t(g)] : std::max(d0[size_t(g)], 0.0f);
-            const float law = std::max(2.0f * base, floorLen);
-            const float e = dag.groups.at(g).error;
-            if (base > 0.0f) worst = std::max(worst, e / base);
-            if (e > law * (1.0f + 1e-5f)) ++over;
-        }
-        carriedAll += carried + st.levelsAllCarried;   // a group carried, or a whole level re-run with doubled budgets
+        carriedAll += carried;
         const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
-        std::printf("== %s: %d reductions, %d carried, %d retries, %d levels (%d all carried); worst stored / children's "
-                    "stored %.3f; top cut %lld\n", s.name, reductions, carried, st.retries, st.levels, st.levelsAllCarried,
-                    double(worst), top);
+        std::printf("== %s: %d reductions, %d carried (%d for the cluster count), %d retries, %d levels (%d passes re-run); "
+                    "worst measured / granted %.3f, worst granted / 2x children %.3f; top cut %lld\n   reductions by "
+                    "granted / children's stored, ceil(log2) (0 = leaves):", s.name, reductions, carried, countCarried,
+                    st.retries, st.levels, st.levelsAllCarried, double(worstA), double(worstB), top);
+        for (const auto &kv : climb) std::printf(" %d:%d", kv.first, kv.second);
+        std::printf("\n");
         char msg[240];
-        std::snprintf(msg, sizeof(msg), "%s: every group's stored error within 2x its children's STORED error (%d over)",
-                      s.name, over);
-        CHECK_LOUD(over == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: (a) every group's measured step within the budget it was granted (%d over)",
+                      s.name, overA);
+        CHECK_LOUD(overA == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: (b) every granted budget at most 2x what its children carried (%d over)",
+                      s.name, overB);
+        CHECK_LOUD(overB == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: every stored error is max(children's stored, a step within the granted budget) "
+                      "(%d over)", s.name, overStored);
+        CHECK_LOUD(overStored == 0, msg);
         std::snprintf(msg, sizeof(msg), "%s: the chain ends (the top cut draws nothing: %lld)", s.name, top);
         CHECK_LOUD(!dag.isEmpty() && top == 0, msg);
     }
-    std::printf("   carried groups and all-carried levels re-run over the set: %d\n", carriedAll);
+    std::printf("   carried groups over the set (every pass): %d\n", carriedAll);
     CHECK_LOUD(carriedAll > 0, "some group could not reduce within its budget and was carried (the chains still ended)");
     return finish();
 }
