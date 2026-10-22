@@ -1639,6 +1639,57 @@ int main()
         }
     }
 
+    // =====================================================================
+    // CASE 16c — THE PLACEMENT QUANTUM IS TWO CELLS (PHOTON-7 stage 1, Q = 2)
+    //
+    // A cascade's centre is the camera ROUNDED to the nearest EVEN multiple of its cell (PhotonGi.cpp
+    // jahQuantEven), so the directional store's 2 x 2 x 2 blocks sit on one world lattice at every placement. Placed
+    // (the placement pin, then a forced whole rebuild of every cascade) for cameras in an ODD and in an EVEN cell of
+    // cascade 0, each a quarter and three quarters into it, on all three axes at once: every cascade's centre is an
+    // even number of its cells, within one cell of the camera on each axis (16a's `- cell` is that bound), and the
+    // camera's own two neighbours across an odd/even boundary land on the same centre as the rounding says.
+    // =====================================================================
+    std::printf("\n== case 16c: the centre is an even cell, at odd and even camera cells ==\n");
+    {
+        const GiStatus g0 = scene->published().gi;
+        CHECK(!g0.cascades.empty(), "the chain is up for the placement case");
+        if (!g0.cascades.empty()) {
+            const float cell0 = g0.cascades[0].cell;
+            bool allEven = true, allNear = true;
+            const float phases[4] = { 2.25f, 2.75f, 3.25f, 3.75f };   // cells: even + 1/4, even + 3/4, odd + 1/4, odd + 3/4
+            for (float ph : phases) {
+                const Vec3 p(11.0f * 2.0f * cell0 + ph * cell0, 1.5f + ph * cell0, -6.0f * 2.0f * cell0 - ph * cell0);
+                GiPlacementPin pin;
+                pin.on = true;
+                pin.cascadeBuiltCam.assign(g0.cascades.size(), p);
+                scene->setGiPlacementPin(pin);
+                for (size_t i = 0; i < g0.cascades.size(); ++i) {
+                    e->setArm("gi.rebuildCascade", double(i));
+                    render(e, 2);
+                }
+                e->setArm("gi.rebuildCascade", -1.0);
+                render(e, 4);
+                const GiStatus g = scene->published().gi;
+                std::printf("   camera (%.4f, %.4f, %.4f) = %.2f cells of cascade 0 into its lattice:", p.x, p.y, p.z, ph);
+                for (size_t i = 0; i < g.cascades.size(); ++i) {
+                    const GiStatus::CascadeStatus &c = g.cascades[i];
+                    const float cc[3] = { c.centre.x, c.centre.y, c.centre.z }, pp[3] = { p.x, p.y, p.z };
+                    std::printf("  c%zu centre (%.4f, %.4f, %.4f)", i, c.centre.x, c.centre.y, c.centre.z);
+                    for (int a = 0; a < 3; ++a) {
+                        const double k = double(cc[a]) / double(c.cell);
+                        if (std::fabs(k - std::round(k)) > 1e-6 || (long long)std::llround(k) % 2 != 0) allEven = false;
+                        if (std::fabs(double(pp[a]) - double(cc[a])) > double(c.cell) * (1.0 + 1e-5)) allNear = false;
+                    }
+                }
+                std::printf("\n");
+            }
+            scene->setGiPlacementPin(GiPlacementPin());
+            render(e, 2);
+            CHECK(allEven, "every cascade's centre is an EVEN multiple of its cell, at odd and even camera cells (Q = 2)");
+            CHECK(allNear, "...within one cell of the camera on every axis (the near-field guarantee's `- cell`)");
+        }
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;
