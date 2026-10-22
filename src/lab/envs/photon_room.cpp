@@ -201,6 +201,69 @@ std::string describeRamp()
            "Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
 }
 
+// ---- photon-contact (PHOTON-7 stage 6: the ray origin's CHAINED floor arm) -------------------------------------------
+//
+// photon-ramp's contact mark - the 10 cm matte black FOOT (0.02 to 0.12 m) under an emitter post, at the 0.00 strip's
+// place - standing on a MIRROR FLOOR that is a CHAINED mesh: one welded 64 x 64 grid over the room's 7.8 m (8,192
+// triangles: the bake builds its level chain and its cluster DAG, so the drawn floor is Atom's cut of it at the view's
+// tolerance while every ray traces its level 0 - ONE RAY LEVEL PER MESH). The foot's reflected top edge must lie where
+// the mirror puts it (y 0.02 - 0.10) and the reflection must meet the foot at the contact line, within a pixel, from
+// 2.4 m (envcam 1) and 1 m (envcam 2) - photon-ramp's envcams 2 and 3, the same poses. Predicts THE KEEP RULE only.
+Built buildContact(unsigned seed, bool bake)
+{
+    Builder b("photon-contact", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    roomShell(b, unit, b.material(kRho, kRho, kRho, 1.0f));
+    using V = iris::Vec3;
+    Arrays grid;
+    const int n = 64;
+    const float h = 3.9f, y = 0.02f;
+    for (int j = 0; j <= n; ++j)
+        for (int i = 0; i <= n; ++i) {
+            const float x = -h + 2.0f * h * float(i) / float(n), z = -h + 2.0f * h * float(j) / float(n);
+            grid.p.insert(grid.p.end(), { x, y, z });
+            grid.n.insert(grid.n.end(), { 0.0f, 1.0f, 0.0f });
+            grid.uv.insert(grid.uv.end(), { float(i) / float(n), float(j) / float(n) });
+        }
+    for (int j = 0; j < n; ++j)
+        for (int i = 0; i < n; ++i) {
+            const unsigned a = unsigned(j * (n + 1) + i), c = a + 1u, d = a + unsigned(n + 1), e = d + 1u;
+            // counter-clockwise seen from +Y (x right, -z up): (i, j+1) (i+1, j+1) (i+1, j) / (i, j+1) (i+1, j) (i, j)
+            grid.idx.insert(grid.idx.end(), { d, e, c, d, c, a });
+        }
+    b.instance(b.mesh(grid), "floor-chained", "subject", V(0, 0, 0), 0.0f, V(1, 1, 1),
+               b.material(0.9f, 0.9f, 0.9f, 0.0f, 1.0f));
+    const float xc = -2.0f + 0.12f;   // photon-ramp's 0.00 strip's centre line
+    fixedBox(b, unit, "post-foot", V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.12f, -3.0f),
+             b.material(0.02f, 0.02f, 0.02f, 1.0f));
+    fixedBox(b, unit, "post", V(xc - 0.05f, 0.12f, -3.15f), V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
+    return b.finish();
+}
+
+void stopContact(double d, iris::Vec3 &eye, iris::Vec3 &target)
+{
+    // D = 1: the foot from 2.4 m, D = 2: from 1 m (photon-ramp's D = 2 / 3); else the room from its middle
+    const float post = -2.0f + 0.12f;
+    target = iris::Vec3(post, 0.1f, -3.0f);
+    if (d >= 1.5) { eye = iris::Vec3(post, 0.62f, -2.2f); return; }
+    if (d >= 0.5) { eye = iris::Vec3(post, 1.02f, -0.8f); return; }
+    eye = iris::Vec3(0, 3.0f, 3.4f);
+    target = iris::Vec3(0, 0, -1.0f);
+}
+
+std::vector<Prediction> expectContact(const Built &, const Optics &)
+{
+    return { { "probesKeptShare", 1.0, "every probe of the sealed shell sees >= 2 faces of geometry: all kept" } };
+}
+
+std::string describeContact()
+{
+    return "photon-contact: photon-room's sealed shell with a CHAINED mirror floor (a welded 64 x 64 grid: its level "
+           "chain and cluster DAG built) and photon-ramp's contact mark - a 10 cm matte black foot under an emitter "
+           "post (PHOTON-7 stage 6, the ray origin: the foot's reflection meets the foot within a pixel; envcam 1 / 2 "
+           "from 2.4 m / 1 m). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
+}
+
 void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)
 {
     eye = iris::Vec3(0, 1.8f, 3.4f);
@@ -249,6 +312,10 @@ std::string describeRoom()
 Env photonRoom() { return Env{ "photon-room", describeRoom, buildRoom, stopRoom, expectRoom, 500.0f, false }; }
 Env photonGlass() { return Env{ "photon-glass", describeGlass, buildGlass, stopGlass, expectGlass, 500.0f, false }; }
 Env photonRamp() { return Env{ "photon-ramp", describeRamp, buildRamp, stopRamp, expectRamp, 500.0f, false }; }
+Env photonContact()
+{
+    return Env{ "photon-contact", describeContact, buildContact, stopContact, expectContact, 500.0f, false };
+}
 
 }   // namespace envs
 }   // namespace lab
