@@ -18,7 +18,8 @@
 # THE ROW ASSERTS ONLY ITS OWN LAWS (the bars are set by the stages that improve the numbers; the base is below):
 #   (L1) FROZEN = FROZEN: the second frozen walk byte-equal to the first on every frame;
 #   (L2) THE ARMS START EQUAL: the converged hold before the walk byte-equal live vs frozen (one warm cache: AB G10);
-#   (L3) THE CLASSES COVER THE COUNTED PIXELS: no pixel M1 counts is unclassified.
+#   (L3) THE CLASSES COVER THE COUNTED PIXELS: no pixel M1 counts is unclassified, and every pair has its class map
+#        (--classes: an environment's map is the law, never vacuous - PHOTON-7 stage 0's read R5).
 # THE BASE (PHOTON-7 stage 0, irisgl b0371442, Epic, 960x540, warm, clocks unlocked; M1 mean / p99 / share > 1 code;
 # M1 is deterministic run to run, the clocks are not):
 #   court  all +0.002 / 0.92 / 0.32 %; plaster -0.000 / 0.88 / 0.08 %; foliage +0.059 / 5.54 / 8.96 % (no rough,
@@ -91,7 +92,7 @@ if [ "$MODE" = "--bistro" ]; then
 fi
 analyse() {   # scene - its M1, its laws and its clocks (walk_m1.py), into $WD/<scene>-m1.out
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" $1 $1-live $1-frozen $1-frozen2 \
-        --tsv "$WD/data/stillness/$1-live.tsv" > "$WD/$1-m1.out" 2>&1
+        --tsv "$WD/data/stillness/$1-live.tsv" --classes > "$WD/$1-m1.out" 2>&1
 }
 walk court "--data-root $WD/data --env photon-court" 300 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
 walk glass "--data-root $WD/data --env photon-glass" 640 -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live

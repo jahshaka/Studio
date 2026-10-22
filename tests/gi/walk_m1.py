@@ -8,15 +8,18 @@ the GI's stepping): per class the mean, the 99th percentile and the share over o
 The geometry (distance, test, classes, cameras) is the live walk's: the two walks share the camera path and the scene.
 
 usage: walk_m1.py <dump root> <scene> <live> <frozen> [<frozen2>] [--parts name:first:last,...] [--tsv <live tsv>]
+                  [--classes]
   <dump root>/dump-<name>/<name>-tNNN.{rgb,dist,flg,gsize,cls} and <name>-cams.txt (the stillness door's dump);
   --parts splits the pairs (by the index of the pair's newer frame) into named parts (Bistro: the walk, the fly);
-  --tsv: the live walk's stillness TSV - the hitch law and the frame clock over its moving frames.
+  --tsv: the live walk's stillness TSV - the hitch law and the frame clock over its moving frames;
+  --classes: the scene HAS a class map (an environment's; a model has none) - a pair without its .cls, or no counted
+  pixel classified, then FAILS (L3 is never vacuous where it is the law: PHOTON-7 stage 0's read R5).
 Prints the scene's lines; exits 1 on a broken instrument law (walk.sh asserts):
   (L1) FROZEN = FROZEN: every frame of the second frozen walk byte-equal to the first's (a frozen walk is a function of
        the scene and the path - no sample, no clock, no cache state);
   (L2) THE ARMS START EQUAL: the trail's first frame (the converged hold before the walk) byte-equal live vs frozen - both
        booted on one warm shader cache (AB G10: a cold boot draws other variants on vertical silhouettes);
-  (L3) THE CLASSES COVER THE COUNTED PIXELS: no pixel M1 counts is unclassified (with a class map).
+  (L3) THE CLASSES COVER THE COUNTED PIXELS: no pixel M1 counts is unclassified (--classes: the map exists on every pair).
 """
 import json, math, os, sys
 import numpy as np
@@ -27,6 +30,8 @@ def opt(name):
         k = args.index(name); v = args[k + 1]; del args[k:k + 2]; return v
     return None
 parts_arg, tsv_path = opt('--parts'), opt('--tsv')
+want_classes = '--classes' in args
+if want_classes: args.remove('--classes')
 root, scene, live, frozen = args[0], args[1], args[2], args[3]
 frozen2 = args[4] if len(args) > 4 else None
 NAMES = ['all', 'plaster', 'rough', 'glossy', 'mirror', 'foliage', 'mover']
@@ -109,6 +114,8 @@ for i in frames:
     if g is None or la is None or lb is None or fa is None or fb is None:
         fails.append('%s: pair t%03d is missing a file' % (scene, i)); continue
     dist, flg, cls = g
+    if want_classes and cls is None:
+        fails.append('(L3) %s: pair t%03d has no class map (--classes)' % (scene, i)); continue
     e, t = cams[i]; f, r, u = basis(e, t)
     e0, t0 = cams[i - 1]; f0, r0, u0 = basis(e0, t0)
     # the pixel's world point relative to the previous eye: (e - e0) + dir * dist, dir = f + r un + u vn
@@ -137,6 +144,8 @@ for i in frames:
 if counted:
     print('%s (L3) unclassified pixels among the %d counted pixel-frames: %d' % (scene, counted, unclassified))
     if unclassified: fails.append('(L3) %s: %d counted pixels have no class' % (scene, unclassified))
+elif want_classes:
+    fails.append('(L3) %s: no counted pixel was classified (--classes: the class map is the law here)' % scene)
 
 result = {'scene': scene, 'parts': {}}
 for pname, lo, hi in parts:
