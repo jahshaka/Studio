@@ -58,6 +58,9 @@ const std::vector<VerbDoc> &verbs()
           "line (cascade, kind, res, origin, cell, multiplier, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
           "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
+        { "lights", "lights", 0, 0,
+          "every light of the document: its name, type, WORLD position, intensity, range and source radius (one LAB LIGHT "
+          "line each) - where a lamp is, for a pin or a camera (PHOTON-7 stage 1's Bistro read)" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
         { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [freeze] [out=<name>]", 2, 9,

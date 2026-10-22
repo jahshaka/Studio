@@ -834,6 +834,18 @@ bool Session::exec(const Command &c)
         else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
     } else if (c.verb == "move") {
         ok = move(c);
+    } else if (c.verb == "lights") {
+        std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+            if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
+                const iris::LightNodePtr l = n.staticCast<iris::LightNode>();
+                const iris::Vec3 p = n->getGlobalPosition();
+                std::printf("LAB LIGHT %s type %d at %.4f,%.4f,%.4f intensity %.4g range %.4g sourceRadius %.4g\n",
+                            qPrintable(n->getName()), int(l->lightType), p.x(), p.y(), p.z(), l->intensity, l->distance,
+                            l->sourceRadius);
+            }
+            for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+        };
+        walk(mDoc->getRootNode());
     } else if (c.verb == "pin") {
         ok = pin(c);
     } else if (c.verb == "voxels") {
