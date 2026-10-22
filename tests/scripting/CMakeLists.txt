@@ -907,13 +907,14 @@ if(TEST scripting.e2e.editor_controls.timing)
 endif()
 
 # scripting.e2e.world_stillness (PHOTON-2 stage 0) — THE STILLNESS DOOR THROUGH THE SCRIPTING HOST (API-first: the verb a
-# Bistro measurement drives): world.stillness on a new Basic project, a 0.5 m walk, the stop, a 24-frame window and the
-# path check — the door's shape and its invariants (e2e_world_stillness.js says which), never a stillness bar. A fresh
-# home (its own data root: the verb writes its TSV there). 31 frames of move, 2 x 24 window frames, the 5-frame bridge.
+# Bistro measurement drives): world.stillness on a new Basic project, a 0.5 m walk, the stop, a 120-frame window and the
+# path check — the door's shape and its invariants (e2e_world_stillness.js says which) and THE HOLD (PHOTON-2 K6: each
+# window holds, the settle after its last GI write; a window that never holds fails). A fresh home (its own data root:
+# the verb writes its TSV there). 31 frames of move, 2 x 120 window frames, the 5-frame bridge.
 set(_wsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_stillness)
 jah_fresh_home_fixture(scripting.e2e.world_stillness.fresh_home worldStillnessHome "${_wsHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_wsHome}/run)
-jah_gpu_row(scripting.e2e.world_stillness CLASS app TIER epic NEEDS photon FRAMES 84
+jah_gpu_row(scripting.e2e.world_stillness CLASS app TIER epic NEEDS photon FRAMES 276
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_stillness.js
     WORKING_DIRECTORY ${_wsHome}/run)
 set_tests_properties(scripting.e2e.world_stillness PROPERTIES

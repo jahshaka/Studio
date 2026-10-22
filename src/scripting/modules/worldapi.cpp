@@ -2376,6 +2376,10 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
                                     { QStringLiteral("visibleFromGather"), w.visibleFromGather },
                                     { QStringLiteral("lastGiRowFrame"), w.lastGiRowFrame },
                                     { QStringLiteral("holdFrame"), w.holdFrame },
+                                    // the gather's settle N (PHOTON-2 K6: the hold's bar is the last write + N + 1)
+                                    { QStringLiteral("settleFrames"),
+                                      int(w.frames.empty() ? 0u
+                                          : w.frames[size_t(w.holdFrame >= 0 ? w.holdFrame : 0)].settleFrames) },
                                     { QStringLiteral("settleFromStop"), fromStop },
                                     { QStringLiteral("settleFromLastGiRow"), fromRow },
                                     { QStringLiteral("pixels"), pixels },
