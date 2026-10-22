@@ -1,48 +1,87 @@
 #!/bin/bash
-# rtreflect.still_after_stop (PHOTON-2 stage 1, SPECS/PHOTON_2_SPEC.md rev 4's bars) — THE GLASS IS STILL AFTER A STOP.
-# jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the mirror, the declared mover), a
-# 1.2 m walk INSIDE one c0 lattice cell (no GI row may fire after the stop: the reflection's own law, alone), the stop,
-# 30 frames measured by the stillness door on the pixels the gather saw before the stop. THE LAW (physics: under still
-# lights and geometry a reflection is a function of the world and the eye; once the eye stops, only noise falling under
-# a code may change, and a still estimator rests and HOLDS):
-#   (a) at frame 17 — the gather's settle, the hold — the glossy panes' per-frame MEAN change <= 0.05 codes and their
-#       share of pixels changing by a code or more <= the plaster's share on its last moving frame (16);
-#   (b) from frame 19 on the glossy panes and the mirror change 0 codes (the hold at 17; the screen march reflects the
-#       previous frame's colour, one frame of lag; one of margin);
-#   (c) before the hold, the mirror's per-frame mean change <= 1 code with the mover in the room (its estimator fixed:
-#       PHOTON-2 1c).
-# THE BASE (main 8423ec631, measured 2026-10-22 at 1080p, spikes/photon-2/stage0): glossy mean 0.22 at frame 17 and 0.16
-# for ever (69k pixels every frame); the mirror 1.24 codes every frame; never 0.
+# rtreflect.still_after_stop (PHOTON-2 stage 1 + its fix round, SPECS/PHOTON_2_SPEC.md rev 5's bars, F6) — THE GLASS IS
+# STILL AFTER A STOP. jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the mirror, the
+# declared mover), a 1.2 m walk INSIDE one c0 lattice cell (no GI row may fire after the stop: the reflection's own law,
+# alone), the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's placement pin); and a
+# lamp step smaller than the one-ray sigma at rest against a session converged at the new light. THE LAW (physics:
+# under still lights and geometry a reflection is a function of the world and the eye; once the eye stops it rests on
+# the gather's rule — a rest mean handed over from the moving history over N = settleFramesOf(32) = 51 frames — and
+# HOLDS, bit-still):
+#   (a) by frame 17 the glossy panes' per-frame MEAN change <= 0.05 codes, and their share of pixels changing by a code
+#       or more non-increasing frame to frame from 17 to the hold;
+#   (b) from the HOLD frame on the glossy panes and the mirror change 0 codes, the hold <= N + 1 = 52 frames after the
+#       stop;
+#   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
+#   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2, mirror mean <= 0.25 and p99 <= 1;
+#   (e) a lamp step SMALLER than the one-ray sigma (8 -> 8.16) held at rest equals a session converged at the new
+#       light: mean |change| <= 0.05 codes and at most 0.01 % of the pixels more than a code apart (the frozen residual
+#       the history detectors' 95 % arrival cannot see). The step's own arrival (<= 16 frames) is
+#       rtreflect.history_detectors'.
+# THE BASE (main 8423ec631, 2026-10-22, 1080p, spikes/photon-2/stage0): glossy mean 0.22 at frame 17 and 0.16 for ever
+# (69k pixels every frame); the mirror 1.24 codes every frame; never 0; walk vs teleport 130 codes on the glass.
 # usage: still_after_stop.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
-cat > "$WD/run.lab" <<'S'
-stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:1.5,1.8,3.4,1.5,0.5,-3:30 30 out=still
+POSE=1.5,1.8,3.4,1.5,0.5,-3
+cat > "$WD/run.lab" <<S
+stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 230 path out=still
 quit
 S
-"$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/run.lab" > "$WD/lab.log" 2>&1
-rc=$?
-[ $rc -eq 0 ] || { echo "FAIL: jahlab exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/lab.log" | head; tail -5 "$WD/lab.log"; exit 1; }
-grep '^LAB STILLNESS' "$WD/lab.log"
+printf 'camera %s\nframes 300\nlamp lamp intensity 8.16\nframes 300\nshot e-step\nquit\n' "$POSE" > "$WD/step.lab"
+printf 'camera %s\nlamp lamp intensity 8.16\nframes 600\nshot e-ref\nquit\n' "$POSE" > "$WD/ref.lab"
+for run in run step ref; do
+    "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \
+        > "$WD/$run.log" 2>&1
+    rc=$?
+    [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
+done
+grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 python3 -I - "$WD" <<'PY'
-import csv, os, sys
+import csv, os, re, sys
 wd = sys.argv[1]
 rows = [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", "still.tsv")), delimiter="\t") if r["window"] == "walk"]
-assert len(rows) == 31, "the window's 31 frames: %d" % len(rows)
-log = open(os.path.join(wd, "lab.log")).read()
-assert " visible=gather lastGiRow=-1 " in log, "the walk stayed in one lattice cell: no GI row after the stop"
-share = lambda r, c: int(r[c + "_changed"]) / max(1, int(r[c + "_px"]))
-g17, p16 = rows[17], rows[16]
-print("frame 17: glossy mean %.3f share %.4f; plaster share at 16 %.4f" % (float(g17["glossy_mean"]), share(g17, "glossy"), share(p16, "rough")))
-assert float(g17["glossy_mean"]) <= 0.05, "(a) the panes' mean change at frame 17 <= 0.05 codes: %s" % g17["glossy_mean"]
-assert share(g17, "glossy") <= share(p16, "rough"), "(a) the panes' changing share at 17 <= the plaster's at 16"
-late = [(int(r["frame"]), int(r["glossy_max"]), int(r["mirror_max"])) for r in rows[19:] if int(r["glossy_max"]) or int(r["mirror_max"])]
-assert not late, "(b) the glass holds from frame 19: %s" % late[:5]
-mirror = max(float(r["mirror_mean"]) for r in rows[1:17])
-print("mirror mean before the hold: max %.3f" % mirror)
-assert mirror <= 1.0, "(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror
+assert len(rows) == 231, "the window's 231 frames: %d" % len(rows)
+log = open(os.path.join(wd, "run.log")).read()
+assert re.search(r"LAB STILLNESS walk stop=\S+ frames=230 visible=gather lastGiRow=-1 ", log), \
+    "the walk stayed in one lattice cell: no GI row after the stop"
 assert int(rows[1]["mirror_px"]) > 0 and int(rows[1]["glossy_px"]) > 0, "the panes and the mirror are counted"
-print("rtreflect.still_after_stop: PASS")
+N = 51
+moving = lambda r: int(r["glossy_max"]) > 0 or int(r["mirror_max"]) > 0
+hold = next(i for i in range(1, len(rows)) if not any(moving(r) for r in rows[i:]))
+print("the hold: frame %d (bar <= %d)" % (hold, N + 1))
+fails = []
+g17 = float(rows[17]["glossy_mean"])
+share = [int(rows[i]["glossy_changed"]) for i in range(17, hold)]
+rises = [(17 + i + 1, share[i], share[i + 1]) for i in range(len(share) - 1) if share[i + 1] > share[i]]
+print("(a) frame 17: glossy mean %.3f; the changing share 17 -> hold: %s ... (%d rises)" % (g17, share[:6], len(rises)))
+if g17 > 0.05: fails.append("(a) the panes' mean change at frame 17 <= 0.05 codes: %.3f" % g17)
+if rises: fails.append("(a) the panes' changing share non-increasing from 17 to the hold: %d rises, first %s" % (len(rises), rises[0]))
+if hold > N + 1: fails.append("(b) the hold <= %d frames after the stop: %d" % (N + 1, hold))
+mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
+print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
+if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
+m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
+assert m, "the path line"
+cls = {k: (float(a), int(b)) for k, a, b in re.findall(r"(\w+)=([\d.]+)/(\d+)/\d+,\d+", m.group(1))}
+print("(d) walk vs teleport at equal placements: glossy %s mirror %s" % (cls["glossy"], cls["mirror"]))
+if cls["glossy"][0] > 0.5 or cls["glossy"][1] > 2: fails.append("(d) glossy mean <= 0.5 and p99 <= 2: %s" % (cls["glossy"],))
+if cls["mirror"][0] > 0.25 or cls["mirror"][1] > 1: fails.append("(d) mirror mean <= 0.25 and p99 <= 1: %s" % (cls["mirror"],))
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+if Image:
+    a = Image.open(os.path.join(wd, "data", "shots", "e-step.png")).convert("RGB").tobytes()
+    b = Image.open(os.path.join(wd, "data", "shots", "e-ref.png")).convert("RGB").tobytes()
+    d = [max(abs(a[i] - b[i]), abs(a[i + 1] - b[i + 1]), abs(a[i + 2] - b[i + 2])) for i in range(0, len(a), 3)]
+    mean, over = sum(d) / len(d), sum(1 for v in d if v > 1)
+    print("(e) the held small lamp step vs the converged new light: mean %.4f, %d px > 1 code, max %d" % (mean, over, max(d)))
+    if mean > 0.05 or over > len(d) * 1e-4: fails.append("(e) mean <= 0.05 and <= 0.01 %% over a code: %.4f, %d px" % (mean, over))
+else:
+    fails.append("(e) PIL is missing: the lamp-step pictures cannot be compared")
+for f in fails: print("FAIL:", f)
+print("rtreflect.still_after_stop: %s" % ("FAIL" if fails else "PASS"))
+sys.exit(1 if fails else 0)
 PY

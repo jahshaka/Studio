@@ -64,12 +64,14 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
-# rtreflect.still_after_stop (PHOTON-2 stage 1) — THE GLASS IS STILL AFTER A STOP: jahlab's stillness door on
-# photon-glass after a walk inside one lattice cell — the panes' mean change at the hold <= 0.05 codes, the panes and
-# the mirror at 0 codes from the hold on, the mirror's estimator fixed (still_after_stop.sh says the law and the base).
-# 960x540; 231 frames to the stop, 30 after it.
+# rtreflect.still_after_stop (PHOTON-2 stage 1 and its fix round, rev 5's bars) — THE GLASS IS STILL AFTER A STOP:
+# jahlab's stillness door on photon-glass after a walk inside one lattice cell and the path's teleport at equal
+# placements — (a) the panes' mean change at frame 17 <= 0.05 codes and the changing share non-increasing to the hold,
+# (b) 0 codes from the hold (<= 52), (c) the mirror's estimator fixed, (d) walk vs teleport, (e) a small lamp step held
+# at rest against a session converged at the new light (still_after_stop.sh says the law and the base). 960x540; three
+# jahlab sessions: 231 frames to the stop, 230 a window, the path's teleport (697 in all); 601 and 601 frames.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 262
+    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 1899
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
