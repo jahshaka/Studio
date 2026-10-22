@@ -8,7 +8,8 @@
 //                                the budget it was granted, and every granted budget is at most 2x what its children
 //                                carried (stored or granted); a group that cannot reduce is carried, the chain ends
 //   atom2.ends_empty             a 100-triangle prop is one leaf + an empty top, vanishing past its extent; every
-//                                fixture's root is non-empty before the top and the top cut draws nothing
+//                                fixture's root is non-empty before the top and the top cut draws nothing; a chain at
+//                                the depth cap closes with the empty top over its whole pool (never "no DAG")
 //   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
 //   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
 
@@ -419,6 +420,28 @@ inline int endsEmpty()
         std::snprintf(msg, sizeof(msg), "%s: the empty top is priced at the mesh's own extent (%.4g >= %.4g)", s.name,
                       double(fs.rootError), double(ext));
         CHECK_LOUD(fs.rootError >= ext * (1.0f - 1e-6f), msg);
+    }
+    // THE DEPTH CAP NEVER MEANS "NO DAG": the curved shell under a cap of two levels closes with the empty top over
+    // every cluster its pool still holds — a DAG whose top cut draws nothing, priced at the shell's extent.
+    {
+        const iris::MeshPtr shell = curvedShell(625.0f, 4, 3);
+        iris::MeshBake::ClusterDagStats cs;
+        iris::MeshBake::ClusterDagOptions opt;
+        opt.maxLevels = 2;
+        iris::MeshBake::buildClusterDag(shell, &cs, opt);
+        const MeshClusterDag &cd = shell->clusterDag;
+        int topMembers = 0;
+        if (!cd.isEmpty())
+            for (const auto &c : cd.clusters) if (c.group == cd.groups.size() - 1) ++topMembers;
+        const long long top = cd.isEmpty() ? -1 : cutcurve::cutTop(cutcurve::fromMesh(cd));
+        std::printf("== the curved shell under a cap of 2 levels: cap hit %d, %d clusters, %d groups, the top over %d "
+                    "clusters (%d triangles), error %.4g; top cut %lld\n", int(cs.depthCapHit), int(cd.clusters.size()),
+                    int(cd.groups.size()), topMembers, cs.rootTriangles, double(cs.rootError), top);
+        CHECK_LOUD(cs.depthCapHit, "the shell meets the cap of two levels");
+        CHECK_LOUD(!cd.isEmpty(), "...and still has a DAG");
+        CHECK_LOUD(topMembers > 1, "...its empty top closes over every cluster the pool still held");
+        CHECK_LOUD(top == 0, "...the top cut draws nothing");
+        CHECK_LOUD(cs.rootError >= extentOf(shell) * (1.0f - 1e-6f), "...and the top is priced at the shell's extent");
     }
     return finish();
 }
