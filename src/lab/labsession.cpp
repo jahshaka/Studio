@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -801,7 +802,13 @@ bool Session::stillness(const Command &c)
         const std::string &a = c.args[i];
         if (a == "path") spec.path = true;
         else if (a.rfind("age=", 0) == 0) spec.visibleAge = unsigned(std::atoi(a.c_str() + 4));
-        else if (a.rfind("out=", 0) == 0) out = a.substr(4);
+        else if (a.rfind("out=", 0) == 0) {
+            // A NAME, never a path: the files stay in <data-root>/stillness (Studio's world.stillness does the same)
+            out = a.substr(4);
+            for (char &ch : out)
+                if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
+            if (out.empty()) out = "stillness";
+        }
         else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
@@ -862,7 +869,17 @@ bool Session::stillness(const Command &c)
         grey(win.heat, win.heatW, win.heatH, win.name + "-heat", 32);
         grey(win.heatLate, win.heatW, win.heatH, win.name + "-heatlate", 32);
     }
-    grey(spec.classes, spec.classW, spec.classH, "classes", 50);
+    // THE CLASS MAP in colour (rough grey, glossy blue, mirror white, foliage green, mover red; none black): what the
+    // rows are split by — a class, not an object, so a pillar before a wall is one grey with it.
+    if (!spec.classes.empty()) {
+        static const QRgb kPalette[6] = { qRgb(0, 0, 0), qRgb(110, 110, 110), qRgb(60, 110, 230), qRgb(245, 245, 245),
+                                          qRgb(60, 190, 70), qRgb(220, 50, 40) };
+        QImage c(int(spec.classW), int(spec.classH), QImage::Format_RGB32);
+        for (unsigned y = 0; y < spec.classH; ++y)
+            for (unsigned x = 0; x < spec.classW; ++x)
+                c.setPixel(int(x), int(y), kPalette[std::min<unsigned>(5u, spec.classes[size_t(y) * spec.classW + x])]);
+        c.save(QDir(dir).filePath(QString::fromStdString(out + "-classes") + QStringLiteral(".png")), "PNG");
+    }
     std::istringstream lines(rep.summary());
     for (std::string line; std::getline(lines, line);) std::printf("LAB %s\n", line.c_str());
     std::printf("LAB STILLNESS %u frames in %.0f ms -> %s\n", run.plannedFrames(), msSinceStart() - t0, qPrintable(tsv));
