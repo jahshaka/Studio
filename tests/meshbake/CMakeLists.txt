@@ -199,7 +199,7 @@ jah_no_display(bake.cut_curve)
 # THE ATOM-2 ROWS (ATOM-2 part A stage 1; the builder's rows — the spec's six, each a `--atom2 <row>` verb, CPU only:
 # FRAMES 0). The fixtures: the Bistro-units kit-bashed box set, a 10 m curved shell with a 4 x 3 atlas, the card soup,
 # the kit-bash, the rough sheet and a 100-triangle ring (tests/meshbake/atom2_rows.h says what each row asserts).
-foreach(_row adjacency_by_position borders_move ladder_never_forced ends_empty locked_positions_kept one_step_drift_bound)
+foreach(_row adjacency_by_position borders_move ladder_never_forced ends_empty locked_positions_kept one_step_drift_bound weld_within_budget)
     add_test(NAME atom2.${_row} COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 ${_row}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom2.${_row} PROPERTIES
