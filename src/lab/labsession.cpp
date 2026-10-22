@@ -3,6 +3,7 @@
 #include "labclasses.h"
 #include "laboverlay.h"
 
+#include "irisgl/document/animation/animation.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -316,13 +317,13 @@ bool Session::load(std::string &error)
     LoadReport r;
     iris::SceneNodePtr model = loadModel(path, mOpt.dataRoot, r);
     if (!model) { error = r.error.toStdString(); return false; }
-    std::printf("LAB LOAD %s: %s | %d meshes, %s triangles, %d file lights | hash %.0f ms, parse %.0f ms, bake %.0f ms, "
-                "read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions, %.0f ms | %d two-sided nodes | "
-                "foliage (cut-out) %d meshes / %d maps, two-sided opaque %d meshes / %d maps | %s\n",
+    std::printf("LAB LOAD %s: %s | %d meshes, %s triangles, %d file lights, %d animated nodes | hash %.0f ms, parse %.0f ms, "
+                "bake %.0f ms, read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions, %.0f ms | %d "
+                "two-sided nodes | foliage (cut-out) %d meshes / %d maps, two-sided opaque %d meshes / %d maps | %s\n",
                 qPrintable(QFileInfo(path).fileName()),
                 r.baked ? "BAKED (cache miss)" : r.parsed ? "BAKE HIT, PARSED (the sidecar was missing or stale)"
                                                           : "CACHE HIT (no parse, no bake)",
-                r.meshes, grouped(r.triangles).c_str(), r.lights, r.hashMs, r.parseMs, r.bakeMs, r.readMs, r.fragmentMs,
+                r.meshes, grouped(r.triangles).c_str(), r.lights, r.animatedNodes, r.hashMs, r.parseMs, r.bakeMs, r.readMs, r.fragmentMs,
                 r.texturesResolved, r.texturesMissing, r.textureNameCollisions, r.texturesMs, r.twoSidedNodes,
                 r.cutoutMeshes, r.cutoutMaps, r.twoSidedOpaqueMeshes, r.twoSidedOpaqueMaps, qPrintable(r.bakePath));
     std::fflush(stdout);
@@ -396,6 +397,8 @@ void Session::frame()
         }
         mCamera.fly(mInput.held, mInput.dx, mInput.dy);
     }
+    // THE ANIMATION CLOCK (`play on`): one fixed step a frame - the engine's own grid (frames, never wall time)
+    if (mPlaying) mDoc->advance(1.0f / 60.0f);
     mDoc->refresh();
     SceneMirror::FrameView fv;
     fv.view = mView;
@@ -646,6 +649,29 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "draw") {
         if (!onOff(a0, mDraw, v)) { ok = false; std::printf("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
+    } else if (c.verb == "play") {
+        if (!onOff(a0, mPlaying, v)) { ok = false; std::printf("LAB REFUSED play '%s'\n", a0.c_str()); }
+        else {
+            mPlaying = v;
+            mDoc->setPlaying(v);
+            // what plays: the nodes carrying an animation, and how many of them a property track (position, rotation,
+            // scale: the document's own) moves - a skeletal clip is the engine's (the mirror pushes the clock)
+            int animated = 0, tracks = 0, clips = 0;
+            std::function<void(iris::SceneNode *)> walk = [&](iris::SceneNode *n) {
+                if (!n) return;
+                if (const iris::AnimationPtr a = n->getAnimation()) {
+                    ++animated;
+                    if (a->hasPropertyAnim(QStringLiteral("position")) || a->hasPropertyAnim(QStringLiteral("rotation")) ||
+                        a->hasPropertyAnim(QStringLiteral("scale")))
+                        ++tracks;
+                }
+                clips += int(n->getAnimations().size());
+                for (int i = 0; i < n->childCount(); ++i) walk(n->childAt(i));
+            };
+            walk(mDoc->getRootNode().data());
+            std::printf("LAB PLAY %s: %d nodes carry an animation (%d with a property track), %d clips in all\n",
+                        v ? "on" : "off", animated, tracks, clips);
+        }
     } else if (c.verb == "overlay") {
         if (!onOff(a0, mOverlay, v)) { ok = false; std::printf("LAB REFUSED overlay '%s'\n", a0.c_str()); }
         else {

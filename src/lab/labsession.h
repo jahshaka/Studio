@@ -113,6 +113,7 @@ private:
     int mAtomView = 0;
     int mTier = 3;              ///< worldmodes::Mode (Low 0 .. Epic 3)
     bool mGi = true, mOcclusion = true, mDraw = true, mOverlay = false;
+    bool mPlaying = false;   ///< `play on`: the document's clock advances one fixed step a frame
     bool mQuit = false;
     int mExit = 0;
     unsigned long long mFrames = 0;

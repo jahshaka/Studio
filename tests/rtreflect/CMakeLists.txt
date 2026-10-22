@@ -64,14 +64,16 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
-# rtreflect.still_after_stop (PHOTON-2 stage 1 and its fix round, rev 6's bars) — THE GLASS IS STILL AFTER A STOP:
-# jahlab's stillness door on photon-glass after a walk inside one lattice cell and the path's teleport at equal
-# placements — (b) 0 codes from the hold, (c) the mirror's estimator fixed, (d) walk vs teleport on the glossy panes,
-# (e) a small lamp step held at rest against a session converged at the new light; (a) and (f) are PRINTED as pending
-# R1 (stage 1's round 2), (d)'s mirror as stage 5's (still_after_stop.sh says the law and the base). 960x540; three
-# jahlab sessions: 231 frames to the stop, 230 a window, the path's teleport (697 in all); 601 and 601 frames.
+# rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars) — THE GLASS IS STILL AFTER
+# A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the path's teleport at equal
+# placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold, (b) 0 codes from the hold,
+# the hold <= 512 frames, (c) the mirror's estimator fixed, (d) walk vs teleport on the glossy panes, (e) a small lamp
+# step held at rest (the door says so) against a session converged and held at the new light; (f), the 4,096-sample
+# reference, is a measurement over a row's minute (still_after_stop.sh says the law and the base). 960x540; three
+# jahlab sessions: 231 frames to the stop, two 530-frame windows and the path's bridge (1,296); the step's 300 + its
+# door's 532 (832); the reference's door, 551 — 2,679 frames.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 1899
+    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 2679
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

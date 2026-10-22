@@ -129,11 +129,27 @@ Built buildRamp(unsigned seed, bool bake)
              b.emitter(10.0f));
     fixedBox(b, unit, "spark-2px", V(hx + 0.05f - 0.005f, 0.495f, -1.505f), V(hx + 0.05f + 0.005f, 0.505f, -1.495f),
              b.emitter(10.0f));
+    // THE CONTACT LINES (PHOTON-2 round 2, G5): a 10 cm emitter post STANDING on each strip near the far end, 60 cm
+    // tall - its reflection starts at the post's foot (the throw 0) and its two vertical edges blur with the throw, so
+    // the fixed cut, which the throw decides (the lobe's footprint at its hit: 4 alpha t against the texel there),
+    // crosses every strip from 0.04 up inside the reflection; the picture may not step there. Seen from the contact
+    // pose (stopRamp's D = 1); behind the edge bar's band and the sparks from the stop's pose (their rays pass above).
+    for (int i = 0; i < 16; ++i) {
+        const float xc = -2.0f + 0.25f * float(i) + 0.12f;
+        fixedBox(b, unit, QStringLiteral("post-%1").arg(i, 2, 10, QLatin1Char('0')), V(xc - 0.05f, 0.02f, -3.15f),
+                 V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
+    }
     return b.finish();
 }
 
-void stopRamp(double, iris::Vec3 &eye, iris::Vec3 &target)
+void stopRamp(double d, iris::Vec3 &eye, iris::Vec3 &target)
 {
+    if (d >= 0.5) {
+        // D = 1: THE CONTACT POSE (G5) - a metre up, 2.2 m in front of the posts, looking down at their feet
+        eye = iris::Vec3(0, 1.0f, -0.8f);
+        target = iris::Vec3(0, 0.1f, -3.0f);
+        return;
+    }
     // looking down at the strips: the bar above the view, its reflection in the strips' middle
     eye = iris::Vec3(0, 3.0f, 3.4f);
     target = iris::Vec3(0, 0, -1.0f);
@@ -147,9 +163,10 @@ std::vector<Prediction> expectRamp(const Built &, const Optics &)
 std::string describeRamp()
 {
     return "photon-ramp: photon-room's sealed shell with sixteen metal floor strips at perceptual roughness 0.00 to "
-           "0.15 reflecting a white emitter bar on the far wall (the lobe's blur per strip: PHOTON-2 fix F4), and two "
-           "5 / 10 mm emitter sparks above the 0.06 strip (the moving history's highlights: fix F2). Predicts THE KEEP "
-           "RULE only: every probe sees >= 2 faces, all kept.";
+           "0.15 reflecting a white emitter bar on the far wall (the lobe's blur per strip: PHOTON-2 fix F4), two "
+           "5 / 10 mm emitter sparks above the 0.06 strip (the moving history's highlights: fix F2) and an emitter post "
+           "standing on each strip (the contact lines: the fixed cut the throw decides, round 2's G5; envcam 1 looks "
+           "at their feet). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
 }
 
 void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)

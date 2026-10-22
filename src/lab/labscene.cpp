@@ -14,6 +14,7 @@
 #include "irisgl/import/importsettings.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/import/meshbake.h"
+#include "irisgl/import/nodeclips.h"
 #include "irisgl/import/scenelights.h"
 #include "irisgl/import/scenesource.h"
 
@@ -358,6 +359,10 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
             return {};
         }
     }
+    // THE FILE'S NODE ANIMATION PLAYS, as the app's import makes it (assethelper.cpp: irisgl/import/nodeclips.h) - a
+    // channel on a node no rig owns becomes that node's own property animation; without it the lab's Bistro kept its
+    // lanterns' clip on the root, where nothing plays it (PHOTON-2 round 2, G6: `play on` moved nothing)
+    r.animatedNodes = iris::playNodeChannels(node).nodes;
     r.fragmentMs = msSince(t0);
     r.triangles = trianglesOf(node, r.meshes);
     if (node->getName().isEmpty()) node->setName(fi.completeBaseName());

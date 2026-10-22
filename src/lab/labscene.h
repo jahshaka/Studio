@@ -35,6 +35,9 @@ struct LoadReport
     QString bakePath;
     double hashMs = 0, parseMs = 0, bakeMs = 0, readMs = 0, fragmentMs = 0;
     int meshes = 0, lights = 0;
+    /// THE FILE'S NODE ANIMATION (irisgl/import/nodeclips.h): the nodes given a property animation from the file's
+    /// channels - what `play on` moves (Bistro Exterior's lanterns and string lights).
+    int animatedNodes = 0;
     unsigned long long triangles = 0;   ///< level-0 triangles of every mesh of the fragment
     int texturesResolved = 0, texturesMissing = 0, textureNameCollisions = 0;   ///< the maps' names (TextureIndex)
     double texturesMs = 0.0;       ///< the maps' name resolution (TextureIndex)

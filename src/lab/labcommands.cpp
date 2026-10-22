@@ -18,6 +18,9 @@ const std::vector<VerbDoc> &verbs()
         { "occlusion", "occlusion on|off|toggle", 1, 1, "the id pass's depth-pyramid occlusion (Scene::setAtomOcclusionEnabled)" },
         { "draw", "draw on|off|toggle", 1, 1, "the Atom split itself; off = every object through stock PBS (Scene::setAtomDrawEnabled)" },
         { "overlay", "overlay on|off|toggle", 1, 1, "the F3 rows: triangles, occluded, frame ms, tier, view, camera (View::setOverlay)" },
+        { "play", "play on|off|toggle", 1, 1,
+          "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
+          "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6)" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
