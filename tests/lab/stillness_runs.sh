@@ -6,7 +6,8 @@
 # a header and every window frame (2 x 21 rows); the walk window's mask is the gather's own history count and counts
 # pixels of every class the pose shows (rough, glossy, mirror, mover); the reflection count histogram came back for the
 # walk window; the move's GI rows were recorded; the teleport window counts every pixel; the scripted move and the lamp
-# step are accepted. On the rig's display, at 960x540 (the door's cost is per pixel).
+# step are accepted (the nothing-moved control is lab.stillness_control). On the rig's display, at 960x540 (the door's
+# cost is per pixel).
 # usage: stillness_runs.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -25,6 +26,7 @@ S
 rc=$?
 [ $rc -eq 0 ] || { echo "FAIL: jahlab exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/lab.log" | head; tail -5 "$WD/lab.log"; exit 1; }
 grep '^LAB STILLNESS' "$WD/lab.log"
+
 python3 -I - "$WD" <<'PY'
 import csv, os, re, sys
 wd = sys.argv[1]
