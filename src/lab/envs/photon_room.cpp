@@ -68,9 +68,10 @@ Built buildRoom(unsigned seed, bool bake)
 // rho; a metal pane voids it. What each piece is there for (SPECS/PHOTON_2_SPEC.md stage 0, the preflight's §2):
 //   * THE GLOSSY PANE PAIR — two metal floor panes, perceptual roughness 0.1 and 0.3 (both under the 0.4 cut where
 //     the ray tier owns the glossy term): the reflection history's motion rules act on them;
-//   * FOUR MATTE PILLARS standing on the panes 1.4 m in front of the far wall — THE REFLECTED DEPTH STRUCTURE: the
-//     history's parallax drop fires only where a texel's ray length disagrees with its mean's by > 25 %
-//     (rq_reflect.comp), so a pane reflecting one flat wall never trips it; the pillars' silhouettes over the wall
+//   * FOUR MATTE PILLARS standing on the panes 1.4 m in front of the far wall — THE REFLECTED DEPTH STRUCTURE: a
+//     moving eye's reflection history is right only where its virtual point (the surface plus the mean ray length,
+//     rq_reflect_temporal.comp's hit history) names the same reflected thing, and the neighbourhood clamp answers
+//     where it does not — a pane reflecting one flat wall never tests either; the pillars' silhouettes over the wall
 //     8 m behind them do (fixture B's shape: a glossy floor with occluders standing on it);
 //   * A MIRROR on the far wall facing the room (metal, roughness 0): a mirror takes each frame whole, so every
 //     stochastic term of its hit shading shows raw;
