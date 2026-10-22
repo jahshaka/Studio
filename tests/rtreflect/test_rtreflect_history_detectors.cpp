@@ -1,17 +1,18 @@
-// rtreflect.history_detectors — THE REFLECTION HISTORY'S TWO DETECTORS (PHOTON-5 stage 4;
-// SPECS/audits/PHOTON_AUDIT_2026-10-21.md F4).
+// rtreflect.history_detectors — THE REFLECTION HISTORY'S TWO LAWS (PHOTON-5 stage 4;
+// SPECS/audits/PHOTON_AUDIT_2026-10-21.md F4; the mechanism PHOTON-2 stage 1b's).
 //
-// The ray tier's reflection is a temporal mean (rq_reflect.comp): at rest a glossy texel
-// remembers about thirty-two frames (the floor on 1/n, kReflectHistoryFloor). Two things
-// make that memory WRONG rather than merely old, and each has a detector:
+// The ray tier's reflection is a temporal mean (rq_reflect.comp + rq_reflect_temporal.comp):
+// a moving eye's glossy texel remembers about thirty-two frames (the floor on 1/n,
+// kReflectHistoryFloor). Two things make that memory WRONG rather than merely old, and
+// ONE mechanism answers both since PHOTON-2 1b — the history is clamped to the box this
+// frame's samples span and its memory shortened by how far the clamp moved it (Lumen's
+// temporal denoiser; the radiance-key cap and the parallax drop that answered them before
+// are deleted):
 //   (a) THE RADIANCE MOVED: a lamp's intensity stepped. The surface and what it reflects
-//       are the same, so no reprojection test fires, and the old radiance drained out of
-//       a still surface's mean over the floor's ~94 frames. The host passes "the radiance
-//       serial moved" in the pass's Params and the mean's count is capped that frame.
-//   (b) THE EYE MOVED: a sideways slide moves a reflection across its surface. PAN-SMEAR-1's
-//       parallax drop already holds the trail under a code (0.842 measured at the base); this
-//       arm is its guard. (A fetch through the reflected image's point was built and measured
-//       worse, 1.571, and dropped: PHOTON-5's report.)
+//       are the same, so no reprojection test fires; the old radiance drained out of a still
+//       surface's mean over the floor's ~94 frames at the base.
+//   (b) THE EYE MOVED: a sideways slide moves a reflection across its surface: the trail
+//       held under a code (0.842 measured at the base with PAN-SMEAR-1's drop).
 //
 // FIXTURES (High, rays on, 384 x 216):
 //   (a) a glossy metal floor (perceptual roughness 0.2 - above the mirror ramp, where the
@@ -268,16 +269,17 @@ int main()
 
     const int frames95 = lampStep(e, view);
     // THE LAW (the lead's ruling on the measurement): 95 % of a radiance change holds within
-    // 2 x kWarmupFrames frames. Measured: 24 at the base (the 1/32 floor's drain), 11 with the cap.
+    // 2 x kWarmupFrames frames. Measured: 24 at the base (the 1/32 floor's drain), 11 with the
+    // radiance cap (PHOTON-5), 7 with the clamp and its confidence (PHOTON-2 1b).
     CHECK_MSG(frames95 > 0 && frames95 <= 2 * kWarmupFrames,
               "(a) A LAMP STEP reaches the still glossy floor's reflection within 2 x kWarmupFrames = %d frames "
               "(%d; 24 at the base)", 2 * kWarmupFrames, frames95);
 
     float still = 0.0f;
     const float trail = slideTrail(e, view, still);
-    // A GUARD (PAN-SMEAR-1's law, held): measured 0.842 at the base. A history fetched through the
-    // reflected image's point under a moved eye was built and measured WORSE (1.571) - a glossy
-    // lobe's mean length is its far rays' - and was dropped.
+    // A GUARD (PAN-SMEAR-1's law, held): measured 0.842 at the base with the parallax drop, 0.367
+    // with the clamp (PHOTON-2 1b; the hit history through the virtual point chosen by its clamp
+    // error, Lumen's rule — PHOTON-5's "every pixel" fetch, measured 1.571, had no such choice).
     CHECK_MSG(trail <= 1.0f, "(b) A SLIDE leaves no trail: the moving floor within 1 code of the settled (%.3f; "
               "0.842 at the base)", trail);
 

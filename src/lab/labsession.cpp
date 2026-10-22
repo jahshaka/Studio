@@ -802,6 +802,7 @@ bool Session::stillness(const Command &c)
         const std::string &a = c.args[i];
         if (a == "path") spec.path = true;
         else if (a.rfind("age=", 0) == 0) spec.visibleAge = unsigned(std::atoi(a.c_str() + 4));
+        else if (a.rfind("trail=", 0) == 0) spec.moveTrail = unsigned(std::max(0, std::atoi(a.c_str() + 6)));
         else if (a.rfind("out=", 0) == 0) {
             // A NAME, never a path: the files stay in <data-root>/stillness (Studio's world.stillness does the same)
             out = a.substr(4);
@@ -809,7 +810,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, out=<name>)\n", a.c_str()); return false; }
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;

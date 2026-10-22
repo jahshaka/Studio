@@ -63,3 +63,15 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
+
+# rtreflect.still_after_stop (PHOTON-2 stage 1) — THE GLASS IS STILL AFTER A STOP: jahlab's stillness door on
+# photon-glass after a walk inside one lattice cell — the panes' mean change at the hold <= 0.05 codes, the panes and
+# the mirror at 0 codes from the hold on, the mirror's estimator fixed (still_after_stop.sh says the law and the base).
+# 960x540; 231 frames to the stop, 30 after it.
+if(TARGET jahlab)
+    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 262
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.still_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
