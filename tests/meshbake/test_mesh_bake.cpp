@@ -2264,7 +2264,7 @@ iris::MeshPtr positionsOnly(const iris::MeshPtr &src)
     return m;
 }
 
-enum class Arm { Shipped, PosOnly, Stock };
+enum class Arm { Shipped, PosOnly, Stock, Placed };
 
 /// One mesh through one arm. `st` (shipped and posonly) carries the bake's report (with its per-group records).
 Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *st, double *ms)
@@ -2283,6 +2283,7 @@ Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *s
         if (!subject.isNull()) {
             iris::MeshBake::ClusterDagOptions opt;
             opt.wantGroups = true;
+            opt.placement = arm == Arm::Placed;   // stage 2's placement arm (off in the bake: the memory rule's no-go)
             iris::MeshBake::buildClusterDag(subject, st, opt);
             d = fromMesh(subject->clusterDag);
         }
@@ -2350,7 +2351,7 @@ static int dagReachesRoot()
         const iris::MeshClusterDag &dag = cs.mesh->clusterDag;
         std::printf("== %s: %d clusters, %d groups, depth %d, %d levels, %lld ms; %d reductions, %d carried, %d retries, "
                     "%d pieces pruned; root %d tris, top error %.4g\n",
-                    cs.name, dag.clusters.size(), dag.groups.size(), st.depth, st.levels, qint64(t.elapsed()),
+                    cs.name, int(dag.clusters.size()), int(dag.groups.size()), st.depth, st.levels, qint64(t.elapsed()),
                     st.reductions, st.carried, st.retries, st.prunedPieces, st.rootTriangles, double(st.rootError));
         CHECK_LOUD(!dag.isEmpty(), "the mesh has a DAG");
         if (dag.isEmpty()) continue;
@@ -2414,6 +2415,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     int dagMeshes = 0, carried = 0, retries = 0, reductions = 0, allCarriedLevels = 0, capHits = 0, depthMax = 0;
     int g2 = 0, g4 = 0, g8 = 0, pairs = 0;
     double msSum = 0.0;
+    long long dagBytes = 0;
+    std::map<int, int> depthHistogram;
     std::vector<double> d0ratio;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2431,6 +2434,10 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         if (dag.isEmpty()) { ++dagLess; dagLessTris += l0; topAll += l0; continue; }
         ++dagMeshes;
         msSum += st.msTotal;
+        // THE DAG's SIZE as the blob writes it (meshbake.cpp writeClusterDag) and the depth of its deepest group
+        dagBytes += 4 + 4 + 4LL * iris::atomdag::configRecord().size() + 4 + 32LL * dag.groups.size() +
+                    40LL * dag.clusters.size() + 4 + 4LL * dag.vertices.size() + 4 + dag.triangles.size();
+        ++depthHistogram[st.depth];
         carried += st.carried; retries += st.retries; reductions += st.reductions; allCarriedLevels += st.levelsAllCarried;
         depthMax = std::max(depthMax, st.depth);
         rootAll += st.rootTriangles;
@@ -2490,6 +2497,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     if (!d0ratio.empty())
         std::printf("  depth-0 position-quadric estimate / measured step: median %.3f, p10 %.3f, p90 %.3f over %zu groups\n",
                     d0ratio[d0ratio.size() / 2], d0ratio[d0ratio.size() / 10], d0ratio[d0ratio.size() * 9 / 10], d0ratio.size());
+    std::printf("  DAG blob bytes %lld; meshes by their deepest group's depth:", dagBytes);
+    for (const auto &kv : depthHistogram) std::printf(" d%d %d", kv.first, kv.second);
+    std::printf("\n");
     std::printf("  DAG build wall %.0f ms (summed over meshes); process wall %.1f s\n", msSum, double(wall.elapsed()) / 1000.0);
     return 0;
 }
@@ -2564,9 +2574,10 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
 {
     using namespace cutcurve;
     const Arm arm = armName == QStringLiteral("posonly") ? Arm::PosOnly : armName == QStringLiteral("stock") ? Arm::Stock
-                                                                                                           : Arm::Shipped;
-    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock")) {
-        std::printf("FAIL: --arm %s (shipped|posonly|stock)\n", qUtf8Printable(armName));
+                  : armName == QStringLiteral("placed") ? Arm::Placed : Arm::Shipped;
+    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock") &&
+        armName != QStringLiteral("placed")) {
+        std::printf("FAIL: --arm %s (shipped|posonly|stock|placed)\n", qUtf8Printable(armName));
         return 1;
     }
     iris::MeshBake::setBakeThreads(threads);
@@ -2603,14 +2614,25 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
                 qUtf8Printable(QFileInfo(path).fileName()), qUtf8Printable(armName), threads);
     std::printf("mesh\tclass\tname\tl0\tgroups\tdepth");
     for (float E : kLadder) std::printf("\tE%g", double(E));
-    std::printf("\ttop\tms\n");
+    std::printf("\ttop\tms\tvertices\tappended\tbytesPerVertex\n");
     std::map<QString, std::vector<long long>> sums;
+    std::map<QString, std::array<long long, 2>> vsums;   // level-0 vertex bytes, appended vertex bytes
     QElapsedTimer wall; wall.start();
     for (const Item &it : items) {
         if (it.index < 0 || it.index >= meshes.size()) { std::printf("FAIL: mesh %d out of range\n", it.index); return 1; }
         const iris::MeshPtr &m = meshes.at(it.index);
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
         const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
+        // THE VERTEX BYTES (stage 2's memory rule): every per-vertex float buffer, raw, before the build grows them.
+        size_t nv0 = 0;
+        long long bytesPerVertex = 0;
+        for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
+            if (!vb || !vb->data || vb->vertexLayout.getAttribs().size() != 1) continue;
+            const int comps = vb->vertexLayout.getAttribs().first().count;
+            bytesPerVertex += 4 * comps;
+            if (vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position)
+                nv0 = size_t(vb->dataSize) / (sizeof(float) * size_t(comps));
+        }
         iris::MeshBake::ClusterDagStats st;
         double ms = 0.0;
         const Dag d = build(m, arm, &st, &ms);
@@ -2622,7 +2644,12 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
         std::printf("%d\t%s\t%s\t%lld\t%zu\t%d", it.index, qUtf8Printable(it.cls), qUtf8Printable(names[size_t(it.index)]), l0,
                     d.groupError.size(), maxDepth + 1);
         for (long long v : row) std::printf("\t%lld", v);
-        std::printf("\t%.0f\n", ms);
+        std::printf("\t%.0f\t%zu\t%zu\t%lld\n", ms, nv0, st.appendedVertices, bytesPerVertex);
+        for (const QString &key : { it.cls, QStringLiteral("all") }) {
+            vsums[key][0] += (long long)nv0 * bytesPerVertex;
+            vsums[key][1] += (long long)st.appendedVertices * bytesPerVertex;
+            if (it.cls == QStringLiteral("all")) break;
+        }
         for (const QString &key : { it.cls, QStringLiteral("all") }) {
             std::vector<long long> &s = sums[key];
             if (s.empty()) s.assign(size_t(kE) + 2, 0);
@@ -2635,7 +2662,8 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
     for (const auto &kv : sums) {
         std::printf("SUM\t%s\t-\t%lld\t-\t-", qUtf8Printable(kv.first), kv.second[0]);
         for (size_t k = 1; k < kv.second.size(); ++k) std::printf("\t%lld", kv.second[k]);
-        std::printf("\t%lld\n", qint64(wall.elapsed()));
+        std::printf("\t%lld\tvertexBytes %lld\tappendedBytes %lld (%.3f)\n", qint64(wall.elapsed()), vsums[kv.first][0],
+                    vsums[kv.first][1], vsums[kv.first][0] ? double(vsums[kv.first][1]) / double(vsums[kv.first][0]) : 0.0);
     }
     return 0;
 }
@@ -2862,7 +2890,10 @@ static void bakeDeterminism(const QString &part = QString())
     // caller's own first chunks, later = worker threads and nested jobs inside a
     // mesh's stages) must come back to buildFromScene as an invalid model — before,
     // a worker's throw was std::terminate — and the pool must then bake the same
-    // file whole, byte for byte.
+    // file whole, byte for byte. THE FEWEST WHOLE BAKES THE LAW NEEDS (ATOM-2 stage 2,
+    // the 60 s law; was a whole bake after every throw, eleven in all): per width the
+    // five throws, then ONE whole bake byte-identical to the reference — a pool any
+    // throw had left broken (a job still listed, a slot never freed) fails that bake.
     {
         QTemporaryDir scratch;
         iris::MeshBake::setBakeThreads(1);
@@ -2876,10 +2907,11 @@ static void bakeDeterminism(const QString &part = QString())
                 CHECK_LOUD(!failed.valid, qUtf8Printable(QStringLiteral(
                     "%1 thread(s): a throw in unit %2 of the bake answers 'no bake' (and the process lives)")
                     .arg(width == 1 ? 1 : hardware).arg(n)));
-                const QByteArray again = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
-                CHECK_LOUD(!reference.isEmpty() && again == reference, qUtf8Printable(QStringLiteral(
-                    "%1 thread(s): ...and the next bake is whole and byte-identical").arg(width == 1 ? 1 : hardware)));
             }
+            const QByteArray again = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+            CHECK_LOUD(!reference.isEmpty() && again == reference, qUtf8Printable(QStringLiteral(
+                "%1 thread(s): ...and after the five throws the next bake is whole and byte-identical")
+                .arg(width == 1 ? 1 : hardware)));
         }
         iris::MeshBake::setBakeThreads(0);
     }

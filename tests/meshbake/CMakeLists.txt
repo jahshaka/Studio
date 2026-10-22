@@ -95,10 +95,12 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # once serial and twice on every thread, the ten throw cases (two widths x five units) each followed by a whole bake —
 # as THREE rows of the same binary (`--determinism standin|dragon|throws`), each its own process and home; one row was
 # 65 s; the parts' solo runs 8.3 / 15.8 / 42.5 s (2026-10-20). A CPU row renders nothing (FRAMES 0); over the 10 s CPU
-# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT max(6 x the solo run, the 120 s floor), rounded up.
-set(_bake_timeout_standin 120)
-set(_bake_timeout_dragon 120)
-set(_bake_timeout_throws 260)
+# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT: the 60 s law (below).
+# ATOM-2 stage 2 (the stage-1 read's finding 4): every part under the 60 s law — the throws part rebuilt to three whole
+# bakes (the reference, one after each width's five throws); its TIMEOUT is the law itself.
+set(_bake_timeout_standin 60)
+set(_bake_timeout_dragon 60)
+set(_bake_timeout_throws 60)
 foreach(_part standin dragon throws)
     add_test(NAME bake.determinism.${_part}
              COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism.${_part}" -- $<TARGET_FILE:test_mesh_bake>

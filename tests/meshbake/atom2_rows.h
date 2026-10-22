@@ -197,6 +197,23 @@ inline std::vector<unsigned> externalOf(const MeshClusterDag &dag, const Reading
     return ext;
 }
 
+/// The diagonal of a fixture's level-0 box.
+inline float extentOf(const iris::MeshPtr &mesh)
+{
+    size_t nv = 0; int pc = 3;
+    const float *p = cutcurve::positionsOf(mesh, &nv, &pc);
+    const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+    if (!p || ib.isNull() || !ib->data) return 0.0f;
+    const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
+    float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+    for (size_t i = 0; i < size_t(ib->dataSize) / sizeof(unsigned); ++i)
+        for (int k = 0; k < 3; ++k) {
+            lo[k] = std::min(lo[k], p[size_t(idx[i]) * size_t(pc) + size_t(k)]);
+            hi[k] = std::max(hi[k], p[size_t(idx[i]) * size_t(pc) + size_t(k)]);
+        }
+    return std::sqrt((hi[0] - lo[0]) * (hi[0] - lo[0]) + (hi[1] - lo[1]) * (hi[1] - lo[1]) + (hi[2] - lo[2]) * (hi[2] - lo[2]));
+}
+
 inline int finish()
 {
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
@@ -303,29 +320,50 @@ inline int ladderNeverForced()
         opt.wantGroups = true;
         iris::MeshBake::buildClusterDag(s.mesh, &st, opt);
         const MeshClusterDag &dag = s.mesh->clusterDag;
-        int over = 0, reductions = 0, carried = 0;
-        float worst = 0.0f;
-        for (const iris::atomdag::GroupRecord &r : st.records) {
-            if (r.kind == 1) { ++carried; continue; }
-            if (r.kind != 0) continue;
-            ++reductions;
-            const float law = std::max(2.0f * r.childError, r.depth0Estimate >= 0.0f ? 2.0f * r.depth0Estimate : 0.0f);
-            const float allowed = std::max(law, r.budget);   // the budget is the law (or the arithmetic floor)
-            if (r.childError > 0.0f) worst = std::max(worst, r.step / r.childError);
-            if (r.step > allowed * (1.0f + 1e-6f) || r.budget > std::max(law, 1e-30f) * (1.0f + 1e-6f) + 1e-6f * allowed) ++over;
+        if (dag.isEmpty()) {
+            char m0[200];
+            std::snprintf(m0, sizeof(m0), "%s: the DAG was built (depth cap hit: %d)", s.name, int(st.depthCapHit));
+            CHECK_LOUD(false, m0);
+            continue;
         }
-        carriedAll += carried;
+        // THE SPEC'S LAW, read off the DAG itself: every group's stored error <= 2 x the largest STORED error of the
+        // groups that produced its members (a group of leaves: 2 x the position quadric's estimate of its halving);
+        // the empty top (priced at the mesh's extent, a vanishing) and the groups merged as they were are not halvings.
+        std::vector<float> d0(size_t(dag.groups.size()), -1.0f);
+        std::vector<int> kindOf(size_t(dag.groups.size()), -1);
+        int reductions = 0, carried = 0;
+        for (const iris::atomdag::GroupRecord &r : st.records) {
+            if (r.kind == 1) ++carried;
+            if (r.dagGroup >= 0) { d0[size_t(r.dagGroup)] = r.depth0Estimate; kindOf[size_t(r.dagGroup)] = r.kind; }
+            if (r.kind == 0) ++reductions;
+        }
+        std::vector<float> childMax(size_t(dag.groups.size()), 0.0f);
+        for (const auto &c : dag.clusters)
+            if (c.refined >= 0) childMax[size_t(c.group)] = std::max(childMax[size_t(c.group)], dag.groups.at(c.refined).error);
+        const float floorLen = 1e-5f * extentOf(s.mesh);
+        int over = 0;
+        float worst = 0.0f;
+        for (int g = 0; g < dag.groups.size(); ++g) {
+            if (kindOf[size_t(g)] != 0) continue;
+            const float base = childMax[size_t(g)] > 0.0f ? childMax[size_t(g)] : std::max(d0[size_t(g)], 0.0f);
+            const float law = std::max(2.0f * base, floorLen);
+            const float e = dag.groups.at(g).error;
+            if (base > 0.0f) worst = std::max(worst, e / base);
+            if (e > law * (1.0f + 1e-5f)) ++over;
+        }
+        carriedAll += carried + st.levelsAllCarried;   // a group carried, or a whole level re-run with doubled budgets
         const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
-        std::printf("== %s: %d reductions, %d carried, %d retries, %d levels (%d all carried); worst step / children "
-                    "%.3f; top cut %lld\n", s.name, reductions, carried, st.retries, st.levels, st.levelsAllCarried,
+        std::printf("== %s: %d reductions, %d carried, %d retries, %d levels (%d all carried); worst stored / children's "
+                    "stored %.3f; top cut %lld\n", s.name, reductions, carried, st.retries, st.levels, st.levelsAllCarried,
                     double(worst), top);
         char msg[240];
-        std::snprintf(msg, sizeof(msg), "%s: every reduction's step within 2x its children's error (%d over)", s.name, over);
+        std::snprintf(msg, sizeof(msg), "%s: every group's stored error within 2x its children's STORED error (%d over)",
+                      s.name, over);
         CHECK_LOUD(over == 0, msg);
         std::snprintf(msg, sizeof(msg), "%s: the chain ends (the top cut draws nothing: %lld)", s.name, top);
         CHECK_LOUD(!dag.isEmpty() && top == 0, msg);
     }
-    std::printf("   carried groups over the set: %d\n", carriedAll);
+    std::printf("   carried groups and all-carried levels re-run over the set: %d\n", carriedAll);
     CHECK_LOUD(carriedAll > 0, "some group could not reduce within its budget and was carried (the chains still ended)");
     return finish();
 }
@@ -339,9 +377,10 @@ inline int endsEmpty()
     const cutcurve::Dag d = cutcurve::fromMesh(dag);
     const float topError = dag.groups.isEmpty() ? 0.0f : dag.groups.last().error;
     std::printf("== prop: %d clusters, %d groups, top error %.4g (the ring's diagonal %.4g); cut below it %lld, above "
-                "it %lld\n", dag.clusters.size(), dag.groups.size(), double(topError), double(st.rootError),
+                "it %lld\n", int(dag.clusters.size()), int(dag.groups.size()), double(topError), double(st.rootError),
                 cutcurve::cutAt(d, topError * 0.999f), cutcurve::cutAt(d, topError * 1.001f));
     CHECK_LOUD(dag.clusters.size() == 1 && dag.groups.size() == 1, "a 100-triangle prop is one leaf and one group");
+    CHECK_LOUD(topError >= extentOf(prop) * (1.0f - 1e-6f), "the prop's top is priced at its own extent");
     CHECK_LOUD(dag.clusters.size() == 1 && dag.clusters.at(0).triangleCount == 100, "the leaf holds the 100 triangles");
     CHECK_LOUD(cutcurve::cutAt(d, topError * 0.999f) == 100, "under its extent the prop draws whole");
     CHECK_LOUD(cutcurve::cutAt(d, topError * 1.001f) == 0, "past its extent it draws nothing (the empty top)");
@@ -356,6 +395,10 @@ inline int endsEmpty()
         CHECK_LOUD(fs.rootTriangles > 0, msg);
         std::snprintf(msg, sizeof(msg), "%s: the top cut draws nothing", s.name);
         CHECK_LOUD(cutcurve::cutTop(fd) == 0, msg);
+        const float ext = extentOf(s.mesh);
+        std::snprintf(msg, sizeof(msg), "%s: the empty top is priced at the mesh's own extent (%.4g >= %.4g)", s.name,
+                      double(fs.rootError), double(ext));
+        CHECK_LOUD(fs.rootError >= ext * (1.0f - 1e-6f), msg);
     }
     return finish();
 }
@@ -400,7 +443,7 @@ inline int oneStepDriftBound()
         std::printf("== %s: depth tris drift stored:", s.name);
         for (const auto &r : rows) {
             std::printf(" | d%d %d %.4g %.4g", r.depth, r.triangles, double(r.drift), double(r.stored));
-            if (r.depth == 0 || r.triangles == 0) continue;
+            if (r.depth == 0) continue;   // (an EMPTY level is not skipped: everything gone is a drift too)
             if (r.stored > 0.0f) worst = std::max(worst, r.drift / r.stored);
             if (r.drift > 2.0f * r.stored * (1.0f + 1e-5f)) ++over;
         }
@@ -413,6 +456,52 @@ inline int oneStepDriftBound()
     return finish();
 }
 
+/// The smallest stored error at which the cut draws at most `n` triangles (the cut changes only at a group's error).
+inline float errorFor(const cutcurve::Dag &d, long long n)
+{
+    std::vector<float> e;
+    for (float x : d.groupError) if (x < FLT_MAX) e.push_back(x);
+    std::sort(e.begin(), e.end());
+    for (float x : e) {
+        const float E = std::nextafter(x, FLT_MAX);
+        if (cutcurve::cutAt(d, E) <= n) return E;
+    }
+    return FLT_MAX;
+}
+
+/// atom2.placement_straddles (stage 2): THE PLACED SURVIVORS STRADDLE THE CURVE — on the curved shell (a 10 m quarter
+/// sphere, no atlas: the chord sag a re-indexed level cannot place) the stored error at equal triangles (a half, a
+/// quarter, an eighth and a sixteenth of level 0) is at most 0.6 x the re-indexed builder's (stage 1's).
+inline int placementStraddles()
+{
+    const long long l0 = 6144;
+    float worst = 0.0f;
+    std::vector<float> placedE, indexedE;
+    for (bool placement : { true, false }) {
+        const iris::MeshPtr shell = curvedShell(625.0f, 1, 1);
+        iris::MeshBake::ClusterDagStats st;
+        iris::MeshBake::ClusterDagOptions opt;
+        opt.placement = placement;
+        iris::MeshBake::buildClusterDag(shell, &st, opt);
+        const cutcurve::Dag d = cutcurve::fromMesh(shell->clusterDag);
+        std::printf("== %s: %d clusters, %d groups, %zu vertices appended\n", placement ? "placed" : "re-indexed",
+                    int(shell->clusterDag.clusters.size()), int(shell->clusterDag.groups.size()), st.appendedVertices);
+        for (long long n : { l0 / 2, l0 / 4, l0 / 8, l0 / 16 }) (placement ? placedE : indexedE).push_back(errorFor(d, n));
+    }
+    const long long ns[4] = { l0 / 2, l0 / 4, l0 / 8, l0 / 16 };
+    for (int i = 0; i < 4; ++i) {
+        const float r = indexedE[size_t(i)] > 0.0f ? placedE[size_t(i)] / indexedE[size_t(i)] : 0.0f;
+        worst = std::max(worst, r);
+        std::printf("   <= %lld triangles: placed %.5g, re-indexed %.5g -> %.3f\n", ns[i], double(placedE[size_t(i)]),
+                    double(indexedE[size_t(i)]), double(r));
+    }
+    char msg[200];
+    std::snprintf(msg, sizeof(msg), "the placed stored error at equal triangles is at most 0.6x the re-indexed one (worst %.3f)",
+                  double(worst));
+    CHECK_LOUD(worst > 0.0f && worst <= 0.6f, msg);
+    return finish();
+}
+
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
@@ -421,6 +510,7 @@ inline int run(const QString &row)
     if (row == QStringLiteral("ends_empty")) return endsEmpty();
     if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
+    if (row == QStringLiteral("placement_straddles")) return placementStraddles();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }
