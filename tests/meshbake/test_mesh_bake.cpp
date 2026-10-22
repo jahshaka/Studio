@@ -2238,7 +2238,7 @@ const float *positionsOf(const iris::MeshPtr &m, size_t *nv, int *comps)
     return nullptr;
 }
 
-enum class Arm { Shipped, PosOnly, Stock };
+enum class Arm { Shipped, Stock };
 
 /// One mesh through one arm. `st` (shipped and posonly) carries the bake's report (with its per-group records).
 Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *st, double *ms)
@@ -2255,7 +2255,6 @@ Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *s
     } else {
         iris::MeshBake::ClusterDagOptions opt;
         opt.wantGroups = true;
-        if (arm == Arm::PosOnly) opt.weights = iris::atomdag::WeightArm::PosOnly;
         iris::MeshBake::buildClusterDag(mesh, st, opt);
         d = fromMesh(mesh->clusterDag);
     }
@@ -2363,8 +2362,7 @@ static int lockedPositionsKept()
 /// mesh the root's triangles and the top's error; for the file the totals, the level-to-level growth of the stored
 /// maximum (the empty top excluded: it is a vanishing, not a level), the depth-0 estimate against the measured step,
 /// and the wall time. A measurement — nothing is written but the table.
-static int dagLevels(const QString &path, const QString &outPath, int threads, const QSet<int> &only,
-                     iris::atomdag::WeightArm arm)
+static int dagLevels(const QString &path, const QString &outPath, int threads, const QSet<int> &only)
 {
     iris::MeshBake::setBakeThreads(threads);
     Assimp::Importer importer;
@@ -2382,7 +2380,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     QFile out(outPath);
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) { std::printf("FAIL: %s\n", qUtf8Printable(outPath)); return 1; }
     out.write("mesh\tname\tl0\tlevel\tgroups\treductions\tnotSimplified\tcarried\ttop\ttris\terrMax\terrMed\t"
-              "stepOverBudgetMax\tbudgetMax\tretries\tpruned\tislandsDropped\tweightNormalMed\tweightUvMed\n");
+              "stepOverBudgetMax\tbudgetMax\tretries\tpruned\tislandsDropped\n");
     long long l0All = 0, rootAll = 0, topAll = 0, dagLess = 0, dagLessTris = 0;
     int dagMeshes = 0, carried = 0, retries = 0, reductions = 0, allCarriedLevels = 0, capHits = 0, depthMax = 0;
     int g2 = 0, g4 = 0, g8 = 0, pairs = 0;
@@ -2391,7 +2389,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     std::map<int, int> depthHistogram;
     std::map<int, long long> attemptHist;   // groups attempted (every pass) by their simplify count
     std::map<int, long long> grantedHist;   // DAG reductions by ceil(log2(granted / children's stored)); -1 = leaves
-    long long countCarries = 0, budgetCarries = 0, welded = 0;
+    long long countCarries = 0, budgetCarries = 0;
     std::vector<double> d0ratio;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2403,11 +2401,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         iris::MeshBake::ClusterDagStats st;
         iris::MeshBake::ClusterDagOptions opt;
         opt.wantGroups = true;
-        opt.weights = arm;
         iris::MeshBake::buildClusterDag(m, &st, opt);
         const iris::MeshClusterDag &dag = m->clusterDag;
         if (st.depthCapHit) ++capHits;
-        welded += st.welded;
         if (dag.isEmpty()) { ++dagLess; dagLessTris += l0; topAll += l0; continue; }
         ++dagMeshes;
         msSum += st.msTotal;
@@ -2421,7 +2417,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         topAll += cutcurve::cutTop(cutcurve::fromMesh(dag));
         const atom2::Reading rd(dag);
         struct Lv { int groups = 0, red = 0, ns = 0, car = 0, top = 0, retries = 0, pruned = 0, islands = 0;
-                    long long tris = 0; std::vector<float> err, wn, wu; float over = 0.0f, budget = 0.0f; };
+                    long long tris = 0; std::vector<float> err; float over = 0.0f, budget = 0.0f; };
         std::map<int, Lv> lv;
         for (int c = 0; c < dag.clusters.size(); ++c)
             for (int d = rd.born[size_t(c)]; d <= rd.dies[size_t(c)]; ++d) lv[d].tris += dag.clusters.at(c).triangleCount;
@@ -2442,8 +2438,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
             if (r.kind == 0) {
                 if (r.budget > 0.0f) L.over = std::max(L.over, r.step / r.budget);
                 L.budget = std::max(L.budget, r.budget);
-                L.wn.push_back(r.weightNormal);
-                L.wu.push_back(r.weightUv);
                 if (r.level == 0 && r.depth0Estimate > 0.0f && r.step > 0.0f) d0ratio.push_back(double(r.depth0Estimate / r.step));
             }
         }
@@ -2452,11 +2446,11 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         for (auto &kv : lv) {
             const Lv &L = kv.second;
             const float errMax = L.err.empty() ? 0.0f : *std::max_element(L.err.begin(), L.err.end());
-            out.write(QStringLiteral("%1\t%2\t%3\t%4\t%5\t%6\t%7\t%8\t%9\t%10\t%11\t%12\t%13\t%14\t%15\t%16\t%17\t%18\t%19\n")
+            out.write(QStringLiteral("%1\t%2\t%3\t%4\t%5\t%6\t%7\t%8\t%9\t%10\t%11\t%12\t%13\t%14\t%15\t%16\t%17\n")
                           .arg(i).arg(names[size_t(i)]).arg(l0).arg(kv.first).arg(L.groups).arg(L.red).arg(L.ns).arg(L.car)
                           .arg(L.top).arg(L.tris).arg(double(errMax), 0, 'g', 5).arg(double(med(L.err)), 0, 'g', 5)
                           .arg(double(L.over), 0, 'f', 3).arg(double(L.budget), 0, 'g', 5).arg(L.retries).arg(L.pruned)
-                          .arg(L.islands).arg(double(med(L.wn)), 0, 'g', 4).arg(double(med(L.wu)), 0, 'g', 4)
+                          .arg(L.islands)
                           .toUtf8());
             if (!L.err.empty()) {
                 if (prevMax > 0.0f) {
@@ -2469,9 +2463,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         }
     }
     std::sort(d0ratio.begin(), d0ratio.end());
-    std::printf("dag-levels %s (atomdag, %s weights, %d threads): %d meshes with a DAG, %lld without (%lld tris); level 0 %lld\n",
-                qUtf8Printable(QFileInfo(path).fileName()), arm == iris::atomdag::WeightArm::PosOnly ? "posonly" : "nanite",
-                threads, dagMeshes, dagLess, dagLessTris, l0All);
+    std::printf("dag-levels %s (atomdag, %d threads): %d meshes with a DAG, %lld without (%lld tris); level 0 %lld\n",
+                qUtf8Printable(QFileInfo(path).fileName()), threads, dagMeshes, dagLess, dagLessTris, l0All);
     std::printf("  TOP CUT TOTAL %lld (every finite group affordable; DAG-less meshes at level 0); ROOT LEVEL TOTAL %lld "
                 "(the last cluster of every DAG, before its empty top)\n", topAll, rootAll);
     std::printf("  reductions %d, carried %d (levels where every group carried %d), retries %d, depth max %d, depth-cap "
@@ -2481,7 +2474,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     if (!d0ratio.empty())
         std::printf("  depth-0 position-quadric estimate / measured step: median %.3f, p10 %.3f, p90 %.3f over %zu groups\n",
                     d0ratio[d0ratio.size() / 2], d0ratio[d0ratio.size() / 10], d0ratio[d0ratio.size() * 9 / 10], d0ratio.size());
-    std::printf("  the weld (D5): %lld positions snapped over the accepted groups\n", welded);
     std::printf("  carried groups by cause (every pass): cluster count %lld (asked the same budget), budget %lld (asked 2x)\n",
                 countCarries, budgetCarries);
     std::printf("  groups attempted by simplify count (every pass, every shrink; 12 = 12+):");
@@ -2518,13 +2510,13 @@ static int dagGroupsTool(const QString &path, int meshIndex, int threads)
     iris::MeshBake::buildClusterDag(meshes.at(meshIndex), &st, opt);
     static const char *kinds[] = { "reduce", "carried", "top", "asis" };
     std::printf("level\tkind\tgroup\tmembers\tin\tout\tchildren\tgranted\tstep\tstored\tremovedV\tlostF\taddedF\tisland\tlostLocked\t"
-                "attempts\tpruned\tislands\twN\twUV\tdepth0Est\testimate\n");
+                "attempts\tpruned\tislands\tdepth0Est\testimate\n");
     for (const iris::atomdag::GroupRecord &r : st.records)
-        std::printf("%d\t%s\t%d\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%d\t%d\t%d\t%.4g\t%.4g\t%.5g\t%.5g\n",
+        std::printf("%d\t%s\t%d\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%d\t%d\t%d\t%.5g\t%.5g\n",
                     r.level, kinds[std::clamp(r.kind, 0, 3)], r.dagGroup, r.members, r.inTris, r.outTris, double(r.childStored),
                     double(r.budget), double(r.step), double(r.stored), double(r.removedVertex), double(r.lostFacet),
                     double(r.addedFacet), double(r.droppedIsland), double(r.lostLocked), r.attempts, r.pruned,
-                    r.islandsDropped, double(r.weightNormal), double(r.weightUv), double(r.depth0Estimate), double(r.estimate));
+                    r.islandsDropped, double(r.depth0Estimate), double(r.estimate));
     std::printf("# %d clusters, %d groups, %d levels, %.0f ms (leaves %.0f, groups %.0f, reduce %.0f; simplify %.0f, measure %.0f "
                 "of which exact %.0f, summed)\n", st.clusters, st.groups, st.levels, st.msTotal, st.msLeaves, st.msGroups,
                 st.msReduce, st.msSimplify, st.msMeasure, st.msExact);
@@ -2565,15 +2557,14 @@ static int driftTool(const QString &path, const QString &meshesArg, int threads)
 /// `--cut-curve <model> [--meshes <list file | i,j,...>] [--arm shipped|posonly|stock] [--threads N]`: THE CUT CURVE (ATOM-UPGRADE stage 0) — per mesh (every mesh of the file, or the list's: a file of
 /// `index<TAB>class<TAB>name` lines, '#' comments, e.g. spikes/atom-upgrade/spenders.txt), the triangles a cut draws at
 /// E = 2, 4, 8, 16, 32, 64, 128 mesh units and at the top (every finite group affordable), summed per class and over
-/// all; posonly = the same builder with every attribute at a tiny positive weight (stage 3's arm), stock = upstream clusterlod.h unpatched (meshoptimizer's
+/// all; stock = upstream clusterlod.h unpatched (meshoptimizer's
 /// demo/clusterlod.h, the reference arm). TSV on stdout; a measurement — nothing is written.
 static int cutCurveTool(const QString &path, const QString &meshesArg, const QString &armName, int threads)
 {
     using namespace cutcurve;
-    const Arm arm = armName == QStringLiteral("posonly") ? Arm::PosOnly : armName == QStringLiteral("stock") ? Arm::Stock
-                  : Arm::Shipped;
-    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock")) {
-        std::printf("FAIL: --arm %s (shipped|posonly|stock)\n", qUtf8Printable(armName));
+    const Arm arm = armName == QStringLiteral("stock") ? Arm::Stock : Arm::Shipped;
+    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("stock")) {
+        std::printf("FAIL: --arm %s (shipped|stock)\n", qUtf8Printable(armName));
         return 1;
     }
     iris::MeshBake::setBakeThreads(threads);
@@ -3495,20 +3486,16 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--locked-positions-kept")) return lockedPositionsKept();
     if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
-        // [threads] [--mesh i,j,...] [--arm nanite|posonly]
+        // [threads] [--mesh i,j,...]
         int threads = 4;
         QSet<int> only;
-        iris::atomdag::WeightArm arm = iris::atomdag::WeightArm::Nanite;
         for (int a = 4; a < argc; ++a) {
             const QString arg = QString::fromLocal8Bit(argv[a]);
             if (arg == QStringLiteral("--mesh") && a + 1 < argc)
                 for (const QString &n : QString::fromLocal8Bit(argv[++a]).split(QLatin1Char(','))) only.insert(n.toInt());
-            else if (arg == QStringLiteral("--arm") && a + 1 < argc)
-                arm = QString::fromLocal8Bit(argv[++a]) == QStringLiteral("posonly") ? iris::atomdag::WeightArm::PosOnly
-                                                                                     : iris::atomdag::WeightArm::Nanite;
             else threads = arg.toInt();
         }
-        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]), threads, only, arm);
+        return dagLevels(QString::fromLocal8Bit(argv[2]), QString::fromLocal8Bit(argv[3]), threads, only);
     }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--drift")) {
         QString meshesArg;

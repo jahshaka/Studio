@@ -11,8 +11,6 @@
 //                                fixture's root is non-empty before the top and the top cut draws nothing
 //   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
 //   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
-//   atom2.weld_within_budget     two shells 1 unit apart: no group granted under 2 units snaps a position; the first
-//                                group over both shells granted at least 2 does (D5)
 
 #include "import/atomdag/adjacency.h"
 
@@ -478,93 +476,6 @@ inline int oneStepDriftBound()
     return finish();
 }
 
-/// TWO SHELLS 1 UNIT APART (stage 3's weld fixture; "1 cm" in Bistro's centimetres): two 64 x 64 plates, a 32 x 32 grid
-/// each (2,048 triangles), the same sinusoid relief (amplitude 4, wavelength 16) so the chain's errors climb past the
-/// gap, the second the first shifted by exactly `gap` along z — every vertex of one has its twin of the other at the
-/// gap. Two islands; smooth normals, a UV chart per plate. `plateVertices` = the first plate's vertex count (the ids
-/// below it are plate A's).
-inline iris::MeshPtr twoShells(float gap, size_t *plateVertices)
-{
-    std::vector<float> p, nrm, uv;
-    std::vector<unsigned> idx;
-    const int n = 32;
-    const float size = 64.0f, amp = 4.0f, k = 2.0f * 3.14159265358979f / 16.0f;
-    for (int plate = 0; plate < 2; ++plate) {
-        const unsigned base = unsigned(p.size() / 3);
-        for (int j = 0; j <= n; ++j)
-            for (int i = 0; i <= n; ++i) {
-                const float x = size * float(i) / float(n), y = size * float(j) / float(n);
-                const float h = amp * std::sin(k * x) * std::sin(k * y);
-                p.insert(p.end(), { x, y, plate == 0 ? h : h + gap });
-                const float dx = amp * k * std::cos(k * x) * std::sin(k * y), dy = amp * k * std::sin(k * x) * std::cos(k * y);
-                const float l = std::sqrt(dx * dx + dy * dy + 1.0f);
-                nrm.insert(nrm.end(), { -dx / l, -dy / l, 1.0f / l });
-                uv.insert(uv.end(), { float(i) / float(n), float(j) / float(n) });
-            }
-        for (int j = 0; j < n; ++j)
-            for (int i = 0; i < n; ++i) {
-                const unsigned a = base + unsigned(j * (n + 1) + i), b = a + 1, c = a + unsigned(n + 1) + 1, d = a + unsigned(n + 1);
-                idx.insert(idx.end(), { a, b, c, a, c, d });
-            }
-        if (plate == 0 && plateVertices) *plateVertices = p.size() / 3;
-    }
-    return dagroot::meshFromArrays(p, nrm, uv, idx);
-}
-
-/// atom2.weld_within_budget (stage 3, D5): THE WELD SNAPS ACROSS A GAP ONLY WHERE THE BUDGET COVERS IT — on two shells
-/// 1 unit apart no group granted under 2 units snaps a position (the weld radius is E / 2), some group granted at
-/// least 2 does, the first group holding both shells under such a budget is one that welds, and the chain still obeys
-/// the law (every measured step within its granted budget) and ends.
-inline int weldWithinBudget()
-{
-    const float gap = 1.0f;
-    size_t nA = 0;
-    const iris::MeshPtr mesh = twoShells(gap, &nA);
-    iris::MeshBake::ClusterDagStats st;
-    iris::MeshBake::ClusterDagOptions opt;
-    opt.wantGroups = true;
-    iris::MeshBake::buildClusterDag(mesh, &st, opt);
-    const MeshClusterDag &dag = mesh->clusterDag;
-    CHECK_LOUD(!dag.isEmpty(), "the two shells get a DAG");
-    if (dag.isEmpty()) return finish();
-    const auto plates = [&](int c) {   // bit 0: plate A's vertices, bit 1: plate B's
-        const auto &cl = dag.clusters.at(c);
-        int bits = 0;
-        for (quint32 v = 0; v < cl.vertexCount; ++v) bits |= dag.vertices.at(int(cl.vertexOffset + v)) < nA ? 1 : 2;
-        return bits;
-    };
-    int earlyWelds = 0, welds = 0, overA = 0, firstBoth = -1;
-    float firstWeldBudget = -1.0f;
-    int firstWeldLevel = -1;
-    for (size_t i = 0; i < st.records.size(); ++i) {
-        const iris::atomdag::GroupRecord &r = st.records[i];
-        if (r.kind == 2) continue;
-        int bits = 0;
-        for (int m : r.memberClusters) bits |= plates(m);
-        if (r.welded > 0) {
-            ++welds;
-            if (firstWeldBudget < 0.0f) { firstWeldBudget = r.budget; firstWeldLevel = r.level; }
-            if (r.budget < 2.0f * gap * (1.0f - 1e-4f)) ++earlyWelds;
-        }
-        if (firstBoth < 0 && bits == 3 && r.kind != 3 && r.budget >= 2.0f * gap * (1.0f + 1e-4f)) firstBoth = int(i);
-        if (r.kind == 0 && (r.step > r.budget || r.measured > r.budget * 1.05f)) ++overA;
-        std::printf("   level %d pass %d kind %d members %d plates %d in %d out %d granted %.4g step %.4g welded %d\n", r.level,
-                    r.pass, r.kind, r.members, bits, r.inTris, r.outTris, double(r.budget), double(r.step), r.welded);
-    }
-    const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
-    std::printf("== two shells %.3g apart: %d groups recorded, %d weld (first at level %d, granted %.4g), %lld positions "
-                "snapped; the first group over both shells granted >= 2x the gap: record %d (%d welded)\n", double(gap),
-                int(st.records.size()), welds, firstWeldLevel, double(firstWeldBudget), st.welded, firstBoth,
-                firstBoth >= 0 ? st.records[size_t(firstBoth)].welded : -1);
-    CHECK_LOUD(earlyWelds == 0, "no group granted under twice the gap snaps a position (the radius is E / 2)");
-    CHECK_LOUD(welds > 0, "some group granted at least twice the gap snaps the shells together");
-    CHECK_LOUD(firstBoth >= 0 && st.records[size_t(firstBoth)].welded > 0,
-               "the first group holding both shells under a budget of at least twice the gap welds");
-    CHECK_LOUD(overA == 0, "every measured step within the granted budget (the snap's gap priced on the real output)");
-    CHECK_LOUD(top == 0, "the chain ends (the top cut draws nothing)");
-    return finish();
-}
-
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
@@ -573,7 +484,6 @@ inline int run(const QString &row)
     if (row == QStringLiteral("ends_empty")) return endsEmpty();
     if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
-    if (row == QStringLiteral("weld_within_budget")) return weldWithinBudget();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }
