@@ -158,6 +158,27 @@ set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
+# gi.directional_seam (PHOTON-7 stage 1, AB A11) — THE PACKED HALVES OF A DIRECTIONAL VOLUME DO NOT BLEED INTO EACH OTHER:
+# the ray hit's directional read of a uniformly lit floor a quarter texel from either x face of every cascade equals the
+# box's middle (test_gi_seam.cpp says the law; red on the base at the -x face). A fixture, the High chain.
+add_executable(test_gi_seam test_gi_seam.cpp)
+set_target_properties(test_gi_seam PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_seam PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_seam PRIVATE JahshakaEngine)
+add_dependencies(test_gi_seam JahshakaEngineMedia)
+jah_gpu_row(gi.directional_seam CLASS engine COMMAND test_gi_seam
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.directional_seam PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 26)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's
