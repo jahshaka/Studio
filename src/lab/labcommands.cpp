@@ -31,6 +31,20 @@ const std::vector<VerbDoc> &verbs()
         { "measure", "measure D [file.tsv]", 1, 2,
           "an environment's stop D: the camera, settle, the probe, and each predicted quantity beside the measured one "
           "(a TSV row each: env, seed, tier, stop, quantity, predicted, measured)" },
+        { "move", "move x,y,z,tx,ty,tz N", 2, 2,
+          "a scripted camera move: N frames walking from the current pose to that one (eye and target linearly, the "
+          "last frame exactly at it); N = 0 is a TELEPORT (one frame drawn at the pose)" },
+        { "lamp", "lamp <name> intensity <v> | lamp <name> position x,y,z", 3, 3,
+          "a lamp step: the named light's intensity or position written in the document (the mirror pushes it on the "
+          "next frame); no frame is drawn" },
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [out=<name>]", 2, 5,
+          "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
+          "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
+          "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
+          "default 10), per material class (rough, glossy < 0.4, mirror, foliage = two-sided, mover; by the "
+          "environment's objects), the GI cache rows that fired, the gather's rest and the reflection count "
+          "histogram; `path` adds the teleport window and the walk-vs-teleport comparison. Writes "
+          "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
         { "quit", "quit", 0, 0, "end the run" },
@@ -133,6 +147,8 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         if (out.verb == "frames" && !number(0, 0, true)) return false;
         if (out.verb == "settle" && !number(0, 1, true)) return false;
         if ((out.verb == "envcam" || out.verb == "measure") && !number(0, 0, false)) return false;
+        if (out.verb == "move" && !number(1, 0, true)) return false;
+        if (out.verb == "stillness" && !number(1, 2, true)) return false;
         return true;
     }
     error = "'" + line + "': unknown command '" + out.verb + "' (help lists them)";

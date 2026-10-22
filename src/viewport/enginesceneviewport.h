@@ -109,6 +109,8 @@ public:
     bool cameraRotationLocked() const override;
     QString gridPlane() const override { return mGridPlanePushed; }
     bool setCameraPose(const EditorCameraPose &pose) override;
+    bool runStillness(const jahshaka::engine::StillnessSpec &spec, jahshaka::engine::StillnessReport &out,
+                      std::string &err) override;
     bool frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing) override;
     void setEditorData(std::unique_ptr<EditorData> data) override;
     EditorData *getEditorData() override;

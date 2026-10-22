@@ -7,6 +7,7 @@
 #include "services/defaultfloormaterial.h"
 #include "services/scenestats.h"
 #include "viewport/enginesceneviewport.h"
+#include "jahshaka/engine/Stillness.h"
 
 #include <QShowEvent>
 #include <QKeySequence>
@@ -563,6 +564,35 @@ bool EngineSceneViewport::setCameraPose(const EditorCameraPose &pose)
     // new pose inside setCamera().
     resyncCameraController();
     return true;
+}
+
+// world.stillness (PHOTON-2 stage 0): the engine's stillness door, driven with this viewport's camera — each planned
+// pose placed exactly as editor.setCamera places one, then ONE lockstep frame (a timeline frame of 1/60 s, the
+// engine's fixed grid). The door reads the presented frame (a window view: its frame capture).
+bool EngineSceneViewport::runStillness(const jahshaka::engine::StillnessSpec &spec,
+                                       jahshaka::engine::StillnessReport &out, std::string &err)
+{
+    if (!mEngine || !view() || !mEngineScene) {
+        err = "world.stillness: the engine viewport is not live";
+        return false;
+    }
+    jahshaka::engine::StillnessRun run(*mEngine, *mEngineScene, *view());
+    if (!run.begin(spec, err)) return false;
+    jahshaka::engine::Vec3 eye, target;
+    while (run.nextPose(eye, target)) {
+        EditorCameraPose pose;
+        pose.position = iris::Vec3(eye.x, eye.y, eye.z);
+        pose.hasPosition = true;
+        pose.lookAt = iris::Vec3(target.x, target.y, target.z);
+        pose.hasLookAt = true;
+        if (!setCameraPose(pose)) {
+            err = "world.stillness: the viewport refused a camera pose";
+            return false;
+        }
+        renderFrames(1, 1.0f / 60.0f);
+        if (!run.frameDone(err)) return false;
+    }
+    return run.finish(out, err);
 }
 
 // editor.frameNode: focusOnNode's framing maths with the view direction taken

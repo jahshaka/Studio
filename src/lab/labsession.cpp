@@ -1,5 +1,6 @@
 #include "labsession.h"
 
+#include "labclasses.h"
 #include "laboverlay.h"
 
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -9,6 +10,7 @@
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Stillness.h"
 #include "jahshaka/engine/Types.h"
 
 #include <QDir>
@@ -43,6 +45,27 @@ constexpr int kSettleSteadyFrames = 8;
 constexpr int kSettleDefaultCap = 1200;
 
 const char *tierName(int t) { return tierNames()[size_t(std::max(0, std::min(3, t)))].c_str(); }
+
+bool parsePose(const std::string &word, iris::Vec3 &eye, iris::Vec3 &target)
+{
+    std::vector<float> n;
+    std::string cur;
+    for (char c : word + ",") {
+        if (c == ',') {
+            char *end = nullptr;
+            const double v = std::strtod(cur.c_str(), &end);
+            if (cur.empty() || !end || *end) return false;
+            n.push_back(float(v));
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    if (n.size() != 6) return false;
+    eye = iris::Vec3(n[0], n[1], n[2]);
+    target = iris::Vec3(n[3], n[4], n[5]);
+    return true;
+}
 
 bool onOff(const std::string &w, bool current, bool &out)
 {
@@ -736,6 +759,12 @@ bool Session::exec(const Command &c)
                         << "\n";
             }
         }
+    } else if (c.verb == "stillness") {
+        ok = stillness(c);
+    } else if (c.verb == "lamp") {
+        ok = lamp(c);
+    } else if (c.verb == "move") {
+        ok = move(c);
     } else if (c.verb == "help") {
         std::printf("%s", helpText().c_str());
     } else if (c.verb == "echo") {
@@ -749,6 +778,147 @@ bool Session::exec(const Command &c)
     std::fflush(stdout);
     if (!ok && c.source == "script") mExit = 1;
     return ok;
+}
+
+// ---- THE STILLNESS DOOR, THE LAMP STEP, THE SCRIPTED MOVE (PHOTON-2 stage 0) ------------------------------------------
+
+bool Session::stillness(const Command &c)
+{
+    using namespace jahshaka::engine;
+    std::string script = c.args[0];
+    if (!script.empty() && script[0] == '@') {
+        std::ifstream in(script.substr(1));
+        if (!in) { std::printf("LAB REFUSED stillness: cannot read the script %s\n", script.c_str() + 1); return false; }
+        std::stringstream ss;
+        ss << in.rdbuf();
+        script = ss.str();
+    }
+    StillnessSpec spec;
+    spec.script = script;
+    spec.frames = unsigned(std::atoi(c.args[1].c_str()));
+    std::string out = "stillness-" + std::to_string(mFrames);
+    for (size_t i = 2; i < c.args.size(); ++i) {
+        const std::string &a = c.args[i];
+        if (a == "path") spec.path = true;
+        else if (a.rfind("age=", 0) == 0) spec.visibleAge = unsigned(std::atoi(a.c_str() + 4));
+        else if (a.rfind("out=", 0) == 0) out = a.substr(4);
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, out=<name>)\n", a.c_str()); return false; }
+    }
+    std::vector<StillnessMove> moves;
+    std::string err;
+    Vec3 fe, ft;
+    if (!parseStillnessScript(spec.script, moves, err) || !stillnessFinalPose(moves, fe, ft)) {
+        std::printf("LAB REFUSED %s\n", err.c_str());
+        return false;
+    }
+    // THE CLASSES AT THE STOP'S POSE, from the environment's own objects (a model session counts every pixel as one)
+    const unsigned w = mInput.width ? mInput.width : mOpt.width, h = mInput.height ? mInput.height : mOpt.height;
+    if (mBuilt) {
+        const double tc = msSinceStart();
+        spec.classNames = stillnessClassNames();
+        spec.classes = stillnessClassImage(mBuilt->objects, iris::Vec3(fe.x, fe.y, fe.z), iris::Vec3(ft.x, ft.y, ft.z),
+                                           mCamera.node()->angle, w, h);
+        spec.classW = w;
+        spec.classH = h;
+        std::printf("LAB STILLNESS classes at the stop's pose: %ux%u in %.0f ms\n", w, h, msSinceStart() - tc);
+    }
+    StillnessRun run(*mEngine, *mScene, *mView);
+    if (!run.begin(spec, err)) { std::printf("LAB REFUSED %s\n", err.c_str()); return false; }
+    const double t0 = msSinceStart();
+    Vec3 eye, target;
+    while (!mQuit && run.nextPose(eye, target)) {
+        mCamera.set(iris::Vec3(eye.x, eye.y, eye.z), iris::Vec3(target.x, target.y, target.z));
+        frame();
+        if (!run.frameDone(err)) { std::printf("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
+    }
+    StillnessReport rep;
+    if (!run.finish(rep, err)) { std::printf("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
+    const QString dir = QDir(mOpt.dataRoot).filePath(QStringLiteral("stillness"));
+    QDir().mkpath(dir);
+    const QString tsv = QDir(dir).filePath(QString::fromStdString(out) + QStringLiteral(".tsv"));
+    {
+        std::ofstream f(tsv.toStdString());
+        f << rep.tsv();
+        if (!f) { std::printf("LAB STILLNESS FAILED cannot write %s\n", qPrintable(tsv)); return false; }
+    }
+    // THE PICTURES BESIDE THE TSV: each window's last frame, its heat (the largest change a pixel made over the
+    // window, 32 grey levels a code: one code reads 32, eight or more white) and its late heat (the last quarter),
+    // and the class map the rows were split by.
+    const auto grey = [&](const std::vector<unsigned char> &v, unsigned gw, unsigned gh, const std::string &name, int k) {
+        if (v.empty() || !gw || !gh) return;
+        QImage g(int(gw), int(gh), QImage::Format_Grayscale8);
+        for (unsigned y = 0; y < gh; ++y) {
+            uchar *row = g.scanLine(int(y));
+            for (unsigned x = 0; x < gw; ++x) row[x] = uchar(std::min(255, int(v[size_t(y) * gw + x]) * k));
+        }
+        g.save(QDir(dir).filePath(QString::fromStdString(out + "-" + name) + QStringLiteral(".png")), "PNG");
+    };
+    for (const StillnessWindow &win : rep.windows) {
+        const Image &img = win.lastPicture;
+        if (!img.width) continue;
+        QImage q(img.rgba.data(), int(img.width), int(img.height), int(img.width * 4), QImage::Format_RGBA8888);
+        q.convertToFormat(QImage::Format_RGB888)
+            .save(QDir(dir).filePath(QString::fromStdString(out + "-" + win.name) + QStringLiteral(".png")), "PNG");
+        grey(win.heat, win.heatW, win.heatH, win.name + "-heat", 32);
+        grey(win.heatLate, win.heatW, win.heatH, win.name + "-heatlate", 32);
+    }
+    grey(spec.classes, spec.classW, spec.classH, "classes", 50);
+    std::istringstream lines(rep.summary());
+    for (std::string line; std::getline(lines, line);) std::printf("LAB %s\n", line.c_str());
+    std::printf("LAB STILLNESS %u frames in %.0f ms -> %s\n", run.plannedFrames(), msSinceStart() - t0, qPrintable(tsv));
+    return true;
+}
+
+bool Session::lamp(const Command &c)
+{
+    iris::LightNodePtr found;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Light && n->getName().toStdString() == c.args[0])
+            found = n.staticCast<iris::LightNode>();
+        for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+    };
+    walk(mDoc->getRootNode());
+    if (!found) { std::printf("LAB REFUSED lamp: no light named '%s'\n", c.args[0].c_str()); return false; }
+    if (c.args[1] == "intensity") {
+        char *end = nullptr;
+        const double v = std::strtod(c.args[2].c_str(), &end);
+        if (!end || *end || v < 0.0) { std::printf("LAB REFUSED lamp: '%s' is not an intensity\n", c.args[2].c_str()); return false; }
+        found->setPropertyValue(QStringLiteral("intensity"), float(v));
+        return true;
+    }
+    if (c.args[1] == "position") {
+        iris::Vec3 p, unused;
+        if (!parsePose(c.args[2] + ",0,0,0", p, unused)) {
+            std::printf("LAB REFUSED lamp: '%s' is not x,y,z\n", c.args[2].c_str());
+            return false;
+        }
+        found->setLocalPos(p);
+        return true;
+    }
+    std::printf("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
+    return false;
+}
+
+bool Session::move(const Command &c)
+{
+    iris::Vec3 eye, target;
+    if (!parsePose(c.args[0], eye, target)) {
+        std::printf("LAB REFUSED move: '%s' is not x,y,z,tx,ty,tz\n", c.args[0].c_str());
+        return false;
+    }
+    const int n = std::atoi(c.args[1].c_str());
+    if (n <= 0) {
+        mCamera.set(eye, target);
+        frame();
+        return true;
+    }
+    const iris::Vec3 e0 = mCamera.position(), t0 = mCamera.target();
+    for (int i = 1; i <= n && !mQuit; ++i) {
+        const float t = float(i) / float(n);
+        mCamera.set(e0 + (eye - e0) * t, t0 + (target - t0) * t);
+        frame();
+    }
+    return true;
 }
 
 void Session::readStdinLines()

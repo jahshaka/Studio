@@ -250,15 +250,25 @@ iris::MeshPtr Builder::mesh(const Arrays &a)
     return m;
 }
 
-iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughness)
+iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughness, float metallic)
 {
     auto mat = iris::PbrMaterial::create();
     mat->setValue("baseColor", QColor::fromRgbF(r, g, b));
     mat->setValue("roughness", roughness);
-    mat->setValue("metallic", 0.0f);
+    mat->setValue("metallic", metallic);
     const float v[4] = { r, g, b, roughness };
     hashFloats(mHash, v, 4);
+    if (metallic != 0.0f) hashFloats(mHash, &metallic, 1);   // a dielectric hashes as it always did
+    mMatFacts.push_back({ mat.data(), MatFacts{ roughness, metallic } });
     return mat;
+}
+
+void Builder::setMovable(int index)
+{
+    if (index < 0 || size_t(index) >= mNodes.size()) return;
+    mNodes[size_t(index)]->setMobility(iris::Mobility::Movable);
+    mBuilt.objects[size_t(index)].mover = true;
+    mHash.addData(QByteArray("movable"));
 }
 
 int Builder::instance(const iris::MeshPtr &m, const QString &name, const QString &role, const iris::Vec3 &pos,
@@ -281,6 +291,10 @@ int Builder::instance(const iris::MeshPtr &m, const QString &name, const QString
     Object o;
     o.name = name;
     o.role = role;
+    for (const auto &f : mMatFacts)
+        if (f.first == mat.data()) { o.roughness = f.second.roughness; o.metallic = f.second.metallic; }
+    o.twoSided = twoSided;
+    mNodes.push_back(node);
     const iris::AABB b = m->getAABB();
     const iris::Vec3 c = (b.getMin() + b.getMax()) * 0.5f, h = (b.getMax() - b.getMin()) * 0.5f;
     boxBounds(c, h, pos, yaw, scale, o.boxMin, o.boxMax);

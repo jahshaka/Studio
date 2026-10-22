@@ -84,6 +84,10 @@ private:
     /// the cut probe of the next drawn frame, per object name (false: no id pass / never answered)
     bool probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &sum);
     envs::Optics optics() const;
+    /// THE STILLNESS DOOR's lab verb (PHOTON-2 stage 0; irisgl Stillness.h), the lamp step and the scripted move.
+    bool stillness(const Command &c);
+    bool lamp(const Command &c);
+    bool move(const Command &c);
     void nameEngineNodes();
     double msSinceStart() const;
 

@@ -12,9 +12,13 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/core/colorjson.h"
 #include "scripting/modules/worldapi.h"
+#include "jahshaka/engine/Stillness.h"
+#include "services/apppaths.h"
 #include <QtMath>
 
 #include <QDir>
+#include <QFile>
+#include <QImage>
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -429,6 +433,24 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'sunlitUp', 'shadedUp' and 'other' split the HITS by what they landed on: an upward-facing surface (the hit normal's y above 0.7) where the hit's own sun ray reached the sun, one where it did not, and everything else — each {count, sources: {name: {count, luminance}}}: the reading that says what a ray on the sunlit street returned and who answered it. "
           "'probes' is how many probes the rectangle held and 'rays' the rays counted; 'frame' which gather frame it is of. {rays: N} also returns the first N counted rays one by one as 'samples' — {source, cascade, cell, radiance [r, g, b], distance, hit [x, y, z] (half precision), normal [x, y, z] (the hit's geometric normal, snorm8; zero for a far hit, which names no triangle), sun} — for a caller that classifies the hits itself (a document raycast at each hit).",
           Needs::Document },
+        { "stillness", "world.stillness({script, frames, path, visibleAge, classes, out}) -> {ok, summary, tsv, windows, path}",
+          "THE STILLNESS DOOR (PHOTON-2) — the instrument of 'the still world stays still': under still lights and geometry a "
+          "pixel whose surface was visible before the camera stopped may change after the stop only by noise falling under "
+          "one 8-bit code. It drives the EDITOR CAMERA through a move script — segments 'teleport:x,y,z,tx,ty,tz' (one frame "
+          "at that pose, looking at tx,ty,tz), 'walk:x,y,z,tx,ty,tz:N' (N frames from the current pose, linearly) and "
+          "'hold:N', separated by '/' — one lockstep frame per pose, and its last frame is THE STOP; then 'frames' more "
+          "frames (default 120) are measured: per frame the largest and the mean change from the previous frame in codes "
+          "(max of R, G, B) on the pixels VISIBLE AT THE STOP (the gather's own pixel-history count >= 'visibleAge', default "
+          "10 — every pixel when no gather runs), split by 'classes': [{name, x, y, w, h}] rectangles in fractions of the "
+          "view (a later rectangle wins; pixels in none count only in 'all'); which GI cache rows fired that frame "
+          "(vct.*, ifd.*, cards.*, rq.blas — the frame monitor's); the gather's rest counters; the reflection history's "
+          "count histogram. 'path': true adds a second window reached by a TELEPORT (far away and back to the same pose) "
+          "and compares the two windows' last pictures and each cascade's light bytes (direct and total) and placement. "
+          "The TSV and the windows' last pictures and heat maps go to the data root's 'stillness' folder under 'out' "
+          "(a name, default 'stillness'). It renders frames and owns the frame monitor for its run: refused while a "
+          "perf.capture runs. 'summary' holds the STILLNESS lines (per window: the frames to under one code per class "
+          "counted from the stop and from the last GI row, the gather's hold frame, the GI rows of the move before the stop).",
+          Needs::Engine },
         { "gatherIrradiance", "world.gatherIrradiance({x, y, w, h}) -> {ready, frame, width, height, pixels, answered, irradiance}",
           "THE SCREEN-PROBE GATHER'S ANSWER, AS NUMBERS — the diffuse irradiance E/pi the gather hands the pixels of a "
           "rectangle {x, y, w, h} (fractions of the view, the whole view by default), the mean over the pixels it answered, "
@@ -2267,6 +2289,117 @@ QVariantMap WorldApi::gatherIrradiance(const QVariantMap &params)
                         { QStringLiteral("irradiance"), QVariantMap{ { QStringLiteral("r"), sum[0] * inv },
                                                                      { QStringLiteral("g"), sum[1] * inv },
                                                                      { QStringLiteral("b"), sum[2] * inv } } } };
+}
+
+QVariantMap WorldApi::stillness(const QVariantMap &params)
+{
+    if (!requireEngine()) return QVariantMap();
+    jahshaka::engine::StillnessSpec spec;
+    spec.script = params.value(QStringLiteral("script")).toString().toStdString();
+    if (spec.script.empty()) { fail(QStringLiteral("world.stillness: 'script' is required (teleport:..., walk:...:N, hold:N)")); return QVariantMap(); }
+    spec.frames = unsigned(std::max(0, params.value(QStringLiteral("frames"), 120).toInt()));
+    spec.path = params.value(QStringLiteral("path"), false).toBool();
+    spec.visibleAge = unsigned(std::max(0, params.value(QStringLiteral("visibleAge"), 10).toInt()));
+    // THE SCREEN CLASSES: rectangles in fractions of the view, rasterised onto a fixed grid the door resamples
+    // to the picture (nearest) — on Bistro, the screencast's regions (the panes, the plaster, the foliage).
+    const QVariantList classes = scriptmod::normalizeJs(params.value(QStringLiteral("classes"))).toList();
+    if (!classes.isEmpty()) {
+        constexpr unsigned kGridW = 1920u, kGridH = 1080u;
+        spec.classW = kGridW;
+        spec.classH = kGridH;
+        spec.classes.assign(size_t(kGridW) * kGridH, 0u);
+        for (const QVariant &cv : classes) {
+            const QVariantMap c = cv.toMap();
+            const QString name = c.value(QStringLiteral("name")).toString();
+            if (name.isEmpty() || spec.classNames.size() >= 250u) {
+                fail(QStringLiteral("world.stillness: every class needs a 'name' (and at most 250 classes)"));
+                return QVariantMap();
+            }
+            spec.classNames.push_back(name.toStdString());
+            const unsigned char k = (unsigned char)spec.classNames.size();
+            const double x = std::clamp(c.value(QStringLiteral("x")).toDouble(), 0.0, 1.0);
+            const double y = std::clamp(c.value(QStringLiteral("y")).toDouble(), 0.0, 1.0);
+            const double w = std::clamp(c.value(QStringLiteral("w"), 1.0).toDouble(), 0.0, 1.0 - x);
+            const double h = std::clamp(c.value(QStringLiteral("h"), 1.0).toDouble(), 0.0, 1.0 - y);
+            const unsigned x0 = unsigned(x * kGridW), y0 = unsigned(y * kGridH);
+            const unsigned x1 = std::min(kGridW, unsigned(std::ceil((x + w) * kGridW)));
+            const unsigned y1 = std::min(kGridH, unsigned(std::ceil((y + h) * kGridH)));
+            for (unsigned py = y0; py < y1; ++py)
+                for (unsigned px = x0; px < x1; ++px) spec.classes[size_t(py) * kGridW + px] = k;
+        }
+    }
+    QString out = params.value(QStringLiteral("out"), QStringLiteral("stillness")).toString();
+    for (QChar &ch : out)
+        if (!ch.isLetterOrNumber() && ch != QLatin1Char('-') && ch != QLatin1Char('_')) ch = QLatin1Char('_');
+    jahshaka::engine::StillnessReport rep;
+    std::string err;
+    if (!host.viewport || !host.viewport->runStillness(spec, rep, err)) {
+        fail(QString::fromStdString(err.empty() ? std::string("world.stillness: no engine viewport") : err));
+        return QVariantMap();
+    }
+    // THE FILES, in the data root (never a caller's path: a script and the MCP tool both reach this verb).
+    const QString dir = QDir(AppPaths::dataRoot()).filePath(QStringLiteral("stillness"));
+    QDir().mkpath(dir);
+    const QString tsv = QDir(dir).filePath(out + QStringLiteral(".tsv"));
+    {
+        QFile f(tsv);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(QByteArray::fromStdString(rep.tsv())) < 0) {
+            fail(QStringLiteral("world.stillness: cannot write %1").arg(tsv));
+            return QVariantMap();
+        }
+    }
+    QVariantList windows;
+    for (const jahshaka::engine::StillnessWindow &w : rep.windows) {
+        if (w.lastPicture.width) {
+            QImage q(w.lastPicture.rgba.data(), int(w.lastPicture.width), int(w.lastPicture.height),
+                     int(w.lastPicture.width * 4), QImage::Format_RGBA8888);
+            q.convertToFormat(QImage::Format_RGB888)
+                .save(QDir(dir).filePath(out + QStringLiteral("-") + QString::fromStdString(w.name) + QStringLiteral(".png")));
+        }
+        if (!w.heat.empty()) {
+            QImage g(int(w.heatW), int(w.heatH), QImage::Format_Grayscale8);
+            for (unsigned y = 0; y < w.heatH; ++y) {
+                uchar *row = g.scanLine(int(y));
+                for (unsigned x = 0; x < w.heatW; ++x) row[x] = uchar(std::min(255, int(w.heat[size_t(y) * w.heatW + x]) * 32));
+            }
+            g.save(QDir(dir).filePath(out + QStringLiteral("-") + QString::fromStdString(w.name) + QStringLiteral("-heat.png")));
+        }
+        QVariantMap fromStop, fromRow, pixels;
+        for (size_t k = 0; k < w.settleFromStop.size(); ++k) {
+            const QString name = k == 0 ? QStringLiteral("all") : QString::fromStdString(rep.classNames[k - 1]);
+            fromStop[name] = w.settleFromStop[k];
+            fromRow[name] = w.settleFromLastGiRow[k];
+            pixels[name] = w.visiblePixels[k];
+        }
+        windows.append(QVariantMap{ { QStringLiteral("name"), QString::fromStdString(w.name) },
+                                    { QStringLiteral("frames"), int(w.frames.empty() ? 0 : w.frames.size() - 1) },
+                                    { QStringLiteral("visibleFromGather"), w.visibleFromGather },
+                                    { QStringLiteral("lastGiRowFrame"), w.lastGiRowFrame },
+                                    { QStringLiteral("holdFrame"), w.holdFrame },
+                                    { QStringLiteral("settleFromStop"), fromStop },
+                                    { QStringLiteral("settleFromLastGiRow"), fromRow },
+                                    { QStringLiteral("pixels"), pixels },
+                                    { QStringLiteral("moveRows"), QString::fromStdString(w.moveRows) },
+                                    { QStringLiteral("lastMoveRowAgo"), w.lastMoveRowAgo } });
+    }
+    QVariantMap path;
+    if (rep.pathChecked) {
+        QVariantList dEq, lEq, cEq;
+        for (int v : rep.pathDirectEqual) dEq.append(v);
+        for (int v : rep.pathLightEqual) lEq.append(v);
+        for (int v : rep.pathCentreEqual) cEq.append(v);
+        path = QVariantMap{ { QStringLiteral("maxCodes"), int(rep.pathMaxCodes.empty() ? 0 : rep.pathMaxCodes[0]) },
+                            { QStringLiteral("pixelsDiffering"), int(rep.pathPixelsDiffering.empty() ? 0 : rep.pathPixelsDiffering[0]) },
+                            { QStringLiteral("directEqual"), dEq },
+                            { QStringLiteral("lightEqual"), lEq },
+                            { QStringLiteral("placementEqual"), cEq } };
+    }
+    QStringList summary = QString::fromStdString(rep.summary()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    return QVariantMap{ { QStringLiteral("ok"), true },
+                        { QStringLiteral("summary"), summary },
+                        { QStringLiteral("tsv"), tsv },
+                        { QStringLiteral("windows"), windows },
+                        { QStringLiteral("path"), path } };
 }
 
 QVariantMap WorldApi::gatherHits(const QVariantMap &params)

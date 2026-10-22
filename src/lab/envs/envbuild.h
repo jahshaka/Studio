@@ -52,13 +52,16 @@ public:
     /// tests/meshbake meshFromArrays (:2285), COPIED: the arrays as an iris::Mesh (its bounds set), then — when the build
     /// bakes — the bake's stages in meshbake.cpp bakeStages' order. Hashed.
     iris::MeshPtr mesh(const Arrays &a);
-    iris::PbrMaterialPtr material(float r, float g, float b, float roughness = 0.9f);
+    iris::PbrMaterialPtr material(float r, float g, float b, float roughness = 0.9f, float metallic = 0.0f);
     /// One instance: a MeshNode of `mesh` at pos / yaw (degrees about +Y) / scale, recorded as an Object. Returns its
     /// index in Built::objects.
     int instance(const iris::MeshPtr &m, const QString &name, const QString &role, const iris::Vec3 &pos,
                  float yawDegrees, const iris::Vec3 &scale, const iris::PbrMaterialPtr &mat,
                  bool castsShadow = true, bool twoSided = false);
     void feature(const Feature &f) { mBuilt.features.push_back(f); }
+    /// Declares object `index` MOVABLE (the document's mobility, the user's word: the ray tier's mover gate opens on
+    /// it) without moving it.
+    void setMovable(int index);
     /// the world (the Basic template's sky and lights, Epic), the static defaults, the hash; the build's time
     Built finish();
     Built &built() { return mBuilt; }
@@ -67,6 +70,10 @@ private:
     QCryptographicHash mHash;
     QCryptographicHash mBakeHash;
     Built mBuilt;
+    /// what material() set, for the objects' facts
+    struct MatFacts { float roughness = 1.0f, metallic = 0.0f; };
+    std::vector<std::pair<const void *, MatFacts>> mMatFacts;
+    std::vector<iris::SceneNodePtr> mNodes;   ///< per object, its node
     bool mBake;
     double mStartMs;
 };

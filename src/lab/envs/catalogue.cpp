@@ -12,11 +12,13 @@ Env atomSmall();
 Env atomFlat();
 Env photonRoom();
 Env photonCourt();
+Env photonGlass();
 
 const std::vector<Env> &catalogue()
 {
     static const std::vector<Env> c = { atomStreet(), atomArcade(), atomForest(), atomOcclusion(),
-                                        atomSmall(),  atomFlat(),   photonRoom(), photonCourt() };
+                                        atomSmall(),  atomFlat(),   photonRoom(), photonCourt(),
+                                        photonGlass() };
     return c;
 }
 

@@ -1,5 +1,6 @@
-// photon-room and photon-court — Photon's two closed-form fixtures (LAB-1 stage 2). Not dollied (their laws do not
-// move with the distance); `--env-list` prints the law at every stop, and the Photon spec measures them.
+// photon-room — Photon's closed-form room (LAB-1 stage 2), and its reflective sibling photon-glass (PHOTON-2 stage 0,
+// below). Not dollied (their laws do not move with the distance); `--env-list` prints the law at every stop, and the
+// Photon specs measure them (the stillness door reads them under motion).
 //
 // photon-room — AN ENCLOSED ROOM. An 8 m cube room (walls 0.3 m thick, inside x, z in [-4, 4], y in [0, 8]) with ONE
 // 1 x 1 m opening in its +Z wall, a lamp (kDefaultLampIntensity) 6 m up, every surface matte at albedo rho = 0.5.
@@ -28,11 +29,9 @@ constexpr float kRho = 0.5f;
 
 // ---- photon-room ---------------------------------------------------------------------------------------------------
 
-Built buildRoom(unsigned seed, bool bake)
+/// THE ROOM'S SHELL (photon-room's, and photon-glass's around its fixtures): the eight walls, the opening, the lamp.
+void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte)
 {
-    Builder b("photon-room", seed, bake);
-    const iris::MeshPtr unit = unitBox(b);
-    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
     using V = iris::Vec3;
     const float t = 0.3f, h = 4.0f, top = 8.0f;
     fixedBox(b, unit, "floor", V(-h - t, -t, -h - t), V(h + t, 0, h + t), matte);
@@ -52,7 +51,70 @@ Built buildRoom(unsigned seed, bool bake)
     lamp->setLocalPos(V(0, 6, 0));
     lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
     lamp->setPropertyValue(QStringLiteral("distance"), 20.0f);
+}
+
+Built buildRoom(unsigned seed, bool bake)
+{
+    Builder b("photon-room", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    roomShell(b, unit, b.material(kRho, kRho, kRho, 1.0f));
     return b.finish();
+}
+
+// ---- photon-glass (PHOTON-2 stage 0) --------------------------------------------------------------------------------
+//
+// THE REFLECTIVE FIXTURE OF THE STILLNESS DOOR, in photon-room's sealed shell — a sibling, not photon-room itself:
+// photon-room's closed form (the bounce residual r = rho (1 - A_open / A)) holds only while every surface is matte
+// rho; a metal pane voids it. What each piece is there for (SPECS/PHOTON_2_SPEC.md stage 0, the preflight's §2):
+//   * THE GLOSSY PANE PAIR — two metal floor panes, perceptual roughness 0.1 and 0.3 (both under the 0.4 cut where
+//     the ray tier owns the glossy term): the reflection history's motion rules act on them;
+//   * FOUR MATTE PILLARS standing on the panes 1.4 m in front of the far wall — THE REFLECTED DEPTH STRUCTURE: the
+//     history's parallax drop fires only where a texel's ray length disagrees with its mean's by > 25 %
+//     (rq_reflect.comp), so a pane reflecting one flat wall never trips it; the pillars' silhouettes over the wall
+//     8 m behind them do (fixture B's shape: a glossy floor with occluders standing on it);
+//   * A MIRROR on the far wall facing the room (metal, roughness 0): a mirror takes each frame whole, so every
+//     stochastic term of its hit shading shows raw;
+//   * ONE DECLARED MOVER (Movable, standing still): the ray tier's mover gate opens only in a scene with movers
+//     (OgreRayQuery.cpp rayMoversOf), and with it the per-frame-rotated mover-visibility rays a mirror shows; a still
+//     mover keeps every cache's rest (a moving one would re-trace the cards' movers term every frame).
+// THE EXPECTATION: the keep rule only — every probe of the sealed shell sees geometry in >= 2 faces.
+Built buildGlass(unsigned seed, bool bake)
+{
+    Builder b("photon-glass", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
+    roomShell(b, unit, matte);
+    using V = iris::Vec3;
+    fixedBox(b, unit, "pane-r0.1", V(-3.6f, 0, -3.6f), V(-0.2f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.1f, 1.0f));
+    fixedBox(b, unit, "pane-r0.3", V(0.2f, 0, -3.6f), V(3.6f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.3f, 1.0f));
+    const float xs[4] = { -2.6f, -1.3f, 1.3f, 2.6f };
+    for (int i = 0; i < 4; ++i)
+        fixedBox(b, unit, QStringLiteral("pillar-%1").arg(i), V(xs[i] - 0.15f, 0.02f, -2.75f),
+                 V(xs[i] + 0.15f, 2.6f, -2.45f), matte);
+    fixedBox(b, unit, "mirror", V(-0.8f, 0.4f, -4.0f), V(0.8f, 2.4f, -3.97f), b.material(0.95f, 0.95f, 0.95f, 0.0f, 1.0f));
+    const int mover = fixedBox(b, unit, "mover", V(2.7f, 0.02f, -0.6f), V(3.3f, 0.62f, 0.0f),
+                               b.material(0.8f, 0.3f, 0.2f, 0.5f));
+    b.setMovable(mover);
+    return b.finish();
+}
+
+void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)
+{
+    eye = iris::Vec3(0, 1.8f, 3.4f);
+    target = iris::Vec3(0, 0.5f, -3.0f);
+}
+
+std::vector<Prediction> expectGlass(const Built &, const Optics &)
+{
+    return { { "probesKeptShare", 1.0, "every probe of the sealed shell sees >= 2 faces of geometry: all kept" } };
+}
+
+std::string describeGlass()
+{
+    return "photon-glass: photon-room's sealed shell with two metal floor panes (roughness 0.1 and 0.3), four matte "
+           "pillars standing on them, a mirror on the far wall and one declared (still) mover - the stillness door's "
+           "reflective fixture (PHOTON-2). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept (the "
+           "metal voids photon-room's diffuse residual).";
 }
 
 void stopRoom(double, iris::Vec3 &eye, iris::Vec3 &target)
@@ -82,6 +144,7 @@ std::string describeRoom()
 }   // namespace
 
 Env photonRoom() { return Env{ "photon-room", describeRoom, buildRoom, stopRoom, expectRoom, 500.0f, false }; }
+Env photonGlass() { return Env{ "photon-glass", describeGlass, buildGlass, stopGlass, expectGlass, 500.0f, false }; }
 
 }   // namespace envs
 }   // namespace lab

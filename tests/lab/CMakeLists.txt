@@ -37,3 +37,12 @@ jah_gpu_row(lab.dolly_matches_probe SHIP CLASS engine FRAMES 30
             ${CMAKE_CURRENT_BINARY_DIR}/work/dolly_matches_probe
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.dolly_matches_probe PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.stillness_runs (PHOTON-2 stage 0) — the stillness door through jahlab's `stillness` verb on photon-glass, with the
+# path check, then the `move` and `lamp` verbs (stillness_runs.sh says what it asserts: the door's shape, never a bar).
+# 960x540; 51 frames of move (the stop its last), 2 x 20 window frames, the 5-frame bridge, 7 frames of the verbs after.
+jah_gpu_row(lab.stillness_runs CLASS engine FRAMES 104
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/stillness_runs.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/stillness_runs
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.stillness_runs PROPERTIES TIMEOUT 60 LABELS "lab")

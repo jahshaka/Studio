@@ -26,6 +26,7 @@
 #include <QVector>
 #include <QVector3D>
 #include <functional>
+#include <string>
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -36,7 +37,7 @@ class Project;
 class EditorData;
 class Gizmo;
 class SceneMirror;
-namespace jahshaka { namespace engine { class Scene; class View; } }
+namespace jahshaka { namespace engine { class Scene; class View; struct StillnessSpec; struct StillnessReport; } }
 enum class SceneMode;         // playbackservice.h
 
 /// Signals a viewport emits. A separate QObject so the interface itself stays a
@@ -260,6 +261,15 @@ public:
     /// without it snaps back on the first mouse move. Returns false when there
     /// is no editor camera. Optional; headless viewports may leave it out.
     virtual bool setCameraPose(const EditorCameraPose &) { return false; }
+    /// THE STILLNESS DOOR ON THIS VIEWPORT (PHOTON-2 stage 0; irisgl Stillness.h, world.stillness): the engine's one
+    /// implementation driven with the editor camera — each planned pose placed (setCameraPose) and one lockstep
+    /// frame stepped — and read through the view's presented frame. Only the engine viewport implements it.
+    virtual bool runStillness(const jahshaka::engine::StillnessSpec &, jahshaka::engine::StillnessReport &,
+                              std::string &err)
+    {
+        err = "this viewport has no engine view";
+        return false;
+    }
     /// Frame `node` from a chosen direction (editor.frameNode): focusOnNode's
     /// bounds maths with the view direction taken from `framing` instead of
     /// from the current camera. Same controller-resync obligation.
