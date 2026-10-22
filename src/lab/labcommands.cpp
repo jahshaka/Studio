@@ -37,6 +37,9 @@ const std::vector<VerbDoc> &verbs()
         { "lamp", "lamp <name> intensity <v> | lamp <name> position x,y,z", 3, 3,
           "a lamp step: the named light's intensity or position written in the document (the mirror pushes it on the "
           "next frame); no frame is drawn" },
+        { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
+          "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
+          "the document (the mirror pushes it on the next frame); no frame is drawn" },
         { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [out=<name>]", 2, 6,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "

@@ -4,7 +4,9 @@
 #include "laboverlay.h"
 
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
@@ -764,6 +766,8 @@ bool Session::exec(const Command &c)
         ok = stillness(c);
     } else if (c.verb == "lamp") {
         ok = lamp(c);
+    } else if (c.verb == "material") {
+        ok = material(c);
     } else if (c.verb == "move") {
         ok = move(c);
     } else if (c.verb == "help") {
@@ -914,6 +918,42 @@ bool Session::lamp(const Command &c)
         return true;
     }
     std::printf("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
+    return false;
+}
+
+bool Session::material(const Command &c)
+{
+    iris::MeshNodePtr found;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
+            found = n.staticCast<iris::MeshNode>();
+        for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+    };
+    walk(mDoc->getRootNode());
+    if (!found) { std::printf("LAB REFUSED material: no mesh named '%s'\n", c.args[0].c_str()); return false; }
+    const iris::PbrMaterialPtr mat = found->getMaterial().dynamicCast<iris::PbrMaterial>();
+    if (!mat) { std::printf("LAB REFUSED material: '%s' wears no PBR material\n", c.args[0].c_str()); return false; }
+    if (c.args[1] == "colour") {
+        iris::Vec3 rgb, unused;
+        if (!parsePose(c.args[2] + ",0,0,0", rgb, unused) || rgb.x() < 0 || rgb.y() < 0 || rgb.z() < 0 ||
+            rgb.x() > 1 || rgb.y() > 1 || rgb.z() > 1) {
+            std::printf("LAB REFUSED material: '%s' is not r,g,b in 0..1\n", c.args[2].c_str());
+            return false;
+        }
+        mat->setValue("baseColor", QColor::fromRgbF(rgb.x(), rgb.y(), rgb.z()));
+        return true;
+    }
+    if (c.args[1] == "roughness") {
+        char *end = nullptr;
+        const double v = std::strtod(c.args[2].c_str(), &end);
+        if (!end || *end || v < 0.0 || v > 1.0) {
+            std::printf("LAB REFUSED material: '%s' is not a roughness in 0..1\n", c.args[2].c_str());
+            return false;
+        }
+        mat->setValue("roughness", float(v));
+        return true;
+    }
+    std::printf("LAB REFUSED material: '%s' (colour | roughness)\n", c.args[1].c_str());
     return false;
 }
 
