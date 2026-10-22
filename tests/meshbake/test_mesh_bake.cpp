@@ -2264,7 +2264,7 @@ iris::MeshPtr positionsOnly(const iris::MeshPtr &src)
     return m;
 }
 
-enum class Arm { Shipped, PosOnly, Stock, Placed };
+enum class Arm { Shipped, PosOnly, Stock };
 
 /// One mesh through one arm. `st` (shipped and posonly) carries the bake's report (with its per-group records).
 Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *st, double *ms)
@@ -2283,7 +2283,6 @@ Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *s
         if (!subject.isNull()) {
             iris::MeshBake::ClusterDagOptions opt;
             opt.wantGroups = true;
-            opt.placement = arm == Arm::Placed;   // stage 2's placement arm (off in the bake: the memory rule's no-go)
             iris::MeshBake::buildClusterDag(subject, st, opt);
             d = fromMesh(subject->clusterDag);
         }
@@ -2574,10 +2573,9 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
 {
     using namespace cutcurve;
     const Arm arm = armName == QStringLiteral("posonly") ? Arm::PosOnly : armName == QStringLiteral("stock") ? Arm::Stock
-                  : armName == QStringLiteral("placed") ? Arm::Placed : Arm::Shipped;
-    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock") &&
-        armName != QStringLiteral("placed")) {
-        std::printf("FAIL: --arm %s (shipped|posonly|stock|placed)\n", qUtf8Printable(armName));
+                  : Arm::Shipped;
+    if (armName != QStringLiteral("shipped") && armName != QStringLiteral("posonly") && armName != QStringLiteral("stock")) {
+        std::printf("FAIL: --arm %s (shipped|posonly|stock)\n", qUtf8Printable(armName));
         return 1;
     }
     iris::MeshBake::setBakeThreads(threads);
@@ -2614,25 +2612,14 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
                 qUtf8Printable(QFileInfo(path).fileName()), qUtf8Printable(armName), threads);
     std::printf("mesh\tclass\tname\tl0\tgroups\tdepth");
     for (float E : kLadder) std::printf("\tE%g", double(E));
-    std::printf("\ttop\tms\tvertices\tappended\tbytesPerVertex\n");
+    std::printf("\ttop\tms\n");
     std::map<QString, std::vector<long long>> sums;
-    std::map<QString, std::array<long long, 2>> vsums;   // level-0 vertex bytes, appended vertex bytes
     QElapsedTimer wall; wall.start();
     for (const Item &it : items) {
         if (it.index < 0 || it.index >= meshes.size()) { std::printf("FAIL: mesh %d out of range\n", it.index); return 1; }
         const iris::MeshPtr &m = meshes.at(it.index);
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
         const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
-        // THE VERTEX BYTES (stage 2's memory rule): every per-vertex float buffer, raw, before the build grows them.
-        size_t nv0 = 0;
-        long long bytesPerVertex = 0;
-        for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
-            if (!vb || !vb->data || vb->vertexLayout.getAttribs().size() != 1) continue;
-            const int comps = vb->vertexLayout.getAttribs().first().count;
-            bytesPerVertex += 4 * comps;
-            if (vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position)
-                nv0 = size_t(vb->dataSize) / (sizeof(float) * size_t(comps));
-        }
         iris::MeshBake::ClusterDagStats st;
         double ms = 0.0;
         const Dag d = build(m, arm, &st, &ms);
@@ -2644,12 +2631,7 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
         std::printf("%d\t%s\t%s\t%lld\t%zu\t%d", it.index, qUtf8Printable(it.cls), qUtf8Printable(names[size_t(it.index)]), l0,
                     d.groupError.size(), maxDepth + 1);
         for (long long v : row) std::printf("\t%lld", v);
-        std::printf("\t%.0f\t%zu\t%zu\t%lld\n", ms, nv0, st.appendedVertices, bytesPerVertex);
-        for (const QString &key : { it.cls, QStringLiteral("all") }) {
-            vsums[key][0] += (long long)nv0 * bytesPerVertex;
-            vsums[key][1] += (long long)st.appendedVertices * bytesPerVertex;
-            if (it.cls == QStringLiteral("all")) break;
-        }
+        std::printf("\t%.0f\n", ms);
         for (const QString &key : { it.cls, QStringLiteral("all") }) {
             std::vector<long long> &s = sums[key];
             if (s.empty()) s.assign(size_t(kE) + 2, 0);
@@ -2662,8 +2644,7 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
     for (const auto &kv : sums) {
         std::printf("SUM\t%s\t-\t%lld\t-\t-", qUtf8Printable(kv.first), kv.second[0]);
         for (size_t k = 1; k < kv.second.size(); ++k) std::printf("\t%lld", kv.second[k]);
-        std::printf("\t%lld\tvertexBytes %lld\tappendedBytes %lld (%.3f)\n", qint64(wall.elapsed()), vsums[kv.first][0],
-                    vsums[kv.first][1], vsums[kv.first][0] ? double(vsums[kv.first][1]) / double(vsums[kv.first][0]) : 0.0);
+        std::printf("\t%lld\n", qint64(wall.elapsed()));
     }
     return 0;
 }

@@ -456,52 +456,6 @@ inline int oneStepDriftBound()
     return finish();
 }
 
-/// The smallest stored error at which the cut draws at most `n` triangles (the cut changes only at a group's error).
-inline float errorFor(const cutcurve::Dag &d, long long n)
-{
-    std::vector<float> e;
-    for (float x : d.groupError) if (x < FLT_MAX) e.push_back(x);
-    std::sort(e.begin(), e.end());
-    for (float x : e) {
-        const float E = std::nextafter(x, FLT_MAX);
-        if (cutcurve::cutAt(d, E) <= n) return E;
-    }
-    return FLT_MAX;
-}
-
-/// atom2.placement_straddles (stage 2): THE PLACED SURVIVORS STRADDLE THE CURVE — on the curved shell (a 10 m quarter
-/// sphere, no atlas: the chord sag a re-indexed level cannot place) the stored error at equal triangles (a half, a
-/// quarter, an eighth and a sixteenth of level 0) is at most 0.6 x the re-indexed builder's (stage 1's).
-inline int placementStraddles()
-{
-    const long long l0 = 6144;
-    float worst = 0.0f;
-    std::vector<float> placedE, indexedE;
-    for (bool placement : { true, false }) {
-        const iris::MeshPtr shell = curvedShell(625.0f, 1, 1);
-        iris::MeshBake::ClusterDagStats st;
-        iris::MeshBake::ClusterDagOptions opt;
-        opt.placement = placement;
-        iris::MeshBake::buildClusterDag(shell, &st, opt);
-        const cutcurve::Dag d = cutcurve::fromMesh(shell->clusterDag);
-        std::printf("== %s: %d clusters, %d groups, %zu vertices appended\n", placement ? "placed" : "re-indexed",
-                    int(shell->clusterDag.clusters.size()), int(shell->clusterDag.groups.size()), st.appendedVertices);
-        for (long long n : { l0 / 2, l0 / 4, l0 / 8, l0 / 16 }) (placement ? placedE : indexedE).push_back(errorFor(d, n));
-    }
-    const long long ns[4] = { l0 / 2, l0 / 4, l0 / 8, l0 / 16 };
-    for (int i = 0; i < 4; ++i) {
-        const float r = indexedE[size_t(i)] > 0.0f ? placedE[size_t(i)] / indexedE[size_t(i)] : 0.0f;
-        worst = std::max(worst, r);
-        std::printf("   <= %lld triangles: placed %.5g, re-indexed %.5g -> %.3f\n", ns[i], double(placedE[size_t(i)]),
-                    double(indexedE[size_t(i)]), double(r));
-    }
-    char msg[200];
-    std::snprintf(msg, sizeof(msg), "the placed stored error at equal triangles is at most 0.6x the re-indexed one (worst %.3f)",
-                  double(worst));
-    CHECK_LOUD(worst > 0.0f && worst <= 0.6f, msg);
-    return finish();
-}
-
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
@@ -510,7 +464,6 @@ inline int run(const QString &row)
     if (row == QStringLiteral("ends_empty")) return endsEmpty();
     if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
-    if (row == QStringLiteral("placement_straddles")) return placementStraddles();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }
