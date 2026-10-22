@@ -114,6 +114,9 @@ private:
     int mTier = 3;              ///< worldmodes::Mode (Low 0 .. Epic 3)
     bool mGi = true, mOcclusion = true, mDraw = true, mOverlay = false;
     bool mPlaying = false;   ///< `play on`: the document's clock advances one fixed step a frame
+    /// `reflections both|rays`: the view's reflection SOURCES (PostFxDesc::ssrScreenMarch - the screen march beside the
+    /// rays, or the rays alone): PHOTON-2 stage 1b's measuring door (C1's SSR-vs-ray agreement).
+    bool mScreenMarch = true;
     bool mQuit = false;
     int mExit = 0;
     unsigned long long mFrames = 0;

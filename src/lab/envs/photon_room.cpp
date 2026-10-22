@@ -102,11 +102,15 @@ Built buildGlass(unsigned seed, bool bake)
 // ---- photon-ramp (PHOTON-2 stage 1 fix round: F4's ramp, F2's highlights) -------------------------------------------
 //
 // photon-room's sealed shell with THE ROUGHNESS RAMP — sixteen metal floor strips, 0.25 m apart side by side across
-// the room's middle 4 m, perceptual roughness 0.00, 0.01 ... 0.15 — reflecting THE EDGE, a white emitter bar on the far
-// wall (y 3.3 to 3.6 m: above the stop's view — the eye 3 m up looking down at the strips — so the screen march cannot answer it and the band is the ray tier's
-// alone — the screen's answer is a sharp mirror image at every roughness, JahSsrResolve_ps.glsl): the bar's
-// reflected band in each strip has the lobe's blur, which must rise with the roughness and step nowhere (fix F4: the fixed estimator, the filter's reach and the hit read's mirror cut follow the
-// lobe's footprint at its hit, never an alpha). And THE HIGHLIGHTS: two emitter cubes 0.5 m above the 0.06 strip (a
+// the room's middle 4 m, perceptual roughness 0.00, 0.01 ... 0.15 — reflecting THE EDGE, a white emitter PANEL on the
+// far wall from y 3.3 m up to 7.9 m (above the stop's view — the eye 3 m up looking down at the strips — so the screen
+// march cannot answer it and the band is the ray tier's alone): its LOWER EDGE is a true HALF-PLANE in every strip's
+// reflection (PHOTON-2 stage 1b, V7: the 0.3 m bar it replaces was as narrow as the blur from roughness 0.08 up, so a
+// 10-90 taken against its falling peak read low). The edge's reflected 10-90 width is the lobe's, against the closed
+// form Delta-theta(10-90) = (16/3) alpha t / (d + t) seen from the eye (the GGX slope marginal's 10-90 is (8/3) alpha,
+// doubled in the reflected direction; d the eye's distance to the reflection point, t the point's to the edge): it
+// must rise with the roughness and step nowhere (fix F4: the fixed estimator, the filter's reach and the hit read's
+// mirror cut follow the lobe's footprint at its hit, never an alpha). And THE HIGHLIGHTS: two emitter cubes 0.5 m above the 0.06 strip (a
 // lobe ~1.6 trace texels wide at that throw: a stochastic texel whose rays mostly find the spark), 5 and 10 mm
 // across — a ~1 px and a ~2 x 2 px image at 5.4 m from the stop's eye — whose reflections the moving history must
 // keep (fix F2: the clamp's box holds the texel's own sample). A sibling, not photon-glass itself: the glass
@@ -123,7 +127,7 @@ Built buildRamp(unsigned seed, bool bake)
         fixedBox(b, unit, QStringLiteral("strip-%1").arg(i, 2, 10, QLatin1Char('0')), V(x0, 0, -3.6f),
                  V(x0 + 0.24f, 0.02f, 1.6f), b.material(0.9f, 0.9f, 0.9f, 0.01f * float(i), 1.0f));
     }
-    fixedBox(b, unit, "edge", V(-3.9f, 3.3f, -3.99f), V(3.9f, 3.6f, -3.95f), b.emitter(1.0f));
+    fixedBox(b, unit, "edge", V(-3.9f, 3.3f, -3.99f), V(3.9f, 7.9f, -3.95f), b.emitter(1.0f));
     const float hx = -2.0f + 0.25f * 6.0f + 0.12f;   // the 0.06 strip's centre line
     fixedBox(b, unit, "spark-1px", V(hx - 0.05f - 0.0025f, 0.4975f, -1.5025f), V(hx - 0.05f + 0.0025f, 0.5025f, -1.4975f),
              b.emitter(10.0f));
@@ -134,16 +138,42 @@ Built buildRamp(unsigned seed, bool bake)
     // the fixed cut, which the throw decides (the lobe's footprint at its hit: 4 alpha t against the texel there),
     // crosses every strip from 0.04 up inside the reflection; the picture may not step there. Seen from the contact
     // pose (stopRamp's D = 1); behind the edge bar's band and the sparks from the stop's pose (their rays pass above).
+    // THE CONTACT MARK (PHOTON-2 stage 1b, C3's row): the 0.00 strip's post stands on a 10 cm MATTE BLACK FOOT (0.02 to
+    // 0.12 m), the emitter above it - a uniform emitter hides the origin's seam (a ray lifted b off the strip shows the
+    // face from height b at the contact, and a uniform face looks the same from any height); the foot's reflected top
+    // edge must lie where the mirror puts it (y 0.02 - 0.10 under the strip's plane), and its displacement in rows is
+    // the seam (the 1/2-cell bias shows the foot b shorter in the reflection).
     for (int i = 0; i < 16; ++i) {
         const float xc = -2.0f + 0.25f * float(i) + 0.12f;
-        fixedBox(b, unit, QStringLiteral("post-%1").arg(i, 2, 10, QLatin1Char('0')), V(xc - 0.05f, 0.02f, -3.15f),
-                 V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
+        const QString name = QStringLiteral("post-%1").arg(i, 2, 10, QLatin1Char('0'));
+        if (i == 0) {
+            fixedBox(b, unit, name + QStringLiteral("-foot"), V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.12f, -3.0f),
+                     b.material(0.02f, 0.02f, 0.02f, 1.0f));
+            fixedBox(b, unit, name, V(xc - 0.05f, 0.12f, -3.15f), V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
+            continue;
+        }
+        fixedBox(b, unit, name, V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
     }
     return b.finish();
 }
 
 void stopRamp(double d, iris::Vec3 &eye, iris::Vec3 &target)
 {
+    // D = 2 and 3: THE CONTACT ROW (PHOTON-2 stage 1b, C3's ray origin): the 0.00 strip's post foot from 2.4 m (D = 2:
+    // 1.0 m up, 2.2 m in front) and from 1 m (D = 3: 0.6 m up, 0.8 m in front), looking at the foot - the rows between
+    // the foot line and its reflection's first row are the origin's seam (the 1/2-cell bias read ~37 px at 2.4 m and ~88
+    // px at 1 m to first order: the preflight's estimate).
+    const float post00 = -2.0f + 0.12f;   // the 0.00 strip's centre line (its post's)
+    if (d >= 2.5) {
+        eye = iris::Vec3(post00, 0.62f, -2.2f);
+        target = iris::Vec3(post00, 0.1f, -3.0f);
+        return;
+    }
+    if (d >= 1.5) {
+        eye = iris::Vec3(post00, 1.02f, -0.8f);
+        target = iris::Vec3(post00, 0.1f, -3.0f);
+        return;
+    }
     if (d >= 0.5) {
         // D = 1: THE CONTACT POSE (G5) - a metre up, 2.2 m in front of the posts, looking down at their feet
         eye = iris::Vec3(0, 1.0f, -0.8f);
@@ -163,10 +193,12 @@ std::vector<Prediction> expectRamp(const Built &, const Optics &)
 std::string describeRamp()
 {
     return "photon-ramp: photon-room's sealed shell with sixteen metal floor strips at perceptual roughness 0.00 to "
-           "0.15 reflecting a white emitter bar on the far wall (the lobe's blur per strip: PHOTON-2 fix F4), two "
+           "0.15 reflecting the lower edge of a white emitter panel on the far wall - a half-plane (the lobe's blur per "
+           "strip against (16/3) alpha t / (d + t): PHOTON-2 fix F4, stage 1b V7), two "
            "5 / 10 mm emitter sparks above the 0.06 strip (the moving history's highlights: fix F2) and an emitter post "
            "standing on each strip (the contact lines: the fixed cut the throw decides, round 2's G5; envcam 1 looks "
-           "at their feet). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
+           "at their feet; envcam 2 / 3 at the 0.00 strip's post foot from 2.4 m / 1 m: stage 1b's contact row). "
+           "Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
 }
 
 void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)

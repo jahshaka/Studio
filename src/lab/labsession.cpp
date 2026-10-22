@@ -406,12 +406,15 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless) {
+    if (mOpt.headless || !mScreenMarch) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade).
-        fv.finish = [](FrameInputView &part, View *v) {
+        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays`
+        // (the screen march off: the rays alone answer).
+        const bool headless = mOpt.headless, march = mScreenMarch;
+        fv.finish = [headless, march](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
-            fx.allowOffscreen = true;
+            if (headless) fx.allowOffscreen = true;
+            if (!march) fx.ssrScreenMarch = false;
             part.postFx = fx;
         };
     }
@@ -656,6 +659,16 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "draw") {
         if (!onOff(a0, mDraw, v)) { ok = false; std::printf("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
+    } else if (c.verb == "reflections") {
+        // THE REFLECTION'S SOURCES (PHOTON-2 stage 1b, C1's measuring door): both = the screen march beside the rays,
+        // rays = the rays alone (the march's passes leave the chain: a graph rebuild, the histories restart)
+        if (a0 == "both" || a0 == "rays") {
+            mScreenMarch = a0 == "both";
+            std::printf("LAB REFLECTIONS %s\n", a0.c_str());
+        } else {
+            ok = false;
+            std::printf("LAB REFUSED reflections '%s' (both|rays)\n", a0.c_str());
+        }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; std::printf("LAB REFUSED play '%s'\n", a0.c_str()); }
         else {

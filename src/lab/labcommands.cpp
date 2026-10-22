@@ -21,6 +21,9 @@ const std::vector<VerbDoc> &verbs()
         { "play", "play on|off|toggle", 1, 1,
           "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
           "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6)" },
+        { "reflections", "reflections both|rays", 1, 1,
+          "the view's reflection sources (PostFxDesc::ssrScreenMarch): the screen march beside the rays, or the rays "
+          "alone - PHOTON-2 stage 1b's measuring door (C1's SSR-vs-ray agreement); a graph rebuild, the histories restart" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
