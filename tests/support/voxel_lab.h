@@ -170,9 +170,11 @@ inline void setHandOver(std::vector<Cascade> &ch)
 }
 
 /// A split store from its level 0 (per texel RGBA float, rgb = the three axes): coverage+,
-/// coverage-, position+, position- - what GiVoxelVolume reads back and a dump holds. The chain
-/// is built as the GPU's autogen mips build it (a 2x2x2 box, the chain stopping at the shortest
-/// axis).
+/// coverage-, position+, position- - what GiVoxelVolume reads back and a dump holds. The GPU's
+/// level-0 position is O x f, f the surface's place in its OWN cell (PHOTON-7 stage 1); the lab
+/// keeps every level absolute in the box's [0, 1], so each texel's cell is added here - what the
+/// GPU's chain does at its first level (PhotonMipChain). The chain is built as the GPU's mips build
+/// it (a 2x2x2 box, the chain stopping at the shortest axis).
 inline void fromSplit(Cascade &c, const int dims[3], const float o[3], const float ce[3], const float *cov[2],
                       const float *pos[2])
 {
@@ -182,8 +184,15 @@ inline void fromSplit(Cascade &c, const int dims[3], const float o[3], const flo
     for (int a = 0; a < 3; ++a) l0.r[a] = dims[a];
     for (int h = 0; h < 2; ++h) {
         l0.O[h].resize(n * 3); l0.P[h].resize(n * 3);
-        for (size_t i = 0; i < n; ++i)
-            for (int a = 0; a < 3; ++a) { l0.O[h][i * 3 + a] = cov[h][i * 4 + a]; l0.P[h][i * 3 + a] = pos[h][i * 4 + a]; }
+        for (size_t i = 0; i < n; ++i) {
+            const size_t cellIdx[3] = { i % size_t(dims[0]), (i / size_t(dims[0])) % size_t(dims[1]),
+                                        i / (size_t(dims[0]) * size_t(dims[1])) };
+            for (int a = 0; a < 3; ++a) {
+                const double o = cov[h][i * 4 + a];
+                l0.O[h][i * 3 + a] = cov[h][i * 4 + a];
+                l0.P[h][i * 3 + a] = float((double(pos[h][i * 4 + a]) + o * double(cellIdx[a])) / double(dims[a]));
+            }
+        }
     }
     c.L.assign(1, l0);
     c.D.clear();
