@@ -2390,6 +2390,8 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     std::map<int, long long> attemptHist;   // groups attempted (every pass) by their simplify count
     std::map<int, long long> grantedHist;   // DAG reductions by ceil(log2(granted / children's stored)); -1 = leaves
     long long countCarries = 0, budgetCarries = 0;
+    long long cardMeshes = 0, cardComps = 0, cardL0Bytes = 0, cardAppendedBytes = 0, appendedAll = 0;
+    int cornersOutside = 0, memoHits = 0;
     std::vector<double> d0ratio;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2398,12 +2400,49 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
         const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
         l0All += l0;
+        // THE VERTEX BYTES (D9's memory rule): every per-vertex float buffer, raw, before the build grows them; the
+        // card-soup class = the meshes most of whose islands are under 12 triangles (stage 0's census)
+        size_t nv0 = 0;
+        long long bytesPerVertex = 0;
+        for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
+            if (!vb || !vb->data || vb->vertexLayout.getAttribs().size() != 1) continue;
+            const int comps = vb->vertexLayout.getAttribs().first().count;
+            bytesPerVertex += 4 * comps;
+            if (vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position)
+                nv0 = size_t(vb->dataSize) / (sizeof(float) * size_t(comps));
+        }
+        bool cardClass = false;
+        size_t comps = 0, under12 = 0;
+        {
+            size_t nvp = 0;
+            int pc = 3;
+            const float *pp = cutcurve::positionsOf(m, &nvp, &pc);
+            if (pp && !ib.isNull() && ib->data) {
+                const std::vector<unsigned> b(reinterpret_cast<const unsigned *>(ib->data),
+                                              reinterpret_cast<const unsigned *>(ib->data) + size_t(ib->dataSize) / sizeof(unsigned));
+                const iris::atomdag::Islands is = iris::atomdag::findIslands(pp, pc, nvp, b);
+                comps = is.count();
+                for (size_t c = 0; c < comps; ++c) under12 += is.triangles[c] < 12 ? 1u : 0u;
+                cardClass = comps > 0 && under12 * 2 > comps;
+            }
+        }
         iris::MeshBake::ClusterDagStats st;
         iris::MeshBake::ClusterDagOptions opt;
         opt.wantGroups = true;
         iris::MeshBake::buildClusterDag(m, &st, opt);
         const iris::MeshClusterDag &dag = m->clusterDag;
         if (st.depthCapHit) ++capHits;
+        appendedAll += (long long)st.appendedVertices * bytesPerVertex;
+        cornersOutside += st.cornersOutsideBox;
+        if (cardClass) {
+            ++cardMeshes; cardComps += (long long)comps;
+            cardL0Bytes += (long long)nv0 * bytesPerVertex;
+            cardAppendedBytes += (long long)st.appendedVertices * bytesPerVertex;
+            std::printf("CARDMESH\t%d\t%s\tislands %zu (%zu under 12)\tl0 %lld\tvertices %zu\tappended %zu\tbytes %lld -> +%lld "
+                        "(%.3f)\tquads %d for %d cards\n", i, qUtf8Printable(names[size_t(i)]), comps, under12, l0, nv0,
+                        st.appendedVertices, (long long)nv0 * bytesPerVertex, (long long)st.appendedVertices * bytesPerVertex,
+                        nv0 ? double(st.appendedVertices) / double(nv0) : 0.0, st.cardSets, st.cardsMerged);
+        }
         if (dag.isEmpty()) { ++dagLess; dagLessTris += l0; topAll += l0; continue; }
         ++dagMeshes;
         msSum += st.msTotal;
@@ -2411,6 +2450,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         dagBytes += 4 + 4 + 4LL * iris::atomdag::configRecord().size() + 4 + 32LL * dag.groups.size() +
                     40LL * dag.clusters.size() + 4 + 4LL * dag.vertices.size() + 4 + dag.triangles.size();
         ++depthHistogram[st.depth];
+        memoHits += st.memoHits;
         carried += st.carried; retries += st.retries; reductions += st.reductions; allCarriedLevels += st.levelsAllCarried;
         depthMax = std::max(depthMax, st.depth);
         rootAll += st.rootTriangles;
@@ -2474,6 +2514,11 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     if (!d0ratio.empty())
         std::printf("  depth-0 position-quadric estimate / measured step: median %.3f, p10 %.3f, p90 %.3f over %zu groups\n",
                     d0ratio[d0ratio.size() / 2], d0ratio[d0ratio.size() / 10], d0ratio[d0ratio.size() * 9 / 10], d0ratio.size());
+    std::printf("  D9 THE CARD-SOUP CLASS (most islands under 12 triangles): %lld meshes, %lld islands; level-0 vertex bytes %lld, "
+                "appended %lld (%.4f); appended over every mesh %lld; corners outside their mesh's box %d\n", cardMeshes,
+                cardComps, cardL0Bytes, cardAppendedBytes, cardL0Bytes ? double(cardAppendedBytes) / double(cardL0Bytes) : 0.0,
+                appendedAll, cornersOutside);
+    std::printf("  count-carried groups met again and looked up (the memo): %d\n", memoHits);
     std::printf("  carried groups by cause (every pass): cluster count %lld (asked the same budget), budget %lld (asked 2x)\n",
                 countCarries, budgetCarries);
     std::printf("  groups attempted by simplify count (every pass, every shrink; 12 = 12+):");
@@ -2510,13 +2555,14 @@ static int dagGroupsTool(const QString &path, int meshIndex, int threads)
     iris::MeshBake::buildClusterDag(meshes.at(meshIndex), &st, opt);
     static const char *kinds[] = { "reduce", "carried", "top", "asis" };
     std::printf("level\tkind\tgroup\tmembers\tin\tout\tchildren\tgranted\tstep\tstored\tremovedV\tlostF\taddedF\tisland\tlostLocked\t"
-                "attempts\tpruned\tislands\tdepth0Est\testimate\n");
+                "attempts\tpruned\tislands\tdepth0Est\testimate\tcards\tsets\tcardsMerged\tsourceArea\tquadArea\treach\n");
     for (const iris::atomdag::GroupRecord &r : st.records)
-        std::printf("%d\t%s\t%d\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%d\t%d\t%d\t%.5g\t%.5g\n",
+        std::printf("%d\t%s\t%d\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%.5g\t%d\t%d\t%d\t%.5g\t%.5g\t%d\t%d\t%d\t%.5g\t%.5g\t%.5g\n",
                     r.level, kinds[std::clamp(r.kind, 0, 3)], r.dagGroup, r.members, r.inTris, r.outTris, double(r.childStored),
                     double(r.budget), double(r.step), double(r.stored), double(r.removedVertex), double(r.lostFacet),
                     double(r.addedFacet), double(r.droppedIsland), double(r.lostLocked), r.attempts, r.pruned,
-                    r.islandsDropped, double(r.depth0Estimate), double(r.estimate));
+                    r.islandsDropped, double(r.depth0Estimate), double(r.estimate), int(r.cards), r.cardSets, r.cardsMerged,
+                    double(r.cardSourceArea), double(r.cardQuadArea), double(r.cardReach));
     std::printf("# %d clusters, %d groups, %d levels, %.0f ms (leaves %.0f, groups %.0f, reduce %.0f; simplify %.0f, measure %.0f "
                 "of which exact %.0f, summed)\n", st.clusters, st.groups, st.levels, st.msTotal, st.msLeaves, st.msGroups,
                 st.msReduce, st.msSimplify, st.msMeasure, st.msExact);

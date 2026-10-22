@@ -90,7 +90,7 @@ else
     # the serializer, its declarations and the cluster DAG's builder (ATOM-2: its own TUs, import/atomdag/)
     for must in import/meshbake.cpp import/meshbake.h import/bakeshared.h import/atomdag/build.cpp import/atomdag/measure.cpp \
                 import/atomdag/ladder.cpp import/atomdag/simplify.cpp import/atomdag/groups.cpp import/atomdag/leaves.cpp \
-                import/atomdag/adjacency.cpp; do
+                import/atomdag/adjacency.cpp import/atomdag/cards.cpp; do
         if ! printf '%s\n' "$hashed" | grep -qx "$must"; then
             echo "FAIL: $must is not in the producer hash. The serializer must always be"
             echo "      hashed — nothing else can notice that the written bytes changed."

@@ -12,6 +12,8 @@
 //                                the depth cap closes with the empty top over its whole pool (never "no DAG")
 //   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
 //   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
+//   atom2.cards_merge_within_budget  the card soup merges at the level granted its spacing; every set's measured price
+//                                within the budget and stored; the quads conserve the cards' area within 10 % (D9)
 
 #include "import/atomdag/adjacency.h"
 
@@ -499,6 +501,93 @@ inline int oneStepDriftBound()
     return finish();
 }
 
+/// atom2.cards_merge_within_budget (stage 4, D9): THE CARD SOUP MERGES WHERE ITS BUDGET REACHES ITS SPACING — 2,000
+/// 10 cm cards in a 1 m ball: the first level whose card groups are granted at least the cards' spacing (the median
+/// nearest-centre distance) merges; every merge's cards lie within its granted budget of their seed; every merged
+/// set's MEASURED price (the sources against the quad, both ways) is within the budget and stored in the group's
+/// error; the quads conserve the merged cards' area within 10 % (each group and the whole); every quad corner lies
+/// inside the mesh's box; and the chain still obeys the law and ends.
+inline int cardsMergeWithinBudget()
+{
+    const iris::MeshPtr soup = dagroot::cardSoup();
+    // the spacing: the median distance from a card's centre to its nearest card's
+    std::vector<iris::Vec3> centres;
+    {
+        size_t nv = 0;
+        int pc = 3;
+        const float *p = cutcurve::positionsOf(soup, &nv, &pc);
+        for (size_t c = 0; c + 3 < nv; c += 4) {
+            iris::Vec3 m(0, 0, 0);
+            for (size_t k = 0; k < 4; ++k) m += iris::Vec3(p[(c + k) * size_t(pc)], p[(c + k) * size_t(pc) + 1], p[(c + k) * size_t(pc) + 2]);
+            centres.push_back(m * 0.25f);
+        }
+    }
+    std::vector<float> nearest;
+    for (size_t i = 0; i < centres.size(); ++i) {
+        float best = FLT_MAX;
+        for (size_t j = 0; j < centres.size(); ++j) if (j != i) best = std::min(best, (centres[i] - centres[j]).length());
+        nearest.push_back(best);
+    }
+    std::sort(nearest.begin(), nearest.end());
+    const float spacing = nearest[nearest.size() / 2];
+    const float l0Area = [&] {
+        double a = 0.0;
+        size_t nv = 0;
+        int pc = 3;
+        const float *p = cutcurve::positionsOf(soup, &nv, &pc);
+        const iris::IndexBufferPtr ib = soup->getIndexBuffer();
+        const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
+        for (size_t t = 0; t < size_t(ib->dataSize) / 12u; ++t) {
+            const auto P = [&](unsigned v) { return iris::Vec3(p[v * size_t(pc)], p[v * size_t(pc) + 1], p[v * size_t(pc) + 2]); };
+            a += 0.5 * double(iris::Vec3::crossProduct(P(idx[t * 3 + 1]) - P(idx[t * 3]), P(idx[t * 3 + 2]) - P(idx[t * 3])).length());
+        }
+        return float(a);
+    }();
+    iris::MeshBake::ClusterDagStats st;
+    iris::MeshBake::ClusterDagOptions opt;
+    opt.wantGroups = true;
+    iris::MeshBake::buildClusterDag(soup, &st, opt);
+    const MeshClusterDag &dag = soup->clusterDag;
+    CHECK_LOUD(!dag.isEmpty(), "the card soup gets a DAG");
+    if (dag.isEmpty()) return finish();
+    int firstReach = -1, firstMerge = -1, farMerges = 0, overPrice = 0, unstored = 0, overCoverage = 0, overA = 0;
+    double src = 0.0, quad = 0.0;
+    for (const iris::atomdag::GroupRecord &r : st.records) {
+        if (!r.cards) continue;
+        if (firstReach < 0 && r.budget >= spacing) firstReach = r.level;
+        if (r.kind == 0 && r.cardSets > 0) {
+            if (firstMerge < 0) firstMerge = r.level;
+            if (r.cardReach > r.budget) ++farMerges;
+            if (r.cardPrice > r.budget) ++overPrice;
+            if (dag.groups.at(r.dagGroup).error < r.cardPrice) ++unstored;
+            if (r.step > r.budget || r.measured > r.budget * 1.05f) ++overA;
+            const float q = r.cardSourceArea > 0.0f ? r.cardQuadArea / r.cardSourceArea : 0.0f;
+            if (q < 0.9f || q > 1.1f) ++overCoverage;
+            src += double(r.cardSourceArea);
+            quad += double(r.cardQuadArea);
+        }
+        std::printf("   level %d pass %d kind %d granted %.4g step %.4g sets %d cards %d price %.4g reach %.4g area %.4g -> %.4g\n",
+                    r.level, r.pass, r.kind, double(r.budget), double(r.step), r.cardSets, r.cardsMerged, double(r.cardPrice),
+                    double(r.cardReach), double(r.cardSourceArea), double(r.cardQuadArea));
+    }
+    const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
+    std::printf("== card soup: spacing %.4g (level 0's area %.4g); the first level granted the spacing %d, the first merge at "
+                "level %d; %d quads for %d cards, %zu vertices appended, %d shrunk, %d corners outside the box; coverage %.4f; "
+                "top cut %lld\n", double(spacing), double(l0Area), firstReach, firstMerge, st.cardSets, st.cardsMerged,
+                st.appendedVertices, st.quadsShrunk, st.cornersOutsideBox, src > 0.0 ? quad / src : 0.0, top);
+    CHECK_LOUD(firstReach >= 0 && firstMerge == firstReach,
+               "the first level whose card groups are granted the cards' spacing merges (and none merges before it)");
+    CHECK_LOUD(st.cardSets > 0 && st.appendedVertices == size_t(4 * st.cardSets), "each quad is four appended vertices");
+    CHECK_LOUD(farMerges == 0, "every merged card lies within its group's granted budget of its seed");
+    CHECK_LOUD(overPrice == 0 && overA == 0, "every merged set's measured price is within the granted budget");
+    CHECK_LOUD(unstored == 0, "every merged group's stored error carries its sets' measured price");
+    CHECK_LOUD(overCoverage == 0 && src > 0.0 && std::fabs(quad / src - 1.0) <= 0.1,
+               "the quads conserve the merged cards' area within 10 % (every group, and the whole)");
+    CHECK_LOUD(st.cornersOutsideBox == 0, "every quad corner lies inside the mesh's box");
+    CHECK_LOUD(top == 0, "the chain ends (the top cut draws nothing)");
+    return finish();
+}
+
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
@@ -507,6 +596,7 @@ inline int run(const QString &row)
     if (row == QStringLiteral("ends_empty")) return endsEmpty();
     if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
+    if (row == QStringLiteral("cards_merge_within_budget")) return cardsMergeWithinBudget();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }
