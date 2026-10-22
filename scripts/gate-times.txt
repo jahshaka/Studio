@@ -64,6 +64,7 @@ gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's
 gi.hold_after_stop 28.47  solo, the card lock held, :71, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions)
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+gi.ray_level_fixed 2.34  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 3, 2026-10-23: one engine, two scenes - a 4 m walk and its teleport, 105 frames)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
 gi.walk 47.89  solo, the card lock held, :77, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms)

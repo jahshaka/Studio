@@ -137,6 +137,27 @@ set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 
 
+# gi.ray_level_fixed — ONE RAY LEVEL PER MESH (PHOTON-7 stage 6): a 4 m camera walk builds no bottom-level structure
+# and re-points no near copy, every near copy is level 0, and walk vs a teleport to the walk's end: the same level per
+# slot (test_ray_level_fixed.cpp states the law and the base's red). 105 frames.
+add_executable(test_ray_level_fixed test_ray_level_fixed.cpp)
+set_target_properties(test_ray_level_fixed PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ray_level_fixed PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_ray_level_fixed PRIVATE JahshakaEngine)
+add_dependencies(test_ray_level_fixed JahshakaEngineMedia)
+jah_gpu_row(gi.ray_level_fixed CLASS engine COMMAND test_ray_level_fixed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ray_level_fixed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.ray_level_fixed PROPERTIES JAHSHAKA_TEST_FRAMES 105)
+
 # gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1):
 # an open court keeps >= 1 probe at Medium, a bare floor printed, a sealed room its whole grid.
 add_executable(test_gi_probe_court test_gi_probe_court.cpp)

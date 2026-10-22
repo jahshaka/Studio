@@ -591,6 +591,13 @@ std::string Session::statusJson()
         const RayQueryStatus &rq = mScene->published().rayQuery;
         o << ",\"hits\":{\"records\":" << rq.hitRecords << ",\"dropped\":" << rq.hitDropped << ",\"capacity\":"
           << rq.hitCapacity << "}";
+        // ...and THE RAY STRUCTURES (PHOTON-7 stage 6, one ray level per mesh): the near and far copies, the bottom
+        // levels held and their bytes, the ones built from a level above 0 (the far copies'), the top level, and the
+        // bottom-level builds ever
+        o << ",\"rays\":{\"instances\":" << rq.instances << ",\"farInstances\":" << rq.farInstances
+          << ",\"blasCount\":" << rq.blasCount << ",\"blasBytes\":" << rq.blasBytes << ",\"levelBlasCount\":"
+          << rq.levelBlasCount << ",\"levelBlasBytes\":" << rq.levelBlasBytes << ",\"tlasBytes\":" << rq.tlasBytes
+          << ",\"triangles\":" << rq.triangles << ",\"blasBuilds\":" << rq.blasBuilds << "}";
     }
     // THE LAST CUT PROBE (`probe` / `measure`): the drawn triangles of its frame summed over the objects, and those of
     // the objects with no visible pixel — the hidden share's numerator (the probe's frame, said beside the status's)

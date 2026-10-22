@@ -2048,12 +2048,12 @@ static int footprintSweepMain(Engine *e)
 /// gi.rt_reflect_format_lavapipe (archived: archive/tests/gi) and gi.rt_reflect_format_refused_lavapipe (archived: archive/tests/gi)).
 ///
 /// The tier's availability gate asks the device for STORAGE_IMAGE support of
-/// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
+/// the formats its own images use (RGBA16F, RG32UI) instead of assuming it, and a
 /// device that lacks one is a no-rays device with ONE log line naming it. Both
 /// rows run on LAVAPIPE, the second device of the box: without the deny it must
 /// NOT refuse (both formats are core-mandatory storage formats, so every
 /// conformant driver stores to them — the check is a driver-defect guard), and
-/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` (fault injection) the same device must
+/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_UINT` (fault injection) the same device must
 /// refuse through the one gate: no ray query, a view at the ray tier with no
 /// trace, frames that still draw, and the line in the log.
 static bool logContains(const std::string &path, const char *needle)
