@@ -197,18 +197,18 @@ set_tests_properties(bake.cut_curve PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.cut_curve)
 
-# THE ATOM-2 ROWS (ATOM-2 part A stage 1; the builder's rows — the spec's six, each a `--atom2 <row>` verb, CPU only:
-# FRAMES 0). The fixtures: the Bistro-units kit-bashed box set, a 10 m curved shell with a 4 x 3 atlas, the card soup,
-# the kit-bash, the rough sheet and a 100-triangle ring (tests/meshbake/atom2_rows.h says what each row asserts).
-foreach(_row adjacency_by_position borders_move ladder_never_forced ends_empty locked_positions_kept one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
+# THE ATOM-2 ROWS (ATOM-2 part A; the builder's rows, each a `--atom2 <row>` verb, CPU only: FRAMES 0). The five below
+# are THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge as the DAG builder's end-to-end laws. The fixtures: the
+# Bistro-units kit-bashed box set, a 10 m curved shell with a 4 x 3 atlas, the card soup, the kit-bash, the rough sheet
+# and a 100-triangle ring (tests/meshbake/atom2_rows.h says what each row asserts). The builder's other three rows
+# (atom2.adjacency_by_position, atom2.borders_move, atom2.locked_positions_kept — the last one the SHIP row
+# bake.locked_positions_kept's law over the same fixtures) were archived at the merge: archive/tests/ATOM-2/.
+set(_atom2_ship_rows ladder_never_forced ends_empty one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
+foreach(_row IN LISTS _atom2_ship_rows)
     add_test(NAME atom2.${_row} COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 ${_row}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_ship_row(atom2.cards_merge_within_budget)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
-    jah_ship_row(atom2.ends_empty)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
-    jah_ship_row(atom2.ladder_never_forced)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
-    jah_ship_row(atom2.level_table_is_a_cut)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
-    jah_ship_row(atom2.one_step_drift_bound)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
     set_tests_properties(atom2.${_row} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(atom2.${_row})
+    jah_ship_row(atom2.${_row})   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
 endforeach()

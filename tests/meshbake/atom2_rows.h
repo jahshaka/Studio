@@ -1,16 +1,14 @@
-// ATOM-2 part A's rows and fixtures (SPECS/ATOM_2_SPEC.md stages 1-3). Included by test_mesh_bake.cpp after its CHECK
-// macros, its dagroot:: fixtures and the cutcurve:: helpers; each row is a verb (`--atom2 <row>`), CPU only.
+// ATOM-2 part A's rows and fixtures (SPECS/ATOM_2_SPEC.md stages 1-5). Included by test_mesh_bake.cpp after its CHECK
+// macros, its dagroot:: fixtures and the cutcurve:: helpers; each row is a verb (`--atom2 <row>`), CPU only. The five
+// below are the SHIP rows promoted at the merge; the builder's adjacency_by_position and borders_move rows are in
+// archive/tests/ATOM-2/ (its locked_positions_kept row was the SHIP row bake.locked_positions_kept's law: lockedPositionsKeptLaw).
 //
-//   atom2.adjacency_by_position  two coincident unindexed vertices are one adjacency node; a flipped duplicate is not
-//   atom2.borders_move           a group's lock set is exactly its recomputed external positions: a level-k border
-//                                both sides of which share a group at k+1 is NOT locked there
 //   atom2.ladder_never_forced    THE LAW (ladder.h), replayed from the records: every group's measured step is within
 //                                the budget it was granted, and every granted budget is at most 2x what its children
 //                                carried (stored or granted); a group that cannot reduce is carried, the chain ends
 //   atom2.ends_empty             a 100-triangle prop is one leaf + an empty top, vanishing past its extent; every
 //                                fixture's root is non-empty before the top and the top cut draws nothing; a chain at
 //                                the depth cap closes with the empty top over its whole pool (never "no DAG")
-//   atom2.locked_positions_kept  no group's output loses a position its level locked (recomputed from the DAG)
 //   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
 //   atom2.cards_merge_within_budget  the card soup merges at the level granted its spacing; every set's measured price
 //                                within the budget and stored; the quads conserve the cards' area within 10 % (D9)
@@ -225,96 +223,6 @@ inline int finish()
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
     else          std::printf("ALL %d CHECKS PASSED\n", checks);
     return failures ? 1 : 0;
-}
-
-inline int adjacencyByPosition()
-{
-    using namespace iris::atomdag;
-    // A (0 1 2), B shares A's edge 1-2 through its own coincident vertices 3 (= 2's position) and 4 (= 1's), reversed
-    // (a twin); C repeats A's edge 1-2 in the SAME direction (a flipped duplicate: never a twin of A); D is a third
-    // triangle on the reversed edge (an edge shared by more than two keeps every link).
-    const std::vector<float> pos = { 0, 0, 0,  1, 0, 0,  0, 1, 0,     // 0 1 2
-                                     0, 1, 0,  1, 0, 0,  1, 1, 0,     // 3 (=2) 4 (=1) 5
-                                     1, 0, 0,  0, 1, 0, -1, 1, 1,     // 6 (=1) 7 (=2) 8
-                                     0, 1, 0,  1, 0, 0,  1, 1, -1 };  // 9 (=2) 10 (=1) 11
-    const std::vector<unsigned> tris = { 0, 1, 2,  3, 4, 5,  6, 7, 8,  9, 10, 11 };
-    MeshView view;
-    view.positions = pos.data();
-    view.nv = pos.size() / 3;
-    const std::vector<unsigned> weld = weldByPosition(view);
-    CHECK_LOUD(weld[3] == weld[2] && weld[4] == weld[1] && weld[6] == weld[1] && weld[7] == weld[2],
-               "coincident unindexed vertices are one adjacency node (one weld id)");
-    CHECK_LOUD(weld[5] != weld[8], "distinct positions stay distinct");
-    EdgeTable table;
-    table.build(tris.data(), tris.size() / 3, weld);
-    std::set<unsigned> twinsOfA;
-    table.forTwins(weld[1], weld[2], [&](unsigned t, unsigned) { twinsOfA.insert(t); });
-    std::printf("   A's edge 1->2 is twinned by triangles:");
-    for (unsigned t : twinsOfA) std::printf(" %u", t);
-    std::printf("\n");
-    CHECK_LOUD(twinsOfA.count(1u) == 1, "B (the reversed edge through coincident vertices) is A's twin");
-    CHECK_LOUD(twinsOfA.count(3u) == 1, "D (a third triangle on the reversed edge) keeps its link");
-    CHECK_LOUD(twinsOfA.count(2u) == 0, "C (the same direction: a flipped duplicate) is not linked");
-    CHECK_LOUD(twinsOfA.count(0u) == 0, "a triangle is never its own twin");
-    // A seam inside a real mesh: the curved shell's 4 x 3 atlas splits vertices along every chart border; its leaves
-    // must still be built across the seams (a cluster holding triangles of two charts exists).
-    const iris::MeshPtr shell = curvedShell(625.0f, 4, 3);
-    iris::MeshBake::buildClusterDag(shell);
-    const MeshClusterDag &dag = shell->clusterDag;
-    const std::vector<unsigned> w = weldOf(shell);
-    int crossing = 0;
-    for (const auto &c : dag.clusters) {
-        if (c.refined >= 0) continue;
-        // two vertex ids at ONE position inside one leaf: the leaf spans a UV seam (the atlas splits ids, not positions)
-        std::set<unsigned> ids, welds;
-        for (int t = 0; t < int(c.triangleCount); ++t) for (int k = 0; k < 3; ++k) ids.insert(dag.vertexOf(c, t, k));
-        for (unsigned v : ids) welds.insert(w[v]);
-        if (welds.size() < ids.size()) ++crossing;   // two ids at one position inside one leaf: it spans a seam
-    }
-    std::printf("   curved shell (4x3 atlas): %d leaves, %d of them span a UV seam\n",
-                int(std::count_if(dag.clusters.begin(), dag.clusters.end(), [](const auto &c) { return c.refined < 0; })),
-                crossing);
-    CHECK_LOUD(crossing > 0, "leaves are built across UV seams (adjacency by position)");
-    return finish();
-}
-
-inline int bordersMove()
-{
-    int mergedBorders = 0;
-    for (const Subject &s : fixtures()) {
-        iris::MeshBake::ClusterDagStats st;
-        iris::MeshBake::ClusterDagOptions opt;
-        opt.wantGroups = opt.wantLocks = true;
-        iris::MeshBake::buildClusterDag(s.mesh, &st, opt);
-        const MeshClusterDag &dag = s.mesh->clusterDag;
-        if (dag.isEmpty()) { CHECK_LOUD(false, "the fixture has a DAG"); continue; }
-        const Reading rd(dag);
-        const std::vector<unsigned> weld = weldOf(s.mesh);
-        int compared = 0, mismatched = 0, merged = 0;
-        for (const iris::atomdag::GroupRecord &r : st.records) {
-            if (r.dagGroup < 0 || r.kind == 2) continue;
-            std::vector<int> members;
-            const std::vector<unsigned> ext = externalOf(dag, rd, weld, r.dagGroup, &members);
-            // the builder's lock set uses ITS weld (the first vertex at a position): translate both to positions
-            std::set<unsigned> mine(ext.begin(), ext.end()), theirs;
-            for (unsigned w : r.external) theirs.insert(weld[w]);
-            ++compared;
-            if (mine != theirs) ++mismatched;
-            // a border of the level below inside this group: two members produced by DIFFERENT groups sharing an edge
-            std::set<int> producers;
-            for (int c : members) producers.insert(dag.clusters.at(c).refined);
-            if (producers.size() > 1 && *producers.begin() >= 0) ++merged;
-        }
-        mergedBorders += merged;
-        std::printf("== %s: %d groups compared, %d lock sets differ from the recomputed external set; %d groups merge "
-                    "clusters of different producers (an old border now interior)\n", s.name, compared, mismatched, merged);
-        char msg[240];
-        std::snprintf(msg, sizeof(msg), "%s: every group locks exactly its recomputed external positions (%d differ)",
-                      s.name, mismatched);
-        CHECK_LOUD(mismatched == 0, msg);
-    }
-    CHECK_LOUD(mergedBorders > 0, "a level-k border falls inside a level-k+1 group somewhere (and is not locked there)");
-    return finish();
 }
 
 inline int ladderNeverForced()
@@ -714,11 +622,8 @@ inline int levelTableIsACut()
 
 inline int run(const QString &row)
 {
-    if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
-    if (row == QStringLiteral("borders_move")) return bordersMove();
     if (row == QStringLiteral("ladder_never_forced")) return ladderNeverForced();
     if (row == QStringLiteral("ends_empty")) return endsEmpty();
-    if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
     if (row == QStringLiteral("cards_merge_within_budget")) return cardsMergeWithinBudget();
     if (row == QStringLiteral("level_table_is_a_cut")) return levelTableIsACut();
