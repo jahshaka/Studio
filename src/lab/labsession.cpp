@@ -957,15 +957,15 @@ bool Session::stillness(const Command &c)
         grey(win.heat, win.heatW, win.heatH, win.name + "-heat", 32);
         grey(win.heatLate, win.heatW, win.heatH, win.name + "-heatlate", 32);
     }
-    // THE CLASS MAP in colour (rough grey, glossy blue, mirror white, foliage green, mover red; none black): what the
-    // rows are split by — a class, not an object, so a pillar before a wall is one grey with it.
+    // THE CLASS MAP in colour (plaster grey, rough brown, glossy blue, mirror white, foliage green, mover red; none
+    // black): what the rows are split by — a class, not an object, so a pillar before a wall is one grey with it.
     if (!spec.classes.empty()) {
-        static const QRgb kPalette[6] = { qRgb(0, 0, 0), qRgb(110, 110, 110), qRgb(60, 110, 230), qRgb(245, 245, 245),
-                                          qRgb(60, 190, 70), qRgb(220, 50, 40) };
+        static const QRgb kPalette[7] = { qRgb(0, 0, 0), qRgb(110, 110, 110), qRgb(150, 100, 60), qRgb(60, 110, 230),
+                                          qRgb(245, 245, 245), qRgb(60, 190, 70), qRgb(220, 50, 40) };
         QImage c(int(spec.classW), int(spec.classH), QImage::Format_RGB32);
         for (unsigned y = 0; y < spec.classH; ++y)
             for (unsigned x = 0; x < spec.classW; ++x)
-                c.setPixel(int(x), int(y), kPalette[std::min<unsigned>(5u, spec.classes[size_t(y) * spec.classW + x])]);
+                c.setPixel(int(x), int(y), kPalette[std::min<unsigned>(6u, spec.classes[size_t(y) * spec.classW + x])]);
         c.save(QDir(dir).filePath(QString::fromStdString(out + "-classes") + QStringLiteral(".png")), "PNG");
     }
     std::istringstream lines(rep.summary());

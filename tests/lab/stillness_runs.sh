@@ -4,7 +4,7 @@
 # then the `move` and `lamp` verbs. A fixture row: the door's SHAPE and its invariants, never a stillness bar (the bars
 # are the later stages' rows). It asserts: the verb prints a STILLNESS line per window and the path line; the TSV holds
 # a header and every window frame (2 x 21 rows); the walk window's mask is the gather's own history count and counts
-# pixels of every class the pose shows (rough, glossy, mirror, mover); the reflection count histogram came back for the
+# pixels of every class the pose shows (plaster, glossy, mirror, mover); the reflection count histogram came back for the
 # walk window; the move's GI rows were recorded; the teleport window counts every pixel; the scripted move and the lamp
 # step are accepted (the nothing-moved control is lab.stillness_control). On the rig's display, at 960x540 (the door's
 # cost is per pixel).
@@ -44,9 +44,9 @@ rows = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "row.tsv")
 assert len(rows) == 42, "every window frame is a row: %d" % len(rows)
 w = [r for r in rows if r["window"] == "walk"]
 assert [int(r["frame"]) for r in w] == list(range(21)), "the walk window frames 0..20"
-for c in ("rough", "glossy", "mirror", "mover"):
+for c in ("plaster", "glossy", "mirror", "mover"):
     assert int(w[1][c + "_px"]) > 0, "the walk window counts %s pixels" % c
-assert int(w[1]["all_px"]) >= sum(int(w[1][c + "_px"]) for c in ("rough", "glossy", "mirror", "foliage", "mover")), "all >= the classes"
+assert int(w[1]["all_px"]) >= sum(int(w[1][c + "_px"]) for c in ("plaster", "rough", "glossy", "mirror", "foliage", "mover")), "all >= the classes"
 assert any(int(r["glossy_refl_gt33"]) >= 0 for r in w[1:]), "the reflection count histogram came back"
 t = [r for r in rows if r["window"] == "teleport"]
 assert int(t[1]["all_px"]) == 960 * 540, "the teleport window counts every pixel: %s" % t[1]["all_px"]

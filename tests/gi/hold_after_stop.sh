@@ -66,7 +66,7 @@ fails = []
 w = window("room-sub")
 rows = sorted({n for r in w[1:] for n in rows_of(r)})
 h = held_from(w)
-over = [(int(r["frame"]), int(r["rough_max"])) for r in w[1:] if int(r["rough_max"]) > 1]
+over = [(int(r["frame"]), int(r["plaster_max"])) for r in w[1:] if int(r["plaster_max"]) > 1]
 print("room sub-cell: GI rows after the stop %s; held from frame %s; plaster frames over a code: %s" % (rows or "none", h, over[:6]))
 if rows: fails.append("room sub-cell: no GI row after the stop: %s" % rows)
 if h is None or h > 17: fails.append("room sub-cell: the gather held by frame 17: %s" % h)

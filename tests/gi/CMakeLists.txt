@@ -170,6 +170,35 @@ if(TARGET jahlab)
     set_tests_properties(gi.hit_list_demand PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.walk (PHOTON-7 stage 0, L6: THE WALK IS THE PRODUCT) — THE WALKING ROW: jahlab's stillness door on photon-court's
+# 15 m crossing and photon-glass's 2.4 m walk, each a LIVE and two GI-FROZEN walks on one warm cache (a prime session
+# first); M1 per class (live less frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and
+# the GPU clock PRINTED - the bars are the later stages'; it asserts only its instrument's laws: frozen = frozen, the arms
+# start equal, the classes cover the counted pixels (walk.sh says the laws and the base). 960x540; eight sessions:
+# court 7 + 3 x 370 frames, glass 7 + 3 x 710. ALL THE CARD'S SLOTS (TOKENS 8): its GPU clock is read alone.
+if(TARGET jahlab)
+    jah_gpu_row(gi.walk CLASS engine TOKENS 8 FRAMES 3254
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
+# gi.walk_bistro (PHOTON-7 stage 0) — THE WALKING ROW ON BISTRO EXTERIOR, A MEASURE (labelled `measure`, never gating;
+# tests/CMakeLists.txt JAH_MEASURE_ROWS): the same door and analysis (walk.sh --bistro) on the owner's model - a 4 m walk
+# of 90 frames then the fly back at 0.25 m a frame (16), live and frozen, M1 'all' (a model has no class map) and the
+# hitch law per part. Its OWN data root (the bake and Bistro's shader cache, never the fixtures'): JAH_LAB_BISTRO_ROOT at
+# run time, else the lab's default; SKIPS (77) when the model, the cached bake or a quiet card is missing.
+set(JAH_LAB_BISTRO_MODEL "$ENV{HOME}/Downloads/demo-scenes/amazon-lumberyard-bistro/prepared/BistroExterior.fbx"
+    CACHE FILEPATH "gi.walk_bistro's model (the owner's demo data)")
+if(TARGET jahlab)
+    jah_gpu_row(gi.walk_bistro CLASS engine TOKENS 8 FRAMES 1832
+        COLD "Bistro boots on its own data root's shader cache (the owner's demo data), never the fixtures' shared one"
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_bistro
+                --bistro ${JAH_LAB_BISTRO_MODEL} "$ENV{HOME}/.local/share/jahlab"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_bistro PROPERTIES TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+endif()
+
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36
 # frames, falling over 10-frame windows, then the hold, no burst) and photon-court's 15 m crossing (the change falling
