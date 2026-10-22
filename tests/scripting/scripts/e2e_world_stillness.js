@@ -2,8 +2,8 @@
 // a Bistro measurement drives). On a new project's default scene: a 0.5 m walk, the stop, a short window and the path
 // check. The ASSERTIONS are the door's SHAPE and its own invariants, never a picture: the verb answers ok with one
 // STILLNESS line per window plus the path line, the TSV exists, the window frames are the ones asked for, the class
-// split covers the rectangles, the walk window's mask is the gather's own when one runs, and a still view after a
-// window whose last GI row has landed holds (the gather's settle law: hold = the last row + the settle + 1, or never).
+// split covers the rectangles, the walk window's mask is the gather's own when one runs, and a still view holds at
+// the settle after the stop or after the field's last write (PHOTON-2 stage 2c's law; below).
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -39,11 +39,16 @@ assert(px.all > 0 && px.upper > 0 && px.lower > 0 && px.upper + px.lower === px.
 var st = world.giStatus();
 if (st.gather && st.gather.running === true)
     assert(r.windows[0].visibleFromGather === true, "the walk window's mask is the gather's own history count");
+// THE HOLD (PHOTON-2 stage 2c): the gather's rest key no longer folds the caches' budget rows, so a still view holds
+// at the settle after the stop (frame 17) while the field and the cards go on refining; only the field's LAST write
+// (or an edit) restarts the rest, after which it holds again a settle later - after the last row, when that write is
+// the window's last row.
 for (var w = 0; w < 2; ++w) {
     var win = r.windows[w];
     if (win.holdFrame >= 0)
-        assert(win.holdFrame > win.lastGiRowFrame, win.name + ": the hold comes after the last GI row (" +
-               win.holdFrame + " > " + win.lastGiRowFrame + ")");
+        assert(win.holdFrame <= 17 || win.holdFrame > win.lastGiRowFrame,
+               win.name + ": the hold is the stop's settle or comes after the last GI row (" + win.holdFrame +
+               ", last row " + win.lastGiRowFrame + ")");
 }
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
 assert(r.path.directEqual.length >= 1, "the path check read the cascades: " + JSON.stringify(r.path));
