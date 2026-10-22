@@ -378,6 +378,8 @@ AREA_RULES = [
     # THE WORLD MODES' TABLE, MOVED DOWN (LAB-1): irisgl/document/scenegraph/worldmodes.* is the file the line below
     # (src/services/worldmodes.) names at the ranges before the move — the same reach, ahead of the irisgl/document rules
     (r"^irisgl/document/scenegraph/worldmodes\.", ["hdr", "ssr", "looks", "*picture"], []),
+    # THE LAB (LAB-1; the merge read's F2): a jahlab change reaches the lab's rows
+    (r"^(src|scripts|tests)/lab/", ["lab"], []),
     (r"^irisgl/document/(physics|animation)/",
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
       "*headless-scripts"], ["node", "anim", "avatar", "player", "scene"]),

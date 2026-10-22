@@ -72,7 +72,7 @@ int envCheck(unsigned seed, const std::string &only)
                     a.hash.left(16).constData(), same ? "identical" : "DIFFERS", a.bakeHash.left(16).constData(),
                     baked ? " = rebaked" : " != REBAKED ", baked ? "" : again.bakeHash.left(16).constData(),
                     seeded ? "another hash" : "THE SAME HASH (the seed reaches nothing)");
-        bad += !(fast && same && baked && seeded);
+        bad += !(same && baked && seeded);   // the time is printed, never a bar (the merge read's F3: no wall-clock verdict in a row)
     }
     if (n == 0) { std::printf("ENV-CHECK: no environment '%s'\n", only.c_str()); return 1; }
     std::printf("ENV-CHECK %s (%d of %d red)\n", bad ? "FAILED" : "PASSED", bad, n);

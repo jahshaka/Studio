@@ -19,6 +19,7 @@
 // WHAT IT DOES NOT MODEL: the previous frame's pyramid (the dolly settles first), the late list's re-test, the boxes'
 // near-plane cases, the occluders' side faces (a nearer box's side face covers more than its front rectangle: the
 // prediction is the conservative side).
+#include <stdexcept>
 #include "envbuild.h"
 
 #include <algorithm>
@@ -68,6 +69,8 @@ Built build(unsigned seed, bool bake)
                 clash = clash || (x - wd * 0.5f < q.second.x() + 0.5f && x + wd * 0.5f > q.first.x() - 0.5f &&
                                   z0 < q.second.z() + 0.5f && z1 > q.first.z() - 0.5f);
             if (!clash) break;
+            if (attempt == 499) throw std::runtime_error("atom-occlusion: no overlap-free placement for building " + std::to_string(i)
+                                                   + " (the seed exhausts the field; 'wholly nearer' must stay a total order)");
         }
         placed.push_back({ iris::Vec3(x - wd * 0.5f, 0, -0.5f - behind - dp), iris::Vec3(x + wd * 0.5f, 0, -0.5f - behind) });
         const iris::Vec3 pos(x, 0, -0.5f - behind - dp * 0.5f);
@@ -167,6 +170,12 @@ std::vector<Prediction> expect(const Built &b, const Optics &o)
         const Rect &r = boxes[i].r;
         if (r.empty()) continue;   // off screen
         std::vector<Rect> cover = wall;   // the wall stands in front of every building
+        // THE GROUND NEARER THAN THIS BUILDING (the merge read's F1): no pitch, the eye above the ground — every screen row
+        // below the building's own foot row is a steeper ray that meets the ground (or a nearer box) before its near face
+        {
+            const float H = o.heightPixels, W = H * o.aspect;
+            if (r.y1 < H) cover.push_back(Rect{ 0.0f, r.y1, W, H });
+        }
         for (size_t j = 0; j < boxes.size(); ++j)
             if (j != i && !boxes[j].r.empty() && boxes[j].farZ < boxes[i].nearZ) cover.push_back(boxes[j].r);
         if (!covered(r, cover)) { ++visible; continue; }
