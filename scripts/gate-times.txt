@@ -60,6 +60,7 @@ frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3,
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
 gi.cascades_asan 23.23  quiet n=41
+gi.hold_after_stop 22.27  solo, the card lock held, :71, warm (PHOTON-2 stage 2, 2026-10-22; jahlab on photon-room and photon-court, 960x540, three sessions)
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.rayquery_asan 9.73  quiet n=41

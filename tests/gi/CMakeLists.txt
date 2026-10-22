@@ -157,3 +157,16 @@ set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
+
+# gi.hold_after_stop (PHOTON-2 stage 2) — THE GATHER HOLDS AFTER A STOP: jahlab's stillness door on photon-room (a walk
+# inside one lattice cell; a lamp step at rest: the field's change four samples deep within 2 passes) and on
+# photon-court (the 15 m crossing: the gather held by frame 17, the field's rows within one pass, the canopy <= 1
+# code a frame; the plaster's card-row frames reported). hold_after_stop.sh says the law and the base. 960x540; three
+# jahlab sessions: 392, 363 and 452 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 1207
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.hold_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
