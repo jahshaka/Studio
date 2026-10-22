@@ -6,12 +6,11 @@
 #   ROOM, a 1.2 m walk inside one lattice cell (the no-regression check): no GI row after the stop, the gather held
 #     by frame 17, the plaster's per-frame change <= 1 code from frame 1;
 #   ROOM, a lamp step 8 -> 12 at rest (f, J2): the field's change done within 36 frames of the step (Lumen's diffuse
-#     keeps 10 % at 24 frames, 1 % at 48), the per-frame change non-increasing over 10-frame windows to the hold
-#     (the tolerance is THIS row's own (rule R3; J5's 0.01 is the court's (a) only): each window's standard error from
-#     its own frames - the per-frame mean change's noise from its successive differences, sigma^2 = sum (m[i+1] -
-#     m[i])^2 / (2 (n - 1)), a slow trend cancels; the window's sigma / sqrt(n) - and a rise counts beyond 5 combined
-#     standard errors: the difference over its estimated error is Welch's t with ~18 degrees of freedom, P(t > 5) =
-#     5e-5, so the ~10 comparisons a run makes false-alarm under 0.1 %), then the hold, and 0 codes after it;
+#     keeps 10 % at 24 frames, 1 % at 48), the per-frame change non-increasing over 10-frame windows to the hold -
+#     THE RISE LAW, tests/support/rise_law.py (PHOTON-7 stage 0's read R2: one robust noise figure for the whole
+#     series, never a window's own, and every window judged against it, its mean and each of its frames - a burst of
+#     any length is a rise; the tolerance THIS row's own, rule R3; J5's 0.01 is the court's (a) only), then the hold,
+#     and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
 #     burst; (c) the hold <= the last frame the hold waited on + 17 (the door's hold_key: the gather's rest key moved -
@@ -35,6 +34,7 @@
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
+HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 ROOM=1.5,2,3,1.5,1.5,-4
 printf 'stillness teleport:0.3,2,3,0.3,1.5,-4/hold:300/walk:%s:30 60 out=room-sub\nquit\n' "$ROOM" > "$WD/room-sub.lab"
@@ -50,9 +50,11 @@ for run in room-sub:photon-room room-lamp:photon-room court-x:photon-court court
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($name) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$name.log" | head; tail -5 "$WD/$name.log"; exit 1; }
     grep '^LAB STILLNESS walk' "$WD/$name.log" | cut -c1-300
 done
-python3 -I - "$WD" <<'PY'
+python3 -I - "$WD" "$HERE/../support" <<'PY'
 import csv, os, re, sys
 wd = sys.argv[1]
+sys.path.insert(0, sys.argv[2])
+import rise_law
 def window(name, part="walk"):
     return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == part]
 def rows_of(r):
@@ -65,22 +67,7 @@ def windows_to(w, h):
     return [sum(chg[a:min(a + 10, end)]) / max(1, min(10, end - a)) for a in range(1, end, 10)]
 def rises_of(wins):   # J5: a rise beyond 0.01 code (the court's (a) only - the lead's ruling for that law)
     return [(i, round(wins[i], 3), round(wins[i + 1], 3)) for i in range(len(wins) - 1) if wins[i + 1] > wins[i] + 0.01]
-def windows_se(w, h):   # (f)'s windows with their own standard errors (R3: the row's own quantum, the header says how)
-    import math
-    chg = [float(r["all_mean"]) for r in w]
-    end = h if h is not None else len(w)
-    out = []
-    for a in range(1, end, 10):
-        m = chg[a:min(a + 10, end)]
-        n = len(m)
-        se = math.sqrt(sum((m[i + 1] - m[i]) ** 2 for i in range(n - 1)) / (2.0 * (n - 1)) / n) if n >= 2 else 0.0
-        out.append((sum(m) / n, se))
-    return out
-def rises_se(ws):   # a rise beyond 5 of the two windows' combined standard errors
-    import math
-    return [(i, round(ws[i][0], 4), round(ws[i + 1][0], 4), round(5.0 * math.hypot(ws[i][1], ws[i + 1][1]), 4))
-            for i in range(len(ws) - 1) if ws[i + 1][0] - ws[i][0] > 5.0 * math.hypot(ws[i][1], ws[i + 1][1])]
-fails = []
+fails = list(rise_law.selfcheck())   # the law's instrument first: the read's synthetic bursts are rises, a flat tail none
 # ROOM, the sub-cell walk
 w = window("room-sub")
 rows = sorted({n for r in w[1:] for n in rows_of(r)})
@@ -96,13 +83,15 @@ conv = [int(r["frame"]) for r in w if "ifd.converge" in rows_of(r)]
 done = max(conv) + 1 if conv else 0
 h = held_from(w)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
-lwins = windows_se(w, h)
-lrises = rises_se(lwins)
-print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 36); 10-frame windows (+- their standard error) %s; held from %s; frames changing after the hold: %d"
-      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, " ".join("%.4f+-%.4f" % x for x in lwins), h, len(after)))
+# (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
+spans, lwins, lsigma, lrises = rise_law.judge([float(r["all_mean"]) for r in w], 1, h if h is not None else len(w),
+                                              max(1e-4, 1.0 / max(1, int(w[1]["all_px"]))))
+print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 36); 10-frame windows (sqrt of the mean change; its noise %.5f) %s; held from %s; frames changing after the hold: %d"
+      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, lsigma, " ".join("%.4f" % x for x in lwins), h, len(after)))
 if not conv: fails.append("room lamp step: the field never integrated the change")
 elif done > 36: fails.append("(f) room lamp step: the field's change within 36 frames: %d" % done)
-if lrises: fails.append("(f) room lamp step: the change non-increasing over 10-frame windows (5 combined standard errors): rises (window, from, to, bound) %s" % lrises)
+if lrises: fails.append("(f) room lamp step: the change non-increasing to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
+                        % [(k, f, round(a, 4), round(b, 4), round(c, 4)) for k, f, a, b, c in lrises[:8]])
 if h is None: fails.append("(f) room lamp step: the picture never held")
 elif after: fails.append("(f) room lamp step: no change after the hold: %d frames from %d" % (len(after), after[0]))
 # COURT, the crossing
