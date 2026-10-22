@@ -17,7 +17,10 @@
 #   (pinned scroll) the pin moves cascade 0 by 2.8 m through the SCROLL path: placed where the pin says, and its store
 #                equal to a whole rebuild there within one step;
 #   (roof)       photon-roof at Epic, High, Medium and Low: the direct term of every floor voxel of every cascade under the
-#                plate (z < -3.2: the reference D_sun = 0) - 0 within one step.
+#                plate's interior (z < -3.2, |x| <= 8: the reference D_sun = 0) - 0 within one step. The interior is one
+#                outermost cell (1.875 m, world-anchored) inside the plate's x edges (+-10.32): a coarse voxel the edge
+#                crosses is part-covered at its own resolution (the store's resolution term, measured: the floor at
+#                |x| 9.45 under cascade 3's half-covered edge cell read 0.05), which is no placement's.
 # BAND-FREE (the shells' own law, SPECS/PHOTON_7_SPEC.md stage 1): a voxel's march over its own cascade's shell - D_k
 # (8 cells of the cascade: Epic 0.625 / 1.875 / 5.625 m), the hand-over to the next coarser cell plane (two of its cells)
 # and the face's offset in the voxel (one cell) - stays inside its box toward the sun at BOTH placements; inside the band
@@ -63,7 +66,7 @@ S
         echo "frames 4"
         for c in 0 1 2 3; do
             [ "$t" = low ] && [ $c -gt 1 ] && continue
-            echo "voxels $c direct r-$t-c$c.vox -9.5,-1.0,-9.5,9.5,1.0,-3.2"
+            echo "voxels $c direct r-$t-c$c.vox -8.0,-1.0,-9.5,8.0,1.0,-3.2"
         done
     done
     echo "quit"

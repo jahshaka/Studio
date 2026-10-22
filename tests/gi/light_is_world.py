@@ -76,20 +76,20 @@ def compare(arm, an, bn, cells, exclude=None, regions=None):
     centres, va, vb = j
     t = reach(a['cascade'], cells)
     m = band_free(a, centres, t) & band_free(b, centres, t)
-    m &= (np.max(va[:, :3], axis=1) > 0) | (np.max(vb[:, :3], axis=1) > 0)   # a voxel with light at either placement
+    m &= (va[:, 3] > 0) | (vb[:, 3] > 0)   # a voxel holding a surface at either placement (lit or in shadow)
     if exclude is not None:
         m &= ~exclude(centres)
     q = quantum(np.maximum(np.abs(va), np.abs(vb)))
     over = np.any(np.abs(va - vb) > q, axis=1) & m
     worst = float(np.max(np.abs(va - vb)[m] / q[m])) if m.any() else 0.0
     ratio = float(np.median(vb[m & (va[:, 0] > 0), 0] / va[m & (va[:, 0] > 0), 0])) if (m & (va[:, 0] > 0)).any() else 0.0
-    print('(%s) cascade %d, %s vs %s: %d band-free lit voxels compared (reach %.3f m), %d differ by more than one step '
+    print('(%s) cascade %d, %s vs %s: %d band-free surface voxels compared (reach %.3f m), %d differ by more than one step '
           '(worst %.1f steps; median ratio %.4f)' % (arm, a['cascade'], an, bn, int(m.sum()), t, int(over.sum()), worst, ratio))
     for name, region in (regions or {}).items():
         r = m & region(centres)
         print('   %s: %d compared, %d over one step' % (name, int(r.sum()), int((over & r).sum())))
     if not m.any():
-        fails.append('(%s) no band-free lit voxel to compare' % arm)
+        fails.append('(%s) no band-free surface voxel to compare' % arm)
     elif over.any():
         fails.append('(%s) %d band-free voxels of cascade %d differ between the placements by more than one RGBA16F step '
                      '(worst %.1f steps)' % (arm, int(over.sum()), a['cascade'], worst))
