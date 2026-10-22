@@ -1504,10 +1504,10 @@ static int lampMain(Engine *e, bool target)
     // both rows: it is the mechanism the clip row witnesses.
     {
         const GiVoxelStats vs = s->giVoxelStats(0);
-        std::printf("   THE VOXEL CACHE (%s %dx%dx%d, multiplier %.4f): emissive store %s peak "
+        std::printf("   THE VOXEL CACHE (%s %dx%dx%d): emissive store %s peak "
                     "%.4f, lit peak %.4f, peak direct %.4f over %lld lit voxels — the emitter's "
                     "authored radiance is %.2f\n",
-                    vs.format.c_str(), vs.width, vs.height, vs.depth, double(vs.multiplier),
+                    vs.format.c_str(), vs.width, vs.height, vs.depth,
                     vs.emissiveFormat.c_str(), double(vs.peakEmissive), double(vs.peak),
                     double(vs.peakDirect), (long long)vs.voxelsLit, kL);
     }

@@ -55,7 +55,7 @@ const std::vector<VerbDoc> &verbs()
           "ONE CASCADE'S VOXELS (PHOTON-7 stage 1; Scene::giVoxelVolume / giVoxelStats), read once the chain owes no "
           "voxel work (GiStatus::chainOwed; frames rendered while it does, cap 600): `stats` prints the cascade's "
           "GiVoxelStats; any other kind writes that level-0 array BY WORLD CELL to <data-root>/<file> - one JSON header "
-          "line (cascade, kind, res, origin, cell, multiplier, lo = the first voxel's WORLD cell index, dims) then "
+          "line (cascade, kind, res, origin, cell, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
           "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
         { "lights", "lights", 0, 0,

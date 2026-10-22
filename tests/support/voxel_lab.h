@@ -199,16 +199,15 @@ inline void fromSplit(Cascade &c, const int dims[3], const float o[3], const flo
     buildChain(c);
 }
 
-/// A store dump (tests/support/voxeldump.h, JAH_VOXEL_DUMP): dims, origin, cell, multiplier,
-/// then per texel RGBA float: coverage+, coverage-, position+, position-.
+/// A store dump (tests/support/voxeldump.h, JAH_VOXEL_DUMP): dims, origin, cell, then per texel
+/// RGBA float: coverage+, coverage-, position+ (cell-relative at level 0), position-.
 inline bool loadDump(const std::string &path, Cascade &c)
 {
     FILE *f = std::fopen(path.c_str(), "rb");
     if (!f) return false;
     int dims[3];
-    float o[3], ce[3], m;
-    bool ok = std::fread(dims, 4, 3, f) == 3 && std::fread(o, 4, 3, f) == 3 && std::fread(ce, 4, 3, f) == 3 &&
-              std::fread(&m, 4, 1, f) == 1;
+    float o[3], ce[3];
+    bool ok = std::fread(dims, 4, 3, f) == 3 && std::fread(o, 4, 3, f) == 3 && std::fread(ce, 4, 3, f) == 3;
     const size_t n = ok ? size_t(dims[0]) * dims[1] * dims[2] : 0;
     std::vector<float> buf[4];
     for (int i = 0; ok && i < 4; ++i) { buf[i].resize(n * 4); ok = std::fread(buf[i].data(), 4, n * 4, f) == n * 4; }

@@ -29,10 +29,10 @@ inline D3 cross(D3 a, D3 b) { return D3{ a.y * b.z - a.z * b.y, a.z * b.x - a.x 
 inline double len(D3 a) { return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
 inline double comp(D3 a, int i) { return i == 0 ? a.x : (i == 1 ? a.y : a.z); }
 
-/// A store: the light (radiance x c, k units), c and the coverage per half-axis, on a lattice.
+/// A store: the light (radiance x c), c and the coverage per half-axis, on a lattice.
 struct Store {
     int W = 0, H = 0, D = 0;
-    double origin[3] = { 0, 0, 0 }, cell = 0, k = 1;
+    double origin[3] = { 0, 0, 0 }, cell = 0;
     std::vector<float> light;     ///< rgba per voxel (rgb only read)
     std::vector<float> cov[2];    ///< [0] the faces looking +a, [1] -a: O_x O_y O_z c per voxel
     /// LEVEL 0 PER SIDE (PHOTON-VOXEL-5; empty on a Low volume): the back side's light and the
@@ -59,7 +59,6 @@ inline Store fromGpu(const GiVoxelVolume &v)
     s.W = v.width; s.H = v.height; s.D = v.depth;
     for (int a = 0; a < 3; ++a) s.origin[a] = v.origin[a];
     s.cell = v.cell[0];
-    s.k = v.multiplier;
     s.light = v.light;
     s.lightBack = v.lightBack;
     s.normal = v.normal;
@@ -103,7 +102,6 @@ inline double clipArea(const Tri &t, const D3 &lo, const D3 &hi)
 inline Store modelStore(const Store &ref, const std::vector<Tri> &tris, double alpha)
 {
     Store s = ref;
-    s.k = 1.0;
     std::fill(s.light.begin(), s.light.end(), 0.f);
     for (int h = 0; h < 2; ++h) s.cov[h].assign(s.light.size(), 0.f);
     std::vector<double> sum[2] = { std::vector<double>(s.light.size(), 0.0), std::vector<double>(s.light.size(), 0.0) };
@@ -149,14 +147,14 @@ inline Store modelStore(const Store &ref, const std::vector<Tri> &tris, double a
 }
 
 /// FLUX along each axis, both halves: sum of radiance x (O_a+ + O_a-) x cell^2 (radiance
-/// = colour / c / k).
+/// = colour / c).
 inline void flux(const Store &s, double out[3])
 {
     out[0] = out[1] = out[2] = 0;
     for (size_t i = 0; i < s.light.size(); i += 4) {
         const double c = s.cov[0][i + 3];
         if (c <= 0) continue;
-        const double rad = (s.light[i] + s.light[i + 1] + s.light[i + 2]) / 3.0 / s.k / c;
+        const double rad = (s.light[i] + s.light[i + 1] + s.light[i + 2]) / 3.0 / c;
         for (int a = 0; a < 3; ++a) out[a] += rad * (s.cov[0][i + a] + s.cov[1][i + a]) * s.cell * s.cell;
     }
 }
@@ -193,7 +191,7 @@ inline double march(const Store &s, D3 o, D3 d, double tMax, double &opacity, in
                 const double wt = ((q & 1) ? f[0] : 1 - f[0]) * (((q >> 1) & 1) ? f[1] : 1 - f[1]) *
                                   (((q >> 2) & 1) ? f[2] : 1 - f[2]);
                 const size_t i = s.at(ix, iy, iz);
-                col += wt * (s.light[i] + s.light[i + 1] + s.light[i + 2]) / 3.0 / s.k;
+                col += wt * (s.light[i] + s.light[i + 1] + s.light[i + 2]) / 3.0;
                 c += wt * s.cov[0][i + 3];
                 // a RAY is stopped by any face it crosses: both halves, capped per texel
                 for (int a = 0; a < 3; ++a) O[a] += wt * std::min(1.0f, s.cov[0][i + a] + s.cov[1][i + a]);

@@ -2946,7 +2946,6 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.width = st.width; out.height = st.height; out.depth = st.depth;
     out.format = QString::fromStdString(st.format);
     out.formatMax = st.formatMax;
-    out.multiplier = st.multiplier;
     out.peak = st.peak;
     out.peakDirect = st.peakDirect;
     out.meanLit = st.meanLit;

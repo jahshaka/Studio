@@ -1154,12 +1154,10 @@ bool Session::voxels(const Command &c)
     if (kind == "stats") {
         const GiVoxelStats st = mScene->giVoxelStats(int(ci));
         if (!st.available) { std::printf("LAB VOXELS FAILED: no stats for cascade %ld\n", ci); return false; }
-        std::printf("LAB VOXELS STATS cascade %d %dx%dx%d format %s multiplier %.6g peak %.6g peakDirect %.6g (true radiance: "
-                    "%.6g / %.6g) meanLit %.6g lit %lld atMax %lld directAtMax %lld aboveOne %lld peakEmissive %.6g light %s "
-                    "direct %s store %s (waited %d frames)\n",
-                    st.cascade, st.width, st.height, st.depth, st.format.c_str(), st.multiplier, st.peak, st.peakDirect,
-                    st.multiplier > 0.0f ? st.peak / st.multiplier : 0.0f,
-                    st.multiplier > 0.0f ? st.peakDirect / st.multiplier : 0.0f, st.meanLit, st.voxelsLit,
+        std::printf("LAB VOXELS STATS cascade %d %dx%dx%d format %s peak %.6g peakDirect %.6g (radiance) meanLit %.6g lit %lld "
+                    "atMax %lld directAtMax %lld aboveOne %lld peakEmissive %.6g light %s direct %s store %s (waited %d "
+                    "frames)\n",
+                    st.cascade, st.width, st.height, st.depth, st.format.c_str(), st.peak, st.peakDirect, st.meanLit, st.voxelsLit,
                     st.voxelsAtMax, st.directAtMax, st.voxelsAboveOne, st.peakEmissive, st.lightDigest.c_str(),
                     st.directDigest.c_str(), st.storeDigest.c_str(), waited);
         return true;
@@ -1206,7 +1204,7 @@ bool Session::voxels(const Command &c)
     out.precision(9);
     out << "{\"cascade\":" << ci << ",\"kind\":\"" << kind << "\",\"res\":[" << res[0] << "," << res[1] << "," << res[2]
         << "],\"origin\":[" << v.origin[0] << "," << v.origin[1] << "," << v.origin[2] << "],\"cell\":[" << v.cell[0]
-        << "," << v.cell[1] << "," << v.cell[2] << "],\"multiplier\":" << v.multiplier << ",\"lo\":[" << base[0] + lo[0]
+        << "," << v.cell[1] << "," << v.cell[2] << "],\"lo\":[" << base[0] + lo[0]
         << "," << base[1] + lo[1] << "," << base[2] + lo[2] << "],\"dims\":[" << hi[0] - lo[0] << "," << hi[1] - lo[1]
         << "," << hi[2] - lo[2] << "]}\n";
     double peak = 0.0;
@@ -1222,9 +1220,9 @@ bool Session::voxels(const Command &c)
             }
     const bool ok = bool(out);
     std::printf("LAB VOXELS cascade %ld %s origin %.4f,%.4f,%.4f cell %.6f res %dx%dx%d world lo %lld,%lld,%lld dims %dx%dx%d "
-                "peak %.6g nonzero %lld multiplier %.6g (waited %d frames) -> %s\n",
+                "peak %.6g nonzero %lld (waited %d frames) -> %s\n",
                 ci, kind.c_str(), v.origin[0], v.origin[1], v.origin[2], v.cell[0], res[0], res[1], res[2], base[0] + lo[0],
-                base[1] + lo[1], base[2] + lo[2], hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], peak, nonzero, v.multiplier,
+                base[1] + lo[1], base[2] + lo[2], hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], peak, nonzero,
                 waited, qPrintable(path));
     return ok;
 }

@@ -1,6 +1,6 @@
 """gi.light_is_world's judge (PHOTON-7 stage 1; light_is_world.sh says the arms, the band and the base).
 
-A dump (the lab's `voxels <c> direct <file>`): one JSON header line {cascade, kind, res, origin, cell, multiplier, lo, dims}
+A dump (the lab's `voxels <c> direct <file>`): one JSON header line {cascade, kind, res, origin, cell, lo, dims}
 then dims x RGBA float32, x fastest; voxel (i, j, k) of the dump is WORLD cell lo + (i, j, k), its centre
 (world cell + 0.5) x cell. Two dumps of one cascade are joined on the world cell.
 THE QUANTUM: the direct volume is RGBA16F - one step at a value x is 2^(floor(log2 x) - 10) (2^-24 under the normal range);

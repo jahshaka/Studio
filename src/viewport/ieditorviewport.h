@@ -1001,8 +1001,8 @@ public:
     /// never on a frame path; `available` false means there is no engine to
     /// ask, no VCT arm on the scene, or no such cascade.
     ///
-    /// Every value is in the STORE's own normalised units (scene radiance
-    /// times `multiplier`), because the question it answers is about the
+    /// Every value is scene radiance (what the store holds: PHOTON-7 stage 1
+    /// deleted the per-cascade normalisation), because the question it answers is about the
     /// STORE: does the bounce's fixed point fit in the format.
     struct GiVoxelStatsInfo {
         bool    available = false;
@@ -1010,15 +1010,14 @@ public:
         int     width = 0, height = 0, depth = 0;
         QString format;            ///< the total volume's pixel format, Ogre's spelling
         float   formatMax = 0.0f;  ///< 1.0 for a UNORM store; 0 = a float one (no ceiling)
-        float   multiplier = 0.0f; ///< k: a voxel holds k times the surface's radiance
         float   peak = 0.0f;       ///< peak channel of the TOTAL volume
-        float   peakDirect = 0.0f; ///< ...and of the DIRECT one (<= 1/headroom by construction)
+        float   peakDirect = 0.0f; ///< ...and of the DIRECT one
         double  meanLit = 0.0;     ///< mean channel maximum over lit voxels
         qint64  voxelsLit = 0;
         qint64  voxelsAtMax = 0;   ///< on the format's top bin: on a UNORM total this IS the clip
         qint64  directAtMax = 0;
         qint64  voxels = 0;
-        qint64  voxelsAboveOne = 0;///< above 1.0 in store units — what an 8-bit store would clip
+        qint64  voxelsAboveOne = 0;///< above 1.0 — what an 8-bit store would clip
         /// THE SOURCE the injection seeds the volumes above from (VOXEL-CLIP-1):
         /// the voxeliser's emissive store, in SCENE RADIANCE (no normalisation).
         /// `emissiveFormat` empty = this cascade has no voxeliser to read.

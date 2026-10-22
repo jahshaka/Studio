@@ -27,7 +27,6 @@ inline void dumpVoxelStore(jahshaka::engine::Scene *s, const char *tag)
         std::fwrite(dims, sizeof(int), 3, f);
         std::fwrite(v.origin, sizeof(float), 3, f);
         std::fwrite(v.cell, sizeof(float), 3, f);
-        std::fwrite(&v.multiplier, sizeof(float), 1, f);
         std::fwrite(v.coverageP.data(), sizeof(float), v.coverageP.size(), f);
         std::fwrite(v.coverageN.data(), sizeof(float), v.coverageN.size(), f);
         std::fwrite(v.positionP.data(), sizeof(float), v.positionP.size(), f);
