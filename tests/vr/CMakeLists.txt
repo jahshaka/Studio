@@ -92,9 +92,9 @@ set_tests_properties(vr.mirror_live PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
-# vr.hit_list_stereo (PHOTON-2 stage 2's tail, 1.6 A2) — THE STEREO VIEW'S HIT LIST HOLDS BOTH EYES' DEMAND: a live
-# session against Monado with every gather ray a hit record (gather.decodeHits); after 24 eye frames of growth no record
-# is dropped, the list holds the demand and is sized from it (e2e_vr_hit_list.js says the law and the base).
+# vr.hit_list_stereo (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: per live view) — THE STEREO VIEW'S HIT LIST
+# HOLDS BOTH EYES' DEMAND: a live session against Monado with every gather ray a hit record (gather.decodeHits); after
+# 24 eye frames of growth no live view's list drops a record (e2e_vr_hit_list.js says the law and the base).
 set(_vr_hit_home "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home")
 jah_gpu_row(vr.hit_list_stereo CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
