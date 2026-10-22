@@ -7,7 +7,11 @@
 #     by frame 17, the plaster's per-frame change <= 1 code from frame 1;
 #   ROOM, a lamp step 8 -> 12 at rest (f, J2): the field's change done within 36 frames of the step (Lumen's diffuse
 #     keeps 10 % at 24 frames, 1 % at 48), the per-frame change non-increasing over 10-frame windows to the hold
-#     (0.01-code tolerance, J5), then the hold, and 0 codes after it;
+#     (the tolerance is THIS row's own (rule R3; J5's 0.01 is the court's (a) only): each window's standard error from
+#     its own frames - the per-frame mean change's noise from its successive differences, sigma^2 = sum (m[i+1] -
+#     m[i])^2 / (2 (n - 1)), a slow trend cancels; the window's sigma / sqrt(n) - and a rise counts beyond 5 combined
+#     standard errors: the difference over its estimated error is Welch's t with ~18 degrees of freedom, P(t > 5) =
+#     5e-5, so the ~10 comparisons a run makes false-alarm under 0.1 %), then the hold, and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
 #     burst; (c) the hold <= the last frame the hold waited on + 17 (the door's hold_key: the gather's rest key moved -
@@ -59,8 +63,23 @@ def windows_to(w, h):
     chg = [float(r["all_mean"]) for r in w]
     end = h if h is not None else len(w)
     return [sum(chg[a:min(a + 10, end)]) / max(1, min(10, end - a)) for a in range(1, end, 10)]
-def rises_of(wins):   # J5: a rise beyond 0.01 code
+def rises_of(wins):   # J5: a rise beyond 0.01 code (the court's (a) only - the lead's ruling for that law)
     return [(i, round(wins[i], 3), round(wins[i + 1], 3)) for i in range(len(wins) - 1) if wins[i + 1] > wins[i] + 0.01]
+def windows_se(w, h):   # (f)'s windows with their own standard errors (R3: the row's own quantum, the header says how)
+    import math
+    chg = [float(r["all_mean"]) for r in w]
+    end = h if h is not None else len(w)
+    out = []
+    for a in range(1, end, 10):
+        m = chg[a:min(a + 10, end)]
+        n = len(m)
+        se = math.sqrt(sum((m[i + 1] - m[i]) ** 2 for i in range(n - 1)) / (2.0 * (n - 1)) / n) if n >= 2 else 0.0
+        out.append((sum(m) / n, se))
+    return out
+def rises_se(ws):   # a rise beyond 5 of the two windows' combined standard errors
+    import math
+    return [(i, round(ws[i][0], 4), round(ws[i + 1][0], 4), round(5.0 * math.hypot(ws[i][1], ws[i + 1][1]), 4))
+            for i in range(len(ws) - 1) if ws[i + 1][0] - ws[i][0] > 5.0 * math.hypot(ws[i][1], ws[i + 1][1])]
 fails = []
 # ROOM, the sub-cell walk
 w = window("room-sub")
@@ -77,13 +96,13 @@ conv = [int(r["frame"]) for r in w if "ifd.converge" in rows_of(r)]
 done = max(conv) + 1 if conv else 0
 h = held_from(w)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
-lwins = windows_to(w, h)
-lrises = rises_of(lwins)
-print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 36); 10-frame windows %s; held from %s; frames changing after the hold: %d"
-      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, " ".join("%.3f" % x for x in lwins), h, len(after)))
+lwins = windows_se(w, h)
+lrises = rises_se(lwins)
+print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 36); 10-frame windows (+- their standard error) %s; held from %s; frames changing after the hold: %d"
+      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, " ".join("%.4f+-%.4f" % x for x in lwins), h, len(after)))
 if not conv: fails.append("room lamp step: the field never integrated the change")
 elif done > 36: fails.append("(f) room lamp step: the field's change within 36 frames: %d" % done)
-if lrises: fails.append("(f) room lamp step: the change non-increasing over 10-frame windows (0.01 tolerance): rises %s" % lrises)
+if lrises: fails.append("(f) room lamp step: the change non-increasing over 10-frame windows (5 combined standard errors): rises (window, from, to, bound) %s" % lrises)
 if h is None: fails.append("(f) room lamp step: the picture never held")
 elif after: fails.append("(f) room lamp step: no change after the hold: %d frames from %d" % (len(after), after[0]))
 # COURT, the crossing

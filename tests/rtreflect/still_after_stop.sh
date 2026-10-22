@@ -10,7 +10,11 @@
 # jah_reflect_rest.glsl), converges PER TEXEL until its answer has changed under a code for 8 frames, then STOPS
 # tracing; the view HOLDS - bit-still - when no texel is left or at 512 rest frames (K_max):
 #   (a) from frame 17 the glossy per-frame mean change <= 0.05 codes and DECREASING over 10-frame windows to the hold
-#       (J5's measurement tolerance: a window may exceed the one before by at most 0.01 code);
+#       (the tolerance is THIS row's own, rule R3 - J5's 0.01 was the gather's, carried here unruled: each window's
+#       standard error from its own frames, the per-frame mean change's noise from its successive differences,
+#       sigma^2 = sum (m[i+1] - m[i])^2 / (2 (n - 1)) so a slow trend cancels, the window's sigma / sqrt(n); a rise
+#       counts beyond 5 combined standard errors - Welch's t with ~18 degrees of freedom, P(t > 5) = 5e-5, so the ~50
+#       comparisons to a K_max hold false-alarm under 0.3 %);
 #   (b) from the HOLD frame on the glossy panes and the mirror change 0 codes, the hold at <= 513 rest frames (K_max
 #       512, the view holding on the frame after it);
 #   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
@@ -41,7 +45,7 @@ for run in run; do
 done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 python3 -I - "$WD" "$WIN" <<'PY'
-import csv, os, re, sys
+import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])
 fails = []
 def window(name, which="walk"):
@@ -71,12 +75,20 @@ if rows:
     elif rest > 513: fails.append("(b) the hold at <= 513 rest frames: %d" % rest)
     end = hold if held else len(rows)
     starts = list(range(17, end, 10))
-    win10 = [sum(float(rows[i]["glossy_mean"]) for i in range(a, min(a + 10, end))) / min(10, end - a) for a in starts]
+    win10, se10 = [], []
+    for a in starts:
+        m = [float(rows[i]["glossy_mean"]) for i in range(a, min(a + 10, end))]
+        n = len(m)
+        win10.append(sum(m) / n)
+        se10.append(math.sqrt(sum((m[i + 1] - m[i]) ** 2 for i in range(n - 1)) / (2.0 * (n - 1)) / n) if n >= 2 else 0.0)
     print("(a) glossy mean change, 10-frame windows from 17 to the hold: %s" % " ".join("%.4f" % w for w in win10))
     over = [(a, w) for a, w in zip(starts, win10) if w > 0.05]
     if over: fails.append("(a) <= 0.05 codes from frame 17: %s" % " ".join("%d:%.4f" % x for x in over))
-    rising = [(starts[i + 1], win10[i], win10[i + 1]) for i in range(len(win10) - 1) if win10[i + 1] > win10[i] + 0.01]
-    if rising: fails.append("(a) decreasing to the hold: rises at %s" % " ".join("%d:%.4f->%.4f" % x for x in rising))
+    bound = [5.0 * math.hypot(se10[i], se10[i + 1]) for i in range(len(win10) - 1)]
+    print("(a) a rise's bound (5 combined standard errors of the two windows): %s" % " ".join("%.5f" % b for b in bound))
+    rising = [(starts[i + 1], win10[i], win10[i + 1], bound[i]) for i in range(len(win10) - 1)
+              if win10[i + 1] - win10[i] > bound[i]]
+    if rising: fails.append("(a) decreasing to the hold: rises at %s" % " ".join("%d:%.4f->%.4f (bound %.5f)" % x for x in rising))
     mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
     print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
     if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
