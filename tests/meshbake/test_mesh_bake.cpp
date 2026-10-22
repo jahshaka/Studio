@@ -931,123 +931,6 @@ static void storeIntegration()
 }
 
 // ---------------------------------------------------------------------------
-// 7. THE ATOM LOD CHAIN (SPECS/NANITE_SPEC.md §7).
-//
-// Three separate claims, and they fail in different ways:
-//   (a) the POLICY — which meshes get a chain and what it looks like;
-//   (b) the SERIALIZER — the chain survives the blob byte for byte, because a
-//       level that comes back subtly different draws holes at a distance and
-//       nothing else in the tree would notice;
-//   (c) the CONTRACT the LOD levels are consumed through, MeshData::
-//       lodForWorldError — Photon's voxelizer and its far-field proxy pick a
-//       level with it, and "the coarsest level whose error is below this cell
-//       size" has to mean exactly that at both ends of the range.
-// ---------------------------------------------------------------------------
-
-static void lodChain()
-{
-    // (a) THE POLICY, on a mesh that has one: the shipped gizmo sphere.
-    const QString spherePath = fixture(QStringLiteral("app/models/axis_sphere.obj"));
-    QTemporaryDir staging;
-    iris::MeshBake::Model model = iris::MeshBake::buildFromFile(
-        spherePath, iris::MeshBake::fingerprintFor(QStringLiteral("lodchain")), staging.path());
-    CHECK_LOUD(model.valid && !model.meshes.isEmpty(), "the LOD fixture baked");
-    if (!model.valid || model.meshes.isEmpty()) return;
-
-    const iris::MeshPtr &mesh = model.meshes.first();
-    CHECK_LOUD(mesh->lodIndices.size() >= 2, "a 960-triangle mesh gets a chain of at least two levels");
-    CHECK_LOUD(mesh->lodIndices.size() == mesh->lodErrors.size(),
-               "every level carries exactly one error");
-    const int baseTris = mesh->getIndexBuffer() ? mesh->getIndexBuffer()->dataSize / 12 : 0;
-    int previousTris = baseTris;
-    float previousError = 0.0f;
-    bool ordered = baseTris > 0;
-    for (int i = 0; i < mesh->lodIndices.size(); ++i) {
-        const int tris = int(mesh->lodIndices.at(i).size()) / 3;
-        if (tris >= previousTris || mesh->lodErrors.at(i) <= previousError) ordered = false;
-        // A level indexes the ORIGINAL vertex buffer — that is what keeps every
-        // level of a mesh inside one draw call, and a level naming a vertex the
-        // mesh does not have would draw garbage the moment the camera backs off.
-        for (quint32 v : mesh->lodIndices.at(i))
-            if (int(v) >= mesh->numVerts) { ordered = false; break; }
-        previousTris = tris;
-        previousError = mesh->lodErrors.at(i);
-    }
-    CHECK_LOUD(ordered, "levels get coarser and their errors grow, monotonically");
-    CHECK_LOUD(mesh->lodErrors.first() > 0.0f, "the first level's error is a real length, not zero");
-
-    // THE CHAIN ENDS ON A RULE ABOUT THE CONTENT, NOT ON A LEVEL COUNT (ATOM-3
-    // A6). `kMaxLevels` used to stop every chain at four levels — 1/16 of the
-    // triangles, whatever the asset — so no model had a far-field proxy. The
-    // chain now halves until the TRIANGLE FLOOR (kMinTriangles = 128, which is
-    // also Nanite's root cluster), until a level cannot shed 15 %, or until the
-    // error passes 5 % of the extent. This fixture is small enough that the
-    // floor is what stops it: its coarsest level cannot be halved again.
-    const int coarsestTris = mesh->lodIndices.isEmpty()
-                                 ? 0 : int(mesh->lodIndices.last().size()) / 3;
-    CHECK_LOUD(coarsestTris > 0 && coarsestTris < 2 * 128,
-               ("the chain ran down to the triangle floor, not to a level count (coarsest level " +
-                std::to_string(coarsestTris) + " triangles)").c_str());
-
-    // (b) THE SERIALIZER: through the blob and back, byte for byte.
-    const QString blob = QDir(staging.path()).filePath(QStringLiteral("lod.jmb"));
-    QString err;
-    CHECK_LOUD(iris::MeshBake::write(blob, model, &err), "the chain serialized");
-    iris::MeshBake::Model read = iris::MeshBake::read(blob);
-    CHECK_LOUD(read.valid && !read.meshes.isEmpty(), "and read back");
-    if (read.valid && !read.meshes.isEmpty()) {
-        const iris::MeshPtr &back = read.meshes.first();
-        bool identical = back->lodIndices.size() == mesh->lodIndices.size() &&
-                         back->lodErrors.size() == mesh->lodErrors.size();
-        for (int i = 0; identical && i < mesh->lodIndices.size(); ++i)
-            identical = back->lodIndices.at(i) == mesh->lodIndices.at(i) &&
-                        back->lodErrors.at(i) == mesh->lodErrors.at(i);
-        CHECK_LOUD(identical, "every level survives the blob byte for byte");
-    }
-
-    // (a2) A MESH THAT MUST NOT GET ONE. The axis cube is far below the point
-    // where a level saves anything, and a chain there would cost a buffer, a
-    // VAO and a switch for nothing.
-    iris::MeshBake::Model cube = iris::MeshBake::buildFromFile(
-        fixture(QStringLiteral("app/models/axis_cube.obj")),
-        iris::MeshBake::fingerprintFor(QStringLiteral("lodcube")), staging.path());
-    if (cube.valid && !cube.meshes.isEmpty()) {
-        CHECK_LOUD(cube.meshes.first()->lodIndices.isEmpty(),
-                   "a mesh too small to simplify gets NO chain (not a fake level)");
-    }
-
-    // (a3) THE CHAIN BUILDER IS IDEMPOTENT: asking twice must not append a
-    // second chain to the same mesh.
-    const int before = int(mesh->lodIndices.size());
-    iris::MeshBake::buildLodChain(mesh);
-    CHECK_LOUD(int(mesh->lodIndices.size()) == before,
-               "buildLodChain replaces the chain, it does not append to it");
-
-    // (c) THE CONSUMER CONTRACT (the hand-off Photon reads): the coarsest level
-    // whose MEASURED BOUND is below a world-space cell size. The rule reads
-    // `lodBounds` and not `lodErrors` since ATOM-BAKE-1 (AT-A5) — which this
-    // case now proves by giving the two arrays DIFFERENT numbers and asserting
-    // the answers follow the bounds.
-    jahshaka::engine::MeshData data;
-    data.positions.assign(9, 0.0f);
-    data.indices = { 0, 1, 2 };
-    data.lodIndices = { { 0, 1, 2 }, { 0, 1, 2 }, { 0, 1, 2 } };
-    data.lodBounds = { 0.01f, 0.05f, 0.20f };
-    data.lodErrors = { 1.0f, 2.0f, 3.0f };   // deliberately absurd: nothing may read these
-    CHECK_LOUD(data.lodForWorldError(0.005f) == 0,
-               "a cell finer than every level's bound asks for the finest level");
-    CHECK_LOUD(data.lodForWorldError(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
-    CHECK_LOUD(data.lodForWorldError(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
-    CHECK_LOUD(data.lodForWorldError(10.0f) == 3, "a cell coarser than every level takes the coarsest");
-    CHECK_LOUD(data.lodForWorldError(0.0f) == 0 && data.lodForWorldError(-1.0f) == 0,
-               "a non-positive cell size means the finest, never a wrap-around");
-    jahshaka::engine::MeshData plain;
-    plain.indices = { 0, 1, 2 };
-    CHECK_LOUD(plain.lodForWorldError(100.0f) == 0,
-               "a mesh with no chain is level 0 at every cell size");
-}
-
-// ---------------------------------------------------------------------------
 // 8. SURFACE CARDS (SPECS/SURFACE_CACHE_ASSESSMENT.md §2/§7 phase 1) — the
 //    `meshbake.cards` (archived: archive/tests/meshbake) suite.
 //
@@ -1444,94 +1327,6 @@ static void surfaceCards()
     }
 }
 
-
-// ---------------------------------------------------------------------------
-// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — an arm of the `atom.lod_bound_bar` (archived: archive/tests/atom) suite
-// (`--bound-bar` runs it after the bar, section 14).
-//
-// THE CLAIM UNDER TEST, in one sentence: for every level of every shipped mesh,
-// no point of that level's surface lies further from level 0's surface than the
-// length the bake stored — measured INDEPENDENTLY of the bake's own sampler.
-//
-// WHAT THIS IS, SAID ACCURATELY. It is a REGRESSION CHECK, not an independent
-// derivation: `checkLodBounds` re-measures at 8x the area samples, at strata the bake
-// never used, plus the SAME exact removed-vertex walk, under the same island caps and
-// without the margin. Where the exact vertex term carries the maximum (the dragon,
-// the endless plane, most levels since ATOM-LOD-BOUND-1 stopped multiplying that
-// exact term by the sampling margin) the check reproduces the stored number and reads
-// 1.0000; where the sampled term carries it, the ratio is the dense samples against
-// 1.25x the bake's (0.80-0.90 on the shipped meshes), which is the margin being judged.
-// `flat_grid_100m.obj` (the old 100 m ground plane, kept here as a test subject) reads ~0.20 because its bound is the precision floor. The physics bar —
-// bound >= the dense reference AND <= 2x the simplifier's error — is
-// atom.lod_bound_bar (archived: archive/tests/atom); `test_mesh_bake --bound-terms <file>` prints a chain's terms.
-//
-// WHAT IT ADDS TO THE BAR: the same dense re-measure through the BAKE's own route
-// (`MeshBake::buildFromFile`, where the bar loads through testmesh::parseFile), one bound and
-// one quadric per level, the bounds non-decreasing, and the ratio table.
-//
-// AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
-// over-state as easily as it under-states — it is a different quantity, not a
-// looser version of this one — so the suite REPORTS the ratio and pins nothing.
-// The ratio table is the evidence AT-A5 was missing.
-static void errorBound()
-{
-    struct Row { QString path; };
-    const QVector<Row> subjects = {
-        { QStringLiteral("app/content/primitives/sphere.obj") },
-        { QStringLiteral("app/content/primitives/hp_sphere.obj") },
-        { QStringLiteral("app/content/primitives/capsule.obj") },
-        { QStringLiteral("app/content/primitives/torus.obj") },
-        { QStringLiteral("app/content/primitives/hemisphere.obj") },
-        { QStringLiteral("app/content/primitives/teapot.obj") },
-        { QStringLiteral("app/content/primitives/tube.obj") },
-        { QStringLiteral("app/content/primitives/endlessplane.obj") },
-        { QStringLiteral("tests/meshbake/fixtures/flat_grid_100m.obj") },
-        { QStringLiteral("app/models/axis_sphere.obj") },
-        { QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb") },
-    };
-
-    int chained = 0;
-    std::printf("      %-34s %5s %9s %12s %12s %6s\n",
-                "mesh", "level", "tris", "quadric", "bound", "ratio");
-    for (const Row &r : subjects) {
-        iris::MeshBake::Model m =
-            iris::MeshBake::buildFromFile(fixture(r.path), QStringLiteral("atom-error-bound"));
-        if (!m.valid || m.meshes.isEmpty()) {
-            CHECK_LOUD(false, qUtf8Printable(r.path + ": bakes at all"));
-            continue;
-        }
-        for (const iris::MeshPtr &mesh : m.meshes) {
-            if (mesh.isNull() || mesh->lodIndices.isEmpty()) continue;
-            ++chained;
-            CHECK_LOUD(mesh->lodBounds.size() == mesh->lodIndices.size() &&
-                           mesh->lodErrors.size() == mesh->lodIndices.size(),
-                       qUtf8Printable(r.path + ": one bound and one quadric per level"));
-            // Monotone, because the one rule stops at the first level it cannot
-            // afford and that is only correct for a sorted array.
-            bool monotone = true;
-            for (int i = 1; i < mesh->lodBounds.size(); ++i)
-                if (mesh->lodBounds.at(i) < mesh->lodBounds.at(i - 1)) monotone = false;
-            CHECK_LOUD(monotone, qUtf8Printable(r.path + ": the bounds are non-decreasing"));
-
-            double worstRatio = 0.0;
-            const bool ok = iris::MeshBake::checkLodBounds(mesh, 8, &worstRatio);
-            CHECK_LOUD(ok, qUtf8Printable(
-                               QStringLiteral("%1: EVERY level is inside its stored bound under "
-                                              "an independent sampling 8x as dense (worst "
-                                              "measured/stored %2)")
-                                   .arg(r.path).arg(worstRatio, 0, 'f', 4)));
-            for (int i = 0; i < mesh->lodBounds.size(); ++i) {
-                const float q = mesh->lodErrors.at(i), b = mesh->lodBounds.at(i);
-                std::printf("      %-34s %5d %9d %12.6f %12.6f %6.2f\n",
-                            qUtf8Printable(QFileInfo(r.path).fileName()), i + 1,
-                            int(mesh->lodIndices.at(i).size() / 3), double(q), double(b),
-                            q > 0.0f ? double(b) / double(q) : 0.0);
-            }
-        }
-    }
-    CHECK_LOUD(chained >= 8, "the subject list really does carry chained meshes");
-}
-
 // ---------------------------------------------------------------------------
 //
 // A FRESH LIBRARY, seeded exactly as a launch seeds one (PrimitiveAssets::
@@ -1876,26 +1671,9 @@ static void windingAgreesWithNormals()
 }
 
 // ---------------------------------------------------------------------------
-// 14. THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — the `atom.lod_bound_bar` (archived: archive/tests/atom)
-// suite, and the scan stand-in `atom.lod_switch` (archived: archive/tests/atom) imports.
-//
-// THE DEFECT IT GUARDS. A scan's debris islands (1-6 triangle components floating
-// round the surface) were collapsed away by the simplifier and then measured
-// against the nearest SURVIVING surface metres off, so the owner's temple stored a
-// level-1 bound 100-115x its simplifier error and never left level 0 inside 1 km.
-// The bake now measures REPRESENTED surface (a dropped island costs its own
-// extent) and locks what would be displaced past twice the level's own error
-// (irisgl/import/meshbake.cpp, `Islands` and the displacement lock).
-//
-// THE BAR, per level of every chained mesh:
-//   (a) HONEST: the stored bound is at least a dense reference of the two-sided
-//       distance (MeshBake::checkLodBounds at 8x the samples, exact vertex walk, no
-//       margin) — on a one-component mesh that reference IS the sampled Hausdorff;
-//   (b) TIGHT: the stored bound is at most twice the simplifier's own error (or the
-//       precision floor, where the level is exact);
-//   (c) on the stand-in, every island a level dropped is no bigger than the level's
-//       bound (the cap is the island's size, never more), and level 1 is reached by
-//       150 m on a 1080-line, 45-degree view — the owner's bar for the temple.
+// THE SCAN STAND-IN (ATOM-LOD-BOUND-1's fixture): a dense noisy surface with debris islands, written by
+// `--write-standin` for the suites that import it and baked by `--determinism standin`. (The bound bar it was made for
+// measured the old level chain — deleted with the chain at ATOM-2 stage 5; the level table is cuts of the DAG.)
 
 namespace standin {
 
@@ -1976,76 +1754,6 @@ inline bool write(const QString &path)
 }
 
 }   // namespace standin
-
-/// The largest axis extent of a mesh's positions (meshoptimizer's simplifyScale:
-/// what the bake's precision floor is a fraction of) and its box half-diagonal
-/// (the radius the GPU level rule subtracts from the view distance).
-static void meshExtents(const iris::MeshPtr &mesh, float *maxAxis, float *halfDiagonal)
-{
-    iris::Vec3 lo(FLT_MAX, FLT_MAX, FLT_MAX), hi(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-    for (const iris::VertexBufferPtr &vb : mesh->getVertexBuffers()) {
-        const auto &attribs = vb->vertexLayout.getAttribs();
-        if (attribs.isEmpty() || attribs[0].usage != iris::VertexAttribUsage::Position) continue;
-        const int comps = attribs[0].count > 0 ? attribs[0].count : 3;
-        const int count = vb->dataSize / int(sizeof(float) * comps);
-        const float *p = reinterpret_cast<const float *>(vb->data);
-        for (int i = 0; i < count; ++i) {
-            const iris::Vec3 q(p[i * comps], p[i * comps + 1], p[i * comps + 2]);
-            lo = iris::Vec3(std::min(lo.x(), q.x()), std::min(lo.y(), q.y()), std::min(lo.z(), q.z()));
-            hi = iris::Vec3(std::max(hi.x(), q.x()), std::max(hi.y(), q.y()), std::max(hi.z(), q.z()));
-        }
-        break;
-    }
-    const iris::Vec3 size = hi - lo;
-    if (maxAxis) *maxAxis = std::max(std::max(size.x(), size.y()), size.z());
-    if (halfDiagonal) *halfDiagonal = 0.5f * size.length();
-}
-
-/// The view distance at which a level whose bound is `bound` becomes affordable at
-/// one pixel on a `lines`-line view with a `fovDeg` vertical field of view: the GPU
-/// rule (JahCullTest_cs.glsl) affords bound <= (d - radius) * 2 / (P * lines).
-static float switchDistance(float bound, float radius, float fovDeg = 45.0f, float lines = 1080.0f)
-{
-    const float P = 1.0f / std::tan(0.5f * fovDeg * 3.14159265f / 180.0f);
-    return bound * P * lines * 0.5f + radius;
-}
-
-/// Prints one mesh's chain as the bound's terms (the test-time window that
-/// replaced the JAH_BAKE_BOUND_TERMS latch).
-static void printTerms(const QString &label, const QVector<iris::MeshBake::LodLevelTerms> &terms,
-                       float radius)
-{
-    std::printf("      %-22s %5s %7s %9s %9s %9s %9s %9s %5s %6s %5s %4s %8s %8s\n", "mesh", "level",
-                "tris", "quadric", "area", "vertex", "facet", "bound", "x", "drop", "lock", "pass",
-                "dropExt", "L@1080");
-    for (int i = 0; i < terms.size(); ++i) {
-        const auto &t = terms.at(i);
-        std::printf("      %-22s %5d %7d %9.5f %9.5f %9.5f %9.5f %9.5f %5.2f %6d %5d %4d %8.4f %7.0fm\n",
-                    qUtf8Printable(label), i + 1, t.triangles, double(t.quadric), double(t.areaTerm),
-                    double(t.vertexTerm), double(t.facetTerm), double(t.bound),
-                    t.quadric > 0.0f ? double(t.bound / t.quadric) : 0.0, t.islandsDropped,
-                    t.verticesLocked, t.passes, double(t.droppedMaxExtent),
-                    double(switchDistance(t.bound, radius)));
-    }
-}
-
-/// `--bound-terms <model>`: the chain of every mesh of any model file, as terms.
-/// The tool the lead re-runs on a file nobody can ship (the owner's scan).
-static int boundTerms(const QString &path)
-{
-    const QList<iris::MeshPtr> meshes = testmesh::parseFile(path);
-    if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
-    for (int i = 0; i < meshes.size(); ++i) {
-        QVector<iris::MeshBake::LodLevelTerms> terms;
-        QElapsedTimer t; t.start();
-        iris::MeshBake::buildLodChain(meshes.at(i), &terms);
-        float radius = 0.0f;
-        meshExtents(meshes.at(i), nullptr, &radius);
-        printTerms(QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i), terms, radius);
-        std::printf("      (chain %lld ms, radius %.2f m)\n", qint64(t.elapsed()), double(radius));
-    }
-    return 0;
-}
 
 // ---- bake.dag_reaches_root (ATOM-6 stage 2c) ---------------------------------------------------
 //
@@ -2931,89 +2639,6 @@ static void bakeDeterminism(const QString &part = QString())
     }
 }
 
-static void boundBar()
-{
-    QTemporaryDir tmp;
-    const QString standinPath = tmp.path() + QStringLiteral("/lod_standin.obj");
-    CHECK_LOUD(standin::write(standinPath), "the scan stand-in is written");
-
-    struct Subject { QString path; bool standin; };
-    const QVector<Subject> subjects = {
-        { fixture(QStringLiteral("app/content/primitives/sphere.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/hp_sphere.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/capsule.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/torus.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/hemisphere.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/teapot.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/tube.obj")), false },
-        { fixture(QStringLiteral("app/content/primitives/endlessplane.obj")), false },
-        { fixture(QStringLiteral("tests/meshbake/fixtures/flat_grid_100m.obj")), false },
-        { fixture(QStringLiteral("app/models/axis_sphere.obj")), false },
-        { QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj"), false },
-        { standinPath, true },
-    };
-    int chained = 0;
-    for (const Subject &s : subjects) {
-        const QString name = s.standin ? QStringLiteral("scan stand-in") : QFileInfo(s.path).fileName();
-        const QList<iris::MeshPtr> meshes = testmesh::parseFile(s.path);
-        CHECK_LOUD(!meshes.isEmpty(), qUtf8Printable(name + ": parses"));
-        for (const iris::MeshPtr &mesh : meshes) {
-            QVector<iris::MeshBake::LodLevelTerms> terms;
-            iris::MeshBake::buildLodChain(mesh, &terms);
-            if (mesh->lodIndices.isEmpty()) continue;
-            ++chained;
-            float maxAxis = 0.0f, radius = 0.0f;
-            meshExtents(mesh, &maxAxis, &radius);
-            printTerms(name, terms, radius);
-
-            double worst = 0.0;
-            QVector<float> reference;
-            const bool honest = iris::MeshBake::checkLodBounds(mesh, 8, &worst, &reference);
-            CHECK_LOUD(honest, qUtf8Printable(QStringLiteral(
-                "%1: (a) every stored bound >= the per-facet two-sided reference (worst reference/stored %2)")
-                .arg(name).arg(worst, 0, 'f', 4)));
-
-            // (b) 2x where the level dropped no island — the displacement lock's
-            // budget on the exact term, which on these subjects also bounds the
-            // sampled one. Where islands WERE dropped the sampled term may carry an
-            // island's capped distance (<= the budget) times the sampling margin, so
-            // the arithmetic ceiling of the rule there is 2 x 1.25.
-            bool tight = true;
-            QString tightWhy;
-            const float floorBound = maxAxis * 1e-5f;
-            for (int k = 0; k < terms.size(); ++k) {
-                const float factor = terms.at(k).islandsDropped > 0 ? 2.5f : 2.0f;
-                const float allowed = std::max(factor * terms.at(k).quadric, floorBound * 1.0001f);
-                if (terms.at(k).bound > allowed * (1.0f + 1e-6f)) {
-                    tight = false;
-                    tightWhy += QStringLiteral(" L%1 %2 > %4 x %3").arg(k + 1)
-                                    .arg(double(terms.at(k).bound), 0, 'f', 5)
-                                    .arg(double(terms.at(k).quadric), 0, 'f', 5).arg(double(factor));
-                }
-            }
-            CHECK_LOUD(tight, qUtf8Printable(name + QStringLiteral(": (b) every bound <= 2x the "
-                                                                   "simplifier's error (2.5x on a level "
-                                                                   "that dropped islands)") + tightWhy));
-            if (!s.standin) continue;
-
-            bool capped = true;
-            int droppedAny = 0;
-            for (const auto &t : terms) {
-                droppedAny += t.islandsDropped;
-                if (t.droppedMaxExtent > t.bound * (1.0f + 1e-6f)) capped = false;
-            }
-            CHECK_LOUD(capped && droppedAny > 0, qUtf8Printable(QStringLiteral(
-                "%1: (c) the levels drop islands (%2 in all) and none is bigger than its level's bound")
-                .arg(name).arg(droppedAny)));
-            const float d1 = switchDistance(terms.first().bound, radius);
-            CHECK_LOUD(d1 <= 150.0f, qUtf8Printable(QStringLiteral(
-                "%1: (c) level 1 (bound %2 m) is affordable from %3 m on a 1080-line 45-degree view "
-                "(bar: 150 m)").arg(name).arg(double(terms.first().bound), 0, 'f', 4).arg(double(d1), 0, 'f', 0)));
-        }
-    }
-    CHECK_LOUD(chained >= 10, "the subject list really does carry chained meshes");
-}
-
 /// CULL-MODE-1: A TWO-SIDED SOURCE MATERIAL IS BAKED. glTF's `doubleSided` arrives
 /// through assimp as AI_MATKEY_TWOSIDED; the import stores it on the baked material
 /// (MeshMaterialData::twoSided, bake format v16) and it survives the blob.
@@ -3503,19 +3128,8 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
     // ATOM-LOD-BOUND-1: the bar, the stand-in the app suite imports, and the terms tool.
-    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-bar")) {
-        std::printf("== 14. the LOD bound's physics bar ==\n");
-        boundBar();
-        std::printf("== 9. the measured bound, through the bake's own route ==\n");
-        errorBound();
-        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
-        else          std::printf("ALL %d CHECKS PASSED\n", checks);
-        return failures ? 1 : 0;
-    }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--write-standin"))
         return standin::write(QString::fromLocal8Bit(argv[2])) ? 0 : 1;
-    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-terms"))
-        return boundTerms(QString::fromLocal8Bit(argv[2]));
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve-law")) return cutCurveLaw();
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cut-curve")) {
         QString meshesArg, armName = QStringLiteral("shipped");
@@ -3610,9 +3224,6 @@ int main(int argc, char **argv)
 
     std::printf("== 5. the store ==\n");
     storeIntegration();
-
-    std::printf("== 7. the ATOM LOD chain ==\n");
-    lodChain();
 
     std::printf("== 17. the clip bake and the describe block ==\n");
     clipBake();

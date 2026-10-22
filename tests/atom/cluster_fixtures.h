@@ -4,7 +4,7 @@
 // Document side only: the shipped meshes read through assimp exactly as an
 // import reads them, procedural fixtures built as iris::Mesh arrays, and every
 // one of them BAKED through the product's own entry points (MeshBake::
-// buildLodChain + buildClusterDag) and handed across through the product's own
+// buildClusterDag + buildLevelTable) and handed across through the product's own
 // SceneMirror::toMeshData — so what a suite measures is what an import produces
 // and what the engine receives, not a second implementation of either.
 #pragma once

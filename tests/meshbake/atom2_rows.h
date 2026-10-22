@@ -14,6 +14,8 @@
 //   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
 //   atom2.cards_merge_within_budget  the card soup merges at the level granted its spacing; every set's measured price
 //                                within the budget and stored; the quads conserve the cards' area within 10 % (D9)
+//   atom2.level_table_is_a_cut   the whole-mesh level table: <= 8 uniform-depth cuts of the DAG, each bound the
+//                                largest stored error at its depth, non-decreasing (D10)
 
 #include "import/atomdag/adjacency.h"
 
@@ -588,6 +590,78 @@ inline int cardsMergeWithinBudget()
     return finish();
 }
 
+/// atom2.level_table_is_a_cut (stage 5, D10): THE WHOLE-MESH LEVEL TABLE IS UNIFORM-DEPTH CUTS OF THE DAG — on every
+/// fixture (the card soup's merged quads included) the table holds at most eight levels; every level is EXACTLY the triangles of the
+/// clusters alive at one depth (born at or before it, their own group forming at or after it: the builder's pool
+/// there, so its borders are the locked ones — atom2.locked_positions_kept); its bound is the largest stored error at
+/// that depth (never more than the DAG stores there); the bounds are positive and non-decreasing and the levels
+/// strictly fewer triangles each; every index names a vertex of the mesh.
+inline int levelTableIsACut()
+{
+    for (const Subject &s : fixtures()) {
+        iris::MeshBake::buildClusterDag(s.mesh);
+        iris::MeshBake::buildLevelTable(s.mesh);
+        const MeshClusterDag &dag = s.mesh->clusterDag;
+        if (dag.isEmpty()) { CHECK_LOUD(false, "the fixture has a DAG"); continue; }
+        const Reading rd(dag);
+        const auto sorted = [](std::vector<std::array<quint32, 3>> v) { std::sort(v.begin(), v.end()); return v; };
+        // every depth's cut, its triangles (each sorted by corner, the list sorted) and its largest stored error
+        std::vector<std::vector<std::array<quint32, 3>>> cuts(size_t(rd.maxDepth) + 1);
+        std::vector<float> storedAt(size_t(rd.maxDepth) + 1, 0.0f);
+        for (int c = 0; c < dag.clusters.size(); ++c) {
+            const auto &cl = dag.clusters.at(c);
+            for (int d = rd.born[size_t(c)]; d <= rd.dies[size_t(c)]; ++d) {
+                if (cl.refined >= 0) storedAt[size_t(d)] = std::max(storedAt[size_t(d)], dag.groups.at(cl.refined).error);
+                for (int t = 0; t < int(cl.triangleCount); ++t)
+                    cuts[size_t(d)].push_back({ dag.vertexOf(cl, t, 0), dag.vertexOf(cl, t, 1), dag.vertexOf(cl, t, 2) });
+            }
+        }
+        for (auto &cut : cuts) cut = sorted(cut);
+        size_t nv = 0;
+        int pc = 3;
+        cutcurve::positionsOf(s.mesh, &nv, &pc);
+        int notACut = 0, overStored = 0, badBounds = 0, badCounts = 0, badIndex = 0;
+        float prevBound = 0.0f;
+        int prevTris = -1, lastDepth = 0;
+        std::printf("== %s: DAG depth %d, %d levels:", s.name, rd.maxDepth, int(s.mesh->lodIndices.size()));
+        for (int i = 0; i < s.mesh->lodIndices.size(); ++i) {
+            const QVector<quint32> &idx = s.mesh->lodIndices.at(i);
+            std::vector<std::array<quint32, 3>> tris;
+            for (int t = 0; t + 2 < idx.size(); t += 3) tris.push_back({ idx[t], idx[t + 1], idx[t + 2] });
+            for (quint32 v : idx) if (size_t(v) >= nv) ++badIndex;
+            tris = sorted(tris);
+            int depth = -1;
+            for (int d = lastDepth + 1; d <= rd.maxDepth && depth < 0; ++d) if (cuts[size_t(d)] == tris) depth = d;
+            const float bound = s.mesh->lodBounds.at(i);
+            if (depth < 0) ++notACut;
+            else {
+                lastDepth = depth;
+                if (bound > storedAt[size_t(depth)] * (1.0f + 1e-6f) || bound < storedAt[size_t(depth)] * (1.0f - 1e-6f))
+                    ++overStored;
+            }
+            if (!(bound > 0.0f) || bound < prevBound) ++badBounds;
+            if (prevTris >= 0 && int(tris.size()) >= prevTris) ++badCounts;
+            prevBound = bound;
+            prevTris = int(tris.size());
+            std::printf(" [d%d %zu tris, bound %.4g]", depth, tris.size(), double(bound));
+        }
+        std::printf("\n");
+        char msg[240];
+        std::snprintf(msg, sizeof(msg), "%s: at most %d levels, at least one when the DAG has a level", s.name,
+                      iris::MeshBake::kLevelTableMax);
+        CHECK_LOUD(s.mesh->lodIndices.size() <= iris::MeshBake::kLevelTableMax &&
+                       (rd.maxDepth < 2 || !s.mesh->lodIndices.isEmpty()), msg);
+        std::snprintf(msg, sizeof(msg), "%s: every level is a uniform-depth cut of the DAG (%d not)", s.name, notACut);
+        CHECK_LOUD(notACut == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: every bound is the largest stored error at its depth (%d not)", s.name, overStored);
+        CHECK_LOUD(overStored == 0, msg);
+        std::snprintf(msg, sizeof(msg), "%s: the bounds positive and non-decreasing, the levels fewer triangles each, "
+                      "every index a vertex (%d / %d / %d)", s.name, badBounds, badCounts, badIndex);
+        CHECK_LOUD(badBounds == 0 && badCounts == 0 && badIndex == 0, msg);
+    }
+    return finish();
+}
+
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("adjacency_by_position")) return adjacencyByPosition();
@@ -597,6 +671,7 @@ inline int run(const QString &row)
     if (row == QStringLiteral("locked_positions_kept")) return lockedPositionsKeptLaw(fixtures());
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
     if (row == QStringLiteral("cards_merge_within_budget")) return cardsMergeWithinBudget();
+    if (row == QStringLiteral("level_table_is_a_cut")) return levelTableIsACut();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }
