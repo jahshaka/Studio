@@ -1,4 +1,4 @@
-"""THE RISE LAW of a settling series (PHOTON-7 stage 0's read, R2; rule R3: a tolerance belongs to its row, derived from
+"""THE RISE LAW of a settling series (PHOTON-7 stage 0's read, R2 and R3; rule R3: a tolerance belongs to its row, derived from
 that row's quantum) - "the per-frame change is non-increasing until the hold", judged the ONE way both rows judge it
 (gi.hold_after_stop (f), rtreflect.still_after_stop (a)).
 
@@ -13,17 +13,21 @@ sigma to ~S/3, so no burst of 5 frames or fewer was ever a rise, whatever its he
           over sqrt(2) x 0.67449 (the median of |N(0, 2 sigma^2)|): a slow trend cancels in a difference, and a burst of
           any length moves the median by at most the two differences its edges make; floored at the row's QUANTUM (the
           larger of one pixel-code over the pixels averaged and the record's print precision), taken at the tail's level.
-  THE WINDOWS: 10 frames from `start` to `end`.
+  THE WINDOWS: 10 frames from `start` to `end`; a final window shorter than 5 frames is merged into the one before (the
+          read's R3: a 1-frame window has no successive difference, and a hold one frame into a window made it one).
   A RISE, between window i and window i + 1 (n_i, n_j frames; K = 5):
     (mean)  mean_j - mean_i > K sigma sqrt(1 / n_i + 1 / n_j)         - the series' level went up;
     (burst) any frame f of window j:  m[f] - mean_i > K sigma sqrt(1 + 1 / n_i)   - a burst of ANY length >= 1 frame
             and >= the bound (a window's mean dilutes a 1-frame burst ten times; a frame cannot hide in its window).
   The first window has no window before it: a burst inside it is not judged (the rows start their windows after the
   stop's own transient).
-THE FALSE ALARM, measured (this module's own Monte Carlo, `python3 rise_law.py mc`: series of i.i.d. normal frames in the
-judged space): either test, per window pair, 1.2e-3 at 60 frames, 3.1e-4 at 95 (the lamp step's), 3.1e-5 at 500 (the
-glass's K_max hold) - the median of a short tail's differences is a loose estimate - so about 0.25 % for the lamp step's
-eight pairs and 0.15 % for the glass's fifty.
+THE FALSE ALARM, measured (this module's own Monte Carlo, `python3 rise_law.py mc [frames]`: series of i.i.d. normal
+frames in the judged space): either test, per window pair, 1.8e-3 at 52 frames (its last window merged), 1.2e-3 at 60,
+3.4e-4 at 95 (the lamp step's), 3.1e-5 at 500 (the glass's K_max hold) - the median of a short tail's differences is a
+loose estimate - so about 0.3 % for the lamp step's eight pairs and 0.15 % for the glass's fifty. (The statistic this replaced - each window's own successive-
+difference error, 5 combined standard errors - false-alarmed 1.2e-4 per comparison by the same kind of Monte Carlo, the
+read's R3: about 0.6 % for 50 comparisons and 0.12 % for 10, not the 5e-5 / 0.3 % / 0.1 % its comments stated - and it
+could not see a burst.)
 SELF CHECK (`selfcheck`, run by both rows before they judge): the read's synthetic cases - a decay with 1-, 2-, 3- and
 5-frame bursts of 0.2, 1 and 5 codes inside it - are each a rise, and the same decay with no burst is none.
 """
@@ -32,6 +36,7 @@ import random
 
 K = 5.0
 WINDOW = 10
+MIN_WINDOW = 5
 MEDIAN_ABS_NORMAL = 0.6744897501960817   # the median of |N(0, 1)|
 
 
@@ -47,8 +52,12 @@ def robust_sigma(series, quantum=0.0):
 
 
 def windows(start, end):
-    """The [a, b) spans of WINDOW frames over [start, end) (the last one what is left)."""
-    return [(a, min(a + WINDOW, end)) for a in range(start, end, WINDOW)]
+    """The [a, b) spans of WINDOW frames over [start, end); a last span shorter than MIN_WINDOW merged into the one before."""
+    spans = [[a, min(a + WINDOW, end)] for a in range(start, end, WINDOW)]
+    if len(spans) >= 2 and spans[-1][1] - spans[-1][0] < MIN_WINDOW:
+        spans[-2][1] = spans[-1][1]
+        spans.pop()
+    return [tuple(sp) for sp in spans]
 
 
 def stabilised(m, quantum):
@@ -98,8 +107,11 @@ def selfcheck():
     fails = []
     rng = random.Random(20261023)
     base = _decay(60, rng)
-    if judge(base, 1, 60)[3]:
-        fails.append("rise_law: a flat (decaying) tail with no burst is a rise: %s" % judge(base, 1, 60)[3][:2])
+    for end in (60, 52, 51):   # (52 and 51: a hold one or two frames into a window - merged, R3)
+        if judge(base, 1, end)[3]:
+            fails.append("rise_law: a flat (decaying) tail with no burst is a rise (hold %d): %s" % (end, judge(base, 1, end)[3][:2]))
+    if windows(1, 52)[-1] != (41, 52):
+        fails.append("rise_law: a final window under %d frames is merged into the one before: %s" % (MIN_WINDOW, windows(1, 52)))
     for height in (0.2, 1.0, 5.0):
         for length in (1, 2, 3, 5):
             for at in (24, 35, 52):
@@ -132,7 +144,7 @@ def _monte_carlo(series=60000, frames=60):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "mc":
-        _monte_carlo()
+        _monte_carlo(frames=int(sys.argv[2]) if len(sys.argv) > 2 else 60)
     else:
         f = selfcheck()
         print("\n".join(f) if f else "rise_law selfcheck: every synthetic burst is a rise, the flat tail is none")
