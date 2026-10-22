@@ -53,6 +53,8 @@ public:
     /// bakes — the bake's stages in meshbake.cpp bakeStages' order. Hashed.
     iris::MeshPtr mesh(const Arrays &a);
     iris::PbrMaterialPtr material(float r, float g, float b, float roughness = 0.9f, float metallic = 0.0f);
+    /// An EMITTER (PHOTON-2 fix F2/F4's fixtures): a matte material glowing white at `intensity`. Hashed.
+    iris::PbrMaterialPtr emitter(float intensity);
     /// One instance: a MeshNode of `mesh` at pos / yaw (degrees about +Y) / scale, recorded as an Object. Returns its
     /// index in Built::objects.
     int instance(const iris::MeshPtr &m, const QString &name, const QString &role, const iris::Vec3 &pos,

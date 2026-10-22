@@ -99,6 +99,59 @@ Built buildGlass(unsigned seed, bool bake)
     return b.finish();
 }
 
+// ---- photon-ramp (PHOTON-2 stage 1 fix round: F4's ramp, F2's highlights) -------------------------------------------
+//
+// photon-room's sealed shell with THE ROUGHNESS RAMP — sixteen metal floor strips, 0.25 m apart side by side across
+// the room's middle 4 m, perceptual roughness 0.00, 0.01 ... 0.15 — reflecting THE EDGE, a white emitter bar on the far
+// wall (y 3.3 to 3.6 m: above the stop's view — the eye 3 m up looking down at the strips — so the screen march cannot answer it and the band is the ray tier's
+// alone — the screen's answer is a sharp mirror image at every roughness, JahSsrResolve_ps.glsl): the bar's
+// reflected band in each strip has the lobe's blur, which must rise with the roughness and step nowhere (fix F4: the fixed estimator, the filter's reach and the hit read's mirror cut follow the
+// lobe's footprint at its hit, never an alpha). And THE HIGHLIGHTS: two emitter cubes 0.5 m above the 0.06 strip (a
+// lobe ~1.6 trace texels wide at that throw: a stochastic texel whose rays mostly find the spark), 5 and 10 mm
+// across — a ~1 px and a ~2 x 2 px image at 5.4 m from the stop's eye — whose reflections the moving history must
+// keep (fix F2: the clamp's box holds the texel's own sample). A sibling, not photon-glass itself: the glass
+// fixture's measured base (stage 0) stays comparable.
+Built buildRamp(unsigned seed, bool bake)
+{
+    Builder b("photon-ramp", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
+    roomShell(b, unit, matte);
+    using V = iris::Vec3;
+    for (int i = 0; i < 16; ++i) {
+        const float x0 = -2.0f + 0.25f * float(i);
+        fixedBox(b, unit, QStringLiteral("strip-%1").arg(i, 2, 10, QLatin1Char('0')), V(x0, 0, -3.6f),
+                 V(x0 + 0.24f, 0.02f, 1.6f), b.material(0.9f, 0.9f, 0.9f, 0.01f * float(i), 1.0f));
+    }
+    fixedBox(b, unit, "edge", V(-3.9f, 3.3f, -3.99f), V(3.9f, 3.6f, -3.95f), b.emitter(1.0f));
+    const float hx = -2.0f + 0.25f * 6.0f + 0.12f;   // the 0.06 strip's centre line
+    fixedBox(b, unit, "spark-1px", V(hx - 0.05f - 0.0025f, 0.4975f, -1.5025f), V(hx - 0.05f + 0.0025f, 0.5025f, -1.4975f),
+             b.emitter(10.0f));
+    fixedBox(b, unit, "spark-2px", V(hx + 0.05f - 0.005f, 0.495f, -1.505f), V(hx + 0.05f + 0.005f, 0.505f, -1.495f),
+             b.emitter(10.0f));
+    return b.finish();
+}
+
+void stopRamp(double, iris::Vec3 &eye, iris::Vec3 &target)
+{
+    // looking down at the strips: the bar above the view, its reflection in the strips' middle
+    eye = iris::Vec3(0, 3.0f, 3.4f);
+    target = iris::Vec3(0, 0, -1.0f);
+}
+
+std::vector<Prediction> expectRamp(const Built &, const Optics &)
+{
+    return { { "probesKeptShare", 1.0, "every probe of the sealed shell sees >= 2 faces of geometry: all kept" } };
+}
+
+std::string describeRamp()
+{
+    return "photon-ramp: photon-room's sealed shell with sixteen metal floor strips at perceptual roughness 0.00 to "
+           "0.15 reflecting a white emitter bar on the far wall (the lobe's blur per strip: PHOTON-2 fix F4), and two "
+           "5 / 10 mm emitter sparks above the 0.06 strip (the moving history's highlights: fix F2). Predicts THE KEEP "
+           "RULE only: every probe sees >= 2 faces, all kept.";
+}
+
 void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)
 {
     eye = iris::Vec3(0, 1.8f, 3.4f);
@@ -146,6 +199,7 @@ std::string describeRoom()
 
 Env photonRoom() { return Env{ "photon-room", describeRoom, buildRoom, stopRoom, expectRoom, 500.0f, false }; }
 Env photonGlass() { return Env{ "photon-glass", describeGlass, buildGlass, stopGlass, expectGlass, 500.0f, false }; }
+Env photonRamp() { return Env{ "photon-ramp", describeRamp, buildRamp, stopRamp, expectRamp, 500.0f, false }; }
 
 }   // namespace envs
 }   // namespace lab

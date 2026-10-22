@@ -263,6 +263,16 @@ iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughnes
     return mat;
 }
 
+iris::PbrMaterialPtr Builder::emitter(float intensity)
+{
+    iris::PbrMaterialPtr mat = material(1.0f, 1.0f, 1.0f, 0.9f, 0.0f);
+    mat->setValue("emissiveColor", QColor::fromRgbF(1.0, 1.0, 1.0));
+    mat->setValue("emissiveIntensity", intensity);
+    mHash.addData(QByteArray("emitter"));
+    hashFloats(mHash, &intensity, 1);
+    return mat;
+}
+
 void Builder::setMovable(int index)
 {
     if (index < 0 || size_t(index) >= mNodes.size()) return;
