@@ -158,6 +158,18 @@ set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
+# gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2) — THE HIT LIST IS SIZED BY ITS DEMAND, AND A DROP IS NO SAMPLE:
+# jahlab on photon-room with every gather ray a record (gather.decodeHits): the list sized from the records asked for
+# drops none; the overflow arm rq.hitListCap holding it to a third FORCES drops and the floor stays within 1 code of
+# the undropped session (hit_list_demand.sh says the law and the base). 960x540; two jahlab sessions of 151 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.hit_list_demand CLASS engine FRAMES 302
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hit_list_demand.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/hit_list_demand
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.hit_list_demand PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36
 # frames, falling over 10-frame windows, then the hold, no burst) and photon-court's 15 m crossing (the change falling

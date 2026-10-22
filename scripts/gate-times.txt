@@ -60,6 +60,7 @@ frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3,
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
 gi.cascades_asan 23.23  quiet n=41
+gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; jahlab on photon-room, 960x540, two sessions)
 gi.hold_after_stop 28.47  solo, the card lock held, :71, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions)
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
@@ -239,6 +240,7 @@ thumbnails.studio_env 1.97  quiet n=43
 ui.space_docks 18.40  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-admission (spikes/testing-speed-b4/profile.txt)
 ui.space_docks.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+vr.hit_list_stereo 15.26  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; Monado, the app's VR session; 42.6 s on its first, cold-cache run)
 vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.probe_court 4.27  solo, the card lock held (PHOTON-5 stage 1, 2026-10-21; the lead's promotion at the merge)

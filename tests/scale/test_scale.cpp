@@ -2210,8 +2210,8 @@ static int bakeMain()
 
 // ===========================================================================
 // scale.hit_list (archived: archive/tests/scale) — W12: THE HIT LIST (1.17 M records vs 2.07 M Epic gather rays).
-// Anchor: irisgl/engine/src/EnginePrivate.h:960 (kHitListHeightFactor 0.5625: the list
-// is sized from the view); rq_probe_gather.comp:300-311 (a dropped record = zero radiance).
+// Anchor: irisgl/engine/src/EnginePrivate.h (kHitListWidth: the list is sized by its demand since PHOTON-2 stage 2's
+// tail); rq_probe_gather.comp (a dropped record = no sample, kAtlasNoSample).
 // Number: records appended, dropped and the capacity (RayQueryStatus) on the Epic world at
 // 1080p — still and on the walk.
 // ===========================================================================
@@ -2246,7 +2246,7 @@ static int hitListMain()
     std::printf("W12 capacity %llu | still: records med %.0f max %.0f, dropped med %.0f max %.0f | walk: records med %.0f "
                 "max %.0f, dropped med %.0f max %.0f | decode draws %d\n",
                 cap, rs.median, rs.max, ds.median, ds.max, rw.median, rw.max, dw.median, dw.max, rq.hitDecodeDraws);
-    target("W12", dw.median, "records", "hit records DROPPED per frame on the Epic walk (zero radiance each)");
+    target("W12", dw.median, "records", "hit records DROPPED per frame on the Epic walk (no sample each)");
     target("W12", rw.max, "records", ("appended per frame at worst on the walk, against " + std::to_string(cap)).c_str());
     shutdown(env);
     return failures ? 1 : 0;

@@ -582,6 +582,13 @@ std::string Session::statusJson()
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
       << gi.cards.invalidIndirect << ",\"invalidMaterial\":" << gi.cards.invalidMaterial << ",\"invalidTransform\":"
       << gi.cards.invalidTransform << "}}";
+    // ...and THE HIT LIST (PHOTON-2 stage 2's tail): its demand-sized capacity, the records the traces appended and the
+    // ones a full list dropped (no sample) - read back a few frames late
+    {
+        const RayQueryStatus &rq = mScene->published().rayQuery;
+        o << ",\"hits\":{\"records\":" << rq.hitRecords << ",\"dropped\":" << rq.hitDropped << ",\"capacity\":"
+          << rq.hitCapacity << "}";
+    }
     // THE LAST CUT PROBE (`probe` / `measure`): the drawn triangles of its frame summed over the objects, and those of
     // the objects with no visible pixel — the hidden share's numerator (the probe's frame, said beside the status's)
     if (mProbed)
