@@ -447,8 +447,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "count histogram. 'path': true adds a second window reached by a TELEPORT (far away and back to the same pose) "
           "and compares the two windows' last pictures and each cascade's light bytes (direct and total) and placement. "
           "The TSV and the windows' last pictures and heat maps go to the data root's 'stillness' folder under 'out' "
-          "(a name, default 'stillness'). It renders frames and owns the frame monitor for its run: refused while a "
-          "perf.capture runs. 'summary' holds the STILLNESS lines (per window: the frames to under one code per class "
+          "(a name, default 'stillness'). It renders frames and reads the frame monitor through its own tee: beside a "
+          "running perf.capture the capture goes on recording (the monitor left at the level it found); with none it "
+          "switches the monitor on for its run and off after it. 'summary' holds the STILLNESS lines (per window: the frames to under one code per class "
           "counted from the stop and from the last GI row, the gather's hold frame, the GI rows of the move before the stop).",
           Needs::Engine },
         { "gatherIrradiance", "world.gatherIrradiance({x, y, w, h}) -> {ready, frame, width, height, pixels, answered, irradiance}",

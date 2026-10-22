@@ -57,4 +57,26 @@ for (var w = 0; w < 2; ++w) {
 }
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
 assert(r.path.directEqual.length >= 1, "the path check read the cascades: " + JSON.stringify(r.path));
+
+// THE DOOR BESIDE A HOST'S CAPTURE (PHOTON-2 round 2, G7): a perf.capture running before the run is never refused nor
+// stopped - the door reads its own copy of the records (the tee), leaves the monitor at the level it found, and its
+// cost line counts the run's frames only (a tail frame it renders while a record is owed is not the run's work).
+var cap = perf.capture({ frames: 900, label: "e2e-world-stillness-g7" });
+assert(cap && cap.started === true, "a host capture records: " + JSON.stringify(cap));
+var planned = 1 + 2 + 20;   // the teleport, the hold, the window's 20 frames after the stop
+var r2 = world.stillness({ script: "teleport:0,2,8,0,1,0/hold:2", frames: 20, out: "e2e-world-stillness-g7" });
+assert(r2 && r2.ok === true, "world.stillness runs beside the host's capture");
+var costLine = "";
+for (var c = 0; c < r2.summary.length; ++c)
+    if (r2.summary[c].indexOf("gpu ms") >= 0) costLine = r2.summary[c];
+assert(costLine.length > 0, "the run's cost line: " + costLine.substring(0, 160));
+var counts = costLine.match(/\((\d+)\)/g) || [];
+var most = 0;
+for (var q = 0; q < counts.length; ++q) most = Math.max(most, parseInt(counts[q].slice(1, -1), 10));
+assert(counts.length > 0 && most <= planned, "the cost line counts the run's " + planned + " frames at most: " + most);
+var ps = perf.status();
+assert(ps.recording === true, "the host's capture still records after the run: " + JSON.stringify(ps.phase));
+var stopped = perf.stop();
+assert(stopped && stopped.stopped === true && stopped.frames > planned,
+       "the host's bundle holds its frames, the run's among them: " + JSON.stringify(stopped));
 console.log("world.stillness e2e: PASS");
