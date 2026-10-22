@@ -570,7 +570,9 @@ std::string Session::statusJson()
     // ...and the field's state (PHOTON-2 K1/K4: the light age by z-slab, the follows, a change's skips) and the
     // surface cache's counters - an agent's per-frame `status file` reads them
     o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << ",\"ifdRefinesOwed\":" << gi.ifdRefinesOwed
-      << ",\"ifdFollows\":" << gi.ifdFollows << ",\"ifdChangeSkips\":" << gi.ifdChangeSkips << ",\"ifdLightAgeBySlab\":[";
+      << ",\"ifdFollows\":" << gi.ifdFollows << ",\"ifdChangeSkips\":" << gi.ifdChangeSkips
+      << ",\"ifdRestWindow\":" << gi.ifdRestWindow << ",\"ifdDispatched\":" << gi.ifdDispatchedLastFrame
+      << ",\"ifdLightAgeBySlab\":[";
     for (size_t i = 0; i < gi.ifdLightAgeBySlab.size(); ++i) o << (i ? "," : "") << gi.ifdLightAgeBySlab[i];
     o << "],\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
