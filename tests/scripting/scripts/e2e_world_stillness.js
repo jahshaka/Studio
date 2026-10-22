@@ -23,7 +23,13 @@ var r = world.stillness({
 });
 assert(r && r.ok === true, "world.stillness answered ok");
 for (var i = 0; i < r.summary.length; ++i) console.log(r.summary[i]);
-assert(r.summary.length === 3, "three STILLNESS lines (walk, teleport, path): " + r.summary.length);
+var lines = { walk: 0, teleport: 0, path: 0 };
+for (var k = 0; k < r.summary.length; ++k) {
+    var w = r.summary[k].split(" ")[1];
+    if (lines.hasOwnProperty(w)) ++lines[w];
+}
+assert(lines.walk === 1 && lines.teleport === 1 && lines.path === 1,
+       "a STILLNESS line per window and the path line: " + JSON.stringify(lines));
 assert(r.windows.length === 2 && r.windows[0].name === "walk" && r.windows[1].name === "teleport",
        "two windows, walk then teleport");
 assert(r.windows[0].frames === 24 && r.windows[1].frames === 24, "each window is the 24 frames asked for");
