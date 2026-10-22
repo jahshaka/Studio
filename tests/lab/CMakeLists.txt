@@ -55,3 +55,12 @@ jah_gpu_row(lab.stillness_control CLASS engine FRAMES 213
             ${CMAKE_CURRENT_BINARY_DIR}/work/stillness_control
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.stillness_control PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.camera_cut (PHOTON-2 round 2, N3) — A CAMERA CUT RESTARTS THE HISTORIES (Lumen's rule: a view axis turning > 75
+# degrees or the eye moving > 100 m in a frame): on photon-glass a 150 m teleport and a 90 degree snap step the gather's
+# and the reflection's cut counters by one, a 50 m teleport by none (camera_cut.sh). Three door runs of 26 frames.
+jah_gpu_row(lab.camera_cut CLASS engine FRAMES 78
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/camera_cut.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/camera_cut
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.camera_cut PROPERTIES TIMEOUT 60 LABELS "lab")
