@@ -192,6 +192,7 @@ jah_ship_row(bake.locked_positions_kept)   # THE SHIP SET: the border-crack law'
 # draws nothing (the empty top: stage 5's law). Red at the base. A CPU row: FRAMES 0.
 add_test(NAME bake.cut_curve COMMAND $<TARGET_FILE:test_mesh_bake> --cut-curve-law
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_ship_row(bake.cut_curve)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
 set_tests_properties(bake.cut_curve PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.cut_curve)
@@ -202,6 +203,11 @@ jah_no_display(bake.cut_curve)
 foreach(_row adjacency_by_position borders_move ladder_never_forced ends_empty locked_positions_kept one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
     add_test(NAME atom2.${_row} COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 ${_row}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_ship_row(atom2.cards_merge_within_budget)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
+    jah_ship_row(atom2.ends_empty)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
+    jah_ship_row(atom2.ladder_never_forced)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
+    jah_ship_row(atom2.level_table_is_a_cut)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
+    jah_ship_row(atom2.one_step_drift_bound)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
     set_tests_properties(atom2.${_row} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(atom2.${_row})
