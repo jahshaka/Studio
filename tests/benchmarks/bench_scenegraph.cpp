@@ -976,18 +976,16 @@ int main(int argc, char **argv)
     {
         // A mesh with a real chain: the shipped high-poly sphere (1,536
         // triangles), simplified by the SAME code the importer bakes with
-        // (MeshBake::buildLodChain) rather than a second implementation of the
+        // (MeshBake::buildClusterDag + buildLevelTable) rather than a second implementation of the
         // policy. Loaded from the source tree because IrisGL's own qrc carries
         // only the 12-triangle cube.
         iris::MeshPtr dense =
             testmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
         CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
         if (!dense.isNull()) {
-            iris::MeshBake::buildLodChain(dense);
-            // ...AND ITS CLUSTER DAG, as the importer bakes both (ATOM-CLUSTER-CUT): the id
-            // pass draws an Atom item's CLUSTER CUT, and a mesh with a chain but no DAG is
-            // cut as a flat one — its level 0, whatever the dial says.
+            // its CLUSTER DAG and its level table (the DAG's uniform cuts), as the importer bakes them
             iris::MeshBake::buildClusterDag(dense);
+            iris::MeshBake::buildLevelTable(dense);
             const int levels = int(dense->lodIndices.size());
             std::printf("    fixture: %d triangles, %d LOD level(s)\n",
                         dense->getIndexBuffer() ? dense->getIndexBuffer()->dataSize / 12 : 0, levels);

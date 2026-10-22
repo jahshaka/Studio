@@ -116,9 +116,9 @@ static MeshData chainedMesh()
 // ---- THE EMPTY TOP GROUP (ATOM-6 stage 2c) --------------------------------------------------
 // A group the bake's prune emptied (every component removed whole) is a GROUP with its measured error and NO output
 // clusters: affordable, the object draws nothing there (a card under its own extent vanishes). The runtime must
-// agree on it: the twin and the device draw nothing for an affordable empty group and not its members. The fixture
-// is a card soup's bake whose terminal groups are made empty groups — each keeps its members and gets a finite error
-// above every other group's (monotone), so a far view affords it and the whole object vanishes.
+// agree on it: the twin and the device draw nothing for an affordable empty group and not its members. Since ATOM-2
+// every mesh's DAG ends in an empty top (its error the last cluster's extent), so a far view affords it on every
+// fixture and the whole object vanishes; the card soup stays as the many-islands case.
 static iris::MeshPtr cardSoup(int cards)
 {
     std::vector<float> p, n;
@@ -139,16 +139,6 @@ static iris::MeshPtr cardSoup(int cards)
     }
     return clusterfix::meshFromArrays(p, n, {}, idx);
 }
-static bool emptyTop(const std::string &name) { return name.rfind("empty-top", 0) == 0; }
-static void makeTopEmpty(clusterfix::Fixture &f)
-{
-    float top = 0.0f;
-    for (const MeshClusterGroup &g : f.data.clusterGroups)
-        if (g.error < FLT_MAX) top = std::max(top, g.error);
-    for (MeshClusterGroup &g : f.data.clusterGroups)
-        if (g.error >= FLT_MAX) { g.error = std::max(top, 1e-3f) * 2.0f; g.estimate = g.error; }
-}
-
 static void clusterCutParity(Engine *e)
 {
     std::printf("\n== the fourth copy: the CLUSTER CUT, C++ against the GLSL piece ==\n");
@@ -165,7 +155,7 @@ static void clusterCutParity(Engine *e)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "empty-top-cards", cardSoup(400) });   // ATOM-6: the empty top group
+    meshes.push_back({ "cards", cardSoup(400) });   // a card soup (ATOM-6's empty-top fixture; every mesh ends empty now)
 
     // The instance: rotated 30 degrees about Y then 20 about X, scaled NON-UNIFORMLY
     // (1 : 0.6 : 1.3 along its own axes, times the sweep's scale), placed `dist`
@@ -182,17 +172,15 @@ static void clusterCutParity(Engine *e)
     const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
     unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
     // THE ROOT CUT (ATOM-7 stage 4): the device's jahClusterRootDrawn against Types.h clusterRootDrawn at every
-    // (view, cluster); on a terminal-top mesh (no finite group without output) it must be the rule it replaced
-    // (own group terminal, a leaf or produced by a finite group), on the empty-top fixture exactly the members of
-    // the empty groups — the last non-empty groups' clusters — and never nothing.
-    unsigned long long rootEvaluated = 0, rootMismatched = 0, rootOldDiffers = 0, emptyTopRootClusters = 0,
-                       emptyTopRootWrong = 0;
-    size_t terminalTopMeshes = 0;
+    // (view, cluster). Since ATOM-2 every mesh's DAG ends in an EMPTY TOP (no terminal group exists any more), so on
+    // every mesh the root cut is exactly the members of the empty groups — the last non-empty groups' clusters — and
+    // never nothing.
+    unsigned long long rootEvaluated = 0, rootMismatched = 0, emptyTopRootClusters = 0, emptyTopRootWrong = 0;
+    size_t emptyTopMeshes = 0;
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
         if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
-        if (emptyTop(m.first)) makeTopEmpty(f);
         ++meshesRun;
         std::vector<ClusterCutView> views;
         for (int di = 0; di < 20; ++di) {
@@ -223,7 +211,7 @@ static void clusterCutParity(Engine *e)
             bool emptyGroups = false;
             for (size_t g = 0; g < produced.size(); ++g)
                 if (produced[g] == 0u && f.data.clusterGroups[g].error < kClusterTerminal) emptyGroups = true;
-            size_t rootCount = 0;
+            size_t rootCount = 0, meshRoot = 0;
             for (size_t c = 0; c < nc; ++c) {
                 const MeshCluster &cl = f.data.clusters[c];
                 const bool cpu = clusterRootDrawn(cl, f.data.clusterGroups, produced);
@@ -232,20 +220,16 @@ static void clusterCutParity(Engine *e)
                     ++rootEvaluated;
                     if ((rootDrawn[vi * nc + c] != 0) != cpu) ++rootMismatched;
                 }
-                const bool old = f.data.clusterGroups[size_t(cl.group)].error >= kClusterTerminal &&
-                                 (cl.refined < 0 || f.data.clusterGroups[size_t(cl.refined)].error < kClusterTerminal);
-                if (!emptyGroups && old != cpu) ++rootOldDiffers;
-                if (emptyTop(m.first)) {
-                    const bool member = produced[size_t(cl.group)] == 0u &&
-                                        f.data.clusterGroups[size_t(cl.group)].error < kClusterTerminal &&
-                                        (cl.refined < 0 || f.data.clusterGroups[size_t(cl.refined)].error < kClusterTerminal);
-                    if (member != cpu) ++emptyTopRootWrong;
-                    emptyTopRootClusters += cpu ? 1u : 0u;
-                }
+                const bool member = produced[size_t(cl.group)] == 0u &&
+                                    f.data.clusterGroups[size_t(cl.group)].error < kClusterTerminal &&
+                                    (cl.refined < 0 || f.data.clusterGroups[size_t(cl.refined)].error < kClusterTerminal);
+                if (member != cpu) ++emptyTopRootWrong;
+                emptyTopRootClusters += cpu ? 1u : 0u;
+                meshRoot += cpu ? 1u : 0u;
             }
-            if (!emptyGroups) ++terminalTopMeshes;
+            if (emptyGroups && meshRoot > 0) ++emptyTopMeshes;
             std::printf("   %-16s the root cut: %zu clusters (%s)\n", m.first.c_str(), rootCount,
-                        emptyGroups ? "empty groups" : "terminal top");
+                        emptyGroups ? "an empty top" : "NO EMPTY TOP");
         }
         unsigned long long meshBad = 0, meshNear = 0, meshNearBad = 0;
         size_t distinct = 0;
@@ -296,12 +280,10 @@ static void clusterCutParity(Engine *e)
     std::snprintf(msg, sizeof(msg), "THE ROOT CUT (ATOM-7): the device's jahClusterRootDrawn = Types.h clusterRootDrawn "
                   "at %llu (view, cluster) answers (%llu differ)", rootEvaluated, rootMismatched);
     CHECK(rootEvaluated > 0u && rootMismatched == 0u, msg);
-    std::snprintf(msg, sizeof(msg), "the root cut on the %zu terminal-top meshes is the rule it replaced (%llu clusters "
-                  "differ)", terminalTopMeshes, rootOldDiffers);
-    CHECK(terminalTopMeshes >= 4u && rootOldDiffers == 0u, msg);
-    std::snprintf(msg, sizeof(msg), "the empty top: the root cut draws the last non-empty groups' %llu clusters (%llu "
-                  "wrong), never nothing", emptyTopRootClusters, emptyTopRootWrong);
-    CHECK(emptyTopRootClusters > 0u && emptyTopRootWrong == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "the empty top on every mesh (%zu of %zu): the root cut draws the last non-empty "
+                  "groups' %llu clusters (%llu wrong), never nothing", emptyTopMeshes, meshesRun, emptyTopRootClusters,
+                  emptyTopRootWrong);
+    CHECK(emptyTopMeshes == meshesRun && emptyTopRootClusters > 0u && emptyTopRootWrong == 0u, msg);
 }
 
 // ---- THE FIFTH COPY: THE PRODUCT'S CUT (ATOM-CLUSTER-CUT) --------------------------
@@ -329,7 +311,7 @@ static void productCutParity(Engine *e, View *view)
     const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
     if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
     meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "empty-top-cards", cardSoup(400) });   // ATOM-6: the empty top group
+    meshes.push_back({ "cards", cardSoup(400) });   // a card soup (ATOM-6's empty-top fixture; every mesh ends empty now)
 
     struct Set { float tol, fovDeg, height; bool ortho; };
     // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows).
@@ -343,8 +325,7 @@ static void productCutParity(Engine *e, View *view)
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
-        if (!clusterfix::bake(f, m.second, m.first, iris::MeshBake::ClusterDagVariant::Shipped, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
-        if (emptyTop(m.first)) makeTopEmpty(f);
+        if (!clusterfix::bake(f, m.second, m.first, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
         // THE GROUPS WITH NO OUTPUT CLUSTERS (the empty groups): where one is affordable its members' regions
         // are covered by nothing — the object vanishes there, which is the empty group's meaning.
         std::vector<unsigned char> hasOutput(f.data.clusterGroups.size(), 0);
@@ -470,7 +451,7 @@ static void productCutParity(Engine *e, View *view)
                     }
                     for (size_t t = 0; t < cover.size(); ++t)
                         coverageBad += (cover[t] == 1u || (cover[t] == 0u && vanished[t])) ? 0u : 1u;
-                    if (emptyTop(m.first) && gpu.empty()) ++emptyTopVanished;
+                    if (gpu.empty()) ++emptyTopVanished;   // every mesh ends in an empty top (ATOM-2)
                 }
                 if (gpu == cpu) continue;
                 if (near) ++meshNearBad; else ++meshBad;

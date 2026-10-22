@@ -4,8 +4,8 @@
 // THE LAW OF AN ENVIRONMENT: generated, deterministic (a seed), in metres at the default scene scale, with its ANALYTIC
 // EXPECTATION beside it — the number the one-pixel rule predicts — so a lab run against it is a test of a LAW, not of
 // agreement with a picture. Each environment is a generator in envs/<name>.cpp: build(seed) -> an iris::Scene (built in
-// memory: no file, every mesh through the bake's own stages — MeshBake::buildLodChain / buildCards / buildSdf /
-// buildClusterDag, the order and the calls of meshbake.cpp bakeStages), expect(view) -> the closed form at a camera,
+// memory: no file, every mesh through the bake's own stages — MeshBake::buildClusterDag / buildLevelTable / buildCards,
+// the order and the calls of meshbake.cpp bakeStages), expect(view) -> the closed form at a camera,
 // describe() -> the catalogue's text (`jahlab --env-list`).
 //
 // THE ONE-PIXEL RULE, as the cut states it (Types.h clusterCut; JahCullCut_cs.glsl jahClusterGroupAllowed): a view

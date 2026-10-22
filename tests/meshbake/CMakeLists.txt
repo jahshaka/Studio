@@ -8,6 +8,8 @@
 # Document-side by construction: no engine, no display.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
+    # the cut curve's STOCK arm: upstream clusterlod unpatched, renamed (ATOM-UPGRADE stage 0; a reference, never a product path)
+    cutcurve_stock.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/primitiveseed.cpp
@@ -51,13 +53,16 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/engine/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # meshoptimizer.h for the stock arm (its entry points are libIrisGL's exported ones)
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/meshoptimizer/src)
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     # the Stanford dragon tests/atom extracts at configure time (atom.lod_bound_bar (archived: archive/tests/atom))
     JAH_CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures")
 target_link_libraries(test_mesh_bake PRIVATE IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia
+    meshoptimizer)   # the cut curve's STOCK arm: the clusterizer + partitioner libIrisGL no longer pulls in
 jah_links_assimp(test_mesh_bake)
 
 # THE APP FOLDER BESIDE THE BINARY. This target links no .qrc, and the seeder
@@ -90,10 +95,12 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # once serial and twice on every thread, the ten throw cases (two widths x five units) each followed by a whole bake —
 # as THREE rows of the same binary (`--determinism standin|dragon|throws`), each its own process and home; one row was
 # 65 s; the parts' solo runs 8.3 / 15.8 / 42.5 s (2026-10-20). A CPU row renders nothing (FRAMES 0); over the 10 s CPU
-# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT max(6 x the solo run, the 120 s floor), rounded up.
-set(_bake_timeout_standin 120)
-set(_bake_timeout_dragon 120)
-set(_bake_timeout_throws 260)
+# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT: the 60 s law (below).
+# ATOM-2 stage 2 (the stage-1 read's finding 4): every part under the 60 s law — the throws part rebuilt to three whole
+# bakes (the reference, one after each width's five throws); its TIMEOUT is the law itself.
+set(_bake_timeout_standin 60)
+set(_bake_timeout_dragon 60)
+set(_bake_timeout_throws 60)
 foreach(_part standin dragon throws)
     add_test(NAME bake.determinism.${_part}
              COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism.${_part}" -- $<TARGET_FILE:test_mesh_bake>
@@ -106,11 +113,10 @@ foreach(_part standin dragon throws)
 endforeach()
 jah_ship_row(bake.determinism.standin bake.determinism.dragon bake.determinism.throws)   # THE SHIP SET (TEST-CUT-1)
 
-# bake.dag_reaches_root (ATOM-6 stage 2c; SHIP — the lead's promotion at the merge: the bake's end-to-end row for the
-# cluster DAG: pruning, empty groups, the lock, monotone errors — 1.1 s): a card soup (2,000 quads in a
-# 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake to DAGs whose coarsest cut is empty or one cluster,
-# errors monotone and under kMaxRelBound x the extent, no group terminal for lack of a target, no pruned piece
-# re-locked. Red at the base (terminal at depth 0). A CPU row: FRAMES 0.
+# bake.dag_reaches_root (ATOM-6 stage 2c; SHIP — the bake's end-to-end row for the cluster DAG; rewritten for ATOM-2's
+# builder, the law kept): a card soup (2,000 quads in a 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake
+# to DAGs that END — the top cut draws nothing over a non-empty root, the stored errors monotone, no group terminal,
+# the builder under its depth cap. A CPU row: FRAMES 0.
 add_test(NAME bake.dag_reaches_root COMMAND $<TARGET_FILE:test_mesh_bake> --dag-reaches-root
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(bake.dag_reaches_root PROPERTIES
@@ -169,14 +175,34 @@ if(TEST meshbake.archive_bakes)
     set_property(TEST meshbake.archive_bakes PROPERTY JAHSHAKA_TEST_FRAMES 551)
 endif()
 
-# bake.locked_positions_kept (ATOM-7 stage 2; the builder's row — 1.6 s): A LOCKED POSITION SURVIVES. The card soup, the
-# kit-bash and a rough faceted sheet (96 x 96 cells with UV charts: long group borders, sliver fans) bake with no group
-# losing a position its level locked — clusterlod's report sums to 0 and so do the positions the DAG's own clusters say
-# were lost (recomputed), each within its group's error (max d/err <= 1). Red before the verify's rule 4: the rough sheet
-# lost 2 positions at d3 (at the stage-1 tip; the soup and the kit-bash lose none there).
+# bake.locked_positions_kept (ATOM-7 stage 2; SHIP; rewritten for ATOM-2's builder, the law kept): A LOCKED POSITION
+# SURVIVES. The card soup, the kit-bash and a rough faceted sheet (96 x 96 cells with UV charts: long group borders,
+# sliver fans) bake with no group's output losing a position its level locked — recomputed from the DAG itself (a
+# group's external positions: its members' edges twinned by a pool cluster outside it).
 add_test(NAME bake.locked_positions_kept COMMAND $<TARGET_FILE:test_mesh_bake> --locked-positions-kept
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(bake.locked_positions_kept PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.locked_positions_kept)
 jah_ship_row(bake.locked_positions_kept)   # THE SHIP SET: the border-crack law's end-to-end row (ATOM-7; the lead's promotion at the merge)
+
+# bake.cut_curve (ATOM-UPGRADE stage 0; the builder's row): THE CUT CURVE IS MONOTONE AND ENDS EMPTY. The kit-bashed box
+# set (30 overlapping boxes, 360 triangles, hard UV seams) bakes to a DAG whose cut — the runtime's rule over the stored
+# errors, `test_mesh_bake --cut-curve`'s count — never grows as E grows and, once every finite group is affordable,
+# draws nothing (the empty top: stage 5's law). Red at the base. A CPU row: FRAMES 0.
+add_test(NAME bake.cut_curve COMMAND $<TARGET_FILE:test_mesh_bake> --cut-curve-law
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.cut_curve PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.cut_curve)
+
+# THE ATOM-2 ROWS (ATOM-2 part A stage 1; the builder's rows — the spec's six, each a `--atom2 <row>` verb, CPU only:
+# FRAMES 0). The fixtures: the Bistro-units kit-bashed box set, a 10 m curved shell with a 4 x 3 atlas, the card soup,
+# the kit-bash, the rough sheet and a 100-triangle ring (tests/meshbake/atom2_rows.h says what each row asserts).
+foreach(_row adjacency_by_position borders_move ladder_never_forced ends_empty locked_positions_kept one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
+    add_test(NAME atom2.${_row} COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 ${_row}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom2.${_row} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+    jah_no_display(atom2.${_row})
+endforeach()

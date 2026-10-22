@@ -228,15 +228,14 @@ iris::MeshPtr Builder::mesh(const Arrays &a)
     m->boundingSphere = box.getMinimalEnclosingSphere();
     ++mBuilt.meshes;
     if (mBake) {
-        // THE BAKE'S STAGES, meshbake.cpp bakeStages' calls in its order (the chain, the cards at the import default,
-        // the SDF, then the cluster DAG) — the same product an imported mesh carries
+        // THE BAKE'S STAGES, meshbake.cpp bakeStages' calls in its order (the cluster DAG, its level table, the cards at
+        // the import default) — the same product an imported mesh carries
         const double t0 = nowMs();
-        iris::MeshBake::buildLodChain(m);
-        iris::MeshBake::buildCards(m, iris::kDefaultMaxCards);
-        iris::MeshBake::buildSdf(m);
         iris::MeshBake::buildClusterDag(m);
+        iris::MeshBake::buildLevelTable(m);
+        iris::MeshBake::buildCards(m, iris::kDefaultMaxCards);
         mBuilt.bakeMs += nowMs() - t0;
-        // THE BAKE'S PRODUCTS, hashed: the chain's levels and the DAG (its clusters and groups are padding-free PODs)
+        // THE BAKE'S PRODUCTS, hashed: the level table and the DAG (its clusters and groups are padding-free PODs)
         for (const QVector<quint32> &level : m->lodIndices)
             mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(level.constData()), level.size() * qsizetype(sizeof(quint32))));
         const iris::MeshClusterDag &dag = m->clusterDag;

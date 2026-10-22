@@ -37,7 +37,7 @@ failures=0
 #    FIRST-PARTY PATHS ONLY (GATE-COST-1 P8; GATE-COST-2): src and irisgl WITHOUT irisgl's
 #    SUBMODULES (irisgl/.gitmodules — vendored code pinned from elsewhere), its git-ignored
 #    build output (the Ogre install) and .git; the
-#    in-tree vendored dirs (meshoptimizer-clusterlod, the *-patches stacks) are walked.
+#    in-tree vendored dirs (the *-patches stacks) are walked.
 #    tests/hygiene/first_party.sh says why.
 . "$(dirname "$0")/first_party.sh"
 mapfile -t OWN < <(first_party_paths irisgl)
