@@ -826,6 +826,17 @@ bool Session::stillness(const Command &c)
         else if (a.rfind("age=", 0) == 0) spec.visibleAge = unsigned(std::atoi(a.c_str() + 4));
         else if (a.rfind("trail=", 0) == 0) spec.moveTrail = unsigned(std::max(0, std::atoi(a.c_str() + 6)));
         else if (a == "restarts") spec.classRestarts = true;
+        else if (a.rfind("dump=", 0) == 0) {
+            // THE MOVING WINDOW'S RAW MATERIAL (PHOTON-2 round 2, M1): <data-root>/stillness/dump-<name>/, emptied
+            std::string name = a.substr(5);
+            for (char &ch : name)
+                if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
+            const QString dir = QDir(mOpt.dataRoot).filePath(QStringLiteral("stillness/dump-") + QString::fromStdString(name));
+            QDir(dir).removeRecursively();
+            QDir().mkpath(dir);
+            spec.dumpDir = dir.toStdString();
+            spec.dumpName = name;
+        }
         else if (a.rfind("out=", 0) == 0) {
             // A NAME, never a path: the files stay in <data-root>/stillness (Studio's world.stillness does the same)
             out = a.substr(4);
@@ -833,7 +844,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, out=<name>)\n", a.c_str()); return false; }
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;
@@ -852,7 +863,13 @@ bool Session::stillness(const Command &c)
         spec.classW = w;
         spec.classH = h;
         std::printf("LAB STILLNESS classes at the stop's pose: %ux%u in %.0f ms\n", w, h, msSinceStart() - tc);
+        const std::vector<envs::Object> objects = mBuilt->objects;
+        const float fov = mCamera.node()->angle;
+        spec.classesAt = [objects, fov](const Vec3 &e, const Vec3 &t, unsigned cw, unsigned ch) {
+            return stillnessClassImage(objects, iris::Vec3(e.x, e.y, e.z), iris::Vec3(t.x, t.y, t.z), fov, cw, ch);
+        };
     }
+    spec.fovYDegrees = mCamera.node()->angle;
     StillnessRun run(*mEngine, *mScene, *mView);
     if (!run.begin(spec, err)) { std::printf("LAB REFUSED %s\n", err.c_str()); return false; }
     const double t0 = msSinceStart();

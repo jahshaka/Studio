@@ -42,7 +42,7 @@ const std::vector<VerbDoc> &verbs()
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
-        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [out=<name>]", 2, 7,
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [out=<name>]", 2, 8,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
           "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
@@ -50,7 +50,9 @@ const std::vector<VerbDoc> &verbs()
           "environment's objects), the GI cache rows that fired, the gather's rest and the reflection count "
           "histogram; `path` adds the teleport window and the walk-vs-teleport comparison; `trail=N` measures the last N "
           "frames of the move too (every pixel, the ray levels re-fitted); `restarts` adds per frame the gather's foliage "
-          "pixels and how many restarted their history (the class bit of its own history word). Writes "
+          "pixels and how many restarted their history (the class bit of its own history word); `dump=<name>` writes "
+          "every trail frame's picture, the gather's view distance and surface test, its classes and camera to "
+          "<data-root>/stillness/dump-<name>/ (M1's moving window, computed offline). Writes "
           "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
