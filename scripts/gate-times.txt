@@ -127,7 +127,8 @@ pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
 rigperf.smoke 1.47  quiet n=49
-rtreflect.still_after_stop 22.40  solo, the card lock held, :71, warm (PHOTON-2 stage 1 fix round, 2026-10-22; jahlab on photon-glass, 960x540: the path check and the small lamp step, three sessions)
+rtreflect.lamp_step_held 28.85  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (e) split out of still_after_stop; jahlab on photon-glass, 960x540, two sessions, 600-frame windows)
+rtreflect.still_after_stop 26.45  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (a)-(d), one jahlab session on photon-glass, 960x540, two 600-frame windows and the path's bridge)
 samples.cleanstart.Matcaps 47.78  quiet n=50
 samples.cleanstart.Mirror_Room 46.42  quiet n=50
 samples.cleanstart.Particles 52.59  quiet n=46

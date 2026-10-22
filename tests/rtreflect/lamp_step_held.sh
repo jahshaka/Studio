@@ -1,0 +1,72 @@
+#!/bin/bash
+# rtreflect.lamp_step_held (PHOTON-2 stage 1's round 2, rev 6's (e); split out of rtreflect.still_after_stop in round 4 so
+# each row runs its law in under a minute) — A SMALL LAMP STEP AT REST IS HELD AT THE NEW LIGHT'S PICTURE.
+# jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the mirror, the declared mover -
+# parked) at still_after_stop's stop pose; two sessions, each through the stillness door with a 600-frame window (P1's
+# stop on the standard error runs most texels to K_max 512, so a view holds on its 513th rest frame):
+#   (e) a lamp step SMALLER than the one-ray sigma (8 -> 8.16) applied at rest, HELD (the door says it held before its
+#       shot), equals a session converged at the new light (held likewise): mean |change| <= 0.05 codes and at most
+#       0.01 % of the pixels more than a code apart. The step's own arrival (<= 16 frames) is
+#       rtreflect.history_detectors'.
+# Every judgement is a FAIL line, never a traceback (a window that never holds included).
+# usage: lamp_step_held.sh <jahlab> <work dir>
+set -u
+LAB=${1:?jahlab}; WD=${2:?work dir}
+[ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
+rm -rf "$WD"; mkdir -p "$WD"
+POSE=1.5,1.8,3.4,1.5,0.5,-3
+WIN=600
+# the step and its reference, each through the door at the stop's pose (a teleport to the pose it stands at: no move;
+# the reference's 20 frames give the gather the history the door's mask counts)
+printf 'camera %s\nframes 300\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
+    "$POSE" "$POSE" "$WIN" > "$WD/step.lab"
+printf 'camera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
+    "$POSE" "$POSE" "$WIN" > "$WD/ref.lab"
+for run in step ref; do
+    "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \
+        > "$WD/$run.log" 2>&1
+    rc=$?
+    [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
+done
+python3 -I - "$WD" "$WIN" <<'PY'
+import csv, os, sys
+wd, win = sys.argv[1], int(sys.argv[2])
+fails = []
+def window(name, which="walk"):
+    p = os.path.join(wd, "data", "stillness", name + ".tsv")
+    if not os.path.exists(p): return None
+    return [r for r in csv.DictReader(open(p), delimiter="\t") if r["window"] == which]
+moving = lambda r: int(r["glossy_max"]) > 0 or int(r["mirror_max"]) > 0
+def holdOf(rows):
+    late = [i for i in range(1, len(rows)) if moving(rows[i])]
+    return (late[-1] + 1) if late else 1
+for name in ("estep", "eref"):
+    r = window(name)
+    if not r or len(r) != win + 1:
+        fails.append("(e) the %s session's door window: %s" % (name, "no TSV" if not r else len(r)))
+        continue
+    if not int(r[1]["glossy_px"]) > 0:
+        fails.append("(e) the %s session's door counted no glass" % name)
+        continue
+    h = holdOf(r)
+    print("(e) the %s session held at frame %d of %d before its shot" % (name, h, win))
+    if h >= len(r): fails.append("(e) the %s session never held before its shot" % name)
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+if not Image:
+    fails.append("(e) PIL is missing: the lamp-step pictures cannot be compared")
+elif all(os.path.exists(os.path.join(wd, "data", "shots", n + ".png")) for n in ("e-step", "e-ref")):
+    a = Image.open(os.path.join(wd, "data", "shots", "e-step.png")).convert("RGB").tobytes()
+    b = Image.open(os.path.join(wd, "data", "shots", "e-ref.png")).convert("RGB").tobytes()
+    d = [max(abs(a[i] - b[i]), abs(a[i + 1] - b[i + 1]), abs(a[i + 2] - b[i + 2])) for i in range(0, len(a), 3)]
+    mean, over = sum(d) / len(d), sum(1 for v in d if v > 1)
+    print("(e) the held small lamp step vs the converged new light: mean %.4f, %d px > 1 code, max %d" % (mean, over, max(d)))
+    if mean > 0.05 or over > len(d) * 1e-4: fails.append("(e) mean <= 0.05 and <= 0.01 %% over a code: %.4f, %d px" % (mean, over))
+else:
+    fails.append("(e) the step's or the reference's shot is missing")
+for f in fails: print("FAIL:", f)
+print("rtreflect.lamp_step_held: %s" % ("FAIL" if fails else "PASS"))
+sys.exit(1 if fails else 0)
+PY

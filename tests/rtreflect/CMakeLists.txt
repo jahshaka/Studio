@@ -64,18 +64,26 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
-# rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars) — THE GLASS IS STILL AFTER
-# A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the path's teleport at equal
-# placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold, (b) 0 codes from the hold,
-# the hold <= 512 frames, (c) the mirror's estimator fixed, (d) walk vs teleport on the glossy panes, (e) a small lamp
-# step held at rest (the door says so) against a session converged and held at the new light; (f), the 4,096-sample
-# reference, is a measurement over a row's minute (still_after_stop.sh says the law and the base). 960x540; three
-# jahlab sessions: 231 frames to the stop, two 530-frame windows and the path's bridge (1,296); the step's 300 + its
-# door's 532 (832); the reference's door, 551 — 2,679 frames.
+# rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
+# GLASS IS STILL AFTER A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the
+# path's teleport at equal placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold
+# (J5's 0.01-code tolerance), (b) 0 codes from the hold, the hold at <= 513 rest frames, (c) the mirror's estimator
+# fixed, (d) walk vs teleport on the glossy panes; (f), the 4,096-sample reference, is a measurement over a row's
+# minute (still_after_stop.sh says the law and the base). 960x540; one jahlab session: 231 frames to the stop, two
+# 600-frame windows and the path's bridge - 1,436 frames.
+# rtreflect.lamp_step_held (rev 6's (e), split out of the row above in round 4 so each runs its law under a minute) —
+# a small lamp step held at rest against a session converged at the new light, each through the door's 600-frame
+# window (lamp_step_held.sh). 960x540; two jahlab sessions: the step's 300 + its door's 602 (902), the reference's
+# 621 - 1,523 frames.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 2679
+    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 1436
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.still_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(rtreflect.lamp_step_held CLASS engine FRAMES 1523
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lamp_step_held PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
