@@ -504,14 +504,47 @@ inline int oneStepDriftBound()
 }
 
 /// atom2.cards_merge_within_budget (stage 4, D9): THE CARD SOUP MERGES WHERE ITS BUDGET REACHES ITS SPACING — 2,000
-/// 10 cm cards in a 1 m ball: the first level whose card groups are granted at least the cards' spacing (the median
+/// 10 cm cards in a 1 m ball, and the same in a 0.35 m ball (a canopy's overlap): the first level whose card groups are granted at least the cards' spacing (the median
 /// nearest-centre distance) merges; every merge's cards lie within its granted budget of their seed; every merged
 /// set's MEASURED price (the sources against the quad, both ways) is within the budget and stored in the group's
-/// error; the quads conserve the merged cards' area within 10 % (each group and the whole); every quad corner lies
-/// inside the mesh's box; and the chain still obeys the law and ends.
-inline int cardsMergeWithinBudget()
+/// error; the quads conserve the merged cards' area within 10 % (every group at every level, and the whole); the
+/// mesh's box is recomputed over the quads; and the chain still obeys the law and ends.
+/// A CANOPY-DENSE CARD SOUP (the Linde's class at scale): `count` 10 cm cards of random orientation in a ball of
+/// `radius` — at 0.35 m they overlap many deep, where a quad of their summed area reaches past their own box.
+inline iris::MeshPtr denseCardSoup(int count, float radius)
 {
-    const iris::MeshPtr soup = dagroot::cardSoup();
+    std::vector<float> p, n, uv;
+    std::vector<unsigned> idx;
+    unsigned seed = 4049u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
+    for (int c = 0; c < count; ++c) {
+        float cx, cy, cz;
+        do { cx = rnd() * 2.0f - 1.0f; cy = rnd() * 2.0f - 1.0f; cz = rnd() * 2.0f - 1.0f; } while (cx * cx + cy * cy + cz * cz > 1.0f);
+        cx *= radius; cy *= radius; cz *= radius;
+        float nx = rnd() * 2.0f - 1.0f, ny = rnd() * 2.0f - 1.0f, nz = rnd() * 2.0f - 1.0f;
+        float nl = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < 1e-3f) { nx = 0; ny = 1; nz = 0; nl = 1; }
+        nx /= nl; ny /= nl; nz /= nl;
+        const float ax = std::fabs(nx) < 0.9f ? 1.0f : 0.0f, ay = ax > 0.5f ? 0.0f : 1.0f, az = 0.0f;
+        float ux = ay * nz - az * ny, uy = az * nx - ax * nz, uz = ax * ny - ay * nx;
+        const float ul = std::sqrt(ux * ux + uy * uy + uz * uz);
+        ux /= ul; uy /= ul; uz /= ul;
+        const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+        const float h = 0.05f;
+        const unsigned b = unsigned(p.size() / 3);
+        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (const auto &k : corners) {
+            p.insert(p.end(), { cx + h * (k[0] * ux + k[1] * vx), cy + h * (k[0] * uy + k[1] * vy), cz + h * (k[0] * uz + k[1] * vz) });
+            n.insert(n.end(), { nx, ny, nz });
+            uv.insert(uv.end(), { k[0] * 0.5f + 0.5f, k[1] * 0.5f + 0.5f });
+        }
+        idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
+    }
+    return dagroot::meshFromArrays(p, n, uv, idx);
+}
+
+inline void cardsMergeCase(const char *name, const iris::MeshPtr &soup)
+{
     // the spacing: the median distance from a card's centre to its nearest card's
     std::vector<iris::Vec3> centres;
     {
@@ -551,7 +584,7 @@ inline int cardsMergeWithinBudget()
     iris::MeshBake::buildClusterDag(soup, &st, opt);
     const MeshClusterDag &dag = soup->clusterDag;
     CHECK_LOUD(!dag.isEmpty(), "the card soup gets a DAG");
-    if (dag.isEmpty()) return finish();
+    if (dag.isEmpty()) return;
     int firstReach = -1, firstMerge = -1, farMerges = 0, overPrice = 0, unstored = 0, overCoverage = 0, overA = 0;
     double src = 0.0, quad = 0.0;
     for (const iris::atomdag::GroupRecord &r : st.records) {
@@ -573,10 +606,21 @@ inline int cardsMergeWithinBudget()
                     double(r.cardReach), double(r.cardSourceArea), double(r.cardQuadArea));
     }
     const long long top = cutcurve::cutTop(cutcurve::fromMesh(dag));
-    std::printf("== card soup: spacing %.4g (level 0's area %.4g); the first level granted the spacing %d, the first merge at "
-                "level %d; %d quads for %d cards, %zu vertices appended, %d shrunk, %d corners outside the box; coverage %.4f; "
-                "top cut %lld\n", double(spacing), double(l0Area), firstReach, firstMerge, st.cardSets, st.cardsMerged,
-                st.appendedVertices, st.quadsShrunk, st.cornersOutsideBox, src > 0.0 ? quad / src : 0.0, top);
+    // THE BOX IS RECOMPUTED: every vertex the DAG names lies inside the mesh's (grown) box
+    int outside = 0;
+    {
+        size_t nvAll = 0;
+        int pcAll = 3;
+        const float *pa = cutcurve::positionsOf(soup, &nvAll, &pcAll);
+        for (size_t v = 0; v < nvAll; ++v)
+            for (int k = 0; k < 3; ++k)
+                if (pa[v * size_t(pcAll) + size_t(k)] < soup->aabb.getMin()[k] ||
+                    pa[v * size_t(pcAll) + size_t(k)] > soup->aabb.getMax()[k]) { ++outside; break; }
+    }
+    std::printf("== %s: spacing %.4g (level 0's area %.4g); the first level granted the spacing %d, the first merge at "
+                "level %d; %d quads for %d cards, %zu vertices appended; coverage %.4f; vertices outside the box %d; top "
+                "cut %lld\n", name, double(spacing), double(l0Area), firstReach, firstMerge, st.cardSets, st.cardsMerged,
+                st.appendedVertices, src > 0.0 ? quad / src : 0.0, outside, top);
     CHECK_LOUD(firstReach >= 0 && firstMerge == firstReach,
                "the first level whose card groups are granted the cards' spacing merges (and none merges before it)");
     CHECK_LOUD(st.cardSets > 0 && st.appendedVertices == size_t(4 * st.cardSets), "each quad is four appended vertices");
@@ -585,8 +629,14 @@ inline int cardsMergeWithinBudget()
     CHECK_LOUD(unstored == 0, "every merged group's stored error carries its sets' measured price");
     CHECK_LOUD(overCoverage == 0 && src > 0.0 && std::fabs(quad / src - 1.0) <= 0.1,
                "the quads conserve the merged cards' area within 10 % (every group, and the whole)");
-    CHECK_LOUD(st.cornersOutsideBox == 0, "every quad corner lies inside the mesh's box");
+    CHECK_LOUD(outside == 0, "the mesh's box is recomputed over the quads' corners");
     CHECK_LOUD(top == 0, "the chain ends (the top cut draws nothing)");
+}
+
+inline int cardsMergeWithinBudget()
+{
+    cardsMergeCase("card soup (2,000 cards in a 1 m ball)", dagroot::cardSoup());
+    cardsMergeCase("dense canopy (2,000 cards in a 0.35 m ball)", denseCardSoup(2000, 0.35f));
     return finish();
 }
 

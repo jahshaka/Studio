@@ -2099,7 +2099,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
     std::map<int, long long> grantedHist;   // DAG reductions by ceil(log2(granted / children's stored)); -1 = leaves
     long long countCarries = 0, budgetCarries = 0;
     long long cardMeshes = 0, cardComps = 0, cardL0Bytes = 0, cardAppendedBytes = 0, appendedAll = 0;
-    int cornersOutside = 0, memoHits = 0;
     std::vector<double> d0ratio;
     QElapsedTimer wall; wall.start();
     for (int i = 0; i < meshes.size(); ++i) {
@@ -2141,7 +2140,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         const iris::MeshClusterDag &dag = m->clusterDag;
         if (st.depthCapHit) ++capHits;
         appendedAll += (long long)st.appendedVertices * bytesPerVertex;
-        cornersOutside += st.cornersOutsideBox;
         if (cardClass) {
             ++cardMeshes; cardComps += (long long)comps;
             cardL0Bytes += (long long)nv0 * bytesPerVertex;
@@ -2158,7 +2156,6 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         dagBytes += 4 + 4 + 4LL * iris::atomdag::configRecord().size() + 4 + 32LL * dag.groups.size() +
                     40LL * dag.clusters.size() + 4 + 4LL * dag.vertices.size() + 4 + dag.triangles.size();
         ++depthHistogram[st.depth];
-        memoHits += st.memoHits;
         carried += st.carried; retries += st.retries; reductions += st.reductions; allCarriedLevels += st.levelsAllCarried;
         depthMax = std::max(depthMax, st.depth);
         rootAll += st.rootTriangles;
@@ -2223,10 +2220,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         std::printf("  depth-0 position-quadric estimate / measured step: median %.3f, p10 %.3f, p90 %.3f over %zu groups\n",
                     d0ratio[d0ratio.size() / 2], d0ratio[d0ratio.size() / 10], d0ratio[d0ratio.size() * 9 / 10], d0ratio.size());
     std::printf("  D9 THE CARD-SOUP CLASS (most islands under 12 triangles): %lld meshes, %lld islands; level-0 vertex bytes %lld, "
-                "appended %lld (%.4f); appended over every mesh %lld; corners outside their mesh's box %d\n", cardMeshes,
+                "appended %lld (%.4f); appended over every mesh %lld\n", cardMeshes,
                 cardComps, cardL0Bytes, cardAppendedBytes, cardL0Bytes ? double(cardAppendedBytes) / double(cardL0Bytes) : 0.0,
-                appendedAll, cornersOutside);
-    std::printf("  count-carried groups met again and looked up (the memo): %d\n", memoHits);
+                appendedAll);
     std::printf("  carried groups by cause (every pass): cluster count %lld (asked the same budget), budget %lld (asked 2x)\n",
                 countCarries, budgetCarries);
     std::printf("  groups attempted by simplify count (every pass, every shrink; 12 = 12+):");
