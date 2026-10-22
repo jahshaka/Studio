@@ -312,11 +312,9 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     // the source's two-sided flag on the nodes, the file's lights.
     t0 = Clock::now();
     TextureIndex tex(extractDir, fi.absolutePath());
-    // THE SOURCE'S TWO-SIDED FLAG (CULL-MODE-1: MeshMaterialData::twoSided -> the node's FaceCullingMode::None) is
-    // written by MeshNode::loadAsSceneFragment but NOT by MeshBake::buildFragment (meshbake.cpp buildFragmentNode sets
-    // no cull) — the app's node keeps it through its stored definition. The lab records the meshes whose material
-    // says two-sided and sets the nodes' cull after the build (a finding for irisgl/import: buildFragment's gap).
-    // DELETE THIS COPY when part A's MeshBake::buildFragment sets the flag itself.
+    // THE SOURCE'S TWO-SIDED FLAG: MeshBake::buildFragment sets the node's FaceCullingMode::None from the bake's twoSided
+    // flag itself (CULL-MODE-1, meshbake.cpp buildFragmentNode; settled by the ATOM-2 stage-1 read). This walk only COUNTS the
+    // two-sided meshes for the open log and re-asserts the same cull (idempotent); it is not a fix of a bake gap.
     QSet<const iris::Mesh *> twoSided;
     iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided](iris::MeshPtr mesh, iris::MeshMaterialData &d) {
         if (d.twoSided && mesh) twoSided.insert(mesh.data());
