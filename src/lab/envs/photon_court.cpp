@@ -3,7 +3,8 @@
 //
 // photon-court — THE COURT AT SCALE. A 20 x 20 m court floor, walls on three sides (x = -10, x = +10, z = -10; 8 m
 // tall), open to the sky and to +Z, and a two-sided CUT-OUT canopy (an 8 x 8 m quad, 4 m up, over the back half: a leaf
-// mask of 16 x 16 leaves, alpha-tested - the foliage class's fixture, PHOTON-2 K5).
+// mask of 16 x 16 leaves, alpha-tested - the foliage class's fixture, PHOTON-2 K5) with a second leaf layer 6 cm above
+// it (11 x 11 leaves: L8's depth step between the history test's bounds).
 // THE EXPECTATION. (1) Every probe of the court sees geometry in at least two faces (the floor and a wall, or the
 // canopy): all kept (the selftest's court: 18 of 18 since PHOTON-5). (2) A TWO-SIDED canopy's voxel darkness equals the
 // two-winding reference (gi.voxel_two_sided's law: both coverage halves and both normals) — the ratio 1 (the law of the
@@ -38,6 +39,13 @@ Built buildCourt(unsigned seed, bool bake)
     c.quad(V(-4, 4, -2), V(4, 4, -2), V(4, 4, -10), V(-4, 4, -10), V(0, -1, 0));
     const int o = b.instance(b.mesh(c), QStringLiteral("canopy"), QStringLiteral("subject"), V(0, 0, 0), 0.0f,
                              V(1, 1, 1), b.cutout(0.8f, 0.3f, 0.2f, 1.0f, 16), true, true);
+    // ...AND A SECOND LEAF LAYER 6 cm ABOVE (PHOTON-2 L8): leaves at two depths a few per cent apart - from a metre
+    // below, a 6 cm offset is a 6 % depth step, between the history test's 1 % and 3 % bounds over its grazing factor
+    // at the crossing's distances - so the foliage rule's own accepts have something to accept (a flat mask gave none).
+    Arrays c2;
+    c2.quad(V(-4, 4.06f, -2), V(4, 4.06f, -2), V(4, 4.06f, -10), V(-4, 4.06f, -10), V(0, -1, 0));
+    b.instance(b.mesh(c2), QStringLiteral("canopy-upper"), QStringLiteral("subject"), V(0, 0, 0), 0.0f, V(1, 1, 1),
+               b.cutout(0.7f, 0.35f, 0.2f, 1.0f, 11), true, true);
     Feature f;
     f.kind = Feature::Fixed;
     f.object = o;

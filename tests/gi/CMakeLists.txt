@@ -165,9 +165,9 @@ jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the le
 # write + 17, the field's last write <= 40 frames, a follow frame's extra GPU <= 3 ms and its entering planes' fill
 # frames stepping no more pixels than the same crossing with them inline - J1's fade) and THE FOLIAGE CLASS (K5).
 # hold_after_stop.sh says the law and the base.
-# 960x540; five jahlab sessions: 424, 483, 393, 393 and 393 frames.
+# 960x540; five jahlab sessions: 393, 424, 483, 483 and 483 frames.
 if(TARGET jahlab)
-    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 2086
+    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 2266
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

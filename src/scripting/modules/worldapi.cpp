@@ -2376,6 +2376,9 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
                                     { QStringLiteral("visibleFromGather"), w.visibleFromGather },
                                     { QStringLiteral("lastGiRowFrame"), w.lastGiRowFrame },
                                     { QStringLiteral("holdFrame"), w.holdFrame },
+                                    // the last frame the hold waited on: the rest key moved or the inputs owed work
+                                    // (PHOTON-2 L7: a write with no GI row included)
+                                    { QStringLiteral("lastHoldKeyFrame"), w.lastHoldKeyFrame },
                                     // the gather's settle N (PHOTON-2 K6: the hold's bar is the last write + N + 1)
                                     { QStringLiteral("settleFrames"),
                                       int(w.frames.empty() ? 0u

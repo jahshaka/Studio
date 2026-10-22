@@ -1,7 +1,7 @@
 #!/bin/bash
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, SPECS/PHOTON_2_SPEC.md rev 8's H4 as rev 9 restated it: J1-J5) —
 # THE GATHER SETTLES, THEN HOLDS.
-# jahlab's stillness door at 960x540, three sessions; the gather's four states (H1): MOVING, SETTLING (the camera still,
+# jahlab's stillness door at 960x540, five sessions; the gather's four states (H1): MOVING, SETTLING (the camera still,
 # an input written or owed: the EMA, no hold), RESTING (the rest mean), HELD; the field's rest budget (H2):
 #   ROOM, a 1.2 m walk inside one lattice cell (the no-regression check): no GI row after the stop, the gather held
 #     by frame 17, the plaster's per-frame change <= 1 code from frame 1;
@@ -10,7 +10,9 @@
 #     (0.01-code tolerance, J5), then the hold, and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
-#     burst; (c) the hold <= the last input write + 17 frames and the field's last write <= 40 frames after the stop;
+#     burst; (c) the hold <= the last frame the hold waited on + 17 (the door's hold_key: the gather's rest key moved -
+#     every write, a ray-level refit or a light write with no GI row included - or its inputs owed work) and the
+#     field's last write <= 40 frames after the stop;
 #     (d, J1) a follow frame's extra GPU (the ifd.follow row: the entered planes invalidated, faded in one sample a
 #     pass at the budget) <= 3 ms, and on the move's last 60 frames the frames the planes fill (ifd.follow / ifd.enter)
 #     step no more pixels beyond their 3x3 neighbourhood's motion change of the frame before (the door's step_px)
@@ -21,8 +23,10 @@
 #   COURT, THE FOLIAGE CLASS (K5: foliage = the alpha-tested canopy, its leaf mask): the gather wrote its class on the
 #     canopy (>= 1000 foliage pixels in its own history at the stop - 0 when the class has no writer: the base), and
 #     the same crossing again under the class-off arm (gather.classOff: every pixel the 1 % rule, no class split) -
-#     the canopy's share of pixels restarting their history during the move's last 60 frames and its per-frame
-#     change after the stop, class vs no class, printed.
+#     the pixels whose history only the foliage rule accepted (a depth delta between the 1 % and the 3 % bounds: the
+#     door's foliage_rule) > 0 with the class and 0 under the arm (red on an inverted or missing class test, L8); the
+#     canopy's share of pixels restarting their history during the move's last 60 frames and its per-frame change
+#     after the stop, class vs no class, printed.
 # usage: hold_after_stop.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -85,17 +89,19 @@ elif after: fails.append("(f) room lamp step: no change after the hold: %d frame
 # COURT, the crossing
 w = window("court-x")
 h = held_from(w)
-lastw = max([int(r["frame"]) for r in w if rows_of(r)] or [-1])
+lastw = max([int(r["frame"]) for r in w[1:] if r["hold_key"] == "1"] or [0])
+lastrow = max([int(r["frame"]) for r in w if rows_of(r)] or [-1])
 lastf = max([int(r["frame"]) for r in w if any(n.startswith("ifd.") for n in rows_of(r))] or [-1])
 wins = windows_to(w, h)
 rises = rises_of(wins)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
-print("court crossing: held from %s; the last input write %d (hold - write = %s); the field's last write %d; 10-frame windows %s; frames changing after the hold %d"
-      % (h, lastw, None if h is None else h - lastw, lastf, " ".join("%.3f" % x for x in wins), len(after)))
+print("court crossing: held from %s; the last frame the hold waited on %d (hold - that = %s; the last GI row %d); the field's last write %d; 10-frame windows %s; frames changing after the hold %d"
+      % (h, lastw, None if h is None else h - lastw, lastrow, lastf, " ".join("%.3f" % x for x in wins), len(after)))
 if rises: fails.append("(a) court: the per-frame change non-increasing over 10-frame windows (0.01 tolerance): rises %s" % rises)
 if h is None: fails.append("(b) court: the picture never held")
 elif after: fails.append("(b) court: no change after the hold: %d frames from %d" % (len(after), after[0]))
-if h is not None and h > lastw + 17: fails.append("(c) court: the hold <= the last input write + 17: %d > %d" % (h, lastw + 17))
+if h is not None and h > lastw + 17: fails.append("(c) court: the hold <= the last frame it waited on + 17: %d > %d" % (h, lastw + 17))
+if h is not None and h <= lastw: fails.append("(c) court: the hold after the last frame it waited on: %d <= %d" % (h, lastw))
 if lastf > 40: fails.append("(c) court: the field's last write <= 40 frames after the stop: %d" % lastf)
 log = open(os.path.join(wd, "court-x.log")).read()
 m = re.search(r"ifd\.follow=([\d.]+)\((\d+)\)", log)
@@ -135,6 +141,11 @@ n_off, share_off = restarts("court-off")
 print("court foliage class: %d foliage pixels in the gather's history at the stop (bar >= 1000); the canopy restarting during the move's last 60 frames: class %.4f (%d frames read), no class %.4f (%d); after the stop, max/mean codes: class %s, no class %s; held from %s / %s"
       % (stop_px, share_on, n_on, share_off, n_off, canopy_after(w), canopy_after(woff), held_from(w), held_from(woff)))
 if stop_px < 1000: fails.append("K5 court: the gather's foliage class on the canopy (>= 1000 pixels at the stop): %d" % stop_px)
+rule_on = sum(int(r["foliage_rule"]) for r in window("court-x", "walk-move") + window("court-x"))
+rule_off = sum(int(r["foliage_rule"]) for r in window("court-off", "walk-move") + window("court-off"))
+print("court foliage rule: the histories only the 3 %% bound accepted, over the move's trail and the window: class %d, class off %d (bars > 0 / 0)" % (rule_on, rule_off))
+if rule_on <= 0: fails.append("L8 court: the foliage rule accepts some history with the class: %d" % rule_on)
+if rule_off != 0: fails.append("L8 court: the foliage rule accepts none under gather.classOff: %d" % rule_off)
 for f in fails: print("FAIL:", f)
 print("gi.hold_after_stop: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
