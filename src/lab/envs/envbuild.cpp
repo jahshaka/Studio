@@ -3,7 +3,9 @@
 #include "../labscene.h"
 
 #include "irisgl/core/geometry/aabb.h"
+#include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -15,6 +17,7 @@
 #include "irisgl/import/meshbake.h"
 
 #include <QColor>
+#include <QImage>
 #include <QHash>
 
 #include <algorithm>
@@ -273,6 +276,46 @@ iris::PbrMaterialPtr Builder::emitter(float intensity)
     return mat;
 }
 
+iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness, int cells)
+{
+    iris::PbrMaterialPtr mat = material(r, g, b, roughness, 0.0f);
+    // THE LEAF MASK: one session texture per cell count (the pixels are a function of it alone).
+    const int res = 512;
+    const QString guid = QStringLiteral("jahlab-leaf-mask-%1").arg(cells);
+    iris::Texture2DPtr tex = iris::LiveTextures::find(guid);
+    if (!tex) {
+        tex = iris::LiveTextures::create(guid, QStringLiteral("leaf mask"), res, res, true);
+        if (tex) {
+            QImage img(res, res, QImage::Format_RGBA8888);
+            img.fill(QColor(255, 255, 255, 0));
+            Lcg rng(0x1eafu + unsigned(cells));
+            const float cell = float(res) / float(cells);
+            for (int cy = 0; cy < cells; ++cy)
+                for (int cx = 0; cx < cells; ++cx) {
+                    const float ox = (cx + rng.range(0.35f, 0.65f)) * cell, oy = (cy + rng.range(0.35f, 0.65f)) * cell;
+                    const float ax = rng.range(0.30f, 0.48f) * cell, ay = rng.range(0.18f, 0.32f) * cell;
+                    const float tilt = rng.range(0.0f, 3.14159265f), cs = std::cos(tilt), sn = std::sin(tilt);
+                    const int x0 = int(ox - cell), x1 = int(ox + cell), y0 = int(oy - cell), y1 = int(oy + cell);
+                    for (int y = std::max(0, y0); y <= std::min(res - 1, y1); ++y)
+                        for (int x = std::max(0, x0); x <= std::min(res - 1, x1); ++x) {
+                            const float dx = x + 0.5f - ox, dy = y + 0.5f - oy;
+                            const float u = (dx * cs + dy * sn) / ax, v = (-dx * sn + dy * cs) / ay;
+                            if (u * u + v * v <= 1.0f) img.setPixelColor(x, y, QColor(255, 255, 255, 255));
+                        }
+                }
+            tex->writeLive(img);
+        }
+    }
+    if (tex) mat->setBaseColorMap(tex);
+    mat->setAlphaMode(1);
+    mat->setAlphaCutoff(0.5f);
+    for (auto &f : mMatFacts)
+        if (f.first == mat.data()) f.second.cutout = true;
+    mHash.addData(QByteArray("cutout"));
+    mHash.addData(QByteArray::number(cells));
+    return mat;
+}
+
 void Builder::setMovable(int index)
 {
     if (index < 0 || size_t(index) >= mNodes.size()) return;
@@ -302,7 +345,11 @@ int Builder::instance(const iris::MeshPtr &m, const QString &name, const QString
     o.name = name;
     o.role = role;
     for (const auto &f : mMatFacts)
-        if (f.first == mat.data()) { o.roughness = f.second.roughness; o.metallic = f.second.metallic; }
+        if (f.first == mat.data()) {
+            o.roughness = f.second.roughness;
+            o.metallic = f.second.metallic;
+            o.cutout = f.second.cutout;
+        }
     o.twoSided = twoSided;
     mNodes.push_back(node);
     const iris::AABB b = m->getAABB();

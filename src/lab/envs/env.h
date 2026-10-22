@@ -100,9 +100,11 @@ struct Object
     QString role;                    ///< "subject" (measured), "ground", "wall", "building", "prop", ...
     iris::Vec3 boxMin, boxMax;       ///< world bounds
     /// THE MATERIAL'S FACTS the stillness door's classes read (PHOTON-2 stage 0: glossy < 0.4, rough, foliage =
-    /// two-sided or alpha-tested, the mirror, the declared mover) — the builder records what it set.
+    /// alpha-tested (cut-out; K5 - a two-sided opaque surface is not foliage), the mirror, the declared mover) — the
+    /// builder records what it set.
     float roughness = 1.0f, metallic = 0.0f;
     bool twoSided = false;
+    bool cutout = false;             ///< the material is alpha-tested (alphaMode 1, Builder::cutout)
     bool mover = false;              ///< declared Movable (the document's mobility): the ray tier's mover gate is on
 };
 

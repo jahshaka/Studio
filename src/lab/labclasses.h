@@ -14,7 +14,7 @@ namespace lab {
 
 /// The classes, in the door's column order: rough, glossy, mirror, foliage, mover.
 const std::vector<std::string> &stillnessClassNames();
-/// An object's class, 1-based in stillnessClassNames' order: the mover first, two-sided = foliage, a metal under
+/// An object's class, 1-based in stillnessClassNames' order: the mover first, alpha-tested (cut-out) = foliage, a metal under
 /// roughness 0.05 = the mirror, under 0.4 = glossy (the ray tier's cut), else rough.
 unsigned char stillnessClassOf(const envs::Object &o);
 /// Per pixel (row-major, w x h) of a perspective view from `eye` towards `target` (world +Y up, `fovYDegrees` the

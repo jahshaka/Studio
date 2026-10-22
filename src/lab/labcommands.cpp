@@ -40,14 +40,17 @@ const std::vector<VerbDoc> &verbs()
         { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
           "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
-        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [out=<name>]", 2, 6,
+        { "arm", "arm <name> <value>", 2, 2,
+          "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [out=<name>]", 2, 7,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
           "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
-          "default 10), per material class (rough, glossy < 0.4, mirror, foliage = two-sided, mover; by the "
+          "default 10), per material class (rough, glossy < 0.4, mirror, foliage = alpha-tested (cut-out), mover; by the "
           "environment's objects), the GI cache rows that fired, the gather's rest and the reflection count "
           "histogram; `path` adds the teleport window and the walk-vs-teleport comparison; `trail=N` measures the last N "
-          "frames of the move too (every pixel, the ray levels re-fitted). Writes "
+          "frames of the move too (every pixel, the ray levels re-fitted); `restarts` adds per frame the gather's foliage "
+          "pixels and how many restarted their history (the class bit of its own history word). Writes "
           "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
@@ -153,6 +156,7 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         if ((out.verb == "envcam" || out.verb == "measure") && !number(0, 0, false)) return false;
         if (out.verb == "move" && !number(1, 0, true)) return false;
         if (out.verb == "stillness" && !number(1, 2, true)) return false;
+        if (out.verb == "arm" && !number(1, -1e9, false)) return false;
         return true;
     }
     error = "'" + line + "': unknown command '" + out.verb + "' (help lists them)";

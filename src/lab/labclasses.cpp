@@ -14,7 +14,7 @@ const std::vector<std::string> &stillnessClassNames()
 unsigned char stillnessClassOf(const envs::Object &o)
 {
     if (o.mover) return 5u;
-    if (o.twoSided) return 4u;
+    if (o.cutout) return 4u;   // foliage = an alpha-tested (cut-out) surface, the engine's class (PHOTON-2 K5)
     if (o.metallic >= 0.5f && o.roughness < 0.05f) return 3u;
     if (o.roughness < 0.4f) return 2u;
     return 1u;

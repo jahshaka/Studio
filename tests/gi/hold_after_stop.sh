@@ -10,7 +10,12 @@
 #     non-increasing over 10-frame windows until the hold; (b) 0 codes after the hold - no burst; (c) the hold <= the
 #     last input write + 17 frames and the field's last write <= 40 frames after the stop; (d) the follow frames'
 #     extra GPU (three of the four entering samples: 3/4 of the ifd.follow row) <= 3 ms; the frame's busy GPU while
-#     the field's rest budget runs reported (the round's (e) is Bistro's, measured in the lab).
+#     the field's rest budget runs reported (the round's (e) is Bistro's, measured in the lab);
+#   COURT, THE FOLIAGE CLASS (K5: foliage = the alpha-tested canopy, its leaf mask): the gather wrote its class on the
+#     canopy (>= 1000 foliage pixels in its own history at the stop - 0 when the class has no writer: the base), and
+#     the same crossing again under the class-off arm (gather.classOff: every pixel the 1 % rule, no class split) -
+#     the canopy's share of pixels restarting their history during the move's last 60 frames and its per-frame
+#     change after the stop, class vs no class, printed.
 # usage: hold_after_stop.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -19,8 +24,9 @@ rm -rf "$WD"; mkdir -p "$WD"
 ROOM=1.5,2,3,1.5,1.5,-4
 printf 'stillness teleport:0.3,2,3,0.3,1.5,-4/hold:300/walk:%s:30 60 out=room-sub\nquit\n' "$ROOM" > "$WD/room-sub.lab"
 printf 'camera %s\nframes 300\nlamp lamp intensity 12\nstillness teleport:%s/hold:1 120 out=room-lamp\nquit\n' "$ROOM" "$ROOM" > "$WD/room-lamp.lab"
-printf 'stillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 out=court-x\nquit\n' > "$WD/court-x.lab"
-for run in room-sub:photon-room room-lamp:photon-room court-x:photon-court; do
+printf 'stillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-x\nquit\n' > "$WD/court-x.lab"
+printf 'arm gather.classOff 1\nstillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-off\nquit\n' > "$WD/court-off.lab"
+for run in room-sub:photon-room room-lamp:photon-room court-x:photon-court court-off:photon-court; do
     name=${run%%:*}; env=${run#*:}
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env "$env" --script "$WD/$name.lab" \
         > "$WD/$name.log" 2>&1
@@ -31,8 +37,8 @@ done
 python3 -I - "$WD" <<'PY'
 import csv, os, re, sys
 wd = sys.argv[1]
-def window(name):
-    return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == "walk"]
+def window(name, part="walk"):
+    return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == part]
 def rows_of(r):
     return [] if r["gi_rows"] == "-" else [it.split(":")[0] for it in r["gi_rows"].split(",")]
 def held_from(w):
@@ -86,6 +92,20 @@ else:
     print("court crossing: no follow frame measured (no GPU timing)")
 busy = [float(r["frame_gpu_ms"]) for r in w[1:] if float(r["frame_gpu_ms"]) >= 0 and any(n.startswith("ifd.") for n in rows_of(r))]
 if busy: print("court crossing: the frame's busy GPU while the field's rest budget ran: mean %.2f, max %.2f ms" % (sum(busy) / len(busy), max(busy)))
+# COURT, THE FOLIAGE CLASS (K5)
+def restarts(name):
+    tr = [r for r in window(name, "walk-move") if int(r["class_px"]) >= 0]
+    px = sum(int(r["class_px"]) for r in tr)
+    return len(tr), (sum(int(r["class_restart"]) for r in tr) / px if px else -1.0)
+def canopy_after(w):
+    return max(int(r["foliage_max"]) for r in w[1:]), round(sum(float(r["foliage_mean"]) for r in w[1:]) / max(1, len(w) - 1), 4)
+stop_px = int(w[0]["class_px"])
+n_on, share_on = restarts("court-x")
+woff = window("court-off")
+n_off, share_off = restarts("court-off")
+print("court foliage class: %d foliage pixels in the gather's history at the stop (bar >= 1000); the canopy restarting during the move's last 60 frames: class %.4f (%d frames read), no class %.4f (%d); after the stop, max/mean codes: class %s, no class %s; held from %s / %s"
+      % (stop_px, share_on, n_on, share_off, n_off, canopy_after(w), canopy_after(woff), held_from(w), held_from(woff)))
+if stop_px < 1000: fails.append("K5 court: the gather's foliage class on the canopy (>= 1000 pixels at the stop): %d" % stop_px)
 for f in fails: print("FAIL:", f)
 print("gi.hold_after_stop: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)

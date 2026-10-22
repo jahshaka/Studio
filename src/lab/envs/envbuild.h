@@ -55,6 +55,10 @@ public:
     iris::PbrMaterialPtr material(float r, float g, float b, float roughness = 0.9f, float metallic = 0.0f);
     /// An EMITTER (PHOTON-2 fix F2/F4's fixtures): a matte material glowing white at `intensity`. Hashed.
     iris::PbrMaterialPtr emitter(float intensity);
+    /// A CUT-OUT (PHOTON-2 K5's foliage): material() alpha-tested (alphaMode 1, cutoff 0.5) through a LEAF MASK on its
+    /// base colour map - `cells` x `cells` leaves over the 0..1 UV square, each an ellipse of a fixed generator's
+    /// size and tilt, opaque inside and clear between (a live texture: no file). Hashed.
+    iris::PbrMaterialPtr cutout(float r, float g, float b, float roughness, int cells);
     /// One instance: a MeshNode of `mesh` at pos / yaw (degrees about +Y) / scale, recorded as an Object. Returns its
     /// index in Built::objects.
     int instance(const iris::MeshPtr &m, const QString &name, const QString &role, const iris::Vec3 &pos,
@@ -73,7 +77,7 @@ private:
     QCryptographicHash mBakeHash;
     Built mBuilt;
     /// what material() set, for the objects' facts
-    struct MatFacts { float roughness = 1.0f, metallic = 0.0f; };
+    struct MatFacts { float roughness = 1.0f, metallic = 0.0f; bool cutout = false; };
     std::vector<std::pair<const void *, MatFacts>> mMatFacts;
     std::vector<iris::SceneNodePtr> mNodes;   ///< per object, its node
     bool mBake;

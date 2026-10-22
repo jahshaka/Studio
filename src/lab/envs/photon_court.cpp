@@ -2,10 +2,12 @@
 // `--env-list` prints the law at every stop, and the Photon spec measures it.
 //
 // photon-court — THE COURT AT SCALE. A 20 x 20 m court floor, walls on three sides (x = -10, x = +10, z = -10; 8 m
-// tall), open to the sky and to +Z, and a two-sided canopy (an 8 x 8 m quad, 4 m up, over the back half).
+// tall), open to the sky and to +Z, and a two-sided CUT-OUT canopy (an 8 x 8 m quad, 4 m up, over the back half: a leaf
+// mask of 16 x 16 leaves, alpha-tested - the foliage class's fixture, PHOTON-2 K5).
 // THE EXPECTATION. (1) Every probe of the court sees geometry in at least two faces (the floor and a wall, or the
 // canopy): all kept (the selftest's court: 18 of 18 since PHOTON-5). (2) A TWO-SIDED canopy's voxel darkness equals the
-// two-winding reference (gi.voxel_two_sided's law: both coverage halves and both normals) — the ratio 1.
+// two-winding reference (gi.voxel_two_sided's law: both coverage halves and both normals) — the ratio 1 (the law of the
+// two windings; the mask's holes are the same in both).
 #include "envbuild.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -35,7 +37,7 @@ Built buildCourt(unsigned seed, bool bake)
     Arrays c;
     c.quad(V(-4, 4, -2), V(4, 4, -2), V(4, 4, -10), V(-4, 4, -10), V(0, -1, 0));
     const int o = b.instance(b.mesh(c), QStringLiteral("canopy"), QStringLiteral("subject"), V(0, 0, 0), 0.0f,
-                             V(1, 1, 1), b.material(0.8f, 0.3f, 0.2f, 1.0f), true, true);
+                             V(1, 1, 1), b.cutout(0.8f, 0.3f, 0.2f, 1.0f, 16), true, true);
     Feature f;
     f.kind = Feature::Fixed;
     f.object = o;
@@ -60,8 +62,8 @@ std::vector<Prediction> expectCourt(const Built &, const Optics &)
 
 std::string describeCourt()
 {
-    return "photon-court: the court at scale (a 20 m floor, walls on three sides, open sky) with a two-sided 8 m "
-           "canopy. Predicts THE KEEP RULE — every probe sees >= 2 faces of geometry: all kept — and the canopy's "
+    return "photon-court: the court at scale (a 20 m floor, walls on three sides, open sky) with a two-sided, cut-out "
+           "(alpha-tested leaves) 8 m canopy. Predicts THE KEEP RULE — every probe sees >= 2 faces of geometry: all kept — and the canopy's "
            "two-sided voxel darkness EQUAL to the two-winding reference (ratio 1).";
 }
 

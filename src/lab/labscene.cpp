@@ -316,13 +316,19 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     // flag itself (CULL-MODE-1, meshbake.cpp buildFragmentNode; settled by the ATOM-2 stage-1 read). This walk only COUNTS the
     // two-sided meshes for the open log and re-asserts the same cull (idempotent); it is not a fix of a bake gap.
     QSet<const iris::Mesh *> twoSided;
-    iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided](iris::MeshPtr mesh, iris::MeshMaterialData &d) {
+    QSet<QString> cutoutMaps, twoSidedOpaqueMaps;
+    iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided, &r, &cutoutMaps, &twoSidedOpaqueMaps](
+                                                                       iris::MeshPtr mesh, iris::MeshMaterialData &d) {
         if (d.twoSided && mesh) twoSided.insert(mesh.data());
+        if (d.alphaMode == 1) { ++r.cutoutMeshes; cutoutMaps.insert(d.diffuseTexture); }
+        else if (d.alphaMode == 0 && d.twoSided) { ++r.twoSidedOpaqueMeshes; twoSidedOpaqueMaps.insert(d.diffuseTexture); }
         iris::MeshMaterialData resolved = d;
         tex.resolve(resolved);
         return iris::MaterialPtr(iris::materialFromMeshData(resolved));
     });
     if (!node) { r.error = QStringLiteral("the bake of %1 holds no fragment").arg(path); return {}; }
+    r.cutoutMaps = int(cutoutMaps.size());
+    r.twoSidedOpaqueMaps = int(twoSidedOpaqueMaps.size());
     r.texturesResolved = tex.resolved;
     r.texturesMissing = tex.missing;
     r.textureNameCollisions = tex.collisions;

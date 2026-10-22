@@ -317,13 +317,14 @@ bool Session::load(std::string &error)
     iris::SceneNodePtr model = loadModel(path, mOpt.dataRoot, r);
     if (!model) { error = r.error.toStdString(); return false; }
     std::printf("LAB LOAD %s: %s | %d meshes, %s triangles, %d file lights | hash %.0f ms, parse %.0f ms, bake %.0f ms, "
-                "read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions, %.0f ms | %d two-sided nodes | %s\n",
+                "read %.0f ms, fragment %.0f ms | maps %d resolved, %d missing, %d name collisions, %.0f ms | %d two-sided nodes | "
+                "foliage (cut-out) %d meshes / %d maps, two-sided opaque %d meshes / %d maps | %s\n",
                 qPrintable(QFileInfo(path).fileName()),
                 r.baked ? "BAKED (cache miss)" : r.parsed ? "BAKE HIT, PARSED (the sidecar was missing or stale)"
                                                           : "CACHE HIT (no parse, no bake)",
                 r.meshes, grouped(r.triangles).c_str(), r.lights, r.hashMs, r.parseMs, r.bakeMs, r.readMs, r.fragmentMs,
                 r.texturesResolved, r.texturesMissing, r.textureNameCollisions, r.texturesMs, r.twoSidedNodes,
-                qPrintable(r.bakePath));
+                r.cutoutMeshes, r.cutoutMaps, r.twoSidedOpaqueMeshes, r.twoSidedOpaqueMaps, qPrintable(r.bakePath));
     std::fflush(stdout);
     mSceneTriangles = r.triangles;
     QString werr;
@@ -777,6 +778,12 @@ bool Session::exec(const Command &c)
         ok = lamp(c);
     } else if (c.verb == "material") {
         ok = material(c);
+    } else if (c.verb == "arm") {
+        // A MEASURING ARM, asked on the engine's side (Engine::request: the affinity law)
+        const double v = std::strtod(c.args[1].c_str(), nullptr);
+        mEngine->request([&](Engine &e) { ok = e.setArm(c.args[0], v); });
+        if (!ok) std::printf("LAB REFUSED arm: no arm '%s' (or %s out of its range)\n", c.args[0].c_str(), c.args[1].c_str());
+        else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
     } else if (c.verb == "move") {
         ok = move(c);
     } else if (c.verb == "help") {
@@ -816,6 +823,7 @@ bool Session::stillness(const Command &c)
         if (a == "path") spec.path = true;
         else if (a.rfind("age=", 0) == 0) spec.visibleAge = unsigned(std::atoi(a.c_str() + 4));
         else if (a.rfind("trail=", 0) == 0) spec.moveTrail = unsigned(std::max(0, std::atoi(a.c_str() + 6)));
+        else if (a == "restarts") spec.classRestarts = true;
         else if (a.rfind("out=", 0) == 0) {
             // A NAME, never a path: the files stay in <data-root>/stillness (Studio's world.stillness does the same)
             out = a.substr(4);
@@ -823,7 +831,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, out=<name>)\n", a.c_str()); return false; }
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;

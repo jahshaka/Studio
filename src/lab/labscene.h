@@ -39,6 +39,9 @@ struct LoadReport
     int texturesResolved = 0, texturesMissing = 0, textureNameCollisions = 0;   ///< the maps' names (TextureIndex)
     double texturesMs = 0.0;       ///< the maps' name resolution (TextureIndex)
     int twoSidedNodes = 0;   ///< nodes given FaceCullingMode::None from their material's twoSided flag
+    /// THE FOLIAGE CLASS'S COUNT (PHOTON-2 K5): meshes whose material is alpha-tested (alphaMode 1: the class), and
+    /// the double-sided OPAQUE ones (two-sided, alphaMode 0: not the class) - and the distinct base-colour maps of each.
+    int cutoutMeshes = 0, twoSidedOpaqueMeshes = 0, cutoutMaps = 0, twoSidedOpaqueMaps = 0;
 };
 
 /// Loads `path` (FBX / OBJ / glTF / GLB...) through the bake cache under `dataRoot`. Null + report.error on failure.
