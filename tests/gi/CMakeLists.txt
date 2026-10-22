@@ -158,15 +158,16 @@ set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
-# gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4) — THE GATHER SETTLES, THEN HOLDS: jahlab's stillness
-# door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 16 frames, then the
-# hold, no burst) and photon-court's 15 m crossing (the change falling over 10-frame windows to the hold, 0 codes
-# after it, the hold <= the last input write + 17, the field's last write <= 40 frames, a follow frame's extra GPU
-# <= 3 ms) and THE FOLIAGE CLASS (K5: the court's cut-out canopy carries the gather's class; the crossing again under
-# the class-off arm, the canopy's restart share and change printed). hold_after_stop.sh says the law and the base.
-# 960x540; four jahlab sessions: 424, 483, 393 and 393 frames.
+# gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
+# jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36
+# frames, falling over 10-frame windows, then the hold, no burst) and photon-court's 15 m crossing (the change falling
+# over 10-frame windows to the hold with J5's 0.01-code tolerance, 0 codes after it, the hold <= the last input
+# write + 17, the field's last write <= 40 frames, a follow frame's extra GPU <= 3 ms and its entering planes' fill
+# frames stepping no more pixels than the same crossing with them inline - J1's fade) and THE FOLIAGE CLASS (K5).
+# hold_after_stop.sh says the law and the base.
+# 960x540; five jahlab sessions: 424, 483, 393, 393 and 393 frames.
 if(TARGET jahlab)
-    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 1693
+    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 2086
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

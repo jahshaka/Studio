@@ -1,16 +1,23 @@
 #!/bin/bash
-# gi.hold_after_stop (PHOTON-2 stage 2 and its round, SPECS/PHOTON_2_SPEC.md rev 8's H4) — THE GATHER SETTLES, THEN HOLDS.
+# gi.hold_after_stop (PHOTON-2 stage 2 and its round, SPECS/PHOTON_2_SPEC.md rev 8's H4 as rev 9 restated it: J1-J5) —
+# THE GATHER SETTLES, THEN HOLDS.
 # jahlab's stillness door at 960x540, three sessions; the gather's four states (H1): MOVING, SETTLING (the camera still,
 # an input written or owed: the EMA, no hold), RESTING (the rest mean), HELD; the field's rest budget (H2):
 #   ROOM, a 1.2 m walk inside one lattice cell (the no-regression check): no GI row after the stop, the gather held
 #     by frame 17, the plaster's per-frame change <= 1 code from frame 1;
-#   ROOM, a lamp step 8 -> 12 at rest (f): the field's change done within 16 frames of the step, then the hold, and
-#     0 codes after it;
+#   ROOM, a lamp step 8 -> 12 at rest (f, J2): the field's change done within 36 frames of the step (Lumen's diffuse
+#     keeps 10 % at 24 frames, 1 % at 48), the per-frame change non-increasing over 10-frame windows to the hold
+#     (0.01-code tolerance, J5), then the hold, and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
-#     non-increasing over 10-frame windows until the hold; (b) 0 codes after the hold - no burst; (c) the hold <= the
-#     last input write + 17 frames and the field's last write <= 40 frames after the stop; (d) the follow frames'
-#     extra GPU (three of the four entering samples: 3/4 of the ifd.follow row) <= 3 ms; the frame's busy GPU while
-#     the field's rest budget runs reported (the round's (e) is Bistro's, measured in the lab);
+#     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
+#     burst; (c) the hold <= the last input write + 17 frames and the field's last write <= 40 frames after the stop;
+#     (d, J1) a follow frame's extra GPU (the ifd.follow row: the entered planes invalidated, faded in one sample a
+#     pass at the budget) <= 3 ms, and on the move's last 60 frames the frames the planes fill (ifd.follow / ifd.enter)
+#     step no more pixels beyond their 3x3 neighbourhood's motion change of the frame before (the door's step_px)
+#     than the same frames of the same crossing with the planes integrated whole in the follow frame (the arm
+#     gi.fieldEnterInline: the field already there, nothing to fade) - by at most 2 % of that run's or 50 pixels;
+#     the rest budget's share of a settling frame's busy GPU printed (J4's bar, <= 0.5 ms, is Bistro's, measured in
+#     the lab);
 #   COURT, THE FOLIAGE CLASS (K5: foliage = the alpha-tested canopy, its leaf mask): the gather wrote its class on the
 #     canopy (>= 1000 foliage pixels in its own history at the stop - 0 when the class has no writer: the base), and
 #     the same crossing again under the class-off arm (gather.classOff: every pixel the 1 % rule, no class split) -
@@ -26,7 +33,8 @@ printf 'stillness teleport:0.3,2,3,0.3,1.5,-4/hold:300/walk:%s:30 60 out=room-su
 printf 'camera %s\nframes 300\nlamp lamp intensity 12\nstillness teleport:%s/hold:1 120 out=room-lamp\nquit\n' "$ROOM" "$ROOM" > "$WD/room-lamp.lab"
 printf 'stillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-x\nquit\n' > "$WD/court-x.lab"
 printf 'arm gather.classOff 1\nstillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-off\nquit\n' > "$WD/court-off.lab"
-for run in room-sub:photon-room room-lamp:photon-room court-x:photon-court court-off:photon-court; do
+printf 'arm gi.fieldEnterInline 1\nstillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 out=court-inline\nquit\n' > "$WD/court-inline.lab"
+for run in room-sub:photon-room room-lamp:photon-room court-x:photon-court court-off:photon-court court-inline:photon-court; do
     name=${run%%:*}; env=${run#*:}
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env "$env" --script "$WD/$name.lab" \
         > "$WD/$name.log" 2>&1
@@ -43,6 +51,12 @@ def rows_of(r):
     return [] if r["gi_rows"] == "-" else [it.split(":")[0] for it in r["gi_rows"].split(",")]
 def held_from(w):
     return next((int(r["frame"]) for r in w if r["held"] == "1"), None)
+def windows_to(w, h):
+    chg = [float(r["all_mean"]) for r in w]
+    end = h if h is not None else len(w)
+    return [sum(chg[a:min(a + 10, end)]) / max(1, min(10, end - a)) for a in range(1, end, 10)]
+def rises_of(wins):   # J5: a rise beyond 0.01 code
+    return [(i, round(wins[i], 3), round(wins[i + 1], 3)) for i in range(len(wins) - 1) if wins[i + 1] > wins[i] + 0.01]
 fails = []
 # ROOM, the sub-cell walk
 w = window("room-sub")
@@ -59,10 +73,13 @@ conv = [int(r["frame"]) for r in w if "ifd.converge" in rows_of(r)]
 done = max(conv) + 1 if conv else 0
 h = held_from(w)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
-print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 16); held from %s; frames changing after the hold: %d"
-      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, h, len(after)))
+lwins = windows_to(w, h)
+lrises = rises_of(lwins)
+print("room lamp step: the field's change on frames %s, done %d frames after the step (bar <= 36); 10-frame windows %s; held from %s; frames changing after the hold: %d"
+      % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, " ".join("%.3f" % x for x in lwins), h, len(after)))
 if not conv: fails.append("room lamp step: the field never integrated the change")
-elif done > 16: fails.append("(f) room lamp step: the field's change within 16 frames: %d" % done)
+elif done > 36: fails.append("(f) room lamp step: the field's change within 36 frames: %d" % done)
+if lrises: fails.append("(f) room lamp step: the change non-increasing over 10-frame windows (0.01 tolerance): rises %s" % lrises)
 if h is None: fails.append("(f) room lamp step: the picture never held")
 elif after: fails.append("(f) room lamp step: no change after the hold: %d frames from %d" % (len(after), after[0]))
 # COURT, the crossing
@@ -70,28 +87,40 @@ w = window("court-x")
 h = held_from(w)
 lastw = max([int(r["frame"]) for r in w if rows_of(r)] or [-1])
 lastf = max([int(r["frame"]) for r in w if any(n.startswith("ifd.") for n in rows_of(r))] or [-1])
-chg = [float(r["all_mean"]) for r in w]
-end = h if h is not None else len(w)
-wins = [sum(chg[a:min(a + 10, end)]) / max(1, min(10, end - a)) for a in range(1, end, 10)]
-rises = [(i, round(wins[i], 3), round(wins[i + 1], 3)) for i in range(len(wins) - 1) if wins[i + 1] > wins[i]]
+wins = windows_to(w, h)
+rises = rises_of(wins)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
 print("court crossing: held from %s; the last input write %d (hold - write = %s); the field's last write %d; 10-frame windows %s; frames changing after the hold %d"
       % (h, lastw, None if h is None else h - lastw, lastf, " ".join("%.3f" % x for x in wins), len(after)))
-if rises: fails.append("(a) court: the per-frame change non-increasing over 10-frame windows: rises %s" % rises)
+if rises: fails.append("(a) court: the per-frame change non-increasing over 10-frame windows (0.01 tolerance): rises %s" % rises)
 if h is None: fails.append("(b) court: the picture never held")
 elif after: fails.append("(b) court: no change after the hold: %d frames from %d" % (len(after), after[0]))
 if h is not None and h > lastw + 17: fails.append("(c) court: the hold <= the last input write + 17: %d > %d" % (h, lastw + 17))
 if lastf > 40: fails.append("(c) court: the field's last write <= 40 frames after the stop: %d" % lastf)
 log = open(os.path.join(wd, "court-x.log")).read()
 m = re.search(r"ifd\.follow=([\d.]+)\((\d+)\)", log)
+me = re.search(r"ifd\.enter=([\d.]+)\((\d+)\)", log)
 if m:
-    extra = 0.75 * float(m.group(1))
-    print("court crossing: the follow frames' ifd.follow %.2f ms GPU (%s frames): extra %.2f ms (bar <= 3)" % (float(m.group(1)), m.group(2), extra))
+    extra = float(m.group(1))
+    print("court crossing: the follow frames' ifd.follow %.3f ms GPU (%s frames; bar <= 3); the entering passes' ifd.enter %s"
+          % (extra, m.group(2), "%s ms (%s frames)" % (me.group(1), me.group(2)) if me else "none"))
     if extra > 3.0: fails.append("(d) court: a follow frame's extra GPU <= 3 ms: %.2f" % extra)
 else:
-    print("court crossing: no follow frame measured (no GPU timing)")
-busy = [float(r["frame_gpu_ms"]) for r in w[1:] if float(r["frame_gpu_ms"]) >= 0 and any(n.startswith("ifd.") for n in rows_of(r))]
-if busy: print("court crossing: the frame's busy GPU while the field's rest budget ran: mean %.2f, max %.2f ms" % (sum(busy) / len(busy), max(busy)))
+    fails.append("(d) court: no follow frame measured (no GPU timing)")
+inl = {r["frame"]: int(r["step_px"]) for r in window("court-inline", "walk-move")}
+fill = [(r["frame"], int(r["step_px"]), inl.get(r["frame"], -1)) for r in window("court-x", "walk-move")
+        if int(r["step_px"]) >= 0 and any(n in ("ifd.follow", "ifd.enter") for n in rows_of(r))]
+over = [f for f in fill if f[2] < 0 or f[1] > f[2] + max(50, f[2] // 50)]
+print("court crossing: steps beyond the neighbourhood's motion (step_px) on the %d fill frames: %d more than the inline arm's at most (max %s vs %s)"
+      % (len(fill), max([f[1] - f[2] for f in fill] or [0]), max([f[1] for f in fill] or [None]), max([f[2] for f in fill] or [None])))
+if not fill: fails.append("(d) court: the move's trail carries no fill frame")
+elif over: fails.append("(d) court: a fill frame steps more pixels than the same frame with the planes inline: %s" % over[:4])
+sett = [r for r in w[1:] if r["held"] != "1" and float(r["frame_gpu_ms"]) >= 0]
+withf = [float(r["frame_gpu_ms"]) for r in sett if any(n.startswith("ifd.") for n in rows_of(r))]
+without = [float(r["frame_gpu_ms"]) for r in sett if not any(n.startswith("ifd.") for n in rows_of(r))]
+if withf and without:
+    print("court crossing: a settling frame's busy GPU with the field's rest budget %.2f ms (%d), without %.2f (%d): it adds %.2f ms"
+          % (sum(withf) / len(withf), len(withf), sum(without) / len(without), len(without), sum(withf) / len(withf) - sum(without) / len(without)))
 # COURT, THE FOLIAGE CLASS (K5)
 def restarts(name):
     tr = [r for r in window(name, "walk-move") if int(r["class_px"]) >= 0]
