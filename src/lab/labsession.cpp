@@ -834,6 +834,10 @@ bool Session::exec(const Command &c)
         else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
     } else if (c.verb == "move") {
         ok = move(c);
+    } else if (c.verb == "pin") {
+        ok = pin(c);
+    } else if (c.verb == "voxels") {
+        ok = voxels(c);
     } else if (c.verb == "help") {
         std::printf("%s", helpText().c_str());
     } else if (c.verb == "echo") {
@@ -1060,6 +1064,157 @@ bool Session::move(const Command &c)
         frame();
     }
     return true;
+}
+
+// ---- THE GI DOORS (PHOTON-7 stage 1): the placement pin, one cascade's voxels by world cell ----------------------------
+
+bool Session::pin(const Command &c)
+{
+    using namespace jahshaka::engine;
+    if (c.args[0] == "off") {
+        if (c.args.size() != 1) { std::printf("LAB REFUSED pin: 'pin off' takes nothing more\n"); return false; }
+        mScene->setGiPlacementPin(GiPlacementPin());   // a message: applied at the next frame's drain
+        frame();
+        std::printf("LAB PIN off\n");
+        return true;
+    }
+    if (c.args.size() < 2) { std::printf("LAB REFUSED pin: pin <c|all> x,y,z [scroll] | pin off\n"); return false; }
+    const bool scroll = c.args.size() == 3 && c.args[2] == "scroll";
+    if (c.args.size() == 3 && !scroll) { std::printf("LAB REFUSED pin: '%s' (scroll)\n", c.args[2].c_str()); return false; }
+    iris::Vec3 p, unused;
+    if (!parsePose(c.args[1] + ",0,0,0", p, unused)) {
+        std::printf("LAB REFUSED pin: '%s' is not x,y,z\n", c.args[1].c_str());
+        return false;
+    }
+    const GiStatus g = mScene->published().gi;
+    if (g.cascades.empty()) { std::printf("LAB REFUSED pin: the scene has no cascade chain\n"); return false; }
+    const int n = int(g.cascades.size());
+    int only = -1;
+    if (c.args[0] != "all") {
+        char *end = nullptr;
+        const long v = std::strtol(c.args[0].c_str(), &end, 10);
+        if (!end || *end || v < 0 || v >= n) {
+            std::printf("LAB REFUSED pin: '%s' is not a cascade 0..%d or all\n", c.args[0].c_str(), n - 1);
+            return false;
+        }
+        only = int(v);
+    }
+    // EVERY CASCADE IS PINNED (the pin is the chain's placement): the named one at the position, the rest where they stand
+    GiPlacementPin pinned;
+    pinned.on = true;
+    for (int i = 0; i < n; ++i)
+        pinned.cascadeBuiltCam.push_back(only < 0 || i == only ? Vec3(p.x(), p.y(), p.z()) : g.cascades[size_t(i)].builtCam);
+    mScene->setGiPlacementPin(pinned);
+    if (!scroll) {
+        // A WHOLE REBUILD of each pinned cascade at its pin (the measuring door gi.rebuildCascade, one frame each)
+        for (int i = 0; i < n && !mQuit; ++i) {
+            if (only >= 0 && i != only) continue;
+            bool armed = false;
+            mEngine->request([&](Engine &e) { armed = e.setArm("gi.rebuildCascade", double(i)); });
+            if (!armed) { std::printf("LAB REFUSED pin: the engine refused the arm gi.rebuildCascade %d\n", i); return false; }
+            frame();
+        }
+        mEngine->request([&](Engine &e) { e.setArm("gi.rebuildCascade", -1.0); });
+    }
+    frame();
+    std::printf("LAB PIN %s at %.4f,%.4f,%.4f%s\n", c.args[0].c_str(), p.x(), p.y(), p.z(),
+                scroll ? " (the scroll path)" : " (whole rebuilds)");
+    return true;
+}
+
+bool Session::voxels(const Command &c)
+{
+    using namespace jahshaka::engine;
+    char *end = nullptr;
+    const long ci = std::strtol(c.args[0].c_str(), &end, 10);
+    if (!end || *end || ci < 0) { std::printf("LAB REFUSED voxels: '%s' is not a cascade\n", c.args[0].c_str()); return false; }
+    const std::string kind = c.args[1];
+    // THE CHAIN'S ANSWER: no voxel work owed for two consecutive frames (GiStatus::chainOwed), cap 600 frames
+    int waited = 0, quiet = 0;
+    for (; waited < 600 && !mQuit && quiet < 2; ++waited) {
+        const GiStatus &g = mScene->published().gi;
+        bool busy = g.chainOwed;
+        for (const auto &cs : g.cascades) busy = busy || cs.pending > 0 || cs.scrolling;
+        quiet = busy ? 0 : quiet + 1;
+        if (quiet < 2) frame();
+    }
+    if (quiet < 2) { std::printf("LAB VOXELS FAILED: the chain still owed voxel work after %d frames\n", waited); return false; }
+    if (kind == "stats") {
+        const GiVoxelStats st = mScene->giVoxelStats(int(ci));
+        if (!st.available) { std::printf("LAB VOXELS FAILED: no stats for cascade %ld\n", ci); return false; }
+        std::printf("LAB VOXELS STATS cascade %d %dx%dx%d format %s multiplier %.6g peak %.6g peakDirect %.6g (true radiance: "
+                    "%.6g / %.6g) meanLit %.6g lit %lld atMax %lld directAtMax %lld aboveOne %lld peakEmissive %.6g light %s "
+                    "direct %s store %s (waited %d frames)\n",
+                    st.cascade, st.width, st.height, st.depth, st.format.c_str(), st.multiplier, st.peak, st.peakDirect,
+                    st.multiplier > 0.0f ? st.peak / st.multiplier : 0.0f,
+                    st.multiplier > 0.0f ? st.peakDirect / st.multiplier : 0.0f, st.meanLit, st.voxelsLit,
+                    st.voxelsAtMax, st.directAtMax, st.voxelsAboveOne, st.peakEmissive, st.lightDigest.c_str(),
+                    st.directDigest.c_str(), st.storeDigest.c_str(), waited);
+        return true;
+    }
+    GiVoxelVolume v;
+    if (!mScene->giVoxelVolume(int(ci), v) || !v.available) {
+        std::printf("LAB VOXELS FAILED: no volume for cascade %ld\n", ci);
+        return false;
+    }
+    const std::vector<float> *arr = kind == "direct" ? &v.direct : kind == "light" ? &v.light : kind == "back" ? &v.lightBack
+                                  : kind == "albedo" ? &v.albedo : kind == "covp" ? &v.coverageP : kind == "covn" ? &v.coverageN
+                                  : kind == "posp" ? &v.positionP : kind == "posn" ? &v.positionN : nullptr;
+    if (!arr) {
+        std::printf("LAB REFUSED voxels: '%s' (direct|light|back|albedo|covp|covn|posp|posn|stats)\n", kind.c_str());
+        return false;
+    }
+    const int res[3] = { v.width, v.height, v.depth };
+    if (arr->size() != size_t(res[0]) * res[1] * res[2] * 4u) {
+        std::printf("LAB VOXELS FAILED: cascade %ld keeps no '%s' volume\n", ci, kind.c_str());
+        return false;
+    }
+    // THE WORLD CELL of voxel 0 (the origin is an exact multiple of the cell: the lattice's own corner) and the box's span
+    long long base[3];
+    int lo[3] = { 0, 0, 0 }, hi[3] = { res[0], res[1], res[2] };
+    for (int a = 0; a < 3; ++a) base[a] = (long long)std::llround(double(v.origin[a]) / double(v.cell[a]));
+    if (c.args.size() > 3) {
+        std::vector<float> b;
+        std::string cur;
+        for (char ch : c.args[3] + ",") {
+            if (ch == ',') { if (!cur.empty()) b.push_back(float(std::strtod(cur.c_str(), nullptr))); cur.clear(); }
+            else cur += ch;
+        }
+        if (b.size() != 6) { std::printf("LAB REFUSED voxels: '%s' is not x0,y0,z0,x1,y1,z1\n", c.args[3].c_str()); return false; }
+        for (int a = 0; a < 3; ++a) {
+            // the voxels whose CENTRE lies in [b_a, b_a+3]
+            lo[a] = std::max(0, int(std::ceil((double(b[size_t(a)]) - v.origin[a]) / v.cell[a] - 0.5)));
+            hi[a] = std::min(res[a], int(std::floor((double(b[size_t(a + 3)]) - v.origin[a]) / v.cell[a] - 0.5)) + 1);
+            if (hi[a] <= lo[a]) { std::printf("LAB REFUSED voxels: the box misses cascade %ld\n", ci); return false; }
+        }
+    }
+    QString path = QString::fromStdString(c.args.size() > 2 ? c.args[2] : "voxels-" + c.args[0] + "-" + kind + ".vox");
+    if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+    std::ofstream out(path.toStdString(), std::ios::binary);
+    out.precision(9);
+    out << "{\"cascade\":" << ci << ",\"kind\":\"" << kind << "\",\"res\":[" << res[0] << "," << res[1] << "," << res[2]
+        << "],\"origin\":[" << v.origin[0] << "," << v.origin[1] << "," << v.origin[2] << "],\"cell\":[" << v.cell[0]
+        << "," << v.cell[1] << "," << v.cell[2] << "],\"multiplier\":" << v.multiplier << ",\"lo\":[" << base[0] + lo[0]
+        << "," << base[1] + lo[1] << "," << base[2] + lo[2] << "],\"dims\":[" << hi[0] - lo[0] << "," << hi[1] - lo[1]
+        << "," << hi[2] - lo[2] << "]}\n";
+    double peak = 0.0;
+    long long nonzero = 0;
+    for (int z = lo[2]; z < hi[2]; ++z)
+        for (int y = lo[1]; y < hi[1]; ++y)
+            for (int x = lo[0]; x < hi[0]; ++x) {
+                const float *t = &(*arr)[((size_t(z) * res[1] + y) * res[0] + x) * 4u];
+                out.write(reinterpret_cast<const char *>(t), 4 * sizeof(float));
+                const double m = std::max(std::max(t[0], t[1]), t[2]);
+                peak = std::max(peak, m);
+                nonzero += m > 0.0 ? 1 : 0;
+            }
+    const bool ok = bool(out);
+    std::printf("LAB VOXELS cascade %ld %s origin %.4f,%.4f,%.4f cell %.6f res %dx%dx%d world lo %lld,%lld,%lld dims %dx%dx%d "
+                "peak %.6g nonzero %lld multiplier %.6g (waited %d frames) -> %s\n",
+                ci, kind.c_str(), v.origin[0], v.origin[1], v.origin[2], v.cell[0], res[0], res[1], res[2], base[0] + lo[0],
+                base[1] + lo[1], base[2] + lo[2], hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], peak, nonzero, v.multiplier,
+                waited, qPrintable(path));
+    return ok;
 }
 
 void Session::readStdinLines()

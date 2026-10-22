@@ -89,6 +89,9 @@ private:
     bool lamp(const Command &c);
     bool material(const Command &c);
     bool move(const Command &c);
+    /// THE GI DOORS (PHOTON-7 stage 1): the placement pin and one cascade's voxels by world cell.
+    bool pin(const Command &c);
+    bool voxels(const Command &c);
     void nameEngineNodes();
     double msSinceStart() const;
 

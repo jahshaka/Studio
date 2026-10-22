@@ -170,6 +170,19 @@ if(TARGET jahlab)
     set_tests_properties(gi.hit_list_demand PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.light_is_world (PHOTON-7 stage 1, L1: LIGHT IS A WORLD FUNCTION) — the direct term of a world voxel is the same at two
+# placements of its cascade (the occluders in cascade 1's and 2's shells, a cut-out partial plane, a lamp in range of one
+# placement only), a pinned chain neither aborts nor moves when the eye or the pin moves, and the floor under an 8 m
+# plate is dark at every tier (the march through the chain to the last cascade's exit). jahlab's `pin` and `voxels`
+# doors on photon-shells and photon-roof (light_is_world.sh says the arms, the band and the base). 960x540; two sessions.
+if(TARGET jahlab)
+    jah_gpu_row(gi.light_is_world CLASS engine FRAMES 300
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/light_is_world.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/light_is_world
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.light_is_world PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.walk (PHOTON-7 stage 0, L6: THE WALK IS THE PRODUCT) — THE WALKING ROW: jahlab's stillness door on photon-court's
 # 15 m crossing and photon-glass's 2.4 m walk, each a LIVE and two GI-FROZEN walks on one warm cache (a prime session
 # first); M1 per class (live less frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and

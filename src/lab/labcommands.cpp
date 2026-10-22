@@ -46,6 +46,18 @@ const std::vector<VerbDoc> &verbs()
         { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
           "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
+        { "pin", "pin <c|all> x,y,z [scroll] | pin off", 1, 3,
+          "THE GI PLACEMENT PIN (PHOTON-7 stage 1; Scene::setGiPlacementPin, the measuring door): cascade c (or every "
+          "cascade) placed for the camera position x,y,z, every other cascade pinned where it stands (its builtCam); "
+          "then a forced WHOLE rebuild of each pinned cascade at its pin (the arm gi.rebuildCascade, one frame each) - "
+          "`scroll` leaves the re-placement to the scroll path instead (the pinned-scroll arm); `off` releases the pin" },
+        { "voxels", "voxels <c> <direct|light|back|albedo|covp|covn|posp|posn|stats> [file] [x0,y0,z0,x1,y1,z1]", 2, 4,
+          "ONE CASCADE'S VOXELS (PHOTON-7 stage 1; Scene::giVoxelVolume / giVoxelStats), read once the chain owes no "
+          "voxel work (GiStatus::chainOwed; frames rendered while it does, cap 600): `stats` prints the cascade's "
+          "GiVoxelStats; any other kind writes that level-0 array BY WORLD CELL to <data-root>/<file> - one JSON header "
+          "line (cascade, kind, res, origin, cell, multiplier, lo = the first voxel's WORLD cell index, dims) then "
+          "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
+          "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
         { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [freeze] [out=<name>]", 2, 9,
