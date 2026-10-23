@@ -3,8 +3,15 @@
 # THE GATHER SETTLES, THEN HOLDS.
 # jahlab's stillness door at 960x540, five sessions; the gather's four states (H1): MOVING, SETTLING (the camera still,
 # an input written or owed: the EMA, no hold), RESTING (the rest mean), HELD; the field's rest budget (H2):
-#   ROOM, a 1.2 m walk inside one lattice cell (the no-regression check): no GI row after the stop, the gather held
-#     by frame 17, the plaster's per-frame change <= 1 code from frame 1;
+#   ROOM, a 1.2 m walk inside one lattice cell (the no-regression check; PHOTON-7 stage 5, 5-5, the lead's ruling - the
+#     demand's read-back lags, so a face the walk's last frames first hit arrives after the stop, and admitting it is
+#     right): (1) EVERY GI ROW AFTER THE STOP IS OWED BY THE MOTION, within its bound - a card row is a DEMAND ARRIVAL
+#     whose stamps all predate the stop, admitted within the demand's period + its read-back lag of it
+#     (CardCacheStatus::demandReadEvery + demandReadLag) and captured the frame after; a field row is the REFINEMENT
+#     of a plane the window entered before the stop (no window move after it), within the restart's depth + the
+#     marks' lag (GiStatus::ifdRestartDepth + ifdMarkLag) - every post-stop row printed with its cause and its stamp,
+#     any other cause or a row past its bound RED; (2) the gather held <= the last such row + 17; the plaster's
+#     per-frame change <= 1 code from frame 1;
 #   ROOM, a lamp step 8 -> 12 at rest (f, J2): THE FIELD'S LAW (PHOTON-7 stage 5, 5-4: the 36 frames were the deleted
 #     rest budget's arithmetic) - its last write <= max(the voxel store's rest frame, the frame the integrations owed
 #     then run out at that frame's grant) + the restart's depth (4) + the marks' readback lag (4) + 1, and every frame
@@ -17,14 +24,16 @@
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
 #     burst; (c) the hold <= the last frame the hold waited on + 17 (the door's hold_key: the gather's rest key moved -
-#     every write, a ray-level refit or a light write with no GI row included - or its inputs owed work), the field's
+#     every write, a ray-level refit or a light write with no GI row included - or its inputs owed work); (g) NO READER
+#     WEIGHT BELOW 1 (PHOTON-7 stage 5, 5-5: the window's guard band keeps up with the eye) - the field's read region
+#     holds no empty probe (GiStatus::ifdReadUnheld) on any frame of the move's trail and after it; the field's
 #     law (the room's, above; the 40 frames deleted with the rest budget); the rest frames' GPU against the moving
 #     median and the walk's marks per outer commit printed;
-#     (d, J1) a follow frame's extra GPU (the ifd.follow row: the entered planes invalidated, faded in one sample a
-#     pass at the budget) <= 3 ms, and on the move's last 60 frames the frames the planes fill (ifd.follow / ifd.enter)
-#     step no more pixels beyond their 3x3 neighbourhood's motion change of the frame before (the door's step_px)
-#     than the same frames of the same crossing with the planes integrated whole in the follow frame (the arm
-#     gi.fieldEnterInline: the field already there, nothing to fade) - by at most 2 % of that run's or 50 pixels;
+#     (d, J1) a step frame's extra GPU (the ifd.follow row: the entered planes invalidated, then integrated fresh at
+#     the budget in the guard band, 5-5) <= 3 ms, and on the move's last 60 frames the step frames (ifd.follow) step no
+#     more pixels beyond their 3x3 neighbourhood's motion change of the frame before (the door's step_px) than the same
+#     frames of the same crossing with the planes integrated in the step frame (the arm gi.fieldEnterInline) - by at
+#     most 2 % of that run's or 50 pixels;
 #     the rest budget's share of a settling frame's busy GPU printed (J4's bar, <= 0.5 ms, is Bistro's, measured in
 #     the lab);
 #   COURT, THE FOLIAGE CLASS (K5: foliage = the alpha-tested canopy, its leaf mask): the gather wrote its class on the
@@ -72,14 +81,15 @@ def windows_to(w, h):
 def field_law(w):
     # PHOTON-7 stage 5 (5-4), THE LEAD'S LAW for the field's last write (36 / 40 were B8's arithmetic, deleted with it):
     # <= max(the voxel store's rest frame R - the first frame from which the chain owes nothing - and the frame the owed
-    # integrations run out at R's grant) + the restart's depth (4) + the marks' readback lag (4) + 1; and every frame
-    # while restarts are owed spends its whole grant (within one restart's depth).
+    # integrations run out at R's grant) + the restart's depth + the marks' readback lag + 1 (GiStatus::ifdRestartDepth,
+    # ifdMarkLag: the engine's constants, never a literal); and every frame while restarts are owed spends its whole grant
+    # (within one restart's depth).
     fr = [int(r["frame"]) for r in w]
     owed = [int(r["store_owed"]) for r in w]
     R = next((fr[i] for i in range(len(w)) if not any(owed[i:])), None)
     last = max([f for r, f in zip(w, fr) if any(n.startswith("ifd.") for n in rows_of(r))] or [-1])
     short = [(fr[k], int(w[k]["ifd_spent"]), int(w[k]["ifd_grant"])) for k in range(1, len(w))
-             if int(w[k - 1]["ifd_owed_restarts"]) > 0 and int(w[k]["ifd_spent"]) + 4 <= int(w[k]["ifd_grant"])]
+             if int(w[k - 1]["ifd_owed_restarts"]) > 0 and int(w[k]["ifd_spent"]) + int(w[k]["ifd_restart_depth"]) <= int(w[k]["ifd_grant"])]
     spend = " ".join("%d:%s/%s" % (fr[k], w[k]["ifd_spent"], w[k]["ifd_grant"]) for k in range(len(w)) if int(w[k]["ifd_grant"]))
     if R is None:
         return None, None, None, None, last, short, spend
@@ -88,18 +98,46 @@ def field_law(w):
     grants = [int(r["ifd_grant"]) for r in w[i:] if int(r["ifd_grant"])]
     G = grants[0] if grants else 0
     exhaust = R + (-(-W // G) if W and G else 0)
-    return R, W, G, max(R, exhaust) + 4 + 4 + 1, last, short, spend
+    return R, W, G, max(R, exhaust) + int(w[i]["ifd_restart_depth"]) + int(w[i]["ifd_mark_lag"]) + 1, last, short, spend
 def rises_of(wins):   # J5: a rise beyond 0.01 code (the court's (a) only - the lead's ruling for that law)
     return [(i, round(wins[i], 3), round(wins[i + 1], 3)) for i in range(len(wins) - 1) if wins[i + 1] > wins[i] + 0.01]
 fails = list(rise_law.selfcheck())   # the law's instrument first: the read's synthetic bursts are rises, a flat tail none
-# ROOM, the sub-cell walk
+# ROOM, the sub-cell walk: every post-stop GI row owed by the motion, within its bound (the lead's ruling, 5-5)
 w = window("room-sub")
-rows = sorted({n for r in w[1:] for n in rows_of(r)})
 h = held_from(w)
 over = [(int(r["frame"]), int(r["plaster_max"])) for r in w[1:] if int(r["plaster_max"]) > 1]
-print("room sub-cell: GI rows after the stop %s; held from frame %s; plaster frames over a code: %s" % (rows or "none", h, over[:6]))
-if rows: fails.append("room sub-cell: no GI row after the stop: %s" % rows)
-if h is None or h > 17: fails.append("room sub-cell: the gather held by frame 17: %s" % h)
+stop = int(w[0]["cards_frame"]) - 1          # the cache's frame of the walk's last move (frame 0 is the first still one)
+L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"])
+D = int(w[0]["ifd_restart_depth"]) + int(w[0]["ifd_mark_lag"])
+follows0 = int(w[0]["ifd_follows"])
+arrivals = []                                 # (window frame, cache frame, the arrivals' newest mark, cards)
+for k in range(len(w)):
+    got = int(w[k]["cards_admitted"]) - int(w[k - 1]["cards_admitted"]) if k else 0
+    if got > 0:
+        arrivals.append((int(w[k]["frame"]), int(w[k]["cards_frame"]), int(w[k]["cards_arrival_mark"]), got))
+owed, stray = [], []
+for r in w[1:]:
+    f, names = int(r["frame"]), rows_of(r)
+    if not names:
+        continue
+    cards = [n for n in names if n.startswith("cards.")]
+    ifd = [n for n in names if n.startswith("ifd.")]
+    other = [n for n in names if not n.startswith("cards.") and not n.startswith("ifd.")]
+    if cards:
+        a = [x for x in arrivals if x[0] <= f and x[0] >= f - 1]
+        ok = bool(a) and all(m <= stop and c - stop <= L for _, c, m, _ in a)
+        (owed if ok else stray).append((f, "cards: arrival %s (stop %d, bound %d)" % (a or "none", stop, L)))
+    if ifd:
+        ok = int(r["ifd_follows"]) == follows0 and f <= D
+        (owed if ok else stray).append((f, "ifd: the refinement of a plane entered before the stop (window moves since %d, bound %d)"
+                                           % (int(r["ifd_follows"]) - follows0, D)))
+    if other:
+        stray.append((f, "no motion's cause: %s" % other))
+last = max([f for f, _ in owed] or [0])
+print("room sub-cell: post-stop rows owed by the motion %s; stray %s; held from frame %s (the last owed row %d + 17 = %d); plaster frames over a code: %s"
+      % (owed or "none", stray or "none", h, last, last + 17, over[:6]))
+if stray: fails.append("(1) room sub-cell: every post-stop GI row owed by the motion within its bound: %s" % stray[:4])
+if h is None or h > last + 17: fails.append("(2) room sub-cell: the gather held by the last owed row + 17: %s > %d" % (h, last + 17))
 if over: fails.append("room sub-cell: the plaster <= 1 code a frame from frame 1: %s" % over[:6])
 # ROOM, the lamp step (f)
 w = window("room-lamp")
@@ -155,19 +193,25 @@ print("court crossing: the walk's marks (the cone-shell commit's baseline): %d p
 print("court crossing: the grant spent per frame (frame:spent/grant): %s" % cspend)
 if cbound is None or clast > cbound: fails.append("(c) court: the field's last write within the law: %d > %s" % (clast, cbound))
 if cshort: fails.append("(c) court: every frame while restarts are owed spends its grant: %s" % cshort[:6])
+# (g) NO READER WEIGHT BELOW 1 (5-5): the field's read region holds no empty probe over the move's trail and after it
+unheld = [(r["window"], int(r["frame"]), int(r["ifd_read_unheld"])) for r in window("court-x", "walk-move") + w
+          if int(r["ifd_read_unheld"]) > 0]
+steps = int(w[-1]["ifd_follows"]) - int(window("court-x", "walk-move")[0]["ifd_follows"])
+print("court crossing: (g) the field's window moved %d times over the trail and after; read-region frames with an empty probe: %s"
+      % (steps, unheld[:6] or "none"))
+if steps <= 0: fails.append("(g) court: the field's window steps with the walk")
+if unheld: fails.append("(g) court: no reader weight below 1 (no empty probe in the read region): %s" % unheld[:6])
 log = open(os.path.join(wd, "court-x.log")).read()
 m = re.search(r"ifd\.follow=([\d.]+)\((\d+)\)", log)
-me = re.search(r"ifd\.enter=([\d.]+)\((\d+)\)", log)
 if m:
     extra = float(m.group(1))
-    print("court crossing: the follow frames' ifd.follow %.3f ms GPU (%s frames; bar <= 3); the entering passes' ifd.enter %s"
-          % (extra, m.group(2), "%s ms (%s frames)" % (me.group(1), me.group(2)) if me else "none"))
+    print("court crossing: the step frames' ifd.follow %.3f ms GPU (%s frames; bar <= 3)" % (extra, m.group(2)))
     if extra > 3.0: fails.append("(d) court: a follow frame's extra GPU <= 3 ms: %.2f" % extra)
 else:
     fails.append("(d) court: no follow frame measured (no GPU timing)")
 inl = {r["frame"]: int(r["step_px"]) for r in window("court-inline", "walk-move")}
 fill = [(r["frame"], int(r["step_px"]), inl.get(r["frame"], -1)) for r in window("court-x", "walk-move")
-        if int(r["step_px"]) >= 0 and any(n in ("ifd.follow", "ifd.enter") for n in rows_of(r))]
+        if int(r["step_px"]) >= 0 and "ifd.follow" in rows_of(r)]
 over = [f for f in fill if f[2] < 0 or f[1] > f[2] + max(50, f[2] // 50)]
 print("court crossing: steps beyond the neighbourhood's motion (step_px) on the %d fill frames: %d more than the inline arm's at most (max %s vs %s)"
       % (len(fill), max([f[1] - f[2] for f in fill] or [0]), max([f[1] for f in fill] or [None]), max([f[2] for f in fill] or [None])))

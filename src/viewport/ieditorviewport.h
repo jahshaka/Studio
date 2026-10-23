@@ -763,11 +763,11 @@ public:
         /// the scene runs the SSAO passes whatever the row says, and why.
         bool ssaoSuppressed = false;
         QString ssaoSuppressedReason;
-        /// WHERE THE FIELD IS — the corners of the volume its probes span. The
-        /// scene's fitted box in the single-volume arm; cascade 0's box, which
-        /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).
-        /// `ifdFollows` counts the follows of cascade 0 (scrolls + re-placements) since the last
-        /// build: 0 while standing still, one per cascade-0 step while walking.
+        /// WHERE THE FIELD IS — the corners of the volume its probes span: a box of
+        /// cascade 0's size centred on the eye, its window stepping with the eye one
+        /// probe plane at a time (PHOTON-7 stage 5, 5-5). `ifdFollows` counts the
+        /// window's moves (scrolls + re-placements) since the last build: 0 while
+        /// standing still, one per probe spacing walked.
         QVector3D ifdMin;
         QVector3D ifdMax;
         quint64   ifdFollows = 0;

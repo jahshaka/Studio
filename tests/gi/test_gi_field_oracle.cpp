@@ -27,6 +27,13 @@
 //       came from the moves (none from a region or a whole-field mark). PRINTED: THE LAW'S SLACK - the restarts of
 //       probes the truth held, over the probes it held (the second room's: A's leak moving B's own bricks, VOXEL-LEAK-1;
 //       the open field's: the accumulation sums every small move of the bounce's convergence).
+//   (5) A PROBE CASCADE 0 DOES NOT HOLD STARTS ITS MARCH IN CASCADE 1 (PHOTON-7 stage 5, 5-5: the field's window steps
+//       with the eye, decoupled from cascade 0's commits, so it may lead cascade 0's box; a fourth fixture): a lamp-lit
+//       floor with no sky and no ambient - the floor's light is the only light - the eye at the origin (cascade 0's box
+//       [-5, 5] m on x at High) and the field PINNED (GiPlacementPin) over x [6, 16] m: its probes over the floor at
+//       x 5.5 .. 9.5 m stand outside cascade 0's box and inside cascade 1's. Each of them reads the floor's light (a
+//       march that did not start in cascade 1 reads nothing: there is nothing else to read); PRINTED: their mean
+//       against the same probes integrated once the eye's move to x = 8 m has placed cascade 0 over them.
 // THE MARKS' VISIBILITY (Jahshaka/FieldAccumulate: the probe's depth moments - each ray's march's end, the support of
 // its radiance - bound the share of its rays a moved box can reach) is what (3) and (4) read.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
@@ -69,6 +76,7 @@ float halfToFloat(uint16_t h) {
 /// Every probe slot's interior texels (rgb) and its count (alpha), from an RGBA16F atlas.
 struct Probes {
     unsigned count = 0, res = 0;
+    unsigned dims[3] = { 0u, 0u, 0u }, offset[3] = { 0u, 0u, 0u };   // the probes per axis, the window's slot offset
     std::vector<float> rgb;      // count x res^2 x 3
     std::vector<float> samples;  // count
 };
@@ -76,6 +84,7 @@ bool readProbes(Scene *s, Probes &out) {
     GiFieldAtlas a;
     if (!s->giFieldAtlas(a) || !a.available || a.irradBytesPerTexel != 8u) return false;
     out.count = a.probes[0] * a.probes[1] * a.probes[2];
+    for (int k = 0; k < 3; ++k) { out.dims[k] = a.probes[k]; out.offset[k] = a.windowOffset[k]; }
     out.res = a.irradBordered - 2u;
     out.rgb.assign(size_t(out.count) * out.res * out.res * 3u, 0.0f);
     out.samples.assign(out.count, 0.0f);
@@ -417,6 +426,95 @@ int main()
           "(4)(ii) NO MARK BEYOND THE LAW: every restart from the moves");
     s3->setGlobalIllumination(off);
     run(2);
+
+    // (5) THE PROBES OUTSIDE CASCADE 0
+    {
+        View *v5 = e->createOffscreenView("field_oracle_c1", 128, 128, Colour(0, 0, 0));
+        Scene *s5 = e->createScene("field_oracle_c1");
+        if (!v5 || !s5) { std::printf("FAIL: the c1 view/scene\n"); return 1; }
+        v5->setScene(s5);
+        s5->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        enginetest::leakroom::addSlab(s5, Colour(0.6f, 0.6f, 0.6f), Vec3(0, -0.1f, 0), Vec3(40.0f, 0.2f, 40.0f));
+        const NodeId lamp5 = s5->createNode();
+        s5->setNodeTransform(lamp5, Vec3(6.0f, 4.0f, 0.0f), Quat(), Vec3(1, 1, 1));
+        LightDesc l5;
+        l5.type = LightType::Point;
+        l5.colour = Colour(1.0f, 1.0f, 1.0f);
+        l5.intensity = 20.0f;
+        l5.range = 30.0f;
+        l5.castShadows = true;
+        s5->setLight(lamp5, l5);
+        enginetest::testCameraLookAt(v5, Vec3(0.0f, 1.0f, 0.0f), Vec3(1.0f, 0.8f, 0.0f));
+        GiPlacementPin pin;
+        pin.on = true;
+        pin.field = true;
+        pin.fieldOrigin = Vec3(6.0f, -2.0f, -5.0f);
+        s5->setGiPlacementPin(pin);
+        const auto settle5 = [&]() {
+            int quiet = 0, f = 0;
+            for (; f < 1500 && quiet < 30; ++f) {
+                run(1);
+                quiet = s5->published().gi.giAtRest ? quiet + 1 : 0;
+            }
+            return quiet >= 30 ? f - quiet : -1;
+        };
+        if (!s5->setGlobalIllumination(gi)) { std::printf("FAIL: the c1 GI builds\n"); return 1; }
+        e->waitForAsyncShaders();
+        const int rest8 = settle5();
+        Probes c1, c0;
+        const bool w0 = readProbes(s5, c1);
+        const GiStatus n0 = s5->published().gi;
+        // the probes over the floor outside cascade 0 and inside cascade 1 (the window's offset is 0: pinned, built there)
+        std::vector<unsigned> outside;
+        bool placed = n0.cascades.size() >= 2u && c1.dims[0] > 0u;
+        double c0Hi = 0.0;
+        if (placed) {
+            const GiStatus::CascadeStatus &k0 = n0.cascades[0], &k1 = n0.cascades[1];
+            c0Hi = double(k0.centre.x) + double(k0.halfSize);
+            const double sz[3] = { double(n0.ifdMax.x - n0.ifdMin.x), double(n0.ifdMax.y - n0.ifdMin.y),
+                                   double(n0.ifdMax.z - n0.ifdMin.z) };
+            const double lo[3] = { double(n0.ifdMin.x), double(n0.ifdMin.y), double(n0.ifdMin.z) };
+            for (unsigned p = 0; p < c1.count; ++p) {
+                const unsigned slot[3] = { p % c1.dims[0], (p / c1.dims[0]) % c1.dims[1], p / (c1.dims[0] * c1.dims[1]) };
+                double w[3];
+                for (int a = 0; a < 3; ++a) {   // window-local i at the enlarged corner plus i spacings (setFieldVolume)
+                    const unsigned i = (slot[a] + c1.dims[a] - c1.offset[a]) % c1.dims[a];
+                    const double n = double(c1.dims[a]), block = sz[a] / n, sp = (sz[a] + 2.0 * block) / n;
+                    w[a] = lo[a] - block + double(i) * sp;
+                }
+                if (w[0] > c0Hi + 0.5 && w[0] < double(k1.centre.x) + double(k1.halfSize) - 0.5 && w[1] > 0.3 &&
+                    w[1] < 3.0 && std::fabs(w[2]) < 3.0)
+                    outside.push_back(p);
+            }
+        }
+        size_t dark = 0;
+        double sum1 = 0.0;
+        for (unsigned p : outside) {
+            double brightest = 0.0;
+            for (unsigned t = 0; t < c1.res * c1.res; ++t)
+                for (int c = 0; c < 3; ++c) brightest = std::max(brightest, double(c1.rgb[(size_t(p) * c1.res * c1.res + t) * 3u + c]));
+            dark += brightest > 0.0 && c1.samples[p] >= 1.0f ? 0u : 1u;
+            for (unsigned t = 0; t < c1.res * c1.res; ++t) sum1 += c1.rgb[(size_t(p) * c1.res * c1.res + t) * 3u + 1u];
+        }
+        // the same probes once cascade 0 holds them (the eye at x = 8: cascade 0 re-placed over them; the field pinned)
+        enginetest::testCameraLookAt(v5, Vec3(8.0f, 1.0f, 0.0f), Vec3(9.0f, 0.8f, 0.0f));
+        const int rest9 = settle5();
+        const bool w1 = readProbes(s5, c0);
+        const GiStatus n1 = s5->published().gi;
+        double sum0 = 0.0;
+        for (unsigned p : outside)
+            for (unsigned t = 0; t < c0.res * c0.res; ++t) sum0 += c0.rgb[(size_t(p) * c0.res * c0.res + t) * 3u + 1u];
+        std::printf("   (5) probes outside cascade 0 (its box to x %.2f m): at rest in %d frames | %zu probes over the floor at "
+                    "x %.1f .. 9.5 m, %zu reading no light | their mean against cascade 0 holding them (at rest in %d frames, "
+                    "cascade 0 to x %.2f m): %.4f\n", c0Hi, rest8, outside.size(), c0Hi + 0.5, dark, rest9,
+                    n1.cascades.empty() ? 0.0 : double(n1.cascades[0].centre.x + n1.cascades[0].halfSize),
+                    sum0 > 0.0 ? sum1 / sum0 : 0.0);
+        CHECK(rest8 >= 0 && rest9 >= 0 && w0 && w1 && placed && !outside.empty() && dark == 0u,
+              "(5) A PROBE CASCADE 0 DOES NOT HOLD STARTS ITS MARCH IN CASCADE 1: every one over the lit floor reads its light");
+        s5->setGiPlacementPin(GiPlacementPin());
+        s5->setGlobalIllumination(off);
+        run(2);
+    }
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;
