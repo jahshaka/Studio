@@ -64,6 +64,28 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
+# rtreflect.far_record (PHOTON-7 stage 6, READ_B finding 1) — A FAR HIT IS RECORDED AS A FAR HIT: a mirror's reflection of a
+# two-level sphere 93 m behind the camera (past the 50 m near length: the far copies, a record) against the sphere seen
+# directly from the mirrored camera - its lit and dark halves where they are, not the shuffled level-0 triangles a
+# near-flagged record decodes. 256x144, 66 frames.
+add_executable(test_far_record test_far_record.cpp)
+set_target_properties(test_far_record PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_far_record PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_far_record PRIVATE JahshakaEngine)
+add_dependencies(test_far_record JahshakaEngineMedia)
+jah_gpu_row(rtreflect.far_record CLASS engine COMMAND test_far_record
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.far_record PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(rtreflect.far_record PROPERTIES JAHSHAKA_TEST_FRAMES 66)
+
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
 # GLASS IS STILL AFTER A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the
 # path's teleport at equal placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold
