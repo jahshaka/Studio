@@ -17,8 +17,11 @@
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
 //   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'
 //       half steps of D x a numeric form factor x the window at every floor point;
-//   (4) PRINTED: the same light half-occluded - the card's one ray to the rectangle's centre against the visible form
-//       factor across the penumbra (the worst error and the width over one code).
+//   (4) ITS PENUMBRA (the 5-3 fix: an area light's visibility fractional, n x n ratio rays a texel): the same light
+//       half-occluded - every texel against the visible form factor within GiQualityFacts::cardAreaStrata's law, the
+//       band's signed mean under one code; the trace's rays and GPU ms printed;
+//   (5) PRINTED: the bounce on the back wall with the voxels' area visibility one march to the centre (shipped)
+//       against 16 x 16 ratio marches (the measuring arm gi.voxelAreaStrata).
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -339,38 +342,142 @@ int main()
     CHECK(restA >= 0 && aRead > 300 && aOver == 0u,
           "(3) THE AREA LIGHT'S FORM FACTOR ON THE CARD: every point within the stores' half steps of the numeric one");
 
-    // (4) THE PENUMBRA, PRINTED: a still 0.05 m plate 0.6 m up over x < 0 (half the rectangle's view across a 1 m
-    // band); the card's direct along z = 0, a texel apart, against D x the VISIBLE form factor (the same grid, each
-    // sample's segment to the floor point tested against the plate), past the stored values' half steps.
+    // (4) THE PENUMBRA: a still 0.05 m plate 0.6 m up over x < 0 (half the rectangle's view across a 1 m band); the
+    // card's direct along z = 0, a texel apart, against D x the VISIBLE form factor (the same grid, each sample's
+    // segment to the floor point tested against the plate). The rounding excluded (the three stored values' half
+    // steps and the fractional byte's, 1 / 510 of the area light's unoccluded direct). THE BARS (GiQualityFacts::
+    // cardAreaStrata's law): at every texel the error within the weight of the one column of strata the plate's edge
+    // cuts (the edge is parallel to the rectangle's side: from each point it projects to a line x = const on the
+    // rectangle) - each stratum's form-factor weight bounded over its corners and centre - and over the band (the
+    // texels the plate shades in part) the SIGNED mean under one code of the texel's radiance (the jitter unbiased).
     plate = { Vec3(-1.7f, 0.575f, -1.2f), Vec3(0.0f, 0.625f, 1.2f) };
+    e->setFrameMonitor(MonitorLevel::Review);
     cube(as, Vec3(-0.85f, 0.6f, 0.0f), Vec3(1.7f, 0.05f, 2.4f), Colour(0.5f, 0.5f, 0.5f), false);
     const int restP = settleOn(as);
-    size_t pRead = 0;
-    int firstOver = 1 << 30, lastOver = -(1 << 30), overCount = 0;
-    double pWorstFrac = 0.0, pWorstCodes = 0.0, pWorstAt = 0.0;
+    run(6);   // the GPU samples come back a few frames late
+    e->setFrameMonitor(MonitorLevel::Off);
+    double lampMsMax = -1.0;
+    unsigned lampFrames = 0;
+    {
+        std::vector<MonitorRecord> records;
+        while (e->popMonitorRecords(records) > 0) {}
+        for (const MonitorRecord &r : records) {
+            double ms = -1.0;
+            for (const CacheWork &w : r.cacheWork)
+                if (w.detail == "cards.lamps" && w.gpuMs >= 0.0f) ms = std::max(ms, 0.0) + double(w.gpuMs);
+            if (ms >= 0.0) { ++lampFrames; lampMsMax = std::max(lampMsMax, ms); }
+        }
+    }
+    const GiStatus gp = as->published().gi;
+    const unsigned n = std::max(gp.cards.areaStrata, 1u);
+    // the law's bound at a floor point: the largest column's share of the strata's form-factor weights
+    const auto lawBound = [&](double px, double pz) {
+        const auto f = [&](double qx, double qz) {
+            const double dx = qx - px, dz = qz - pz, y = areaAt.y, r2 = dx * dx + y * y + dz * dz;
+            return y * y / (r2 * r2);
+        };
+        double minSum = 0.0, worstCol = 0.0;
+        for (unsigned ii = 0; ii < n; ++ii) {
+            double colMax = 0.0;
+            for (unsigned jj = 0; jj < n; ++jj) {
+                const double x0 = -0.5 * aw + aw * ii / n, x1 = -0.5 * aw + aw * (ii + 1) / n;
+                const double z0 = -0.5 * ah + ah * jj / n, z1 = -0.5 * ah + ah * (jj + 1) / n;
+                const double v[5] = { f(x0, z0), f(x1, z0), f(x0, z1), f(x1, z1), f(0.5 * (x0 + x1), 0.5 * (z0 + z1)) };
+                colMax += *std::max_element(v, v + 5);
+                minSum += *std::min_element(v, v + 5);
+            }
+            worstCol = std::max(worstCol, colMax);
+        }
+        return minSum > 0.0 ? worstCol / minSum : 1.0;
+    };
+    size_t pRead = 0, pBand = 0, pPast = 0;
+    double pWorstFrac = 0.0, pWorstAt = 0.0, pWorstOfBound = 0.0, bandSigned = 0.0, bandAbs = 0.0, boundMin = 1.0;
+    double bandErr = 0.0, bandRad = 0.0;
     for (int t = 0; t <= 102; ++t) {
-        const double px = -0.8 + t / 64.0, pz = 0.0;
+        // AT THE TEXELS' CENTRES (the floor's one card: 128 texels over its 2 m, centres at -1 + ( i + 0.5 ) / 64): the
+        // truth where the card's answer was traced (a point half a texel off moves the truth by the penumbra's slope).
+        const double px = -1.0 + (13.5 + t) / 64.0, pz = 0.5 / 64.0;
         CardSample cs;
         if (!as->readCardAt(Vec3(float(px), 0.0f, float(pz)), Vec3(0, 1, 0), cs) || !cs.ok || !cs.lit) continue;
         ++pRead;
         const double kD = cs.albedo[1];
         const double dk = double(cs.radiance[1]) - cs.indirect[1] - cs.flat[1];
         const double scale = kD * kIntensity * 3.14159265358979 * windowAt(px, pz);
-        const double full = scale * formFactor(px, pz, false), truth = scale * formFactor(px, pz, true);
-        // (past the three stored values' half steps, as (3)'s bar: the store's rounding is no penumbra error)
-        const double tol = std::ldexp(double(cs.radiance[1]) + cs.indirect[1] + cs.flat[1], -7);
+        const double fFull = formFactor(px, pz, false), fVis = formFactor(px, pz, true);
+        const double full = scale * fFull, truth = scale * fVis;
+        const double tol = std::ldexp(double(cs.radiance[1]) + cs.indirect[1] + cs.flat[1], -7) + full / 510.0;
         const double err = std::max(0.0, std::fabs(dk - truth) - tol);
-        const double codes = err / (0.01 * std::max(truth + cs.indirect[1] + cs.flat[1], 5.9604645e-6));
+        const double bound = lawBound(px, pz);
+        boundMin = std::min(boundMin, bound);
+        if (err > bound * full) ++pPast;
+        pWorstOfBound = std::max(pWorstOfBound, err / std::max(bound * full, 1e-12));
         if (err / std::max(full, 1e-12) > pWorstFrac) { pWorstFrac = err / std::max(full, 1e-12); pWorstAt = px; }
-        pWorstCodes = std::max(pWorstCodes, codes);
-        if (codes > 1.0) { firstOver = std::min(firstOver, t); lastOver = std::max(lastOver, t); ++overCount; }
+        if (fVis > 1e-6 * fFull && fVis < (1.0 - 1e-6) * fFull) {   // the band: shaded in part
+            const double code = 0.01 * std::max(truth + cs.indirect[1] + cs.flat[1], 5.9604645e-6);
+            bandSigned += (dk - truth) / code;
+            bandAbs += std::fabs(dk - truth) / code;
+            bandErr += dk - truth;
+            bandRad += truth + cs.indirect[1] + cs.flat[1];
+            ++pBand;
+        }
     }
-    std::printf("   (4) the area light's penumbra (printed): at rest in %d frames; %zu of 103 texels along z = 0 read; the "
-                "card's centre-ray answer against the visible form factor: worst %.1f %% of the unoccluded direct (at x "
-                "%.3f m), %.1f codes of the texel's radiance; over one code at %d texels, from x %.3f to %.3f m (%d texels "
-                "wide; the true penumbra is 64)\n", restP, pRead, 100.0 * pWorstFrac, pWorstAt, pWorstCodes, overCount,
-                overCount ? -0.8 + firstOver / 64.0 : 0.0, overCount ? -0.8 + lastOver / 64.0 : 0.0,
-                overCount ? lastOver - firstOver + 1 : 0);
+    bandSigned /= double(std::max<size_t>(pBand, 1u));
+    bandAbs /= double(std::max<size_t>(pBand, 1u));
+    // THE BAND'S MEAN ERROR in codes of its mean radiance (the energy a reader averaging the band sees moved: the
+    // estimator's bias) - beside the per-texel codes' mean, which the umbra's end weighs by 1 / its small radiance
+    const double bandCodes = pBand && bandRad > 0.0 ? bandErr / (0.01 * bandRad) : 0.0;
+    std::printf("   (4) the area light's penumbra: at rest in %d frames; %zu of 103 texels along z = 0 read, %zu in the band; "
+                "n = %u strata a side: the worst error %.2f %% of the unoccluded direct (at x %.3f m), %.3f of the law's "
+                "bound there (the bound %.1f %% at its least), %zu past it; the band's mean error %+.3f codes of its mean "
+                "radiance (per texel: %+.3f codes signed, %.3f unsigned) | one relight's trace: at most %llu rays, GPU %.3f ms the frame's largest (%u frames traced)\n",
+                restP, pRead, pBand, n, 100.0 * pWorstFrac, pWorstAt, pWorstOfBound, 100.0 * boundMin, pPast, bandCodes,
+                bandSigned, bandAbs, (unsigned long long)gp.cards.lampRaysLastTrace, lampMsMax, lampFrames);
+    CHECK(restP >= 0 && pRead > 90 && pBand > 40 && pPast == 0u && std::fabs(bandCodes) < 1.0,
+          "(4) THE AREA LIGHT'S PENUMBRA: every texel within the strata law's bound, the band's mean under one code");
+
+    // (5) PRINTED: THE BOUNCE THE VOXELS' CENTRE MARCH LEAVES (the lead's ruling: measured before the voxels change).
+    // The back wall's card indirect - the bounce it gathers from the store, the floor's penumbra in its view - with
+    // the voxels' area light visibility one march to the rectangle's centre (shipped) against the same store with
+    // 16 x 16 ratio marches a half-face (the measuring arm gi.voxelAreaStrata), the GI rebuilt whole between: the
+    // difference in codes of the wall texel's radiance.
+    const auto readWall = [&](std::vector<double> &ind, std::vector<double> &rad) {
+        ind.clear();
+        rad.clear();
+        for (int i = -8; i <= 8; ++i)
+            for (int k = 1; k <= 15; ++k) {
+                CardSample cs;
+                const bool ok = as->readCardAt(Vec3(0.1f * float(i), 0.1f * float(k), -1.0f), Vec3(0, 0, 1), cs) && cs.ok &&
+                                cs.lit && cs.indirect[1] > 0.0f;
+                ind.push_back(ok ? double(cs.indirect[1]) : -1.0);
+                rad.push_back(ok ? double(cs.radiance[1]) : -1.0);
+            }
+    };
+    std::vector<double> indA, radA, indB, radB;
+    readWall(indA, radA);
+    e->setArm("gi.voxelAreaStrata", 16.0);
+    as->setGlobalIllumination(off);
+    run(2);
+    as->setGlobalIllumination(gi);
+    e->waitForAsyncShaders();
+    const int restV = settleOn(as);
+    readWall(indB, radB);
+    e->setArm("gi.voxelAreaStrata", 0.0);
+    size_t vN = 0, vOver = 0;
+    double vWorst = 0.0, vMean = 0.0, vSigned = 0.0;
+    for (size_t k = 0; k < indA.size(); ++k) {
+        if (indA[k] < 0.0 || indB[k] < 0.0) continue;
+        const double codes = (indA[k] - indB[k]) / (0.01 * std::max(radB[k], 5.9604645e-6));
+        ++vN;
+        vWorst = std::max(vWorst, std::fabs(codes));
+        vMean += std::fabs(codes);
+        vSigned += codes;
+        vOver += std::fabs(codes) > 1.0 ? 1u : 0u;
+    }
+    vMean /= double(std::max<size_t>(vN, 1u));
+    vSigned /= double(std::max<size_t>(vN, 1u));
+    std::printf("   (5) the voxels' centre march against 16 x 16 ratio marches (printed): the many-ray store at rest in %d "
+                "frames; the back wall's bounce at %zu of %zu points: worst %.3f codes of its radiance, mean %.3f "
+                "(signed %+.3f), %zu over one code\n", restV, vN, indA.size(), vWorst, vMean, vSigned, vOver);
     as->setGlobalIllumination(off);
     run(2);
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,

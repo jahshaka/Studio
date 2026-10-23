@@ -592,7 +592,9 @@ std::string Session::statusJson()
       << ",\"evicted\":" << gi.cards.evicted << ",\"compactionMoves\":" << gi.cards.compactionMoves
       << ",\"demandHits\":[" << gi.cards.demandHits[0] << "," << gi.cards.demandHits[1] << "," << gi.cards.demandHits[2]
       << "," << gi.cards.demandHits[3] << "],\"lampTraces\":" << gi.cards.lampTraces << ",\"cardLampsMax\":"
-      << gi.cards.cardLampsMax << ",\"lampOverflowShareMax\":" << gi.cards.lampOverflowShareMax << "}";
+      << gi.cards.cardLampsMax << ",\"lampOverflowShareMax\":" << gi.cards.lampOverflowShareMax
+      << ",\"cardAreaLampsMax\":" << gi.cards.cardAreaLampsMax << ",\"cardsMultiArea\":" << gi.cards.cardsMultiArea
+      << ",\"cardsSharedFractional\":" << gi.cards.cardsSharedFractional << "}";
     // ...and THE CASCADES' SCROLL WORK (PHOTON-7 stage 2, the work law's door; cumulative since the chain was built):
     // the commits, the voxels their delta injections lit in the slabs and outside them (read back a few frames late:
     // `counted` injections), the slabs' cells, the cells the commits computed the direct over, the voxels every delta
