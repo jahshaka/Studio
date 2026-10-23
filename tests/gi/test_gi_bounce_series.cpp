@@ -24,6 +24,15 @@
 //   (2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce operator's energy, independent of the escape;
 //   (3) THE FEEDBACK STOPS: the chain owes nothing at its rest, and it ran fewer brick-passes than the Jacobi's 64 a brick
 //       (it stops the converged bricks).
+//   (4) A STOPPED BRICK BESIDE A MOVING ONE RESUMES (stage 4's read R3; the main arm's room after its Jacobi and the
+//       feedback's rest; High and Epic - see the arm): a lamp
+//       of 200 switched on 0.5 m over the floor's centre at the room's rest (range 3 m: only its sphere's bricks are
+//       activated, every other brick of the room stopped) moves the light of the walls outside its range by more than a
+//       code (counted: the arm fails when nothing outside moves), which can only reach the feedback through the stopped
+//       bricks' resume (what their gather sees move, accumulated); at the feedback's rest every inner-wall voxel within
+//       one code of a 64-pass Jacobi of the same state - the stop law's bound with the resume's own error in it. RED on
+//       the resume's old weight (the centres' distance, one face: 316 voxels over a code, the worst 2.36, no brick of
+//       cascade 0 resumed - High). (The coupling is the store's: at 50 the walls outside moved 0.72 codes at most.)
 // (THE LEAK ITSELF is printed, not barred: the cones at coarse levels read a texel the wall only partly covers - a
 // march finding, VOXEL-LEAK-1. A pass-1 reading is never the operator: the outer cascades run first in a frame, so an
 // inner cascade's first pass already reads an outer one's bounce.)
@@ -253,6 +262,106 @@ int main(int argc, char **argv)
                     bricks0 ? double(jRan) / bricks0 : 0.0, outerRan);
         CHECK(jRan >= 56ull * bricks0 && outerRan == 0ull,
               "the Jacobi door ran every brick of cascade 0 a frame, the outer cascades held");
+        // (4) THE RESUME ARM: a lamp over the floor's centre, the room at its rest (the Jacobi's tail stopped first, so
+        // every brick the lamp's sphere does not activate is STOPPED) - at the ray tiers' chain only (High, Epic: 128^3, a
+        // 0.625 m brick); at Low and Medium (64^3, 1.25 m bricks) the walls a brick outside the range sit at the room's own
+        // walls and the lamp moves none of them by a code (Medium 0.07 at a lamp of 500, range 2): the arm could not fail.
+        size_t lampOver = 0, lampMovedOutside = 0, lampMovedAll = 0;
+        double lampMeanBefore = 0.0, lampMeanAfter = 0.0, lampOutsideMax = 0.0;
+        double lampWorst = 0.0;
+        int lampRest = -1;
+        bool lampOk = false;
+        const bool lampArm = tiers[t] == GiQuality::High || tiers[t] == GiQuality::Epic;
+        if (lampArm) {
+            for (int f = 0, quiet = 0; f < 900 && quiet < 8; ++f) {   // the Jacobi's tail to its rest
+                run(1);
+                const GiStatus g = m.scene->published().gi;
+                quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
+            }
+            const float lampY = 0.5f, lampRange = 3.0f;
+            const NodeId lamp = m.scene->createNode();
+            LightDesc ld;
+            ld.type = LightType::Point;
+            ld.colour = Colour(1.0f, 1.0f, 1.0f);
+            ld.intensity = 200.0f;
+            ld.range = lampRange;
+            m.scene->setNodeTransform(lamp, Vec3(0.0f, lampY, 0.0f), Quat(), Vec3(1, 1, 1));
+            m.scene->setLight(lamp, ld);
+            const GiStatus before = m.scene->published().gi;
+            int f = 0, quiet = 0;
+            for (; f < 900 && quiet < 8; ++f) {
+                run(1);
+                const GiStatus g = m.scene->published().gi;
+                quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
+            }
+            lampRest = quiet >= 8 ? f - quiet : -1;
+            const GiStatus after = m.scene->published().gi;
+            for (size_t c = 0; c < after.cascades.size() && c < before.cascades.size(); ++c)
+                std::printf("   the resume arm's cascade %zu: %llu passes, %llu bricks run, %llu stops, %llu resumes, %llu carried, "
+                            "the relight carried %llu frames\n", c,
+                            after.cascades[c].feedbackPasses - before.cascades[c].feedbackPasses,
+                            after.cascades[c].feedbackBricksRan - before.cascades[c].feedbackBricksRan,
+                            after.cascades[c].feedbackStops - before.cascades[c].feedbackStops,
+                            after.cascades[c].feedbackResumes - before.cascades[c].feedbackResumes,
+                            after.cascades[c].feedbackCarried - before.cascades[c].feedbackCarried,
+                            after.cascades[c].relightCarried - before.cascades[c].relightCarried);
+            const Reading lf = read(m.scene);
+            e->setArm("gi.bounceJacobi", 1.0);
+            run(64);
+            const Reading lj = read(m.scene);
+            e->setArm("gi.bounceJacobi", 0.0);
+            run(2);
+            lampOk = lf.ok && lj.ok && lf.voxels == lj.voxels && lj.voxels == j64.voxels;
+            std::vector<char> outside;
+            if (lampOk) {
+                // the voxels' positions in the selection's order, re-derived to tell the lamp's box from the rest
+                GiVoxelVolume v;
+                if (m.scene->giVoxelLight(0, v) && v.available) {
+                    const float cell = v.cell[0];
+                    for (int z = 0; z < v.depth; ++z)
+                        for (int y = 0; y < v.height; ++y)
+                            for (int x = 0; x < v.width; ++x) {
+                                const float p[3] = { v.origin[0] + cell * (x + 0.5f), v.origin[1] + cell * (y + 0.5f),
+                                                     v.origin[2] + cell * (z + 0.5f) };
+                                const bool inGrown = std::fabs(p[0]) < kHalfX + cell && std::fabs(p[2]) < kHalfZ + cell &&
+                                                     p[1] > -cell && p[1] < kHeight + cell;
+                                const bool inShrunk = std::fabs(p[0]) < kHalfX - cell && std::fabs(p[2]) < kHalfZ - cell &&
+                                                      p[1] > cell && p[1] < kHeight - cell;
+                                if (!inGrown || inShrunk) continue;
+                                int near = 0;
+                                near += std::fabs(p[0]) > kHalfX - 1.0f ? 1 : 0;
+                                near += std::fabs(p[2]) > kHalfZ - 1.0f ? 1 : 0;
+                                near += (p[1] < 1.0f || p[1] > kHeight - 1.0f) ? 1 : 0;
+                                if (near > 1) continue;
+                                const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                                if (!(v.light[i + 3] > 0.5f)) continue;
+                                // outside the lamp's range box, by a brick (the activation's own boxes are whole bricks)
+                                const float pad = lampRange + 8.0f * cell;
+                                outside.push_back(std::fabs(p[0]) > pad || std::fabs(p[2]) > pad ||
+                                                  std::fabs(p[1] - lampY) > pad ? 1 : 0);
+                            }
+                }
+                for (size_t i = 0; i < lf.voxels; ++i) {
+                    const double rel = std::fabs(double(lf.L[i]) - double(lj.L[i])) / std::max(double(lj.L[i]), 1e-6);
+                    lampWorst = std::max(lampWorst, rel);
+                    lampOver += rel > 0.01 ? 1u : 0u;
+                    const double moved = std::fabs(double(lj.L[i]) - double(j64.L[i])) / std::max(double(j64.L[i]), 1e-6);
+                    if (i < outside.size() && outside[i] && moved > 0.01) ++lampMovedOutside;
+                    if (moved > 0.01) ++lampMovedAll;
+                    if (i < outside.size() && outside[i]) lampOutsideMax = std::max(lampOutsideMax, moved);
+                }
+                lampMeanBefore = j64.mean;
+                lampMeanAfter = lj.mean;
+            }
+            std::printf("   the resume arm (a lamp of 200, range %.1f m, %.1f m over the floor): at rest in %d frames - cascade 0 "
+                        "resumed %llu bricks, stopped %llu; %zu inner-wall voxels outside its range moved over a code; "
+                        "feedback vs Jacobi-64: worst voxel %.3f codes, %zu over one code (moved anywhere %zu; the inner "
+                        "walls' mean %.5f -> %.5f; outside, the most moved %.3f codes of %zu)\n", lampRange, lampY, lampRest,
+                        after.cascades[0].feedbackResumes - before.cascades[0].feedbackResumes,
+                        after.cascades[0].feedbackStops - before.cascades[0].feedbackStops, lampMovedOutside,
+                        100.0 * lampWorst, lampOver, lampMovedAll, lampMeanBefore, lampMeanAfter, 100.0 * lampOutsideMax,
+                        size_t(std::count(outside.begin(), outside.end(), char(1))));
+        }
         std::vector<double> mainL;
         for (const Reading &r : m.cascades) mainL.push_back(r.ok ? r.mean : -1.0);
         drop(m);
@@ -294,6 +403,12 @@ int main(int argc, char **argv)
               "(2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce's energy, whatever the escape");
         CHECK(bricks0 > 0u && bricksRan < 64ull * bricks0,
               "(3) the feedback ran fewer brick-passes than the Jacobi's 64 a brick (it stops the converged ones)");
+        if (lampArm) {
+            CHECK(lampOk && lampRest >= 0 && lampMovedOutside > 0u,
+                  "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
+            CHECK(lampOk && lampOver == 0u,
+                  "(4) A STOPPED BRICK BESIDE A MOVING ONE RESTS WITHIN ONE CODE OF A 64-PASS JACOBI at every inner-wall voxel");
+        }
         std::printf("   (the tier's three arms: %d frames, %.1f s)\n", frames - tierF0,
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - tierT0).count());
     }
