@@ -86,6 +86,28 @@ set_tests_properties(rtreflect.far_record PROPERTIES ENVIRONMENT "QT_QPA_PLATFOR
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.far_record PROPERTIES JAHSHAKA_TEST_FRAMES 66)
 
+# rtreflect.tilted_normal (PHOTON-7 stage 6, READ_B finding 6) — A SHADING NORMAL FAR FROM THE SURFACE NEVER VOIDS THE
+# FOLD: a mirror floor whose vertex normals tilt 70 degrees still reflects the wall its drawn plane faces (the geometric
+# normal falls back to the shading one only where the depth's reconstruction fails), against the untilted control.
+# 256x144, 61 frames.
+add_executable(test_tilted_normal test_tilted_normal.cpp)
+set_target_properties(test_tilted_normal PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_tilted_normal PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_tilted_normal PRIVATE JahshakaEngine)
+add_dependencies(test_tilted_normal JahshakaEngineMedia)
+jah_gpu_row(rtreflect.tilted_normal CLASS engine COMMAND test_tilted_normal
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.tilted_normal PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(rtreflect.tilted_normal PROPERTIES JAHSHAKA_TEST_FRAMES 61)
+
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
 # GLASS IS STILL AFTER A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the
 # path's teleport at equal placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold
