@@ -190,6 +190,10 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["lights", "shadow"] for f in ("setShadowSettings", "applyNodeCasterBit", "setNodeLightMask", "nodeLightMask",
                                          "setNodeCastShadow", "nodeCastShadow", "setLight", "removeLight", "ogreLight",
                                          "nodeOfLight")},
+    # PHOTON-7 stage 3's read F1: the one light teardown (removeLight, releaseNode) - the GI's gone sphere, the shadow lamp
+    "destroyNodeLight": ["lights", "shadow", "gi"],
+    # ...and F3: a subtree's item box, the region an attach, a hide, a reparent or a mobility flip lists
+    "subtreeItemBox": ["gi"],
     **{f: ["lights", "gi", "*picture"] for f in ("setAmbient", "setAmbientSh", "applyAmbientSh")},
     **{f: ["gi", "sky", "lights"] for f in ("applyVctEnvironment", "applyCascadeEnvironment", "rayEnvironment",
                                             "noteEnvironmentChanged", "setEnvironmentLight")},

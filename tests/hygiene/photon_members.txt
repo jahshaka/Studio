@@ -1,4 +1,4 @@
-# PHOTON'S MEMBERS (145) — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
+# PHOTON'S MEMBERS (137) — the named list source.scene_no_photon_members holds (ENGINE-UPGRADE-2B stage 1).
 # One data-member name per line; '#' starts a comment. Generated ONCE from the prefix family
 # (mGi/mProbe/mIfd/mPhoton/mCard/mVct/mFwd/mCascade/mScan/mDrag/mSun: 143 at f8c745483, by the
 # preflight's members2.py) and then edited by hand at both ends:
@@ -62,7 +62,6 @@ mGiCascadeAwaitingCamera
 mGiCascadeDirtyAll
 mGiCascadeDirtyBoxes
 mGiChainProfileVr
-mGiChainSettles
 mGiChainShapeDirty
 mGiDeferralRetry
 mGiDeferrals
@@ -85,15 +84,9 @@ mGiPlan
 mGiProbeRegion
 mGiRebuilds
 mGiRestartPending
-mGiRestTicks
 mGiReusedLastRefresh
-mGiSettleCascades
-mGiSettleSerial
-mGiSettleStepsOwed
-mGiSettleTop
 mGiStageBuild
 mGiStagedVolume
-mGiTickOwed
 mGiVoxelTextureWaitFrames
 mGiVoxelTextureWaitGaveUp
 mIfd
