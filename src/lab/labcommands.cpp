@@ -217,6 +217,7 @@ std::string helpText()
          "                      triangles, scene hash and bake hash; another seed another hash; exits 0 green, 1 red\n"
          "  --footprint N       the occlusion test's footprint (texels) the expectations assume (default 2: this base)\n"
          "  --bake-only         bake the file into the data root (or find its bake) and exit: CPU only, no engine\n"
+         "                      (a run on a model whose bake is not cached refuses, exit 5: never a bake under the card)\n"
          "  --camera x,y,z,tx,ty,tz   the camera at the start\n"
          "  --tier low|medium|high|epic   the World Mode at the start (default epic, a new scene's)\n"
          "  --size WxH          the window / offscreen size (default 1920x1080)\n"

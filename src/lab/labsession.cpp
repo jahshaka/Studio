@@ -1356,6 +1356,24 @@ int Session::run(const Options &opt)
                     r.lights, r.parseMs, r.bakeMs, r.readMs, r.texturesResolved, r.texturesMissing, qPrintable(r.bakePath));
         return m ? 0 : 4;
     }
+    // A RUN ON A MODEL NEVER BAKES UNDER THE CARD (the urgent list's #30, PHOTON-7 stage 5: two Bistro runs spent 37-46 s
+    // of CPU baking inside the card lock, past the 60 s law): a cache miss refuses before the engine boots.
+    if (mOpt.env.isEmpty() && !mOpt.file.isEmpty()) {
+        QString model = mOpt.file;
+        if (model.endsWith(QStringLiteral(".jlab"), Qt::CaseInsensitive)) {
+            Jlab j;
+            QString jerr;
+            model = readJlab(model, j, jerr) && j.env.isEmpty() ? j.file : QString();
+        }
+        QString missing;
+        if (!model.isEmpty() && !bakeCached(model, mOpt.dataRoot, missing)) {
+            std::fprintf(stderr, "jahlab: %s: the bake cache under %s has %s - a lab run never bakes under the card; "
+                                 "bake it first, off the card: jahlab --bake-only %s --data-root %s\n",
+                         qPrintable(QFileInfo(model).fileName()), qPrintable(mOpt.dataRoot), qPrintable(missing),
+                         qPrintable(QFileInfo(model).absoluteFilePath()), qPrintable(mOpt.dataRoot));
+            return 5;
+        }
+    }
     if (!boot(err)) { std::fprintf(stderr, "jahlab: %s\n", err.c_str()); return 3; }
     if (!load(err)) { std::fprintf(stderr, "jahlab: %s\n", err.c_str()); return 4; }
     // THE FIRST FRAME: every mesh of the world is built by this sync (the mirror unbudgeted — the whole world arrives

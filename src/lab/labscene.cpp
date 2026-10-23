@@ -239,6 +239,25 @@ unsigned long long trianglesOf(const iris::SceneNodePtr &n, int &meshes)
 
 }   // namespace
 
+bool bakeCached(const QString &pathIn, const QString &dataRoot, QString &missing)
+{
+    // loadModel's own key and its two tests, without the read
+    const QFileInfo fi(pathIn);
+    if (!fi.isFile()) return true;   // loadModel reports it
+    const iris::ImportSettings settings;
+    const QString oid = fileOid(fi.absoluteFilePath());
+    if (oid.isEmpty()) return true;
+    const QString fingerprint = MeshBake::fingerprintFor(oid, settings.hash());
+    const QString bakePath =
+        QDir(QDir(dataRoot).filePath(QStringLiteral("bakes"))).filePath(MeshBake::fileNameFor(oid, settings.hash()));
+    QJsonArray lights;
+    const bool bake = MeshBake::headerMatches(bakePath, fingerprint);
+    const bool sidecar = readSidecar(bakePath + QStringLiteral(".lights.json"), fingerprint, lights);
+    if (bake && sidecar) return true;
+    missing = !bake ? QStringLiteral("no bake (a parse and a bake)") : QStringLiteral("no sidecar (a parse)");
+    return false;
+}
+
 iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, LoadReport &r)
 {
     r = LoadReport();

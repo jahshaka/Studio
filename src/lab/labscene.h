@@ -50,6 +50,10 @@ struct LoadReport
 /// Loads `path` (FBX / OBJ / glTF / GLB...) through the bake cache under `dataRoot`. Null + report.error on failure.
 iris::SceneNodePtr loadModel(const QString &path, const QString &dataRoot, LoadReport &report);
 
+/// THE CACHE HOLDS `path`'s BAKE AND ITS SIDECAR under `dataRoot` (loadModel would neither parse nor bake): the file's
+/// hash and the two headers, no parse. False + `missing` says which is absent (a missing file is not a miss: true).
+bool bakeCached(const QString &path, const QString &dataRoot, QString &missing);
+
 /// The Basic template's world (src/services/scenetemplatebuilder.cpp, its document half): the World Mode Epic, the
 /// realistic sky with the height fog, the 100 x 1 x 100 m floor (the shipped cube, through the same bake, top at y = 0,
 /// the tile, casting no shadow), the Sky Light — and the default sun only when `wantSun` (the file's own directional
