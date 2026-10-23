@@ -1713,26 +1713,25 @@ int main(int argc, char **argv)
         CHECK(mirror.target()->published().gi.schedulerResolves == refresh0,
               "GI idle: 60 idle frames asked for ZERO GI re-solves");
 
-        // A light that really moves must still re-solve — exactly once, but NOT
-        // on the frame it moved (REFLECTIONS_ADOPTION_SPEC.md P2, re-pinned in
-        // that lane). The move ARMS a pending refresh; the expensive re-solve
-        // fires once the light has held still for the coalescing window, which
-        // is what stops a DRAG from costing one full re-voxelize per frame.
-        // Everything the old contract cared about still holds — one move, one
-        // re-solve, and idleness afterwards — it just happens a few frames later.
+        // A light that really moves is RELIT, never re-solved (PHOTON-7 stage 4: the lamp's old and new spheres are
+        // a listed region - a delta of the direct term over them - and the feedback's passes converge the bounce from
+        // there; the coalesced re-solve after the light held still is deleted with the settle it was). One move: no
+        // re-solve on its frame or after it, and the feedback comes to rest again.
+        const unsigned long long rests0 = mirror.target()->published().gi.feedbackRests;
         gpanel->setLocalPos(iris::Vec3(1.5f, 2.6f, 0.0f));
         mirror.sync();
         mirror.sync(mirrorframe::environment(view));
         enginetest::frames(engine, 1);
         CHECK(mirror.target()->published().gi.schedulerResolves == refresh0,
-              "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
+              "GI: the frame a light MOVES does not re-solve");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
             mirror.sync(mirrorframe::environment(view));
             enginetest::frames(engine, 1);
         }
-        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 + 1,
-              "GI: once the light holds still, moving it re-solved exactly once");
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 &&
+                  mirror.target()->published().gi.feedbackRests > rests0 && !mirror.target()->published().gi.feedbackOwed,
+              "GI: a light that moved is relit through the feedback - no re-solve, and the feedback came to rest");
 
         // Moving GEOMETRY is deliberately NOT a re-solve (GI_SPEC: the mirror
         // pushes every item's transform every frame; flagging that would
@@ -1743,7 +1742,7 @@ int main(int argc, char **argv)
             mirror.sync(mirrorframe::environment(view));
             enginetest::frames(engine, 1);
         }
-        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0 + 1, "GI: moving a MESH does not re-solve");
+        CHECK(mirror.target()->published().gi.schedulerResolves == refresh0, "GI: moving a MESH does not re-solve");
 
         // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
         //

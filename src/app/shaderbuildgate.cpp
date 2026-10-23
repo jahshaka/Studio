@@ -648,6 +648,26 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         warmScene->setAtomDrawEnabled(true);
         warmScene->setGlobalIllumination(warmGi);
     }
+    // ...AND THE DELTA INJECTION (PHOTON-7 stage 4): a cascade rebuilt where it stands, a lamp's change and a whole
+    // relight inject their direct term as a DELTA over the kept voxels (the feedback keeps the bounce), and the first one
+    // after a project is open compiled VCT/LightInjection's delta permutation on the UI thread (shader.async_after_open,
+    // 0.67 s). The arm's whole relight (Scene::refreshGiLighting) dispatches that permutation here, per tier, until the
+    // compiles go quiet again.
+    const auto warmDelta = [&]() {
+        if (!warmScene || !warmScene->refreshGiLighting()) return 0;
+        int frames = 0, deltaQuiet = 0;
+        engine->shaderBuildProgress(compiled, cached, expected);
+        unsigned deltaLast = compiled;
+        for (; frames < kWarmUpGiFrames && deltaQuiet < kGiQuietFrames; ++frames) {
+            engine->renderOneFrame();
+            poll();
+            engine->shaderBuildProgress(compiled, cached, expected);
+            deltaQuiet = compiled == deltaLast ? deltaQuiet + 1 : 0;
+            deltaLast = compiled;
+        }
+        return frames;
+    };
+    if (runPass && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) giFrames += warmDelta();
     // EVERY OTHER TIER'S COMPUTE SET TOO (ASYNC-SHADERS-1). After a project is open a tier
     // change must not compile on the UI thread, and the voxel arm's compute permutations
     // (the injection, the bounce, the field's integration, the card light — per cascade
@@ -681,6 +701,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                 tierLast = compiled;
             }
             giFrames += tierFrames;
+            if (gi.mode != GiMode::Off) giFrames += warmDelta();
         }
         // NO RESTORE (BUGS-7 (c)): the born tier's arm was built above, and the warm-up scene is destroyed next — a
         // push back to it built a lighting arm nothing drew (four frames of the gate).
