@@ -14,7 +14,7 @@
 # TREE'S KEY - the sha256 of the jahlab binary (the engine is linked in: a C++ change can add a shader variant), of the
 # staged media tree beside it (every Hlms template and compute source jahlab reads) and of the Ogre fork's commit.
 # THE CHECK (--check): exit 0 when the data root's stamp for the scene carries this tree's key, else exit 3 naming the
-# warm command - what a row that loads a model runs before it boots (gi.walk_bistro). After a media edit, a C++ build
+# warm command - what a run that loads a model does before it boots (walk.sh --bistro, by hand: gi.walk_bistro is archived). After a media edit, a C++ build
 # or a pin bump the cache is (partly) cold: the warm step is what is run, never a longer TIMEOUT.
 # THE DISPLAY: $DISPLAY when it names a rig (never :0 - refused), else a private Xvfb on a free :60-:99 at 1920x1080x24,
 # its pid recorded and killed at the end. The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab.

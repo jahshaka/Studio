@@ -1076,7 +1076,6 @@ set(JAH_MEASURE_ROWS
     engine.planar_asan
     gi.cascades_asan
     gi.rt_reflect_asan
-    gi.walk_bistro   # PHOTON-7 stage 0: the walking row on the owner's Bistro - a measure by the spec, never gating
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
     hdr.drag_stable_asan

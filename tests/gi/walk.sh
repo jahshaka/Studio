@@ -124,7 +124,10 @@ if [ "$MODE" = "--bistro" ]; then
     [ -d "$ROOT/shadercache" ] && cp -a "$ROOT/shadercache" "$SNAP" || SNAP=""
     # THE 4 m WALK (90 frames: 0.044 m a frame) THEN THE FLY BACK AT 0.25 m A FRAME (16 frames): one trail of 106 -
     # the hold, the walk's 90, the fly's first 15 (its 16th is the stop)
-    walk bistro "--data-root $ROOT $MODEL" 800 -10.365,11.211,4.793 -4.461,9.705,-0.392 -7.413,10.458,2.200 \
+    # THE HOLD, THE FEWEST FRAMES ITS LAWS NEED (PHOTON-7 stage 5, the lead's ruling - measured once at the walk's start
+    # pose: the GI's last row at frame 98, the gather held from 115, the reflection held from 611): a frozen walk needs
+    # the readers held (the stillness door refuses it otherwise) - 620 (was 800)
+    walk bistro "--data-root $ROOT $MODEL" 620 -10.365,11.211,4.793 -4.461,9.705,-0.392 -7.413,10.458,2.200 \
          -4.461,9.705,-0.392 90 "/walk:-10.365,11.211,4.793,-4.461,9.705,-0.392:16" 106 live frozen
     python3 -I "$HERE/walk_m1.py" "$ROOT/stillness" bistro bistro-live bistro-frozen --parts walk:1:90,fly:91:105 \
         --tsv "$ROOT/stillness/bistro-live.tsv"

@@ -82,7 +82,6 @@ gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
 gi.walk 49.05  solo, the card lock held, :83, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms; PHOTON-7 stage 5, 5-4: the field spends its whole grant on the walk restarts (the cones still hop at the box face)) (PHOTON-7 stage 5: the holds cut to the frames the laws need - the court 120, the glass 600 - and the glass M1 beside its second frozen walk: 59.6 -> 50.4 s; the second frozen walk dumps its pictures alone: 49.1 s)
-gi.walk_bistro 48.09  solo, the card lock held, :77, Bistro's own data root warm (PHOTON-7 stage 0, 2026-10-22; a MEASURE: two jahlab sessions on Bistro Exterior, 960x540; 54.62 s on its first run, the page cache cold)
 gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 gpu.cutout_soak.tornado 36.65  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
