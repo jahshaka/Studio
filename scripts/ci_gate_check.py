@@ -119,6 +119,10 @@ class Reach:
         self.fork = fork_rows(build, self.graph, self.inv0)
         self.cache = {}
 
+    def same_tree(self, a):
+        """Is commit `a`'s tree this tip's (the same Studio tree, so the same irisgl pin and fork)?"""
+        return a == self.tip or subprocess.run(["git", "diff", "--quiet", a, self.tip], cwd=self.gs.ROOT).returncode == 0
+
     def of(self, a):
         if a in self.cache:
             return self.cache[a]
@@ -146,8 +150,11 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
         return f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]})"
     if fact is None:
         return "the row is not in the build's ctest inventory"
-    if row.startswith("source.") or "lint" in (fact.get("labels") or ()) or "hygiene" in (fact.get("labels") or ()):
-        return "a lint reads the whole tree: never served (2026-10-14: seven unpriced rows passed R2 by a served record)"
+    if (row.startswith("source.") or "lint" in (fact.get("labels") or ()) or "hygiene" in (fact.get("labels") or ())) \
+            and not reach.same_tree(rec["tip"]["studio"]):
+        # a lint reads the whole tree, so only a record of THIS tree answers it (2026-10-14: seven unpriced rows passed R2 by a
+        # served record of an older tree); at the same tree it is the same answer (URGENT FIX LIST #20)
+        return "a lint reads the whole tree: served only by a record of this very tree"
     rc = (rec.get("config") or {}).get("hash")
     if not rc or not cfg or rc != cfg.get("hash"):
         return "its build configuration differs (or is unknown): %s vs this build's %s" % (
