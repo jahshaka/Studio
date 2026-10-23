@@ -9,15 +9,17 @@
 # stops, each texel hands its moving history over to its own rest mean (eased out over 2N = 38 samples,
 # jah_reflect_rest.glsl), converges PER TEXEL until its rest mean's standard error has stayed under a code for 8
 # frames, then STOPS tracing; the view HOLDS - bit-still - when no texel is left (no frame count holds it):
-#   (a) from frame 17 the glossy per-frame mean change <= 0.05 codes and DECREASING over 10-frame windows to the hold
-#       (the tolerance is THIS row's own, rule R3 - J5's 0.01 was the gather's, carried here unruled: each window's
-#       standard error from its own frames, the per-frame mean change's noise from its successive differences,
-#       sigma^2 = sum (m[i+1] - m[i])^2 / (2 (n - 1)) so a slow trend cancels, the window's sigma / sqrt(n); a rise
-#       counts beyond 5 combined standard errors - Welch's t with ~18 degrees of freedom, P(t > 5) = 5e-5, so even
-#       ~50 comparisons false-alarm under 0.3 %);
+#   (a) NO RISE over the settle: from 16 frames past the rest's own start (its hand-over's transient: 2N / 4 frames; here
+#       the stop's first frame, so frame 17) to the hold, the
+#       glossy per-frame mean change decays and never rises - THE RISE LAW, tests/support/rise_law.py (photon-7 stage
+#       0's read R2: one robust noise figure for the whole series, every window judged against it, its mean and each of
+#       its frames - a burst of any length is a rise). (Its "<= 0.05 codes from frame 17" is DELETED, the lead's ruling:
+#       a moving estimate holds <= 12 samples, so the rest's refinement must move the mean by up to its SE, ~sigma /
+#       sqrt 12 - no honest estimator reaches 0.05 at frame 17; it read 0.30 on the base.)
 #   (b') the HOLD reached inside the window, from it on the glossy panes and the mirror change 0 codes, and at the hold
-#       NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its standard error, so every live texel's
-#       is under one code at the hold - the stop's own guarantee; a capped one stopped at its count's ceiling instead);
+#       NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its DISPLAYED standard error - the filter's
+#       rest taps combined, in display codes - so every live texel's is under one code at the hold, the stop's own
+#       guarantee; a capped one stopped at its count's ceiling instead);
 #   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
@@ -45,10 +47,13 @@ for run in run; do
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
 done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
-python3 -I - "$WD" "$WIN" <<'PY'
+HERE=$(cd "$(dirname "$0")" && pwd)
+python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])
-fails = []
+sys.path.insert(0, sys.argv[3])
+import rise_law
+fails = list(rise_law.selfcheck())   # the law's instrument first: the read's synthetic bursts are rises, a flat tail none
 def window(name, which="walk"):
     p = os.path.join(wd, "data", "stillness", name + ".tsv")
     if not os.path.exists(p): return None
@@ -76,21 +81,21 @@ if rows:
     if not held: fails.append("(b') the glass never held inside the %d-frame window" % (len(rows) - 1))
     elif capped != 0: fails.append("(b') capped texels at the hold: %d (the rest's defect reading must be 0)" % capped)
     end = hold if held else len(rows)
-    starts = list(range(17, end, 10))
-    win10, se10 = [], []
-    for a in starts:
-        m = [float(rows[i]["glossy_mean"]) for i in range(a, min(a + 10, end))]
-        n = len(m)
-        win10.append(sum(m) / n)
-        se10.append(math.sqrt(sum((m[i + 1] - m[i]) ** 2 for i in range(n - 1)) / (2.0 * (n - 1)) / n) if n >= 2 else 0.0)
-    print("(a) glossy mean change, 10-frame windows from 17 to the hold: %s" % " ".join("%.4f" % w for w in win10))
-    over = [(a, w) for a, w in zip(starts, win10) if w > 0.05]
-    if over: fails.append("(a) <= 0.05 codes from frame 17: %s" % " ".join("%d:%.4f" % x for x in over))
-    bound = [5.0 * math.hypot(se10[i], se10[i + 1]) for i in range(len(win10) - 1)]
-    print("(a) a rise's bound (5 combined standard errors of the two windows): %s" % " ".join("%.5f" % b for b in bound))
-    rising = [(starts[i + 1], win10[i], win10[i + 1], bound[i]) for i in range(len(win10) - 1)
-              if win10[i + 1] - win10[i] > bound[i]]
-    if rising: fails.append("(a) decreasing to the hold: rises at %s" % " ".join("%d:%.4f->%.4f (bound %.5f)" % x for x in rising))
+    glossy = [float(r["glossy_mean"]) for r in rows]
+    # FROM THE REST'S OWN START (its last, before the hold) + 16 frames - past its hand-over's transient (2N / 4 frames);
+    # here the rest begins on the stop's first frame, so frame 17
+    restStart = max([i for i in range(1, end) if int(rows[i]["refl_rest_frames"]) <= 1] or [1])
+    start = restStart + 16
+    spans = rise_law.windows(start, end)
+    win10 = [sum(glossy[a:b]) / (b - a) for a, b in spans]
+    print("(a) glossy mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in win10)))
+    # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
+    _, _, sigma, rising = rise_law.judge(glossy, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))
+    print("(a) the rise law's noise (sqrt of the mean change, the tail's successive differences): %.5f; rises %d" % (sigma, len(rising)))
+    if rising: fails.append("(a) no rise to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
+                            % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in rising[:10]))
+    active = {i: rows[i]["refl_rest_active"] for i in (80, 300, 600) if i < len(rows)}
+    print("(b') the rest's active texels at frames 80 / 300 / 600: %s" % " / ".join(str(active.get(i, "-")) for i in (80, 300, 600)))
     mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
     print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
     if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
