@@ -19,6 +19,12 @@
 //   F. A SHIFT THAT THROWS HALF WAY (gi.cascadeFaultCommit): the live store is torn, so the cascade scrolls no more
 //      until a WHOLE rebuild has made it one box's again. F2. ...and when that rebuild fails twice the store is
 //      cleared and the cascade stands down.
+//   G. WHAT IS LIT AT A COMMIT: the light was shifted with the store, so the direct term is re-injected AS A DELTA and
+//      the sky and the bounces re-solved over the slab and its bounce reach only. A KEPT VOXEL WHOSE DIRECT (both sides)
+//      DID NOT CHANGE KEEPS EVERY BIT of its total and back outside that region; THE WORK LAW - the voxels the commit
+//      lit, counted by the door (CascadeStatus::commitLit*), are exactly the slab's lit voxels plus the changed direct
+//      set the store shows; and WALK = TELEPORT on the direct: the scrolled cascade's direct term is a whole build's,
+//      bit for bit. (A placement pin holds cascade 1, so the step scrolls cascade 0 alone.)
 //   V. THE VRAM: every cascade's scratch at Epic, measured by the texture-memory door, against the per-size box-sized
 //      targets the scratch replaces (the same eleven volumes at res^3).
 //   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive, its factor per half, the coverage and the position per
@@ -436,6 +442,106 @@ int main()
         for (unsigned x : v.accumWeight) empty = empty && x == 0u;
         CHECK(empty, "...EMPTY: albedo, emissive, coverage, the area weight and the light all zero");
         rebuildWhole();
+    }
+
+    // ---- G. what is lit at a commit (PHOTON-7 stage 2) --------------------------------------------
+    std::printf("\n== G: the commit's light - the direct as a delta, the passes over the slab's reach ==\n");
+    {
+        run(4);
+        GiVoxelVolume before, after;
+        CHECK(scene->giVoxelVolume(0, before), "the store before the step reads back");
+        const GiStatus pre = scene->published().gi;
+        // THE STEP SCROLLS CASCADE 0 ALONE, so the counts are its commit's: a placement pin holds cascade 1 at its own
+        // camera and places cascade 0 for the stepped one (an outer commit re-injects cascade 0 as a delta too).
+        const Vec3 target(cam.x + 1.05f * step, cam.y, cam.z);
+        {
+            GiPlacementPin pin;
+            pin.on = true;
+            pin.cascadeBuiltCam.push_back(target);
+            for (size_t k = 1; k < pre.cascades.size(); ++k) pin.cascadeBuiltCam.push_back(pre.cascades[k].builtCam);
+            scene->setGiPlacementPin(pin);
+        }
+        look(target);
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        CHECK(scene->giVoxelVolume(0, after), "the store after the commit reads back");
+        run(4);   // the commit's count lands (read back a few frames late)
+        const GiStatus post = scene->published().gi;
+        const int res = after.width;
+        const int sx = int(std::lround((after.origin[0] - before.origin[0]) / after.cell[0]));
+        const int sy = int(std::lround((after.origin[1] - before.origin[1]) / after.cell[1]));
+        const int sz = int(std::lround((after.origin[2] - before.origin[2]) / after.cell[2]));
+        // THE PASS REGION the engine re-solves (PhotonComponent::planScroll): the slab's box dilated by cascade 0's bounce
+        // reach - 2^(maxLod + 1) + 1 cells, maxLod = log2 of the next cascade's cell over this one's - aligned out to 8.
+        const double ratio = double(post.cascades[1].cell) / double(post.cascades[0].cell);
+        const int reach = int(std::ceil(std::exp2(std::log2(ratio) + 1.0))) + 1;
+        const int slabLo = sx > 0 ? res - sx : 0, slabHi = sx > 0 ? res : -sx;
+        const int regLo = std::max(0, slabLo - reach) / 8 * 8, regHi = std::min(res, (slabHi + reach + 7) / 8 * 8);
+        size_t kept = 0, unchangedKept = 0, unchangedOutside = 0, violations = 0, bandAll = 0, slabLit = 0;
+        for (int z = 0; z < res; ++z)
+            for (int y = 0; y < res; ++y)
+                for (int x = 0; x < res; ++x) {
+                    const size_t ia = (size_t(z) * res + y) * res + x;
+                    const int ox = x + sx, oy = y + sy, oz = z + sz;
+                    const bool inOld = ox >= 0 && ox < res && oy >= 0 && oy < res && oz >= 0 && oz < res;
+                    if (!inOld) {   // the slab
+                        bool lit = false;
+                        for (int k = 0; k < 4; ++k)
+                            lit = lit || after.direct[ia * 4 + k] != 0.0f || after.directBack[ia * 4 + k] != 0.0f;
+                        slabLit += lit ? 1u : 0u;
+                        continue;
+                    }
+                    ++kept;
+                    const size_t ib = (size_t(oz) * res + oy) * res + ox;
+                    // the direct terms of BOTH sides (a delta replaces each in its own total)
+                    const bool sameDirect = std::memcmp(&after.direct[ia * 4], &before.direct[ib * 4], 16) == 0 &&
+                                            std::memcmp(&after.directBack[ia * 4], &before.directBack[ib * 4], 16) == 0;
+                    if (!sameDirect) { ++bandAll; continue; }
+                    ++unchangedKept;
+                    if (x >= regLo && x < regHi) continue;   // inside the pass region: re-solved by design
+                    ++unchangedOutside;
+                    if (std::memcmp(&after.light[ia * 4], &before.light[ib * 4], 16) != 0 ||
+                        std::memcmp(&after.lightBack[ia * 4], &before.lightBack[ib * 4], 16) != 0)
+                        ++violations;
+                }
+        const unsigned long long litSlab = post.cascades[0].commitLitSlab - pre.cascades[0].commitLitSlab;
+        const unsigned long long litBand = post.cascades[0].commitLitBand - pre.cascades[0].commitLitBand;
+        const unsigned long long counted = post.cascades[0].commitCounted - pre.cascades[0].commitCounted;
+        const unsigned long long region = post.cascades[0].commitRegionCells - pre.cascades[0].commitRegionCells;
+        const unsigned long long whole = (unsigned long long)res * res * res;
+        std::printf("   committed after %d frame(s), shift (%d, %d, %d); the pass region x [%d, %d) (reach %d cells); the "
+                    "outer cascades' scrolls", n, sx, sy, sz, regLo, regHi, reach);
+        bool outerScrolled = false;
+        for (size_t k = 1; k < post.cascades.size(); ++k) {
+            std::printf(" +%llu", post.cascades[k].scrolls - pre.cascades[k].scrolls);
+            outerScrolled = outerScrolled || post.cascades[k].scrolls != pre.cascades[k].scrolls;
+        }
+        std::printf("\n");
+        std::printf("   kept %zu voxels: %zu with both sides' direct unchanged (%zu outside the pass region: %zu changed "
+                    "their total or back), %zu with a changed one (the band)\n", kept, unchangedKept, unchangedOutside,
+                    violations, bandAll);
+        std::printf("   THE WORK: lit %llu in the slab (the store's own: %zu lit slab voxels) + %llu outside it (the store's "
+                    "band %zu) = %llu of %llu voxels (%.2f %%); one pass covered %llu (%.1f %%); counted %llu commit(s)\n",
+                    litSlab, slabLit, litBand, bandAll, litSlab + litBand, whole,
+                    100.0 * double(litSlab + litBand) / double(whole), region, 100.0 * double(region) / double(whole),
+                    counted);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u && sx != 0, "the step committed as a scroll");
+        CHECK(unchangedOutside > 0 && violations == 0,
+              "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its total and back (outside the pass region)");
+        CHECK(!outerScrolled, "only cascade 0 scrolled (its counts are its own commit's)");
+        CHECK(counted == 1u && litBand == bandAll && litSlab == slabLit,
+              "THE WORK LAW, counted by the door: the voxels lit are the slab's lit voxels plus the changed direct set");
+        CHECK(litSlab + litBand < whole / 2u && region < whole, "...a fraction of the cascade (the old commit lit it whole)");
+        scene->setGiPlacementPin(GiPlacementPin());
+        rebuildWhole();
+        GiVoxelVolume built;
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        size_t directDiff = 0;
+        for (size_t i = 0; i < built.direct.size() && i < after.direct.size(); ++i)
+            directDiff += std::memcmp(&built.direct[i], &after.direct[i], 4) != 0 ? 1u : 0u;
+        std::printf("   the direct after the walk against a whole build at its placement: %zu of %zu floats differ\n",
+                    directDiff, built.direct.size());
+        CHECK(built.direct.size() == after.direct.size() && directDiff == 0,
+              "WALK = TELEPORT ON THE DIRECT: the scrolled cascade's direct term is the whole build's, bit for bit");
     }
 
     // ---- V. the VRAM at Epic ---------------------------------------------------------------------
