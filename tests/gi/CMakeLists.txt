@@ -229,7 +229,8 @@ set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 794)
 # swept box, its sun shadow (the box and the header's direction) and its lamp's sphere; a script move its old and new
 # box and a material edit its wearer's box, re-voxelising only the cascades that hold it (A19 deleted); a sun change is
 # the sun's overflow and a > 4x sun or sky step restarts; 129 movers merge at the cap and never overflow; a scroll's
-# commit lists its injection boxes (test_gi_changed_regions.cpp says the laws). A fixture.
+# commit lists its injection boxes; the light passes' brick mask marks a lamp step's change only inside its spheres'
+# cover (test_gi_changed_regions.cpp says the laws). A fixture.
 add_executable(test_gi_changed_regions test_gi_changed_regions.cpp)
 set_target_properties(test_gi_changed_regions PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -246,7 +247,7 @@ jah_gpu_row(gi.changed_regions CLASS engine COMMAND test_gi_changed_regions
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1059)
+set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1071)
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit

@@ -19,6 +19,9 @@
 //            lies inside a listed region of its kind (Mover and MoverShadow).
 //   SLAB:    a dolly's cascade-0 scroll lists, on its commit frame, the commit's injection boxes as Slab regions of
 //            cascade 0, each inside cascade 0's new box; its chunk frames list no Slab.
+//   BRICKS:  the light passes' brick mask (Scene::takeGiBrickMask): the still scene's updates change no brick's direct term;
+//            the lamp step's re-injection marks bricks, every one in the cover of the old sphere joined with the new.
+//   Every count the status carries is read NON-ZERO somewhere (the lamp step, the sun, the cap), never only zero.
 // A fixture (the engine alone, one small offscreen view; the gather and the field off). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -204,8 +207,12 @@ int main()
     // ---- STILL ---------------------------------------------------------------------------------------------------
     std::printf("\n== STILL: 600 frames ==\n");
     {
-        const unsigned long long closes0 = scene->published().gi.regionCloses;
+        const GiStatus g0 = scene->published().gi;
+        const unsigned long long closes0 = g0.regionCloses;
         int listing = 0;
+        unsigned activeDirect = 0;
+        std::vector<unsigned long long> seenReadings;
+        for (const GiStatus::CascadeStatus &cs : g0.cascades) seenReadings.push_back(cs.brickReadings);
         GiChangedRegions first;
         for (int f = 0; f < 600; ++f) {
             run(1);
@@ -214,9 +221,23 @@ int main()
                 if (!listing) first = regions();
                 ++listing;
             }
+            // (a reading that landed THIS frame: the last reading's count stands until the next lands)
+            for (size_t i = 0; i < g.cascades.size(); ++i)
+                if (i < seenReadings.size() && g.cascades[i].brickReadings != seenReadings[i]) {
+                    activeDirect += g.cascades[i].bricksDirectLast;
+                    seenReadings[i] = g.cascades[i].brickReadings;
+                }
         }
-        const unsigned long long closes = scene->published().gi.regionCloses - closes0;
-        std::printf("   closes %llu, frames listing %d\n", closes, listing);
+        const GiStatus g1 = scene->published().gi;
+        const unsigned long long closes = g1.regionCloses - closes0;
+        unsigned long long updates = 0, readings = 0;
+        for (size_t i = 0; i < g1.cascades.size() && i < g0.cascades.size(); ++i) {
+            updates += g1.cascades[i].brickUpdates - g0.cascades[i].brickUpdates;
+            readings += g1.cascades[i].brickReadings - g0.cascades[i].brickReadings;
+        }
+        std::printf("   closes %llu, frames listing %d; the brick mask: %llu light updates, %llu readings, %u direct-active "
+                    "bricks summed over the readings\n", closes, listing, updates, readings, activeDirect);
+        CHECK(activeDirect == 0u, "...and no reading of the brick mask landing in it holds a changed direct term");
         if (listing) dump(first, "the first listing frame");
         CHECK(closes == 600u, "the list closed once a frame");
         CHECK(listing == 0, "A STILL SCENE LISTS NOTHING FOR 600 FRAMES (no region, no overflow, no restart)");
@@ -226,11 +247,24 @@ int main()
     std::printf("\n== LAMP: a pose step and an intensity step ==\n");
     {
         const Vec3 from = lampPos;
+        // THE BRICK MASKS EMPTIED before the step (the settle let every reading in flight land).
+        const size_t nCascades = scene->published().gi.cascades.size();
+        for (size_t i = 0; i < nCascades; ++i) {
+            GiBrickMask junk;
+            scene->takeGiBrickMask(int(i), junk);
+        }
         lampPos = Vec3(2.5f, 1.8f, 0.2f);
         scene->setNodeTransform(lamp, lampPos, Quat(), Vec3(1, 1, 1));
         run(1);
         const GiChangedRegions r = regions();
         dump(r, "the step's frame");
+        {
+            // THE STATUS'S COUNTS READ THIS LIST (the negative control of the still arm's zeros)
+            const GiStatus g = scene->published().gi;
+            CHECK(g.regionFrame == r.frame && g.regionCount == unsigned(r.regions.size()) && g.regionCount > 0u &&
+                      g.regionsByKind[unsigned(GiRegionKind::Lamp)] == 1u,
+                  "the status's counts are this list's (a frame, a count, one Lamp)");
+        }
         const GiChangedRegion *l = firstKind(r, GiRegionKind::Lamp);
         const Box want = join(sphere(from, lampDesc.range), sphere(lampPos, lampDesc.range));
         // (the cards' own answer to the light write - today every resident card relit, the radiance signature C4 that
@@ -241,6 +275,48 @@ int main()
         CHECK(countKind(r, GiRegionKind::Lamp) == 1u && l && same(*l, want) && others == 0u && !r.overflow && !r.restart,
               "A LAMP STEP LISTS EXACTLY ITS OLD SPHERE JOINED WITH ITS NEW (one Lamp region; no other producer but the cards')");
         CHECK(l && l->cascadeMask != 0u, "...and names the cascades it reaches");
+        // THE BRICK MASK OF THE STEP (PHOTON-7 stage 3): the chain re-injected (the host's refresh) - every brick whose
+        // direct term changed by a code or more lies in the cover of the old sphere joined with the new (past its range a
+        // lamp lights nothing), and some brick did change (the count is read non-zero).
+        {
+            scene->refreshGlobalIllumination();
+            unsigned directLastMax = 0;
+            for (int f = 0; f < 8; ++f) {
+                run(1);
+                for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
+                    directLastMax = std::max(directLastMax, cs.bricksDirectLast);
+            }
+            unsigned marked = 0, outside = 0, bounceMarked = 0;
+            for (size_t i = 0; i < nCascades; ++i) {
+                GiBrickMask m;
+                if (!scene->takeGiBrickMask(int(i), m)) continue;
+                unsigned mi = 0, oi = 0, bi = 0;
+                for (int z = 0; z < m.dims[2]; ++z)
+                    for (int y = 0; y < m.dims[1]; ++y)
+                        for (int x = 0; x < m.dims[0]; ++x) {
+                            const size_t k = (size_t(z) * m.dims[1] + y) * m.dims[0] + x;
+                            bi += m.bounce[k] >= 1.0f ? 1u : 0u;
+                            if (!(m.direct[k] >= 1.0f)) continue;
+                            ++mi;
+                            const Box b{ Vec3(m.origin.x + m.brickMetres * x, m.origin.y + m.brickMetres * y,
+                                              m.origin.z + m.brickMetres * z),
+                                         Vec3(m.origin.x + m.brickMetres * (x + 1), m.origin.y + m.brickMetres * (y + 1),
+                                              m.origin.z + m.brickMetres * (z + 1)) };
+                            const bool meets = b.lo.x <= want.hi.x && b.hi.x >= want.lo.x && b.lo.y <= want.hi.y &&
+                                               b.hi.y >= want.lo.y && b.lo.z <= want.hi.z && b.hi.z >= want.lo.z;
+                            oi += meets ? 0u : 1u;
+                        }
+                std::printf("   cascade %zu: %d^3 bricks of %.3f m, %u readings: %u direct-changed (%u outside the "
+                            "spheres' cover), %u moved by the last pass\n", i, m.dims[0], double(m.brickMetres), m.readings,
+                            mi, oi, bi);
+                marked += mi;
+                outside += oi;
+                bounceMarked += bi;
+            }
+            CHECK(marked > 0u && directLastMax > 0u,
+                  "THE LAMP STEP'S DIRECT CHANGE IS IN THE BRICK MASK (the door and the status's count read it non-zero)");
+            CHECK(outside == 0u, "...AND EVERY BRICK IT MARKS LIES IN THE COVER OF THE OLD SPHERE JOINED WITH THE NEW");
+        }
         settle(600);
         lampDesc.intensity = 8.0f;
         scene->setLight(lamp, lampDesc);
@@ -367,6 +443,8 @@ int main()
         scene->setLight(sunNode, sun);
         const GiChangedRegions five = step("the sun x5");
         CHECK((five.overflow & kGiRegionOverflowSun) && five.restart, "A 5x SUN STEP RESTARTS");
+        CHECK((scene->published().gi.regionOverflow & kGiRegionOverflowSun) && scene->published().gi.regionRestart,
+              "...and the status reads the overflow and the restart (non-zero)");
         float sh[27] = {};
         sh[0] = sh[1] = sh[2] = 0.1f;
         scene->setAmbientSh(sh);
@@ -428,6 +506,8 @@ int main()
                     inShadow, swept.size());
         CHECK(r.regions.size() <= kGiRegionCap && r.merges > 0u && !r.overflow,
               "129 MOVERS MERGE AT THE CAP AND NEVER OVERFLOW");
+        CHECK(scene->published().gi.regionMerges == r.merges && scene->published().gi.regionCount == unsigned(r.regions.size()),
+              "...and the status reads the merges and the count");
         CHECK(inMover == swept.size() && inShadow == swept.size(),
               "...every mover's swept box inside a region of its kind (Mover, MoverShadow)");
         for (NodeId n : movers) scene->removeNode(n);
