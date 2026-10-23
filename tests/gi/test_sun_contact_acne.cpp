@@ -1,19 +1,27 @@
-// gi.sun_contact_acne — THE SUN CONTACT NEVER SHADOWS A SURFACE BY ITSELF (PHOTON-7 stage 6, READ_A W1).
+// gi.sun_contact_acne — THE SUN CONTACT NEVER SHADOWS A SURFACE BY ITSELF, AND ITS LIFT IS NO SMALLER THAN THE LAW
+// (PHOTON-7 stage 6, READ_A W1, READ_B F3 + F5).
 //
 // THE LAW: the contact job traces one ray per pixel from the pixel's DRAWN surface toward the sun and folds
 // min( map, ray ) into the direct sun; on a sunlit surface with nothing between it and the sun the ray must find
 // nothing, so the picture with the job ON equals the picture with it OFF there, pixel for pixel. The pixel shows the
-// drawn LOD (a stock item's level, chosen under the view's pixel tolerance, up to 1/0.9 of it in the 10 % band) while
-// the ray traces each mesh's LEVEL 0 (ONE RAY LEVEL PER MESH): on a CONVEX surface the drawn facets lie INSIDE level 0
-// by up to the tolerance, so the origin must leave by the tolerance plus a margin for that sign along the GEOMETRIC
-// normal (rq_sun_contact.comp: the float bound + (tolerance x bias + 1) footprints). NO ROW MEASURED THIS before (the
-// archived gi.sun_contact's arm 3 asserted it on a flat floor, where the drawn level is the traced one).
-// THE NEGATIVE CONTROL: the arm rays.origincut 0 (the float bound alone) must read RED on the same sphere - the drawn
-// facets inside level 0 start their rays inside it - or the fixture cannot fail.
-// THE FIXTURE: a matte UV sphere (radius 1 m) whose level 1 (16 x 8 of level 0's 64 x 32) lies inside level 0 by its
-// measured bound, seen from the distance where that bound is 0.85 of the view's 1-px tolerance (the stock LOD draws
-// level 1), a sun 35 degrees up behind the camera's shoulder, a floor far below, no GI. The lit hemisphere's pixels:
-// job on vs job off. Frames: 1 + 3 x 16 = 49.
+// drawn LOD (a stock item's level) while the ray traces each mesh's LEVEL 0 (ONE RAY LEVEL PER MESH): on a CONVEX
+// surface the drawn facets lie INSIDE level 0, so the origin leaves along the GEOMETRIC normal by the ONE ORIGIN LAW
+// (jah_ray_origin.glsl, Types.h rayOriginDrawnFootprints): the float bound + kLevelDriftOverBound x the tolerance x
+// one footprint at the point's Euclidean distance (over 1 - the view's band; this offscreen view has none).
+// WHY THE DRIFT RATIO, AND WHAT THIS ROW PLACES BETWEEN THE TWO (READ_B F5): the LOD rule spends the bake's STORED
+// error, which bounds each step's deviation from its INPUT, and a level's drift from level 0 may reach 2x it (the
+// bake's ship law, atom2.one_step_drift_bound). So the fixture's level is AUTHORED that way: level 1's facets lie
+// inside the sphere by their measured sag D while the level table stores D / kFixtureDrift (1.8, inside the law) -
+// the strategy draws it wherever the stored bound is under the tolerance - and the camera stands where HALF the law's
+// lift (what the tolerance alone gives: the pre-F3 lift) is under D and the whole law is over it. THREE PICTURES with
+// the job on: the law (green: nothing darker), HALF its drawn term (rays.originCut 0.5) and NONE of it (0) - both RED:
+// the facets' middles start their rays inside level 0.
+// THE FIXTURE: a matte UV sphere (radius 1 m) whose level 1 (16 x 8 of level 0's 64 x 32) the STOCK strategy draws (the
+// scene's visibility buffer off: it draws a DAG-less mesh at level 0), a sun 35 degrees up behind the camera's
+// shoulder, a floor far below, no GI. The lit hemisphere's pixels: each picture vs the job off. HALF the law's term
+// red is also the proof that level 1 is what the view drew: level 0 is the traced surface, which a lift of
+// centimetres clears.
+// Frames: 1 + 4 x 16 = 65.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -34,9 +42,12 @@ static int failures = 0;
 static const unsigned kW = 640, kH = 360;
 static const float kPi = 3.14159265358979f;
 static const int kSeg0 = 64, kRing0 = 32, kStep1 = 4;
+/// The fixture level's drift from level 0 over its STORED bound - inside the bake's ship law (kLevelDriftOverBound).
+static constexpr float kFixtureDrift = 1.8f;
+static_assert(kFixtureDrift < kLevelDriftOverBound, "the fixture's level must obey the bake's drift law");
 
-/// THE SPHERE: level 0 and level 1 (every 4th vertex each way) over one vertex buffer; level 1's measured bound, the
-/// largest distance of its triangles from the sphere (sampled), returned.
+/// THE SPHERE: level 0 and level 1 (every 4th vertex each way) over one vertex buffer; level 1's measured sag D, the
+/// largest distance of its triangles from the sphere (sampled), returned - its table stores D / kFixtureDrift.
 static MeshData sphereMesh(float &bound1)
 {
     MeshData d;
@@ -74,8 +85,9 @@ static MeshData sphereMesh(float &bound1)
             }
     }
     d.lodIndices.push_back(level1);
-    d.lodBounds.push_back(bound1);
-    d.lodErrors.push_back(bound1);
+    // THE STORED BOUND, as a bake that drifted kFixtureDrift x would store it (the head of this file)
+    d.lodBounds.push_back(bound1 / kFixtureDrift);
+    d.lodErrors.push_back(bound1 / kFixtureDrift);
     return d;
 }
 
@@ -104,6 +116,11 @@ int main()
     fx.allowOffscreen = true;
     view->setPostFx(fx);
     s->setPixelTolerance(1.0f);
+    // THROUGH OGRE'S OWN LOD (the stock strategy, OgreMesh.cpp): the visibility buffer draws a mesh with no cluster DAG
+    // at its LEVEL 0 (the cut picks per cluster, and this mesh has none - measured: the same 0 / 0 / 866 px with level 1
+    // made unaffordable), so the level this row is about is drawn only by the stock route - the route every item Atom
+    // does not take draws through (a blended, skinned, custom-piece or planar item).
+    s->setAtomDrawEnabled(false);
     s->setAmbient(Colour(0.10f, 0.11f, 0.12f), Colour(0.08f, 0.08f, 0.08f));
     // the sun 35 degrees up, from behind the camera's right shoulder (the camera looks down -z)
     const float el = 35.0f * kPi / 180.0f, az = 25.0f * kPi / 180.0f;
@@ -129,13 +146,21 @@ int main()
     const NodeId floor = enginetest::addTestCube(s, Colour(0.5f, 0.5f, 0.5f), 0.0f, 1.0f);
     enginetest::setNodeScale(s, floor, Vec3(200.0f, 0.2f, 200.0f));
     enginetest::setNodePosition(s, floor, Vec3(0.0f, -1.6f, 0.0f));
-    // THE DISTANCE: level 1's bound at 0.85 of one full-resolution footprint (2 tan(22.5) / H a metre)
+    // THE DISTANCE: the sphere's nearest point where HALF the law's lift (one footprint of 2 tan(22.5) / H a metre at
+    // the tolerance 1) is D / 1.4 - so half the law clears no facet middle deeper than 0.71-0.77 D over the lit
+    // hemisphere, the law clears 1.43 D at least, and the stored bound D / 1.8 is 0.78 of the tolerance there (the
+    // strategy draws level 1: it judges the object at its bounding sphere's nearest distance)
     const float footPerMetre = 2.0f * std::tan(22.5f * kPi / 180.0f) / float(kH);
-    const float dist = bound1 / (0.85f * footPerMetre);
+    const float dist = 1.0f + bound1 / (1.4f * footPerMetre);
     const Vec3 cam(0.0f, 0.0f, dist);
     enginetest::testCameraLookAt(view, cam, Vec3(0.0f, 0.0f, 0.0f));
-    std::printf("   the camera %.2f m from the sphere: level 1's bound = %.2f footprints\n", dist,
-                bound1 / (dist * footPerMetre));
+    const float allowed = footPerMetre * (dist - 1.0f);
+    std::printf("   the camera %.2f m from the sphere's centre: level 1's sag D %.4f m, stored %.4f m = %.2f of the "
+                "tolerance at the nearest point; the law's lift there %.4f m (%.2f D), half of it %.4f m (%.2f D)\n",
+                dist, bound1, bound1 / kFixtureDrift, bound1 / kFixtureDrift / allowed,
+                rayOriginDrawnFootprints(1.0f, 0.0f) * allowed, rayOriginDrawnFootprints(1.0f, 0.0f) * allowed / bound1,
+                0.5f * rayOriginDrawnFootprints(1.0f, 0.0f) * allowed,
+                0.5f * rayOriginDrawnFootprints(1.0f, 0.0f) * allowed / bound1);
 
     const auto shoot = [&](bool contact, Image &img) {
         SunContactDesc sc;
@@ -145,23 +170,27 @@ int main()
         enginetest::frames(e, 16);
         return view->readPixels(img);
     };
-    Image off, on, noCut;
+    Image off, on, half, noCut;
     CHECK(shoot(false, off), "the picture with the contact job off");
     CHECK(shoot(true, on), "the picture with the contact job on");
     const SunContactStatus st = s->published().sunContact;
     CHECK(st.on && st.running, "the contact job ran (on %d, running %d%s%s)", int(st.on), int(st.running),
           st.reason.empty() ? "" : ": ", st.reason.c_str());
     bool armed = false;
+    e->request([&](Engine &en) { armed = en.setArm("rays.originCut", 0.5); });
+    CHECK(armed, "the first control's arm (rays.originCut 0.5)");
+    CHECK(shoot(true, half), "the picture with the contact job on, its origin's drawn term halved");
+    armed = false;
     e->request([&](Engine &en) { armed = en.setArm("rays.originCut", 0.0); });
-    CHECK(armed, "the negative control's arm (rays.originCut 0)");
-    CHECK(shoot(true, noCut), "the picture with the contact job on, its origin's drawn-cut term off");
+    CHECK(armed, "the second control's arm (rays.originCut 0)");
+    CHECK(shoot(true, noCut), "the picture with the contact job on, its origin's drawn term off");
     e->request([&](Engine &en) { en.setArm("rays.originCut", 1.0); });
 
     // THE LIT DISK: the sphere's projected disk, its pixels whose surface faces the sun by more than 0.2
     const float tanHalf = std::tan(22.5f * kPi / 180.0f);
     const float pxPerRad = 0.5f * float(kH) / tanHalf;
     const float rDisk = pxPerRad * std::asin(1.0f / dist) * 0.92f;
-    int lit = 0, acneOn = 0, acneNoCut = 0;
+    int lit = 0, acneOn = 0, acneHalf = 0, acneNoCut = 0;
     const auto luma = [](const Image &img, unsigned x, unsigned y) {
         const size_t i = (size_t(y) * img.width + x) * 4u;
         return 0.2126f * img.rgba[i] + 0.7152f * img.rgba[i + 1] + 0.0722f * img.rgba[i + 2];
@@ -184,13 +213,16 @@ int main()
             ++lit;
             const float a = luma(off, x, y);
             if (luma(on, x, y) < a - 1.0f) ++acneOn;
+            if (luma(half, x, y) < a - 1.0f) ++acneHalf;
             if (luma(noCut, x, y) < a - 1.0f) ++acneNoCut;
         }
-    std::printf("   the lit hemisphere: %d px; darker by more than a code with the job on %d, with its drawn-cut term"
-                " off %d\n", lit, acneOn, acneNoCut);
+    std::printf("   the lit hemisphere: %d px; darker by more than a code with the job on %d, with its drawn term"
+                " halved %d, with it off %d\n", lit, acneOn, acneHalf, acneNoCut);
     CHECK(lit >= 500, "the lit hemisphere is in view (%d px)", lit);
     CHECK(acneOn == 0, "the contact job shadows no lit pixel of the convex sphere by itself (%d)", acneOn);
-    CHECK(acneNoCut > 0, "THE NEGATIVE CONTROL is red: the float bound alone starts the rays inside level 0 (%d px)",
+    CHECK(acneHalf > 0, "THE FIRST CONTROL is red: HALF the law's drawn term starts the facets' middles' rays inside "
+          "level 0 (%d px)", acneHalf);
+    CHECK(acneNoCut > 0, "THE SECOND CONTROL is red: the float bound alone starts the rays inside level 0 (%d px)",
           acneNoCut);
 
     std::printf("%s\n", failures ? "gi.sun_contact_acne: FAIL" : "gi.sun_contact_acne: PASS");

@@ -162,9 +162,11 @@ set_tests_properties(gi.ray_level_fixed PROPERTIES JAHSHAKA_TEST_FRAMES 105)
 # convex 10.3 m cylinder cap carded at its coarse level (split 4 x 2, 2 cm texels; the level 5.4 cm inside the arc), the
 # sun overhead - every texel's sun ray lifted past the captured level's measured bound, none self-shadowed
 # (test_card_sun_lift.cpp states the law and the base's red). 49 frames.
-# gi.sun_contact_acne — THE SUN CONTACT NEVER SHADOWS A SURFACE BY ITSELF (PHOTON-7 stage 6, READ_A W1): a two-level
-# sphere drawn at its coarse level (0.85 of the 1-px tolerance), the lit hemisphere with the contact job on equals it
-# off; the negative control (rays.originCut 0) red (test_sun_contact_acne.cpp). 49 frames.
+# gi.sun_contact_acne — THE SUN CONTACT NEVER SHADOWS A SURFACE BY ITSELF, AND ITS LIFT IS NO SMALLER THAN THE LAW
+# (PHOTON-7 stage 6, READ_A W1, READ_B F5): a two-level sphere drawn at its coarse level, whose facets' sag is 1.8x the
+# level's STORED bound (a drift inside the bake's 2x law), seen where half the law's lift is under the sag and the law
+# over it: the lit hemisphere with the contact job on equals it off; HALF the drawn term (rays.originCut 0.5) and none
+# of it (0) both red (test_sun_contact_acne.cpp). 65 frames.
 add_executable(test_card_sun_lift test_card_sun_lift.cpp)
 set_target_properties(test_card_sun_lift PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -198,7 +200,7 @@ jah_gpu_row(gi.sun_contact_acne CLASS engine COMMAND test_sun_contact_acne
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sun_contact_acne PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
-set_tests_properties(gi.sun_contact_acne PROPERTIES JAHSHAKA_TEST_FRAMES 49)
+set_tests_properties(gi.sun_contact_acne PROPERTIES JAHSHAKA_TEST_FRAMES 65)
 
 # gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1):
 # an open court keeps >= 1 probe at Medium, a bare floor printed, a sealed room its whole grid.
