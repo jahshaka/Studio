@@ -787,17 +787,23 @@ int main()
         CHECK(post.cascades[0].scrolls > pre.cascades[0].scrolls && post.cascades[1].scrolls > pre.cascades[1].scrolls,
               "I: both cascades scrolled");
         CHECK(!together, "I: CASCADE 0 AND AN OUTER CASCADE NEVER COMMIT IN ONE FRAME (the slots' one-writer rule)");
-        GiVoxelVolume walked, whole;
-        CHECK(scene->giVoxelVolume(0, walked), "I: the walked store reads back");
+        // BOTH CASCADES' DIRECT against a whole build: cascade 0's (the outer commit's re-march of it, by the region its moved
+        // faces swept against the sun reach - PHOTON-7 stage 4's read R4) and cascade 1's own (the outermost commit's own
+        // delta, by the same region and its slabs)
+        GiVoxelVolume walked[2], whole[2];
+        for (int k = 0; k < 2; ++k) CHECK(scene->giVoxelVolume(k, walked[k]), "I: the walked store reads back");
         rebuildWhole();   // (at every cascade's builtCam)
-        CHECK(scene->giVoxelVolume(0, whole), "I: the whole build's store reads back");
-        size_t diff = 0;
-        for (size_t i = 0; i < whole.direct.size() && i < walked.direct.size(); ++i)
-            diff += std::memcmp(&whole.direct[i], &walked.direct[i], 4) != 0 ? 1u : 0u;
-        std::printf("   cascade 0's direct against a whole build at the same placements: %zu of %zu floats differ\n", diff,
-                    whole.direct.size());
-        CHECK(whole.direct.size() == walked.direct.size() && diff == 0,
+        for (int k = 0; k < 2; ++k) CHECK(scene->giVoxelVolume(k, whole[k]), "I: the whole build's store reads back");
+        size_t diff[2] = { 0, 0 };
+        for (int k = 0; k < 2; ++k)
+            for (size_t i = 0; i < whole[k].direct.size() && i < walked[k].direct.size(); ++i)
+                diff[k] += std::memcmp(&whole[k].direct[i], &walked[k].direct[i], 4) != 0 ? 1u : 0u;
+        std::printf("   the direct against a whole build at the same placements: cascade 0 %zu of %zu floats differ, cascade 1 "
+                    "%zu of %zu\n", diff[0], whole[0].direct.size(), diff[1], whole[1].direct.size());
+        CHECK(whole[0].direct.size() == walked[0].direct.size() && diff[0] == 0,
               "I: ONCE STILL, CASCADE 0'S DIRECT IS THE WHOLE BUILD'S, bit for bit (the outer commit's re-march reached it)");
+        CHECK(whole[1].direct.size() == walked[1].direct.size() && diff[1] == 0,
+              "I: ...AND THE OUTERMOST'S OWN, bit for bit (its commit's region: the faces swept against the light, the slabs)");
         scene->removeNode(wall);
         scene->removeNode(sunNode);
         sunNode = enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
