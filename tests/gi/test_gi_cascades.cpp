@@ -924,15 +924,27 @@ int main()
             const MaterialId mat = scene->createPbrMaterial(pp);
             const NodeId painted = scene->createNode();
             scene->attachMesh(painted, m, mat);
-            enginetest::setNodePosition(scene, painted, Vec3(-1.5f, 0.5f, 1.0f));
+            const Vec3 paintedAt(-1.5f, 0.5f, 1.0f);
+            enginetest::setNodePosition(scene, painted, paintedAt);
             render(e, 16);
             pp.albedo = Colour(0.9f, 0.9f, 0.1f);
             const unsigned long long armMat = scene->published().gi.rebuilds;
+            // THE CASCADES THAT HOLD THE WEARER (PHOTON-7 stage 3, AB A19 deleted): a voxel input of a material changes the
+            // voxels of the items that wear it and nothing else, so exactly the cascades whose box meets the painted cube's
+            // re-voxelise (the whole-chain dirty this used to assert re-voxelised the cascades that do not hold it too).
+            unsigned long long holding = 0;
+            for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades) {
+                bool meets = true;
+                const float c[3] = { cs.centre.x, cs.centre.y, cs.centre.z }, p[3] = { paintedAt.x, paintedAt.y, paintedAt.z };
+                for (int a = 0; a < 3; ++a) meets = meets && std::fabs(p[a] - c[a]) <= cs.halfSize + 0.5f;
+                holding += meets ? 1u : 0u;
+            }
             CHECK(scene->setPbrMaterial(mat, pp), "a material parameter is edited");
             scene->refreshGlobalIllumination();
             measure("a material edit", armMat, 16, total, worst);
-            CHECK(total == (unsigned long long)nCascades,
-                  "...and EVERY cascade got fresh voxels — one cascade per frame");
+            std::printf("   the cascades holding the painted cube: %llu of %zu\n", holding, nCascades);
+            CHECK(holding >= 1u && total == holding,
+                  "...and EXACTLY THE CASCADES THAT HOLD THE WEARER got fresh voxels - one cascade per frame");
             render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(scene->published().gi.vctBound,
                   "...with the chain still bound after every voxeliser was replaced");
