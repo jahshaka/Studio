@@ -2,12 +2,13 @@
 # rtreflect.lamp_step_held (PHOTON-2 stage 1's round 2, rev 6's (e); split out of rtreflect.still_after_stop in round 4 so
 # each row runs its law in under a minute) — A SMALL LAMP STEP AT REST IS HELD AT THE NEW LIGHT'S PICTURE.
 # jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the mirror, the declared mover -
-# parked) at still_after_stop's stop pose; two sessions, each through the stillness door with a 600-frame window (P1's
-# stop on the standard error runs most texels to K_max 512, so a view holds on its 513th rest frame):
+# parked) at still_after_stop's stop pose; two sessions, each through the stillness door with a 600-frame window (the
+# rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame, no frame cap - a view holds when every texel
+# has stopped by its standard error, about 100 frames on the glass):
 #   (e) a lamp step SMALLER than the one-ray sigma (8 -> 8.16) applied at rest, HELD (the door says it held before its
 #       shot), equals a session converged at the new light (held likewise): mean |change| <= 0.05 codes and at most
-#       0.01 % of the pixels more than a code apart. The step's own arrival (<= 16 frames) is
-#       rtreflect.history_detectors'.
+#       0.01 % of the pixels more than a code apart; each session's hold with NO CAPPED TEXEL (the door's
+#       refl_rest_capped 0). The step's own arrival (<= 16 frames) is rtreflect.history_detectors'.
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
 # usage: lamp_step_held.sh <jahlab> <work dir>
 set -u
@@ -49,8 +50,10 @@ for name in ("estep", "eref"):
         fails.append("(e) the %s session's door counted no glass" % name)
         continue
     h = holdOf(r)
-    print("(e) the %s session held at frame %d of %d before its shot" % (name, h, win))
+    capped = int(r[h]["refl_rest_capped"]) if h < len(r) else -1
+    print("(e) the %s session held at frame %d of %d before its shot (capped texels %d)" % (name, h, win, capped))
     if h >= len(r): fails.append("(e) the %s session never held before its shot" % name)
+    elif capped != 0: fails.append("(e) the %s session's hold has %d capped texels (must be 0)" % (name, capped))
 try:
     from PIL import Image
 except ImportError:

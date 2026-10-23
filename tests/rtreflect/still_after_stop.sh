@@ -3,20 +3,21 @@
 # split in round 4: (e) is rtreflect.lamp_step_held's, lamp_step_held.sh) — THE GLASS IS STILL AFTER A STOP. jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the
 # mirror, the declared mover - parked), a 1.2 m walk INSIDE one c0 lattice cell (no GI row may fire after the stop: the
 # reflection's own law, alone), the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's
-# placement pin). Two 600-frame windows: P1's stop on the standard error runs most texels to K_max, so the view holds
-# on the 513th rest frame and a 530-frame window ended before it (the round-3 red at 2fb7f67b).
+# placement pin). One 600-frame window (the rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame,
+# no frame cap - PREFLIGHT_R section 3's estimate, (2N + the measured samples) / 4 + 8, about 100 frames).
 # THE LAW (physics: under still lights and geometry a reflection is a function of the world and the eye): once the eye
-# stops, each texel hands its moving history over to its own rest mean (eased out over 2N = 102 samples,
-# jah_reflect_rest.glsl), converges PER TEXEL until its answer has changed under a code for 8 frames, then STOPS
-# tracing; the view HOLDS - bit-still - when no texel is left or at 512 rest frames (K_max):
+# stops, each texel hands its moving history over to its own rest mean (eased out over 2N = 38 samples,
+# jah_reflect_rest.glsl), converges PER TEXEL until its rest mean's standard error has stayed under a code for 8
+# frames, then STOPS tracing; the view HOLDS - bit-still - when no texel is left (no frame count holds it):
 #   (a) from frame 17 the glossy per-frame mean change <= 0.05 codes and DECREASING over 10-frame windows to the hold
 #       (the tolerance is THIS row's own, rule R3 - J5's 0.01 was the gather's, carried here unruled: each window's
 #       standard error from its own frames, the per-frame mean change's noise from its successive differences,
 #       sigma^2 = sum (m[i+1] - m[i])^2 / (2 (n - 1)) so a slow trend cancels, the window's sigma / sqrt(n); a rise
-#       counts beyond 5 combined standard errors - Welch's t with ~18 degrees of freedom, P(t > 5) = 5e-5, so the ~50
-#       comparisons to a K_max hold false-alarm under 0.3 %);
-#   (b) from the HOLD frame on the glossy panes and the mirror change 0 codes, the hold at <= 513 rest frames (K_max
-#       512, the view holding on the frame after it);
+#       counts beyond 5 combined standard errors - Welch's t with ~18 degrees of freedom, P(t > 5) = 5e-5, so even
+#       ~50 comparisons false-alarm under 0.3 %);
+#   (b') the HOLD reached inside the window, from it on the glossy panes and the mirror change 0 codes, and at the hold
+#       NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its standard error, so every live texel's
+#       is under one code at the hold - the stop's own guarantee; a capped one stopped at its count's ceiling instead);
 #   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
@@ -68,11 +69,12 @@ if rows and not (int(rows[1]["mirror_px"]) > 0 and int(rows[1]["glossy_px"]) > 0
 if rows:
     hold = holdOf(rows)
     held = hold < len(rows)
-    print("(b) the hold: frame %d (0 codes from it on: %s; K_max 512)" % (hold, "yes" if held else "NO"))
+    print("(b') the hold: frame %d (0 codes from it on: %s)" % (hold, "yes" if held else "NO"))
     rest = int(rows[hold]["refl_rest_frames"]) if held else -1
-    print("(b) the reflection's rest frames at the hold: %d (<= 513: the view holds on the frame after K_max 512)" % rest)
-    if not held: fails.append("(b) the glass never held inside the %d-frame window" % (len(rows) - 1))
-    elif rest > 513: fails.append("(b) the hold at <= 513 rest frames: %d" % rest)
+    capped = int(rows[hold]["refl_rest_capped"]) if held else -1
+    print("(b') at the hold: %d rest frames; capped texels %d (the door's refl_rest_capped)" % (rest, capped))
+    if not held: fails.append("(b') the glass never held inside the %d-frame window" % (len(rows) - 1))
+    elif capped != 0: fails.append("(b') capped texels at the hold: %d (the rest's defect reading must be 0)" % capped)
     end = hold if held else len(rows)
     starts = list(range(17, end, 10))
     win10, se10 = [], []
