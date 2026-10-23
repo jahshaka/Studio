@@ -18,8 +18,9 @@
 //   CAP:     129 movers stepping in one frame merge into at most 128 regions with no overflow, and every mover's swept box
 //            lies inside a listed region of its kind (Mover and MoverShadow).
 //   SLAB:    a dolly's cascade-0 scroll lists, on its commit frame, EXACTLY the commit's injection boxes as Slab regions of
-//            cascade 0, at its NEW corner (its slab's side and its trailing face, each its march's reach deep, 4-aligned);
-//            its chunk frames list no Slab.
+//            cascade 0, at its NEW corner (its slab's side and its trailing face, each its march's reach deep, 4-aligned),
+//            and its LEAVING slab (the old box's cells the new one dropped: PHOTON-7 stage 5's ruling); its chunk frames list
+//            no Slab.
 //   GONE:    a lamp NODE deleted (removeNode, the mirror's path) lists exactly its sphere; a movable cube removed lists its
 //            last box as a Mover with its shadows; a still cube removed while another object holds the tail slot lists
 //            the removed cube's box (its REMOVE) and NOTHING for the tail object, renumbered into the freed slot unchanged
@@ -626,12 +627,34 @@ int main()
                     }
                     want.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
                 };
+                int sh[3];
+                for (int a = 0; a < 3; ++a) sh[a] = int(std::lround(dc[a] / cell));
                 for (int a = 0; a < 3; ++a) {
-                    const int s = int(std::lround(dc[a] / cell));
+                    const int s = sh[a];
                     if (s == 0) continue;
                     const int kLo = s < 0 ? -s : 0, kHi = s > 0 ? res - s : res;
                     if (kHi < res) { box(a, kHi - reach, res); box(a, 0, reach); }
                     else { box(a, 0, kLo + reach); box(a, res - reach, res); }
+                }
+                // ...AND THE LEAVING SLAB (PHOTON-7 stage 5's ruling: the producer lists it beside the entering one), per
+                // moved axis: the old box's cells the new one dropped, across the union of the old and new boxes on the
+                // other axes (PhotonComponent::rebuildCascade's moved faces).
+                for (int a = 0; a < 3; ++a) {
+                    if (sh[a] == 0) continue;
+                    float l[3], h[3];
+                    const float c[3] = { corner.x, corner.y, corner.z };
+                    for (int k = 0; k < 3; ++k) {
+                        const float nLo = c[k], nHi = c[k] + float(res) * cell;
+                        const float oLo = nLo - float(sh[k]) * cell, oHi = nHi - float(sh[k]) * cell;
+                        if (k == a) {
+                            l[k] = sh[a] > 0 ? oLo : nHi;
+                            h[k] = sh[a] > 0 ? nLo : oHi;
+                        } else {
+                            l[k] = std::min(oLo, nLo);
+                            h[k] = std::max(oHi, nHi);
+                        }
+                    }
+                    want.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
                 }
                 unsigned matched = 0;
                 for (const Box &w : want)
@@ -650,7 +673,7 @@ int main()
         std::printf("   commits %d (Slab regions of cascade 0 inside its box on %d), chunk frames %d (listing a Slab %d)\n",
                     commitFrames, slabsOk, scrollFrames, chunkSlabFrames);
         CHECK(commitFrames >= 1 && slabsOk == commitFrames,
-              "A COMMIT LISTS EXACTLY ITS INJECTION BOXES AS SLAB REGIONS OF CASCADE 0, AT ITS NEW CORNER");
+              "A COMMIT LISTS EXACTLY ITS INJECTION BOXES AND ITS LEAVING SLAB AS SLAB REGIONS OF CASCADE 0, AT ITS NEW CORNER");
         CHECK(chunkSlabFrames == 0, "...and its chunk frames list none");
     }
 

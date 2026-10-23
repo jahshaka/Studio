@@ -249,6 +249,29 @@ set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1071)
 
+# gi.card_oracle (PHOTON-7 stage 5, 5-1) — THE CARDS REFINE ONLY WHAT CHANGED, AND WHAT THEY KEEP IS STILL RIGHT: a lamp
+# step on a carded court against an ORACLE (the same final state solved whole: the GI torn down and built again) - every
+# lit texel of every resident card within one code of the oracle, the relit and the kept alike; the step relit the
+# lamp's props and not every card; the far prop's direct half, outside the lamp's range, untouched
+# (test_gi_card_oracle.cpp says the laws). A fixture.
+add_executable(test_gi_card_oracle test_gi_card_oracle.cpp)
+set_target_properties(test_gi_card_oracle PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_oracle PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_oracle PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_oracle JahshakaEngineMedia)
+jah_gpu_row(gi.card_oracle CLASS engine COMMAND test_gi_card_oracle
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_oracle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.card_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 179)
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
