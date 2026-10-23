@@ -45,7 +45,11 @@ def window(name, which="walk"):
     return [r for r in csv.DictReader(open(p), delimiter="\t") if r["window"] == which]
 moving = lambda r: int(r["glossy_max"]) > 0 or int(r["mirror_max"]) > 0
 def holdOf(rows):
-    late = [i for i in range(1, len(rows)) if moving(rows[i])]
+    # THE HOLD IS THE REST'S, NOT THE PICTURE'S (the lead's ruling, PHOTON-7 stage 6): the first frame from which the
+    # view holds to the window's end - no texel left converging (the host's read-back active count 0: the door's
+    # refl_held 1; the trace no longer dispatched). A picture that stops moving a code while texels still trace is
+    # not held.
+    late = [i for i in range(1, len(rows)) if rows[i]["refl_held"] != "1"]
     return (late[-1] + 1) if late else 1
 for name in ("estep", "eref"):
     r = window(name)

@@ -60,7 +60,11 @@ def window(name, which="walk"):
     return [r for r in csv.DictReader(open(p), delimiter="\t") if r["window"] == which]
 moving = lambda r: int(r["glossy_max"]) > 0 or int(r["mirror_max"]) > 0
 def holdOf(rows):
-    late = [i for i in range(1, len(rows)) if moving(rows[i])]
+    # THE HOLD IS THE REST'S, NOT THE PICTURE'S (the lead's ruling, PHOTON-7 stage 6): the first frame from which the
+    # view holds to the window's end - no texel left converging (the host's read-back active count 0: the door's
+    # refl_held 1; the trace no longer dispatched). A picture that stops moving a code while texels still trace is
+    # not held.
+    late = [i for i in range(1, len(rows)) if rows[i]["refl_held"] != "1"]
     return (late[-1] + 1) if late else 1
 rows = window("still")
 log = open(os.path.join(wd, "run.log")).read()
@@ -74,12 +78,17 @@ if rows and not (int(rows[1]["mirror_px"]) > 0 and int(rows[1]["glossy_px"]) > 0
 if rows:
     hold = holdOf(rows)
     held = hold < len(rows)
-    print("(b') the hold: frame %d (0 codes from it on: %s)" % (hold, "yes" if held else "NO"))
+    still = held and not any(moving(rows[i]) for i in range(hold, len(rows)))
+    traced = [i for i in range(hold, len(rows)) if "rq.reflect.trace:" in rows[i].get("gpu_rows", "")] if held else []
+    print("(b') the hold (no texel active): frame %d; from it on the glass changes 0 codes: %s; frames from it on with "
+          "the trace's GPU row: %d%s" % (hold, "yes" if still else "NO", len(traced),
+                                         (" (first %d)" % traced[0]) if traced else ""))
     rest = int(rows[hold]["refl_rest_frames"]) if held else -1
     capped = int(rows[hold]["refl_rest_capped"]) if held else -1
     print("(b') at the hold: %d rest frames; capped texels %d (the door's refl_rest_capped)" % (rest, capped))
-    if not held: fails.append("(b') the glass never held inside the %d-frame window" % (len(rows) - 1))
+    if not held: fails.append("(b') the glass never held (no texel active) inside the %d-frame window" % (len(rows) - 1))
     elif capped != 0: fails.append("(b') capped texels at the hold: %d (the rest's defect reading must be 0)" % capped)
+    elif not still: fails.append("(b') the glass moved after the hold")
     end = hold if held else len(rows)
     glossy = [float(r["glossy_mean"]) for r in rows]
     # FROM THE REST'S OWN START (its last, before the hold) + 16 frames - past its hand-over's transient (2N / 4 frames);
