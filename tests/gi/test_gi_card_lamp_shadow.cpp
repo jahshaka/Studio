@@ -15,6 +15,10 @@
 //       plus one step of the R11G11B10F store - RED where the LampShadow region does not reach the cards.
 // (An EDIT inside a lamp's range stales the same sphere; a still caster's move also moves the store, whose change
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
+//   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'
+//       half steps of D x a numeric form factor x the window at every floor point;
+//   (4) PRINTED: the same light half-occluded - the card's one ray to the rectangle's centre against the visible form
+//       factor across the penumbra (the worst error and the width over one code).
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -221,6 +225,153 @@ int main()
           "(2) THE SHADOW FOLLOWS THE MOVED MOVER: every point within a code of a whole re-solve");
 
     scene->setGlobalIllumination(off);
+    run(2);
+    e->destroyView(view);
+    e->destroyScene(scene);
+    run(1);
+
+    // ---- (3) AN AREA LIGHT ON A CARD, AGAINST A NUMERIC FORM FACTOR; (4) ITS PENUMBRA, PRINTED ----
+    // A carded 2 m floor (one card, 128 texels: 1.5625 cm) and a carded back wall (the gather's hits make the floor
+    // resident), an ACCURATE area light 1 x 0.5 m facing down 1.2 m over the floor's centre (intensity 3, range 20 m).
+    // The card's direct (its radiance less its indirect and its flat term, over its kD) against D x F x the window:
+    // D = intensity x pi (OgreScene's power scale), F = the rectangle's form factor at the texel, (1 / pi) x the
+    // integral of cos x cos' / r^2 over the rectangle on a 200 x 100 midpoint grid, bounded over the texel the read
+    // picked (its centre within half a texel of the point: F's least and largest on that square), the bar the three
+    // stored values' half steps (R11G11B10F: 2^-7 of each on green).
+    View *av = e->createOffscreenView("card_area", 256, 256, Colour(0, 0, 0));
+    Scene *as = e->createScene("card_area");
+    if (!av || !as) { std::printf("FAIL: the area view/scene\n"); return 1; }
+    av->setScene(as);
+    {
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 1;
+        av->setPostFx(fx);
+    }
+    av->setOffscreenContract(OffscreenContract::Live);
+    const float kAlbedo = 0.6f;
+    cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false);
+    cube(as, Vec3(0.0f, 1.0f, -1.05f), Vec3(2.0f, 2.0f, 0.1f), Colour(0.5f, 0.5f, 0.6f), false);
+    const Vec3 areaAt(0.0f, 1.2f, 0.0f);
+    const double aw = 1.0, ah = 0.5, kIntensity = 3.0, kRange = 20.0;
+    {
+        const NodeId lamp = as->createNode();
+        LightDesc l;
+        l.type = LightType::Area;
+        l.accurate = true;
+        l.rectWidth = float(aw);
+        l.rectHeight = float(ah);
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = float(kIntensity);
+        l.range = float(kRange);
+        as->setNodeTransform(lamp, areaAt, Quat(), Vec3(1, 1, 1));
+        as->setLight(lamp, l);
+    }
+    enginetest::testCameraLookAt(av, Vec3(0.0f, 2.2f, 2.6f), Vec3(0.0f, 0.3f, -0.5f));
+    const auto settleOn = [&](Scene *sc) {
+        unsigned long long relights = ~0ull, admitted = ~0ull;
+        int quiet = 0, f = 0;
+        for (; f < 1500 && quiet < 60; ++f) {
+            run(1);
+            const GiStatus g = sc->published().gi;
+            const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
+                               g.cards.admitted == admitted && g.cards.queueLength == 0u;
+            relights = g.cards.relights;
+            admitted = g.cards.admitted;
+            quiet = still ? quiet + 1 : 0;
+        }
+        return quiet >= 60 ? f - quiet : -1;
+    };
+    // THE RECTANGLE (the light shines down its node's -Y: corners at y 1.2, x +-0.5, z +-0.25) and an occluder box's test
+    std::vector<Vec3> plate;   // lo, hi when the plate is in
+    const auto formFactor = [&](double px, double pz, bool visibleOnly) {
+        const int nx = 200, nz = 100;
+        const double dA = (aw / nx) * (ah / nz), y = areaAt.y;
+        double sum = 0.0;
+        for (int i = 0; i < nx; ++i)
+            for (int k = 0; k < nz; ++k) {
+                const double qx = -0.5 * aw + (i + 0.5) * aw / nx, qz = -0.5 * ah + (k + 0.5) * ah / nz;
+                if (visibleOnly && !plate.empty() &&
+                    crosses(Vec3(float(px), 0.0f, float(pz)), Vec3(float(qx), float(y), float(qz)), plate[0], plate[1]))
+                    continue;
+                const double dx = qx - px, dz = qz - pz, r2 = dx * dx + y * y + dz * dz;
+                sum += y * y / (r2 * r2) * dA;   // cos (floor, +y) x cos (light, -y) / r^2
+            }
+        return sum / 3.14159265358979;
+    };
+    const auto windowAt = [&](double px, double pz) {
+        const double d = std::sqrt(px * px + double(areaAt.y) * areaAt.y + pz * pz), x = d / kRange, x2 = x * x;
+        const double w = std::max(0.0, std::min(1.0, 1.0 - x2 * x2));
+        return w * w;
+    };
+    const double kHalfTexel = 1.0 / 128.0 + 1e-4;   // 2 m over 128 texels, halved (and a hair)
+    if (!as->setGlobalIllumination(gi)) { std::printf("FAIL: the area GI builds\n"); return 1; }
+    e->waitForAsyncShaders();
+    const int restA = settleOn(as);
+    size_t aRead = 0, aOver = 0;
+    double aWorst = 0.0, aWorstRel = 0.0;
+    for (int i = -9; i <= 9; ++i)
+        for (int k = -9; k <= 9; ++k) {
+            const double px = 0.1 * i, pz = 0.1 * k;
+            CardSample cs;
+            if (!as->readCardAt(Vec3(float(px), 0.0f, float(pz)), Vec3(0, 1, 0), cs) || !cs.ok || !cs.lit) continue;
+            ++aRead;
+            const double kD = cs.albedo[1];
+            const double dk = double(cs.radiance[1]) - cs.indirect[1] - cs.flat[1];   // direct x kD, green
+            double fLo = 1e30, fHi = -1e30;
+            for (int u = -1; u <= 1; ++u)   // (the square's corners, edges' middles and centre: F is smooth on it)
+                for (int v = -1; v <= 1; ++v) {
+                    const double f = formFactor(px + kHalfTexel * u, pz + kHalfTexel * v, false);
+                    fLo = std::min(fLo, f);
+                    fHi = std::max(fHi, f);
+                }
+            const double scale = kD * kIntensity * 3.14159265358979 * windowAt(px, pz);
+            const double tol = std::ldexp(double(cs.radiance[1]) + cs.indirect[1] + cs.flat[1], -7);
+            const double past = std::max(0.0, std::max(scale * fLo - dk, dk - scale * fHi));
+            const double rel = std::fabs(dk / (scale * 0.5 * (fLo + fHi)) - 1.0);
+            aWorst = std::max(aWorst, past / std::max(tol, 1e-12));
+            aWorstRel = std::max(aWorstRel, rel);
+            aOver += past > tol ? 1u : 0u;
+        }
+    std::printf("   (3) the area light, unoccluded: at rest in %d frames; %zu of 361 floor points read; the card's direct "
+                "against D x F (numeric) x the window: worst %.3f of the stored values' half steps past the texel's F "
+                "range, %zu points past, the largest relative difference %.4f\n", restA, aRead, aWorst, aOver, aWorstRel);
+    CHECK(restA >= 0 && aRead > 300 && aOver == 0u,
+          "(3) THE AREA LIGHT'S FORM FACTOR ON THE CARD: every point within the stores' half steps of the numeric one");
+
+    // (4) THE PENUMBRA, PRINTED: a still 0.05 m plate 0.6 m up over x < 0 (half the rectangle's view across a 1 m
+    // band); the card's direct along z = 0, a texel apart, against D x the VISIBLE form factor (the same grid, each
+    // sample's segment to the floor point tested against the plate), past the stored values' half steps.
+    plate = { Vec3(-1.7f, 0.575f, -1.2f), Vec3(0.0f, 0.625f, 1.2f) };
+    cube(as, Vec3(-0.85f, 0.6f, 0.0f), Vec3(1.7f, 0.05f, 2.4f), Colour(0.5f, 0.5f, 0.5f), false);
+    const int restP = settleOn(as);
+    size_t pRead = 0;
+    int firstOver = 1 << 30, lastOver = -(1 << 30), overCount = 0;
+    double pWorstFrac = 0.0, pWorstCodes = 0.0, pWorstAt = 0.0;
+    for (int t = 0; t <= 102; ++t) {
+        const double px = -0.8 + t / 64.0, pz = 0.0;
+        CardSample cs;
+        if (!as->readCardAt(Vec3(float(px), 0.0f, float(pz)), Vec3(0, 1, 0), cs) || !cs.ok || !cs.lit) continue;
+        ++pRead;
+        const double kD = cs.albedo[1];
+        const double dk = double(cs.radiance[1]) - cs.indirect[1] - cs.flat[1];
+        const double scale = kD * kIntensity * 3.14159265358979 * windowAt(px, pz);
+        const double full = scale * formFactor(px, pz, false), truth = scale * formFactor(px, pz, true);
+        // (past the three stored values' half steps, as (3)'s bar: the store's rounding is no penumbra error)
+        const double tol = std::ldexp(double(cs.radiance[1]) + cs.indirect[1] + cs.flat[1], -7);
+        const double err = std::max(0.0, std::fabs(dk - truth) - tol);
+        const double codes = err / (0.01 * std::max(truth + cs.indirect[1] + cs.flat[1], 5.9604645e-6));
+        if (err / std::max(full, 1e-12) > pWorstFrac) { pWorstFrac = err / std::max(full, 1e-12); pWorstAt = px; }
+        pWorstCodes = std::max(pWorstCodes, codes);
+        if (codes > 1.0) { firstOver = std::min(firstOver, t); lastOver = std::max(lastOver, t); ++overCount; }
+    }
+    std::printf("   (4) the area light's penumbra (printed): at rest in %d frames; %zu of 103 texels along z = 0 read; the "
+                "card's centre-ray answer against the visible form factor: worst %.1f %% of the unoccluded direct (at x "
+                "%.3f m), %.1f codes of the texel's radiance; over one code at %d texels, from x %.3f to %.3f m (%d texels "
+                "wide; the true penumbra is 64)\n", restP, pRead, 100.0 * pWorstFrac, pWorstAt, pWorstCodes, overCount,
+                overCount ? -0.8 + firstOver / 64.0 : 0.0, overCount ? -0.8 + lastOver / 64.0 : 0.0,
+                overCount ? lastOver - firstOver + 1 : 0);
+    as->setGlobalIllumination(off);
     run(2);
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
