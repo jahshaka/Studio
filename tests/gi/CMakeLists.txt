@@ -295,8 +295,9 @@ set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 2326)
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
 # TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
 # to the other and a teleport compared at the second - its pillars carded, no outer face read, the first room's unread
-# cards evicted, the read set resident in both runs and every card resident in both within a code
-# (test_gi_card_residency.cpp says the laws). A fixture.
+# cards evicted, the read set resident in both runs (the values of the cards resident in both PRINTED, not yet a law:
+# the cascades' placements are path-dependent until the cone-shell commit), and the atlas compacting on a crowded
+# room's arrivals (test_gi_card_residency.cpp says the laws). A fixture.
 add_executable(test_gi_card_residency test_gi_card_residency.cpp)
 set_target_properties(test_gi_card_residency PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -317,7 +318,8 @@ set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1141)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
-# the shadow following the moved blocker (an Edit inside the lamp's range) within a code of a whole re-solve
+# the shadow following the moved MOVER (the movable channel: its LampShadow region, inside the lamp's range) within a
+# code of a whole re-solve
 # (test_gi_card_lamp_shadow.cpp says the laws). A fixture.
 add_executable(test_gi_card_lamp_shadow test_gi_card_lamp_shadow.cpp)
 set_target_properties(test_gi_card_lamp_shadow PROPERTIES
