@@ -3,10 +3,16 @@
 # the world's light shows, per material class, and what each moving frame costs on both clocks.
 # jahlab at Epic, 960x540, on two of its environments through the stillness door's moving dump (trail + dump) and its
 # GI-freeze arm (freeze: the gather and the reflection keep their histories and take no sample, no GI cache works):
-#   photon-court: the 15 m crossing, 0,3,18 -> 0,3,3 looking down the court, 60 frames, from a converged hold (300);
+#   photon-court: the 15 m crossing, 0,3,18 -> 0,3,3 looking down the court, 60 frames;
 #   photon-glass: the 2.4 m walk, -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3 (the glossy panes, the mirror, the
-#     pillars), 60 frames, from a converged hold (640 frames: the reflection holds on rest frame 513 = K_max + 1, and
-#     its rest begins ~80 frames after the placement - 540 read rest 462, not held).
+#     pillars), 60 frames;
+#   each from a hold of the FEWEST FRAMES THE LAWS NEED (PHOTON-7 stage 5, the lead's ruling: the row had lost its
+#   margin at 59.5 s): L1 and L2 need none (the arms run the same deterministic frames); M1 and the frame law need the
+#   GI's own rest at the walk's start, so the live walk's work is the walk's - measured at frame 80 in both scenes
+#   (GiStatus::giAtRest, 20-frame steps) - plus the gather's hold (17): the court 120 (was 300); and a FROZEN walk needs
+#   the readers HELD at its start (the stillness door refuses it otherwise: a frozen unconverged history makes M1 measure
+#   the convergence) - the glass's reflection rests from ~frame 80 and holds K_max + 1 = 513 frames later: 600 (was 640).
+#   The glass's M1 runs beside its second frozen walk (a frozen session reads no clock), its L1 after it.
 # Each scene: a PRIME session (the walk's two poses, 3 frames each: every shader variant the walk draws compiled into the
 # row's warm cache), then three sessions of the same script - LIVE, FROZEN and FROZEN again.
 # M1, THE WALKING FLICKER (walk_m1.py): per pair of consecutive moving frames, the residual of this frame against the
@@ -125,17 +131,24 @@ analyse() {   # scene - its M1, its laws and its clocks (walk_m1.py), into $WD/<
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" $1 $1-live $1-frozen $1-frozen2 \
         --tsv "$WD/data/stillness/$1-live.tsv" --classes > "$WD/$1-m1.out" 2>&1
 }
-walk court "--data-root $WD/data --env photon-court" 300 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
-walk glass "--data-root $WD/data --env photon-glass" 640 -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
-# (the court's analysis is CPU work: it runs beside the glass's two FROZEN sessions, which read no clock - never beside
-# a live arm, whose wall and GPU clocks the hitch law reads)
+SETTLE=120    # the court (the header: the GI's rest at 80 + the gather's 17-frame hold, rounded up)
+GSETTLE=600   # the glass: its reflection HELD before a frozen walk (the door's precondition: rest from ~frame 80, + K_max + 1)
+walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
+walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
+# (the analyses are CPU work: they run beside the glass's FROZEN sessions, which read no clock - never beside a live
+# arm, whose wall and GPU clocks the hitch law reads; the glass's M1 beside its second frozen walk, its L1 after it)
 analyse court & apid=$!
 PRIME=0   # (primed above, with the glass's live arm)
-walk glass "--data-root $WD/data --env photon-glass" 640 -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen frozen2
+walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen
+python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen \
+    --tsv "$WD/data/stillness/glass-live.tsv" --classes > "$WD/glass-m1.out" 2>&1 & gpid=$!
+walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen2
 fails=0
 wait $apid || fails=1
-analyse glass || fails=1
-cat "$WD/court-m1.out" "$WD/glass-m1.out"
+wait $gpid || fails=1
+python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen glass-frozen2 --l1-only \
+    > "$WD/glass-l1.out" 2>&1 || fails=1
+cat "$WD/court-m1.out" "$WD/glass-l1.out" "$WD/glass-m1.out"
 rm -rf "$WD/data/stillness/dump-"*   # the dumps (~270 MB a walk) once their numbers are printed
 echo "gi.walk: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $fails

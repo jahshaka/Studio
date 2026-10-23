@@ -8,12 +8,14 @@ the GI's stepping): per class the mean, the 99th percentile and the share over o
 The geometry (distance, test, classes, cameras) is the live walk's: the two walks share the camera path and the scene.
 
 usage: walk_m1.py <dump root> <scene> <live> <frozen> [<frozen2>] [--parts name:first:last,...] [--tsv <live tsv>]
-                  [--classes]
+                  [--classes] [--l1-only]
   <dump root>/dump-<name>/<name>-tNNN.{rgb,dist,flg,gsize,cls} and <name>-cams.txt (the stillness door's dump);
   --parts splits the pairs (by the index of the pair's newer frame) into named parts (Bistro: the walk, the fly);
   --tsv: the live walk's stillness TSV - the hitch law and the frame clock over its moving frames;
   --classes: the scene HAS a class map (an environment's; a model has none) - a pair without its .cls, or no counted
-  pixel classified, then FAILS (L3 is never vacuous where it is the law: PHOTON-7 stage 0's read R5).
+  pixel classified, then FAILS (L3 is never vacuous where it is the law: PHOTON-7 stage 0's read R5);
+  --l1-only: L1 alone (frozen vs frozen2), and exit - walk.sh runs M1 with the live and frozen walks while the second
+  frozen walk records, and L1 once it has (the row's time, PHOTON-7 stage 5).
 Prints the scene's lines; exits 1 on a broken instrument law (walk.sh asserts):
   (L1) FROZEN = FROZEN: every frame of the second frozen walk byte-equal to the first's (a frozen walk is a function of
        the scene and the path - no sample, no clock, no cache state);
@@ -32,6 +34,8 @@ def opt(name):
 parts_arg, tsv_path = opt('--parts'), opt('--tsv')
 want_classes = '--classes' in args
 if want_classes: args.remove('--classes')
+l1_only = '--l1-only' in args
+if l1_only: args.remove('--l1-only')
 root, scene, live, frozen = args[0], args[1], args[2], args[3]
 frozen2 = args[4] if len(args) > 4 else None
 NAMES = ['all', 'plaster', 'rough', 'glossy', 'mirror', 'foliage', 'mover']
@@ -61,6 +65,9 @@ if frozen2:
     print('%s (L1) frozen vs frozen: %d of %d frames differ%s' % (scene, len(differ), len(frames),
           (' (first t%03d)' % differ[0]) if differ else ''))
     if differ: fails.append('(L1) %s: the two frozen walks differ on %d frames (first t%03d)' % (scene, len(differ), differ[0]))
+if l1_only:
+    for f in fails: print('FAIL: %s' % f)
+    sys.exit(1 if fails or not frozen2 else 0)
 a0, b0 = rgb(live, frames[0]), rgb(frozen, frames[0])
 if a0 is None or b0 is None:
     fails.append('(L2) %s: the trail\'s first frame is missing' % scene)
