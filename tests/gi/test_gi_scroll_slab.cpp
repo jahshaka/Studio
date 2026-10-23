@@ -28,6 +28,8 @@
 //      lit, counted by the door (CascadeStatus::commitLit*), are exactly the slab's lit voxels plus the changed direct
 //      set the store shows; and WALK = TELEPORT on the direct: the scrolled cascade's direct term is a whole build's,
 //      bit for bit. (A placement pin holds cascade 1, so the step scrolls cascade 0 alone.)
+//   H. A ONE-FRAME COMMIT (PHOTON-7 stage 2's read D2): the slab's chunks voxelised in the commit's own command buffer
+//      before the shift - the store a whole build's (red while the shift's first transition carried no dependency).
 //   V. THE VRAM: every cascade's scratch at Epic, measured by the texture-memory door, against the per-size box-sized
 //      targets the scratch replaces (the same eleven volumes at res^3).
 //   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive, its factor per half, the coverage and the position per
@@ -298,6 +300,46 @@ int main()
                   "D: A COMMIT'S DIRECTIONAL VOLUMES, EVERY LEVEL, ARE A WHOLE REGENERATION FROM ITS LEVEL 0, FLOAT FOR FLOAT");
         }
     };
+
+    // ---- H. one-frame commits (PHOTON-7 stage 2's read D2) ----------------------------------------
+    // THE ROW THAT SEES THE COMMIT'S BARRIER (PhotonVoxelScroll::commit): the slab spread over ONE frame, so the slab's
+    // chunks are voxelised in the commit's own command buffer before the shift - a 16-cell step on x (a two-frame commit
+    // here), then the step back, which commits in one frame on y. Measured 2026-10-23: when the shift's first transition
+    // carried no dependency (the solver's per-frame reset: oldAccess Undefined, no source stage) the one-frame store lost
+    // 186 INTERIOR cells against a whole build (a mid-frame submit used to hide it); with the store's prior use given to
+    // the solver, a whole build's. Run first, from home, then home restored.
+    std::printf("\n== H: one-frame commits are the store a whole build writes ==\n");
+    {
+        const Vec3 steps[2] = { Vec3(16.2f * cell, 0.0f, 0.0f), Vec3(-16.2f * cell, 16.2f * cell, 0.0f) };
+        for (int k = 0; k < 2; ++k) {
+            e->setArm("gi.scrollFrames", 1.0);
+            run(1);
+            const GiStatus pre = scene->published().gi;
+            look(Vec3(cam.x + steps[k].x, cam.y + steps[k].y, cam.z + steps[k].z));
+            const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
+            const GiStatus post = scene->published().gi;
+            const Vec3 &c1 = post.cascades[0].centre, &c0 = pre.cascades[0].centre;
+            const int sh[3] = { int(std::lround((c1.x - c0.x) / cell)), int(std::lround((c1.y - c0.y) / cell)),
+                                int(std::lround((c1.z - c0.z) / cell)) };
+            std::printf("   H%d: committed after %d frame(s); shift (%d, %d, %d) cells\n", k, n, sh[0], sh[1], sh[2]);
+            CHECK(scene->giVoxelVolume(0, scrolled), "H: the scrolled store reads back");
+            e->setArm("gi.scrollFrames", 0.0);
+            rebuildWhole();
+            CHECK(scene->giVoxelVolume(0, built), "H: the whole build's store reads back");
+            CHECK(sameStore(scrolled, built, k ? "H1" : "H0"),
+                  k ? "H: A ONE-FRAME COMMIT (THE CHUNKS AND THE SHIFT IN ONE COMMAND BUFFER) IS THE WHOLE BUILD'S, FLOAT FOR FLOAT"
+                    : "H: the step's commit is the whole build's");
+            if (k) CHECK(n == 1, "H: ...the commit took ONE frame (its chunks voxelised in it)");
+        }
+        // HOME RESTORED: the chain rebuilt where the arms below start.
+        look(home);
+        GiParams off; off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+        scene->setGlobalIllumination(small);
+        run(8);
+        e->waitForAsyncShaders();
+    }
 
     // ---- A. one scroll, three slabs ----------------------------------------------------------
     std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
