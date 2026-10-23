@@ -36,8 +36,9 @@
 #       sub-pixel snap are real: jah_ray_origin.glsl jahDepthPointError; at 1 m printed - the float bound covers it).
 #       NO ARM HERE CAN FAIL FOR THE DRAWN TERM: Atom's cut draws this floor at level 0 from these poses (its groups'
 #       nearest distance is ~0 from inside them), and even where it draws coarse, HALF the law is its own guarantee (a
-#       one-step cluster drawn under tol x footprint at its group's distance deviates by exactly its stored error) - the
-#       drawn term's need and its factor 2 are proven on the stock route by gi.sun_contact_acne (half the law red).
+#       one-step cluster drawn under tol x footprint at its group's distance deviates by exactly its stored error).
+#       gi.sun_contact_acne IS THE DRAWN TERM'S GUARD: on the stock route its half-law control reads red (822 px) and
+#       its full law green - the term's need and its factor 2 (the lead's round-7 ruling).
 #   (d) THE CREASE (READ_A finding 1): along the block's base (placed on a stretch the cut draws coarse from 3.4 m,
 #       measured), the floor's FIRST row below the crease steps from the second by no more than the second steps from
 #       the third, plus the encode's 2 codes - a ray whose lift went SIDEWAYS (the depth's nearer neighbour across the
