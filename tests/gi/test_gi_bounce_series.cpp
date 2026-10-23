@@ -1,5 +1,5 @@
 // gi.bounce_series (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE SERIES'
-// LIMIT, read in the voxel STORE (Scene::giVoxelVolume - no gather, no field, no picture).
+// LIMIT, read in the voxel STORE (Scene::giVoxelLight, the total alone - no gather, no field, no picture).
 //
 // A SEALED 8 x 4 x 8 m room (0.3 m slabs, every seam overlapped) whose inner walls EMIT a uniform radiance E and
 // reflect with albedo rho = 0.5 at roughness 1 under a uniform sky of radiance S (setAmbientSh's constant band - what
@@ -16,8 +16,10 @@
 // THE LAWS, per tier (Low, Medium, High, Epic), each on cascade 0's inner-wall voxels (covered, a cell inside the
 // room's faces, a metre from its edges), surface radiance = the store's total over its coverage:
 //   (1) FEEDBACK = A 64-PASS JACOBI WITHIN ONE CODE (main arm): the feedback run to its rest (no brick active) against 64
-//       Jacobi passes from the direct term (the measuring door gi.bounceJacobi, 64 frames), every voxel within 1 % of the
-//       Jacobi's radiance - the stop law's own bound (a brick stops once the tail of its series is under a code);
+//       Jacobi passes of cascade 0 from its direct term (the measuring door gi.bounceJacobi set to 1, 64 frames: the outer
+//       cascades hold their rest, so both answers are fixed points of one operator), every voxel within 1 % of the
+//       Jacobi's radiance - the stop law's own bound (a brick stops once the tail of its series is under a code); the
+//       door is seen to run (every brick of cascade 0 a frame, the outer cascades held);
 //   (2) BOTH WITHIN 3 % OF E / (1 - a'(1 - e)), e the sky-leak arm's (the physics with its leak, the spec's bar);
 //   (2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce operator's energy, independent of the escape;
 //   (3) THE FEEDBACK STOPS: the chain owes nothing at its rest, and it ran fewer brick-passes than the Jacobi's 64 a brick
@@ -25,13 +27,16 @@
 // (THE LEAK ITSELF is printed, not barred: the cones at coarse levels read a texel the wall only partly covers - a
 // march finding, VOXEL-LEAK-1. A pass-1 reading is never the operator: the outer cascades run first in a frame, so an
 // inner cascade's first pass already reads an outer one's bounce.)
-// A fixture (the engine alone, one small offscreen view; rays, the gather, the field and the cards off). Counted in frames.
+// ONE TIER A ROW (gi.bounce_series.<tier>, the argument; none = every tier). A fixture (the engine alone, one small
+// offscreen view; rays, the gather, the field and the cards off). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -76,7 +81,7 @@ Reading read(Scene *s, int cascade = 0)
 {
     Reading r;
     GiVoxelVolume v;
-    if (!s->giVoxelVolume(cascade, v) || !v.available || v.light.empty()) return r;
+    if (!s->giVoxelLight(cascade, v) || !v.available || v.light.empty()) return r;
     const float cell = v.cell[0];
     for (int z = 0; z < v.depth; ++z)
         for (int y = 0; y < v.height; ++y)
@@ -109,7 +114,7 @@ Reading read(Scene *s, int cascade = 0)
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-bounce-series-ogre.log");
@@ -131,7 +136,8 @@ int main()
         GiStatus status;
         std::vector<Reading> cascades;
     };
-    const auto arm = [&](GiQuality tier, float E, float S) {
+    // (the store's door downloads every volume of a cascade: an arm reads only the cascades its law needs)
+    const auto arm = [&](GiQuality tier, float E, float S, bool everyCascade) {
         Arm a;
         a.view = e->createOffscreenView("bounce_series", 64, 64, Colour(0, 0, 0));
         a.scene = e->createScene("bounce_series");
@@ -167,7 +173,7 @@ int main()
         }
         a.restFrames = quiet >= 8 ? f - quiet : -1;
         a.status = s->published().gi;
-        for (size_t c = 0; c < a.status.cascades.size(); ++c) a.cascades.push_back(read(s, int(c)));
+        for (size_t c = 0; c < (everyCascade ? a.status.cascades.size() : size_t(1)); ++c) a.cascades.push_back(read(s, int(c)));
         return a;
     };
     const auto drop = [&](Arm &a) {
@@ -185,10 +191,15 @@ int main()
     // e FROM THE SKY-LEAK ARM: L_sky = a' e S / (1 - a'(1 - e))  =>  e = L_sky (1 - a') / (a' (S - L_sky)).
     const auto escapeOf = [](double lSky, double S) { return lSky * (1.0 - kADiffuse) / (kADiffuse * (S - lSky)); };
     const double sStar = kE / (1.0 - kADiffuse);
+    // ONE TIER A ROW (gi.bounce_series.<tier>: a fixture's 10 s budget, source.row_budget), named by the argument;
+    // none = every tier.
     for (int t = 0; t < 4; ++t) {
+        if (argc > 1 && std::string(argv[1]) != names[t]) continue;
         std::printf("\n== %s ==\n", names[t]);
+        const auto tierT0 = std::chrono::steady_clock::now();
+        const int tierF0 = frames;
         // THE SKY-LEAK ARM: the escape share, per cascade
-        Arm sky = arm(tiers[t], 0.0f, 1.0f);
+        Arm sky = arm(tiers[t], 0.0f, 1.0f, true);
         if (!sky.scene || sky.cascades.empty() || !sky.cascades[0].ok) {
             CHECK(false, "the sky-leak arm's room and store");
             drop(sky);
@@ -208,7 +219,7 @@ int main()
         drop(sky);
 
         // THE MAIN ARM: the feedback to its rest, then the 64-pass Jacobi
-        Arm m = arm(tiers[t], kE, 0.0f);
+        Arm m = arm(tiers[t], kE, 0.0f, false);
         if (!m.scene || m.cascades.empty() || !m.cascades[0].ok) {
             CHECK(false, "the main arm's room and store");
             drop(m);
@@ -224,17 +235,30 @@ int main()
                     atRest.cascades[0].feedbackResumes, atRest.cascades[0].feedbackSaturated);
         CHECK(m.restFrames >= 0, "THE FEEDBACK STOPS: the chain owes nothing at its rest");
         const Reading fb = m.cascades[0];
+        // THE JACOBI OVER CASCADE 0 (the door set to 1): restarted from its direct term, every brick a pass a frame, the
+        // outer cascades holding their state - the feedback's rest, so cascade 0's two answers are fixed points of one
+        // operator.
         e->setArm("gi.bounceJacobi", 1.0);
-        run(64);   // the arm latches at the frame's top: its first frame restarts from the direct terms, then a pass a frame
+        run(64);   // the arm latches at the frame's top: its first frame restarts from the direct term, then a pass a frame
         const Reading j64 = read(m.scene);
         e->setArm("gi.bounceJacobi", 0.0);
         run(2);
+        // THE DOOR RAN (the arm can fail): cascade 0 ran EVERY brick a frame through the window (its books land a few
+        // frames late: 56 of the 64 at least), the cascades outside it held.
+        const GiStatus afterJ = m.scene->published().gi;
+        const unsigned long long jRan = afterJ.cascades[0].feedbackBricksRan - bricksRan;
+        const unsigned long long outerRan =
+            afterJ.cascades.size() > 1 ? afterJ.cascades[1].feedbackBricksRan - atRest.cascades[1].feedbackBricksRan : 0ull;
+        std::printf("   the Jacobi's window: cascade 0 ran %llu brick-passes (%.1f a brick), cascade 1 %llu\n", jRan,
+                    bricks0 ? double(jRan) / bricks0 : 0.0, outerRan);
+        CHECK(jRan >= 56ull * bricks0 && outerRan == 0ull,
+              "the Jacobi door ran every brick of cascade 0 a frame, the outer cascades held");
         std::vector<double> mainL;
         for (const Reading &r : m.cascades) mainL.push_back(r.ok ? r.mean : -1.0);
         drop(m);
 
         // THE OPERATOR'S ARM: the sky held at the room's answer
-        Arm op = arm(tiers[t], kE, float(sStar));
+        Arm op = arm(tiers[t], kE, float(sStar), false);
         const bool opOk = op.scene && !op.cascades.empty() && op.cascades[0].ok;
         const double lOp = opOk ? op.cascades[0].mean : 0.0;
         drop(op);
@@ -253,13 +277,10 @@ int main()
             over += rel > 0.01 ? 1u : 0u;
         }
         // (the two arms' own fit, printed - the mean field's: a' e = L_sky / L_main, a'(1 - e) = 1 - E / L_main)
-        std::printf("   the two arms' fit per cascade, a' and e:");
-        for (size_t c = 0; c < mainL.size() && c < skyL.size(); ++c) {
-            if (mainL[c] <= 0.0 || skyL[c] < 0.0) continue;
-            const double ae = skyL[c] / mainL[c], a1e = 1.0 - kE / mainL[c];
-            std::printf("  c%zu %.4f / %.3f", c, ae + a1e, ae + a1e > 0.0 ? ae / (ae + a1e) : 0.0);
+        if (mainL[0] > 0.0 && skyL[0] >= 0.0) {
+            const double ae = skyL[0] / mainL[0], a1e = 1.0 - kE / mainL[0];
+            std::printf("   the two arms' fit on cascade 0: a' %.4f, e %.3f\n", ae + a1e, ae + a1e > 0.0 ? ae / (ae + a1e) : 0.0);
         }
-        std::printf("\n");
         std::printf("   %zu inner-wall voxels (cell %.4f m), e %.4f: the limit E / (1 - a'(1 - e)) = %.5f; feedback %.5f (%+.2f %%), "
                     "Jacobi-64 %.5f (%+.2f %%); feedback vs Jacobi-64: worst voxel %.3f codes, %zu voxels over one code\n",
                     fb.voxels, double(atRest.cascades[0].cell), ec, limit, fb.mean, 100.0 * (fb.mean / limit - 1.0),
@@ -273,6 +294,8 @@ int main()
               "(2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce's energy, whatever the escape");
         CHECK(bricks0 > 0u && bricksRan < 64ull * bricks0,
               "(3) the feedback ran fewer brick-passes than the Jacobi's 64 a brick (it stops the converged ones)");
+        std::printf("   (the tier's three arms: %d frames, %.1f s)\n", frames - tierF0,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - tierT0).count());
     }
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");

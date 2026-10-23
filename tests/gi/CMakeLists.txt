@@ -249,9 +249,10 @@ set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1071)
 
-# gi.bounce_series (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE SERIES'
-# LIMIT, read in the voxel store: a sealed 8 x 4 x 8 m room of emissive walls at albedo 0.5, per tier - the feedback at
-# its rest within one code of a 64-pass Jacobi (the measuring door gi.bounceJacobi), both within 3 % of
+# gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
+# SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
+# walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
+# gi.bounceJacobi), both within 3 % of
 # E / (1 - a'(1 - e)) with e the room's escape MEASURED by its sky-leak arm, and the operator's own arm (the sky held at
 # E / (1 - a')) converging to it (test_gi_bounce_series.cpp says the laws). A fixture.
 add_executable(test_gi_bounce_series test_gi_bounce_series.cpp)
@@ -266,10 +267,16 @@ target_compile_definitions(test_gi_bounce_series PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_bounce_series PRIVATE JahshakaEngine)
 add_dependencies(test_gi_bounce_series JahshakaEngineMedia)
-jah_gpu_row(gi.bounce_series CLASS engine COMMAND test_gi_bounce_series
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.bounce_series PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 564)
+foreach(_tier low medium high epic)
+    jah_gpu_row(gi.bounce_series.${_tier} CLASS engine COMMAND test_gi_bounce_series ${_tier}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.bounce_series.${_tier} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
+endforeach()
+set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 134)
+set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 145)
+set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 144)
+set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 144)
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
