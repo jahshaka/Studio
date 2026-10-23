@@ -204,7 +204,8 @@ set_tests_properties(gi.light_order PROPERTIES JAHSHAKA_TEST_FRAMES 45)
 
 # gi.scroll_lag (PHOTON-7 stage 2, THE SCHEDULE) — CASCADE 0 IS NEVER QUEUED BEHIND THE CHAIN: each desktop tier's
 # scroll counts (the motion slack at 1.4 m/s) against the stated table; at Epic a 1.4 m/s dolly holds cascade 0's lag
-# at most 4 frames, a 0.25 m/frame fly at most one step (the door: CascadeStatus::lagLast / lagMax). A fixture.
+# at most 4 frames and every cascade's within its own slack, a 0.25 m/frame fly cascade 0's at most one step (the
+# door: CascadeStatus::lagLast / lagMax). A fixture.
 add_executable(test_gi_scroll_lag test_gi_scroll_lag.cpp)
 set_target_properties(test_gi_scroll_lag PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -221,7 +222,7 @@ jah_gpu_row(gi.scroll_lag CLASS engine COMMAND test_gi_scroll_lag
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_lag PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 363)
+set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 794)
 
 # gi.changed_regions (PHOTON-7 stage 3, AB S1; L2) — ONE CHANGED-REGION LIST A FRAME SAYS WHERE THE WORLD CHANGED: a
 # settled scene lists nothing for 600 frames; a lamp step lists exactly its old sphere joined with its new; a mover its

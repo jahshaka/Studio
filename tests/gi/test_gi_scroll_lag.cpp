@@ -7,8 +7,9 @@
 // move to the rebuild that placed it for the camera.
 //   THE TABLE: each desktop tier's counts, from its own resolved chain, printed against the table the count's comment
 //     states (Epic / High 3 / 7 / 31 / 641, Medium 9 / 20 / 31 / 641, Low 9 / 213).
-//   THE DOLLY: Epic, 1.4 m/s (0.0233 m a frame) down a 60 m floor with props, 2.2 of cascade 0's steps - cascade 0's
-//     lag at most 4 frames (its 3 chunk frames and the commit's), every one of its scrolls committed.
+//   THE DOLLY: Epic, 1.4 m/s (0.0233 m a frame) down a 60 m floor with props, past the outermost cascade's step - cascade
+//     0's lag at most 4 frames (its 3 chunk frames and the commit's), every one of its scrolls committed; and EVERY
+//     cascade's lag within its own motion slack in frames (the outer cascades share the general slot: the read's W1).
 //   THE FLY: Epic, 0.25 m a frame over 15 m (about six of cascade 0's 2.578 m steps) - cascade 0's lag at most one step
 //     at that speed (10 frames), and it kept up (a scroll per step).
 // A fixture (the engine alone, one small offscreen view; the gather, the field and the reflection off).
@@ -116,7 +117,10 @@ int main()
         const GiStatus pre = scene->published().gi;
         const float v = kGiWalkMetresPerFrame;
         const float step0 = pre.cascades[0].step;
-        const int n = int(std::ceil(2.2f * step0 / v));
+        // PAST THE OUTERMOST CASCADE'S STEP (PHOTON-7 stage 2's read, W1): every cascade scrolls at least once, the outer
+        // ones sharing the general slot - and at least 2.2 of cascade 0's steps.
+        const float stepOut = pre.cascades.back().step;
+        const int n = int(std::ceil(std::max(2.2f * step0, 1.05f * stepOut) / v));
         for (int f = 0; f < n; ++f) {
             look(Vec3(cam.x + v, cam.y, cam.z));
             run(1);
@@ -130,6 +134,26 @@ int main()
         CHECK(post.cascades[0].scrolls - pre.cascades[0].scrolls >= 2u, "cascade 0 scrolled at each of its steps");
         CHECK(post.cascades[0].lagMax <= 4u && post.cascades[0].lagMax >= 1u,
               "CASCADE 0'S LAG AT 1.4 m/s IS AT MOST 4 FRAMES (its chunk frames and the commit's)");
+        // EVERY CASCADE WITHIN ITS OWN SLACK (W1): the frames the walker takes to cross a cascade's motion slack (its
+        // guaranteed radius less the near field, at 1.4 m/s) bound how late its placement may come - the outer cascades
+        // share the general slot by age, so concurrent flights stretch each other.
+        bool allScrolled = true, allWithin = true;
+        for (size_t i = 0; i < post.cascades.size(); ++i) {
+            const GiStatus::CascadeStatus &cs = post.cascades[i];
+            GiParams::GiCascadeDesc d;
+            d.halfSize = cs.halfSize;
+            d.resolution = cs.resolution;
+            d.stepCells = cs.step / cs.cell;
+            const double slack = double(giCascadeGuaranteedRadius(d) - giNearFieldRadius(d));
+            const unsigned long long slackFrames = (unsigned long long)std::floor(slack / double(v));
+            const bool scrolled = cs.scrolls > pre.cascades[i].scrolls;
+            std::printf("     c%zu  lag max %llu of its slack's %llu frames (%.3f m)%s\n", i, cs.lagMax, slackFrames, slack,
+                        scrolled ? "" : "  <- never scrolled");
+            allScrolled = allScrolled && scrolled;
+            allWithin = allWithin && cs.lagMax <= slackFrames;
+        }
+        CHECK(allScrolled, "every cascade scrolled on the dolly");
+        CHECK(allWithin, "EVERY CASCADE'S LAG IS WITHIN ITS OWN SLACK AT 1.4 m/s (the outer ones share the general slot)");
     }
 
     // ---- THE FLY -----------------------------------------------------------------------------------------------
