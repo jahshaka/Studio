@@ -521,8 +521,11 @@ bool Session::shot(const std::string &nameIn)
         std::printf("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
         return false;
     }
-    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu%s\n", qPrintable(path), img.width, img.height, colours.size(),
-                mFrames, extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
+    // (THE MODE LABEL: the sources the reflection traced this picture with - what it ran, read from the engine)
+    const int sources = mScene->published().rayQuery.reflectSources;
+    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu sources %s%s\n", qPrintable(path), img.width, img.height,
+                colours.size(), mFrames, sources < 0 ? "-" : reflectSourcesName(ReflectSources(sources)),
+                extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
     std::fflush(stdout);
     return true;
 }

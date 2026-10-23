@@ -105,6 +105,9 @@ static float meanDiff(const Image &a, const Image &b, unsigned y0, unsigned y1)
     return n ? float(sum / double(n)) : 1e9f;
 }
 
+/// The sources this row measures (its bars are Both's).
+static constexpr ReflectSources kSources = ReflectSources::Both;
+
 static void rayTier(Scene *s, View *view)
 {
     GiParams gi;
@@ -117,8 +120,21 @@ static void rayTier(Scene *s, View *view)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
+    fx.reflectSources = kSources;   // THE MODE THIS ROW INTENDS (the mode label: never assumed - asserted below)
     fx.hdrReadback = true;
     view->setPostFx(fx);
+}
+
+/// THE MODE LABEL (PHOTON-7 stage 6): the sources the reflection RAN with, read from the engine and printed - this
+/// row's bars are Both's (the screen source while moving is what the slide judges: Rays with the hits flattened
+/// measured 0.506 where Both measured 1.366, so a number without its mode is no number).
+static void checkSources(Scene *s, const char *part)
+{
+    const int ran = s->published().rayQuery.reflectSources;
+    std::printf("-- %s: the reflection traced with the sources '%s'\n", part,
+                ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)));
+    CHECK_MSG(ran == int(kSources), "%s: the reflection ran '%s', the row intends '%s'", part,
+              ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)), reflectSourcesName(kSources));
 }
 
 /// (a) THE LAMP STEP: frames from the step until the reflection holds 95 % of its change.
@@ -188,6 +204,7 @@ static int lampStep(Engine *e, View *view)
     for (size_t i = stepAt; i < stepAt + 12 && i < trace.size(); ++i)
         std::printf(" %.0f%%", 100.0 * (trace[i] - before) / std::max(after - before, 1e-9));
     std::printf("\n   95 %% of the change held after %d frames\n", reached);
+    checkSources(s, "(a)");
     e->destroyScene(s);
     return reached;
 }
@@ -248,6 +265,7 @@ static float slideTrail(Engine *e, View *view, float &stillOut)
     }
     std::printf("-- (b) slide 0.25 m/frame x 24: floor moving-vs-settled %.3f codes, worst 16-column band %.3f "
                 "(still control %.3f)\n", err, worstBand, stillOut);
+    checkSources(s, "(b)");
     e->destroyScene(s);
     return err;
 }

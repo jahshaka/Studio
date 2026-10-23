@@ -8,9 +8,11 @@
 # over one code <= 1 %. The unfrozen walk's M1 is printed beside it (the merge judges the world's half: stages 1-5 on
 # photon-7), and the spatial filter's GPU time over the world-held walk (the stillness door's per-frame rows).
 # jahlab at Epic, 960x540; four sessions: a prime, the live, the frozen and the world-held walk (7 + 3 x 710 frames).
-# usage: walk_world.sh <jahlab> <work dir> [both|rays]   (the reflection's sources: jahlab's default, Both, or the rays alone)
+# usage: walk_world.sh <jahlab> <work dir> [both|rays]   (the reflection's sources, Both unless named; the walks' own
+# sources are read back from the door and asserted: the mode label)
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; SOURCES=${3:-both}
+case "$SOURCES" in both|rays|screen) ;; *) echo "FAIL: sources '$SOURCES' (both|rays|screen)"; exit 1 ;; esac
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 M1="$HERE/../gi/walk_m1.py"
@@ -36,12 +38,21 @@ python3 -I "$M1" "$ROOT" glassworld glass-world glass-frozen > "$WD/world-m1.out
 grep -E 'M1 (all|glossy|mirror)|\(L2\)' "$WD/live-m1.out" | sed 's/^/  unfrozen (the merge judges it): /'
 grep -E 'M1 (all|glossy|mirror)|\(L2\)|\(L3\)' "$WD/world-m1.out" | sed 's/^/  world held: /'
 grep '^FAIL' "$WD/live-m1.out" "$WD/world-m1.out"
-python3 -I - "$ROOT" <<'PY'
+python3 -I - "$ROOT" "$SOURCES" <<'PY'
 import csv, json, os, sys
-root = sys.argv[1]
+root, intends = sys.argv[1], sys.argv[2]
+fails = 0
+# THE MODE LABEL (PHOTON-7 stage 6): the sources each walk's reflection RAN with (the door's refl_sources, read from the
+# engine), printed and asserted against the mode this row intends - a mode is never assumed
+for arm in ('live', 'frozen', 'world'):
+    ran = sorted({x.get('refl_sources', '-') for x in csv.DictReader(open(os.path.join(root, 'glass-%s.tsv' % arm)),
+                                                                    delimiter='\t') if x.get('window') == 'walk-move'})
+    print('  the %s walk\'s reflection traced with the sources %s' % (arm, '/'.join(ran) or 'none'))
+    if ran != [intends]:
+        print('FAIL: the %s walk ran the sources %s, the row intends %s' % (arm, '/'.join(ran) or 'none', intends))
+        fails += 1
 r = json.load(open(os.path.join(root, 'glassworld-walk.json')))['parts']
 m1 = list(r.values())[0]['m1']
-fails = 0
 for cls in ('glossy', 'mirror'):
     v = m1.get(cls)
     if v is None:
