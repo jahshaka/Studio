@@ -1,0 +1,480 @@
+// gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2, AB S4/A4/A7) — A SCROLLED
+// CASCADE IS, BIT FOR BIT, THE CASCADE BUILT WHERE IT IS NOW.
+//
+// A camera scroll keeps the voxels (and, since PHOTON-7 stage 2, the light) the new box shares with the old one: the
+// entering slab is voxelised in chunks into the cascade's SLAB-SIZED SCRATCH while the readers keep the unshifted
+// store; at the commit the live store is shifted in place, the scratch's slabs copied into its far ends, and the
+// placement moves. A scroll carries the shifts its scratch holds - the largest first, cut to the scratch's layers;
+// another rides along while its slab fits (PhotonComponent::planScroll) - so the reference whole build is made AT THE
+// SCROLLED CASCADE'S OWN PLACEMENT (the placement pin restores each cascade's builtCam).
+//   A. THREE SLABS IN ONE SCROLL: a shift on all three axes, none a multiple of the dispatch's 4 (the bounds guard),
+//      all within the scratch's layers - cascade 0's voxeliser store (Scene::giVoxelVolume) EQUAL, float for float, to
+//      a whole build at the same placement.
+//   B. THE SPREAD: the slab cut into many chunks over many frames; the placement - the readers' box - unchanged until
+//      the commit, GI not at rest meanwhile, the committed store a whole build's. A step past the scratch's layers is
+//      cut there and its remainder taken by the next scroll(s).
+//   C. AN EDIT that reaches only the box being built drops the scroll, and the next one builds the edited scene.
+//   E. TWO SCROLLS WITH NO REBUILD BETWEEN: a whole build's store; a scroll whose LIVE box is edited mid-flight is
+//      dropped for the edit's whole rebuild.
+//   F. A SHIFT THAT THROWS HALF WAY (gi.cascadeFaultCommit): the live store is torn, so the cascade scrolls no more
+//      until a WHOLE rebuild has made it one box's again. F2. ...and when that rebuild fails twice the store is
+//      cleared and the cascade stands down.
+//   V. THE VRAM: every cascade's scratch at Epic, measured by the texture-memory door, against the per-size box-sized
+//      targets the scratch replaces (the same eleven volumes at res^3).
+//   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive, its factor per half, the coverage and the position per
+//   half, the area weight - and nothing else needs to be: the commit regenerates every mip from level 0.
+// A, B, C, E, F run a two-cascade table at 64 cells (a dyadic cell, 10 m / 64: the arithmetic every shipped table has),
+// so a store read is 0.26 M voxels. A fixture (the engine alone, one offscreen view).
+#include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+
+using namespace jahshaka::engine;
+
+static int failures = 0;
+#define CHECK(cond, msg)                                                        \
+    do {                                                                        \
+        if (cond) std::printf("ok: %s\n", msg);                                 \
+        else { std::printf("FAIL: %s\n", msg); ++failures; }                     \
+    } while (0)
+
+static const unsigned kSize = 128;
+
+static GiParams chainGi()
+{
+    GiParams gi;
+    gi.gather = GiToggle::Off;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.ddgi = GiToggle::Off;
+    gi.updateBudget = 0;
+    return gi;
+}
+
+static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char *what)
+{
+    if (!a.available || !b.available || a.width != b.width || a.height != b.height || a.depth != b.depth) {
+        std::printf("   %s: a store is missing or the sizes differ\n", what);
+        return false;
+    }
+    for (int i = 0; i < 3; ++i)
+        if (a.origin[i] != b.origin[i] || a.cell[i] != b.cell[i]) {
+            std::printf("   %s: the placement differs (axis %d: origin %.6f vs %.6f)\n", what, i,
+                        double(a.origin[i]), double(b.origin[i]));
+            return false;
+        }
+    struct Arr { const char *name; const std::vector<float> *x, *y; };
+    const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo }, { "normal", &a.normal, &b.normal },
+                         { "coverageP", &a.coverageP, &b.coverageP }, { "coverageN", &a.coverageN, &b.coverageN },
+                         { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN },
+                         { "emissive", &a.emissive, &b.emissive },
+                         { "emitP", &a.emitP, &b.emitP }, { "emitN", &a.emitN, &b.emitN } };
+    bool same = true;
+    {
+        size_t diff = 0;
+        if (a.accumWeight.size() != b.accumWeight.size() || a.accumWeight.empty()) {
+            std::printf("   %s: accumWeight sizes %zu vs %zu\n", what, a.accumWeight.size(), b.accumWeight.size());
+            same = false;
+        } else {
+            for (size_t i = 0; i < a.accumWeight.size(); ++i) diff += a.accumWeight[i] != b.accumWeight[i] ? 1u : 0u;
+            if (diff) {
+                std::printf("   %s: accumWeight differs in %zu of %zu\n", what, diff, a.accumWeight.size());
+                same = false;
+            }
+        }
+    }
+    for (const Arr &r : arrs) {
+        if (r.x->size() != r.y->size() || r.x->empty()) {
+            std::printf("   %s: %s sizes %zu vs %zu\n", what, r.name, r.x->size(), r.y->size());
+            same = false;
+            continue;
+        }
+        size_t diff = 0, first = size_t(-1);
+        for (size_t i = 0; i < r.x->size(); ++i)
+            if (std::memcmp(&(*r.x)[i], &(*r.y)[i], sizeof(float)) != 0) {
+                if (first == size_t(-1)) first = i;
+                ++diff;
+            }
+        if (diff) {
+            const size_t v = first / 4u;
+            std::printf("   %s: %s differs in %zu of %zu floats (first at voxel %zu,%zu,%zu: %.7f vs %.7f)\n",
+                        what, r.name, diff, r.x->size(), v % size_t(a.width), (v / size_t(a.width)) % size_t(a.height),
+                        v / size_t(a.width * a.height), double((*r.x)[first]), double((*r.y)[first]));
+            same = false;
+        }
+    }
+    size_t lit = 0;
+    for (size_t i = 3; i < a.albedo.size(); i += 4) lit += a.albedo[i] > 0.0f ? 1u : 0u;
+    std::printf("   %s: %s (%zu occupied voxels)\n", what, same ? "the stores are equal" : "THE STORES DIFFER", lit);
+    return same;
+}
+
+/// THE SPREAD ARMS' BUDGET: small enough that the fixture's slab is cut into one chunk per 4-cell layer (at most eight
+/// a frame: B asserts two or more chunk frames), large enough that the cut stops at layers rather than single groups.
+static const double kSpreadBudgetMs = 0.005;
+
+int main()
+{
+    std::string err;
+    const auto cfg = enginetest::testEngineConfig("test-gi-scroll-slab-ogre.log");
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
+    Engine *e = engine.get();
+    int frames = 1;
+    const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
+
+    View *view = e->createOffscreenView("scroll", kSize, kSize, Colour(0, 0, 0));
+    Scene *scene = e->createScene("scroll");
+    if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(scene);
+    scene->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+    // A room, plus objects in and around the box the walk enters: a junction (two walls on a floor), two-sided plates,
+    // and props on both sides of the step.
+    const NodeId ground = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.9f);
+    enginetest::setNodePosition(scene, ground, Vec3(0.0f, -0.05f, 0.0f));
+    enginetest::setNodeScale(scene, ground, Vec3(60.0f, 0.1f, 60.0f));
+    const NodeId wallB = enginetest::addTestCube(scene, Colour(0.1f, 0.9f, 0.2f), 0.0f, 0.8f);
+    enginetest::setNodePosition(scene, wallB, Vec3(-4.0f, 2.5f, 0.0f));
+    enginetest::setNodeScale(scene, wallB, Vec3(0.3f, 5.0f, 12.0f));
+    struct Prop { Vec3 pos, scale; Colour albedo; };
+    const Prop props[] = {
+        { Vec3(1.2f, 0.7f, 1.0f),  Vec3(1.0f, 1.0f, 1.0f),   Colour(0.2f, 0.3f, 0.95f) },
+        { Vec3(5.6f, 0.5f, 0.3f),  Vec3(0.9f, 1.0f, 0.7f),   Colour(0.9f, 0.6f, 0.1f) },
+        { Vec3(7.3f, 1.4f, -1.7f), Vec3(0.4f, 2.8f, 0.4f),   Colour(0.7f, 0.2f, 0.7f) },
+        { Vec3(6.1f, 2.0f, 2.6f),  Vec3(1.7f, 0.05f, 1.3f),  Colour(0.3f, 0.8f, 0.8f) },   // a plate
+        { Vec3(6.1f, 2.3f, 2.6f),  Vec3(1.7f, 0.05f, 1.3f),  Colour(0.8f, 0.8f, 0.3f) },   // its twin
+        { Vec3(3.4f, 4.6f, -0.9f), Vec3(2.2f, 0.3f, 0.6f),   Colour(0.6f, 0.6f, 0.6f) },
+        { Vec3(-1.8f, 1.1f, -2.4f),Vec3(0.6f, 2.2f, 0.6f),   Colour(0.9f, 0.1f, 0.1f) },
+        { Vec3(-3.1f, 0.4f, 4.2f), Vec3(0.8f, 0.8f, 0.8f),   Colour(0.4f, 0.9f, 0.4f) },
+        { Vec3(1.0f, 0.9f, -4.6f), Vec3(1.1f, 1.8f, 0.5f),   Colour(0.95f, 0.95f, 0.2f) },
+    };
+    std::vector<NodeId> propNodes;
+    for (const Prop &p : props) {
+        const NodeId n = enginetest::addTestCube(scene, p.albedo, 0.0f, 0.6f);
+        enginetest::setNodePosition(scene, n, p.pos);
+        enginetest::setNodeScale(scene, n, p.scale);
+        propNodes.push_back(n);
+    }
+    // ONE EMISSIVE SURFACE: the emissive store is a half float.
+    NodeId glow = 0;
+    {
+        glow = scene->createNode();
+        PbrParams gp;
+        gp.albedo = Colour(0.8f, 0.8f, 0.8f);
+        gp.roughness = 0.35f;
+        gp.emissive = Colour(2.5f, 1.2f, 0.4f);
+        const MeshId gm = scene->createMesh(enginetest::unitCubeMesh());
+        const MaterialId gmat = scene->createPbrMaterial(gp);
+        CHECK(glow && gm && gmat && scene->attachMesh(glow, gm, gmat), "an emissive panel");
+        enginetest::setNodePosition(scene, glow, Vec3(5.2f, 1.6f, -1.0f));
+        enginetest::setNodeScale(scene, glow, Vec3(0.1f, 1.2f, 1.6f));
+    }
+    enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
+
+    GiParams small = chainGi();
+    small.cascadeCount = 2;
+    small.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 64, 0.0f };
+    small.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f, 64, 0.0f };
+    const Vec3 home(0.0f, 2.0f, 2.0f);
+    Vec3 cam = home;
+    const auto look = [&](const Vec3 &p) {
+        cam = p;
+        enginetest::testCameraLookAt(view, p, Vec3(p.x + 1.0f, 1.0f, p.z - 4.0f));
+    };
+    look(home);
+    CHECK(scene->setGlobalIllumination(small), "a two-cascade chain at 64 cells builds");
+    run(8);
+    GiStatus st = scene->published().gi;
+    if (st.cascades.size() != 2u) { std::printf("FAIL: the chain has %zu cascades\n", st.cascades.size()); return 1; }
+    const float cell = st.cascades[0].cell, step = st.cascades[0].step;
+    std::printf("   cascade 0: %d^3, cell %.5f m, step %.3f m (%.0f cells)\n", st.cascades[0].resolution, double(cell),
+                double(step), double(step / cell));
+
+    // THE REFERENCE: a whole build of the chain AT THE CASCADES' CURRENT PLACEMENTS (the pin restores each builtCam).
+    const auto rebuildWhole = [&]() {
+        const GiStatus now = scene->published().gi;
+        GiPlacementPin pin;
+        pin.on = true;
+        for (const GiStatus::CascadeStatus &cs : now.cascades) pin.cascadeBuiltCam.push_back(cs.builtCam);
+        scene->setGiPlacementPin(pin);
+        GiParams off; off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+        scene->setGlobalIllumination(small);
+        run(8);
+        scene->setGiPlacementPin(GiPlacementPin());
+    };
+    // Frames until cascade 0 has committed `want` scrolls (or `cap` frames).
+    const auto untilScrolls = [&](unsigned long long want, int cap) {
+        int n = 0;
+        for (; n < cap && scene->published().gi.cascades[0].scrolls < want; ++n) run(1);
+        return n;
+    };
+    // Frames until cascade 0 owes nothing and has nothing in flight (or `cap` frames).
+    const auto untilSettled = [&](int cap) {
+        int n = 0;
+        for (; n < cap && (scene->published().gi.cascades[0].pending || scene->published().gi.cascades[0].scrolling); ++n)
+            run(1);
+        return n;
+    };
+    GiVoxelVolume scrolled, built;
+
+    // ---- A. one scroll, three slabs ----------------------------------------------------------
+    std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        // x past its band by a little (a shift of 2 cells), y and z riding along (6 cells each): 14 layers, within the
+        // scratch's; none a multiple of 4.
+        const Vec3 to(home.x - 1.9f * cell, home.y + 6.1f * cell, home.z - 6.4f * cell);
+        look(to);
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        const GiStatus post = scene->published().gi;
+        const int sx = int(std::lround((post.cascades[0].centre.x - pre.cascades[0].centre.x) / cell));
+        const int sy = int(std::lround((post.cascades[0].centre.y - pre.cascades[0].centre.y) / cell));
+        const int sz = int(std::lround((post.cascades[0].centre.z - pre.cascades[0].centre.z) / cell));
+        std::printf("   committed after %d frame(s); shift (%d, %d, %d) cells; scroll frames %llu; rebuilds %llu -> %llu\n",
+                    n, sx, sy, sz, post.cascades[0].scrollFrames, pre.cascades[0].rebuilds, post.cascades[0].rebuilds);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "THE CAMERA'S STEP TOOK THE SLAB PATH");
+        CHECK(post.cascades[0].rebuilds == pre.cascades[0].rebuilds + 1u, "...as one rebuild of cascade 0");
+        CHECK(sx != 0 && sy != 0 && sz != 0, "...on all three axes (three slabs in one scroll)");
+        CHECK(sx % 4 != 0 && sy % 4 != 0 && sz % 4 != 0, "...none a multiple of the dispatch's four (the bounds guard)");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the scrolled store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "A"), "A SCROLLED STORE IS THE WHOLE BUILD'S, FLOAT FOR FLOAT");
+    }
+
+    // ---- B. the spread, and a step past the scratch's layers ---------------------------------
+    std::printf("\n== B: the slab spread over frames commits the same store ==\n");
+    {
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        const Vec3 from = cam;
+        const Vec3 to(from.x - 1.5f * step, from.y - 5.2f * cell, from.z + 6.6f * cell);
+        look(to);
+        int flight = 0;
+        bool placedStill = true, notAtRest = true, sawFlight = false;
+        for (; flight < 400 && scene->published().gi.cascades[0].scrolls == pre.cascades[0].scrolls; ++flight) {
+            run(1);
+            const GiStatus mid = scene->published().gi;
+            if (mid.cascades[0].scrolls != pre.cascades[0].scrolls) break;
+            sawFlight = sawFlight || mid.cascades[0].scrolling;
+            placedStill = placedStill && mid.cascades[0].centre.x == pre.cascades[0].centre.x &&
+                          mid.cascades[0].centre.y == pre.cascades[0].centre.y &&
+                          mid.cascades[0].centre.z == pre.cascades[0].centre.z;
+            notAtRest = notAtRest && !mid.giAtRest;
+        }
+        const GiStatus post = scene->published().gi;
+        const unsigned long long spent = post.cascades[0].scrollFrames - pre.cascades[0].scrollFrames;
+        const int sx = int(std::lround((post.cascades[0].centre.x - pre.cascades[0].centre.x) / cell));
+        std::printf("   the first scroll committed after %d frame(s), %llu of them building chunks; its x shift %d cells "
+                    "(the step asked %.1f)\n", flight + 1, spent, sx, double(-1.5f * step / cell));
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "the spread scroll commits");
+        CHECK(sawFlight && spent >= 2u, "...SPREAD over several frames (the slab's 4-cell layers, eight a frame)");
+        CHECK(placedStill, "...the cascade's placement - its readers' box - unchanged until the commit");
+        CHECK(notAtRest, "...and GI not at rest while the scroll is owed");
+        CHECK(std::abs(sx) <= int(std::ceil((step / cell + 1.0f) * 0.5f)) * 2,
+              "...its shift cut to the scratch's layers (one step's slab)");
+        const int rest = untilSettled(600);
+        const GiStatus done = scene->published().gi;
+        std::printf("   the remainder: %llu more scroll(s), settled after %d frames\n",
+                    done.cascades[0].scrolls - post.cascades[0].scrolls, rest);
+        CHECK(rest < 600, "...and the cascade owes nothing after it (the camera inside the cut placement's band, "
+                          "or the remainder scrolled)");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the spread store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "B"), "A SPREAD SCROLL'S STORE IS THE WHOLE BUILD'S, FLOAT FOR FLOAT");
+    }
+
+    // ---- C. an edit in the box being built -------------------------------------------------------
+    std::printf("\n== C: an edit reaching only the box being built drops the scroll ==\n");
+    {
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        const Vec3 from = cam;
+        const Vec3 to(from.x + 1.05f * step, from.y, from.z);
+        look(to);
+        run(3);   // in flight: a few chunks built
+        const bool flying = scene->published().gi.cascades[0].scrolling;
+        // The prop beyond the live box's +x face, inside the target's: the dirty path's box test (the live box) does
+        // not reach it.
+        const float liveMaxX = pre.cascades[0].centre.x + pre.cascades[0].halfSize;
+        enginetest::setNodePosition(scene, propNodes[2], Vec3(liveMaxX + 0.4f * step, 1.0f, from.z - 1.0f));
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 400);
+        const GiStatus post = scene->published().gi;
+        std::printf("   in flight when edited: %d; committed %d frame(s) later; aborts %llu -> %llu\n",
+                    int(flying), n, pre.cascadeScrollAborts, post.cascadeScrollAborts);
+        CHECK(flying, "the scroll was in flight when the edit landed");
+        CHECK(post.cascadeScrollAborts > pre.cascadeScrollAborts, "THE EDIT DROPPED THE SCROLL");
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "...and a scroll committed after it");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        untilSettled(400);
+        run(2);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "C"), "THE COMMITTED STORE HOLDS THE EDITED SCENE, AS A WHOLE BUILD DOES");
+    }
+
+    // ---- E. two scrolls chained; a live-box edit mid-flight -----------------------------------
+    std::printf("\n== E: two scrolls with no rebuild between; a live-box edit drops a scroll ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
+        untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        look(Vec3(cam.x, cam.y + 0.2f * step, cam.z - 1.05f * step));
+        untilScrolls(pre.cascades[0].scrolls + 2u, 8);
+        const GiStatus two = scene->published().gi;
+        CHECK(two.cascades[0].scrolls == pre.cascades[0].scrolls + 2u &&
+              two.cascades[0].rebuilds == pre.cascades[0].rebuilds + 2u,
+              "two scrolls, no rebuild between them");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the twice-scrolled store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "E1"), "TWO CHAINED SCROLLS LEAVE A WHOLE BUILD'S STORE, FLOAT FOR FLOAT");
+
+        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        run(1);
+        const GiStatus pre2 = scene->published().gi;
+        look(Vec3(cam.x - 1.05f * step, cam.y, cam.z));
+        run(3);
+        const bool flying = scene->published().gi.cascades[0].scrolling;
+        // A prop INSIDE the live box (and the target's): the dirty path marks the cascade itself.
+        enginetest::setNodePosition(scene, propNodes[0], Vec3(pre2.cascades[0].centre.x - 0.4f, 0.7f, 1.0f));
+        const int n = untilSettled(400);
+        const GiStatus post = scene->published().gi;
+        std::printf("   in flight when edited: %d; aborts %llu -> %llu; scrolls %llu -> %llu; settled after %d frames\n",
+                    int(flying), pre2.cascadeScrollAborts, post.cascadeScrollAborts, pre2.cascades[0].scrolls,
+                    post.cascades[0].scrolls, n);
+        CHECK(flying, "the scroll was in flight when its live box was edited");
+        CHECK(post.cascadeScrollAborts > pre2.cascadeScrollAborts, "THE LIVE-BOX EDIT DROPPED THE SCROLL");
+        CHECK(post.cascades[0].scrolls == pre2.cascades[0].scrolls, "...for the edit's whole rebuild (no scroll committed)");
+        e->setArm("gi.scrollBudgetMs", 0.0);
+        run(2);
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "E2"), "THE EDITED SCENE'S STORE IS A WHOLE BUILD'S");
+    }
+
+    // ---- F. a shift that throws half way -------------------------------------------------------
+    std::printf("\n== F: a shift that throws half way leaves a torn store that never scrolls ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        e->setArm("gi.cascadeFaultCommit", 0.0);
+        look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
+        run(1);   // the shift throws half way: torn, the first failure
+        // ...AND THE WHOLE REBUILD THAT REPAIRS IT FAILS TOO (gi.cascadeFault): the second failure, which stands an
+        // ordinary cascade down - never a torn one.
+        e->setArm("gi.cascadeFaultCommit", -1.0);
+        e->setArm("gi.cascadeFault", 0.0);
+        run(1);
+        e->setArm("gi.cascadeFault", -1.0);
+        const GiStatus torn = scene->published().gi;
+        CHECK(torn.cascades[0].pending != 0 && torn.cascades[0].scrolls == pre.cascades[0].scrolls,
+              "A TORN STORE IS NEVER STOOD DOWN: two failures, still owed its whole rebuild");
+        run(1);
+        int n = 0;
+        for (; n < 8 && scene->published().gi.cascades[0].pending; ++n) run(1);
+        const GiStatus post = scene->published().gi;
+        std::printf("   scrolls %llu -> %llu, rebuilds %llu -> %llu, owed after %d frames: %d\n",
+                    pre.cascades[0].scrolls, post.cascades[0].scrolls, pre.cascades[0].rebuilds,
+                    post.cascades[0].rebuilds, n, post.cascades[0].pending);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls, "THE TORN STORE IS NEVER SCROLLED FROM");
+        CHECK(post.cascades[0].rebuilds == pre.cascades[0].rebuilds + 1u && !post.cascades[0].pending,
+              "...the next frame rebuilds it whole, and it owes nothing");
+        CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
+        rebuildWhole();
+        CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
+        CHECK(sameStore(scrolled, built, "F"), "THE REBUILT STORE IS A WHOLE BUILD'S");
+    }
+
+    // ---- F2. a torn store whose whole rebuild fails TWICE ----------------------------------------
+    std::printf("\n== F2: a torn store whose whole rebuild fails twice is cleared and stood down ==\n");
+    {
+        const GiStatus pre = scene->published().gi;
+        e->setArm("gi.cascadeFaultCommit", 0.0);
+        look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
+        run(1);   // torn
+        e->setArm("gi.cascadeFaultCommit", -1.0);
+        e->setArm("gi.cascadeFault", 0.0);
+        run(1);   // the first whole rebuild fails: still owed
+        const GiStatus once = scene->published().gi;
+        run(1);   // the second: cleared and stood down
+        const GiStatus twice = scene->published().gi;
+        const unsigned long long rebuildsBefore = scene->published().gi.cascades[0].rebuilds;
+        int owed = 0;
+        for (int f = 0; f < 6; ++f) { run(1); owed += scene->published().gi.cascades[0].pending ? 1 : 0; }
+        const GiStatus after = scene->published().gi;
+        std::printf("   pending %d / %d / %d, torn-cleared %d / %d (cleared %llu -> %llu)\n", once.cascades[0].pending,
+                    twice.cascades[0].pending, after.cascades[0].pending, int(twice.cascades[0].tornCleared),
+                    int(after.cascades[0].tornCleared), pre.cascadeTornCleared, after.cascadeTornCleared);
+        CHECK(once.cascades[0].pending != 0 && !once.cascades[0].tornCleared,
+              "one failed whole rebuild of a torn store: still owed it");
+        CHECK(twice.cascades[0].pending == 0 && after.cascades[0].pending == 0 && owed == 0 &&
+                  after.cascades[0].tornCleared && after.cascadeTornCleared == pre.cascadeTornCleared + 1u &&
+                  after.cascades[0].rebuilds == rebuildsBefore,
+              "TWO: ITS VOLUMES CLEARED AND IT STANDS DOWN (bounded, the status saying torn-cleared)");
+        GiVoxelVolume v;
+        CHECK(scene->giVoxelVolume(0, v), "the cleared store reads back");
+        e->setArm("gi.cascadeFault", -1.0);
+        bool empty = v.available && !v.albedo.empty();
+        for (const std::vector<float> *a : { &v.albedo, &v.emissive, &v.coverageP, &v.coverageN, &v.light })
+            for (float x : *a) empty = empty && x == 0.0f;
+        for (unsigned x : v.accumWeight) empty = empty && x == 0u;
+        CHECK(empty, "...EMPTY: albedo, emissive, coverage, the area weight and the light all zero");
+        rebuildWhole();
+    }
+
+    // ---- V. the VRAM at Epic ---------------------------------------------------------------------
+    std::printf("\n== V: the scroll scratches' VRAM at Epic (the texture-memory door) ==\n");
+    {
+        GiParams epic = chainGi();
+        epic.quality = GiQuality::Epic;
+        CHECK(scene->setGlobalIllumination(epic), "the Epic chain builds");
+        run(4);
+        std::vector<TextureMemoryEntry> tex;
+        CHECK(e->textureMemory(tex), "the texture door answers");
+        const GiStatus ep = scene->published().gi;
+        unsigned long long scratch = 0, perVoxelBytes = 0, scratchVoxels = 0;
+        std::vector<int> sizes;
+        for (const TextureMemoryEntry &t : tex)
+            if (t.name.rfind("PhotonScrollScratch/", 0) == 0) {
+                scratch += t.bytes;
+                scratchVoxels += (unsigned long long)t.width * t.height * t.depth;
+            }
+        // the deleted box-sized targets: one per SIZE, the same eleven volumes at res^3 (per-voxel bytes from the scratch)
+        for (const GiStatus::CascadeStatus &cs : ep.cascades)
+            if (std::find(sizes.begin(), sizes.end(), cs.resolution) == sizes.end()) sizes.push_back(cs.resolution);
+        // the scratch's per-voxel bytes: its bytes over its voxels across the eleven volumes (they share dims per cascade)
+        perVoxelBytes = scratchVoxels ? scratch * 11ull / scratchVoxels : 0ull;
+        unsigned long long targets = 0;
+        for (int r : sizes) targets += perVoxelBytes * (unsigned long long)r * r * r;
+        std::printf("   the scratches: %.1f MB (%zu cascades; %llu B a voxel over the eleven volumes); the box-sized "
+                    "targets they replace: %.1f MB (%zu sizes); net %.1f MB\n",
+                    double(scratch) / 1048576.0, ep.cascades.size(), perVoxelBytes, double(targets) / 1048576.0,
+                    sizes.size(), (double(scratch) - double(targets)) / 1048576.0);
+        CHECK(scratch > 0 && scratch < targets, "THE SCRATCHES HOLD LESS THAN THE TARGETS THEY REPLACE");
+    }
+
+    scene->removeNode(ground);
+    scene->removeNode(wallB);
+    scene->removeNode(glow);
+    for (NodeId n : propNodes) scene->removeNode(n);
+    run(2);
+    std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
+                failures == 1 ? "" : "s");
+    return failures ? 1 : 0;
+}

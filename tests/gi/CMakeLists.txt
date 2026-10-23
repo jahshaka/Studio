@@ -181,6 +181,29 @@ set_tests_properties(gi.directional_seam PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 # THE FRAMES: 24 to the chain's rest, 3 to cascade 0's rebuild under the roof (measured), 12 after it, 2 at the end
 set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 41)
 
+# gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
+# CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
+# in the box being built, two chained scrolls and a live-box edit, a torn shift (and its twice-failed repair) each leave
+# cascade 0's store equal, float for float, to a whole build at the same placement; the scratches' VRAM at Epic
+# (test_gi_scroll_slab.cpp says the laws). A fixture, a two-cascade 64-cell chain.
+add_executable(test_gi_scroll_slab test_gi_scroll_slab.cpp)
+set_target_properties(test_gi_scroll_slab PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_scroll_slab PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_scroll_slab PRIVATE JahshakaEngine)
+add_dependencies(test_gi_scroll_slab JahshakaEngineMedia)
+jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_scroll_slab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scroll_slab PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 126)
+
 # gi.shell_ends (PHOTON-7 stage 1's read F1) — EVERY CASCADE MARCHES THE WORLD CHAIN'S SHELLS: at the four desktop tiers
 # every cascade's shell list (GiStatus::CascadeStatus::shellEnds) equals sum 8 x cell_i over the chain (test_gi_shells.cpp
 # says the law; red on the base: an inner entry summed the marching cascade's own cell). A fixture.
