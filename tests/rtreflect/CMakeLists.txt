@@ -129,17 +129,25 @@ set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 
-# rtreflect.walk_world (PHOTON-7 stage 6 commit 7, the lead's ruling; two labelled arms after REFLECT-MOVING-1) — THE
-# REFLECTION'S WALKING BAR: gi.walk's glass walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the
-# reflections live) against the frozen walk - glossy and mirror M1 p99 <= 2 codes, share over one code <= 1 %, in two
-# arms each asserting its mode: (i) Rays with the hits flattened, the reflection's own bar (stage 6's); (ii) Both on
-# real hits, REFLECT-MOVING-1's Both half (red until that work, owed before PHOTON-7's master check on the merged tree).
-# 960x540; five jahlab sessions: 12 + 4 x 570 frames.
+# rtreflect.walk_world / rtreflect.walk_world_both (PHOTON-7 stage 6 commit 7; the lead's rulings: two labelled arms after
+# REFLECT-MOVING-1, round 5's measures) — THE REFLECTION'S WALKING BARS: gi.walk's glass walk with THE WORLD HELD
+# (gi.freeze = 2: no cache work, the gather held, the reflections live), seeds 0 and 7919, against the frozen walk -
+# GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole M1, each p99 <= 2 codes and share over one code
+# <= 1 % (whole glossy M1 printed as information: the noise plus the signal) (walk_world.sh, walk_noise.py). One arm a
+# row, its mode asserted: walk_world = Rays with the hits flattened, the reflection's own bar (stage 6's); walk_world_both
+# = Both on real hits, REFLECT-MOVING-1's Both half (the defect's slide and lag are owed before PHOTON-7's master check on
+# the merged tree). 960x540; four jahlab sessions each: 6 + 3 x 570 frames.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 2292
+    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 1716
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+                raysflat
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(rtreflect.walk_world_both CLASS engine TOKENS 8 FRAMES 1716
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world_both PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
     # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
