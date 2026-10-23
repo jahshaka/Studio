@@ -65,13 +65,15 @@ walk() {   # scene, source flags (one word), settle, start, target0, end, target
     fi
     for arm in "$@"; do
         local f=""; [ "${arm#frozen}" != "$arm" ] && f=" freeze"
+        # (the second frozen walk is read for L1 alone - byte for byte against the first: its pictures alone, dumprgb)
+        local dk="dump"; [ "$arm" = frozen2 ] && dk="dumprgb"
         # (Bistro's arms boot on the SAME cache bytes: its data root's cache as the run found it, restored before each
         # arm - a session writes the variants it compiled at its exit, and a grown cache draws other variants, AB G10)
         if [ -n "${SNAP:-}" ]; then rm -rf "$ROOT/shadercache"; cp -a "$SNAP" "$ROOT/shadercache"; fi
         # (the window after the stop: 8 frames - the stop frame's history count, the door's mask, comes back a few
         # frames late; M1 and the hitch law read the trail, the moving frames, only)
-        printf 'camera %s,%s\nframes %d\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d dump=%s-%s%s out=%s-%s\nstatus\nquit\n' \
-            "$s" "$t0" "$settle" "$s" "$t0" "$e" "$t1" "$n" "$extra" "$trail" "$scene" "$arm" "$f" "$scene" "$arm" \
+        printf 'camera %s,%s\nframes %d\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d %s=%s-%s%s out=%s-%s\nstatus\nquit\n' \
+            "$s" "$t0" "$settle" "$s" "$t0" "$e" "$t1" "$n" "$extra" "$trail" "$dk" "$scene" "$arm" "$f" "$scene" "$arm" \
             > "$WD/$scene-$arm.lab"
         session "$scene-$arm" $src
         [ "$arm" = live ] && work "$scene" "$WD/$scene-$arm.log"

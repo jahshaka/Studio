@@ -72,7 +72,7 @@ const std::vector<VerbDoc> &verbs()
           "line each) - where a lamp is, for a pin or a camera (PHOTON-7 stage 1's Bistro read)" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
-        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [freeze] [out=<name>]", 2, 9,
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>|dumprgb=<name>] [freeze] [out=<name>]", 2, 9,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
           "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
@@ -83,7 +83,8 @@ const std::vector<VerbDoc> &verbs()
           "frames of the move too (every pixel, the ray levels re-fitted); `restarts` adds per frame the gather's foliage "
           "pixels and how many restarted their history (the class bit of its own history word); `dump=<name>` writes "
           "every trail frame's picture, the gather's view distance and surface test, its classes and camera to "
-          "<data-root>/stillness/dump-<name>/ (M1's moving window, computed offline); `freeze` switches the arm "
+          "<data-root>/stillness/dump-<name>/ (M1's moving window, computed offline), `dumprgb=<name>` the pictures and "
+          "cameras alone (a walk compared byte for byte); `freeze` switches the arm "
           "gi.freeze on at the script's first walk frame, only when the gather and the reflection HELD on the frame before "
           "(M1's frozen walk from the converged picture; the run fails otherwise - settle longer), restored at the end. "
           "Writes "
