@@ -574,14 +574,14 @@ std::string Session::statusJson()
       << ",\"draws\":" << rs.draws << ",\"batches\":" << rs.batches << ",\"triangles\":" << rs.triangles
       << ",\"vertices\":" << rs.vertices << ",\"instances\":" << rs.instances
       << ",\"gpuCountLagFrames\":" << rs.gpuCountLagFrames << "}";
-    // ...and the field's state (PHOTON-2 K1/K4: the light age by z-slab, the follows, a change's skips) and the
-    // surface cache's counters - an agent's per-frame `status file` reads them
-    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << ",\"ifdRefinesOwed\":" << gi.ifdRefinesOwed
-      << ",\"ifdFollows\":" << gi.ifdFollows << ",\"ifdChangeSkips\":" << gi.ifdChangeSkips
-      << ",\"ifdRestWindow\":" << gi.ifdRestWindow << ",\"ifdDispatched\":" << gi.ifdDispatchedLastFrame
-      << ",\"ifdLightAgeBySlab\":[";
-    for (size_t i = 0; i < gi.ifdLightAgeBySlab.size(); ++i) o << (i ? "," : "") << gi.ifdLightAgeBySlab[i];
-    o << "],\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
+    // ...and the field's state (PHOTON-7 stage 5, 5-4: the marks, the restarts and refinements owed, the follows) and
+    // the surface cache's counters - an agent's per-frame `status file` reads them
+    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << ",\"ifdOwedRestarts\":" << gi.ifdOwedRestarts
+      << ",\"ifdOwedRefines\":" << gi.ifdOwedRefines << ",\"ifdWorking\":" << (gi.ifdWorking ? "true" : "false")
+      << ",\"ifdMarkedByMoves\":" << gi.ifdMarkedByMoves << ",\"ifdMarkedByRegion\":" << gi.ifdMarkedByRegion
+      << ",\"ifdMarkAlls\":" << gi.ifdMarkAlls << ",\"ifdRestarts\":" << gi.ifdRestarts
+      << ",\"ifdFollows\":" << gi.ifdFollows << ",\"ifdDispatched\":" << gi.ifdDispatchedLastFrame;
+    o << ",\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
       << gi.cards.invalidIndirect << ",\"invalidMaterial\":" << gi.cards.invalidMaterial << ",\"invalidTransform\":"

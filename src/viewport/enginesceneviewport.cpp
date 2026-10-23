@@ -3009,7 +3009,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdBound             = st.ifdBound;
     out.ifdProbes            = st.ifdProbes;
     out.ifdTargetSamples     = st.ifdTargetSamples;
-    out.ifdRefinesOwed       = st.ifdRefinesOwed;
+    out.ifdOwedRestarts      = st.ifdOwedRestarts;
+    out.ifdOwedRefines       = st.ifdOwedRefines;
     out.giAtRest             = st.giAtRest;
     out.ssaoSuppressed       = st.ssaoSuppressed;
     out.ssaoSuppressedReason = QString::fromStdString(st.ssaoSuppressedReason);

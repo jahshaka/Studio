@@ -66,6 +66,7 @@ gi.scroll_slab 5.77  solo, the card lock held, :74, warm (PHOTON-7 stage 2, 2026
 gi.scroll_lag 2.10  solo, the card lock held, :74, warm (PHOTON-7 stage 2, 2026-10-23: the tiers' scroll counts, an Epic 1.4 m/s dolly past the outermost step - every cascade's lag within its own slack (the read's W1) - and a 0.25 m/frame fly, cascade 0's lag)
 gi.changed_regions 5.62  solo, the card lock held, :74, warm (PHOTON-7 stage 3, 2026-10-23: the changed-region list - a still scene for 600 frames, a lamp step and its brick mask, a mover, a script move and a material edit, the sun and the sky, 129 movers at the cap, a scroll's commit)
 gi.card_oracle 8.13  solo, the card lock held, :83, warm (PHOTON-7 stage 5, 2026-10-23: the cards against an oracle - a lamp step on a carded court, every card within a code of the whole re-solve, the stale set's relit and kept)
+gi.field_oracle 14.91  solo, the card lock held, :83, warm (PHOTON-7 stage 5, 5-4: the field refines only what changed - a lamp step against a whole re-solve, two sealed rooms and an open step: safety, no mark beyond the law, the law's slack printed)
 gi.card_residency 12.59  solo, the card lock held, :83, warm (PHOTON-7 stage 5, 2026-10-23: residency by the readers' demand - two sealed carded rooms, a walk and a teleport between them compared on the read set, and a crowded room's quarter pages compacted)
 gi.card_lamp_shadow 16.36  solo, the card lock held, :83, warm (PHOTON-7 stage 5: the cards see lamp shadows, traced - a still and a moving blocker's shadows on a carded floor, the moved mover's against a whole re-solve; an area light's form factor against a numeric one, its penumbra printed)
 gi.leak_room 9.37  solo, the card lock held, :83, warm (restored for PHOTON-7 stage 5: the field's leak at four wall thicknesses, the fold's seam, and the carded walls' arm - the outside lamp's traced bit 0, no red highlight in the lobe)
@@ -74,13 +75,13 @@ gi.bounce_series.medium 5.70  solo, the card lock held, :76, warm (PHOTON-7 stag
 gi.bounce_series.high 11.60  solo, the card lock held, :76, warm (PHOTON-7 stage 4, 2026-10-23: one tier of the sealed room - its sky-leak arm (e measured, every cascade), the main arm (the feedback at its rest against a 64-pass Jacobi over cascade 0, both within 3 % of E / (1 - a'(1 - e))) and the operator's arm (the sky held at E / (1 - a')); the total alone read (Scene::giVoxelLight))
 gi.bounce_series.epic 11.75  solo, the card lock held, :76, warm (PHOTON-7 stage 4, 2026-10-23: one tier of the sealed room - its sky-leak arm (e measured, every cascade), the main arm (the feedback at its rest against a 64-pass Jacobi over cascade 0, both within 3 % of E / (1 - a'(1 - e))) and the operator's arm (the sky held at E / (1 - a')); the total alone read (Scene::giVoxelLight))
 gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; jahlab on photon-room, 960x540, two sessions)
-gi.hold_after_stop 28.47  solo, the card lock held, :71, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions)
+gi.hold_after_stop 33.21  solo, the card lock held, :83, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions; PHOTON-7 stage 5, 5-4: the field law bars)
 gi.light_is_world 31.52  solo, the card lock held, :68, warm (PHOTON-7 stage 1, 2026-10-23; jahlab on photon-shells and photon-roof, 960x540, two sessions)
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
-gi.walk 47.89  solo, the card lock held, :77, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms)
+gi.walk 57.24  solo, the card lock held, :83, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms; PHOTON-7 stage 5, 5-4: the field spends its whole grant on the walk restarts (the cones still hop at the box face))
 gi.walk_bistro 48.09  solo, the card lock held, :77, Bistro's own data root warm (PHOTON-7 stage 0, 2026-10-22; a MEASURE: two jahlab sessions on Bistro Exterior, 960x540; 54.62 s on its first run, the page cache cold)
 gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)

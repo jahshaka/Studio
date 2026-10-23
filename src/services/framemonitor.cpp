@@ -721,7 +721,8 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "reusedLastRefresh", s.gi.reusedLastRefresh },
             { "ifdBound", s.gi.ifdBound },
             { "ifdProbes", s.gi.ifdProbes },
-            { "ifdRefinesOwed", int(s.gi.ifdRefinesOwed) },
+            { "ifdOwedRestarts", int(s.gi.ifdOwedRestarts) },
+            { "ifdOwedRefines", int(s.gi.ifdOwedRefines) },
             { "giAtRest", s.gi.giAtRest },
             // THE CACHE'S OWN HISTORY (audit D6). The snapshot described what
             // the GI arm IS and never what it has been DOING, so a bundle could

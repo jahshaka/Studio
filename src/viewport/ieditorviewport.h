@@ -749,14 +749,14 @@ public:
         /// refused for reasons no caller can see (no voxel volume to feed the
         /// field, DDGI media not staged, a construction that threw), so a
         /// scene asking for it and a scene getting it are two different
-        /// readings. `ifdTargetSamples` / `ifdRefinesOwed` are the field's
-        /// convergence schedule (engine Types.h), and `giAtRest` is THE settle
+        /// readings. `ifdTargetSamples` / `ifdOwedRestarts` / `ifdOwedRefines` are the
+        /// field's convergence schedule (engine Types.h), and `giAtRest` is THE settle
         /// predicate: nothing the scene's GI owes will change the picture.
         bool ifdBound = false;
         int  ifdProbes = 0;
         int  ifdProbesPerFrame = 0;
         unsigned ifdTargetSamples = 0;
-        unsigned ifdRefinesOwed = 0;
+        unsigned ifdOwedRestarts = 0, ifdOwedRefines = 0;
         bool giAtRest = true;
         /// THE CHAIN REFUSES SSAO HERE (SSAO-DOUBLE-1; engine
         /// GiStatus::ssaoSuppressed): the GI carries the occlusion, so no view of
