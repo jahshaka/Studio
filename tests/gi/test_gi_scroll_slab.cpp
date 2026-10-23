@@ -300,14 +300,18 @@ int main()
         CHECK(sawFlight && spent >= 2u, "...SPREAD over several frames (the slab's 4-cell layers, eight a frame)");
         CHECK(placedStill, "...the cascade's placement - its readers' box - unchanged until the commit");
         CHECK(notAtRest, "...and GI not at rest while the scroll is owed");
-        CHECK(std::abs(sx) <= int(std::ceil((step / cell + 1.0f) * 0.5f)) * 2,
-              "...its shift cut to the scratch's layers (one step's slab)");
+        // (the scratch's layers: one step, the even placement's cell and a frame of the fastest camera's travel)
+        const int layers = int(std::ceil((step / cell + 1.0f + std::ceil(kGiFlyMetresPerFrame / cell)) * 0.5f)) * 2;
+        CHECK(std::abs(sx) <= layers && std::abs(sx) < int(std::ceil(1.5f * step / cell)),
+              "...its shift cut to the scratch's layers (one step's slab and a frame's travel)");
         const int rest = untilSettled(600);
         const GiStatus done = scene->published().gi;
         std::printf("   the remainder: %llu more scroll(s), settled after %d frames\n",
                     done.cascades[0].scrolls - post.cascades[0].scrolls, rest);
-        CHECK(rest < 600, "...and the cascade owes nothing after it (the camera inside the cut placement's band, "
-                          "or the remainder scrolled)");
+        CHECK(rest < 600 && done.cascades[0].scrolls > post.cascades[0].scrolls,
+              "...and THE REMAINDER IS SCROLLED (a cut scroll leaves its cascade owed), then it owes nothing");
+        CHECK(done.cascades[0].builtCam.x == cam.x && done.cascades[0].builtCam.z == cam.z,
+              "...the cascade placed for the camera on every axis");
         e->setArm("gi.scrollFrames", 0.0);
         CHECK(scene->giVoxelVolume(0, scrolled), "the spread store reads back");
         rebuildWhole();
