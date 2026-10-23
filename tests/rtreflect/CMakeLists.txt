@@ -129,12 +129,14 @@ set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 
-# rtreflect.walk_world (PHOTON-7 stage 6 commit 7, the lead's ruling) — THE REFLECTION'S OWN WALKING BAR: gi.walk's glass
-# walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the reflections live) against the frozen walk
-# - glossy and mirror M1 p99 <= 2 codes, share over one code <= 1 % (walk_world.sh); the unfrozen walk printed beside it.
-# 960x540; four jahlab sessions: 7 + 3 x 710 frames.
+# rtreflect.walk_world (PHOTON-7 stage 6 commit 7, the lead's ruling; two labelled arms after REFLECT-MOVING-1) — THE
+# REFLECTION'S WALKING BAR: gi.walk's glass walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the
+# reflections live) against the frozen walk - glossy and mirror M1 p99 <= 2 codes, share over one code <= 1 %, in two
+# arms each asserting its mode: (i) Rays with the hits flattened, the reflection's own bar (stage 6's); (ii) Both on
+# real hits, REFLECT-MOVING-1's Both half (red until that work, owed before PHOTON-7's master check on the merged tree).
+# 960x540; five jahlab sessions: 12 + 4 x 570 frames.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 2137
+    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 2292
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world PROPERTIES TIMEOUT 60 LABELS "engine")
