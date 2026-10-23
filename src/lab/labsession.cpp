@@ -599,7 +599,8 @@ std::string Session::statusJson()
           << ",\"slabCells\":" << cs.commitSlabCells << ",\"injectCells\":" << cs.commitInjectCells
           << ",\"marched\":" << cs.deltaMarched << ",\"fbPasses\":" << cs.feedbackPasses << ",\"fbBricksRan\":"
           << cs.feedbackBricksRan << ",\"fbStops\":" << cs.feedbackStops << ",\"fbResumes\":" << cs.feedbackResumes
-          << ",\"fbActive\":" << cs.feedbackActive << ",\"lagLast\":"
+          << ",\"fbActive\":" << cs.feedbackActive << ",\"fbCarried\":" << cs.feedbackCarried
+          << ",\"relightCarried\":" << cs.relightCarried << ",\"lagLast\":"
           << cs.lagLast << ",\"lagMax\":" << cs.lagMax << ",\"lightsInRangeMax\":" << cs.lightsInRangeMax
           << ",\"injectionsOverSlots\":" << cs.injectionsOverSlots << "}";
     }
