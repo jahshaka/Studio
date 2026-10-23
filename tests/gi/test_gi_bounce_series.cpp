@@ -34,6 +34,11 @@
 //       one code of a 64-pass Jacobi of the same state - the stop law's bound with the resume's own error in it. RED on
 //       the resume's old weight (the centres' distance, one face: 316 voxels over a code, the worst 2.36, no brick of
 //       cascade 0 resumed - High). (The coupling is the store's: at 50 the walls outside moved 0.72 codes at most.)
+//   (6) A SUSTAINED CHANGE NEVER STARVES CASCADE 0 (PHOTON-7 stage 5's read A2: the outermost-first spend of the frame's
+//       relight count gave the outer cascades all of it while every frame's change restarted the rounds): through (5)'s
+//       fade - the lamp changing every frame, its sphere meeting every cascade - cascade 0's relight goes round its owed
+//       box at least every 2 x lightWorkFrames + 2 frames (its FLOOR share alone pays its volume in 2 x lightWorkFrames;
+//       a slab's rounding and the round's own frame the +2);
 //   (5) THE SLOW FADE ENDS WHERE THE STEP ENDS (PHOTON-7 stage 4's fix, the lead's bar; High and Epic, after the resume
 //       arm): the lamp from 400 to 200 in one frame, and - from 400 again - FADED to 200 linearly over kFadeFrames, slow
 //       enough that every inner-wall voxel, inside the range and beyond it, moves under ONE STEP of the half-float store
@@ -380,6 +385,7 @@ int main(int argc, char **argv)
         // of the room - the bricks inside the range (the sources the bricks beyond resume from) and beyond it - moves
         // under one step of the store a frame (the end states' difference over the frames, printed).
         size_t stepOver = 0, fadeOver = 0, beyond = 0;
+        int fadeRoundGap = -1, fadeRounds = 0, fadeRoundBound = 0;
         double stepWorst = 0.0, fadeWorst = 0.0, travelBeyond = 0.0, travelInside = 0.0;
         int stepRest = -1, fadeRest = -1;
         bool fadeOk = false;
@@ -418,11 +424,27 @@ int main(int argc, char **argv)
             // back to 400, to the rest
             setLamp(400.0f);
             toRest(900);
-            // THE FADE ARM: 400 -> 200 linearly over kFadeFrames
+            // THE FADE ARM: 400 -> 200 linearly over kFadeFrames - and (6) cascade 0's relight rounds through it
+            unsigned long long rounds0 = m.scene->published().gi.cascades.empty()
+                                             ? 0ull : m.scene->published().gi.cascades[0].relightRounds;
+            int lastRound = 0, roundGap = 0, roundsDone = 0;
             for (int f = 1; f <= kFadeFrames; ++f) {
                 setLamp(400.0f - 200.0f * float(f) / float(kFadeFrames));
                 run(1);
+                const GiStatus g = m.scene->published().gi;
+                const unsigned long long r0 = g.cascades.empty() ? 0ull : g.cascades[0].relightRounds;
+                if (r0 != rounds0) {
+                    roundGap = std::max(roundGap, f - lastRound);
+                    lastRound = f;
+                    rounds0 = r0;
+                    ++roundsDone;
+                }
             }
+            roundGap = std::max(roundGap, kFadeFrames + 1 - lastRound);   // (the tail: no round since the last)
+            const unsigned lwf = giQualityFacts(tiers[t]).lightWorkFrames;
+            fadeRoundGap = roundGap;
+            fadeRounds = roundsDone;
+            fadeRoundBound = int(2u * lwf + 2u);
             fadeRest = toRest(900);
             const Reading fEnd = read(m.scene);
             fadeOk = o400.ok && sEnd.ok && fEnd.ok && o400.voxels == lj.voxels && sEnd.voxels == lj.voxels &&
@@ -492,6 +514,11 @@ int main(int argc, char **argv)
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
             CHECK(lampOk && lampOver == 0u,
                   "(4) A STOPPED BRICK BESIDE A MOVING ONE RESTS WITHIN ONE CODE OF A 64-PASS JACOBI at every inner-wall voxel");
+            std::printf("   (6) the fade is a SUSTAINED change: cascade 0's relight went round its owed box %d times in %d frames, the "
+                        "longest wait %d frames (the floor's bound: 2 x lightWorkFrames + 2 = %d)\n", fadeRounds, kFadeFrames,
+                        fadeRoundGap, fadeRoundBound);
+            CHECK(fadeRoundGap >= 0 && fadeRoundGap <= fadeRoundBound,
+                  "(6) A SUSTAINED CHANGE NEVER STARVES CASCADE 0: its relight rounds within the floor's bound");
             CHECK(fadeOk && travelInside * 1024.0 / kFadeFrames < 1.0 && travelBeyond * 1024.0 / kFadeFrames < 1.0 &&
                       travelBeyond > 0.01 && stepRest >= 0 && fadeRest >= 0,
                   "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
