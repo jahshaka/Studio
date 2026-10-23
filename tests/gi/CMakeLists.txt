@@ -293,7 +293,7 @@ jah_gpu_row(gi.card_residency CLASS engine COMMAND test_gi_card_residency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1157)
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1141)
 
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive

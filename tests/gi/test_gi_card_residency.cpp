@@ -11,8 +11,10 @@
 //   (1) THE READ FACES ARE RESIDENT AND NO UNREACHABLE ONE IS: at B, every pillar of room B holds cards in both runs, and
 //       no card of a wall's OUTER face (the face toward the outside of its room) was read within the window;
 //   (2) THE ATLAS MADE ROOM: the walk's demand (both rooms and the outer faces of the gap) exceeds the atlas and evicted
-//       the unread cards (the teleport's fits whole), and every card read within the readers' window in either run is
-//       resident in the other - walk = teleport on THE RESIDENT SET (the spec's acceptance);
+//       the unread cards (the teleport's fits whole), and every card READ AT B AT LEAST ONCE A FRAME in either run (the
+//       measuring arm's counts over the 30 frames after the arrival) is resident in the other - walk = teleport on THE
+//       RESIDENT SET (the spec's acceptance) down to the demand settle's law (GiQualityFacts::cardDemandSettleFrames:
+//       a face read less may arrive in one run and not the other - counted, printed);
 //   (3) THE VALUES, printed: every lit texel of every card resident in both runs against the other run's, in codes
 //       (1 % of its radiance per channel over the store's floor) past one step of the R11G11B10F store. NOT YET A LAW:
 //       the cascades' placements at one pose are path-dependent (the scroll's hysteresis: after the walk c1-c3 trail the
@@ -108,6 +110,9 @@ Room buildRoom(Scene *s, const Vec3 &c, bool crowded = false) {
 
 struct Run {
     std::vector<CardRadiance> cards;
+    /// each card's READ RATE at B over the 30 frames after the arrival (hits a frame, the measuring arm's counts), by
+    /// its node and card
+    std::map<std::pair<NodeId, unsigned>, double> rate;
     unsigned long long frame = 0ull, newest = 0ull, evicted = 0ull, admitted = 0ull, compaction = 0ull;
     unsigned pagesUsed = 0u;
     int restA = -1, restB = -1;
@@ -184,6 +189,23 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false) 
     } else {
         look(12.0f);
     }
+    // THE READ RATES AT B (the settle law's own quantity: GiQualityFacts::cardDemandSettleFrames catches every face
+    // read at least once a frame): the measuring arm's hit counts over the 30 frames after the arrival, while the readers
+    // run (they rest once the view holds)
+    {
+        std::vector<CardRadiance> c0, c1;
+        unsigned long long f0 = 0ull, f1 = 0ull;
+        scene->readCardRadiance(c0, f0);
+        run(30);
+        scene->readCardRadiance(c1, f1);
+        std::map<std::pair<NodeId, unsigned>, unsigned long long> h0;
+        for (const CardRadiance &k : c0) h0[{ k.node, k.card }] = k.hits;
+        for (const CardRadiance &k : c1) {
+            auto it = h0.find({ k.node, k.card });
+            const unsigned long long base = it != h0.end() && k.hits >= it->second ? it->second : 0ull;
+            out.rate[{ k.node, k.card }] = double(k.hits - base) / 30.0;
+        }
+    }
     out.restB = settle();
     const GiStatus g = scene->published().gi;
     out.evicted = g.cards.evicted;
@@ -211,6 +233,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(true);
+    e->setArm("cards.demandCount", 1.0);   // the readers' hits counted: the read rates (2) reads
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
@@ -257,15 +280,29 @@ int main()
     CHECK(pillarsW == 9u && pillarsT == 9u && outerRead == 0u,
           "(1) THE READ FACES ARE RESIDENT (every pillar of B carded) AND NO OUTER FACE WAS READ");
 
-    // (2) the read set resident in both
+    // (2) the read set resident in both: every card read at B at least once a frame (the settle law's floor) in either
+    //     run is resident in the other
     std::map<std::pair<int, unsigned>, const CardRadiance *> inW, inT;
     for (const CardRadiance &c : w.cards) if (idW.count(c.node)) inW[{ idW.at(c.node), c.card }] = &c;
     for (const CardRadiance &c : t.cards) if (idT.count(c.node)) inT[{ idT.at(c.node), c.card }] = &c;
-    size_t readW = 0, readT = 0, missW = 0, missT = 0;
-    for (const auto &kv : inW) if (readRecently(w, *kv.second)) { ++readW; missW += inT.count(kv.first) ? 0u : 1u; }
-    for (const auto &kv : inT) if (readRecently(t, *kv.second)) { ++readT; missT += inW.count(kv.first) ? 0u : 1u; }
-    std::printf("   the read set: walk %zu cards (%zu not resident in the teleport), teleport %zu (%zu not resident in "
-                "the walk)\n", readW, missW, readT, missT);
+    const auto rateOf = [](const Run &r, const CardRadiance &c) {
+        auto it = r.rate.find({ c.node, c.card });
+        return it != r.rate.end() ? it->second : 0.0;
+    };
+    size_t readW = 0, readT = 0, missW = 0, missT = 0, rareW = 0, rareT = 0;
+    for (const auto &kv : inW) {
+        const double rt = rateOf(w, *kv.second);
+        if (rt >= 1.0) { ++readW; missW += inT.count(kv.first) ? 0u : 1u; }
+        else if (!inT.count(kv.first) && readRecently(w, *kv.second)) ++rareW;
+    }
+    for (const auto &kv : inT) {
+        const double rt = rateOf(t, *kv.second);
+        if (rt >= 1.0) { ++readT; missT += inW.count(kv.first) ? 0u : 1u; }
+        else if (!inW.count(kv.first) && readRecently(t, *kv.second)) ++rareT;
+    }
+    std::printf("   the read set (read at B at least once a frame): walk %zu cards (%zu not resident in the teleport), "
+                "teleport %zu (%zu not resident in the walk) | read less, resident in one run only: walk %zu, teleport "
+                "%zu (the settle law's floor)\n", readW, missW, readT, missT, rareW, rareT);
     CHECK(w.evicted > 0u && readW > 0u && readT > 0u && missW == 0u && missT == 0u,
           "(2) THE ATLAS MADE ROOM (the walk's unread cards evicted) AND THE READ SET IS RESIDENT IN BOTH");
 
