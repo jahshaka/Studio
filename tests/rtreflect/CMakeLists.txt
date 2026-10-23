@@ -175,4 +175,14 @@ if(TARGET jahlab)
                 ${CMAKE_CURRENT_BINARY_DIR}/work/contact
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.contact PROPERTIES TIMEOUT 60 LABELS "engine")
+    # rtreflect.mirror_blend (PHOTON-7 stage 6, READ_B F2) - THE MIRROR TAKES THE COIN'S EXPECTATION: on photon-glass's
+    # mirror, seen from 3 m up at three poses of a slow pan (where the camera-reversal fade crosses one half inside it),
+    # the screen's share of the Both picture (Both - Rays) never steps from nothing to the whole screen-ray difference
+    # between neighbouring pixels away from the ray picture's edges; the base's fixed coin did, along a seam
+    # (mirror_blend.sh). 960x540; one jahlab session, 108 frames.
+    jah_gpu_row(rtreflect.mirror_blend CLASS engine FRAMES 108
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/mirror_blend
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.mirror_blend PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
