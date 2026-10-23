@@ -25,6 +25,8 @@
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
 #   (e) the held small lamp step is rtreflect.lamp_step_held's (lamp_step_held.sh).
+#   (g) the rest's cost: no frame's trace above THE MAX OVER THE TILE FRAMES (one full k-4 frame over every batching
+#       texel), the compact path's tail included.
 #   (f) the held picture against a 4,096-sample reference is a MEASUREMENT (the arm reflect.restReference: 4,300
 #       frames, over a row's minute), never this row's: spikes/photon-2/round2/r1.
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
@@ -109,6 +111,28 @@ if rows:
     mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
     print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
     if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
+    # (g) THE REST'S COST (the lead's bar, PHOTON-7 stage 6): no rest frame's trace costs more than one full TILE frame -
+    # THE MAX OVER THE TILE FRAMES (k 4 over every batching texel, the hand-over included; frame 5 alone was a proxy
+    # 2.5 % low: the residual's store begins at v = 2N, frames 14-15) - the compact path's tail included (its frames:
+    # from the first whose read-back active count is within the list's 16,384).
+    def traceMs(r):
+        for tok in r.get("gpu_rows", "").split(","):
+            if tok.startswith("rq.reflect.trace:"): return float(tok.split(":")[1])
+        return -1.0
+    rest = [(int(r["refl_rest_frames"]), traceMs(r), int(r["refl_rest_active"]) if r["refl_rest_active"] not in ("-", "") else -1)
+            for r in rows[restStart:end] if r["refl_rest_frames"] not in ("-", "")]
+    rest = [x for x in rest if x[0] >= 2 and x[1] > 0.0]
+    take = next((i for i, x in enumerate(rest) if 0 <= x[2] <= 16384), len(rest))
+    tile, tail = rest[:take], rest[take:]
+    if tile:
+        peak = max(x[1] for x in tile)
+        worst = max(tail, key=lambda x: x[1]) if tail else None
+        print("(g) the trace's GPU ms: the max over the %d tile frames %.3f; the compact path from rest frame %s, its max %s"
+              % (len(tile), peak, tail[0][0] if tail else "-", ("%.3f at rest frame %d" % (worst[1], worst[0])) if worst else "-"))
+        if worst and worst[1] > peak:
+            fails.append("(g) a tail frame's trace above the max over the tile frames: %.3f at rest frame %d > %.3f" % (worst[1], worst[0], peak))
+    else:
+        fails.append("(g) no tile frame timed (the trace's GPU row)")
 m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
 if not m:
     fails.append("(d) the path line is missing")
