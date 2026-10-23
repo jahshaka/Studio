@@ -10,8 +10,12 @@
 //   THE DOLLY: Epic, 1.4 m/s (0.0233 m a frame) down a 60 m floor with props, past the outermost cascade's step - cascade
 //     0's lag at most 4 frames (its 3 chunk frames and the commit's), every one of its scrolls committed; and EVERY
 //     cascade's lag within its own motion slack in frames (the outer cascades share the general slot: the read's W1).
-//   THE FLY: Epic, 0.25 m a frame over 15 m (about six of cascade 0's 2.578 m steps) - cascade 0's lag at most one step
-//     at that speed (10 frames), and it kept up (a scroll per step).
+//   THE FLY: Epic, 0.25 m a frame past the outermost cascade's step (at least 15 m: about six of cascade 0's 2.578 m
+//     steps) - cascade 0's lag at most one step at that speed (10 frames), and it kept up (a scroll per step); and EVERY
+//     cascade's lag against its own motion slack at that speed PRINTED, with the outer commits the one-writer rule can have
+//     held (PHOTON-7 stage 5, the lead's starvation question: measured 4 of 9 outer commits a frame after a cascade-0
+//     commit; c1 18 / c2 17 frames of lag against slacks of 0 / 3 frames - under their own counts 7 / 31, so no
+//     schedule meets the slack at fly speed: the general slot's sharing is the lag).
 // A fixture (the engine alone, one small offscreen view; the gather, the field and the reflection off).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -169,13 +173,34 @@ int main()
         e->waitForAsyncShaders();
         const GiStatus pre = scene->published().gi;
         const float v = 0.25f;
-        const int n = 60;
+        const int n = std::max(60, int(std::ceil(1.05f * pre.cascades.back().step / v)));
+        // THE COMMITS' FRAMES, per cascade: an outer commit landing the frame after a cascade-0 commit is the most the
+        // one-writer rule can have held (it holds an outer commit only on a frame cascade 0's slot commits or rebuilds)
+        std::vector<unsigned long long> last(pre.cascades.size());
+        for (size_t i = 0; i < last.size(); ++i) last[i] = pre.cascades[i].scrolls;
+        std::vector<std::vector<int>> commits(pre.cascades.size());
+        const auto noteCommits = [&](int f) {
+            const GiStatus g = scene->published().gi;
+            for (size_t i = 0; i < g.cascades.size() && i < last.size(); ++i) {
+                if (g.cascades[i].scrolls != last[i]) commits[i].push_back(f);
+                last[i] = g.cascades[i].scrolls;
+            }
+        };
         for (int f = 0; f < n; ++f) {
             look(Vec3(cam.x + v, cam.y, cam.z));
             run(1);
+            noteCommits(f);
         }
-        run(6);
+        for (int f = n; f < n + 6; ++f) { run(1); noteCommits(f); }
         const GiStatus post = scene->published().gi;
+        unsigned held = 0, outerCommits = 0;
+        for (size_t i = 1; i < commits.size(); ++i)
+            for (int f : commits[i]) {
+                ++outerCommits;
+                held += std::find(commits[0].begin(), commits[0].end(), f - 1) != commits[0].end() ? 1u : 0u;
+            }
+        std::printf("   the outer commits: %u, of them landing the frame after a cascade-0 commit (the most the one-writer "
+                    "rule can have held): %u; cascade 0 committed %zu times\n", outerCommits, held, commits[0].size());
         const float step0 = post.cascades[0].step;
         const unsigned long long bar = (unsigned long long)std::floor(step0 / v);
         std::printf("   %d frames, %.2f m (cascade 0's step %.3f m = %llu frames); per cascade: scrolls, lag last / max\n",
@@ -187,6 +212,26 @@ int main()
         CHECK(post.cascades[0].scrolls - pre.cascades[0].scrolls + 1u >= steps,
               "cascade 0 kept up: a scroll per step of the fly");
         CHECK(post.cascades[0].lagMax <= bar, "CASCADE 0'S LAG AT 0.25 m A FRAME IS AT MOST ONE STEP");
+        bool allScrolled = true, allWithin = true;
+        for (size_t i = 0; i < post.cascades.size(); ++i) {
+            const GiStatus::CascadeStatus &cs = post.cascades[i];
+            GiParams::GiCascadeDesc d;
+            d.halfSize = cs.halfSize;
+            d.resolution = cs.resolution;
+            d.stepCells = cs.step / cs.cell;
+            const double slack = double(giCascadeGuaranteedRadius(d) - giNearFieldRadius(d));
+            const unsigned long long slackFrames = (unsigned long long)std::floor(slack / double(v));
+            const bool scrolled = cs.scrolls > pre.cascades[i].scrolls;
+            std::printf("     c%zu  lag max %llu of its slack's %llu frames at 0.25 m a frame (%.3f m)%s\n", i, cs.lagMax,
+                        slackFrames, slack, scrolled ? "" : "  <- never scrolled");
+            allScrolled = allScrolled && scrolled;
+            allWithin = allWithin && cs.lagMax <= slackFrames;
+        }
+        CHECK(allScrolled, "every cascade scrolled on the fly");
+        // (PRINTED, NOT A BAR: at 0.25 m a frame the slack of cascades 0-2 is 0-3 frames, under each one's own chunk count
+        // - a walking-speed derivation, giCascadeScrollFrames - so no schedule meets it; the one-writer rule's share of the
+        // outer lags is the commits counted above)
+        std::printf("   every cascade within its slack at 0.25 m a frame: %s\n", allWithin ? "yes" : "no");
     }
 
     GiParams off;
