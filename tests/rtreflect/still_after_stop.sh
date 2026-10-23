@@ -16,10 +16,11 @@
 #       its frames - a burst of any length is a rise). (Its "<= 0.05 codes from frame 17" is DELETED, the lead's ruling:
 #       a moving estimate holds <= 12 samples, so the rest's refinement must move the mean by up to its SE, ~sigma /
 #       sqrt 12 - no honest estimator reaches 0.05 at frame 17; it read 0.30 on the base.)
-#   (b') the HOLD reached inside the window, from it on the glossy panes and the mirror change 0 codes, and at the hold
-#       NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its DISPLAYED standard error - the filter's
-#       rest taps combined, in display codes - so every live texel's is under one code at the hold, the stop's own
-#       guarantee; a capped one stopped at its count's ceiling instead);
+#   (b') the HOLD - no texel left converging (the door's refl_held: the rest's active count 0, never the picture's
+#       stationarity) - reached inside the window, from it on the glossy panes and the mirror change 0 codes, and at the
+#       hold NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its own standard error within its
+#       share of the one-code display budget, sqrt( n_eff ) codes at its pixel - so the displayed SE is under one code
+#       where the neighbours' n_eff match, the stop's own guarantee; a capped one stopped at its count's ceiling);
 #   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
