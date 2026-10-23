@@ -138,6 +138,15 @@ if(TARGET jahlab)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world PROPERTIES TIMEOUT 60 LABELS "engine")
+    # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
+    # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
+    # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
+    # share <= 1 % (lag_law.sh; SE_walk through the door: the arm reflect.historyReadback's moving SE). 960x540; three
+    # jahlab sessions: 6 + 709 + 4,240 frames.
+    jah_gpu_row(rtreflect.lag_law CLASS engine TOKENS 8 FRAMES 4955
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lag_law PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
