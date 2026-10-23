@@ -223,6 +223,30 @@ set_tests_properties(gi.scroll_lag PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 363)
 
+# gi.changed_regions (PHOTON-7 stage 3, AB S1; L2) — ONE CHANGED-REGION LIST A FRAME SAYS WHERE THE WORLD CHANGED: a
+# settled scene lists nothing for 600 frames; a lamp step lists exactly its old sphere joined with its new; a mover its
+# swept box, its sun shadow (the box and the header's direction) and its lamp's sphere; a script move its old and new
+# box and a material edit its wearer's box, re-voxelising only the cascades that hold it (A19 deleted); a sun change is
+# the sun's overflow and a > 4x sun or sky step restarts; 129 movers merge at the cap and never overflow; a scroll's
+# commit lists its injection boxes (test_gi_changed_regions.cpp says the laws). A fixture.
+add_executable(test_gi_changed_regions test_gi_changed_regions.cpp)
+set_target_properties(test_gi_changed_regions PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_changed_regions PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_changed_regions PRIVATE JahshakaEngine)
+add_dependencies(test_gi_changed_regions JahshakaEngineMedia)
+jah_gpu_row(gi.changed_regions CLASS engine COMMAND test_gi_changed_regions
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1059)
+
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
 # in the box being built, two chained scrolls and a live-box edit, a torn shift (and its twice-failed repair) each leave

@@ -92,6 +92,8 @@ private:
     /// THE GI DOORS (PHOTON-7 stage 1): the placement pin and one cascade's voxels by world cell.
     bool pin(const Command &c);
     bool voxels(const Command &c);
+    /// THE CHANGED-REGION LIST (PHOTON-7 stage 3): the last frame's, printed.
+    bool regions(const Command &c);
     void nameEngineNodes();
     double msSinceStart() const;
 

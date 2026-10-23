@@ -64,6 +64,7 @@ gi.directional_seam 7.11  solo, the card lock held, :71, warm (PHOTON-7 stage 1'
 gi.shell_ends 2.75  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F1, 2026-10-23: the four desktop tiers' chains, every cascade's shell list)
 gi.scroll_slab 5.68  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: restored and re-pointed; a two-cascade 64-cell chain, the scratch's arms, the commit's light (G), the Epic VRAM read; the spread a frame count)
 gi.scroll_lag 2.97  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: the tiers' scroll counts, an Epic 1.4 m/s dolly and a 0.25 m/frame fly, cascade 0's lag)
+gi.changed_regions 2.24  solo, the card lock held, :74, warm (PHOTON-7 stage 3, 2026-10-23: the changed-region list - a still scene for 600 frames, a lamp step, a mover, a script move and a material edit, the sun and the sky, 129 movers at the cap, a scroll's commit)
 gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; jahlab on photon-room, 960x540, two sessions)
 gi.hold_after_stop 28.47  solo, the card lock held, :71, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions)
 gi.light_is_world 31.52  solo, the card lock held, :68, warm (PHOTON-7 stage 1, 2026-10-23; jahlab on photon-shells and photon-roof, 960x540, two sessions)

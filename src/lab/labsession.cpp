@@ -865,6 +865,8 @@ bool Session::exec(const Command &c)
         ok = pin(c);
     } else if (c.verb == "voxels") {
         ok = voxels(c);
+    } else if (c.verb == "regions") {
+        ok = regions(c);
     } else if (c.verb == "help") {
         std::printf("%s", helpText().c_str());
     } else if (c.verb == "echo") {
@@ -1146,6 +1148,29 @@ bool Session::pin(const Command &c)
     frame();
     std::printf("LAB PIN %s at %.4f,%.4f,%.4f%s\n", c.args[0].c_str(), p.x(), p.y(), p.z(),
                 scroll ? " (the scroll path)" : " (whole rebuilds)");
+    return true;
+}
+
+bool Session::regions(const Command &c)
+{
+    using namespace jahshaka::engine;
+    const bool boxes = !c.args.empty() && c.args[0] == "boxes";
+    if (!c.args.empty() && !boxes) { std::printf("LAB REFUSED regions: '%s' (boxes)\n", c.args[0].c_str()); return false; }
+    GiChangedRegions r;
+    if (!mScene->giChangedRegions(r)) { std::printf("LAB REGIONS FAILED: no list has closed (no frame drew the scene)\n"); return false; }
+    static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp" };
+    unsigned per[kGiRegionKindCount] = {};
+    for (const GiChangedRegion &g : r.regions)
+        if (unsigned(g.kind) < kGiRegionKindCount) ++per[unsigned(g.kind)];
+    std::printf("LAB REGIONS frame %llu count %zu", r.frame, r.regions.size());
+    for (unsigned k = 1; k < kGiRegionKindCount; ++k) std::printf(" %s %u", kKinds[k], per[k]);
+    std::printf(" overflow %u restart %d merges %u sun %d toSun %.4f,%.4f,%.4f\n", r.overflow, int(r.restart), r.merges,
+                int(r.sun), double(r.toSun.x), double(r.toSun.y), double(r.toSun.z));
+    if (boxes)
+        for (const GiChangedRegion &g : r.regions)
+            std::printf("LAB REGION %s %.4f,%.4f,%.4f %.4f,%.4f,%.4f cascades 0x%x\n",
+                        unsigned(g.kind) < kGiRegionKindCount ? kKinds[unsigned(g.kind)] : "?", double(g.lo.x), double(g.lo.y),
+                        double(g.lo.z), double(g.hi.x), double(g.hi.y), double(g.hi.z), g.cascadeMask);
     return true;
 }
 

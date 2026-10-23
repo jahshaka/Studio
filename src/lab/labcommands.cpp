@@ -58,6 +58,11 @@ const std::vector<VerbDoc> &verbs()
           "line (cascade, kind, res, origin, cell, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
           "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
+        { "regions", "regions [boxes]", 0, 1,
+          "THE CHANGED-REGION LIST (PHOTON-7 stage 3; Scene::giChangedRegions) as the last frame closed it: its frame, "
+          "its regions per kind (Slab, Card, Edit, Mover, MoverShadow, LampShadow, Lamp), its overflow bits (1 the sun, 2 "
+          "the sky, 4 a change with no box), the restart flag, the merges at the 128-box cap and the sun's direction; "
+          "`boxes` adds one LAB REGION line per region (kind, world lo, hi, cascade mask). No frame is drawn" },
         { "lights", "lights", 0, 0,
           "every light of the document: its name, type, WORLD position, intensity, range and source radius (one LAB LIGHT "
           "line each) - where a lamp is, for a pin or a camera (PHOTON-7 stage 1's Bistro read)" },
