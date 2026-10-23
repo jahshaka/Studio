@@ -158,9 +158,10 @@ set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
-# gi.directional_seam (PHOTON-7 stage 1, AB A11) — THE PACKED HALVES OF A DIRECTIONAL VOLUME DO NOT BLEED INTO EACH OTHER:
-# the ray hit's directional read of a uniformly lit floor a quarter texel from either x face of every cascade equals the
-# box's middle (test_gi_seam.cpp says the law; red on the base at the -x face). A fixture, the High chain.
+# gi.directional_seam (PHOTON-7 stage 1, AB A11; stage 1's read F2) — THE PACKED HALVES OF A DIRECTIONAL VOLUME DO NOT
+# BLEED INTO EACH OTHER, AT ANY LEVEL: the hit read at either x face of every cascade, the first half's +x face at levels
+# 0 / 0.5 / last / past it, the read past the last level, and a fractional level at a face under a roofed strip
+# (test_gi_seam.cpp says the laws; (3) and (4) red on stage 1's tip). A fixture, the High chain.
 add_executable(test_gi_seam test_gi_seam.cpp)
 set_target_properties(test_gi_seam PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -177,7 +178,8 @@ jah_gpu_row(gi.directional_seam CLASS engine COMMAND test_gi_seam
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.directional_seam PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 26)
+# THE FRAMES: 24 to the chain's rest, 3 to cascade 0's rebuild under the roof (measured), 12 after it, 2 at the end
+set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 41)
 
 # gi.shell_ends (PHOTON-7 stage 1's read F1) — EVERY CASCADE MARCHES THE WORLD CHAIN'S SHELLS: at the four desktop tiers
 # every cascade's shell list (GiStatus::CascadeStatus::shellEnds) equals sum 8 x cell_i over the chain (test_gi_shells.cpp
