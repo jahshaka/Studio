@@ -34,6 +34,14 @@
 //       x 5.5 .. 9.5 m stand outside cascade 0's box and inside cascade 1's. Each of them reads the floor's light (a
 //       march that did not start in cascade 1 reads nothing: there is nothing else to read); PRINTED: their mean
 //       against the same probes integrated once the eye's move to x = 8 m has placed cascade 0 over them.
+//   (6) THE CONE SHELLS (PHOTON-7 stage 5: a narrow cone - a probe's ray, aperture 0 - hands over on world shells, never
+//       at its cascade's box face): a fifth fixture, a thin plate (0.1 m: under one cascade-1 cell, which holds it at a
+//       part coverage) at x = 8 m between a lamp-lit wall beyond it and the field's probes at x 9.0 .. 9.67 m (1.0 to 1.67
+//       m from it: inside cascade 1's shell [D_0, D_1) = [0.625, 1.875) m at High, outside cascade 0's), the window
+//       pinned; cascade 0 PINNED at two placements, both holding every such probe's cascade-0 shell (D_0 plus two cells
+//       inside the box) - A's box holding the plate, B's face (8.2 m) between the plate and the probes - and the outer
+//       cascades pinned alike. Every such probe within ONE CODE of itself across the two placements. RED with the cone
+//       ending at its box: A's rays read the plate in cascade 0 (opaque), B's in cascade 1 (part covered).
 // THE MARKS' VISIBILITY (Jahshaka/FieldAccumulate: the probe's depth moments - each ray's march's end, the support of
 // its radiance - bound the share of its rays a moved box can reach) is what (3) and (4) read.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
@@ -513,6 +521,99 @@ int main()
               "(5) A PROBE CASCADE 0 DOES NOT HOLD STARTS ITS MARCH IN CASCADE 1: every one over the lit floor reads its light");
         s5->setGiPlacementPin(GiPlacementPin());
         s5->setGlobalIllumination(off);
+        run(2);
+    }
+
+    // (6) THE CONE SHELLS: one probe set, two placements of cascade 0
+    {
+        View *v6 = e->createOffscreenView("field_oracle_shells", 128, 128, Colour(0, 0, 0));
+        Scene *s6 = e->createScene("field_oracle_shells");
+        if (!v6 || !s6) { std::printf("FAIL: the shells view/scene\n"); return 1; }
+        v6->setScene(s6);
+        s6->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        enginetest::leakroom::addSlab(s6, Colour(0.6f, 0.6f, 0.6f), Vec3(0, -0.1f, 0), Vec3(40.0f, 0.2f, 40.0f));
+        enginetest::leakroom::addSlab(s6, Colour(0.6f, 0.6f, 0.6f), Vec3(8.0f, 2.0f, 0.0f), Vec3(0.1f, 4.0f, 10.0f));   // the plate
+        enginetest::leakroom::addSlab(s6, Colour(0.8f, 0.8f, 0.8f), Vec3(5.0f, 2.0f, 0.0f), Vec3(0.4f, 4.0f, 10.0f));   // the lit wall
+        const NodeId lamp6 = s6->createNode();
+        s6->setNodeTransform(lamp6, Vec3(6.5f, 2.0f, 0.0f), Quat(), Vec3(1, 1, 1));
+        LightDesc l6;
+        l6.type = LightType::Point;
+        l6.colour = Colour(1.0f, 1.0f, 1.0f);
+        l6.intensity = 20.0f;
+        l6.range = 3.0f;
+        l6.castShadows = true;
+        s6->setLight(lamp6, l6);
+        enginetest::testCameraLookAt(v6, Vec3(9.5f, 1.0f, 0.0f), Vec3(8.5f, 1.0f, 0.0f));
+        const auto settle6 = [&]() {
+            int quiet = 0, f = 0;
+            for (; f < 1500 && quiet < 30; ++f) {
+                run(1);
+                quiet = s6->published().gi.giAtRest ? quiet + 1 : 0;
+            }
+            return quiet >= 30 ? f - quiet : -1;
+        };
+        // one placement: the chain rebuilt WHOLE at the pinned cameras (cascade 0's given, the outer ones at 9.5 m),
+        // the window pinned over x [6, 16]
+        const auto placeAt = [&](float c0x, Probes &out, GiStatus &st) {
+            GiPlacementPin pin;
+            pin.on = true;
+            pin.field = true;
+            pin.fieldOrigin = Vec3(6.0f, -2.0f, -5.0f);
+            pin.cascadeBuiltCam = { Vec3(c0x, 1.0f, 0.0f), Vec3(9.5f, 1.0f, 0.0f), Vec3(9.5f, 1.0f, 0.0f),
+                                    Vec3(9.5f, 1.0f, 0.0f), Vec3(9.5f, 1.0f, 0.0f), Vec3(9.5f, 1.0f, 0.0f) };
+            s6->setGiPlacementPin(pin);
+            s6->setGlobalIllumination(off);
+            run(2);
+            if (!s6->setGlobalIllumination(gi)) return -1;
+            e->waitForAsyncShaders();
+            const int rest = settle6();
+            st = s6->published().gi;
+            return readProbes(s6, out) ? rest : -1;
+        };
+        Probes pa, pb;
+        GiStatus sa, sb;
+        const int restA = placeAt(9.5f, pa, sa);    // cascade 0 [4.5, 14.5]: it holds the plate
+        const int restB = placeAt(13.2f, pb, sb);   // cascade 0 [8.2, 18.2]: its face between the plate and the probes
+        std::vector<unsigned> set6;
+        double c0aLo = 0.0, c0bLo = 0.0;
+        const bool placed6 = restA >= 0 && restB >= 0 && sa.cascades.size() >= 2u && sb.cascades.size() >= 2u &&
+                             pa.count == pb.count && pa.count > 0u;
+        if (placed6) {
+            c0aLo = double(sa.cascades[0].centre.x) - double(sa.cascades[0].halfSize);
+            c0bLo = double(sb.cascades[0].centre.x) - double(sb.cascades[0].halfSize);
+            const double cell0 = double(sb.cascades[0].cell), d0 = 8.0 * cell0;
+            const double sz[3] = { double(sb.ifdMax.x - sb.ifdMin.x), double(sb.ifdMax.y - sb.ifdMin.y),
+                                   double(sb.ifdMax.z - sb.ifdMin.z) };
+            const double lo[3] = { double(sb.ifdMin.x), double(sb.ifdMin.y), double(sb.ifdMin.z) };
+            for (unsigned p = 0; p < pb.count; ++p) {
+                const unsigned slot[3] = { p % pb.dims[0], (p / pb.dims[0]) % pb.dims[1], p / (pb.dims[0] * pb.dims[1]) };
+                double w[3];
+                for (int a = 0; a < 3; ++a) {
+                    const unsigned i = (slot[a] + pb.dims[a] - pb.offset[a]) % pb.dims[a];
+                    const double n = double(pb.dims[a]), block = sz[a] / n, sp = (sz[a] + 2.0 * block) / n;
+                    w[a] = lo[a] - block + double(i) * sp;
+                }
+                // band-free in both placements (cascade 0's shell D_0 plus two cells inside both boxes, the plate in
+                // cascade 1's shell), over the floor, away from the plate's ends
+                if (w[0] - std::max(c0aLo, c0bLo) >= d0 + 2.0 * cell0 && w[0] <= 8.0 + 1.875 - 0.2 && w[1] > 0.5 &&
+                    w[1] < 3.0 && std::fabs(w[2]) < 3.0)
+                    set6.push_back(p);
+            }
+        }
+        double worst6 = 0.0;
+        size_t over6 = 0;
+        for (unsigned p : set6) {
+            const double c = probeCodes(pb, pa, p);
+            worst6 = std::max(worst6, c);
+            over6 += c > 1.0 ? 1u : 0u;
+        }
+        std::printf("   (6) the cone shells: cascade 0 from x %.2f (A) and %.2f (B) m, at rest in %d / %d frames | %zu probes "
+                    "band-free in both, 1.0 .. 1.67 m from the plate: worst %.3f codes, %zu over one\n", c0aLo, c0bLo,
+                    restA, restB, set6.size(), worst6, over6);
+        CHECK(placed6 && !set6.empty() && over6 == 0u,
+              "(6) A PROBE'S RAY HANDS OVER ON WORLD SHELLS: every band-free probe within one code across two placements");
+        s6->setGiPlacementPin(GiPlacementPin());
+        s6->setGlobalIllumination(off);
         run(2);
     }
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
