@@ -64,7 +64,7 @@ static GiParams chainGi()
     gi.gather = GiToggle::Off;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     return gi;
@@ -251,13 +251,20 @@ int main()
     };
     GiVoxelVolume scrolled, built;
     // THE DIRECTIONAL CHECK, a lambda run on G's one-axis commit (A's three-axis pass region is the whole cube).
-    const auto directionalIsRegenerated = [&](const GiVoxelVolume &v) {
+    const auto directionalIsRegenerated = [&]() {
         // ---- D. THE DIRECTIONAL LEVELS ARE THE LEVEL-0 LIGHT'S (PHOTON-7 stage 2's read D1) ----------------------
         // Every cone past level 0 reads the directional volumes, and step 0 / step 1 make them from the level-0 light
         // alone - so after a commit they must equal, float for float and at every level, a WHOLE regeneration from the
         // same level 0 (the door gi.regenerateDirectional: nothing else is written). A commit that regenerated them over
         // its boxes only left the kept interior's texels where the shift moved the light away from them (red at
         // 52064e7a3: a step's displacement, growing a step a commit).
+        // THE FEEDBACK AT REST FIRST (PHOTON-7 stage 4): its passes move level 0 and regenerate the levels over the bricks
+        // they ran, so the comparison is made where nothing moves - every level must still be a whole regeneration of
+        // level 0 (a kept interior holding a displaced texel is never a brick the feedback runs, so it still shows).
+        for (int f = 0; f < 600 && scene->published().gi.cascades[0].feedbackOwed; ++f) run(1);
+        CHECK(!scene->published().gi.cascades[0].feedbackOwed, "D: cascade 0's feedback comes to rest after the commit");
+        GiVoxelVolume v;
+        CHECK(scene->giVoxelVolume(0, v), "D: the store at rest reads back");
         {
             GiVoxelVolume regen;
             e->setArm("gi.regenerateDirectional", 0.0);
@@ -558,13 +565,14 @@ int main()
     }
 
     // ---- G. what is lit at a commit (PHOTON-7 stage 2) --------------------------------------------
-    std::printf("\n== G: the commit's light - the direct as a delta, the passes over the slab's reach ==\n");
+    std::printf("\n== G: the commit's light - the direct as a delta, the feedback over the bricks it changed ==\n");
     {
-        // NOTHING OF THE CHAIN IN FLIGHT (an outer commit re-injects cascade 0 too) AND THE LAST COMMIT'S COUNT LANDED
-        // (read back a few frames late): the counts below are this step's commit's alone.
+        // NOTHING OF THE CHAIN IN FLIGHT (an outer commit re-injects cascade 0 too), THE FEEDBACK AT REST (PHOTON-7 stage
+        // 4: no brick still converging) AND THE LAST COMMIT'S COUNT LANDED (read back a few frames late): the counts and
+        // the store's changes below are this step's commit's alone.
         const auto chainBusy = [&]() {
             for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
-                if (cs.pending || cs.scrolling) return true;
+                if (cs.pending || cs.scrolling || cs.feedbackOwed) return true;
             return false;
         };
         for (int round = 0; round < 4; ++round) {
@@ -588,19 +596,31 @@ int main()
         look(target);
         const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         CHECK(scene->giVoxelVolume(0, after), "the store after the commit reads back");
-        directionalIsRegenerated(after);   // D, on this one-axis commit
         run(4);   // the commit's count lands (read back a few frames late)
         const GiStatus post = scene->published().gi;
         const int res = after.width;
         const int sx = int(std::lround((after.origin[0] - before.origin[0]) / after.cell[0]));
         const int sy = int(std::lround((after.origin[1] - before.origin[1]) / after.cell[1]));
         const int sz = int(std::lround((after.origin[2] - before.origin[2]) / after.cell[2]));
-        // THE PASS REGION the engine re-solves (PhotonComponent::planScroll): the slab's box dilated by cascade 0's bounce
-        // reach - 2^(maxLod + 1) + 1 cells, maxLod = log2 of the next cascade's cell over this one's - aligned out to 8.
-        const double ratio = double(post.cascades[1].cell) / double(post.cascades[0].cell);
-        const int reach = int(std::ceil(std::exp2(std::log2(ratio) + 1.0))) + 1;
-        const int slabLo = sx > 0 ? res - sx : 0, slabHi = sx > 0 ? res : -sx;
-        const int regLo = std::max(0, slabLo - reach) / 8 * 8, regHi = std::min(res, (slabHi + reach + 7) / 8 * 8);
+        // THE BRICKS THE COMMIT ACTIVATED (PHOTON-7 stage 4): the feedback's pass of the commit's frame runs over the 8^3
+        // bricks the shift brought in (the slab's) and those holding a voxel whose direct term changed (the mask's word
+        // 0) - every other brick is stopped, and its voxels keep their bits (a resume takes effect the next frame).
+        const int bres = (res + 7) / 8;
+        std::vector<char> activeBrick(size_t(bres) * bres * bres, 0);
+        const auto brickOf = [&](int x, int y, int z) { return (size_t(z >> 3) * bres + (y >> 3)) * bres + (x >> 3); };
+        for (int z = 0; z < res; ++z)
+            for (int y = 0; y < res; ++y)
+                for (int x = 0; x < res; ++x) {
+                    const size_t ia = (size_t(z) * res + y) * res + x;
+                    const int ox = x + sx, oy = y + sy, oz = z + sz;
+                    if (!(ox >= 0 && ox < res && oy >= 0 && oy < res && oz >= 0 && oz < res)) { activeBrick[brickOf(x, y, z)] = 1; continue; }
+                    const size_t ib = (size_t(oz) * res + oy) * res + ox;
+                    if (std::memcmp(&after.direct[ia * 4], &before.direct[ib * 4], 16) != 0 ||
+                        std::memcmp(&after.directBack[ia * 4], &before.directBack[ib * 4], 16) != 0)
+                        activeBrick[brickOf(x, y, z)] = 1;
+                }
+        size_t activeBricks = 0;
+        for (char a : activeBrick) activeBricks += a ? 1u : 0u;
         size_t kept = 0, unchangedKept = 0, unchangedOutside = 0, violations = 0, bandAll = 0, slabLit = 0;
         int bandXLo = res, bandXHi = 0;   // the band's extent on the moved axis
         for (int z = 0; z < res; ++z)
@@ -628,7 +648,7 @@ int main()
                         continue;
                     }
                     ++unchangedKept;
-                    if (x >= regLo && x < regHi) continue;   // inside the pass region: re-solved by design
+                    if (activeBrick[brickOf(x, y, z)]) continue;   // a brick the feedback ran: re-solved by design
                     ++unchangedOutside;
                     if (std::memcmp(&after.light[ia * 4], &before.light[ib * 4], 16) != 0 ||
                         std::memcmp(&after.lightBack[ia * 4], &before.lightBack[ib * 4], 16) != 0)
@@ -637,34 +657,37 @@ int main()
         const unsigned long long litSlab = post.cascades[0].commitLitSlab - pre.cascades[0].commitLitSlab;
         const unsigned long long litBand = post.cascades[0].commitLitBand - pre.cascades[0].commitLitBand;
         const unsigned long long counted = post.cascades[0].commitCounted - pre.cascades[0].commitCounted;
-        const unsigned long long region = post.cascades[0].commitRegionCells - pre.cascades[0].commitRegionCells;
         const unsigned long long computed = post.cascades[0].commitInjectCells - pre.cascades[0].commitInjectCells;
+        const unsigned long long marched = post.cascades[0].deltaMarched - pre.cascades[0].deltaMarched;
         const unsigned long long whole = (unsigned long long)res * res * res;
-        std::printf("   committed after %d frame(s), shift (%d, %d, %d); the pass region x [%d, %d) (reach %d cells); the "
-                    "outer cascades' scrolls", n, sx, sy, sz, regLo, regHi, reach);
+        std::printf("   committed after %d frame(s), shift (%d, %d, %d); the bricks the commit activated %zu of %d; the "
+                    "outer cascades' scrolls", n, sx, sy, sz, activeBricks, bres * bres * bres);
         bool outerScrolled = false;
         for (size_t k = 1; k < post.cascades.size(); ++k) {
             std::printf(" +%llu", post.cascades[k].scrolls - pre.cascades[k].scrolls);
             outerScrolled = outerScrolled || post.cascades[k].scrolls != pre.cascades[k].scrolls;
         }
         std::printf("\n");
-        std::printf("   kept %zu voxels: %zu with both sides' direct unchanged (%zu outside the pass region: %zu changed "
-                    "their total or back), %zu with a changed one (the band, x [%d, %d))\n", kept, unchangedKept,
+        std::printf("   kept %zu voxels: %zu with both sides' direct unchanged (%zu outside the activated bricks: %zu "
+                    "changed their total or back), %zu with a changed one (the band, x [%d, %d))\n", kept, unchangedKept,
                     unchangedOutside, violations, bandAll, bandXLo, bandXHi);
         std::printf("   THE WORK: lit %llu in the slab (the store's own: %zu lit slab voxels) + %llu outside it (the store's "
-                    "band %zu) = %llu of %llu voxels (%.2f %%); the direct computed over %llu (%.1f %%); one pass covered "
-                    "%llu (%.1f %%); counted %llu commit(s)\n",
+                    "band %zu) = %llu of %llu voxels (%.2f %%); the direct computed over %llu (%.1f %%), MARCHED %llu (the "
+                    "door's read-back); counted %llu commit(s)\n",
                     litSlab, slabLit, litBand, bandAll, litSlab + litBand, whole,
                     100.0 * double(litSlab + litBand) / double(whole), computed, 100.0 * double(computed) / double(whole),
-                    region, 100.0 * double(region) / double(whole), counted);
+                    marched, counted);
         CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u && sx != 0, "the step committed as a scroll");
         CHECK(unchangedOutside > 0 && violations == 0,
-              "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its total and back (outside the pass region)");
+              "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its total and back (outside the bricks the commit "
+              "activated: the feedback ran nowhere else)");
         CHECK(!outerScrolled, "only cascade 0 scrolled (its counts are its own commit's)");
         CHECK(counted == 1u && litBand == bandAll && litSlab == slabLit,
               "THE WORK LAW, counted by the door: the voxels lit are the slab's lit voxels plus the changed direct set");
-        CHECK(litSlab + litBand < whole / 2u && region < whole && computed < whole,
-              "...a fraction of the cascade, computed and re-solved over regions (the old commit lit it whole)");
+        CHECK(litSlab + litBand < whole / 2u && computed < whole && marched == computed,
+              "...a fraction of the cascade, computed over its boxes - and the door's MARCHES are exactly those cells "
+              "(the old commit lit it whole)");
+        directionalIsRegenerated();   // D, on this one-axis commit (at the feedback's rest)
         scene->setGiPlacementPin(GiPlacementPin());
         rebuildWhole();
         GiVoxelVolume built;

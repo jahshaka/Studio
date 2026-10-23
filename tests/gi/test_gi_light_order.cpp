@@ -55,7 +55,7 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.cascadeCount = 2;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 5.0f, 128, 0.0f };
     gi.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f, 64, 0.0f };

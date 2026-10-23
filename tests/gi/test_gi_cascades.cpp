@@ -100,7 +100,7 @@ static GiParams cascadeGi()
     gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;          // no probe work; this suite is about the voxels
     return gi;
@@ -1392,7 +1392,7 @@ int main()
             };
             std::vector<unsigned long long> before = perCascade();
             const unsigned long long fullBefore = scene->published().gi.cascadeFullRebuilds;
-            const long long settlesBefore = scene->published().gi.chainSettles;
+            const unsigned long long restsBefore = scene->published().gi.feedbackRests;
 
             // THE MOVEMENT: every mover moves every frame, by more than the
             // scan's quantisation, for 24 frames.
@@ -1419,17 +1419,10 @@ int main()
             CHECK(outerRebuilds > 0ull,
                   "...while the cascade that CAN see them follows them");
 
-            // ...AND THE MERGED BOXES' REBUILDS ARE SETTLED FOR, AT REST
-            // (LAMPREST-3's incremental settle, composed with this lane's
-            // merge). A cascade rebuild injects one cascade once, over the
-            // radiance it held where it used to stand, so the chain owes an
-            // at-rest injection afterwards — paid on the first frame the
-            // rebuild queue is empty. F14's merge RAISES that debt (it turns
-            // "the whole chain, one cascade per frame, for ever" into real
-            // rebuilds of the cascade that can see the movers), so the two
-            // belong in one assertion: the debt must actually be paid once the
-            // gesture ends, not carried.
-            const long long settlesAtStop = scene->published().gi.chainSettles;
+            // ...AND THE MERGED BOXES' REBUILDS' LIGHT CONVERGES, AT REST (PHOTON-7 stage 4: the feedback). A rebuild's
+            // bricks resume and converge a pass a frame; once the movement stops the chain's feedback comes to rest -
+            // the debt is paid, not carried (it replaced LAMPREST-3's post-rebuild settle).
+            const unsigned long long restsAtStop = scene->published().gi.feedbackRests;
             // At rest: nothing at all.
             render(e, 4);
             before = perCascade();
@@ -1439,13 +1432,13 @@ int main()
             for (size_t i = 0; i < during.size(); ++i) atRest += during[i] - before[i];
             std::printf("   30 frames after they stop: %llu cascade rebuilds\n", atRest);
             CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
-            const long long settlesAfter = scene->published().gi.chainSettles;
-            std::printf("   chain settles: %lld before the movement, %lld at the stop, %lld "
-                        "after the rest\n", settlesBefore, settlesAtStop, settlesAfter);
-            CHECK(settlesAfter > settlesAtStop,
-                  "the rebuilds the merged dirty boxes caused ARE settled for once the "
-                  "movement stops (LAMPREST-3's post-rebuild injection, paid from the "
-                  "scheduler's own slot)");
+            const unsigned long long restsAfter = scene->published().gi.feedbackRests;
+            const bool owedAfter = scene->published().gi.feedbackOwed;
+            std::printf("   the feedback's rests: %llu before the movement, %llu at the stop, %llu after the rest (owed "
+                        "%d)\n", restsBefore, restsAtStop, restsAfter, int(owedAfter));
+            CHECK(restsAfter > restsAtStop && !owedAfter,
+                  "the light of the rebuilds the merged dirty boxes caused CONVERGES once the movement stops (the "
+                  "feedback comes to rest and owes nothing)");
 
             for (NodeId m : movers) scene->removeNode(m);
             render(e, 6);

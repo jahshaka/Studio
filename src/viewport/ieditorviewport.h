@@ -879,10 +879,10 @@ public:
         /// Frames a scroll's commit waited for its shader from the background compiler (GiStatus): 0 in a scene that
         /// compiles in the frame (the selftest asserts it).
         quint64 cascadeCommitShaderWaits = 0;
-        /// Post-rebuild chain settles (LAMPREST-3): how many at-rest injections
-        /// the cascade scheduler has run because a rebuild left the chain one
-        /// Jacobi pass from its fixed point.
-        long long chainSettles = 0;
+        /// THE FEEDBACK'S RESTS (PHOTON-7 stage 4; GiStatus::feedbackRests): the frames the voxel bounces' feedback
+        /// stopped owing work - the chain's radiance finished moving.
+        double    feedbackRests = 0.0;
+        bool      feedbackOwed = false;
         /// THE ONE WRITER (PHOTON-WRITER-1): second injections of one volume in
         /// one frame the latch refused (0 is the invariant), and the most
         /// injections any one frame has spent.
@@ -894,7 +894,7 @@ public:
         double    dragMoverGestures = 0.0;
         /// THE ONE GI SCHEDULER (U0 3c; GiStatus::scheduler*): what decided WHEN the GI answered a change.
         struct SchedulerInfo {
-            double pushes = 0.0, resolves = 0.0, lightTicks = 0.0, lightTicksAtRest = 0.0;
+            double pushes = 0.0, resolves = 0.0;
             bool   settlePending = false;
             int    settleStableFrames = 0;
             bool   gestureActive = false;

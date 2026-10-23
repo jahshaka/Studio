@@ -163,7 +163,7 @@ static GiParams vctBase()
     gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
-    gi.numBounces = 2;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE, +-12 m around the eye at 64 cells (0.375 m):
     // the lab below reads cascade 0's store and walks it alone, so the engine's march
     // must have no outer cascade to hop into. (The single scene-fitted volume this
@@ -201,7 +201,7 @@ static const Vec3 kCamPos(0.0f, 3.0f, 7.0f), kCamTarget(0.0f, 0.0f, -1.0f);
 /// luminance, and a ray that meets the wall reads NOTHING - the SKY'S share alone. The
 /// engine does put the sky into the voxels (the bounce injection's escaping cones read it,
 /// PHOTON-ENV-1), so the wall reflects the sky back onto the floor; case 1/4 therefore
-/// measures with NO bounce (numBounces 0), where this analytic is the whole physics
+/// measures with NO bounce (bounces off), where this analytic is the whole physics
 /// (PHOTON-VOXEL-4: at two bounces the field's corner read 91.1 % against the sky-only
 /// quadrature's 81.5 - the wall's bounce; at none, 83.6). `grow` inflates the wall by that
 /// many metres on every face (the voxel envelope's one cell).
@@ -564,7 +564,7 @@ int main(int argc, char **argv)
             for (float half : { 5.0f, 30.0f }) {
                 GiParams gi = vctBase();
                 gi.ddgi = GiToggle::Off;
-                gi.numBounces = 0;
+                gi.bounces = false;
                 gi.cascadeSet[0] = GiParams::GiCascadeDesc{ half, 64, 0.0f };
                 char label[120];
                 std::snprintf(label, sizeof label, "%s cones only, cell %.3f m", matte ? "F0=0" : "F0=.04",
@@ -598,7 +598,7 @@ int main(int argc, char **argv)
         for (float half : { 5.0f, 10.0f, 15.0f, 30.0f, 60.0f }) {
             GiParams gi = vctBase();
             gi.ddgi = GiToggle::Off;
-            gi.numBounces = 0;
+            gi.bounces = false;
             gi.cascadeSet[0] = GiParams::GiCascadeDesc{ half, 64, 0.0f };
             char label[120];
             std::snprintf(label, sizeof label, "cones only, one cascade, cell %.3f m", 2.0f * half / 64.0f);
@@ -657,7 +657,7 @@ int main(int argc, char **argv)
         // NO BOUNCE: the subject is the SKY the field and the cones see; the sky-lit wall's
         // bounce (the injection reads the sky, PHOTON-ENV-1) is gi.ddgi (archived: archive/tests/gi)'s and the cards'
         // subject, and it is not in the analytic below (skyIrradiance).
-        ref.numBounces = 0;
+        ref.bounces = false;
         ref.cascadeCount = 1;                // see vctBase: one cascade, the lab's store
         ref.cascadeSet[0] = GiParams::GiCascadeDesc{ 12.0f, 64, 0.0f };
         CHECK(s->setGlobalIllumination(ref), "VCT (Low) builds over the open scene");

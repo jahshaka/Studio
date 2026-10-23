@@ -75,7 +75,7 @@ static Verdict measure(Engine *engine, Scene *s)
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;      // no rays: the grid is the reflection
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.updateBudget = 0;                 // deterministic: no re-captures mid-read
     if (!s->setGlobalIllumination(gi))
         std::printf("   engine error: %s\n", engine->lastError().c_str());

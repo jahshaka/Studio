@@ -587,19 +587,23 @@ std::string Session::statusJson()
       << gi.cards.invalidTransform << "}";
     // ...and THE CASCADES' SCROLL WORK (PHOTON-7 stage 2, the work law's door; cumulative since the chain was built):
     // the commits, the voxels their delta injections lit in the slabs and outside them (read back a few frames late:
-    // `counted` injections), the slabs' cells, the cells the commits computed the direct over and one pass covered,
-    // and the lag (the frames from a step to the rebuild that served it)
+    // `counted` injections), the slabs' cells, the cells the commits computed the direct over, the voxels every delta
+    // MARCHED (PHOTON-7 stage 4: an outer commit's inner re-marches included), the lag (the frames from a step to the
+    // rebuild that served it), and THE FEEDBACK (stage 4): the frames it ran a pass, the bricks those passes ran, its
+    // stops and resumes, the bricks active by its newest reading; the chain's rests
     o << ",\"commitShaderWaits\":" << gi.cascadeCommitShaderWaits << ",\"cascades\":[";
     for (size_t i = 0; i < gi.cascades.size(); ++i) {
         const GiStatus::CascadeStatus &cs = gi.cascades[i];
         o << (i ? "," : "") << "{\"res\":" << cs.resolution << ",\"scrolls\":" << cs.scrolls << ",\"counted\":"
           << cs.commitCounted << ",\"litSlab\":" << cs.commitLitSlab << ",\"litBand\":" << cs.commitLitBand
           << ",\"slabCells\":" << cs.commitSlabCells << ",\"injectCells\":" << cs.commitInjectCells
-          << ",\"regionCells\":" << cs.commitRegionCells << ",\"passes\":" << cs.commitPasses << ",\"lagLast\":"
+          << ",\"marched\":" << cs.deltaMarched << ",\"fbPasses\":" << cs.feedbackPasses << ",\"fbBricksRan\":"
+          << cs.feedbackBricksRan << ",\"fbStops\":" << cs.feedbackStops << ",\"fbResumes\":" << cs.feedbackResumes
+          << ",\"fbActive\":" << cs.feedbackActive << ",\"lagLast\":"
           << cs.lagLast << ",\"lagMax\":" << cs.lagMax << ",\"lightsInRangeMax\":" << cs.lightsInRangeMax
           << ",\"injectionsOverSlots\":" << cs.injectionsOverSlots << "}";
     }
-    o << "]}";
+    o << "],\"feedbackRests\":" << gi.feedbackRests << "}";
     // ...and THE HIT LIST (PHOTON-2 stage 2's tail): its demand-sized capacity, the records the traces appended and the
     // ones a full list dropped (no sample) - read back a few frames late
     {

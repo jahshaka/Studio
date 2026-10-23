@@ -184,6 +184,44 @@ if tsv_path:
             result['parts'][pname].setdefault('clock', {})[c] = s
             line.append('%s p50 %.2f / p95 %.2f / max %.2f ms (%d over 2x the median)' % (label, s['p50'], s['p95'], s['max'], s['over2x']))
         print('%s %s HITCH over %d moving frames: %s' % (scene, pname, len(rs), '; '.join(line)))
+        # THE GPU CLOCK'S MODES (PHOTON-7 stage 4, the lead's R3): a p50 on the boundary of two modes flips between them
+        # run to run, so each mode reports its own p50 - the LIGHT mode the frames within 2x the lowest quartile, the
+        # HEAVY frames those over 2x the light mode's p50 - with the heavy frames' count and what they ARE: the door's
+        # GPU rows (gpu_rows, name:ms) by how much more a heavy frame spends in each than a light one.
+        def rowsOf(x):
+            out = {}
+            for kv in (x.get('gpu_rows') or '').split(','):
+                if ':' not in kv: continue
+                k, v = kv.rsplit(':', 1)
+                try: out[k] = out.get(k, 0.0) + float(v)
+                except ValueError: pass
+            return out
+        busy = [(float(x['frame_gpu_ms']), x) for x in rs if 'frame_gpu_ms' in x and float(x['frame_gpu_ms']) >= 0.0]
+        if busy:
+            sv = sorted(v for v, _ in busy)
+            q1 = sv[len(sv) // 4]
+            light = sorted(v for v in sv if v <= 2.0 * q1)
+            lp50 = light[len(light) // 2]
+            heavyRows = [x for v, x in busy if v > 2.0 * lp50]
+            lightRows = [x for v, x in busy if v <= 2.0 * lp50]
+            hv = sorted(float(x['frame_gpu_ms']) for x in heavyRows)
+            mode = 'GPU busy MODES over %d frames: light p50 %.2f ms (%d frames)' % (len(busy), lp50, len(lightRows))
+            if hv:
+                mode += '; HEAVY (over 2x the light p50) %d frames, p50 %.2f ms' % (len(hv), hv[len(hv) // 2])
+                def meanRows(xs):
+                    acc = {}
+                    for x in xs:
+                        for k, v in rowsOf(x).items(): acc[k] = acc.get(k, 0.0) + v
+                    return {k: v / max(1, len(xs)) for k, v in acc.items()}
+                mh, ml = meanRows(heavyRows), meanRows(lightRows)
+                extra = sorted(((mh.get(k, 0.0) - ml.get(k, 0.0), k) for k in set(mh) | set(ml)), reverse=True)
+                named = ['%s +%.2f' % (k, d) for d, k in extra[:4] if d > 0.05]
+                mode += '; the heavy frames ARE (their rows over a light frame\'s, ms): ' + (', '.join(named) if named else 'no row')
+            else:
+                mode += '; no heavy frame'
+            result['parts'][pname].setdefault('clock', {})['gpu_modes'] = {'light_p50': lp50, 'light': len(lightRows),
+                                                                            'heavy': len(hv), 'heavy_p50': hv[len(hv) // 2] if hv else 0.0}
+            print('%s %s %s' % (scene, pname, mode))
 json.dump(result, open(os.path.join(root, scene + '-walk.json'), 'w'), indent=1)
 for f in fails: print('FAIL:', f)
 sys.exit(1 if fails else 0)

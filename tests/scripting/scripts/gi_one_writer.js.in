@@ -54,7 +54,7 @@ for (var f = 1; f <= 45; ++f) {
 editor.frame(150);
 var g1 = world.giStatus();
 console.log("ONEWRITER drag: refusals " + g1.chainInjectionRefusals + ", peak " +
-            g1.chainInjectionsPeakFrame + ", settles " + g1.chainSettles +
+            g1.chainInjectionsPeakFrame + ", feedback rests " + g1.feedbackRests +
             ", c0 rebuilds " + g1.cascades[0].rebuilds);
 assert(g1.chainInjectionsPeakFrame <= n,
        "NO FRAME OF THE DRAG OR ITS SETTLE INJECTED MORE THAN THE CHAIN'S " + n +

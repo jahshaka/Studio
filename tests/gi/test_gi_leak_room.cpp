@@ -147,7 +147,7 @@ int main()
             gi.quality = GiQuality::High;
             gi.ddgi = GiToggle::On;
             gi.updateBudget = 1;
-            gi.numBounces = 1;
+            gi.bounces = true;
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
@@ -294,7 +294,7 @@ int main()
                 gi.quality = GiQuality::High;
                 gi.ddgi = GiToggle::Off;     // the cone bounce, read directly
                 gi.updateBudget = 0;
-                gi.numBounces = 1;
+                gi.bounces = true;
                 if (!s->setGlobalIllumination(gi))
                     std::printf("   engine error: %s\n", e->lastError().c_str());
                 render(e, 6);

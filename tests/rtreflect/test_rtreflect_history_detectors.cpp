@@ -110,7 +110,7 @@ static void rayTier(Scene *s, View *view)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.testProbeRegionMin = Vec3(-30.0f, -2.0f, -30.0f);
     gi.testProbeRegionMax = Vec3(30.0f, 10.0f, 30.0f);
     s->setGlobalIllumination(gi);

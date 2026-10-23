@@ -12,7 +12,7 @@
 //            and the range sphere of the lamp whose range meets it (LampShadow) - and no Edit (movers are not GI geometry).
 //   EDIT:    a still cube moved by script lists its old box joined with its new as an Edit; a MATERIAL edit (A19 deleted)
 //            lists the wearer's box and re-voxelises only the cascades that hold it (the inner cascade it lies outside of
-//            keeps its rebuild count).
+//            keeps its rebuild count); the mover's material edited lists the mover's box (a ray-only wearer, F6).
 //   SUN/SKY: a sun turn and a 2x sun step are the sun's overflow without a restart, a 5x sun step restarts; a 2x sky step
 //            (the ambient's constant band) is the sky's overflow without a restart, a 5x one restarts (Lumen's 4x).
 //   CAP:     129 movers stepping in one frame merge into at most 128 regions with no overflow, and every mover's swept box
@@ -169,13 +169,13 @@ int main()
     // THE MOVER: a movable cube (pushed movable before its geometry: no reclassification rebuild).
     const NodeId mover = scene->createNode();
     scene->setNodeMovable(mover, true);
+    PbrParams moverP;
+    moverP.albedo = Colour(0.8f, 0.3f, 0.2f);
+    moverP.roughness = 0.5f;
+    const MaterialId moverMat = scene->createPbrMaterial(moverP);
     {
-        PbrParams p;
-        p.albedo = Colour(0.8f, 0.3f, 0.2f);
-        p.roughness = 0.5f;
         const MeshId mesh = scene->createMesh(enginetest::unitCubeMesh());
-        const MaterialId mat = scene->createPbrMaterial(p);
-        if (!mesh || !mat || !scene->attachMesh(mover, mesh, mat)) { std::printf("FAIL: the mover\n"); return 1; }
+        if (!mesh || !moverMat || !scene->attachMesh(mover, mesh, moverMat)) { std::printf("FAIL: the mover\n"); return 1; }
     }
     Vec3 moverPos(0.8f, 0.6f, 0.4f);
     const Vec3 moverScale(0.5f, 0.5f, 0.5f);
@@ -190,7 +190,7 @@ int main()
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
-    gi.numBounces = 1;
+    gi.bounces = true;
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 4.0f), Vec3(0.0f, 0.6f, 0.0f));
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the chain\n"); return 1; }
     e->waitForAsyncShaders();
@@ -253,7 +253,7 @@ int main()
         // changed - the host's no-change relight - must land readings with updates, and no brick's direct term moved.
         {
             const GiStatus a = scene->published().gi;
-            scene->refreshGiLighting(false);
+            scene->refreshGiLighting();
             unsigned directSum = 0;
             std::vector<unsigned long long> seen;
             for (const GiStatus::CascadeStatus &cs : a.cascades) seen.push_back(cs.brickReadings);
@@ -406,6 +406,16 @@ int main()
         CHECK(!countKind(r2, GiRegionKind::Mover) && !countKind(r2, GiRegionKind::MoverShadow) &&
                   !countKind(r2, GiRegionKind::LampShadow),
               "the frame after the step lists no mover");
+        settle(600);
+        // ITS MATERIAL EDITED (stage 3's read F6): a ray-only wearer (no GI geometry, no dirty path) is listed at its box.
+        moverP.albedo = Colour(0.3f, 0.8f, 0.2f);
+        scene->setPbrMaterial(moverMat, moverP);
+        run(1);
+        const GiChangedRegions r3 = regions();
+        dump(r3, "the mover's material edit");
+        const GiChangedRegion *e3 = firstKind(r3, GiRegionKind::Edit);
+        CHECK(countKind(r3, GiRegionKind::Edit) == 1u && e3 && same(*e3, cubeAt(moverPos, moverScale), 1e-3f) && !r3.overflow,
+              "A MATERIAL EDIT ON A RAY-ONLY WEARER (a mover) LISTS ITS BOX (Edit), no overflow");
         settle(600);
     }
 

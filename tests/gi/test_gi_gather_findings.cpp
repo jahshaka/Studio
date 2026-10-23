@@ -98,7 +98,7 @@ static GiParams chainGi(bool gather)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;     // the cones answer where the gather does not
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.gather = gather ? GiToggle::On : GiToggle::Off;
     return gi;
 }

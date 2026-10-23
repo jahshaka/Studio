@@ -56,7 +56,7 @@ int main()
         gi.ddgi = GiToggle::Off;
         gi.gather = GiToggle::Off;
         gi.updateBudget = 0;
-        gi.numBounces = 1;
+        gi.bounces = true;
         if (!scene->setGlobalIllumination(gi)) { std::printf("   %s: the chain did not build\n", t.name); allOk = false; continue; }
         enginetest::frames(e, 6);
         const GiStatus st = scene->published().gi;

@@ -222,7 +222,7 @@ static int composeIdentityArm()
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     unsigned long long step = 0;
@@ -428,7 +428,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
-    gi.numBounces = 1;
+    gi.bounces = true;
     gi.ddgi = GiToggle::Off;
     gi.updateBudget = 0;
     gi.dragMoverChannel = true;

@@ -249,6 +249,27 @@ set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1071)
 
+# gi.bounce_series (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE SERIES'
+# LIMIT, read in the voxel store: a sealed 8 x 4 x 8 m room of emissive walls at albedo 0.5, per tier - the feedback at
+# its rest within one code of a 64-pass Jacobi (the measuring door gi.bounceJacobi), both within 3 % of E / (1 - k), k
+# the room's own one-pass operator a'(1 - e) (test_gi_bounce_series.cpp says the laws). A fixture.
+add_executable(test_gi_bounce_series test_gi_bounce_series.cpp)
+set_target_properties(test_gi_bounce_series PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_bounce_series PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_bounce_series PRIVATE JahshakaEngine)
+add_dependencies(test_gi_bounce_series JahshakaEngineMedia)
+jah_gpu_row(gi.bounce_series CLASS engine COMMAND test_gi_bounce_series
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.bounce_series PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
 # in the box being built, two chained scrolls and a live-box edit, a torn shift (and its twice-failed repair) each leave

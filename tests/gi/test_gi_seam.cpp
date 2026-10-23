@@ -67,7 +67,7 @@ int main()
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.numBounces = 1;
+    gi.bounces = true;
     CHECK(scene->setGlobalIllumination(gi), "the chain is up");
     enginetest::frames(e, 24);
     const auto axisRead = [&](int c, float x, float y, float z, bool positive, float level, float out[4]) {

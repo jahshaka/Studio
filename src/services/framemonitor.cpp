@@ -692,7 +692,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
         { "giParams", QJsonObject{
             { "mode", QLatin1String(giModeName(s.giParams.mode)) },
             { "quality", QLatin1String(giQualityName(s.giParams.quality)) },
-            { "numBounces", s.giParams.numBounces },
+            { "bounces", s.giParams.bounces },
             { "pccProbes", QJsonArray{ s.giParams.pccProbesX, s.giParams.pccProbesY,
                                        s.giParams.pccProbesZ } },
             { "probeHdr", QLatin1String(toggleName(s.giParams.probeHdr)) },

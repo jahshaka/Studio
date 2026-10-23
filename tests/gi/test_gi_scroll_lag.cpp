@@ -38,7 +38,7 @@ static GiParams tierGi(GiQuality q)
     gi.ddgi = GiToggle::Off;
     gi.gather = GiToggle::Off;
     gi.updateBudget = 0;
-    gi.numBounces = 1;
+    gi.bounces = true;
     return gi;
 }
 

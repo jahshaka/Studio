@@ -283,9 +283,9 @@ static void testEpic()
     CHECK(sameChain && hi.probeFaceSize == ep.probeFaceSize && hi.rayReflections == ep.rayReflections,
           "Epic has High's chain, probe face and reflection row");
     CHECK(ep.gather.stride * 2u == hi.gather.stride, "...and four times the gather's probes");
-    CHECK(worldmodes::photonBounces(PhotonTier::Epic) == 3 &&
-              worldmodes::photonBounces(PhotonTier::High) == 1,
-          "...and its own bounce column (the MINIMUM: the series adds passes to a residual, PHOTON-5)");
+    CHECK(worldmodes::photonBounces(PhotonTier::Epic) == 1 && worldmodes::photonBounces(PhotonTier::High) == 1 &&
+              worldmodes::photonBounces(PhotonTier::Medium) == 1 && worldmodes::photonBounces(PhotonTier::Low) == 1,
+          "...and the bounces ON at every tier (PHOTON-7 stage 4: converged by feedback - no count of passes exists)");
 }
 
 static void testProbeBudget()

@@ -1797,7 +1797,7 @@ int main()
         GiParams vct;
         vct.mode = GiMode::Vct;
         vct.quality = GiQuality::Medium;
-        vct.numBounces = 1;
+        vct.bounces = true;
         const GiParams giOff;                      // mode Off
 
         const auto shoot = [&](bool withVct, bool withSsr, Image &out, const char *what) {

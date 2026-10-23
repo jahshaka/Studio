@@ -870,9 +870,10 @@ static int lightsMain()
 }
 
 // ===========================================================================
-// --lights-cost (a MEASURING mode, not a row; P1C-LIGHT-LIST): THE GI LIGHT TICK'S GPU ms on the
-// P0 world (500 lamps), `JAH_LIGHTS_COST_ROUNDS` (16) at-rest ticks forced by refreshGiLighting —
-// the `vct.light` rows' GPU ms (the whole tick: every cascade's injection, bounces, mips). With
+// --lights-cost (a MEASURING mode, not a row; P1C-LIGHT-LIST): THE GI WHOLE RELIGHT'S GPU ms on the
+// P0 world (500 lamps), `JAH_LIGHTS_COST_ROUNDS` (16) relights forced by refreshGiLighting —
+// the `vct.relightN` rows' GPU ms (each cascade's direct term re-injected as a delta and its mips; the bounces are the
+// feedback's own rows, vct.feedbackN, since PHOTON-7 stage 4). With
 // `JAH_LIGHTS_COST_CLUSTER=N`, N more lamps around the eye (30 m range: every one reaches every
 // cascade) — the per-light cost the budget is chosen by. Run under scripts/gpu-exclusive.sh.
 // ===========================================================================
@@ -915,15 +916,15 @@ static int lightsCostMain()
     std::vector<double> ms;
     const auto recs = collect(env, [&] {
         for (int r = 0; r < rounds; ++r) {
-            env.scene->refreshGiLighting(false);
+            env.scene->refreshGiLighting();
             frame(env, 8);
         }
     });
     for (const MonitorRecord &r : recs)
         for (const CacheWork &cw : r.cacheWork)
-            if (cw.detail == "vct.light" && cw.gpuMs > 0.0f) ms.push_back(cw.gpuMs);
+            if (std::string(cw.detail).rfind("vct.relight", 0) == 0 && cw.gpuMs > 0.0f) ms.push_back(cw.gpuMs);
     const Stats s = stats(ms);
-    std::printf("LIGHTS-COST cluster %d: the light tick's GPU ms median %.3f mean %.3f p95 %.3f max %.3f (n %zu)\n",
+    std::printf("LIGHTS-COST cluster %d: a cascade's relight GPU ms median %.3f mean %.3f p95 %.3f max %.3f (n %zu)\n",
                 cluster, s.median, s.mean, s.p95, s.max, s.n);
     shutdown(env);
     return failures ? 1 : 0;

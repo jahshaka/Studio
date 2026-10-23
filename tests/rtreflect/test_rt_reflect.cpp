@@ -331,7 +331,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
@@ -1089,7 +1089,7 @@ static int costMain(Engine *e, const char *, const char *)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE THAT HOLDS THE WHOLE BOX (BUGS-1): the
     // subject is the rays against one voxel volume, every hit shaded from it.
     // D4-PHOTON-TIERS re-aimed this fixture at a 13 m half-size cascade where the
@@ -1443,7 +1443,7 @@ static int lampMain(Engine *e, bool target)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
@@ -1672,7 +1672,7 @@ static int hitresMain(Engine *e)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
@@ -1972,7 +1972,7 @@ static int footprintSweepMain(Engine *e)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;

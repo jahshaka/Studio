@@ -309,10 +309,10 @@ void WorldGiPropertyWidget::rebuild()
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
 
-        // A Photon tier row (Epic's column: 3): an edit here PINS it, like the
-        // technique and quality above, and the mark says so.
+        // A Photon tier row (on at every tier: the bounces converge by feedback, PHOTON-7 stage 4 - 0 is the direct
+        // store alone): an edit here PINS it, like the technique and quality above, and the mark says so.
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
-                                            1.0f, 4.0f, float(scene->giNumBounces));
+                                            0.0f, 1.0f, float(qBound(0, scene->giNumBounces, 1)));
         bounces->setToolTip(rowTip("giBounces"));
         wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
 
@@ -684,7 +684,7 @@ void WorldGiPropertyWidget::onProbeSizeChanged(int row)
 
 void WorldGiPropertyWidget::onBouncesChanged(float value)
 {
-    editPhotonRow(QStringLiteral("giBounces"), qBound(1, qRound(value), 4), tr("Photon Light Bounces"));
+    editPhotonRow(QStringLiteral("giBounces"), qBound(0, qRound(value), 1), tr("Photon Light Bounces"));
 }
 
 void WorldGiPropertyWidget::onDdgiToggled(bool on)

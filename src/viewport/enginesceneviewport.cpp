@@ -3091,15 +3091,14 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
     out.cascadeCommitShaderWaits = quint64(st.cascadeCommitShaderWaits);
-    out.chainSettles         = st.chainSettles;
+    out.feedbackRests        = double(st.feedbackRests);
+    out.feedbackOwed         = st.feedbackOwed;
     out.chainInjectionRefusals   = double(st.chainInjectionRefusals);
     out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);
     out.dragMovers           = st.dragMovers;
     out.dragMoverGestures    = double(st.dragMoverGestures);
     out.scheduler.pushes             = double(st.schedulerPushes);
     out.scheduler.resolves           = double(st.schedulerResolves);
-    out.scheduler.lightTicks         = double(st.schedulerLightTicks);
-    out.scheduler.lightTicksAtRest   = double(st.schedulerLightTicksAtRest);
     out.scheduler.settlePending      = st.settlePending;
     out.scheduler.settleStableFrames = int(st.settleStableFrames);
     out.scheduler.gestureActive      = st.gestureActive;

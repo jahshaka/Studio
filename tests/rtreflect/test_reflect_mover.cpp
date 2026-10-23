@@ -378,7 +378,7 @@ static int costMain(Engine *e)
     s->attachMesh(sphere, s->createMesh(sphereMesh()), s->createPbrMaterial(sp));
     enginetest::setNodeScale(s, sphere, Vec3(2.0f * kSphereR, 2.0f * kSphereR, 2.0f * kSphereR));
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
-    GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
+    GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
@@ -473,7 +473,7 @@ static int costPosedMain(Engine *e)
         homes.push_back(Vec3(float(i % 6) * 1.1f - 2.75f, 0.5f, float(i / 6) * -1.1f + 0.5f));
     }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
-    GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.numBounces = 1;
+    GiParams gi; gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.bounces = true;
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 20.0f, 128, 0.0f };
     s->setGlobalIllumination(gi);
@@ -618,7 +618,7 @@ int main(int argc, char **argv)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.numBounces = 1;
+    gi.bounces = true;
     // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;

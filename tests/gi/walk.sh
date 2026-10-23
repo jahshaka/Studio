@@ -73,7 +73,10 @@ walk() {   # scene, source flags (one word), settle, start, target0, end, target
 }
 work() {   # scene, log - THE WORK LAW'S DOOR after the live walk (PHOTON-7 stage 2): per cascade, the commits, the voxels
            # their delta injections lit (slab + changed direct set) against the cascade, the direct's computed cells,
-           # one pass's cells, the lag; the commit frames' GPU time is the hitch law's own (frame_gpu_ms, below)
+           # the voxels every delta MARCHED (an outer commit's inner cascades' re-marches included: stage 2's read D4),
+           # the lag, and THE FEEDBACK (PHOTON-7 stage 4): the frames a cascade ran a pass and the bricks they ran - an
+           # inner cascade's are its RESUMED passes after the outer commits; the commit frames' GPU time is the hitch
+           # law's own (frame_gpu_ms, below)
     grep -m1 '^LAB STATUS ' "$2" | cut -c12- | python3 -I -c "
 import json, sys
 scene = sys.argv[1]
@@ -81,15 +84,18 @@ st = json.load(sys.stdin)
 print('  WORK %s: the commits waited %d frame(s) for their shader (built in the background)'
       % (scene, st.get('gi', {}).get('commitShaderWaits', 0)))
 for i, c in enumerate(st.get('gi', {}).get('cascades', [])):
-    n = c['scrolls']; whole = c['res'] ** 3
+    n = c['scrolls']; whole = c['res'] ** 3; bricks = whole // 512
+    print('  FEEDBACK %s c%d: %d frames ran a pass, %d bricks run (%.1f a pass, of %d), %d stops, %d resumes, %d active; '
+          'deltas marched %d voxels' % (scene, i, c['fbPasses'], c['fbBricksRan'], c['fbBricksRan'] / max(c['fbPasses'], 1),
+                                       bricks, c['fbStops'], c['fbResumes'], c['fbActive'], c['marched']))
     if not n:
         print('  WORK %s c%d: no scroll committed' % (scene, i)); continue
     k = max(c['counted'], 1); lit = (c['litSlab'] + c['litBand']) / k
     print('  WORK %s c%d: %d commits (%d delta injections counted); lit a delta %.0f = slab %.0f + band %.0f of %d '
-          '(%.2f %%); slab cells %.0f, direct computed %.0f (%.1f %%), a pass %.0f (%.1f %%); lag last %d max %d frames'
+          '(%.2f %%); slab cells %.0f, direct computed %.0f (%.1f %%); lag last %d max %d frames'
           % (scene, i, n, c['counted'], lit, c['litSlab'] / k, c['litBand'] / k, whole, 100.0 * lit / whole,
-             c['slabCells'] / n, c['injectCells'] / n, 100.0 * c['injectCells'] / n / whole, c['regionCells'] / n,
-             100.0 * c['regionCells'] / n / whole, c['lagLast'], c['lagMax']))
+             c['slabCells'] / n, c['injectCells'] / n, 100.0 * c['injectCells'] / n / whole, c['lagLast'], c['lagMax']))
+print('  FEEDBACK %s: the chain came to rest %d time(s)' % (scene, st.get('gi', {}).get('feedbackRests', 0)))
 " "$1"
 }
 PRIME=1

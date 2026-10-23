@@ -566,7 +566,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             gi.mode = worldmodes::photonEnabled(born)
                           ? GiMode(qBound(0, worldmodes::photonTechnique(tier), 2)) : GiMode::Off;
             gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 3));
-            gi.numBounces = worldmodes::photonBounces(tier);
+            gi.bounces = worldmodes::photonBounces(tier) > 0;
             gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
             warmScene->setGlobalIllumination(gi);
             warmGi = gi;
@@ -662,10 +662,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             GiParams gi = warmGi;
             gi.mode = GiMode(qBound(0, worldmodes::photonTechnique(tier), 2));
             gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 3));
-            gi.numBounces = worldmodes::photonBounces(tier);
+            gi.bounces = worldmodes::photonBounces(tier) > 0;
             gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
             if (gi.mode == warmGi.mode && gi.quality == warmGi.quality &&
-                gi.numBounces == warmGi.numBounces && gi.ddgi == warmGi.ddgi)
+                gi.bounces == warmGi.bounces && gi.ddgi == warmGi.ddgi)
                 continue;  // the born tier: built above
             warmScene->setGlobalIllumination(gi);
             int tierQuiet = 0, tierFrames = 0;
