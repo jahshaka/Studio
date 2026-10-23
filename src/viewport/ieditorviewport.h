@@ -957,6 +957,13 @@ public:
             quint64 hitRecords = 0;
             quint64 hitDropped = 0;
             quint64 hitCapacity = 0;
+            /// ...and PER LIVE VIEW (RayQueryStatus::hitViews, PHOTON-7 stage 0's read R4).
+            struct HitListView {
+                int     eyes = 1;
+                int     eyeWidth = 0, eyeHeight = 0;
+                quint64 firstCapacity = 0, capacity = 0, records = 0, dropped = 0;
+            };
+            QVector<HitListView> hitViews;
         };
         RayQueryInfo rayQuery;
         /// THE SCREEN-PROBE GATHER (SPECS/SCREEN_PROBE_GATHER_SPEC.md phase 1) —

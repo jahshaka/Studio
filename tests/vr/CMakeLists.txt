@@ -92,9 +92,10 @@ set_tests_properties(vr.mirror_live PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
 
-# vr.hit_list_stereo (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: per live view) — THE STEREO VIEW'S HIT LIST
-# HOLDS BOTH EYES' DEMAND: a live session against Monado with every gather ray a hit record (gather.decodeHits); after
-# 24 eye frames of growth no live view's list drops a record (e2e_vr_hit_list.js says the law and the base).
+# vr.hit_list_stereo (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0's read R4: the stereo view's OWN list, through
+# giStatus().rayQuery.hitViews) — THE STEREO VIEW'S HIT LIST HOLDS BOTH EYES' DEMAND: a live session against Monado with
+# every gather ray a hit record (gather.decodeHits); the stereo list's first reading holds 0.5625 x W x H x 2 eyes, and
+# after its first growth it drops no record (e2e_vr_hit_list.js says the laws and the base).
 set(_vr_hit_home "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home")
 jah_gpu_row(vr.hit_list_stereo CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
@@ -107,8 +108,9 @@ set_tests_properties(vr.hit_list_stereo PROPERTIES
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_hit_home};JAHSHAKA_DATA_ROOT=${_vr_hit_home}/.local/share/Jahshaka")
-# THE FRAMES (R7): the script's pump, counted by it - 97 editor frames (10 + 87 pumps; 2026-10-23, one run, :68)
-set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 97)
+# THE FRAMES (R7): the script's pump, counted by it - 73 editor frames (10 + 63 pumps for 60 eye frames, read from the
+# first; PHOTON-7 stage 0's read R4, 2026-10-23, one run, :71)
+set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 73)
 
 # vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.

@@ -247,7 +247,7 @@ ui.space_docks 18.40  hand: TESTING-SPEED-B4 solo median n=3 2026-10-12, post-ad
 ui.space_docks.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 view.window_on_render_thread 2.10  the window spike, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 vr.hit_list_stereo.fresh_home 0.07  solo, the card lock held, :68 (PHOTON-7 stage 1, 2026-10-23: the row's home wipe, R12)
-vr.hit_list_stereo 15.26  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; Monado, the app's VR session; 42.6 s on its first, cold-cache run)
+vr.hit_list_stereo 23.52  solo, the card lock held, :71, warm fixture home (PHOTON-7 stage 0's read R4, 2026-10-23: the per-view bars, read from the first eye frame)
 vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.probe_court 4.27  solo, the card lock held (PHOTON-5 stage 1, 2026-10-21; the lead's promotion at the merge)

@@ -3151,6 +3151,17 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.hitRecords   = quint64(rq.hitRecords);
         out.rayQuery.hitDropped   = quint64(rq.hitDropped);
         out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
+        for (const auto &v : rq.hitViews) {
+            IEditorViewport::GiStatusInfo::RayQueryInfo::HitListView h;
+            h.eyes = int(v.eyes);
+            h.eyeWidth = int(v.eyeWidth);
+            h.eyeHeight = int(v.eyeHeight);
+            h.firstCapacity = quint64(v.firstCapacity);
+            h.capacity = quint64(v.capacity);
+            h.records = quint64(v.records);
+            h.dropped = quint64(v.dropped);
+            out.rayQuery.hitViews.append(h);
+        }
     }
     // THE SCREEN-PROBE GATHER (SCREEN_PROBE_GATHER_SPEC phase 1) — a member of
     // GiStatus, unlike the tier above it: it IS global illumination.
