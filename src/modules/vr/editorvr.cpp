@@ -137,9 +137,9 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // this viewport's own view. A project at Low or Medium (row 0) asks for
     // none and pays for none, exactly as its desktop viewport does.
     //
-    // WHAT THE HEADSET DOES WITH IT is not the desktop's screen-space march
+    // WHAT THE HEADSET DOES WITH IT is not the desktop's screen trace
     // (impossible in a stereo target) but the RAYS, per eye — see
-    // PostFxDesc::ssrScreenMarch. `vr.begin({reflections:n})` OVERRIDES the row
+    // PostFxDesc::reflectSources. `vr.begin({reflections:n})` OVERRIDES the row
     // for one session (VrConfig::ssr, -1 = follow the project); it is
     // deliberately not a persisted setting.
     if (options.contains(QStringLiteral("reflections")))

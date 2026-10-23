@@ -133,7 +133,7 @@ pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
 rigperf.smoke 1.47  quiet n=49
-rtreflect.contact 18.69  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A 1-2, 2026-10-23: two jahlab sessions at 1920x1080, photon-ramp Rays/Both and photon-contact's corrugated chained floor, its crease and the negative control, nine shots of 50 frames)
+rtreflect.contact 18.42  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A 1-2, 2026-10-23: two jahlab sessions at 1920x1080, photon-ramp Rays/Both and photon-contact's corrugated chained floor, its crease and the negative control, nine shots of 50 frames)
 rtreflect.lamp_step_held 28.85  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (e) split out of still_after_stop; jahlab on photon-glass, 960x540, two sessions, 600-frame windows)
 rtreflect.still_after_stop 26.45  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (a)-(d), one jahlab session on photon-glass, 960x540, two 600-frame windows and the path's bridge)
 samples.cleanstart.Matcaps 47.78  quiet n=50

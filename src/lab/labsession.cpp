@@ -406,15 +406,16 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || !mScreenMarch) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays`
-        // (the screen march off: the rays alone answer).
-        const bool headless = mOpt.headless, march = mScreenMarch;
-        fv.finish = [headless, march](FrameInputView &part, View *v) {
+        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
+        // `reflections screen` (the one estimator's sources narrowed to one).
+        const bool headless = mOpt.headless;
+        const ReflectSources sources = mReflectSources;
+        fv.finish = [headless, sources](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
-            if (!march) fx.ssrScreenMarch = false;
+            if (sources != ReflectSources::Both) fx.reflectSources = sources;
             part.postFx = fx;
         };
     }
@@ -667,14 +668,15 @@ bool Session::exec(const Command &c)
         if (!onOff(a0, mDraw, v)) { ok = false; std::printf("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
     } else if (c.verb == "reflections") {
-        // THE REFLECTION'S SOURCES (PHOTON-2 stage 1b, C1's measuring door): both = the screen march beside the rays,
-        // rays = the rays alone (the march's passes leave the chain: a graph rebuild, the histories restart)
-        if (a0 == "both" || a0 == "rays") {
-            mScreenMarch = a0 == "both";
+        // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
+        // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
+        if (a0 == "both" || a0 == "rays" || a0 == "screen") {
+            mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
+                                                                                : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            std::printf("LAB REFUSED reflections '%s' (both|rays)\n", a0.c_str());
+            std::printf("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; std::printf("LAB REFUSED play '%s'\n", a0.c_str()); }

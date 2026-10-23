@@ -16,8 +16,9 @@
 #   (b) the foot's reflected top edge (the half-level crossing from the dark foot to the post's bright reflection)
 #       within 1 px of where the mirror puts it FROM THE LIFTED ORIGIN - the origin law's own, bounded offset: the ray
 #       starts the drawn cut's error (Epic's 1 px footprint at the floor point) above the floor, so it meets the foot that
-#       much higher (~1 px) - on the RAYS arms of the flat strip; the BOTH arms' and the corrugated floor's (its zigzag
-#       is a fifth of a pixel) are printed.
+#       much higher (~1 px) - on the flat strip's RAYS and BOTH arms (BOTH is the one estimator since PHOTON-7 stage 6
+#       commit 5: the screen trace answers the mirror's centre ray where the screen vouches for it, the ray the rest - the
+#       raster march's -2.1 px it replaced); the corrugated floor's (its zigzag is a fifth of a pixel) is printed.
 #   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2): inside the band where the flat mirror reflects the emitter panel
 #       over the far wall (y 0.8-7.9; a 0.15 m margin, the post, the foot, the block and the walls kept out) the picture is
 #       the mirror image of one uniform emitter: no pixel more than 3 codes from its row's median (the metal's Fresnel
@@ -205,7 +206,7 @@ def crease(name):
     if cols < 200: fails.append('%s: the crease spans %d columns (< 200): the fixture moved' % (name, cols))
     if lineCols: fails.append('%s: %d columns of the crease hit their own floor (a line along it)' % (name, lineCols))
 for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), True), ('rays-1m', (-1.88, 0.62, -2.2), True),
-                        ('both-2p4', (-1.88, 1.02, -0.8), False), ('both-1m', (-1.88, 0.62, -2.2), False),
+                        ('both-2p4', (-1.88, 1.02, -0.8), True), ('both-1m', (-1.88, 0.62, -2.2), True),
                         ('chained-2p4', (-1.88, 1.02, -0.8), False), ('chained-1m', (-1.88, 0.62, -2.2), False)):
     seam(name, eye, gate)
 for name, eye in (('chained-2p4', (-1.88, 1.02, -0.8)), ('chained-1m', (-1.88, 0.62, -2.2))):

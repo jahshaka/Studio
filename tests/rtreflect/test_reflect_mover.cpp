@@ -697,7 +697,7 @@ int main(int argc, char **argv)
             if (edgeSkinned) poseSkinned(at);
             else enginetest::setNodePosition(s, sphere, at);
         };
-        { PostFxDesc afx = fx; afx.ssrScreenMarch = arm.march; view->setPostFx(afx); }
+        { PostFxDesc afx = fx; afx.reflectSources = arm.march ? ReflectSources::Both : ReflectSources::Rays; view->setPostFx(afx); }
         edgePlace(pathAt(0));
         render(e, kWarmFrames);
         s->setPhotonView(PhotonView::Hits);
@@ -780,7 +780,7 @@ int main(int argc, char **argv)
         };
         {
             PostFxDesc afx = fx;
-            if (!arm.march) afx.ssrScreenMarch = false;
+            if (!arm.march) afx.reflectSources = ReflectSources::Rays;
             view->setPostFx(afx);
         }
         place(pathAt(0));
