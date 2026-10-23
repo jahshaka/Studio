@@ -48,7 +48,8 @@ static int failures = 0;
     } while (0)
 
 namespace {
-constexpr unsigned long long kWindow = 60ull;   // OgreSurfaceCache.cpp's kDemandWindow
+// THE DEMAND'S WINDOW (OgreSurfaceCache.cpp's mDemandWindow): the settle's S, read from the facts
+const unsigned long long kWindow = giQualityFacts(GiQuality::High, GiViewProfile::Desktop).cardDemandSettleFrames;
 
 struct Room {
     Vec3 centre;
