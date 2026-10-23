@@ -25,7 +25,8 @@
 # commits, the voxels their delta injections lit (the slab's + the changed direct set) against the cascade, the cells
 # the direct was computed over and one pass covered, the lag; and the frames a commit waited for its shader.
 # THE ROW ASSERTS ONLY ITS OWN LAWS (the bars are set by the stages that improve the numbers; the base is below):
-#   (L1) FROZEN = FROZEN: the second frozen walk byte-equal to the first on every frame;
+#   (L1) FROZEN = FROZEN: the second frozen walk byte-equal to the first on every frame - the first with the gather's
+#        history readback (its dump), the second without (dumprgb): the readback changes no picture;
 #   (L2) THE ARMS START EQUAL: the converged hold before the walk byte-equal live vs frozen (one warm cache: AB G10);
 #   (L3) THE CLASSES COVER THE COUNTED PIXELS: no pixel M1 counts is unclassified, and every pair has its class map
 #        (--classes: an environment's map is the law, never vacuous - PHOTON-7 stage 0's read R5).
@@ -65,7 +66,8 @@ walk() {   # scene, source flags (one word), settle, start, target0, end, target
     fi
     for arm in "$@"; do
         local f=""; [ "${arm#frozen}" != "$arm" ] && f=" freeze"
-        # (the second frozen walk is read for L1 alone - byte for byte against the first: its pictures alone, dumprgb)
+        # (the second frozen walk is read for L1 alone - byte for byte against the first: its pictures alone, dumprgb,
+        # with no history readback - so L1 also bars a readback that changes a picture, PHOTON-7 stage 5)
         local dk="dump"; [ "$arm" = frozen2 ] && dk="dumprgb"
         # (Bistro's arms boot on the SAME cache bytes: its data root's cache as the run found it, restored before each
         # arm - a session writes the variants it compiled at its exit, and a grown cache draws other variants, AB G10)
