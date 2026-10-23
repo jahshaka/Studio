@@ -59,14 +59,16 @@ frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stag
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
+gi.card_sun_lift 1.92  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A finding 3, 2026-10-23: one engine fixture, a convex carded cap, 49 frames)
 gi.cascades_asan 23.23  quiet n=41
 gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; jahlab on photon-room, 960x540, two sessions)
 gi.hold_after_stop 28.47  solo, the card lock held, :71, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions)
 gi.one_writer 46.36  quiet n=45
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-gi.ray_level_fixed 2.34  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 3, 2026-10-23: one engine, two scenes - a 4 m walk and its teleport, 105 frames)
+gi.ray_level_fixed 2.35  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A W5, 2026-10-23: one engine, one scene - a 4 m walk and a 150 m teleport, 105 frames)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
+gi.sun_contact_acne 1.70  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A W1, 2026-10-23: one engine fixture, a two-level sphere, three pictures, 49 frames)
 gi.walk 47.89  solo, the card lock held, :77, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms)
 gi.walk_bistro 48.09  solo, the card lock held, :77, Bistro's own data root warm (PHOTON-7 stage 0, 2026-10-22; a MEASURE: two jahlab sessions on Bistro Exterior, 960x540; 54.62 s on its first run, the page cache cold)
 gizmo.overlay 1.60  quiet n=44
@@ -87,7 +89,7 @@ input.actions 0.00  ship 3a0422b4e (2026-10-13)
 lab.camera_cut 4.55  spec.sh test photon-2 --subsystem lab, the card lock held, :74, warm (PHOTON-2 round 2 N3's row, priced in round 4, 2026-10-22: it had no line)
 lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2026-10-22; 11.38 s on the run that warmed the shared cache)
 lab.dolly_matches_probe 1.99  solo, the card lock held, :73 (LAB-1 stage 3, 2026-10-22; the lab run itself, dolly.sh + the box set at two stops)
-lab.envs_build 4.64  solo, CPU (LAB-1 stage 2 read, 2026-10-22; the eight checks in parallel, each baked twice)
+lab.envs_build 6.83  solo, CPU (PHOTON-7 stage 6, READ_A finding 2, 2026-10-23: the eleven checks in parallel; photon-contact's corrugated chained floor the slowest, its bake 3.3 s)
 lab.stillness_control 4.06  solo, the card lock held, :71, warm (PHOTON-2 stage 0 fix round, 2026-10-22; jahlab on photon-room held at the stop, 960x540)
 lab.stillness_runs 7.95  solo, the card lock held, :71, warm (PHOTON-2 stage 1, 2026-10-22; jahlab on photon-glass, 960x540, the path check)
 library.model 7.20  ship 3a0422b4e (2026-10-13)
@@ -131,7 +133,7 @@ pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
 rigperf.smoke 1.47  quiet n=49
-rtreflect.contact 14.18  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 4, 2026-10-23: two jahlab sessions at 1920x1080, photon-ramp Rays/Both and photon-contact, six shots of 50 frames)
+rtreflect.contact 18.69  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A 1-2, 2026-10-23: two jahlab sessions at 1920x1080, photon-ramp Rays/Both and photon-contact's corrugated chained floor, its crease and the negative control, nine shots of 50 frames)
 rtreflect.lamp_step_held 28.85  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (e) split out of still_after_stop; jahlab on photon-glass, 960x540, two sessions, 600-frame windows)
 rtreflect.still_after_stop 26.45  solo, the card lock held, :74, warm (PHOTON-2 round 4, 2026-10-22: (a)-(d), one jahlab session on photon-glass, 960x540, two 600-frame windows and the path's bridge)
 samples.cleanstart.Matcaps 47.78  quiet n=50

@@ -3,8 +3,10 @@
 // THE LAW: every ray (the gather's, the sun contact's, the cards' sun, the reflections') traces each mesh's NEAR copy
 // over LEVEL 0 - the authored triangles - wherever the camera stands; the far copy over the coarsest. The traced
 // geometry is then a function of the world alone, so (a) a camera WALK builds no bottom-level structure and re-points
-// no near copy (0 builds, every near level unchanged), and (b) the near copies after the walk are the near copies a
-// camera that TELEPORTED to the walk's end finds (the same level per slot) - and both are level 0.
+// no near copy (0 builds, every near level unchanged) - every one level 0 - and (b) a camera that then TELEPORTS (a
+// cut to a pose 150 m down the line, among the far cubes, where the old rule would have picked level 0 for them and
+// coarser levels for the near ones) finds the SAME STRUCTURES: every slot's near copy references the same bottom-level
+// structure, by its device address, as after the walk (READ_A W5: comparing levels, (b) could not fail apart from (a)).
 // WHAT IT GUARDS AGAINST (the base had no door to read a near copy's level; this row's door is new with the change): the
 // 2x distance band the ray rule re-fitted per view - chained meshes cross it as the eye walks toward them (Bistro
 // Exterior at the owner's pose: 1,384 re-fits at boot, +2 over a 4 m walk, spikes/photon-7/stage6/c3/BISTRO_BLAS.txt),
@@ -12,7 +14,8 @@
 // not.
 // THE FIXTURE: an offscreen view with the ray tier live (the viewport's post chain), twelve two-level cubes on a line
 // at 2 .. 200 m (level 1's measured bound 2 cm, so any rule over a footprint picks it somewhere on the line) and a
-// floor; the eye walks 4 m in 48 frames toward them. Frames: 1 + 24 settle + 48 walk + 4 + the teleport's 24 + 4 = 105.
+// floor; the eye walks 4 m in 48 frames toward them, then cuts 150 m away. Frames: 1 + 24 settle + 48 walk + 4 + the
+// teleport's 28 = 105.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
@@ -121,23 +124,23 @@ int main()
     CHECK(level0 == traced, "every near copy is level 0 (%d of %d)", level0, traced);
     CHECK(changed == 0, "the walk re-pointed no near copy (%d)", changed);
 
-    // (b) THE TELEPORT: a fresh scene of the same content, the camera at the walk's end from its first frame
-    Arm tele;
-    walk.view->setScene(nullptr);
-    if (!makeArm(e, "teleport", tele)) { std::printf("FAIL: the teleport's view/scene: %s\n", e->lastError().c_str()); return 1; }
-    enginetest::testCameraLookAt(tele.view, end, target);
+    // (b) THE TELEPORT: the same scene, the camera cut 150 m down the line - the structures its near copies reference
+    // are the walk's, slot for slot, by device address
+    std::vector<unsigned long long> walkAddr, teleAddr;
+    CHECK(inspect::scene(walk.scene)->rayNearAddresses(walkAddr), "the near copies' structures read back after the walk");
+    enginetest::testCameraLookAt(walk.view, Vec3(0.0f, 1.6f, -150.0f), Vec3(0.0f, 0.5f, -200.0f));
     enginetest::frames(e, 28);
-    CHECK(inspect::scene(tele.scene)->rayNearLevels(tele.levels), "the teleport's near copies read back");
+    CHECK(inspect::scene(walk.scene)->rayNearAddresses(teleAddr), "the near copies' structures read back after the teleport");
     int differ = 0, compared = 0;
-    for (size_t s = 0; s < tele.levels.size() && s < walk.levels.size(); ++s) {
-        if (tele.levels[s] < 0 && walk.levels[s] < 0) continue;
+    for (size_t s = 0; s < teleAddr.size() && s < walkAddr.size(); ++s) {
+        if (!teleAddr[s] && !walkAddr[s]) continue;
         ++compared;
-        if (tele.levels[s] != walk.levels[s]) ++differ;
+        if (teleAddr[s] != walkAddr[s]) ++differ;
     }
-    CHECK(tele.levels.size() == walk.levels.size() && compared == traced,
-          "the teleport traces the walk's slots (%zu / %zu slots, %d compared)", tele.levels.size(),
-          walk.levels.size(), compared);
-    CHECK(differ == 0, "walk vs teleport: every slot's near copy is the same level (%d differ)", differ);
+    CHECK(teleAddr.size() == walkAddr.size() && compared == traced,
+          "the teleport traces the walk's slots (%zu / %zu slots, %d compared)", teleAddr.size(), walkAddr.size(),
+          compared);
+    CHECK(differ == 0, "walk vs teleport: every slot's near copy references the same structure (%d differ)", differ);
 
     std::printf("%s\n", failures ? "gi.ray_level_fixed: FAIL" : "gi.ray_level_fixed: PASS");
     return failures ? 1 : 0;

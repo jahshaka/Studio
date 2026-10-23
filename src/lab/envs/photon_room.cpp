@@ -201,14 +201,29 @@ std::string describeRamp()
            "Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
 }
 
-// ---- photon-contact (PHOTON-7 stage 6: the ray origin's CHAINED floor arm) -------------------------------------------
+// ---- photon-contact (PHOTON-7 stage 6: the ray origin on CHAINED content, and at a crease) --------------------------
 //
 // photon-ramp's contact mark - the 10 cm matte black FOOT (0.02 to 0.12 m) under an emitter post, at the 0.00 strip's
-// place - standing on a MIRROR FLOOR that is a CHAINED mesh: one welded 64 x 64 grid over the room's 7.8 m (8,192
-// triangles: the bake builds its level chain and its cluster DAG, so the drawn floor is Atom's cut of it at the view's
-// tolerance while every ray traces its level 0 - ONE RAY LEVEL PER MESH). The foot's reflected top edge must lie where
-// the mirror puts it (y 0.02 - 0.10) and the reflection must meet the foot at the contact line, within a pixel, from
-// 2.4 m (envcam 1) and 1 m (envcam 2) - photon-ramp's envcams 2 and 3, the same poses. Predicts THE KEEP RULE only.
+// place - standing on a MIRROR FLOOR that is a CHAINED mesh, NON-PLANAR (READ_A finding 2: a flat grid's levels are all
+// the same plane, so Atom's cut equals level 0 exactly and the arm could not fail): one welded 32 x 32 grid over the
+// room's 7.8 m (2,048 triangles, 24 cm cells - the bake builds its level chain and its cluster DAG; 3.3 s, the zigzag
+// being every vertex a feature) CORRUGATED - each vertex kCorrugation above or below y 0.02, a checkerboard, so level 0
+// is a fine zigzag whose simplifications lie within about kCorrugation of it (0.2 mm: a fifth of a pixel at 1 m, so
+// Atom's cut draws coarse clusters wherever their group falls under the view's tolerance). Where the drawn surface lies
+// BELOW level 0, which every ray traces (ONE RAY LEVEL PER MESH), an origin lifted by the float bound alone starts
+// inside level 0 and hits it from below -
+// the origin law's drawn-cut term is what clears it (the row's negative control turns it off: rays.originCut 0). The
+// shading normal is the plane's (+Y), so the zigzag moves no reflection. On it stands the foot (its contact line within
+// the corrugation's 0.2 mm of y 0.02): its reflection must meet it at the contact line within a pixel, from 2.4 m
+// (envcam 1) and 1 m (envcam 2). AN EMITTER PANEL over the far wall (y 0.8 .. 7.9) gives the floor a uniformly bright
+// reflection over a wide band, where a ray that hits its own floor reads dark. And THE CREASE (READ_A finding 1): a
+// BRIGHT MATTE BLOCK (albedo 0.8, card-lit) standing on the same floor (its face at z -2.17: a stretch the cut draws
+// coarse from envcam 3 - measured: the base's side pick drew its line on 132 of 747 columns there), whose base, seen
+// from the foreshortened side (envcam 3, 3.4 m away, 1.3 m up), the floor's first rows must reflect as the rows below
+// them do - a ray whose lift went sideways (the depth's nearer neighbour is across the crease) keeps the drawn surface
+// under level 0 and hits its own floor: a one-row line along the crease. Predicts THE KEEP RULE only.
+constexpr float kCorrugation = 0.0002f;
+
 Built buildContact(unsigned seed, bool bake)
 {
     Builder b("photon-contact", seed, bake);
@@ -216,18 +231,18 @@ Built buildContact(unsigned seed, bool bake)
     roomShell(b, unit, b.material(kRho, kRho, kRho, 1.0f));
     using V = iris::Vec3;
     Arrays grid;
-    const int n = 64;
-    const float h = 3.9f, y = 0.02f;
-    for (int j = 0; j <= n; ++j)
-        for (int i = 0; i <= n; ++i) {
-            const float x = -h + 2.0f * h * float(i) / float(n), z = -h + 2.0f * h * float(j) / float(n);
-            grid.p.insert(grid.p.end(), { x, y, z });
+    const int nx = 32, nz = 32;
+    const float x0 = -3.9f, x1 = 3.9f, z0 = -3.9f, z1 = 3.9f;
+    for (int j = 0; j <= nz; ++j)
+        for (int i = 0; i <= nx; ++i) {
+            const float x = x0 + (x1 - x0) * float(i) / float(nx), z = z0 + (z1 - z0) * float(j) / float(nz);
+            grid.p.insert(grid.p.end(), { x, 0.02f + (((i + j) & 1) ? kCorrugation : -kCorrugation), z });
             grid.n.insert(grid.n.end(), { 0.0f, 1.0f, 0.0f });
-            grid.uv.insert(grid.uv.end(), { float(i) / float(n), float(j) / float(n) });
+            grid.uv.insert(grid.uv.end(), { float(i) / float(nx), float(j) / float(nz) });
         }
-    for (int j = 0; j < n; ++j)
-        for (int i = 0; i < n; ++i) {
-            const unsigned a = unsigned(j * (n + 1) + i), c = a + 1u, d = a + unsigned(n + 1), e = d + 1u;
+    for (int j = 0; j < nz; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const unsigned a = unsigned(j * (nx + 1) + i), c = a + 1u, d = a + unsigned(nx + 1), e = d + 1u;
             // counter-clockwise seen from +Y (x right, -z up): (i, j+1) (i+1, j+1) (i+1, j) / (i, j+1) (i+1, j) (i, j)
             grid.idx.insert(grid.idx.end(), { d, e, c, d, c, a });
         }
@@ -237,14 +252,19 @@ Built buildContact(unsigned seed, bool bake)
     fixedBox(b, unit, "post-foot", V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.12f, -3.0f),
              b.material(0.02f, 0.02f, 0.02f, 1.0f));
     fixedBox(b, unit, "post", V(xc - 0.05f, 0.12f, -3.15f), V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
+    fixedBox(b, unit, "panel", V(-3.9f, 0.8f, -3.99f), V(3.9f, 7.9f, -3.95f), b.emitter(1.0f));
+    // the crease: a bright matte block standing on the chained mirror (its base meets the floor within the corrugation)
+    fixedBox(b, unit, "crease-block", V(1.0f, 0.02f, -2.57f), V(2.8f, 0.8f, -2.17f), b.material(0.8f, 0.8f, 0.8f, 0.9f));
     return b.finish();
 }
 
 void stopContact(double d, iris::Vec3 &eye, iris::Vec3 &target)
 {
-    // D = 1: the foot from 2.4 m, D = 2: from 1 m (photon-ramp's D = 2 / 3); else the room from its middle
+    // D = 1: the foot from 2.4 m, D = 2: from 1 m (photon-ramp's D = 2 / 3); D = 3: the crease from 3.4 m; else the
+    // room from its middle
     const float post = -2.0f + 0.12f;
     target = iris::Vec3(post, 0.1f, -3.0f);
+    if (d >= 2.5) { eye = iris::Vec3(1.9f, 1.3f, 0.45f); target = iris::Vec3(1.9f, 0.1f, -2.75f); return; }
     if (d >= 1.5) { eye = iris::Vec3(post, 0.62f, -2.2f); return; }
     if (d >= 0.5) { eye = iris::Vec3(post, 1.02f, -0.8f); return; }
     eye = iris::Vec3(0, 3.0f, 3.4f);
@@ -258,10 +278,13 @@ std::vector<Prediction> expectContact(const Built &, const Optics &)
 
 std::string describeContact()
 {
-    return "photon-contact: photon-room's sealed shell with a CHAINED mirror floor (a welded 64 x 64 grid: its level "
-           "chain and cluster DAG built) and photon-ramp's contact mark - a 10 cm matte black foot under an emitter "
-           "post (PHOTON-7 stage 6, the ray origin: the foot's reflection meets the foot within a pixel; envcam 1 / 2 "
-           "from 2.4 m / 1 m). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
+    return "photon-contact: photon-room's sealed shell with a CHAINED, CORRUGATED mirror floor (a welded 32 x 32 grid, "
+           "each vertex 0.2 mm above or below: its level chain and cluster DAG built, its coarse plane under the zigzag's "
+           "peaks) under an emitter panel over the far wall, photon-ramp's contact mark on it (a 10 cm matte black foot "
+           "under an emitter post) and a bright matte block standing on it - the crease "
+           "(PHOTON-7 stage 6, the ray origin: the foot's reflection meets the foot within a pixel, no ray hits its own "
+           "floor, the crease's first rows reflect the block; envcam 1 / 2 the foot from 2.4 m / 1 m, envcam 3 the crease "
+           "from 3.4 m). Predicts THE KEEP RULE only: every probe sees >= 2 faces, all kept.";
 }
 
 void stopGlass(double, iris::Vec3 &eye, iris::Vec3 &target)

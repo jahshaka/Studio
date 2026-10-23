@@ -24,6 +24,9 @@ const std::vector<VerbDoc> &verbs()
         { "reflections", "reflections both|rays", 1, 1,
           "the view's reflection sources (PostFxDesc::ssrScreenMarch): the screen march beside the rays, or the rays "
           "alone - PHOTON-2 stage 1b's measuring door (C1's SSR-vs-ray agreement); a graph rebuild, the histories restart" },
+        { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
+          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "
+          "rtreflect.contact's crease arm reads the reflection there, free of the receiver's own diffuse" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },

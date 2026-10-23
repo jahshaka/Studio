@@ -833,6 +833,21 @@ bool Session::exec(const Command &c)
         ok = lamp(c);
     } else if (c.verb == "material") {
         ok = material(c);
+    } else if (c.verb == "photon") {
+        // THE SCENE'S PHOTON VIEW (Scene::setPhotonView, world.setPhotonView's names in PhotonView's order)
+        static const char *const kNames[] = { "off", "voxels", "probes", "cards", "screenProbes", "diffuse",
+                                              "reflections", "hits", "gatherHits" };
+        static_assert(sizeof(kNames) / sizeof(kNames[0]) == size_t(kPhotonViewCount), "one name a Photon view");
+        int mode = -1;
+        for (int i = 0; i < kPhotonViewCount; ++i)
+            if (a0 == kNames[i]) mode = i;
+        if (mode < 0) {
+            ok = false;
+            std::printf("LAB REFUSED photon '%s'\n", a0.c_str());
+        } else {
+            mScene->setPhotonView(PhotonView(mode));
+            std::printf("LAB PHOTON %s\n", a0.c_str());
+        }
     } else if (c.verb == "arm") {
         // A MEASURING ARM, asked on the engine's side (Engine::request: the affinity law)
         const double v = std::strtod(c.args[1].c_str(), nullptr);
