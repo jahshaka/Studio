@@ -1,4 +1,4 @@
-// gi.leak_room (archived: archive/tests/gi) — THE FIELD'S LEAK FIX, UNDER A CASCADE CHAIN TOO
+// gi.leak_room — THE FIELD'S LEAK FIX, UNDER A CASCADE CHAIN TOO
 // (SPECS/PHOTON_SPEC.md E1's bar; promoted from the PHOTON-S2 spike harness,
 // spikes/photon-s2/FINDINGS.md §3, which measured the numbers this pins).
 //
@@ -20,6 +20,19 @@
 // ran beside it as a reference until D4-PHOTON-TIERS deleted that arm; the
 // absolute bars below are the spike's measured numbers.)
 //
+// THE CARDS' ARM (PHOTON-7 stage 5, 5-3 - restored on carded walls): the room at 0.2 m, its slabs CARDED, the rays
+// and the gather on (the gather's hits make the walls resident). On the +Z wall's inner face - it FACES the outside
+// lamp, 11.3 m off through the -Z wall, inside its 12 m range - THE OUTSIDE LAMP'S DIRECT IS EXACTLY ZERO: at every
+// point (Scene::readCardAt) the red lamp is in the card's lamp table and its traced bit is 0, so the relight
+// multiplies its light by 0 (the inside lamp's bit 1: it lights the face); one weighted byte for every lamp let the red
+// pass at 98 % (measured: 2.03 % of the green). THE LOBE TOO: a glossy carded panel before that wall, asked through
+// the ray job's own card read (Engine::cardReadParity, head-on: the red lamp's mirror direction, where its highlight
+// would peak), gains no red-lamp highlight - the read's lobe takes each lamp's own bit by its world id (the red's
+// change of the read minus its change of the stored radiance under one code of the read's green). Printed beside them:
+// the card's whole leak against the VOXEL STORE's at the same points (the surface voxel's light over its coverage,
+// Scene::giVoxelLight) - what is left is the bounce, and the cones' own leak through a thin wall at coarse levels
+// (VOXEL-LEAK-1, out of stage 5), which the -Z wall's inner face (the lamp behind it) shows whole.
+//
 // Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
@@ -30,6 +43,7 @@
 #include <cstdio>
 #include <tuple>
 #include <string>
+#include <vector>
 
 using namespace jahshaka::engine;
 
@@ -43,7 +57,7 @@ static int failures = 0;
 static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
-// (its fix round, B1): gi.gather (archived: archive/tests/gi) measures the same room with a third arm
+// (its fix round, B1): gi.gather measures the same room with a third arm
 // and the two suites compare their numbers against each other, which is only
 // worth anything while the rooms are the same room. `enginetest::leakroom`
 // carries the shell, the two lamps, the pose and the measurement block.
@@ -134,7 +148,7 @@ int main()
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
         // The shell, the two lamps and the pose — one shared fixture, so
-        // gi.gather (archived: archive/tests/gi)'s third arm measures THIS room and not a copy of it.
+        // gi.gather's third arm measures THIS room and not a copy of it.
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
         // ONE measurement path, run once per arm: set the arm, light the
@@ -210,7 +224,7 @@ int main()
     // calls a sphere's voxels two-sided, the injection takes abs(NdotL), and the
     // sphere's FAR side is lit by a lamp that is behind it. That is the leak
     // class, and no other suite sees it: this file's rooms and
-    // gi.cascade_determinism (archived: archive/tests/gi)'s plates are all axis-aligned, where the seam is
+    // gi.cascade_determinism's plates are all axis-aligned, where the seam is
     // never crossed.
     //
     // THE INSTRUMENT is the far side of the subject itself. One lamp, nothing
@@ -373,6 +387,205 @@ int main()
 
     view->setScene(nullptr);
     e->destroyView(view);
+    // ---- THE CARDS' ARM ----------------------------------------------------------------------------------------------
+    std::printf("\n== the cards: the leak on a carded wall, card against the store ==\n");
+    {
+        e->setRayTracing(true);
+        View *cv = e->createOffscreenView("leak_cards", 256, 256, Colour(0, 0, 0));
+        Scene *s = e->createScene("leak_cards");
+        cv->setScene(s);
+        cv->setShadows(true);
+        {
+            PostFxDesc fx;   // the chain, so the gather runs (its hits read the walls' cards)
+            fx.allowOffscreen = true;
+            fx.ssr = 1;
+            cv->setPostFx(fx);
+        }
+        cv->setOffscreenContract(OffscreenContract::Live);
+        const float T = 0.2f;
+        enginetest::leakroom::Room room = enginetest::leakroom::build(s, cv, T, 0.0f, true);
+        // THE GLOSSY PANEL before the +Z wall (its card's lobe is the lobe arm's subject)
+        NodeId panel = 0;
+        {
+            panel = s->createNode();
+            MeshData md = enginetest::unitCubeMesh();
+            md.cards = enginetest::boxCards(0.5f);
+            PbrParams pp;
+            pp.albedo = Colour(0.5f, 0.5f, 0.5f);
+            pp.roughness = 0.15f;
+            const MeshId mesh = s->createMesh(md);
+            const MaterialId mat = s->createPbrMaterial(pp);
+            if (panel && mesh && mat) s->attachMesh(panel, mesh, mat);
+            s->setNodeTransform(panel, Vec3(0.0f, 2.0f, 4.85f), Quat(), Vec3(2.0f, 2.0f, 0.1f));
+        }
+        const unsigned redId = unsigned(room.outside & 0x7FFFFFFFull), greenId = unsigned(room.inside & 0x7FFFFFFFull);
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::Off;
+        gi.gather = GiToggle::On;
+        gi.cards = true;
+        gi.bounces = true;
+        gi.updateBudget = 0;
+        const auto settle = [&]() {
+            unsigned long long relights = ~0ull, admitted = ~0ull;
+            int quiet = 0, f = 0;
+            for (; f < 1500 && quiet < 60; ++f) {
+                render(e, 1);
+                const GiStatus g = s->published().gi;
+                const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
+                                   g.cards.admitted == admitted && g.cards.queueLength == 0u;
+                relights = g.cards.relights;
+                admitted = g.cards.admitted;
+                quiet = still ? quiet + 1 : 0;
+            }
+            return quiet >= 60 ? f - quiet : -1;
+        };
+        // a face's points (its inner plane z = face, facing `nz`), and their surface voxel in cascade 0
+        struct Reading { double cardR = 0.0, cardG = 0.0, directR = 0.0, voxR = 0.0, voxG = 0.0; size_t cards = 0, voxels = 0;
+                         size_t redTabled = 0, redLit = 0, greenLit = 0, greenSeen = 0; };
+        // does the segment a-b cross the panel's box? (slabs) - the inside lamp's shadow of the panel on the wall
+        const auto behindPanel = [](const Vec3 &a, const Vec3 &b) {
+            const double lo[3] = { -1.0, 1.0, 4.8 }, hi[3] = { 1.0, 3.0, 4.9 };
+            const double A[3] = { a.x, a.y, a.z }, B[3] = { b.x, b.y, b.z };
+            double t0 = 0.0, t1 = 1.0;
+            for (int k = 0; k < 3; ++k) {
+                const double d = B[k] - A[k];
+                if (std::fabs(d) < 1e-12) { if (A[k] < lo[k] || A[k] > hi[k]) return false; continue; }
+                double u = (lo[k] - A[k]) / d, v = (hi[k] - A[k]) / d;
+                if (u > v) std::swap(u, v);
+                t0 = std::max(t0, u);
+                t1 = std::min(t1, v);
+                if (t0 > t1) return false;
+            }
+            return true;
+        };
+        const Vec3 greenAt(0.0f, 3.0f, 2.5f);   // the leak room's inside lamp
+        size_t pointCount = 0;
+        const auto readAll = [&](float face, float nz) {
+            std::vector<Vec3> pts;
+            for (int i = -4; i <= 4; ++i)
+                for (int j = 0; j < 4; ++j) pts.push_back(Vec3(0.6f * float(i), 1.1f + 0.6f * float(j), face));
+            pointCount = pts.size();
+            Reading r;
+            for (const Vec3 &p : pts) {
+                CardSample c;
+                if (s->readCardAt(p, Vec3(0, 0, nz), c) && c.ok && c.lit) {
+                    const bool shaded = behindPanel(p, greenAt);   // the panel's own shadow of the inside lamp
+                    for (unsigned k = 0; k < c.lampCount && k < 16u; ++k) {   // the two lamps' bits, by their world ids
+                        if (c.lampIds[k] == redId) { ++r.redTabled; r.redLit += (c.lampMask >> k) & 1u; }
+                        if (c.lampIds[k] == greenId && !shaded) { ++r.greenSeen; r.greenLit += (c.lampMask >> k) & 1u; }
+                    }
+                    r.directR += c.radiance[0] - c.indirect[0] - c.flat[0];   // the direct half (the lamps')
+                    r.cardR += c.radiance[0];
+                    r.cardG += c.radiance[1];
+                    ++r.cards;
+                }
+            }
+            // the finest cascade whose box holds the face's points (cascade 0 rides the camera: the far wall is cascade 1's)
+            GiVoxelVolume v;
+            bool have = false;
+            for (int k = 0; k < 4 && !have; ++k) {
+                GiVoxelVolume t;
+                if (!s->giVoxelLight(k, t) || !t.available) continue;
+                const float zLo = t.origin[2], zHi = t.origin[2] + t.cell[2] * float(t.depth);
+                if (face - 2.0f * t.cell[2] > zLo && face + 2.0f * t.cell[2] < zHi) { v = std::move(t); have = true; }
+            }
+            if (!have) std::printf("   (no cascade's store holds the face)\n");
+            if (have) {
+                for (const Vec3 &p : pts) {
+                    // THE SURFACE VOXEL: of the texels within two cells of the face, along its normal, the most covered
+                    const float cell = v.cell[0];
+                    const int x = int(std::floor((p.x - v.origin[0]) / cell));
+                    const int y = int(std::floor((p.y - v.origin[1]) / cell));
+                    size_t best = size_t(-1);
+                    float bestCov = 0.5f;
+                    for (int dz = -2; dz <= 2; ++dz) {
+                        if (float(dz) * nz > 0.0f) continue;   // into the wall, behind its inner face
+                        const int z = int(std::floor((p.z - v.origin[2]) / cell)) + dz;
+                        if (x < 0 || y < 0 || z < 0 || x >= v.width || y >= v.height || z >= v.depth) continue;
+                        const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                        if (v.light[i + 3] > bestCov) { bestCov = v.light[i + 3]; best = i; }
+                    }
+                    if (best == size_t(-1)) continue;
+                    r.voxR += v.light[best] / bestCov;
+                    r.voxG += v.light[best + 1] / bestCov;
+                    ++r.voxels;
+                }
+            }
+            return r;
+        };
+        s->setGlobalIllumination(gi);
+        e->waitForAsyncShaders();
+        // THE LOBE ARM's queries: the panel's face toward the room, head-on (the read's viewer along its facing)
+        std::vector<CardReadQuery> lobeQ;
+        for (int i = -2; i <= 2; ++i)
+            for (int j = -2; j <= 2; ++j) {
+                CardReadQuery q;
+                q.position = Vec3(0.3f * float(i), 2.0f + 0.3f * float(j), 4.8f);
+                q.facing = Vec3(0.0f, 0.0f, -1.0f);
+                q.node = panel;
+                lobeQ.push_back(q);
+            }
+        const auto lobeRead = [&](std::vector<CardReadPick> &out) { return e->cardReadParity(s, lobeQ, out); };
+        enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
+        const int restOn = settle();
+        const Reading onFar = readAll(5.0f, -1.0f), onNear = readAll(-5.0f, 1.0f);
+        std::vector<CardReadPick> lobeOn, lobeOff;
+        const bool lobeOkOn = lobeRead(lobeOn);
+        enginetest::leakroom::setOutsideIntensity(s, room, 0.0f);
+        const int restOff = settle();
+        const Reading offFar = readAll(5.0f, -1.0f), offNear = readAll(-5.0f, 1.0f);
+        const bool lobeOkOff = lobeRead(lobeOff);
+        const auto leak = [](const Reading &on, const Reading &off, bool card) {
+            const double g = card ? on.cardG : on.voxG;
+            if (!(g > 0.0) || !(card ? on.cards : on.voxels)) return -1.0;
+            return card ? (on.cardR - off.cardR) / g : (on.voxR - off.voxR) / g;
+        };
+        const double cardFar = leak(onFar, offFar, true), voxFar = leak(onFar, offFar, false);
+        const double directFar = onFar.cards && onFar.cardG > 0.0 ? (onFar.directR - offFar.directR) / onFar.cardG : -1.0;
+        std::printf("   rest %d / %d frames | THE +Z FACE (facing the outside lamp through the -Z wall): %zu of %zu points "
+                    "carded, %zu with a surface voxel - the leak (the outside red over the inside green): card %.4f, "
+                    "store %.4f, the card's DIRECT half's %.4f | the -Z face (the lamp behind it: the cones' leak, "
+                    "VOXEL-LEAK-1): card %.4f, store %.4f\n",
+                    restOn, restOff, onFar.cards, pointCount, onFar.voxels, cardFar, voxFar, directFar,
+                    leak(onNear, offNear, true), leak(onNear, offNear, false));
+        CHECK(restOn >= 0 && restOff >= 0 && onFar.cards == pointCount && offFar.cards == pointCount && onFar.voxels > 0,
+              "the carded room comes to rest and its +Z wall reads in the cards and the store");
+        std::printf("   the +Z face's lamp tables: the red lamp tabled at %zu of %zu points, its bit set at %zu; the green "
+                    "lamp's bit set at %zu of the %zu points the panel does not shade from it\n", onFar.redTabled,
+                    pointCount, onFar.redLit, onFar.greenLit, onFar.greenSeen);
+        CHECK(onFar.redTabled == pointCount && onFar.redLit == 0u && onFar.greenSeen > 0u &&
+                  onFar.greenLit == onFar.greenSeen,
+              "THE OUTSIDE LAMP'S DIRECT IS EXACTLY ZERO on the face that faces it through the wall: its traced bit 0 "
+              "at every point (the inside lamp's 1)");
+        // THE LOBE ARM
+        size_t lobeN = 0, lobeOver = 0;
+        double lobeWorst = 0.0;
+        if (lobeOkOn && lobeOkOff && lobeOn.size() == lobeQ.size() && lobeOff.size() == lobeQ.size())
+            for (size_t i = 0; i < lobeQ.size(); ++i) {
+                if (!lobeOn[i].ok || !lobeOff[i].ok) continue;
+                ++lobeN;
+                const double highlight = (double(lobeOn[i].viewed[0]) - double(lobeOff[i].viewed[0])) -
+                                         (double(lobeOn[i].radiance[0]) - double(lobeOff[i].radiance[0]));
+                const double codes = std::fabs(highlight) / std::max(0.01 * double(lobeOn[i].viewed[1]), 1e-9);
+                lobeWorst = std::max(lobeWorst, codes);
+                lobeOver += codes > 1.0 ? 1u : 0u;
+            }
+        std::printf("   the lobe arm (the glossy panel, head-on): %zu of %zu card reads answered; the red lamp's highlight "
+                    "(its change of the read less its change of the stored radiance) worst %.3f codes of the read's green, "
+                    "%zu over one\n", lobeN, lobeQ.size(), lobeWorst, lobeOver);
+        CHECK(lobeN == lobeQ.size() && lobeOver == 0u,
+              "THE LOBE TOO: no red-lamp highlight at the card hits on the panel before the shadowed wall");
+        GiParams goff;
+        goff.mode = GiMode::Off;
+        s->setGlobalIllumination(goff);
+        render(e, 2);
+        e->destroyScene(s);
+        e->destroyView(cv);
+        render(e, 2);
+    }
+
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;

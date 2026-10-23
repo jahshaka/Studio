@@ -399,11 +399,13 @@ inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
 // the rooms are the SAME room. It is here so they cannot drift.
 namespace leakroom {
 
-/// One axis-aligned slab of the shell.
-inline NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
+/// One axis-aligned slab of the shell (CARDED on request: its six box cards, PHOTON-7 stage 5's leak arm).
+inline NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale, bool carded = false)
 {
     const NodeId node = s->createNode();
-    const MeshId mesh = s->createMesh(unitCubeMesh());
+    MeshData md = unitCubeMesh();
+    if (carded) md.cards = boxCards(0.5f);
+    const MeshId mesh = s->createMesh(md);
     PbrParams p;
     p.albedo = albedo;
     p.metalness = 0.0f;
@@ -429,18 +431,18 @@ struct Room {
 /// along z: at 0 the -Z wall's inner face lies ON a cascade-0 texel plane, so a
 /// wall thinner than the cell is split between two texels, not held by one
 /// (gi.gather (archived: archive/tests/gi)'s two-sided arm moves it -0.02 m; PHOTON-VOXEL-5).
-inline Room build(Scene *s, View *view, float T, float shiftZ = 0.0f)
+inline Room build(Scene *s, View *view, float T, float shiftZ = 0.0f, bool carded = false)
 {
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     const Colour white(0.8f, 0.8f, 0.8f);
     const float ho = 5.0f + T * 0.5f;
     const float span = 10.0f + 2.0f * T;
-    addSlab(s, white, Vec3(0, -T * 0.5f, shiftZ), Vec3(span, T, span));            // floor
-    addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, shiftZ), Vec3(span, T, span));      // ceiling
-    addSlab(s, white, Vec3(0, 2, -ho + shiftZ), Vec3(span, 4.0f, T));                  // -Z: THE wall
-    addSlab(s, white, Vec3(0, 2,  ho + shiftZ), Vec3(span, 4.0f, T));                  // +Z
-    addSlab(s, white, Vec3(-ho, 2, shiftZ), Vec3(T, 4.0f, span));                  // -X
-    addSlab(s, white, Vec3( ho, 2, shiftZ), Vec3(T, 4.0f, span));                  // +X
+    addSlab(s, white, Vec3(0, -T * 0.5f, shiftZ), Vec3(span, T, span), carded);            // floor
+    addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, shiftZ), Vec3(span, T, span), carded);      // ceiling
+    addSlab(s, white, Vec3(0, 2, -ho + shiftZ), Vec3(span, 4.0f, T), carded);                  // -Z: THE wall
+    addSlab(s, white, Vec3(0, 2,  ho + shiftZ), Vec3(span, 4.0f, T), carded);                  // +Z
+    addSlab(s, white, Vec3(-ho, 2, shiftZ), Vec3(T, 4.0f, span), carded);                  // -X
+    addSlab(s, white, Vec3( ho, 2, shiftZ), Vec3(T, 4.0f, span), carded);                  // +X
 
     Room r;
     // The inside lamp: PURE GREEN, so the red channel is entirely the outside
