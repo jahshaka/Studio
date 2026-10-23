@@ -257,6 +257,8 @@ rtreflect.far_record 1.37  solo, the card lock held, :83 (PHOTON-7 stage 6, READ
 rtreflect.tilted_normal 4.69  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_B finding 6, 2026-10-23: a mirror floor flat and with 70-degree shading normals before a green wall; 61 frames at 256x144)
 rtreflect.odd_size 3.00  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 7, 2026-10-23: an odd 257x145 view at half-resolution rays; 91 frames)
 rtreflect.walk_world 46.22  solo, the card lock held, :83, TOKENS 8 (PHOTON-7 stage 6 commit 7, 2026-10-23: photon-glass at Epic 960x540, a prime and three walks - live, frozen, world held)
+rtreflect.lag_law 28.31  solo, the card lock held, :83, TOKENS 8 (PHOTON-7 stage 6, REFLECT-MOVING-1's row, 2026-10-23: photon-glass Rays with the hits flattened, 960x540, a prime, the world-held walk and six converged poses - 4,955 frames)
+rtreflect.mirror_blend 9.06  in the master check's call, the card lock held, :83 (PHOTON-7 stage 6, READ_B F2, 2026-10-23: photon-glass's mirror on a slow pan, 960x540, one jahlab session, a 60-frame prime and three poses of 8 + 8 frames)
 bake.locked_positions_kept 1.36  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
 bake.cut_curve 0.05  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
 atom2.adjacency_by_position 0.39  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)

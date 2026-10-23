@@ -32,7 +32,7 @@ std::vector<unsigned char> stillnessClassImage(const std::vector<envs::Object> &
     const iris::Vec3 up = iris::Vec3::crossProduct(right, f);
     const float tanY = std::tan(0.5f * fovYDegrees * float(M_PI) / 180.0f);
     const float aspect = float(w) / float(h);
-    struct Box { float lo[3], hi[3]; unsigned char cls; };
+    struct Box { float lo[3] = {}, hi[3] = {}; unsigned char cls = 0; };
     std::vector<Box> boxes;
     for (const envs::Object &o : objects)
         boxes.push_back({ { o.boxMin.x(), o.boxMin.y(), o.boxMin.z() }, { o.boxMax.x(), o.boxMax.y(), o.boxMax.z() },
