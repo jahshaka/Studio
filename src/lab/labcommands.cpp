@@ -52,7 +52,7 @@ const std::vector<VerbDoc> &verbs()
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
-        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [freeze] [out=<name>]", 2, 9,
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>] [freeze|freeze=world] [out=<name>]", 2, 9,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
           "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
@@ -65,7 +65,9 @@ const std::vector<VerbDoc> &verbs()
           "every trail frame's picture, the gather's view distance and surface test, its classes and camera to "
           "<data-root>/stillness/dump-<name>/ (M1's moving window, computed offline); `freeze` switches the arm "
           "gi.freeze on at the script's first walk frame, only when the gather and the reflection HELD on the frame before "
-          "(M1's frozen walk from the converged picture; the run fails otherwise - settle longer), restored at the end. "
+          "(M1's frozen walk from the converged picture; the run fails otherwise - settle longer), restored at the end; "
+          "`freeze=world` sets it to 2 instead - THE WORLD HELD: the caches and the gather frozen, the reflections live "
+          "(rtreflect.walk_world: the reflection's own estimator alone). "
           "Writes "
           "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
         { "help", "help", 0, 0, "print this table" },

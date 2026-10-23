@@ -108,6 +108,38 @@ set_tests_properties(rtreflect.tilted_normal PROPERTIES ENVIRONMENT "QT_QPA_PLAT
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.tilted_normal PROPERTIES JAHSHAKA_TEST_FRAMES 61)
 
+# rtreflect.odd_size (PHOTON-7 stage 6 commit 7) — EVERY PIXEL OF THE REFLECTION IS WRITTEN EVERY FRAME: an odd 257 x 145
+# view at half-resolution rays, its remainder column and row against their neighbours over a glossy floor's reflection.
+# 91 frames.
+add_executable(test_odd_size test_odd_size.cpp)
+set_target_properties(test_odd_size PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_odd_size PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_odd_size PRIVATE JahshakaEngine)
+add_dependencies(test_odd_size JahshakaEngineMedia)
+jah_gpu_row(rtreflect.odd_size CLASS engine COMMAND test_odd_size
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
+
+# rtreflect.walk_world (PHOTON-7 stage 6 commit 7, the lead's ruling) — THE REFLECTION'S OWN WALKING BAR: gi.walk's glass
+# walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the reflections live) against the frozen walk
+# - glossy and mirror M1 p99 <= 2 codes, share over one code <= 1 % (walk_world.sh); the unfrozen walk printed beside it.
+# 960x540; four jahlab sessions: 7 + 3 x 710 frames.
+if(TARGET jahlab)
+    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 2137
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
 # GLASS IS STILL AFTER A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the
 # path's teleport at equal placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold

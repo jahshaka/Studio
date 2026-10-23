@@ -201,7 +201,6 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// through the same radiance readback the mirror is measured with.
 static int lampMain(Engine *e, bool target);
 static int hitresMain(Engine *e);
-static int footprintSweepMain(Engine *e);
 static int formatCheckMain(Engine *e, const std::string &logFile);
 static int envRayMatchMain(Engine *e);
 
@@ -213,9 +212,8 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
         if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
-    bool wantSweep = false, wantFormat = false, wantEnvMatch = false;
+    bool wantFormat = false, wantEnvMatch = false;
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
         if (std::strcmp(argv[i], "--format-check") == 0) wantFormat = true;
         if (std::strcmp(argv[i], "--env-ray-match") == 0) wantEnvMatch = true;
     }
@@ -238,7 +236,6 @@ int main(int argc, char **argv)
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
     if (wantLamp) return lampMain(e, wantLampTarget);
     if (wantHitres) return hitresMain(e);
-    if (wantSweep) return footprintSweepMain(e);
     if (wantFormat) return formatCheckMain(e, cfg.logFile);
     if (wantEnvMatch) return envRayMatchMain(e);
 
@@ -1774,152 +1771,9 @@ static int hitresMain(Engine *e)
     return failures ? 1 : 0;
 }
 
-// ---------------------------------------------------------------------------
-/// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
-/// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
-/// --footprint-sweep`, gi.rt_reflect (archived: archive/tests/gi)'s own fixture (the mirror wall, the carded
-/// emissive cube behind the camera), the wall's roughness swept.
-///
-/// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
-/// each arm in its own view warmed 60 frames (the temporal mean at its floor):
-///   card  the card read ALONE (the gate open, the arm "cards.footprintTexels" huge):
-///         the per-pixel standard deviation of two CONSECUTIVE frames — the
-///         noise one texel-exact sample per frame leaves after the mean, which
-///         grows with the footprint (the speckle);
-///   voxel the voxel read ALONE (the gate shut, K = 0): its distance from the
-///         card arm's 60-frame mean (the converged answer the card read is
-///         unbiased towards) — the prefiltered read's bias, cells and coverage.
-/// Where the card's noise crosses the voxel's bias is where a texel-exact read
-/// stops paying; the footprint there, in card texels, is k. (A YOUNG view was
-/// the first instrument and says nothing: its two frames are the warm-up's fade
-/// from the probe, identical in both arms to four decimals.)
-static int footprintSweepMain(Engine *e)
-{
-    const unsigned kPx = 192u;
-    // The device exists once a view does (the startup-order law).
-    View *anchor = e->createOffscreenView("fpsweep-anchor", 16u, 16u, Colour(0, 0, 0));
-    Scene *s = e->createScene("fpsweep");
-    if (anchor && s) anchor->setScene(s);
-    if (!s || !e->rayQueryAvailable() || !e->rayTracing()) {
-        std::printf("no ray queries — nothing to sweep\n");
-        return 0;
-    }
-    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
-    PbrParams wallParams;
-    wallParams.albedo = Colour(1.0f, 1.0f, 1.0f);
-    wallParams.metalness = 1.0f;
-    wallParams.roughness = 0.3f;
-    const MaterialId wallMat = s->createPbrMaterial(wallParams);
-    const NodeId wall = s->createNode();
-    s->attachMesh(wall, s->createMesh(enginetest::unitCubeMesh()), wallMat);
-    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
-    enginetest::setNodePosition(s, wall, Vec3(0.0f, 2.0f, 5.0f));
-    MeshData md = enginetest::unitCubeMesh();
-    for (unsigned a = 0; a < 6u; ++a) {
-        MeshCardDesc c;
-        c.axis = static_cast<unsigned char>(a);
-        c.origin = Vec3(0, 0, 0);
-        c.halfU = 0.5f;
-        c.halfV = 0.5f;
-        c.halfDepth = 0.52f;
-        md.cards.push_back(c);
-    }
-    PbrParams cp;
-    cp.albedo = Colour(0.05f, 0.05f, 0.05f);
-    cp.emissive = Colour(0.9f, 0.0f, 0.0f);
-    cp.roughness = 0.6f;
-    const NodeId cube = s->createNode();
-    s->attachMesh(cube, s->createMesh(md), s->createPbrMaterial(cp));
-    enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
-    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
-    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
-    GiParams gi;
-    gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::High;
-    gi.numBounces = 1;
-    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
-    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
-    gi.cascadeCount = 1;
-    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    gi.cards = true;
-    gi.cardResidencyRadius = 40.0f;
-    s->setGlobalIllumination(gi);
-    PostFxDesc fx;
-    fx.allowOffscreen = true;
-    fx.ssr = 2;
-    fx.hdr = false;
-    int serial = 0;
-    const auto shots = [&](int frames, Image &a, Image &b) {
-        View *v = e->createOffscreenView(("fpsweep" + std::to_string(serial++)).c_str(), kPx, kPx,
-                                         Colour(0, 0, 0));
-        v->setScene(s);
-        v->setPostFx(fx);
-        enginetest::testCameraLookAt(v, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
-        render(e, frames);
-        v->readPixels(a);
-        render(e, 1);
-        v->readPixels(b);
-        e->destroyView(v);
-    };
-    {   // settle the scene once (GI, the cube's cards)
-        Image w0, w1;
-        shots(120, w0, w1);
-    }
-    const double kCubeT = 16.0;                     // the wall to the cube, metres
-    const double kTexel = 1.5 / 128.0;              // the 3 m cube's cards split to 1.5 m pages
-    const double kN = 32.0;                         // the temporal mean's memory (1 / kReflectHistoryFloor)
-    std::printf("perceptual  alpha   footprint(texels)  card 2-frame std   voxel |. - card mean|   (mean"
-                " over the cube's reflection, red, 0..1)\n");
-    double prevDiff = 0.0, prevF = 0.0, crossing = -1.0;
-    bool havePrev = false;
-    for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
-        wallParams.roughness = rough;
-        s->setPbrMaterial(wallMat, wallParams);
-        e->setArm("cards.footprintTexels", 1e9);
-        Image c0, c1, v0, v1;
-        shots(60, c0, c1);
-        e->setArm("cards.footprintTexels", 0.0);
-        shots(60, v0, v1);
-        double ec = 0.0, ev = 0.0;
-        int n = 0;
-        for (unsigned y = 0; y < kPx; ++y)
-            for (unsigned x = 0; x < kPx; ++x) {
-                const Colour a = c0.at(x, y), b = c1.at(x, y);
-                const double mean = 0.5 * (double(a.r) + double(b.r));
-                if (mean - std::max(double(a.g), double(a.b)) < 0.08) continue;   // the cube's reflection
-                ec += std::fabs(double(a.r) - double(b.r)) / std::sqrt(2.0);
-                ev += std::fabs(double(v1.at(x, y).r) - mean);
-                ++n;
-            }
-        if (n) { ec /= n; ev /= n; }
-        const double alpha = double(rough) * double(rough);
-        const double f = 2.0 * kCubeT * alpha / std::sqrt(kN) / kTexel;
-        std::printf("  %.2f     %.4f   %8.1f           %.4f             %.4f        (%d px)\n", rough, alpha,
-                    f, ec, ev, n);
-        const double diff = ec - ev;
-        if (havePrev && prevDiff < 0.0 && diff >= 0.0 && crossing < 0.0)
-            crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
-        prevDiff = diff; prevF = f; havePrev = true;
-    }
-    e->setArm("cards.footprintTexels", 4.0);
-    std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
-                crossing);
-    return 0;
-}
+// (THE FOOTPRINT SWEEP, `--footprint-sweep` - the measurement the card read's footprint gate stood on - is DELETED with
+// the gate: PHOTON-7 stage 6, law L5.)
 
-// ---------------------------------------------------------------------------
-/// RAY-FMT-CHECK (PHOTON P3; `--format-check`, the rows
-/// gi.rt_reflect_format_lavapipe (archived: archive/tests/gi) and gi.rt_reflect_format_refused_lavapipe (archived: archive/tests/gi)).
-///
-/// The tier's availability gate asks the device for STORAGE_IMAGE support of
-/// the formats its own images use (RGBA16F, RG32UI) instead of assuming it, and a
-/// device that lacks one is a no-rays device with ONE log line naming it. Both
-/// rows run on LAVAPIPE, the second device of the box: without the deny it must
-/// NOT refuse (both formats are core-mandatory storage formats, so every
-/// conformant driver stores to them — the check is a driver-defect guard), and
-/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_UINT` (fault injection) the same device must
-/// refuse through the one gate: no ray query, a view at the ray tier with no
-/// trace, frames that still draw, and the line in the log.
 static bool logContains(const std::string &path, const char *needle)
 {
     FILE *f = std::fopen(path.c_str(), "rb");

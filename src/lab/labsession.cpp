@@ -897,6 +897,10 @@ bool Session::stillness(const Command &c)
         else if (a.rfind("trail=", 0) == 0) spec.moveTrail = unsigned(std::max(0, std::atoi(a.c_str() + 6)));
         else if (a == "restarts") spec.classRestarts = true;
         else if (a == "freeze") spec.freezeWalk = true;   // M1's frozen walk, from the converged picture (P2-1)
+        else if (a == "freeze=world") {   // THE WORLD HELD: the caches and the gather frozen, the reflections live
+            spec.freezeWalk = true;
+            spec.freezeValue = 2.0;
+        }
         else if (a.rfind("dump=", 0) == 0) {
             // THE MOVING WINDOW'S RAW MATERIAL (PHOTON-2 round 2, M1): <data-root>/stillness/dump-<name>/, emptied
             std::string name = a.substr(5);
@@ -915,7 +919,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, freeze, out=<name>)\n", a.c_str()); return false; }
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;

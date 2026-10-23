@@ -273,7 +273,7 @@ are the per-frame `JAHSHAKA_GATHER_NO_TEMPORAL`, `JAHSHAKA_ATOM_DECODE_OFF`, `JA
 and `JAHSHAKA_GI_FIELD_NO_SCROLL`. Each is a registered arm now (`Engine::setArm` / the verb `engine.arm(name, value)`, latched at the top
 of the next frame; `Engine::arms()` / `engine.arms()` list them with their defaults):
 `rayquery.tlasRefit`, `reflect.motion`, `reflect.monoEyes`, `reflect.alphaTested`,
-`reflect.posed`, `gather.temporal`, `atom.decode`, `cards.footprintTexels`,
+`reflect.posed`, `gather.temporal`, `atom.decode`,
 `gi.fieldScroll`. TESTING-CLEANUP-2 (H8f) converted the last ones read on a per-frame, per-pass or
 per-build path, and deleted them: `JAH_GI_CASCADE_FAULT` / `_POST` -> `gi.cascadeFault` /
 `gi.cascadeFaultPost` (-1 = none, else the cascade that throws), `JAHSHAKA_GI_NO_REBUILD_SETTLE` ->
