@@ -47,7 +47,7 @@ while (frames < 60 && pumped < 400) {
     }
 }
 console.log("stereo hit list: " + frames + " eye frames read, records max " + records + ", capacity " + capacity +
-            ", dropped max " + worst);
+            ", dropped max " + worst + "; the editor frames pumped " + (10 + pumped) + " (the row's FRAMES)");
 assert(frames >= 30, "the session drew eyes: " + frames + " frames read after the growth");
 assert(records > 0, "the eyes' traces appended records: " + records);
 assert(worst === 0, "no live view's list dropped a record after the growth: " + worst);

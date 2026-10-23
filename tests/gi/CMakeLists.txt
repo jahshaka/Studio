@@ -195,9 +195,10 @@ endif()
 # placements of its cascade (the occluders in cascade 1's and 2's shells, a cut-out partial plane, a lamp in range of one
 # placement only), a pinned chain neither aborts nor moves when the eye or the pin moves, and the floor under an 8 m
 # plate is dark at every tier (the march through the chain to the last cascade's exit). jahlab's `pin` and `voxels`
-# doors on photon-shells and photon-roof (light_is_world.sh says the arms, the band and the base). 960x540; two sessions.
+# doors on photon-shells and photon-roof (light_is_world.sh says the arms, the band and the base). 960x540; two sessions,
+# 125 + 67 frames (LAB END, 2026-10-23).
 if(TARGET jahlab)
-    jah_gpu_row(gi.light_is_world CLASS engine FRAMES 300
+    jah_gpu_row(gi.light_is_world CLASS engine FRAMES 192
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/light_is_world.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/light_is_world
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

@@ -84,6 +84,8 @@ ENGINE_SUBSYSTEMS = [
     (r"ShaderCache", ["shadercache"], "the shader cache"),
     (r"TextureCache", ["engine", "assets", "thumbnails", "openasync"], "the texture cache"),
     (r"FrameMonitor|OverlayHud", ["perf", "engine"], "the frame monitor"),
+    # PHOTON-2 stage 0's stillness door (the lab's `stillness`; its rows are jahlab's in gi/ and rtreflect/)
+    (r"src/Stillness\.(h|cpp)$", ["gi", "rtreflect", "lab"], "the stillness door"),
     (r"LogBridge", ["log"], "the log bridge"),
     (r"Sockets", ["sockets"], "sockets"),
     (r"VideoReadback|VideoNv12", ["capture", "engine"], "video readback"),
@@ -249,6 +251,8 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: ["engine", "gizmo"] for f in ("overlaysAllowed", "setOverlay", "overlay", "setHelpersVisible")},
     **{f: ["vr"] for f in ("setVrHelpersVisible", "setStereo", "setHiddenAreaMask")},
     "setVrSsrOverride": ["vr"] + _REFL,
+    # PHOTON-7 stage 0's read R1: the hit list's creation size, every build's (chainDesc asks for it)
+    "hitListCreateRows": _CHAIN + ["gi", "vr"],
     **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
     **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "applyShadows", "dropWorkspaceForShadowRebuild",
                                          "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},

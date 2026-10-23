@@ -107,6 +107,8 @@ set_tests_properties(vr.hit_list_stereo PROPERTIES
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_hit_home};JAHSHAKA_DATA_ROOT=${_vr_hit_home}/.local/share/Jahshaka")
+# THE FRAMES (R7): the script's pump, counted by it - 97 editor frames (10 + 87 pumps; 2026-10-23, one run, :68)
+set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 97)
 
 # vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
@@ -155,6 +157,10 @@ foreach(_t IN LISTS _vr_rows)
     set_property(TEST ${_t} APPEND PROPERTY LABELS vr)
 endforeach()
 
+if(TEST vr.hit_list_stereo)
+    jah_fresh_home_fixture(vr.hit_list_stereo.fresh_home vrHitListFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home" WARM LABELS "scripting;vr")
+    set_property(TEST vr.hit_list_stereo APPEND PROPERTY FIXTURES_REQUIRED vrHitListFreshHome)
+endif()
 if(TEST vr.mirror_live)
     jah_fresh_home_fixture(vr.mirror_live.fresh_home vrMirrorLiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home" WARM LABELS "scripting;vr")
     set_property(TEST vr.mirror_live APPEND PROPERTY FIXTURES_REQUIRED vrMirrorLiveFreshHome)
