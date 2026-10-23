@@ -181,6 +181,27 @@ set_tests_properties(gi.directional_seam PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 # THE FRAMES: 24 to the chain's rest, 3 to cascade 0's rebuild under the roof (measured), 12 after it, 2 at the end
 set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 41)
 
+# gi.light_order (PHOTON-7 stage 1's read F3, F4) — THE SCENE'S LIGHT ORDER IS THE WORLD'S: twenty lamps of one key (more
+# than a voxel's sixteen) created in two orders leave cascade 0's direct term bit-equal (ties by the world, never by
+# creation order). A fixture.
+add_executable(test_gi_light_order test_gi_light_order.cpp)
+set_target_properties(test_gi_light_order PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_light_order PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_light_order PRIVATE JahshakaEngine)
+add_dependencies(test_gi_light_order JahshakaEngineMedia)
+jah_gpu_row(gi.light_order CLASS engine COMMAND test_gi_light_order
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.light_order PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.light_order PROPERTIES JAHSHAKA_TEST_FRAMES 31)
+
 # gi.scroll_lag (PHOTON-7 stage 2, THE SCHEDULE) — CASCADE 0 IS NEVER QUEUED BEHIND THE CHAIN: each desktop tier's
 # scroll counts (the motion slack at 1.4 m/s) against the stated table; at Epic a 1.4 m/s dolly holds cascade 0's lag
 # at most 4 frames, a 0.25 m/frame fly at most one step (the door: CascadeStatus::lagLast / lagMax). A fixture.
