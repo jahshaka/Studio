@@ -596,7 +596,8 @@ std::string Session::statusJson()
           << cs.commitCounted << ",\"litSlab\":" << cs.commitLitSlab << ",\"litBand\":" << cs.commitLitBand
           << ",\"slabCells\":" << cs.commitSlabCells << ",\"injectCells\":" << cs.commitInjectCells
           << ",\"regionCells\":" << cs.commitRegionCells << ",\"passes\":" << cs.commitPasses << ",\"lagLast\":"
-          << cs.lagLast << ",\"lagMax\":" << cs.lagMax << "}";
+          << cs.lagLast << ",\"lagMax\":" << cs.lagMax << ",\"lightsInRangeMax\":" << cs.lightsInRangeMax
+          << ",\"injectionsOverSlots\":" << cs.injectionsOverSlots << "}";
     }
     o << "]}";
     // ...and THE HIT LIST (PHOTON-2 stage 2's tail): its demand-sized capacity, the records the traces appended and the

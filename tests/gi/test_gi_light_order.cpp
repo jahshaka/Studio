@@ -5,6 +5,10 @@
 //     creation order. Twenty lamps of one key, more than a 128^3 voxel's 16 lights, so the tie decides WHICH sixteen a
 //     voxel takes: created in one order, then removed and created in the reverse order, cascade 0's direct term is the
 //     same, bit for bit. RED ON THE BASE (the id tie): the reverse creation picks another sixteen.
+//   SLOTS (F4): a box holds 128 light slots, and a 64^3 voxel's budget IS the slots - past 128 lights in range of a box
+//     a coarse voxel takes the box's first 128, not its own first K (L1 broken there). THE BOX OVER ITS SLOTS IS
+//     COUNTED (CascadeStatus::lightsInRangeMax, injectionsOverSlots): 132 lamps in range of both boxes count it on
+//     each cascade; the twenty of TIES count nothing.
 // A fixture (the engine alone, one offscreen view, a two-cascade chain: 128 cells at 5 m, 64 at 20 m).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -111,7 +115,38 @@ int main()
               "more lamps reach the voxels than a voxel takes (the tie decides which)");
         CHECK(!a.direct.empty() && a.direct.size() == b.direct.size() && lit > 0 && diff == 0,
               "THE TIE IS THE WORLD'S: the direct term is the same, bit for bit, whatever the creation order");
+        CHECK(sb.cascades[0].injectionsOverSlots == 0u && sb.cascades[1].injectionsOverSlots == 0u &&
+                  sb.cascades[1].lightsInRangeMax == kLamps,
+              "twenty lamps: no box over its slots (the most in range: twenty)");
         for (NodeId n : lamps) scene->removeNode(n);
+        run(2);
+    }
+
+    std::printf("\n== SLOTS: 132 lamps in range of both boxes ==\n");
+    {
+        std::vector<NodeId> many;
+        for (int k = 0; k < 132; ++k) {
+            const NodeId n = scene->createNode();
+            const float a = 6.2831853f * float(k) / 132.0f;
+            enginetest::setNodePosition(scene, n, Vec3(3.0f * std::cos(a), 1.0f + 0.01f * float(k), 3.0f * std::sin(a)));
+            LightDesc l;
+            l.type = LightType::Point;
+            l.intensity = 0.02f;
+            l.range = 30.0f;
+            scene->setLight(n, l);
+            many.push_back(n);
+        }
+        GiVoxelVolume v;
+        GiStatus st;
+        CHECK(build(v, st), "the chain builds with 132 lamps");
+        for (size_t i = 0; i < st.cascades.size(); ++i)
+            std::printf("   cascade %zu: %d in range now, the most %d; %llu injection(s) over the 128 slots; a voxel takes %d\n",
+                        i, st.cascades[i].lightsInRange, st.cascades[i].lightsInRangeMax,
+                        st.cascades[i].injectionsOverSlots, st.cascades[i].lightCapacity);
+        CHECK(st.cascades.size() == 2u && st.cascades[0].lightsInRangeMax == 132 && st.cascades[1].lightsInRangeMax == 132 &&
+                  st.cascades[0].injectionsOverSlots > 0u && st.cascades[1].injectionsOverSlots > 0u,
+              "THE BOX OVER ITS LIGHT SLOTS IS COUNTED: 132 in range of each box, every cascade's injections counted");
+        for (NodeId n : many) scene->removeNode(n);
         run(2);
     }
 

@@ -183,7 +183,7 @@ set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 41)
 
 # gi.light_order (PHOTON-7 stage 1's read F3, F4) — THE SCENE'S LIGHT ORDER IS THE WORLD'S: twenty lamps of one key (more
 # than a voxel's sixteen) created in two orders leave cascade 0's direct term bit-equal (ties by the world, never by
-# creation order). A fixture.
+# creation order); 132 lamps in range of both boxes count the box over its 128 light slots. A fixture.
 add_executable(test_gi_light_order test_gi_light_order.cpp)
 set_target_properties(test_gi_light_order PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -200,7 +200,7 @@ jah_gpu_row(gi.light_order CLASS engine COMMAND test_gi_light_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.light_order PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.light_order PROPERTIES JAHSHAKA_TEST_FRAMES 31)
+set_tests_properties(gi.light_order PROPERTIES JAHSHAKA_TEST_FRAMES 45)
 
 # gi.scroll_lag (PHOTON-7 stage 2, THE SCHEDULE) — CASCADE 0 IS NEVER QUEUED BEHIND THE CHAIN: each desktop tier's
 # scroll counts (the motion slack at 1.4 m/s) against the stated table; at Epic a 1.4 m/s dolly holds cascade 0's lag
