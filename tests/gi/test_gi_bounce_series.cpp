@@ -46,6 +46,15 @@
 //       inner-wall voxel beyond the lamp's range box within one code of a 64-pass Jacobi of the end state. RED where a
 //       slow change is dropped (a move under a step recorded as none never resumes the bricks beyond the range, which
 //       stay at the old light).
+//   (7) A CARRIED BRICK'S INJECTION REACHES ITS STOPPED NEIGHBOURS (PHOTON-7 stage 5's read A2 (i); High and Epic, after
+//       (5)): the lamp FADED from 200 to 400 over kCarryFadeFrames - a sustained change, the floor on - with the test door
+//       gi.feedbackCarriedRoute set: a brick its injection moved in a frame is CARRIED that frame (never passed), and
+//       the stopped bricks accumulate the selection's carried section alone, so a carried brick's delta is the ONLY
+//       route to the stopped bricks beyond the range (a later pass's move is measured from the total the delta
+//       already wrote: it never sees the delta). At the rest, every inner-wall voxel beyond the range box within one
+//       code of a 64-pass Jacobi of the end state; the arm can fail (the voxels beyond move over a code). RED with the
+//       carried section unread (High: 296 voxels over a code, the worst 2.25; the door's other half alone,
+//       the passed bricks' moves read, is green either way: under a 120-frame fade the bounces' moves alone resume them).
 // (THE LEAK ITSELF is printed, not barred: the cones at coarse levels read a texel the wall only partly covers - a
 // march finding, VOXEL-LEAK-1. A pass-1 reading is never the operator: the outer cascades run first in a frame, so an
 // inner cascade's first pass already reads an outer one's bounce.)
@@ -76,6 +85,7 @@ const float kRho = 0.5f;     // their albedo
 const float kHalfX = 4.0f, kHalfZ = 4.0f, kHeight = 4.0f, kThick = 0.3f;
 
 const double kADiffuse = kRho * 0.701832;   // a' = rho x DA_hemi(1) (JahDiffuseAlbedo_piece_all.any)
+const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bricks carried in their frames
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
 NodeId slab(Scene *s, const Vec3 &centre, const Vec3 &size, float emission)
@@ -387,6 +397,11 @@ int main(int argc, char **argv)
         // of the room - the bricks inside the range (the sources the bricks beyond resume from) and beyond it - moves
         // under one step of the store a frame (the end states' difference over the frames, printed).
         size_t stepOver = 0, fadeOver = 0, beyond = 0;
+        size_t carryOver = 0, carryMoved = 0;
+        double carryWorst = 0.0;
+        int carryRest = -1;
+        unsigned long long carryResumes = 0, carryCarried = 0;
+        bool carryOk = false;
         int fadeRoundGap = -1, fadeRounds = 0, fadeRoundBound = 0;
         double stepWorst = 0.0, fadeWorst = 0.0, travelBeyond = 0.0, travelInside = 0.0;
         int stepRest = -1, fadeRest = -1;
@@ -471,6 +486,40 @@ int main(int argc, char **argv)
                         "rest %d frames after: beyond, worst %.3f codes, %zu over one\n", kFadeFrames, 100.0 * travelInside,
                         travelInside * 1024.0 / kFadeFrames, 100.0 * travelBeyond, travelBeyond * 1024.0 / kFadeFrames,
                         beyond, stepRest, 100.0 * stepWorst, stepOver, fadeRest, 100.0 * fadeWorst, fadeOver);
+            // (7) THE CARRIED ROUTE: from the fade's end (the lamp at 200, at rest), FADED to 400 with the carry door set
+            const GiStatus c0 = m.scene->published().gi;
+            e->setArm("gi.feedbackCarriedRoute", 1.0);
+            for (int f = 1; f <= kCarryFadeFrames; ++f) {
+                setLamp(200.0f + 200.0f * float(f) / float(kCarryFadeFrames));
+                run(1);
+            }
+            carryRest = toRest(900);
+            e->setArm("gi.feedbackCarriedRoute", 0.0);
+            const GiStatus c1 = m.scene->published().gi;
+            if (!c0.cascades.empty() && !c1.cascades.empty()) {
+                carryResumes = c1.cascades[0].feedbackResumes - c0.cascades[0].feedbackResumes;
+                carryCarried = c1.cascades[0].feedbackCarried - c0.cascades[0].feedbackCarried;
+            }
+            const Reading cEnd = read(m.scene);
+            e->setArm("gi.bounceJacobi", 1.0);
+            run(64);
+            const Reading cJ = read(m.scene);
+            e->setArm("gi.bounceJacobi", 0.0);
+            run(2);
+            carryOk = cEnd.ok && cJ.ok && cEnd.voxels == lj.voxels && cJ.voxels == lj.voxels && lj.voxels == outside.size();
+            if (carryOk)
+                for (size_t i = 0; i < lj.voxels; ++i) {
+                    if (!outside[i]) continue;
+                    const double o = std::max(double(cJ.L[i]), 1e-6);
+                    const double rel = std::fabs(double(cEnd.L[i]) - double(cJ.L[i])) / o;
+                    carryWorst = std::max(carryWorst, rel);
+                    carryOver += rel > 0.01 ? 1u : 0u;
+                    carryMoved += std::fabs(double(cJ.L[i]) - double(lj.L[i])) / o > 0.01 ? 1u : 0u;
+                }
+            std::printf("   (7) the carried route (the lamp 200 -> 400 over %d frames, every injected brick carried in its "
+                        "frame, the carried section the only route): at rest in %d frames - cascade 0 resumed %llu bricks, carried %llu; beyond the range %zu "
+                        "voxels moved over a code; vs Jacobi-64 worst %.3f codes, %zu over one\n", kCarryFadeFrames,
+                        carryRest, carryResumes, carryCarried, carryMoved, 100.0 * carryWorst, carryOver);
         }
         std::vector<double> mainL;
         for (const Reading &r : m.cascades) mainL.push_back(r.ok ? r.mean : -1.0);
@@ -526,6 +575,10 @@ int main(int argc, char **argv)
                   "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
             CHECK(fadeOk && stepOver == 0u && fadeOver == 0u,
                   "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, both within one code of a 64-pass Jacobi");
+            CHECK(carryOk && carryRest >= 0 && carryMoved > 0u,
+                  "(7) the carried route: the fade moves voxels beyond the range over a code, and the feedback comes to rest");
+            CHECK(carryOk && carryOver == 0u,
+                  "(7) A CARRIED BRICK'S INJECTION REACHES ITS STOPPED NEIGHBOURS: beyond the range, within one code of a 64-pass Jacobi");
         }
         std::printf("   (the tier's three arms: %d frames, %.1f s)\n", frames - tierF0,
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - tierT0).count());
