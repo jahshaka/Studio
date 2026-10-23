@@ -22,6 +22,12 @@
 //       eye), and a cone ends at its cascade's box face (jah_voxel_march.glsl), so a card's marched indirect depends on
 //       where the boxes stand until the cone march hands over at the world's shells (stage 5's cone-shell item, whose
 //       commit makes this a law).
+//   (5) A LATE FIRST READER KEEPS THE DEMAND OPEN FOR ITS OWN SETTLE (PHOTON-7 stage 5's read W3): a fourth run, the
+//       teleport again with the test door cards.gatherLate = 8 (the gather's stamps within 8 frames of the arrival
+//       dropped: it reads first 8 frames late, inside the settle's S = 10) - every card of the teleport's read set
+//       (read at B at least lambda_min a frame) resident in it. RED under the readers' MOST clock (the demand closed S
+//       frames after the change, before the late reader's first read-back: 106 of the 106 lost); the reflection never
+//       reads here, so a least clock would never close it (the rule: each reader from its own first stamp).
 //   (4) THE ATLAS COMPACTS: a third run teleports from a CROWDED room (a 7 x 3 x 7 grid of 0.8 m cubes: its read set
 //       fills the atlas with quarter-page cards) to room B (whole pages): the arrivals find no free page and the atlas
 //       merges its sub-cut pages (compaction moves > 0, each moved card re-captured), and B comes to rest carded.
@@ -121,8 +127,9 @@ struct Run {
     Room a, b;
 };
 
-bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false) {
-    const char *name = crowded ? "residency_crowded" : walk ? "residency_walk" : "residency_teleport";
+bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0) {
+    const char *name = crowded ? "residency_crowded" : walk ? "residency_walk" : gatherLate ? "residency_late"
+                                                                                          : "residency_teleport";
     View *view = e->createOffscreenView(name, 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
@@ -183,6 +190,7 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false) 
     if (!scene->setGlobalIllumination(gi)) return false;
     e->waitForAsyncShaders();
     out.restA = settle();
+    if (gatherLate) e->setArm("cards.gatherLate", double(gatherLate));   // (5): the gather reads first N frames late
     if (walk) {
         for (int f = 1; f <= 120; ++f) {
             look(-12.0f + 24.0f * float(f) / 120.0f);
@@ -209,6 +217,7 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false) 
         }
     }
     out.restB = settle();
+    if (gatherLate) e->setArm("cards.gatherLate", 0.0);
     const GiStatus g = scene->published().gi;
     out.evicted = g.cards.evicted;
     out.admitted = g.cards.admitted;
@@ -239,10 +248,11 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
-    Run w, t, c;
+    Run w, t, c, l;
     const bool okW = runOnce(e, true, w, frames);
     const bool okT = runOnce(e, false, t, frames);
     const bool okC = runOnce(e, false, c, frames, true);
+    const bool okL = runOnce(e, false, l, frames, false, 8);
     std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
                 "compaction moves %llu\n", w.restA, w.restB, w.cards.size(), w.pagesUsed, w.admitted, w.evicted,
                 w.compaction);
@@ -321,6 +331,21 @@ int main()
                 "(the law leaves to chance): walk %zu, teleport %zu\n", floor, readW, missW, readT, missT, bandW, bandT);
     CHECK(w.evicted > 0u && readW > 0u && readT > 0u && missW == 0u && missT == 0u,
           "(2) THE ATLAS MADE ROOM (the walk's unread cards evicted) AND THE READ SET IS RESIDENT IN BOTH");
+
+    // (5) THE LATE FIRST READER: the teleport's read set resident in the late run
+    {
+        const std::map<NodeId, int> idL = key(l);
+        std::map<std::pair<int, unsigned>, const CardRadiance *> inL;
+        for (const CardRadiance &k : l.cards) if (idL.count(k.node)) inL[{ idL.at(k.node), k.card }] = &k;
+        size_t readSet = 0, missL = 0;
+        for (const auto &kv : inT)
+            if (rateOf(t, *kv.second) >= floor) { ++readSet; missL += inL.count(kv.first) ? 0u : 1u; }
+        std::printf("   (5) the gather first reading 8 frames late: at rest in B %d frames, %zu cards resident, admitted "
+                    "%llu | the teleport's read set %zu cards, %zu not resident in the late run\n", l.restB, l.cards.size(),
+                    l.admitted, readSet, missL);
+        CHECK(okL && l.restB >= 0 && readSet > 0u && missL == 0u,
+              "(5) A LATE FIRST READER KEEPS THE DEMAND OPEN FOR ITS OWN SETTLE: the read set resident");
+    }
 
     // (3) the values
     size_t common = 0, over = 0;
