@@ -248,7 +248,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     static const char *giQualityNames[] = { "low", "medium", "high", "epic" };
     sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 2)];
     sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 3)];
-    sceneObj["giNumBounces"] = scene->giNumBounces;
+    sceneObj["giBounces"] = scene->giBounces;
     sceneObj["giUpdateBudget"] = scene->giUpdateBudget;   // FIX WAVE B1
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
     // Hybrid probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Always written:

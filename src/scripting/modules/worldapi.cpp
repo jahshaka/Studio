@@ -1091,8 +1091,8 @@ bool WorldApi::gi(const QVariantMap &params)
             return fail(QStringLiteral(
                 "world.gi: bounces must be 0 or 1 (0 = the direct store alone; 1, every tier's column, the bounces "
                 "converged by feedback)"));
-        scene->giNumBounces = b;
-        worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), scene->giNumBounces);
+        scene->giBounces = b != 0;
+        worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), b);
     }
     if (params.contains("light"))
         // The Instant Radiosity driving light. Refused by name, like the bounds
@@ -1249,7 +1249,7 @@ QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
         { QStringLiteral("gather"),
           scene->giGather >= 0 ? scene->giGather > 0
                                : worldmodes::photonGather(worldmodes::photonTier(scene)).on },
-        { QStringLiteral("bounces"), qBound(0, scene->giNumBounces, 1) },
+        { QStringLiteral("bounces"), scene->giBounces ? 1 : 0 },
         // THE EFFECTIVE TABLE ROW — the tier's own columns before any pin, so
         // a caller can hold the resolution above against the table.
         { QStringLiteral("row"), photonRow(worldmodes::photonTier(scene)) },
@@ -3780,7 +3780,7 @@ QVariantMap WorldApi::get()
     static const char *giQualityNames[] = { "low", "medium", "high", "epic" };
     out["gi"] = QVariantMap{ { "mode", kGiModeNames[qBound(0, int(scene->giMode), 2)] },
                              { "quality", giQualityNames[qBound(0, int(scene->giQuality), 3)] },
-                             { "bounces", scene->giNumBounces },
+                             { "bounces", scene->giBounces ? 1 : 0 },
                              { "pccGrid", vecToJs(scene->giPccGrid) },
                              // The old spelling, kept as a READER only: a
                              // settings dump that dropped it would silently

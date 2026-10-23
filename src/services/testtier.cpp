@@ -42,9 +42,10 @@ void applyTestTier(const iris::ScenePtr &scene)
     // back concrete, and a save would then keep the concrete value.
     struct KeptPhoton {
         iris::GiMode mode = {}; iris::GiQuality quality = {};
-        int ddgi = 0, bounces = 0, probeSize = 0, tier = 0;
+        int ddgi = 0, probeSize = 0, tier = 0;
+        bool bounces = true;
         QJsonObject pins;
-    } kept = { scene->giMode, scene->giQuality, scene->giDdgi, scene->giNumBounces,
+    } kept = { scene->giMode, scene->giQuality, scene->giDdgi, scene->giBounces,
                scene->giProbeCaptureSize, scene->giTier, {} };
     if (photonPinned) {
         for (const QString &id : photonRowIds())
@@ -55,7 +56,7 @@ void applyTestTier(const iris::ScenePtr &scene)
         scene->giMode = kept.mode;
         scene->giQuality = kept.quality;
         scene->giDdgi = kept.ddgi;
-        scene->giNumBounces = kept.bounces;
+        scene->giBounces = kept.bounces;
         scene->giProbeCaptureSize = kept.probeSize;
         scene->giTier = kept.tier;
         for (auto it = kept.pins.constBegin(); it != kept.pins.constEnd(); ++it)

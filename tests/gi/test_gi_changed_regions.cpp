@@ -22,7 +22,8 @@
 //            its chunk frames list no Slab.
 //   GONE:    a lamp NODE deleted (removeNode, the mirror's path) lists exactly its sphere; a movable cube removed lists its
 //            last box as a Mover with its shadows; a still cube removed while another object holds the tail slot lists
-//            the removed cube's box (its REMOVE) and the tail object's own box (its ADD into the freed slot).
+//            the removed cube's box (its REMOVE) and NOTHING for the tail object, renumbered into the freed slot unchanged
+//            in the world (PHOTON-7 stage 4's read F2: a compaction move is the index's, not the world's).
 //   ATTACH:  a lit attach lists its item's box as an Edit, never an overflow (stage 3's read F3).
 //   BRICKS:  the light passes' brick mask (Scene::takeGiBrickMask): a still scene's forced re-injection (readings landed,
 //            updates counted) changes no brick's direct term; the lamp step's re-injection marks bricks, every one in the
@@ -689,8 +690,9 @@ int main()
         }
         CHECK(moverGone && shadowGone, "A MOVER REMOVED LISTS ITS LAST BOX (Mover) AND ITS SUN SHADOW (MoverShadow)");
         settle(900);
-        // A SLOT REUSED (stage 3's read F2): a still cube removed while another object holds the tail slot - the
-        // removed cube's box is its REMOVE, and the tail object, moved into the freed slot, its ADD at its own box.
+        // A SLOT REUSED (stage 3's read F2; stage 4's read F2): a still cube removed while another object holds the tail
+        // slot - the removed cube's box is its REMOVE; the tail object, renumbered into the freed slot unchanged in the
+        // world, lists NOTHING.
         const Vec3 cs(0.5f, 0.5f, 0.5f), ap(-2.0f, 0.25f, 2.0f), bp(2.0f, 0.25f, 2.0f);
         const NodeId ca = scene->createNode(), cb = scene->createNode();
         scene->setNodeTransform(ca, ap, Quat(), cs);
@@ -707,7 +709,8 @@ int main()
             if (same(g, cubeAt(ap, cs), 1e-3f)) removed = true;
             if (same(g, cubeAt(bp, cs), 1e-3f)) added = true;
         }
-        CHECK(removed && added, "A SLOT REUSED IS A REMOVE (the removed cube's box) AND AN ADD (the tail object's own box)");
+        CHECK(removed && !added,
+              "A SLOT REUSED IS A REMOVE (the removed cube's box); THE TAIL'S UNCHANGED OBJECT, RENUMBERED, LISTS NOTHING");
     }
 
     GiParams off;

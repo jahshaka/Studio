@@ -312,7 +312,7 @@ void WorldGiPropertyWidget::rebuild()
         // A Photon tier row (on at every tier: the bounces converge by feedback, PHOTON-7 stage 4 - 0 is the direct
         // store alone): an edit here PINS it, like the technique and quality above, and the mark says so.
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
-                                            0.0f, 1.0f, float(qBound(0, scene->giNumBounces, 1)));
+                                            0.0f, 1.0f, scene->giBounces ? 1.0f : 0.0f);
         bounces->setToolTip(rowTip("giBounces"));
         wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
 

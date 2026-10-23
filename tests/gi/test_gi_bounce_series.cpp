@@ -22,8 +22,9 @@
 //       door is seen to run (every brick of cascade 0 a frame, the outer cascades held);
 //   (2) BOTH WITHIN 3 % OF E / (1 - a'(1 - e)), e the sky-leak arm's (the physics with its leak, the spec's bar);
 //   (2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce operator's energy, independent of the escape;
-//   (3) THE FEEDBACK STOPS: the chain owes nothing at its rest, and it ran fewer brick-passes than the Jacobi's 64 a brick
-//       (it stops the converged bricks).
+//   (3) THE FEEDBACK STOPS: the chain owes nothing at its rest (its brick-passes printed; the old "fewer than the
+//       Jacobi's 64 a brick" could not fail - 1.2-2.1 a brick - and is DELETED: the stop and resume rules are (1)'s and
+//       (4)'s).
 //   (4) A STOPPED BRICK BESIDE A MOVING ONE RESUMES (stage 4's read R3; the main arm's room after its Jacobi and the
 //       feedback's rest; High and Epic - see the arm): a lamp
 //       of 200 switched on 0.5 m over the floor's centre at the room's rest (range 3 m: only its sphere's bricks are
@@ -401,8 +402,6 @@ int main(int argc, char **argv)
               "(2) BOTH WITHIN 3 % OF E / (1 - a'(1 - e)), e the room's measured escape (the sky-leak arm)");
         CHECK(std::fabs(lOp / sStar - 1.0) <= 0.03,
               "(2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce's energy, whatever the escape");
-        CHECK(bricks0 > 0u && bricksRan < 64ull * bricks0,
-              "(3) the feedback ran fewer brick-passes than the Jacobi's 64 a brick (it stops the converged ones)");
         if (lampArm) {
             CHECK(lampOk && lampRest >= 0 && lampMovedOutside > 0u,
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");

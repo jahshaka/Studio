@@ -276,8 +276,7 @@ of the next frame; `Engine::arms()` / `engine.arms()` list them with their defau
 `reflect.posed`, `reflect.edgeClasses`, `gather.temporal`, `atom.decode`, `cards.footprintTexels`,
 `gi.fieldScroll`. TESTING-CLEANUP-2 (H8f) converted the last ones read on a per-frame, per-pass or
 per-build path, and deleted them: `JAH_GI_CASCADE_FAULT` / `_POST` -> `gi.cascadeFault` /
-`gi.cascadeFaultPost` (-1 = none, else the cascade that throws), `JAHSHAKA_GI_NO_REBUILD_SETTLE` ->
-`gi.rebuildSettle` (0 = off), `JAHSHAKA_GI_FIELD_RAYS` / `_SAMPLES` / `_STATIC` -> `gi.fieldRays` /
+`gi.cascadeFaultPost` (-1 = none, else the cascade that throws), `JAHSHAKA_GI_FIELD_RAYS` / `_SAMPLES` / `_STATIC` -> `gi.fieldRays` /
 `gi.fieldSamples` / `gi.fieldStatic` (read at the field's build: set the arm, step a frame, then
 build), `JAH_VCT_REFUSE_GEOMETRY` -> `gi.refuseGeometry`, `JAHSHAKA_ATOM_DISCRIMINATE` ->
 `atom.discriminate` (1 codes, 2 the chart), `JAHSHAKA_HIT_WORLD_LIGHTS` -> `atom.hitWorldLights`
