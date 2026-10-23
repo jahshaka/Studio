@@ -11,7 +11,8 @@
 //   (1) THE READ FACES ARE RESIDENT AND NO UNREACHABLE ONE IS: at B, every pillar of room B holds cards in both runs, and
 //       no card of a wall's OUTER face (the face toward the outside of its room) was read within the window;
 //   (2) THE ATLAS MADE ROOM: the walk's demand (both rooms and the outer faces of the gap) exceeds the atlas and evicted
-//       the unread cards (the teleport's fits whole), and every card READ AT B AT LEAST ONCE A FRAME in either run (the
+//       the unread cards (the teleport's fits whole), and every card READ AT B AT LEAST lambda_min TIMES A FRAME
+//       (GiQualityFacts::cardDemandHitFloor) in either run (the
 //       measuring arm's counts over the 30 frames after the arrival) is resident in the other - walk = teleport on THE
 //       RESIDENT SET (the spec's acceptance) down to the demand settle's law (GiQualityFacts::cardDemandSettleFrames:
 //       a face read less may arrive in one run and not the other - counted, printed);
@@ -289,20 +290,34 @@ int main()
         auto it = r.rate.find({ c.node, c.card });
         return it != r.rate.end() ? it->second : 0.0;
     };
-    size_t readW = 0, readT = 0, missW = 0, missT = 0, rareW = 0, rareT = 0;
-    for (const auto &kv : inW) {
-        const double rt = rateOf(w, *kv.second);
-        if (rt >= 1.0) { ++readW; missW += inT.count(kv.first) ? 0u : 1u; }
-        else if (!inT.count(kv.first) && readRecently(w, *kv.second)) ++rareW;
-    }
-    for (const auto &kv : inT) {
-        const double rt = rateOf(t, *kv.second);
-        if (rt >= 1.0) { ++readT; missT += inW.count(kv.first) ? 0u : 1u; }
-        else if (!inW.count(kv.first) && readRecently(t, *kv.second)) ++rareT;
-    }
-    std::printf("   the read set (read at B at least once a frame): walk %zu cards (%zu not resident in the teleport), "
-                "teleport %zu (%zu not resident in the walk) | read less, resident in one run only: walk %zu, teleport "
-                "%zu (the settle law's floor)\n", readW, missW, readT, missT, rareW, rareT);
+    // THE FLOOR: the settle law's lambda_min (GiQualityFacts::cardDemandHitFloor), the one constant
+    const double floor = double(giQualityFacts(GiQuality::High, GiViewProfile::Desktop).cardDemandHitFloor);
+    size_t readW = 0, readT = 0, missW = 0, missT = 0, bandW = 0, bandT = 0;
+    const auto side = [&](const Run &r, const Run &other, const std::map<std::pair<int, unsigned>, const CardRadiance *> &mine,
+                          const std::map<std::pair<int, unsigned>, const CardRadiance *> &theirs, const char *name,
+                          size_t &read, size_t &miss, size_t &band) {
+        size_t unreadOnly = 0;
+        for (const auto &kv : mine) {
+            const double rt = rateOf(r, *kv.second);
+            const bool there = theirs.count(kv.first) != 0u;
+            if (rt >= floor) { ++read; miss += there ? 0u : 1u; }
+            if (rt >= 0.5 * floor && rt < floor) ++band;
+            if (!there && !(rt > 0.0)) ++unreadOnly;
+            else if (!there)   // resident in this run only and read at B: printed with its measured rate
+                std::printf("   %s only: id %d card %u (face %u) read %.3f hits a frame at B%s\n", name, kv.first.first,
+                            kv.first.second, kv.second->bucket, rt,
+                            rt >= floor ? " - AT THE FLOOR OR MORE" : rt >= 0.5 * floor ? " (the band floor/2 .. floor)" : "");
+        }
+        if (unreadOnly)
+            std::printf("   %s only, not read at B at all: %zu cards (the path's: the first room's, the gap's outer faces)\n",
+                        name, unreadOnly);
+        (void)other;
+    };
+    side(w, t, inW, inT, "walk", readW, missW, bandW);
+    side(t, w, inT, inW, "teleport", readT, missT, bandT);
+    std::printf("   the read set (read at B at least %.2f hits a frame, the settle law's floor): walk %zu cards (%zu not "
+                "resident in the teleport), teleport %zu (%zu not resident in the walk) | in the band floor/2 .. floor "
+                "(the law leaves to chance): walk %zu, teleport %zu\n", floor, readW, missW, readT, missT, bandW, bandT);
     CHECK(w.evicted > 0u && readW > 0u && readT > 0u && missW == 0u && missT == 0u,
           "(2) THE ATLAS MADE ROOM (the walk's unread cards evicted) AND THE READ SET IS RESIDENT IN BOTH");
 
