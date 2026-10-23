@@ -379,6 +379,10 @@ int main(int argc, char **argv)
     // and the view HOLDS - no ray at all - long before this read.)
     CHECK_MSG(rq.reflectFrame > 0u, "the trace ran (%u traced frames; %d rays this frame)", unsigned(rq.reflectFrame),
               rq.reflectRays);
+    // THE HOLD (PHOTON-7 stage 6): once the view holds, the trace dispatches no ray - the hold law, never rays at a fixed
+    // frame.
+    CHECK_MSG(!rq.reflectHeld || rq.reflectRays == 0, "a held view traces no ray (%d rays this frame, held %d)",
+              rq.reflectRays, int(rq.reflectHeld));
     // THE BAR. The cube's emissive is 4.0 linear; after the tonemap the wall
     // cannot read that literally, so the bar is on the DIFFERENCE from the arm
     // that has no ray: the reflection must be unmistakable rather than a tint.
