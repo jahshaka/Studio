@@ -205,24 +205,30 @@ std::string describeRamp()
 //
 // photon-ramp's contact mark - the 10 cm matte black FOOT (0.02 to 0.12 m) under an emitter post, at the 0.00 strip's
 // place - standing on a MIRROR FLOOR that is a CHAINED mesh, NON-PLANAR (READ_A finding 2: a flat grid's levels are all
-// the same plane, so Atom's cut equals level 0 exactly and the arm could not fail): one welded 32 x 32 grid over the
-// room's 7.8 m (2,048 triangles, 24 cm cells - the bake builds its level chain and its cluster DAG; 3.3 s, the zigzag
-// being every vertex a feature) CORRUGATED - each vertex kCorrugation above or below y 0.02, a checkerboard, so level 0
-// is a fine zigzag whose simplifications lie within about kCorrugation of it (0.2 mm: a fifth of a pixel at 1 m, so
-// Atom's cut draws coarse clusters wherever their group falls under the view's tolerance). Where the drawn surface lies
-// BELOW level 0, which every ray traces (ONE RAY LEVEL PER MESH), an origin lifted by the float bound alone starts
-// inside level 0 and hits it from below -
-// the origin law's drawn-cut term is what clears it (the row's negative control turns it off: rays.originCut 0). The
-// shading normal is the plane's (+Y), so the zigzag moves no reflection. On it stands the foot (its contact line within
-// the corrugation's 0.2 mm of y 0.02): its reflection must meet it at the contact line within a pixel, from 2.4 m
-// (envcam 1) and 1 m (envcam 2). AN EMITTER PANEL over the far wall (y 0.8 .. 7.9) gives the floor a uniformly bright
-// reflection over a wide band, where a ray that hits its own floor reads dark. And THE CREASE (READ_A finding 1): a
-// BRIGHT MATTE BLOCK (albedo 0.8, card-lit) standing on the same floor (its face at z -2.17: a stretch the cut draws
-// coarse from envcam 3 - measured: the base's side pick drew its line on 132 of 747 columns there), whose base, seen
-// from the foreshortened side (envcam 3, 3.4 m away, 1.3 m up), the floor's first rows must reflect as the rows below
-// them do - a ray whose lift went sideways (the depth's nearer neighbour is across the crease) keeps the drawn surface
-// under level 0 and hits its own floor: a one-row line along the crease. Predicts THE KEEP RULE only.
+// the same plane, so Atom's cut equals level 0 exactly and the arm could not fail): one welded 26 x 32 grid over the
+// room's x -2.2 .. 3.9, z -3.9 .. 3.9 (1,664 triangles, ~24 cm cells - the bake builds its level chain and its cluster
+// DAG, the zigzag being every vertex a feature) CORRUGATED - each vertex kCorrugation above or below y 0.02 by a
+// HASHED sign (a cut that keeps one parity of a checkerboard lies wholly on one side of it; a hashed sign leaves any
+// coarse triangle over a mixture). WHAT ATOM'S CUT DRAWS OF IT FROM THE ROW'S POSES IS LEVEL 0 (measured, round 7: the
+// cut probe's visible pixels all at DAG depth 0 from envcams 1, 2 and 3 - the groups' spheres hold the camera, so
+// their nearest distance and what it affords are ~0): the floor is a CHAINED level-0 surface there, and no row can make
+// it fail for the drawn term (gi.sun_contact_acne does, on the stock route). BESIDE IT, x -3.9 .. -2.2, A FLAT
+// MIRROR at level 0 (a box: every level of a plane is the plane), the FLOAT-ONLY control's floor (the lead's round-7
+// ruling): with the drawn term off, a ray from it has only the point's own error to clear - the float bound and the
+// depth-rebuilt point's term (rays.originPoint: the depth's quantum and the sub-pixel snap) - so it separates float
+// acne from the cut's. The shading normal is +Y on both, so the zigzag moves no reflection. On the chained floor
+// stands the foot (its contact line within the corrugation's 0.2 mm of y 0.02): its reflection must meet it at the
+// contact line within a pixel, from 2.4 m (envcam 1) and 1 m (envcam 2). AN EMITTER PANEL over the far wall (y 0.8 ..
+// 7.9) gives both floors a uniformly bright reflection over a wide band, where a ray that hits its own floor reads
+// dark. And THE CREASE (READ_A finding 1): a BRIGHT MATTE BLOCK (albedo 0.8, card-lit) standing on the chained floor
+// (its face at z -2.17; the base's side pick drew its line on 132 of 747 columns there), whose base, seen from the
+// foreshortened side (envcam 3, 3.4 m away, 1.3 m up), the floor's first rows must reflect as the rows below them do -
+// a ray whose lift went sideways (the depth's nearer neighbour is across the crease) leaves the origin on the floor's
+// own plane, lifted off it by nothing, and hits its own floor: a one-row line along the crease.
+// Predicts THE KEEP RULE only.
 constexpr float kCorrugation = 0.0002f;
+/// Where the flat level-0 mirror ends and the chained floor begins (x, metres): 0.3 m left of the foot's centre line.
+constexpr float kContactFlatEnd = -2.2f;
 
 Built buildContact(unsigned seed, bool bake)
 {
@@ -231,12 +237,16 @@ Built buildContact(unsigned seed, bool bake)
     roomShell(b, unit, b.material(kRho, kRho, kRho, 1.0f));
     using V = iris::Vec3;
     Arrays grid;
-    const int nx = 32, nz = 32;
-    const float x0 = -3.9f, x1 = 3.9f, z0 = -3.9f, z1 = 3.9f;
+    const int nx = 26, nz = 32;
+    const float x0 = kContactFlatEnd, x1 = 3.9f, z0 = -3.9f, z1 = 3.9f;
     for (int j = 0; j <= nz; ++j)
         for (int i = 0; i <= nx; ++i) {
             const float x = x0 + (x1 - x0) * float(i) / float(nx), z = z0 + (z1 - z0) * float(j) / float(nz);
-            grid.p.insert(grid.p.end(), { x, 0.02f + (((i + j) & 1) ? kCorrugation : -kCorrugation), z });
+            // the hashed sign (the head of this section): one PCG step of the vertex's index
+            unsigned h = unsigned(j * (nx + 1) + i) * 747796405u + 2891336453u;
+            h = ((h >> ((h >> 28u) + 4u)) ^ h) * 277803737u;
+            h = (h >> 22u) ^ h;
+            grid.p.insert(grid.p.end(), { x, 0.02f + ((h & 1u) ? kCorrugation : -kCorrugation), z });
             grid.n.insert(grid.n.end(), { 0.0f, 1.0f, 0.0f });
             grid.uv.insert(grid.uv.end(), { float(i) / float(nx), float(j) / float(nz) });
         }
@@ -248,6 +258,9 @@ Built buildContact(unsigned seed, bool bake)
         }
     b.instance(b.mesh(grid), "floor-chained", "subject", V(0, 0, 0), 0.0f, V(1, 1, 1),
                b.material(0.9f, 0.9f, 0.9f, 0.0f, 1.0f));
+    // the flat level-0 mirror beside it (the float-only control's floor), its top at the plane y 0.02
+    fixedBox(b, unit, "floor-flat", V(-3.9f, 0.0f, -3.9f), V(kContactFlatEnd, 0.02f, 3.9f),
+             b.material(0.9f, 0.9f, 0.9f, 0.0f, 1.0f));
     const float xc = -2.0f + 0.12f;   // photon-ramp's 0.00 strip's centre line
     fixedBox(b, unit, "post-foot", V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.12f, -3.0f),
              b.material(0.02f, 0.02f, 0.02f, 1.0f));

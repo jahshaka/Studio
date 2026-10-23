@@ -6,10 +6,11 @@
 #   photon-ramp: the 0.00 strip's post on its 10 cm matte black FOOT (0.02-0.12 m), an emitter above it, from 2.4 m
 #     (envcam 2) and 1 m (envcam 3), the reflections RAYS-only and BOTH (the screen trace first).
 #   photon-contact: the same mark on a CHAINED, CORRUGATED mirror floor (a welded grid each of whose vertices sits 0.2 mm
-#     above or below the plane: Atom's cut draws its coarse plane, which lies BELOW level 0's peaks, while every ray
-#     traces level 0) from 2.4 m and 1 m (envcams 1, 2); the CREASE, a bright matte block standing on that floor, from
-#     3.4 m (envcam 3, the Photon view's reflections alone); and the NEGATIVE CONTROL: the arm rays.originCut 0 (the
-#     origin's drawn-cut term off) at envcams 1 and 2.
+#     above or below the plane by a hashed sign: Atom's cut draws coarse clusters, parts of which lie BELOW level 0,
+#     while every ray traces level 0) beside a FLAT LEVEL-0 mirror (x < -2.2: a box), from 2.4 m and 1 m (envcams 1,
+#     2); the CREASE, a bright matte block standing on the chained floor, from 3.4 m (envcam 3, the Photon view's
+#     reflections alone); and the CONTROLS at envcams 1 and 2: rays.originCut 0 (the origin's drawn term off), then
+#     rays.originPoint 0 as well (the depth-rebuilt point's term off: the float bound alone).
 # THE LAWS (the mirror's geometry and the origin law, exact):
 #   (a) THE SEAM AT THE CONTACT - the rows between the foot's contact line (y 0.02) and its reflection's first dark row -
 #       <= 1 px, every arm (measured down the foot's column, c3.py's method, spikes/photon-2/round5/ramp).
@@ -21,15 +22,22 @@
 #       surface itself, which needs no lift) (BOTH is the one estimator since PHOTON-7 stage 6
 #       commit 5: the screen trace answers the mirror's centre ray where the screen vouches for it, the ray the rest - the
 #       raster march's -2.1 px it replaced); the corrugated floor's (its zigzag is a fifth of a pixel) is printed.
-#   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2): inside the band where the flat mirror reflects the emitter panel
-#       over the far wall (y 0.8-7.9; a 0.15 m margin, the post, the foot, the block and the walls kept out) the picture is
-#       the mirror image of one uniform emitter: no pixel more than 3 codes from its row's median (the metal's Fresnel
-#       drifts 2 codes from row to row over the band, which the row's median follows) - the encode's dither, 2 codes a
-#       channel, and the luminance's mix of independently dithered channels, which puts a row's median up to a code off
-#       an integer (measured: 2.07 at most) - a ray started inside the traced level 0 hits it from below and reads some
-#       other radiance (measured: up to 92 codes off). THE NEGATIVE CONTROL must be RED there (such pixels at 2.4 m or
-#       1 m: measured 10,827 at 2.4 m): it proves the receiver can fail, the drawn cut below level 0 - the flat welded
-#       grid this floor replaces could not (every level of a plane is the plane).
+#   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2; READ_B F4, the lead's round-7 ruling): inside the band where each
+#       mirror floor reflects the emitter panel over the far wall (y 0.8-7.9; a 0.15 m margin, 5 cm either side of the
+#       floors' seam, the post, the foot, the block and the walls kept out) the picture is the mirror image of one
+#       uniform emitter: no pixel more than 3 codes from its row's median (the metal's Fresnel drifts 2 codes from row to
+#       row over the band, which the row's median follows) - the encode's dither, 2 codes a channel, and the luminance's
+#       mix of independently dithered channels, which puts a row's median up to a code off an integer (measured: 2.07 at
+#       most) - a ray started inside the traced level 0 hits it from below and reads some other radiance (measured: up
+#       to 92 codes off). AT EACH DISTANCE, each arm gated on its own: the law green on both floors; rays.originCut 0 -
+#       THE FLOAT-ONLY CONTROL - green on both (both are drawn at LEVEL 0: the cut probe reads every visible pixel of the
+#       chained floor at DAG depth 0 from all three poses, so the point's own error is the whole lift and must clear
+#       them); rays.originPoint 0 as well RED on the chained floor at 2.4 m (the depth's quantum and the rasteriser's
+#       sub-pixel snap are real: jah_ray_origin.glsl jahDepthPointError; at 1 m printed - the float bound covers it).
+#       NO ARM HERE CAN FAIL FOR THE DRAWN TERM: Atom's cut draws this floor at level 0 from these poses (its groups'
+#       nearest distance is ~0 from inside them), and even where it draws coarse, HALF the law is its own guarantee (a
+#       one-step cluster drawn under tol x footprint at its group's distance deviates by exactly its stored error) - the
+#       drawn term's need and its factor 2 are proven on the stock route by gi.sun_contact_acne (half the law red).
 #   (d) THE CREASE (READ_A finding 1): along the block's base (placed on a stretch the cut draws coarse from 3.4 m,
 #       measured), the floor's FIRST row below the crease steps from the second by no more than the second steps from
 #       the third, plus the encode's 2 codes - a ray whose lift went SIDEWAYS (the depth's nearer neighbour across the
@@ -37,7 +45,7 @@
 #       along the crease (measured with the old pick: 132 of 747 columns; with the fix 0).
 # THE BASE (photon-2 round 5, the 1/2-cell bias + tMin, Both): at 1 m the reflected foot ENTIRELY missing (SEAM 99.3
 # rows, the top edge 84.9 rows off); at 2.4 m SEAM 7.4 rows, the edge 5.7 off.
-# 9 shots x 50 = 450 frames; two jahlab sessions.
+# 11 shots x 50 = 550 frames; two jahlab sessions.
 # usage: contact.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -80,6 +88,13 @@ shot nocut-2p4
 envcam 2
 frames 50
 shot nocut-1m
+arm rays.originPoint 0
+envcam 1
+frames 50
+shot nopoint-2p4
+envcam 2
+frames 50
+shot nopoint-1m
 quit
 S
 for run in ramp:photon-ramp chained:photon-contact; do
@@ -97,6 +112,7 @@ shots = sys.argv[1]
 fails = []
 TY = math.tan(math.radians(22.5))
 DRIFT = 2.0   # Types.h kLevelDriftOverBound (the bake's ship law atom2.one_step_drift_bound)
+FLAT_END = -2.2   # photon-contact's kContactFlatEnd: the flat level-0 mirror is x < it, the chained one x > it
 def load(name):
     path = os.path.join(shots, name + '.png')
     if not os.path.exists(path):
@@ -174,6 +190,8 @@ def selfHits(name, eye):
     P = eye + d * t[..., None]
     m = 0.15
     ok &= (np.abs(P[..., 0]) < 4.0 - m) & (P[..., 2] > -4.0 + m) & (P[..., 2] < 4.0 - m)
+    # the two floors, 5 cm clear of their seam: the chained mirror (x > -2.2) and the flat level-0 one
+    floors = {'chained': P[..., 0] > FLAT_END + 0.05, 'flat': P[..., 0] < FLAT_END - 0.05}
     R = d * np.array([1.0, -1.0, 1.0])                       # the flat mirror's reflected direction
     ok &= R[..., 2] < -1e-6
     s = np.where(ok, (-3.95 - P[..., 2]) / np.where(ok, R[..., 2], -1.0), 0.0)
@@ -184,19 +202,24 @@ def selfHits(name, eye):
         hitV = segHitsBox(flat(np.broadcast_to(eye, P.shape)), flat(d), t.reshape(-1), lo, hi, 0.05).reshape(H, W)
         hitR = segHitsBox(flat(P), flat(R), s.reshape(-1), lo, hi, 0.1).reshape(H, W)
         ok &= ~hitV & ~hitR
-    band = lum[ok]
-    if band.size < 1000:
-        fails.append('%s: the panel band holds %d px (< 1000): the fixture moved' % (name, band.size)); return None
-    # against its ROW's median: the emitter's mirror image is uniform along a row, and its row-to-row drift (the metal's
-    # Fresnel with the angle, 2 codes over the band) is the row median's
-    offPx = 0
-    for y in range(H):
-        row = lum[y][ok[y]]
-        if row.size < 16: continue
-        offPx += int((np.abs(row - np.median(row)) > 3.0).sum())
-    print('%-12s the panel band: %d px, %d more than 3 codes off their row (rays that hit their own floor)' %
-          (name, band.size, offPx))
-    return offPx
+    out = {}
+    for floor, fm in floors.items():
+        okF = ok & fm
+        band = lum[okF]
+        if band.size < 1000:
+            fails.append('%s: the %s floor\'s panel band holds %d px (< 1000): the fixture moved' % (name, floor, band.size))
+            out[floor] = None; continue
+        # against its ROW's median: the emitter's mirror image is uniform along a row, and its row-to-row drift (the
+        # metal's Fresnel with the angle, 2 codes over the band) is the row median's
+        offPx = 0
+        for y in range(H):
+            row = lum[y][okF[y]]
+            if row.size < 16: continue
+            offPx += int((np.abs(row - np.median(row)) > 3.0).sum())
+        print('%-12s the %-7s floor\'s panel band: %d px, %d more than 3 codes off their row (rays that hit their own '
+              'floor)' % (name, floor, band.size, offPx))
+        out[floor] = offPx
+    return out
 def crease(name):
     lum = load(name)
     if lum is None: return
@@ -220,16 +243,29 @@ for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), 'rays'), ('rays-1m', (
                         ('both-2p4', (-1.88, 1.02, -0.8), 'both'), ('both-1m', (-1.88, 0.62, -2.2), 'both'),
                         ('chained-2p4', (-1.88, 1.02, -0.8), ''), ('chained-1m', (-1.88, 0.62, -2.2), '')):
     seam(name, eye, gate)
-for name, eye in (('chained-2p4', (-1.88, 1.02, -0.8)), ('chained-1m', (-1.88, 0.62, -2.2))):
-    n = selfHits(name, eye)
-    if n is not None and n > 0: fails.append('%s: %d rays hit their own floor in the panel band' % (name, n))
+# (c) EVERY ARM AT EVERY DISTANCE, each gated on its own (the lead's round-7 ruling - no one-of-two acceptance):
+#   the law: neither floor's band holds a ray that hit its own floor;
+#   rays.originCut 0 - THE FLOAT-ONLY CONTROL: both floors are drawn at LEVEL 0 (measured: the cut probe's visible
+#     pixels all at DAG depth 0 at envcams 1, 2 and 3), so with the drawn term off the point's own error is the whole
+#     lift - the float bound and the depth-rebuilt point's term (jahDepthPointError) - and must clear both;
+#   rays.originPoint 0 as well (the float bound alone): RED on the chained floor at 2.4 m - the depth's quantum and the
+#     sub-pixel snap are real there (measured 24,326 px); at 1 m it is printed, not gated: there the errors (~2 um) are
+#     under the float bound's own 4 ulps of the world coordinates (~1.7 um), so its green is the physics, not a blind arm.
+DIST = (('2p4', (-1.88, 1.02, -0.8)), ('1m', (-1.88, 0.62, -2.2)))
+for d, eye in DIST:
+    law = selfHits('chained-' + d, eye) or {}
+    for floor in ('chained', 'flat'):
+        n = law.get(floor)
+        if n: fails.append('chained-%s: %d rays hit their own %s floor in the panel band (the law)' % (d, n, floor))
+    floatOnly = selfHits('nocut-' + d, eye) or {}
+    for floor in ('chained', 'flat'):
+        n = floatOnly.get(floor)
+        if n: fails.append('nocut-%s: THE FLOAT-ONLY CONTROL IS RED - %d rays from the %s level-0 floor hit it with the '
+                           'point\'s own error as their whole lift' % (d, n, floor))
+    bare = selfHits('nopoint-' + d, eye) or {}
+    if d == '2p4' and bare.get('chained') == 0:
+        fails.append('nopoint-2p4: THE POINT TERM\'S CONTROL IS GREEN - the float bound alone clears the chained floor')
 crease('crease-3p4')
-neg = [selfHits(name, eye) for name, eye in (('nocut-2p4', (-1.88, 1.02, -0.8)), ('nocut-1m', (-1.88, 0.62, -2.2)))]
-if not any(n for n in neg if n):
-    fails.append('the NEGATIVE CONTROL is green: with the drawn-cut term off no ray hit its own floor - the chained '
-                 'receiver cannot fail')
-else:
-    print('the negative control (rays.originCut 0) is red, as it must be: %s px off their row' % neg)
 for f in fails: print('FAIL: ' + f)
 print('rtreflect.contact: %s' % ('FAIL' if fails else 'PASS'))
 sys.exit(1 if fails else 0)

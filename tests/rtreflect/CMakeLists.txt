@@ -164,11 +164,13 @@ if(TARGET jahlab)
     set_tests_properties(rtreflect.lamp_step_held PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1-2) - THE CONTACT MEETS ITS
     # REFLECTION AND NO RAY HITS ITS OWN SURFACE: the post foot's reflection starts at the contact line and its top edge
-    # lies where the mirror puts it, within 1 px, from 2.4 m and 1 m, Rays and Both on photon-ramp; on photon-contact's
-    # CHAINED, CORRUGATED floor (Atom's cut lies below level 0's peaks) the seam, no dark pixel where the floor reflects
-    # the panel, no dark line along a crease, and the negative control (rays.originCut 0) RED (contact.sh). 1920x1080;
-    # two jahlab sessions, nine shots of 50 frames - 450 frames.
-    jah_gpu_row(rtreflect.contact CLASS engine FRAMES 450
+    # lies where the mirror puts it (Rays: the lifted mirror; Both: the interval to the plain one), within 1 px, from
+    # 2.4 m and 1 m on photon-ramp; on photon-contact's CHAINED, CORRUGATED floor (parts of Atom's cut lie below level 0)
+    # and the FLAT level-0 mirror beside it the seam, no dark pixel where the floors reflect the panel, no dark line
+    # along a crease; at EACH distance rays.originCut 0 green on both level-0 floors (the float-only control) and
+    # rays.originPoint 0 red on the chained floor at 2.4 m (contact.sh). 1920x1080; two jahlab sessions, eleven
+    # shots of 50 frames - 550 frames.
+    jah_gpu_row(rtreflect.contact CLASS engine FRAMES 550
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/contact.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/contact
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

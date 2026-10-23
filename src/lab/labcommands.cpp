@@ -37,7 +37,7 @@ const std::vector<VerbDoc> &verbs()
         { "save", "save [file.jlab]", 0, 1, "the session as a .jlab (file or env, camera, tier, view, gi, occlusion, sun)" },
         { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
         { "probe", "probe [file]", 0, 1,
-          "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object (appended to file)" },
+          "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object, and its visible pixels by DAG depth (appended to file)" },
         { "measure", "measure D [file.tsv]", 1, 2,
           "an environment's stop D: the camera, settle, the probe, and each predicted quantity beside the measured one "
           "(a TSV row each: env, seed, tier, stop, quantity, predicted, measured)" },

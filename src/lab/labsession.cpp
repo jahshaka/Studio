@@ -274,6 +274,7 @@ bool Session::probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &
         r.drawnTriangles = o.drawnTriangles;
         r.pixels = o.pixels;
         r.drawnClusters = o.drawnClusters;
+        for (int d = 0; d < 16; ++d) r.depthPixels[d] = o.depthPixels[d];
         sum.drawnTriangles += o.drawnTriangles;
         if (o.pixels == 0) sum.hiddenTriangles += o.drawnTriangles;
         out.push_back(r);
@@ -784,9 +785,14 @@ bool Session::exec(const Command &c)
                 QString path = QString::fromStdString(a0);
                 if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
                 std::ofstream out(path.toStdString(), std::ios::app);
-                for (const envs::ObjectReading &r : rd)
+                for (const envs::ObjectReading &r : rd) {
+                    // ...and its visible pixels by DAG depth, "depth:pixels" for every depth that drew one
                     out << mFrames << "\t" << r.name.toStdString() << "\t" << r.drawnTriangles << "\t" << r.drawnClusters
-                        << "\t" << r.pixels << "\n";
+                        << "\t" << r.pixels << "\t";
+                    for (int d = 0; d < 16; ++d)
+                        if (r.depthPixels[d]) out << d << ":" << r.depthPixels[d] << " ";
+                    out << "\n";
+                }
                 ok = bool(out);
             }
         }
