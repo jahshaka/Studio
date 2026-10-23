@@ -21,9 +21,11 @@
 //       lamp's sphere; their indirect: the light they gather moved a code) and the cards it did not (what they kept is
 //       still the answer: the stale set missed nothing that moved a code) alike;
 //   (2) THE STEP RELIT THE CARDS IN THE LAMP'S RANGE (the direct half's region, exact by the range) AND KEPT THE FAR
-//       EMISSIVE PROP'S (the stale set is a set: what the change cannot reach is not relit - and (1) proves it right);
-//   (3) THE FAR PROP's cards, outside the lamp's range, were not DIRECT-relit by it (their direct half cannot change:
-//       the lamp's range is exact, JahCardLight_cs.glsl), whatever their indirect did.
+//       EMISSIVE PROP'S (the stale set is a set: what the change cannot reach is not relit - and (1) proves it right).
+//       RED where the direct half's region drops the lamp's range (every card's direct staled by the step: measured
+//       once, PHOTON-7 stage 5's read W1 - the emissive prop relit). (The old (3), "the far prop's direct half was not
+//       relit", is deleted: the far prop's cards are re-marched by their indirect after the step, a march recomputes
+//       both halves, so with the range dropped it stayed green - it could not fail.)
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -193,7 +195,7 @@ int main()
     for (const CardRadiance &c : oracle) byKey[{ c.node, c.card }] = &c;
     size_t cards = 0, relit = 0, kept = 0, missing = 0, overRelit = 0, overKept = 0;
     double worstRelit = 0.0, worstKept = 0.0;
-    size_t farDirect = 0, farCards = 0, lampRelit = 0, lampCards = 0, emCards = 0, emRelit = 0;
+    size_t lampRelit = 0, lampCards = 0, emCards = 0, emRelit = 0;
     std::map<std::pair<NodeId, unsigned>, const CardRadiance *> beforeKey;
     for (const CardRadiance &c : before) beforeKey[{ c.node, c.card }] = &c;
     size_t truthMoved = 0, truthStill = 0, stillRelit = 0;
@@ -203,7 +205,6 @@ int main()
         const CardRadiance &o = *it->second;
         ++cards;
         const bool wasRelit = w.lastRelit > stepFrame || w.lastIndirect > stepFrame;
-        const bool directOnly = w.lastRelit > stepFrame && w.lastIndirect <= stepFrame;
         double worst = 0.0;
         size_t over = 0;
         for (size_t t = 0; t < w.rgb.size(); t += 3) {
@@ -224,7 +225,6 @@ int main()
                               (unsigned long long)w.node, w.card, w.size, worst, over, w.lastRelit, w.lastIndirect, stepFrame);
         if (wasRelit) { ++relit; worstRelit = std::max(worstRelit, worst); overRelit += over; }
         else { ++kept; worstKept = std::max(worstKept, worst); overKept += over; }
-        if (w.node == props[3]) { ++farCards; farDirect += directOnly ? 1u : 0u; }
         if (w.node == far) { ++emCards; emRelit += wasRelit ? 1u : 0u; }
         // THE TRUTH: did the card's light move a code from before the step to the oracle?
         auto b = beforeKey.find({ w.node, w.card });
@@ -240,9 +240,8 @@ int main()
         if (w.node == props[0] || w.node == props[1]) { ++lampCards; lampRelit += wasRelit ? 1u : 0u; }
     }
     std::printf("   %zu cards resident in both readings (%zu of the step's not resident in the oracle's): RELIT by the step %zu (worst %.3f codes, %zu texels over a "
-                "code), KEPT %zu (worst %.3f codes, %zu texels over a code); the lamp's props %zu of %zu relit; the far prop "
-                "%zu of %zu direct-only relit\n", cards, missing, relit, worstRelit, overRelit, kept, worstKept, overKept,
-                lampRelit, lampCards, farDirect, farCards);
+                "code), KEPT %zu (worst %.3f codes, %zu texels over a code); the lamp's props %zu of %zu relit\n", cards,
+                missing, relit, worstRelit, overRelit, kept, worstKept, overKept, lampRelit, lampCards);
     CHECK(cards > 0 && overRelit == 0 && overKept == 0,
           "(1) EVERY CARD MATCHES THE ORACLE WITHIN ONE CODE - the relit and the kept alike");
     std::printf("   the truth (before the step against the oracle): %zu cards moved over a code, %zu did not - of those %zu were "
@@ -250,7 +249,6 @@ int main()
                 stillRelit, emRelit, emCards);
     CHECK(lampCards > 0 && lampRelit == lampCards && emCards > 0 && emRelit == 0,
           "(2) THE STEP RELIT THE CARDS IN THE LAMP'S RANGE AND KEPT THE FAR EMISSIVE PROP'S (a stale set, not a sweep)");
-    CHECK(farCards > 0 && farDirect == 0, "(3) THE FAR PROP'S DIRECT HALF, OUTSIDE THE LAMP'S RANGE, WAS NOT RELIT");
 
     scene->setGlobalIllumination(off);
     run(2);
