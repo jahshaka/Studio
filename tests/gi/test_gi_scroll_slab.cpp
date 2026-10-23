@@ -31,6 +31,14 @@
 //   H. A ONE-FRAME COMMIT (PHOTON-7 stage 2's read D2): the slab's chunks voxelised in the commit's own command buffer
 //      before the shift - the store a whole build's (red while the shift's first transition carried no dependency).
 //   B2. A CUT SCROLL'S REMAINDER THE CAMERA TAKES BACK (the read's W2): no zero-shift scroll, no rebuild, nothing owed.
+//   I. AN OUTER COMMIT AND CASCADE 0 (PHOTON-7 stage 4's read R1): a low sun toward +x and a wall standing just outside
+//      cascade 1's +x face, then a step along +x by cascade 1's step, so cascade 1's entering slab brings the wall into
+//      its box and cascade 0's sun marches - which read cascade 1's cells past its own shell, out through that face - see
+//      it. The two commits NEVER land in one frame (the slots' one-writer rule: a frame whose reserved slot commits or
+//      rebuilds cascade 0 holds an outer commit a frame - so an outer commit's re-march of cascade 0 never meets the
+//      latch from the slots; the read's case, and the engine's answer to it - the latched re-march OWED to the relight
+//      path, never dropped - stands for any other writer), and once still, cascade 0's direct term is a whole build's at
+//      the same placements, bit for bit.
 //   V. THE VRAM: every cascade's scratch at Epic, measured by the texture-memory door, against the per-size box-sized
 //      targets the scratch replaces (the same eleven volumes at res^3).
 //   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive, its factor per half, the coverage and the position per
@@ -189,7 +197,7 @@ int main()
         enginetest::setNodePosition(scene, glow, Vec3(5.2f, 1.6f, -1.0f));
         enginetest::setNodeScale(scene, glow, Vec3(0.1f, 1.2f, 1.6f));
     }
-    enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
+    NodeId sunNode = enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
 
     GiParams small = chainGi();
     small.cascadeCount = 2;
@@ -725,6 +733,76 @@ int main()
               "B2: THE REMAINDER THE CAMERA TOOK BACK IS NO SCROLL AND NO REBUILD - nothing is owed");
         e->setArm("gi.scrollFrames", 0.0);
         run(1);
+    }
+
+    // ---- I. an outer commit and cascade 0 (PHOTON-7 stage 4's read R1) ----------------------------
+    std::printf("\n== I: an outer commit and cascade 0: never one frame; still, cascade 0's direct is a whole build's ==\n");
+    {
+        const auto chainBusy = [&]() {
+            for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
+                if (cs.pending || cs.scrolling || cs.feedbackOwed) return true;
+            return scene->published().gi.chainOwed;
+        };
+        const auto settle = [&]() {
+            for (int round = 0; round < 4; ++round) {
+                for (int f = 0; f < 200 && chainBusy(); ++f) run(1);
+                run(8);
+                if (!chainBusy()) break;
+            }
+        };
+        // THE SUN LOW TOWARD +x, THE WALL just past cascade 1's +x face (the camera's x + its 20 m half): 15 m tall, 40 m wide
+        scene->removeNode(sunNode);
+        sunNode = enginetest::addDirectionalLight(scene, Vec3(-1.0f, -0.35f, -0.1f), 5.0f);
+        const NodeId wall = enginetest::addTestCube(scene, Colour(0.5f, 0.5f, 0.5f), 0.0f, 0.9f);
+        enginetest::setNodePosition(scene, wall, Vec3(cam.x + 22.5f, 7.5f, cam.z));
+        enginetest::setNodeScale(scene, wall, Vec3(0.5f, 15.0f, 40.0f));
+        settle();
+        // THE STEP: both cascades scroll; every frame either commits in is recorded (the scheduler's one-writer rule, PG
+        // planCascades: a frame whose reserved slot commits or rebuilds cascade 0 holds an outer commit a frame - so the
+        // two never land in one frame, and the latch case cannot arise from the slots).
+        e->setArm("gi.scrollFrames", 3.0);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        const float up = 1.05f * pre.cascades[1].step;
+        look(Vec3(cam.x + up, cam.y, cam.z));
+        bool together = false;
+        unsigned long long s0 = pre.cascades[0].scrolls, s1 = pre.cascades[1].scrolls;
+        std::string when;
+        for (int f = 0; f < 40; ++f) {
+            run(1);
+            const GiStatus g = scene->published().gi;
+            const bool m0 = g.cascades[0].scrolls != s0, m1 = g.cascades[1].scrolls != s1;
+            together = together || (m0 && m1);
+            if (m0) when += " c0@" + std::to_string(f);
+            if (m1) when += " c1@" + std::to_string(f);
+            s0 = g.cascades[0].scrolls;
+            s1 = g.cascades[1].scrolls;
+        }
+        e->setArm("gi.scrollFrames", 0.0);
+        settle();
+        const GiStatus post = scene->published().gi;
+        std::printf("   the step +x %.3f m: cascade 0 scrolls %llu -> %llu, cascade 1 %llu -> %llu; the commits' frames:%s\n",
+                    double(up), pre.cascades[0].scrolls, post.cascades[0].scrolls, pre.cascades[1].scrolls,
+                    post.cascades[1].scrolls, when.c_str());
+        CHECK(post.cascades[0].scrolls > pre.cascades[0].scrolls && post.cascades[1].scrolls > pre.cascades[1].scrolls,
+              "I: both cascades scrolled");
+        CHECK(!together, "I: CASCADE 0 AND AN OUTER CASCADE NEVER COMMIT IN ONE FRAME (the slots' one-writer rule)");
+        GiVoxelVolume walked, whole;
+        CHECK(scene->giVoxelVolume(0, walked), "I: the walked store reads back");
+        rebuildWhole();   // (at every cascade's builtCam)
+        CHECK(scene->giVoxelVolume(0, whole), "I: the whole build's store reads back");
+        size_t diff = 0;
+        for (size_t i = 0; i < whole.direct.size() && i < walked.direct.size(); ++i)
+            diff += std::memcmp(&whole.direct[i], &walked.direct[i], 4) != 0 ? 1u : 0u;
+        std::printf("   cascade 0's direct against a whole build at the same placements: %zu of %zu floats differ\n", diff,
+                    whole.direct.size());
+        CHECK(whole.direct.size() == walked.direct.size() && diff == 0,
+              "I: ONCE STILL, CASCADE 0'S DIRECT IS THE WHOLE BUILD'S, bit for bit (the outer commit's re-march reached it)");
+        scene->removeNode(wall);
+        scene->removeNode(sunNode);
+        sunNode = enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.5f), 5.0f);
+        look(Vec3(cam.x - up, cam.y, cam.z));
+        settle();
     }
 
     // ---- V. the VRAM at Epic ---------------------------------------------------------------------
