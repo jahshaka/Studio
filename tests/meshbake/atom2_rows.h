@@ -9,7 +9,8 @@
 //   atom2.ends_empty             a 100-triangle prop is one leaf + an empty top, vanishing past its extent; every
 //                                fixture's root is non-empty before the top and the top cut draws nothing; a chain at
 //                                the depth cap closes with the empty top over its whole pool (never "no DAG")
-//   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth
+//   atom2.one_step_drift_bound   the cumulative drift from level 0 is at most 2x the stored error at every depth, and
+//                                every produced cluster's at most 2x its producing group's (the ray origin's law)
 //   atom2.cards_merge_within_budget  the card soup merges at the level granted its spacing; every set's measured price
 //                                within the budget and stored; the quads conserve the cards' area within 10 % (D9)
 //   atom2.level_table_is_a_cut   the whole-mesh level table: <= 8 uniform-depth cuts of the DAG, each bound the
@@ -410,6 +411,24 @@ inline int oneStepDriftBound()
         std::snprintf(msg, sizeof(msg), "%s: the drift from level 0 is within %gx the stored error at every depth (%d over)",
                       s.name, double(jahshaka::engine::kLevelDriftOverBound), over);
         CHECK_LOUD(over == 0, msg);
+        // ...AND PER CLUSTER (PHOTON-7 stage 6, the lead's round-7 ruling): the cut draws a cluster on its producing
+        // group's stored error, and the ray origin lifts a drawn point by kLevelDriftOverBound x it - so the law the
+        // lift spends must hold for every cluster, not only for the largest error of a uniform cut.
+        const QVector<iris::MeshBake::ClusterDriftRow> cl = iris::MeshBake::clusterDrift(s.mesh);
+        int clOver = 0;
+        float clWorst = 0.0f;
+        int clAt = -1, clDepth = 0;
+        float clDrift = 0.0f, clStored = 0.0f;
+        for (const auto &r : cl) {
+            const float ratio = r.stored > 0.0f ? r.drift / r.stored : (r.drift > 0.0f ? 3.4e38f : 0.0f);
+            if (ratio > clWorst) { clWorst = ratio; clAt = r.cluster; clDepth = r.depth; clDrift = r.drift; clStored = r.stored; }
+            if (r.drift > jahshaka::engine::kLevelDriftOverBound * r.stored * (1.0f + 1e-5f)) ++clOver;
+        }
+        std::printf("   per cluster: %d produced clusters, worst drift / stored %.3f (cluster %d, depth %d: %.4g / %.4g)\n",
+                    int(cl.size()), double(clWorst), clAt, clDepth, double(clDrift), double(clStored));
+        std::snprintf(msg, sizeof(msg), "%s: every cluster's drift from level 0 is within %gx its producing group's stored "
+                      "error (%d over)", s.name, double(jahshaka::engine::kLevelDriftOverBound), clOver);
+        CHECK_LOUD(clOver == 0, msg);
     }
     return finish();
 }
