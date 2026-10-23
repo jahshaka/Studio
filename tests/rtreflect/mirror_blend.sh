@@ -41,6 +41,10 @@ rm -rf "$WD"; mkdir -p "$WD"
     > "$WD/pan.log" 2>&1
 rc=$?
 [ $rc -eq 0 ] || { echo "FAIL: jahlab exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/pan.log" | head; exit 1; }
+# THE MODE LABEL: each shot's sources as the engine ran them (b<x> Both, r<x> Rays)
+HERE=$(cd "$(dirname "$0")" && pwd)
+python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/pan.log" -- b=both r=rays
+srcrc=$?
 python3 -I - "$WD/data/shots" <<'PY'
 import math, os, sys
 import numpy as np
@@ -113,3 +117,6 @@ for f in fails: print('FAIL: ' + f)
 print('rtreflect.mirror_blend: %s' % ('FAIL' if fails else 'PASS'))
 sys.exit(1 if fails else 0)
 PY
+rc=$?
+[ $srcrc -eq 0 ] || { echo "rtreflect.mirror_blend: FAIL (the mode label)"; exit 1; }
+exit $rc

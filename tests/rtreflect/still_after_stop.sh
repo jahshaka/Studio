@@ -39,7 +39,9 @@ LAB=${1:?jahlab}; WD=${2:?work dir}
 rm -rf "$WD"; mkdir -p "$WD"
 POSE=1.5,1.8,3.4,1.5,0.5,-3
 WIN=600
+# (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
 cat > "$WD/run.lab" <<S
+reflections both
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN path out=still
 quit
 S
@@ -51,6 +53,8 @@ for run in run; do
 done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
+python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/still.tsv" -- both || {
+    echo "rtreflect.still_after_stop: FAIL (the mode label)"; exit 1; }
 python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])

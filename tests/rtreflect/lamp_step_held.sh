@@ -22,9 +22,10 @@ POSE=1.5,1.8,3.4,1.5,0.5,-3
 WIN=600
 # the step and its reference, each through the door at the stop's pose (a teleport to the pose it stands at: no move;
 # the reference's 20 frames give the gather the history the door's mask counts)
-printf 'camera %s\nframes 300\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
+# (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
+printf 'reflections both\ncamera %s\nframes 300\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/step.lab"
-printf 'camera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
+printf 'reflections both\ncamera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/ref.lab"
 for run in step ref; do
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \
@@ -33,6 +34,9 @@ for run in step ref; do
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
 done
 HERE=$(cd "$(dirname "$0")" && pwd)
+python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/estep.tsv" "$WD/data/stillness/eref.tsv" -- both &&
+python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/step.log" "$WD/ref.log" -- e-=both || {
+    echo "rtreflect.lamp_step_held: FAIL (the mode label)"; exit 1; }
 python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, os, sys
 wd, win = sys.argv[1], int(sys.argv[2])

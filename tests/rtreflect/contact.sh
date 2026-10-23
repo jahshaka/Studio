@@ -105,6 +105,11 @@ for run in ramp:photon-ramp chained:photon-contact; do
     rc=$?
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($name) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$name.log" | head; tail -5 "$WD/$name.log"; exit 1; }
 done
+# THE MODE LABEL: each shot's sources as the engine ran them, against the mode its session set
+HERE=$(cd "$(dirname "$0")" && pwd)
+python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/ramp.log" "$WD/chained.log" -- \
+    rays-=rays both-=both chained-=rays crease-=rays nocut-=rays nopoint-=rays
+srcrc=$?
 python3 -I - "$WD/data/shots" <<'PY'
 import math, os, sys
 import numpy as np
@@ -271,3 +276,6 @@ for f in fails: print('FAIL: ' + f)
 print('rtreflect.contact: %s' % ('FAIL' if fails else 'PASS'))
 sys.exit(1 if fails else 0)
 PY
+rc=$?
+[ $srcrc -eq 0 ] || { echo "rtreflect.contact: FAIL (the mode label)"; exit 1; }
+exit $rc
