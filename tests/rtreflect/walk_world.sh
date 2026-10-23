@@ -8,9 +8,9 @@
 # over one code <= 1 %. The unfrozen walk's M1 is printed beside it (the merge judges the world's half: stages 1-5 on
 # photon-7), and the spatial filter's GPU time over the world-held walk (the stillness door's per-frame rows).
 # jahlab at Epic, 960x540; four sessions: a prime, the live, the frozen and the world-held walk (7 + 3 x 710 frames).
-# usage: walk_world.sh <jahlab> <work dir>
+# usage: walk_world.sh <jahlab> <work dir> [both|rays]   (the reflection's sources: jahlab's default, Both, or the rays alone)
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}
+LAB=${1:?jahlab}; WD=${2:?work dir}; SOURCES=${3:-both}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 M1="$HERE/../gi/walk_m1.py"
@@ -22,12 +22,12 @@ session() {   # name (the script is $WD/<name>.lab)
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
-printf 'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
+printf 'reflections %s\ncamera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$SOURCES" "$S" "$T" "$E" "$T" > "$WD/prime.lab"
 session prime
 for arm in live frozen world; do
     f=""; [ $arm = frozen ] && f=" freeze"; [ $arm = world ] && f=" freeze=world"
-    printf 'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
-        "$S" "$T" "$S" "$T" "$E" "$T" "$arm" "$f" "$arm" > "$WD/glass-$arm.lab"
+    printf 'reflections %s\ncamera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
+        "$SOURCES" "$S" "$T" "$S" "$T" "$E" "$T" "$arm" "$f" "$arm" > "$WD/glass-$arm.lab"
     session glass-$arm
 done
 ROOT="$WD/data/stillness"
@@ -65,5 +65,5 @@ PY
 rcg=$?
 rm -rf "$ROOT/dump-"*
 fails=0; [ $rcl -eq 0 ] && [ $rcw -eq 0 ] && [ $rcg -eq 0 ] || fails=1
-echo "rtreflect.walk_world: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
+echo "rtreflect.walk_world ($SOURCES): $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $fails
