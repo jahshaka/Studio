@@ -373,11 +373,13 @@ int main(int argc, char **argv)
             std::printf("   the resume arm (a lamp of 200, range %.1f m, %.1f m over the floor): at rest in %d frames - cascade 0 "
                         "resumed %llu bricks, stopped %llu; %zu inner-wall voxels outside its range moved over a code; "
                         "feedback vs Jacobi-64: worst voxel %.3f codes, %zu over one code (moved anywhere %zu; the inner "
-                        "walls' mean %.5f -> %.5f; outside, the most moved %.3f codes of %zu)\n", lampRange, lampY, lampRest,
+                        "walls' mean %.5f -> %.5f; outside, the most moved %.3f codes of %zu); stopped on the operator's "
+                        "bound (r never measured): %u before the lamp, %u at its rest\n", lampRange, lampY, lampRest,
                         after.cascades[0].feedbackResumes - before.cascades[0].feedbackResumes,
                         after.cascades[0].feedbackStops - before.cascades[0].feedbackStops, lampMovedOutside,
                         100.0 * lampWorst, lampOver, lampMovedAll, lampMeanBefore, lampMeanAfter, 100.0 * lampOutsideMax,
-                        size_t(std::count(outside.begin(), outside.end(), char(1))));
+                        size_t(std::count(outside.begin(), outside.end(), char(1))), before.cascades[0].feedbackOnPrior,
+                        after.cascades[0].feedbackOnPrior);
         }
         // (5) THE SLOW FADE: from the lamp at 400 at rest, to 200 in one frame, and - from 400 again - FADED to 200 over
         // kFadeFrames; each arm's rest against a 64-pass Jacobi of the end state (the resume arm's, the lamp at 200) at every
