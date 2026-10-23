@@ -40,13 +40,20 @@ void applyTestTier(const iris::ScenePtr &scene)
     const bool photonPinned = scene->worldOverrides.contains(QStringLiteral("giMode"));
     // The RAW fields, never the Rows' get/set: a giDdgi of -1 (auto) read through its row comes
     // back concrete, and a save would then keep the concrete value.
+    // (each field by NAME: an aggregate's positional list followed a member's move silently - R7 moved `bounces`
+    // below `tier` and probeSize took giBounces, tier the probe size, bounces bool(giTier): the stage 5 read's A1)
     struct KeptPhoton {
         iris::GiMode mode = {}; iris::GiQuality quality = {};
         int ddgi = 0, probeSize = 0, tier = 0;
         bool bounces = true;
         QJsonObject pins;
-    } kept = { scene->giMode, scene->giQuality, scene->giDdgi, scene->giBounces,
-               scene->giProbeCaptureSize, scene->giTier, {} };
+    } kept;
+    kept.mode = scene->giMode;
+    kept.quality = scene->giQuality;
+    kept.ddgi = scene->giDdgi;
+    kept.probeSize = scene->giProbeCaptureSize;
+    kept.tier = scene->giTier;
+    kept.bounces = scene->giBounces;
     if (photonPinned) {
         for (const QString &id : photonRowIds())
             if (scene->worldOverrides.contains(id)) kept.pins.insert(id, scene->worldOverrides.value(id));

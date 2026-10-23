@@ -66,6 +66,9 @@ check("opened scene");
 // the list names, and a save after it must still carry the pins.
 world.override({ id: "bloom", value: true });
 world.override({ id: "giMode", value: "vct" });
+// ...and THE PHOTON FIELDS THE PIN KEEPS come back AS THEY WERE (the stage 5 read's A1: a positional initializer put the
+// bounces into the probe size and the probe size into the tier)
+var before = world.settings(), beforeTier = world.photon().tier;
 assert(project.save() === true, "project.save with two pins");
 assert(project.close() === true, "project.close");
 assert(project.open(guid) === true, "project.open of the pinned scene");
@@ -77,6 +80,10 @@ assert(st.bloom.value === 1 && st.bloom.source === "override", "pinned bloom sta
 assert(p.enabled === true && st.giMode.valueId === "vct" && st.giMode.source === "override",
        "a pinned Photon technique stays: Photon ON, giMode vct, still pinned (" + p.enabled + ", " +
        st.giMode.valueId + ", " + st.giMode.source + ")");
+console.log("pinned scene kept: giProbeSize " + st.giProbeSize.value + " (was " + before.giProbeSize.value + "), giBounces " +
+            st.giBounces.value + " (was " + before.giBounces.value + "), tier " + p.tier + " (was " + beforeTier + ")");
+assert(st.giProbeSize.value === before.giProbeSize.value && st.giBounces.value === before.giBounces.value &&
+       p.tier === beforeTier, "the pin keeps the probe size, the bounces and the tier as they were");
 assert(project.save() === true, "project.save after the switch");
 assert(project.close() === true, "project.close");
 assert(project.open(guid) === true, "project.open again");
