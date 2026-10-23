@@ -181,6 +181,27 @@ set_tests_properties(gi.directional_seam PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 # THE FRAMES: 24 to the chain's rest, 3 to cascade 0's rebuild under the roof (measured), 12 after it, 2 at the end
 set_tests_properties(gi.directional_seam PROPERTIES JAHSHAKA_TEST_FRAMES 41)
 
+# gi.scroll_lag (PHOTON-7 stage 2, THE SCHEDULE) — CASCADE 0 IS NEVER QUEUED BEHIND THE CHAIN: each desktop tier's
+# scroll counts (the motion slack at 1.4 m/s) against the stated table; at Epic a 1.4 m/s dolly holds cascade 0's lag
+# at most 4 frames, a 0.25 m/frame fly at most one step (the door: CascadeStatus::lagLast / lagMax). A fixture.
+add_executable(test_gi_scroll_lag test_gi_scroll_lag.cpp)
+set_target_properties(test_gi_scroll_lag PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_scroll_lag PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_scroll_lag PRIVATE JahshakaEngine)
+add_dependencies(test_gi_scroll_lag JahshakaEngineMedia)
+jah_gpu_row(gi.scroll_lag CLASS engine COMMAND test_gi_scroll_lag
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scroll_lag PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 363)
+
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
 # in the box being built, two chained scrolls and a live-box edit, a torn shift (and its twice-failed repair) each leave
@@ -204,7 +225,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_scroll_slab
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 145)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 176)
 
 # gi.shell_ends (PHOTON-7 stage 1's read F1) — EVERY CASCADE MARCHES THE WORLD CHAIN'S SHELLS: at the four desktop tiers
 # every cascade's shell list (GiStatus::CascadeStatus::shellEnds) equals sum 8 x cell_i over the chain (test_gi_shells.cpp

@@ -584,7 +584,21 @@ std::string Session::statusJson()
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
       << gi.cards.invalidIndirect << ",\"invalidMaterial\":" << gi.cards.invalidMaterial << ",\"invalidTransform\":"
-      << gi.cards.invalidTransform << "}}";
+      << gi.cards.invalidTransform << "}";
+    // ...and THE CASCADES' SCROLL WORK (PHOTON-7 stage 2, the work law's door; cumulative since the chain was built):
+    // the commits, the voxels their delta injections lit in the slabs and outside them (read back a few frames late:
+    // `counted` injections), the slabs' cells, the cells the commits computed the direct over and one pass covered,
+    // and the lag (the frames from a step to the rebuild that served it)
+    o << ",\"commitShaderWaits\":" << gi.cascadeCommitShaderWaits << ",\"cascades\":[";
+    for (size_t i = 0; i < gi.cascades.size(); ++i) {
+        const GiStatus::CascadeStatus &cs = gi.cascades[i];
+        o << (i ? "," : "") << "{\"res\":" << cs.resolution << ",\"scrolls\":" << cs.scrolls << ",\"counted\":"
+          << cs.commitCounted << ",\"litSlab\":" << cs.commitLitSlab << ",\"litBand\":" << cs.commitLitBand
+          << ",\"slabCells\":" << cs.commitSlabCells << ",\"injectCells\":" << cs.commitInjectCells
+          << ",\"regionCells\":" << cs.commitRegionCells << ",\"passes\":" << cs.commitPasses << ",\"lagLast\":"
+          << cs.lagLast << ",\"lagMax\":" << cs.lagMax << "}";
+    }
+    o << "]}";
     // ...and THE HIT LIST (PHOTON-2 stage 2's tail): its demand-sized capacity, the records the traces appended and the
     // ones a full list dropped (no sample) - read back a few frames late
     {

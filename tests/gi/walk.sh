@@ -15,6 +15,9 @@
 # mean over the 59 pairs. THE HITCH LAW over the live walk's 59 moving frames on the WALL clock (renderOneFrame) and the
 # GPU clock (the record's busy span: span less the GPU's idle waits on a submission - THE one per-frame GPU time;
 # frame_gpu_ms) - p50 / p95 / max and the frames over twice the median - printed with the frame clock's parts.
+# THE WORK LAW'S DOOR (PHOTON-7 stage 2), printed after each live walk from `jahlab status` (WORK lines): per cascade the
+# commits, the voxels their delta injections lit (the slab's + the changed direct set) against the cascade, the cells
+# the direct was computed over and one pass covered, the lag; and the frames a commit waited for its shader.
 # THE ROW ASSERTS ONLY ITS OWN LAWS (the bars are set by the stages that improve the numbers; the base is below):
 #   (L1) FROZEN = FROZEN: the second frozen walk byte-equal to the first on every frame;
 #   (L2) THE ARMS START EQUAL: the converged hold before the walk byte-equal live vs frozen (one warm cache: AB G10);
@@ -61,11 +64,33 @@ walk() {   # scene, source flags (one word), settle, start, target0, end, target
         if [ -n "${SNAP:-}" ]; then rm -rf "$ROOT/shadercache"; cp -a "$SNAP" "$ROOT/shadercache"; fi
         # (the window after the stop: 8 frames - the stop frame's history count, the door's mask, comes back a few
         # frames late; M1 and the hitch law read the trail, the moving frames, only)
-        printf 'camera %s,%s\nframes %d\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d dump=%s-%s%s out=%s-%s\nquit\n' \
+        printf 'camera %s,%s\nframes %d\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d dump=%s-%s%s out=%s-%s\nstatus\nquit\n' \
             "$s" "$t0" "$settle" "$s" "$t0" "$e" "$t1" "$n" "$extra" "$trail" "$scene" "$arm" "$f" "$scene" "$arm" \
             > "$WD/$scene-$arm.lab"
         session "$scene-$arm" $src
+        [ "$arm" = live ] && work "$scene" "$WD/$scene-$arm.log"
     done
+}
+work() {   # scene, log - THE WORK LAW'S DOOR after the live walk (PHOTON-7 stage 2): per cascade, the commits, the voxels
+           # their delta injections lit (slab + changed direct set) against the cascade, the direct's computed cells,
+           # one pass's cells, the lag; the commit frames' GPU time is the hitch law's own (frame_gpu_ms, below)
+    grep -m1 '^LAB STATUS ' "$2" | cut -c12- | python3 -I -c "
+import json, sys
+scene = sys.argv[1]
+st = json.load(sys.stdin)
+print('  WORK %s: the commits waited %d frame(s) for their shader (built in the background)'
+      % (scene, st.get('gi', {}).get('commitShaderWaits', 0)))
+for i, c in enumerate(st.get('gi', {}).get('cascades', [])):
+    n = c['scrolls']; whole = c['res'] ** 3
+    if not n:
+        print('  WORK %s c%d: no scroll committed' % (scene, i)); continue
+    k = max(c['counted'], 1); lit = (c['litSlab'] + c['litBand']) / k
+    print('  WORK %s c%d: %d commits (%d delta injections counted); lit a delta %.0f = slab %.0f + band %.0f of %d '
+          '(%.2f %%); slab cells %.0f, direct computed %.0f (%.1f %%), a pass %.0f (%.1f %%); lag last %d max %d frames'
+          % (scene, i, n, c['counted'], lit, c['litSlab'] / k, c['litBand'] / k, whole, 100.0 * lit / whole,
+             c['slabCells'] / n, c['injectCells'] / n, 100.0 * c['injectCells'] / n / whole, c['regionCells'] / n,
+             100.0 * c['regionCells'] / n / whole, c['lagLast'], c['lagMax']))
+" "$1"
 }
 PRIME=1
 if [ "$MODE" = "--bistro" ]; then

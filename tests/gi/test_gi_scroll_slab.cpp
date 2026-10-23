@@ -122,9 +122,9 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
     return same;
 }
 
-/// THE SPREAD ARMS' BUDGET: small enough that the fixture's slab is cut into one chunk per 4-cell layer (at most eight
-/// a frame: B asserts two or more chunk frames), large enough that the cut stops at layers rather than single groups.
-static const double kSpreadBudgetMs = 0.005;
+/// THE SPREAD ARMS' COUNT (gi.scrollFrames): the slab's units split over this many chunk frames before the commit's
+/// (B asserts two or more chunk frames).
+static const double kSpreadFrames = 6.0;
 
 int main()
 {
@@ -198,6 +198,10 @@ int main()
     look(home);
     CHECK(scene->setGlobalIllumination(small), "a two-cascade chain at 64 cells builds");
     run(8);
+    // THE COMMIT'S SHADER BUILT BEFORE ANY ARM COUNTS FRAMES: the chain's first build hands the delta injection's
+    // permutation to the background compiler, and a commit waits while it builds - a wall-clock wait; the arms count
+    // frames, so they start with nothing pending.
+    e->waitForAsyncShaders();
     GiStatus st = scene->published().gi;
     if (st.cascades.size() != 2u) { std::printf("FAIL: the chain has %zu cascades\n", st.cascades.size()); return 1; }
     const float cell = st.cascades[0].cell, step = st.cascades[0].step;
@@ -224,6 +228,14 @@ int main()
         for (; n < cap && scene->published().gi.cascades[0].scrolls < want; ++n) run(1);
         return n;
     };
+    // THE COMMIT'S FRAME: from a step, frames until cascade 0's scroll has LANDED - committed, or thrown at its commit -
+    // (a scroll spreads over its count: giCascadeScrollFrames, at most a frame per 4-cell layer of its slab).
+    const auto untilLanded = [&](int cap) {
+        int n = 1;
+        run(1);
+        for (; n < cap && scene->published().gi.cascades[0].scrolling; ++n) run(1);
+        return n;
+    };
     // Frames until cascade 0 owes nothing and has nothing in flight (or `cap` frames).
     const auto untilSettled = [&](int cap) {
         int n = 0;
@@ -241,7 +253,7 @@ int main()
         // scratch's; none a multiple of 4.
         const Vec3 to(home.x - 1.9f * cell, home.y + 6.1f * cell, home.z - 6.4f * cell);
         look(to);
-        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         const GiStatus post = scene->published().gi;
         const int sx = int(std::lround((post.cascades[0].centre.x - pre.cascades[0].centre.x) / cell));
         const int sy = int(std::lround((post.cascades[0].centre.y - pre.cascades[0].centre.y) / cell));
@@ -261,7 +273,7 @@ int main()
     // ---- B. the spread, and a step past the scratch's layers ---------------------------------
     std::printf("\n== B: the slab spread over frames commits the same store ==\n");
     {
-        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre = scene->published().gi;
         const Vec3 from = cam;
@@ -296,7 +308,7 @@ int main()
                     done.cascades[0].scrolls - post.cascades[0].scrolls, rest);
         CHECK(rest < 600, "...and the cascade owes nothing after it (the camera inside the cut placement's band, "
                           "or the remainder scrolled)");
-        e->setArm("gi.scrollBudgetMs", 0.0);
+        e->setArm("gi.scrollFrames", 0.0);
         CHECK(scene->giVoxelVolume(0, scrolled), "the spread store reads back");
         rebuildWhole();
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
@@ -306,7 +318,7 @@ int main()
     // ---- C. an edit in the box being built -------------------------------------------------------
     std::printf("\n== C: an edit reaching only the box being built drops the scroll ==\n");
     {
-        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre = scene->published().gi;
         const Vec3 from = cam;
@@ -325,7 +337,7 @@ int main()
         CHECK(flying, "the scroll was in flight when the edit landed");
         CHECK(post.cascadeScrollAborts > pre.cascadeScrollAborts, "THE EDIT DROPPED THE SCROLL");
         CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "...and a scroll committed after it");
-        e->setArm("gi.scrollBudgetMs", 0.0);
+        e->setArm("gi.scrollFrames", 0.0);
         untilSettled(400);
         run(2);
         CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
@@ -339,9 +351,9 @@ int main()
     {
         const GiStatus pre = scene->published().gi;
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
-        untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         look(Vec3(cam.x, cam.y + 0.2f * step, cam.z - 1.05f * step));
-        untilScrolls(pre.cascades[0].scrolls + 2u, 8);
+        untilScrolls(pre.cascades[0].scrolls + 2u, 32);
         const GiStatus two = scene->published().gi;
         CHECK(two.cascades[0].scrolls == pre.cascades[0].scrolls + 2u &&
               two.cascades[0].rebuilds == pre.cascades[0].rebuilds + 2u,
@@ -351,7 +363,7 @@ int main()
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
         CHECK(sameStore(scrolled, built, "E1"), "TWO CHAINED SCROLLS LEAVE A WHOLE BUILD'S STORE, FLOAT FOR FLOAT");
 
-        e->setArm("gi.scrollBudgetMs", kSpreadBudgetMs);
+        e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre2 = scene->published().gi;
         look(Vec3(cam.x - 1.05f * step, cam.y, cam.z));
@@ -367,7 +379,7 @@ int main()
         CHECK(flying, "the scroll was in flight when its live box was edited");
         CHECK(post.cascadeScrollAborts > pre2.cascadeScrollAborts, "THE LIVE-BOX EDIT DROPPED THE SCROLL");
         CHECK(post.cascades[0].scrolls == pre2.cascades[0].scrolls, "...for the edit's whole rebuild (no scroll committed)");
-        e->setArm("gi.scrollBudgetMs", 0.0);
+        e->setArm("gi.scrollFrames", 0.0);
         run(2);
         CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");
         rebuildWhole();
@@ -381,7 +393,7 @@ int main()
         const GiStatus pre = scene->published().gi;
         e->setArm("gi.cascadeFaultCommit", 0.0);
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
-        run(1);   // the shift throws half way: torn, the first failure
+        untilLanded(32);   // the scroll's chunk frames, then its commit: the shift throws half way - torn, the first failure
         // ...AND THE WHOLE REBUILD THAT REPAIRS IT FAILS TOO (gi.cascadeFault): the second failure, which stands an
         // ordinary cascade down - never a torn one.
         e->setArm("gi.cascadeFaultCommit", -1.0);
@@ -413,7 +425,7 @@ int main()
         const GiStatus pre = scene->published().gi;
         e->setArm("gi.cascadeFaultCommit", 0.0);
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
-        run(1);   // torn
+        untilLanded(32);   // torn
         e->setArm("gi.cascadeFaultCommit", -1.0);
         e->setArm("gi.cascadeFault", 0.0);
         run(1);   // the first whole rebuild fails: still owed
@@ -447,7 +459,18 @@ int main()
     // ---- G. what is lit at a commit (PHOTON-7 stage 2) --------------------------------------------
     std::printf("\n== G: the commit's light - the direct as a delta, the passes over the slab's reach ==\n");
     {
-        run(4);
+        // NOTHING OF THE CHAIN IN FLIGHT (an outer commit re-injects cascade 0 too) AND THE LAST COMMIT'S COUNT LANDED
+        // (read back a few frames late): the counts below are this step's commit's alone.
+        const auto chainBusy = [&]() {
+            for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
+                if (cs.pending || cs.scrolling) return true;
+            return false;
+        };
+        for (int round = 0; round < 4; ++round) {
+            for (int f = 0; f < 128 && chainBusy(); ++f) run(1);
+            run(8);
+            if (!chainBusy()) break;
+        }
         GiVoxelVolume before, after;
         CHECK(scene->giVoxelVolume(0, before), "the store before the step reads back");
         const GiStatus pre = scene->published().gi;
@@ -462,7 +485,7 @@ int main()
             scene->setGiPlacementPin(pin);
         }
         look(target);
-        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 8);
+        const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         CHECK(scene->giVoxelVolume(0, after), "the store after the commit reads back");
         run(4);   // the commit's count lands (read back a few frames late)
         const GiStatus post = scene->published().gi;
@@ -477,6 +500,7 @@ int main()
         const int slabLo = sx > 0 ? res - sx : 0, slabHi = sx > 0 ? res : -sx;
         const int regLo = std::max(0, slabLo - reach) / 8 * 8, regHi = std::min(res, (slabHi + reach + 7) / 8 * 8);
         size_t kept = 0, unchangedKept = 0, unchangedOutside = 0, violations = 0, bandAll = 0, slabLit = 0;
+        int bandXLo = res, bandXHi = 0;   // the band's extent on the moved axis
         for (int z = 0; z < res; ++z)
             for (int y = 0; y < res; ++y)
                 for (int x = 0; x < res; ++x) {
@@ -495,7 +519,12 @@ int main()
                     // the direct terms of BOTH sides (a delta replaces each in its own total)
                     const bool sameDirect = std::memcmp(&after.direct[ia * 4], &before.direct[ib * 4], 16) == 0 &&
                                             std::memcmp(&after.directBack[ia * 4], &before.directBack[ib * 4], 16) == 0;
-                    if (!sameDirect) { ++bandAll; continue; }
+                    if (!sameDirect) {
+                        ++bandAll;
+                        bandXLo = std::min(bandXLo, x);
+                        bandXHi = std::max(bandXHi, x + 1);
+                        continue;
+                    }
                     ++unchangedKept;
                     if (x >= regLo && x < regHi) continue;   // inside the pass region: re-solved by design
                     ++unchangedOutside;
@@ -507,6 +536,7 @@ int main()
         const unsigned long long litBand = post.cascades[0].commitLitBand - pre.cascades[0].commitLitBand;
         const unsigned long long counted = post.cascades[0].commitCounted - pre.cascades[0].commitCounted;
         const unsigned long long region = post.cascades[0].commitRegionCells - pre.cascades[0].commitRegionCells;
+        const unsigned long long computed = post.cascades[0].commitInjectCells - pre.cascades[0].commitInjectCells;
         const unsigned long long whole = (unsigned long long)res * res * res;
         std::printf("   committed after %d frame(s), shift (%d, %d, %d); the pass region x [%d, %d) (reach %d cells); the "
                     "outer cascades' scrolls", n, sx, sy, sz, regLo, regHi, reach);
@@ -517,20 +547,22 @@ int main()
         }
         std::printf("\n");
         std::printf("   kept %zu voxels: %zu with both sides' direct unchanged (%zu outside the pass region: %zu changed "
-                    "their total or back), %zu with a changed one (the band)\n", kept, unchangedKept, unchangedOutside,
-                    violations, bandAll);
+                    "their total or back), %zu with a changed one (the band, x [%d, %d))\n", kept, unchangedKept,
+                    unchangedOutside, violations, bandAll, bandXLo, bandXHi);
         std::printf("   THE WORK: lit %llu in the slab (the store's own: %zu lit slab voxels) + %llu outside it (the store's "
-                    "band %zu) = %llu of %llu voxels (%.2f %%); one pass covered %llu (%.1f %%); counted %llu commit(s)\n",
+                    "band %zu) = %llu of %llu voxels (%.2f %%); the direct computed over %llu (%.1f %%); one pass covered "
+                    "%llu (%.1f %%); counted %llu commit(s)\n",
                     litSlab, slabLit, litBand, bandAll, litSlab + litBand, whole,
-                    100.0 * double(litSlab + litBand) / double(whole), region, 100.0 * double(region) / double(whole),
-                    counted);
+                    100.0 * double(litSlab + litBand) / double(whole), computed, 100.0 * double(computed) / double(whole),
+                    region, 100.0 * double(region) / double(whole), counted);
         CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u && sx != 0, "the step committed as a scroll");
         CHECK(unchangedOutside > 0 && violations == 0,
               "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its total and back (outside the pass region)");
         CHECK(!outerScrolled, "only cascade 0 scrolled (its counts are its own commit's)");
         CHECK(counted == 1u && litBand == bandAll && litSlab == slabLit,
               "THE WORK LAW, counted by the door: the voxels lit are the slab's lit voxels plus the changed direct set");
-        CHECK(litSlab + litBand < whole / 2u && region < whole, "...a fraction of the cascade (the old commit lit it whole)");
+        CHECK(litSlab + litBand < whole / 2u && region < whole && computed < whole,
+              "...a fraction of the cascade, computed and re-solved over regions (the old commit lit it whole)");
         scene->setGiPlacementPin(GiPlacementPin());
         rebuildWhole();
         GiVoxelVolume built;
