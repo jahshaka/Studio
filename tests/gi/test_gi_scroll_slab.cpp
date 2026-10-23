@@ -13,6 +13,9 @@
 //   B. THE SPREAD: the slab cut into many chunks over many frames; the placement - the readers' box - unchanged until
 //      the commit, GI not at rest meanwhile, the committed store a whole build's. A step past the scratch's layers is
 //      cut there and its remainder taken by the next scroll(s).
+//   D. THE DIRECTIONAL LEVELS (PHOTON-7 stage 2's read D1): after G's one-axis commit the directional volumes, every
+//      level, are a whole regeneration from the level-0 light, float for float (gi.regenerateDirectional regenerates
+//      nothing else). (A's three-axis commit cannot see a stale interior: its pass region's box is the whole cube.)
 //   C. AN EDIT that reaches only the box being built drops the scroll, and the next one builds the edited scene.
 //   E. TWO SCROLLS WITH NO REBUILD BETWEEN: a whole build's store; a scroll whose LIVE box is edited mid-flight is
 //      dropped for the edit's whole rebuild.
@@ -244,6 +247,57 @@ int main()
         return n;
     };
     GiVoxelVolume scrolled, built;
+    // THE DIRECTIONAL CHECK, a lambda run on G's one-axis commit (A's three-axis pass region is the whole cube).
+    const auto directionalIsRegenerated = [&](const GiVoxelVolume &v) {
+        // ---- D. THE DIRECTIONAL LEVELS ARE THE LEVEL-0 LIGHT'S (PHOTON-7 stage 2's read D1) ----------------------
+        // Every cone past level 0 reads the directional volumes, and step 0 / step 1 make them from the level-0 light
+        // alone - so after a commit they must equal, float for float and at every level, a WHOLE regeneration from the
+        // same level 0 (the door gi.regenerateDirectional: nothing else is written). A commit that regenerated them over
+        // its boxes only left the kept interior's texels where the shift moved the light away from them (red at
+        // 52064e7a3: a step's displacement, growing a step a commit).
+        {
+            GiVoxelVolume regen;
+            e->setArm("gi.regenerateDirectional", 0.0);
+            run(1);
+            e->setArm("gi.regenerateDirectional", -1.0);
+            CHECK(scene->giVoxelVolume(0, regen), "the regenerated store reads back");
+            size_t lightDiff = 0;
+            for (size_t i = 0; i < v.light.size() && i < regen.light.size(); ++i)
+                lightDiff += std::memcmp(&v.light[i], &regen.light[i], sizeof(float)) != 0 ? 1u : 0u;
+            CHECK(v.light.size() == regen.light.size() && lightDiff == 0u,
+                  "D: the level-0 light did not move under the door (the comparison's premise)");
+            bool same = true;
+            size_t levels = 0, texels = 0;
+            for (int a = 0; a < 3; ++a) {
+                if (v.directional[a].empty() || v.directional[a].size() != regen.directional[a].size()) {
+                    std::printf("   D: axis %d holds %zu vs %zu levels\n", a, v.directional[a].size(),
+                                regen.directional[a].size());
+                    same = false;
+                    continue;
+                }
+                for (size_t L = 0; L < v.directional[a].size(); ++L) {
+                    const std::vector<float> &x = v.directional[a][L], &y = regen.directional[a][L];
+                    ++levels;
+                    texels += x.size() / 4u;
+                    size_t diff = 0, first = size_t(-1);
+                    for (size_t i = 0; i < x.size() && i < y.size(); ++i)
+                        if (std::memcmp(&x[i], &y[i], sizeof(float)) != 0) {
+                            if (first == size_t(-1)) first = i;
+                            ++diff;
+                        }
+                    if (diff || x.size() != y.size()) {
+                        std::printf("   D: axis %d level %zu differs in %zu of %zu floats (first at float %zu: %.7f vs %.7f)\n",
+                                    a, L, diff, x.size(), first, first < x.size() ? double(x[first]) : 0.0,
+                                    first < y.size() ? double(y[first]) : 0.0);
+                        same = false;
+                    }
+                }
+            }
+            std::printf("   D: %zu directional levels, %zu texels compared\n", levels, texels);
+            CHECK(same && levels > 3u,
+                  "D: A COMMIT'S DIRECTIONAL VOLUMES, EVERY LEVEL, ARE A WHOLE REGENERATION FROM ITS LEVEL 0, FLOAT FOR FLOAT");
+        }
+    };
 
     // ---- A. one scroll, three slabs ----------------------------------------------------------
     std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
@@ -491,6 +545,7 @@ int main()
         look(target);
         const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         CHECK(scene->giVoxelVolume(0, after), "the store after the commit reads back");
+        directionalIsRegenerated(after);   // D, on this one-axis commit
         run(4);   // the commit's count lands (read back a few frames late)
         const GiStatus post = scene->published().gi;
         const int res = after.width;
@@ -609,6 +664,35 @@ int main()
                     double(scratch) / 1048576.0, ep.cascades.size(), perVoxelBytes, double(targets) / 1048576.0,
                     sizes.size(), (double(scratch) - double(targets)) / 1048576.0);
         CHECK(scratch > 0 && scratch < targets, "THE SCRATCHES HOLD LESS THAN THE TARGETS THEY REPLACE");
+        // THE COMMIT'S LIGHT AT EPIC, MEASURED (PHOTON-7 stage 2's read D1: the directional levels are regenerated WHOLE
+        // at every commit): the GPU ms of cascade 0's commit's injection phases - direct, mips (step 0 and step 1 whole,
+        // D's chain), sky, bounce - from the monitor, the clocks unlocked. Printed, not a bar.
+        run(8);
+        e->waitForAsyncShaders();
+        const GiStatus pre = scene->published().gi;
+        e->setFrameMonitor(MonitorLevel::Review);
+        look(Vec3(cam.x + 1.05f * pre.cascades[0].step, cam.y, cam.z));
+        untilScrolls(pre.cascades[0].scrolls + 1u, 64);
+        run(6);   // the GPU samples come back a few frames late
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::vector<MonitorRecord> records;
+        while (e->popMonitorRecords(records) > 0) {}
+        unsigned commits = 0;
+        for (const MonitorRecord &r : records) {
+            bool commit = false;
+            float ms[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
+            const char *const names[4] = { "vct.inject.direct0", "vct.inject.mips0", "vct.inject.sky0", "vct.inject.bounce0" };
+            for (const CacheWork &w : r.cacheWork) {
+                if (w.detail == "vct.cascade0") commit = true;
+                for (int k = 0; k < 4; ++k)
+                    if (w.detail == names[k] && w.gpuMs >= 0.0f) ms[k] = std::max(ms[k], 0.0f) + w.gpuMs;
+            }
+            if (!commit) continue;
+            ++commits;
+            std::printf("   Epic cascade 0's commit (frame %llu): GPU ms direct %.3f, mips %.3f (the directional levels whole), "
+                        "sky %.3f, bounce %.3f\n", r.frame, double(ms[0]), double(ms[1]), double(ms[2]), double(ms[3]));
+        }
+        CHECK(commits >= 1u, "the Epic commit's light was measured");
     }
 
     scene->removeNode(ground);
