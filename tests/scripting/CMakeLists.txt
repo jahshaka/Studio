@@ -94,6 +94,8 @@ jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_sc
 # guids). Document verbs only -> --headless: no engine, no display.
 
 jah_pool_arm(editor undo_macro ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_undo_macro.js 7)
+# REFLECT-MODE-1 (PHOTON-7 stage 6): world.reflections - the scene property, one undo step, the refusals, the rows.
+jah_pool_arm(editor world_reflections ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_reflections.js 9)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
 # driven through the verbs against the real database and a real save/reopen.
