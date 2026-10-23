@@ -1193,9 +1193,9 @@ int main()
         enginetest::setNodePosition(scene, fnode, Vec3(0.0f, 0.5f, 1.0f));
         render(e, 24);
         const GiStatus pre = scene->published().gi;
-        // A material edit: every cascade now owes a rebuild in place.
+        // A material edit: the cascades that hold its wearer owe a rebuild in place (PHOTON-7 stage 3: the wearer's box).
         fp.albedo = Colour(0.9f, 0.2f, 0.2f);
-        CHECK(scene->setPbrMaterial(fmat, fp), "a material edit dirties every cascade");
+        CHECK(scene->setPbrMaterial(fmat, fp), "the material edit is accepted");
         e->setArm("gi.cascadeFaultPost", 0.0);
         scene->refreshGlobalIllumination();
         render(e, 2);

@@ -17,11 +17,19 @@
 //            (the ambient's constant band) is the sky's overflow without a restart, a 5x one restarts (Lumen's 4x).
 //   CAP:     129 movers stepping in one frame merge into at most 128 regions with no overflow, and every mover's swept box
 //            lies inside a listed region of its kind (Mover and MoverShadow).
-//   SLAB:    a dolly's cascade-0 scroll lists, on its commit frame, the commit's injection boxes as Slab regions of
-//            cascade 0, each inside cascade 0's new box; its chunk frames list no Slab.
-//   BRICKS:  the light passes' brick mask (Scene::takeGiBrickMask): the still scene's updates change no brick's direct term;
-//            the lamp step's re-injection marks bricks, every one in the cover of the old sphere joined with the new.
-//   Every count the status carries is read NON-ZERO somewhere (the lamp step, the sun, the cap), never only zero.
+//   SLAB:    a dolly's cascade-0 scroll lists, on its commit frame, EXACTLY the commit's injection boxes as Slab regions of
+//            cascade 0, at its NEW corner (its slab's side and its trailing face, each its march's reach deep, 4-aligned);
+//            its chunk frames list no Slab.
+//   GONE:    a lamp NODE deleted (removeNode, the mirror's path) lists exactly its sphere; a movable cube removed lists its
+//            last box as a Mover with its shadows; a still cube removed while another object holds the tail slot lists
+//            the removed cube's box (its REMOVE) and the tail object's own box (its ADD into the freed slot).
+//   ATTACH:  a lit attach lists its item's box as an Edit, never an overflow (stage 3's read F3).
+//   BRICKS:  the light passes' brick mask (Scene::takeGiBrickMask): a still scene's forced re-injection (readings landed,
+//            updates counted) changes no brick's direct term; the lamp step's re-injection marks bricks, every one in the
+//            cover of the old sphere joined with the new.
+//   Every count the status carries is read NON-ZERO somewhere (the lamp step, the sun, the cap) - bricksDirectLast,
+//   bricksActiveLast and bricksBounceLast on the lamp step, regionClosesListing on a listing frame - except
+//   brickReadingsSkipped, which only a GPU that falls four readings behind writes (asserted 0: no door forces it).
 // A fixture (the engine alone, one small offscreen view; the gather and the field off). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -241,6 +249,37 @@ int main()
         if (listing) dump(first, "the first listing frame");
         CHECK(closes == 600u, "the list closed once a frame");
         CHECK(listing == 0, "A STILL SCENE LISTS NOTHING FOR 600 FRAMES (no region, no overflow, no restart)");
+        // ...AND THE BRICK CHECK IS NOT VACUOUS (stage 3's read F7): the still scene's lights re-injected with nothing
+        // changed - the host's no-change relight - must land readings with updates, and no brick's direct term moved.
+        {
+            const GiStatus a = scene->published().gi;
+            scene->refreshGiLighting(false);
+            unsigned directSum = 0;
+            std::vector<unsigned long long> seen;
+            for (const GiStatus::CascadeStatus &cs : a.cascades) seen.push_back(cs.brickReadings);
+            for (int f = 0; f < 12; ++f) {
+                run(1);
+                const GiStatus g = scene->published().gi;
+                for (size_t i = 0; i < g.cascades.size() && i < seen.size(); ++i)
+                    if (g.cascades[i].brickReadings != seen[i]) {
+                        directSum += g.cascades[i].bricksDirectLast;
+                        seen[i] = g.cascades[i].brickReadings;
+                    }
+            }
+            const GiStatus b = scene->published().gi;
+            unsigned long long ups = 0, reads = 0, skipped = 0;
+            for (size_t i = 0; i < b.cascades.size() && i < a.cascades.size(); ++i) {
+                ups += b.cascades[i].brickUpdates - a.cascades[i].brickUpdates;
+                reads += b.cascades[i].brickReadings - a.cascades[i].brickReadings;
+                skipped += b.cascades[i].brickReadingsSkipped;
+            }
+            std::printf("   a no-change re-injection: %llu light updates, %llu readings, %u direct-changed bricks, %llu "
+                        "readings skipped\n", ups, reads, directSum, skipped);
+            CHECK(ups > 0u && reads > 0u, "the forced re-injection updated the light and its readings landed");
+            CHECK(directSum == 0u, "...AND NO BRICK'S DIRECT TERM MOVED (nothing changed: the store's own bits compared)");
+            CHECK(skipped == 0u, "...and no reading was skipped (the GPU keeps up)");
+            settle(600);
+        }
     }
 
     // ---- LAMP ----------------------------------------------------------------------------------------------------
@@ -253,14 +292,18 @@ int main()
             GiBrickMask junk;
             scene->takeGiBrickMask(int(i), junk);
         }
+        const unsigned long long listing0 = scene->published().gi.regionClosesListing;
         lampPos = Vec3(2.5f, 1.8f, 0.2f);
         scene->setNodeTransform(lamp, lampPos, Quat(), Vec3(1, 1, 1));
         run(1);
         const GiChangedRegions r = regions();
         dump(r, "the step's frame");
+        CHECK(scene->published().gi.regionClosesListing == listing0 + 1u,
+              "the step's frame is one close that listed (regionClosesListing read non-zero, stage 3's read F7)");
         {
             // THE STATUS'S COUNTS READ THIS LIST (the negative control of the still arm's zeros)
             const GiStatus g = scene->published().gi;
+
             CHECK(g.regionFrame == r.frame && g.regionCount == unsigned(r.regions.size()) && g.regionCount > 0u &&
                       g.regionsByKind[unsigned(GiRegionKind::Lamp)] == 1u,
                   "the status's counts are this list's (a frame, a count, one Lamp)");
@@ -280,12 +323,17 @@ int main()
         // lamp lights nothing), and some brick did change (the count is read non-zero).
         {
             scene->refreshGlobalIllumination();
-            unsigned directLastMax = 0;
+            unsigned directLastMax = 0, activeLastMax = 0, bounceLastMax = 0;
             for (int f = 0; f < 8; ++f) {
                 run(1);
-                for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
+                for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades) {
                     directLastMax = std::max(directLastMax, cs.bricksDirectLast);
+                    activeLastMax = std::max(activeLastMax, cs.bricksActiveLast);
+                    bounceLastMax = std::max(bounceLastMax, cs.bricksBounceLast);
+                }
             }
+            CHECK(activeLastMax > 0u && bounceLastMax > 0u,
+                  "...the status's active and bounce counts read it non-zero too (stage 3's read F7)");
             unsigned marked = 0, outside = 0, bounceMarked = 0;
             for (size_t i = 0; i < nCascades; ++i) {
                 GiBrickMask m;
@@ -391,6 +439,16 @@ int main()
             scene->setNodeTransform(farCube, farPos, Quat(), Vec3(1, 1, 1));
             const bool attached = mesh && mat && scene->attachMesh(farCube, mesh, mat);
             CHECK(attached, "the far cube attached");
+            run(1);
+            {
+                // ATTACH (stage 3's read F3): a lit attach is told to the voxeliser as "somewhere", to the list as its box
+                const GiChangedRegions ra = regions();
+                dump(ra, "the attach's frame");
+                bool listed = false;
+                for (const GiChangedRegion &g : ra.regions)
+                    if (g.kind == GiRegionKind::Edit && same(g, cubeAt(farPos, Vec3(1, 1, 1)), 1e-3f)) listed = true;
+                CHECK(listed && !ra.overflow, "A LIT ATTACH LISTS ITS ITEM'S BOX (Edit), NEVER AN OVERFLOW");
+            }
             settle(900);
             const GiStatus before = scene->published().gi;
             p.albedo = Colour(0.9f, 0.4f, 0.2f);
@@ -522,38 +580,124 @@ int main()
         const float v = 0.25f;
         int commitFrames = 0, slabsOk = 0, chunkSlabFrames = 0, scrollFrames = 0;
         unsigned long long scrolls = pre.cascades.empty() ? 0ull : pre.cascades[0].scrolls;
+        Vec3 prevCentre = pre.cascades.empty() ? Vec3() : pre.cascades[0].centre;
         for (int f = 0; f < 120 && commitFrames < 2; ++f) {
             cam = Vec3(cam.x + v, cam.y, cam.z);
             enginetest::testCameraLookAt(view, cam, Vec3(cam.x, 0.6f, 0.0f));
             run(1);
             const GiStatus g = scene->published().gi;
-            if (g.cascades.empty()) continue;
+            if (g.cascades.size() < 2u) continue;
             const GiChangedRegions r = regions();
-            unsigned slab0 = 0, slab0Inside = 0;
             const GiStatus::CascadeStatus &c0 = g.cascades[0];
-            const GiChangedRegion box0{ Vec3(c0.centre.x - c0.halfSize, c0.centre.y - c0.halfSize, c0.centre.z - c0.halfSize),
-                                        Vec3(c0.centre.x + c0.halfSize, c0.centre.y + c0.halfSize, c0.centre.z + c0.halfSize),
-                                        GiRegionKind::Slab, 1u };
+            std::vector<const GiChangedRegion *> slab0;
             for (const GiChangedRegion &q : r.regions)
-                if (q.kind == GiRegionKind::Slab && q.cascadeMask == 1u) {
-                    ++slab0;
-                    if (inside(Box{ q.lo, q.hi }, box0, 1e-3f)) ++slab0Inside;
-                }
+                if (q.kind == GiRegionKind::Slab && q.cascadeMask == 1u) slab0.push_back(&q);
             if (c0.scrolls != scrolls) {
                 scrolls = c0.scrolls;
                 ++commitFrames;
                 if (commitFrames == 1) dump(r, "cascade 0's first commit frame");
-                if (slab0 >= 1u && slab0 == slab0Inside) ++slabsOk;
+                // THE EXACT BOXES AT THE NEW CORNER (stage 3's read F7): per moved axis the slab's side and the trailing
+                // face, each its march's reach deep (the shell's end D_0 = 8 cells plus cascade 1's first cell, in cascade
+                // 0's cells, + 1), aligned out to the injection's 4-cell groups - PhotonComponent::rebuildCascade's boxes.
+                const int res = c0.resolution;
+                const float cell = c0.cell;
+                const int reach = int(std::ceil((8.0 * double(cell) + double(g.cascades[1].cell)) / double(cell))) + 1;
+                const Vec3 corner(c0.centre.x - c0.halfSize, c0.centre.y - c0.halfSize, c0.centre.z - c0.halfSize);
+                const float dc[3] = { c0.centre.x - prevCentre.x, c0.centre.y - prevCentre.y, c0.centre.z - prevCentre.z };
+                std::vector<Box> want;
+                const auto box = [&](int axis, int lo, int hi) {
+                    float l[3], h[3];
+                    const float c[3] = { corner.x, corner.y, corner.z };
+                    for (int a = 0; a < 3; ++a) {
+                        const int bl = a == axis ? std::max(0, lo) : 0, bh = a == axis ? std::min(res, hi) : res;
+                        l[a] = c[a] + cell * float(bl / 4 * 4);
+                        h[a] = c[a] + cell * float(std::min(res, (bh + 3) / 4 * 4));
+                    }
+                    want.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
+                };
+                for (int a = 0; a < 3; ++a) {
+                    const int s = int(std::lround(dc[a] / cell));
+                    if (s == 0) continue;
+                    const int kLo = s < 0 ? -s : 0, kHi = s > 0 ? res - s : res;
+                    if (kHi < res) { box(a, kHi - reach, res); box(a, 0, reach); }
+                    else { box(a, 0, kLo + reach); box(a, res - reach, res); }
+                }
+                unsigned matched = 0;
+                for (const Box &w : want)
+                    for (const GiChangedRegion *q : slab0)
+                        if (same(*q, w, 1e-3f)) { ++matched; break; }
+                std::printf("   commit %d: shift (%.0f, %.0f, %.0f) cells, %zu boxes wanted, %zu listed, %u equal\n",
+                            commitFrames, double(dc[0] / cell), double(dc[1] / cell), double(dc[2] / cell), want.size(),
+                            slab0.size(), matched);
+                if (!want.empty() && slab0.size() == want.size() && matched == want.size()) ++slabsOk;
             } else if (c0.scrolling) {
                 ++scrollFrames;
-                if (slab0) ++chunkSlabFrames;
+                if (!slab0.empty()) ++chunkSlabFrames;
             }
+            prevCentre = c0.centre;
         }
         std::printf("   commits %d (Slab regions of cascade 0 inside its box on %d), chunk frames %d (listing a Slab %d)\n",
                     commitFrames, slabsOk, scrollFrames, chunkSlabFrames);
         CHECK(commitFrames >= 1 && slabsOk == commitFrames,
-              "A COMMIT LISTS ITS INJECTION BOXES AS SLAB REGIONS OF CASCADE 0, INSIDE ITS NEW BOX");
+              "A COMMIT LISTS EXACTLY ITS INJECTION BOXES AS SLAB REGIONS OF CASCADE 0, AT ITS NEW CORNER");
         CHECK(chunkSlabFrames == 0, "...and its chunk frames list none");
+    }
+
+    // ---- GONE ----------------------------------------------------------------------------------------------------
+    std::printf("\n== GONE: a lamp node, a mover and a still cube deleted ==\n");
+    {
+        settle(900);
+        // A LAMP NODE DELETED (stage 3's read F1: the mirror deletes with removeNode, not removeLight).
+        scene->removeNode(lamp);
+        run(1);
+        const GiChangedRegions rl = regions();
+        dump(rl, "the lamp node's deletion");
+        const GiChangedRegion *gl = firstKind(rl, GiRegionKind::Lamp);
+        CHECK(countKind(rl, GiRegionKind::Lamp) == 1u && gl && same(*gl, sphere(lampPos, lampDesc.range)),
+              "A LAMP NODE DELETED LISTS EXACTLY ITS SPHERE (Lamp)");
+        settle(900);
+        // A MOVER REMOVED (stage 3's read F2): its last box is a Mover, with its sun shadow - the tail slot: no ADD.
+        const MeshId mesh = scene->createMesh(enginetest::unitCubeMesh());
+        PbrParams p;
+        p.albedo = Colour(0.5f, 0.5f, 0.5f);
+        const MaterialId mat = scene->createPbrMaterial(p);
+        const Vec3 ms(0.4f, 0.4f, 0.4f);
+        const Vec3 mp(-1.5f, 0.4f, 0.5f);
+        const NodeId gone = scene->createNode();
+        scene->setNodeMovable(gone, true);
+        scene->setNodeTransform(gone, mp, Quat(), ms);
+        CHECK(scene->attachMesh(gone, mesh, mat), "the mover to remove attached");
+        settle(900);
+        scene->removeNode(gone);
+        run(1);
+        const GiChangedRegions rm = regions();
+        dump(rm, "the mover's removal");
+        bool moverGone = false, shadowGone = false;
+        for (const GiChangedRegion &g : rm.regions) {
+            if (g.kind == GiRegionKind::Mover && same(g, cubeAt(mp, ms), 1e-3f)) moverGone = true;
+            if (g.kind == GiRegionKind::MoverShadow && same(g, cubeAt(mp, ms), 1e-3f)) shadowGone = true;
+        }
+        CHECK(moverGone && shadowGone, "A MOVER REMOVED LISTS ITS LAST BOX (Mover) AND ITS SUN SHADOW (MoverShadow)");
+        settle(900);
+        // A SLOT REUSED (stage 3's read F2): a still cube removed while another object holds the tail slot - the
+        // removed cube's box is its REMOVE, and the tail object, moved into the freed slot, its ADD at its own box.
+        const Vec3 cs(0.5f, 0.5f, 0.5f), ap(-2.0f, 0.25f, 2.0f), bp(2.0f, 0.25f, 2.0f);
+        const NodeId ca = scene->createNode(), cb = scene->createNode();
+        scene->setNodeTransform(ca, ap, Quat(), cs);
+        scene->setNodeTransform(cb, bp, Quat(), cs);
+        CHECK(scene->attachMesh(ca, mesh, mat) && scene->attachMesh(cb, mesh, mat), "the two cubes attached (b the tail)");
+        settle(900);
+        scene->removeNode(ca);
+        run(1);
+        const GiChangedRegions rs = regions();
+        dump(rs, "the slot's reuse");
+        bool removed = false, added = false;
+        for (const GiChangedRegion &g : rs.regions) {
+            if (g.kind != GiRegionKind::Mover) continue;
+            if (same(g, cubeAt(ap, cs), 1e-3f)) removed = true;
+            if (same(g, cubeAt(bp, cs), 1e-3f)) added = true;
+        }
+        CHECK(removed && added, "A SLOT REUSED IS A REMOVE (the removed cube's box) AND AN ADD (the tail object's own box)");
     }
 
     GiParams off;
