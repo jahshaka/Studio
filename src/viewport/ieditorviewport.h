@@ -876,6 +876,9 @@ public:
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
+        /// Frames a scroll's commit waited for its shader from the background compiler (GiStatus): 0 in a scene that
+        /// compiles in the frame (the selftest asserts it).
+        quint64 cascadeCommitShaderWaits = 0;
         /// Post-rebuild chain settles (LAMPREST-3): how many at-rest injections
         /// the cascade scheduler has run because a rebuild left the chain one
         /// Jacobi pass from its fixed point.

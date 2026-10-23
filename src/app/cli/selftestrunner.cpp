@@ -580,6 +580,11 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
             std::fprintf(stderr, "engine-selftest: cascade %d: %llu scrolls over %llu chunk frames, %llu rebuilds\n", i,
                          (unsigned long long)gi.cascades[i].scrolls, (unsigned long long)gi.cascades[i].scrollFrames,
                          (unsigned long long)gi.cascades[i].rebuilds);
+        // ...AND NO COMMIT WAITED ON A COMPILE'S WALL TIME (PHOTON-7 stage 2's read D3): the selftest's scenes compile in
+        // the frame, so a scroll's commit lands on a frame count, never on how fast a background compile ran.
+        std::fprintf(stderr, "engine-selftest: default scene's commit shader waits %llu (%s)\n",
+                     (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
+        if (gi.cascadeCommitShaderWaits != 0) return 1;
     }
     if (!isPicture(imgMotion) || hashMotion == hash2) {
         std::fprintf(stderr, "engine-selftest: the motion pose is %s\n",
@@ -769,6 +774,13 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: placeholder draws %llu, pending skips %llu (%s)\n",
                      ph, skips, ph == 0 && skips == 0 ? "PASS" : "FAIL");
         if (ph != 0 || skips != 0) return 1;
+    }
+    // ...and fixture B's commits waited on no compile either (read D3).
+    {
+        const auto gi = window.viewport()->giStatus();
+        std::fprintf(stderr, "engine-selftest: fixture B's commit shader waits %llu (%s)\n",
+                     (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
+        if (gi.cascadeCommitShaderWaits != 0) return 1;
     }
     return 0;
 }

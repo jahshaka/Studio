@@ -3090,6 +3090,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
+    out.cascadeCommitShaderWaits = quint64(st.cascadeCommitShaderWaits);
     out.chainSettles         = st.chainSettles;
     out.chainInjectionRefusals   = double(st.chainInjectionRefusals);
     out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);
