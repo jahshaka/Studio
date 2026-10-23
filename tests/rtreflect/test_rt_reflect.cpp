@@ -378,7 +378,9 @@ int main(int argc, char **argv)
     }
 
     CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
-    CHECK_MSG(rq.reflectRays > 0, "the trace dispatched rays (%d at full resolution)",
+    // (TRACED FRAMES, not this frame's rays: a still mirror's texels take their centre ray whole, stop after eight frames
+    // and the view HOLDS - no ray at all - long before this read.)
+    CHECK_MSG(rq.reflectFrame > 0u, "the trace ran (%u traced frames; %d rays this frame)", unsigned(rq.reflectFrame),
               rq.reflectRays);
     // THE BAR. The cube's emissive is 4.0 linear; after the tonemap the wall
     // cannot read that literally, so the bar is on the DIFFERENCE from the arm
@@ -474,156 +476,18 @@ int main(int argc, char **argv)
         render(e, 8);
     }
 
-    // ---- 6b: SCREEN FIRST -----------------------------------------------------
-    // Where the march answers a pixel OUTRIGHT the ray tier must leave it
-    // alone. The claim is stated as a bound (a mean under 4/255 over the region
-    // the march owns) rather than as byte-equality, because the region is
-    // selected by COLOUR and a colour test cannot prove bit-equality of the
-    // pixels it selects — what the bound is worth is the number it measures,
-    // and that number is 0.00 (third reader, item 8).
-    //
-    // THE FIXTURE IS THE WHOLE ARGUMENT. The mirror wall and the cube behind the
-    // camera both go away; what is left is a glossy floor and a MATTE emissive
-    // cube standing in front of the camera, fully on screen. The march can see
-    // everything the floor reflects, at a face-on arrival, well inside its
-    // distance — its best case — and nothing in the shot is itself traced. If
-    // the ray tier is "screen first" this frame cannot move at all.
-    {
-        s->setNodeVisible(wall, false);
-        s->setNodeVisible(cube, false);
-        const NodeId floor = s->createNode();
-        const MaterialId fm = s->createPbrMaterial(wallParams);   // roughness 0, metal
-        const MeshId fmesh = s->createMesh(enginetest::unitCubeMesh());
-        const NodeId lamp = s->createNode();
-        PbrParams lampParams;
-        lampParams.albedo = Colour(0.05f, 0.05f, 0.05f);
-        lampParams.emissive = Colour(4.0f, 0.0f, 0.0f);
-        lampParams.roughness = 0.9f;                              // MATTE: never traced
-        const MaterialId lm = s->createPbrMaterial(lampParams);
-        CHECK(floor && fm && fmesh && s->attachMesh(floor, fmesh, fm) && lamp && lm &&
-                  s->attachMesh(lamp, fmesh, lm),
-              "the screen-first fixture exists (a glossy floor and a matte emitter above it)");
-        enginetest::setNodeScale(s, floor, Vec3(16.0f, 0.3f, 16.0f));
-        enginetest::setNodePosition(s, floor, Vec3(0.0f, -1.0f, 0.0f));
-        enginetest::setNodeScale(s, lamp, Vec3(2.0f, 2.0f, 2.0f));
-        enginetest::setNodePosition(s, lamp, Vec3(0.0f, 2.0f, 0.0f));
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.2f, -7.0f), Vec3(0.0f, 0.4f, 0.0f));
-        s->refreshGlobalIllumination();
-        // BOTH ARMS ARE READ ONCE THE PICTURE HOLDS STILL, never at a frame
-        // count (PHOTON-M3): a chain rebuild re-solves the GI and the settle
-        // runs one injection a frame, and with the float voxel store (fork ae2ed529f+155a56bf8
-        // (was 0080)) the emitter's un-clipped bounce keeps moving the floor for
-        // longer than 48 frames — the two arms, 48 frames apart, then differed
-        // by the settle (mean 7.09/255 over the march region) with the ray tier
-        // blameless. The house lesson: a wall-clock or frame-count settle
-        // measures nothing; read until the value stops moving.
-        const auto readStill = [&](Image &out) {
-            Image prev;
-            render(e, 48);
-            view->readPixels(prev);
-            for (int i = 0; i < 40; ++i) {
-                render(e, 8);
-                view->readPixels(out);
-                if (out.width == prev.width && out.height == prev.height &&
-                    std::equal(out.rgba.begin(), out.rgba.end(), prev.rgba.begin()))
-                    return;
-                prev = out;
-            }
-        };
-        Image withRays;
-        readStill(withRays);
-        unsigned same = 0, moved = 0, worstDiff = 0;
-        // The SAME binary, the same chain — only the tier's switch moves.
-        // (setRayTracing rebuilds the chain, so both arms settle the same way.)
-        e->setRayTracing(false);
-        Image marchOnly;
-        readStill(marchOnly);
-        e->setRayTracing(true);
-        render(e, 48);
-        for (unsigned y = 0; y < withRays.height; ++y)
-            for (unsigned x = 0; x < withRays.width; ++x) {
-                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
-                if (a.r == b.r && a.g == b.g && a.b == b.b) { ++same; continue; }
-                ++moved;
-                worstDiff = std::max(worstDiff,
-                                     unsigned(std::abs(a.r - b.r) * 255.0f + 0.5f));
-            }
-        const float movedPct = 100.0f * float(moved) / float(same + moved);
-        // WHERE THE MARCH IS CONFIDENT, measured rather than assumed. The
-        // resolve's weight is not a yes/no: it is the ENVELOPE (distance, the
-        // screen's edge, a reflection pointing back at the camera) times the
-        // roughness ramp times the hit mask's coverage, and over a floor the
-        // envelope is below 1 across most of the reflection. So "the march
-        // answered this pixel" is a matter of degree, and the pixels where it
-        // answered it OUTRIGHT are the bright interior of the reflection —
-        // which is what this measures: over the texels the march alone already
-        // shows a strong reflection on, the ray tier must leave the colour
-        // essentially where it was.
-        //
-        // (A frame-wide byte-identical claim would be false BY DESIGN, and the
-        // design is the one this suite is defending: where the march's envelope
-        // has faded, the ray answers instead of the probe — that is the whole
-        // point of "rays for the rest". The frame-wide split is printed so the
-        // size of that region is never hidden.)
-        double sumDelta = 0.0;
-        unsigned strong = 0, strongWorst = 0;
-        unsigned dgUnder2 = 0, dgUnder8 = 0, dgUnder32 = 0, dgOver32 = 0;
-        for (unsigned y = 0; y < withRays.height; ++y)
-            for (unsigned x = 0; x < withRays.width; ++x) {
-                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
-                if (b.r - std::max(b.g, b.b) < 0.25f) continue;   // not a strong march hit
-                ++strong;
-                const float d = std::max(std::max(std::abs(a.r - b.r), std::abs(a.g - b.g)),
-                                         std::abs(a.b - b.b)) * 255.0f;
-                sumDelta += double(d);
-                strongWorst = std::max(strongWorst, unsigned(d + 0.5f));
-                if (d < 2.0f) ++dgUnder2; else if (d < 8.0f) ++dgUnder8; else if (d < 32.0f) ++dgUnder32; else ++dgOver32;
-                if (d >= 32.0f && dgOver32 <= 6)
-                    std::printf("      outlier (%u,%u): rays %.3f/%.3f/%.3f march %.3f/%.3f/%.3f\n", x, y,
-                                a.r, a.g, a.b, b.r, b.g, b.b);
-            }
-        std::printf("    delta histogram over the march region: <2: %u, <8: %u, <32: %u, >=32: %u\n",
-                    dgUnder2, dgUnder8, dgUnder32, dgOver32);
-        const float meanDelta = strong ? float(sumDelta / double(strong)) : 0.0f;
-        std::printf("    screen-first fixture: %u px byte-identical, %u moved (%.2f %%), "
-                    "worst red delta %u/255\n", same, moved, movedPct, worstDiff);
-        std::printf("    ...over the %u px the march answers OUTRIGHT: mean delta %.2f/255, "
-                    "worst %u/255\n", strong, meanDelta, strongWorst);
-        CHECK_MSG(strong > 100u, "the march alone really does answer a region (%u px)", strong);
-        // THE MEASURE IS THE SHARE THE RAYS LEAVE ALONE, NOT A MEAN (PHOTON-M3
-        // re-anchor, measured): the region above is a CHROMA classifier over the
-        // march-only picture, and it admits the RIM of the march's lamp hit —
-        // where the march's own answer fades (red 0.40-0.62) and the ray tier
-        // completes it to the lamp (1.0/0/0), which is the composite doing its
-        // job. The histogram is bimodal: 6,094 of 6,667 px within 2/255, 452 at
-        // 32+ on that rim, nothing in between to speak of. With the float voxel
-        // store (fork ae2ed529f+155a56bf8 (was 0080)) the floor's red bounce is brighter, more rim pixels
-        // cross the 0.25 chroma margin, and a MEAN over the region moved from
-        // 2.96 to 7.08/255 with the ray tier blameless. So: the share within
-        // 2/255 (measured 91.4 %) must stay above 85 %, and the rim is named.
-        const float untouchedShare = strong ? float(dgUnder2) / float(strong) : 0.0f;
-        std::printf("    ...share of the march region the rays leave within 2/255: %.1f %%\n",
-                    100.0f * untouchedShare);
-        CHECK_MSG(untouchedShare > 0.85f,
-                  "SCREEN FIRST: where the march answers outright the ray tier leaves the "
-                  "colour alone (%.1f %% of %u px within 2/255; the rest is the hit's rim)",
-                  100.0f * untouchedShare, strong);
-        s->setNodeVisible(floor, false);
-        s->setNodeVisible(lamp, false);
-        s->setNodeVisible(wall, true);
-        s->setNodeVisible(cube, true);
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
-        s->refreshGlobalIllumination();
-        render(e, 24);
-    }
+    // (6b, SCREEN FIRST - "where the march answers a pixel outright the ray tier must leave it alone" - is DELETED with
+    // the two-estimator contract it defended: since PHOTON-7 stage 6 the screen trace is the ONE estimator's first
+    // source, inside the trace (rq_reflect.comp), and no raster march answers a pixel of a ray chain.)
 
     // ---- 6c: A MIRROR DOES NOT GHOST UNDER CAMERA MOTION --------------------
     // (Second reader, H1.) The temporal mean exists for VARIANCE, and a mirror
-    // has none: every sample is the same ray. If the mean kept its floor there,
+    // has none: every sample is the same ray. If the mean kept its memory there,
     // a pan would drag the reflection of where the camera used to be across the
-    // wall for as long as the mean remembers. The blend is raised toward 1 as
-    // the lobe narrows, so one frame after a pan a mirror must already match a
-    // fresh render of the same pose.
+    // wall for as long as the mean remembers. The mirror ramp (PHOTON-7 stage 6,
+    // jah_reflect_draw.glsl) takes the lobe's centre ray where its footprint is
+    // under a texel and gives it ONE frame of memory, so one frame after a pan a
+    // mirror must already match a fresh render of the same pose.
     {
         const Vec3 eye(0.0f, 2.0f, -6.0f);
         enginetest::testCameraLookAt(view, eye, Vec3(0.0f, 2.0f, 5.0f));

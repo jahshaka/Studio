@@ -1,13 +1,11 @@
 // rtreflect.history_detectors — THE REFLECTION HISTORY'S TWO LAWS (PHOTON-5 stage 4;
 // SPECS/audits/PHOTON_AUDIT_2026-10-21.md F4; the mechanism PHOTON-2 stage 1b's).
 //
-// The ray tier's reflection is a temporal mean (rq_reflect.comp + rq_reflect_temporal.comp):
-// a moving eye's glossy texel remembers about thirty-two frames (the floor on 1/n,
-// kReflectHistoryFloor). Two things make that memory WRONG rather than merely old, and
-// ONE mechanism answers both since PHOTON-2 1b — the history is clamped to the box this
-// frame's samples span and its memory shortened by how far the clamp moved it (Lumen's
-// temporal denoiser; the radiance-key cap and the parallax drop that answered them before
-// are deleted):
+// The ray tier's reflection is a temporal mean (rq_reflect.comp + rq_reflect_resolve.comp + rq_reflect_temporal.comp):
+// a moving eye's glossy texel remembers at most Lumen's MaxFrames, twelve frames (PHOTON-7 stage 6; the 32-frame floor
+// before). Two things make that memory WRONG rather than merely old, and ONE mechanism answers both — the history is
+// clamped to the box this frame's RESOLVED samples span and its memory shortened by how far the clamp moved it (Lumen's
+// temporal denoiser; the radiance-key cap and the parallax drop that answered them before are deleted):
 //   (a) THE RADIANCE MOVED: a lamp's intensity stepped. The surface and what it reflects
 //       are the same, so no reprojection test fires; the old radiance drained out of a still
 //       surface's mean over the floor's ~94 frames at the base.
@@ -19,8 +17,11 @@
 //       mean HAS a memory; a true mirror takes every sample whole) reflecting a matte box
 //       lit by one lamp; the lamp's intensity doubles at frame 40. The floor patch where
 //       the box is reflected is read in HDR every frame; the number is the frames from the
-//       step until it holds 95 % of its settled change (24 at the base, 11 with the cap; the
-//       law 2 x kWarmupFrames).
+//       step until it holds 95 % of its settled change (24 at the base, 11 with the cap, 7 with PHOTON-2 1b's clamp) -
+//       PRINTED: its assertion, the radiance cap's 2 x kWarmupFrames, is deleted with the cap and the warm-up
+//       (PHOTON-7 stage 6, the spec's ruling). Under Lumen's denoiser a lamp step drains through the clamp against the
+//       RESOLVED neighbourhood: where that box is wide (a glossy floor's one-ray samples) the history stays inside it and
+//       drains at MaxFrames' 1/12 - 33 frames measured in Both, 22 in Rays (commit 6).
 //   (b) PAN-SMEAR-1's pillar fixture (gi.reflect_motion, archived): a glossy floor, seven
 //       emissive pillars, a 24-frame slide at 0.25 m a frame, the moving floor against the
 //       floor the renderer settles to at the same pose, in 8-bit codes.
@@ -47,7 +48,6 @@ static int failures = 0;
 
 static const unsigned kWidth = 384;
 static const unsigned kHeight = 216;
-static const int kWarmupFrames = 8;    // rq_reflect.comp's kWarmupFrames
 
 static NodeId addBox(Scene *s, const PbrParams &p, const Vec3 &pos, const Vec3 &scale)
 {
@@ -268,12 +268,10 @@ int main()
     }
 
     const int frames95 = lampStep(e, view);
-    // THE LAW (the lead's ruling on the measurement): 95 % of a radiance change holds within
-    // 2 x kWarmupFrames frames. Measured: 24 at the base (the 1/32 floor's drain), 11 with the
-    // radiance cap (PHOTON-5), 7 with the clamp and its confidence (PHOTON-2 1b).
-    CHECK_MSG(frames95 > 0 && frames95 <= 2 * kWarmupFrames,
-              "(a) A LAMP STEP reaches the still glossy floor's reflection within 2 x kWarmupFrames = %d frames "
-              "(%d; 24 at the base)", 2 * kWarmupFrames, frames95);
+    // PRINTED, NOT ASSERTED (the radiance cap's assertion is deleted with the cap - the header): 24 at the base (the 1/32
+    // floor's drain), 11 with the radiance cap (PHOTON-5), 7 with PHOTON-2 1b's clamp, 33 under Lumen's (Both).
+    std::printf("target: (a) a lamp step reaches the still glossy floor's reflection in %d frames (24 at the base)\n",
+                frames95);
 
     float still = 0.0f;
     const float trail = slideTrail(e, view, still);

@@ -70,9 +70,9 @@
 // REFLECT-EDGE-2 (spikes/reflect-edge-2/NOTES.md). THE SILHOUETTE BAND (the reflected
 // disk's edge +-3 px) is gated: grain within 1.5x the still case's AND the moving
 // edge's 10-90 % width within 1 px of the width before the lane — measured 2.14x ->
-// ~1.43x (rigid), 2.03x -> ~1.39x (posed), widths 6.75 -> ~7.1 px. `--edge` prints
-// the band's nature (the history classes through the trace's class overlay beside
-// the analytic coverage change). A POSED item's own surface and the march's
+// ~1.43x (rigid), 2.03x -> ~1.39x (posed), widths 6.75 -> ~7.1 px. (`--edge`, which
+// printed the band's history classes through the trace's class overlay, is deleted with
+// the overlay: PHOTON-7 stage 6.) A POSED item's own surface and the march's
 // reflection of it follow the pose (SKINNED-VELOCITY-1): the id pass does not draw a
 // character, so a pixel no moving Atom item drew is identified through the TLAS
 // while a pose moves — gated against the rigid twin arms (4.5 -> ~1.97 codes against
@@ -678,91 +678,8 @@ int main(int argc, char **argv)
     // the thirty-two-frame floor, which trailed the floor the sky pass brightened),
     // 120-180 at most 1.59, 240 at most 0.72; the whole run 1.31-1.38.
     static const float kSphereEnvelope[kCheckpoints] = { 4.0f, 3.0f, 3.0f, 3.0f };
-    // THE EDGE'S NATURE (REFLECT-EDGE-2, --edge): the rays glossy floor's band read
-    // through the trace's class overlay (the arm "reflect.edgeClasses" on the Hits view) —
-    // per band texel per frame: did the ray hit the mover, did the mean restart,
-    // was the history found through the reflected image; and the new count's bins —
-    // beside the analytic coverage change of the band pixel's lobe footprint.
-    if (argc > 1 && std::string(argv[1]) == "--edge") {
-        const bool edgeSkinned = getenv("JAH_EDGE_SKINNED") != nullptr;
-        const Arm &arm = arms[getenv("JAH_EDGE_ARM") ? atoi(getenv("JAH_EDGE_ARM")) : edgeSkinned ? 6 : 3];
-        PbrParams f2 = fp; f2.metalness = arm.floorMetal; f2.roughness = arm.floorRough;
-        PbrParams s2 = sp; s2.metalness = arm.sphereMetal; s2.roughness = arm.sphereRough;
-        s->setNodeMaterial(floor, s->createPbrMaterial(f2));
-        const NodeId edgeMover = edgeSkinned ? skinnedSphere : sphere;
-        s->setNodeMaterial(edgeMover, s->createPbrMaterial(s2));
-        s->setNodeVisible(sphere, !edgeSkinned);
-        s->setNodeVisible(skinnedSphere, edgeSkinned);
-        const auto edgePlace = [&](const Vec3 &at) {
-            if (edgeSkinned) poseSkinned(at);
-            else enginetest::setNodePosition(s, sphere, at);
-        };
-        { PostFxDesc afx = fx; afx.reflectSources = arm.march ? ReflectSources::Both : ReflectSources::Rays; view->setPostFx(afx); }
-        edgePlace(pathAt(0));
-        render(e, kWarmFrames);
-        s->setPhotonView(PhotonView::Hits);
-        const float kW = 8.0f;   // the settled edge's 10-90 % width (px): the footprint the coverage ramps over
-        auto cov = [&](float sd) { return std::min(std::max(0.5f - sd / kW, 0.0f), 1.0f); };
-        // [group][class]: group 0 leading, 1 trailing, 2 tangential, 3 interior; class = bits (mover|restart<<1|virtual<<2)
-        double cls[2][4][8] = {}, bins[2][4][4] = {}, nCls[2][4] = {}, nBin[2][4] = {};
-        double dc[2][4] = {}, dcBig[2][4] = {}, nDc[2][4] = {};
-        for (int phase = 0; phase < 2; ++phase) {   // 0 moving, 1 parked at the same pose
-            int frame = 0;
-            edgePlace(pathAt(0));
-            render(e, 60);
-            for (int i = 0; i < 240; ++i) {
-                const int mode = 1 + (i & 1);
-                e->setArm("reflect.edgeClasses", double(mode));
-                if (phase == 0) ++frame;
-                if (phase == 0) edgePlace(pathAt(frame));
-                render(e, 1);
-                if (i < 30) continue;
-                Image img;
-                view->readPixels(img);
-                if (getenv("JAH_EDGE_DUMP") && i == 239 && phase == 0) writePpm(img, getenv("JAH_EDGE_DUMP"));
-                const Vec3 c1 = pathAt(frame), c0 = pathAt(phase == 0 ? frame - 1 : frame);
-                float vx1, vy1, vr1, vx0, vy0, vr0, sx, sy, sr;
-                diskOf(Vec3(c1.x, -c1.y, c1.z), kSphereR, vx1, vy1, vr1);
-                diskOf(Vec3(c0.x, -c0.y, c0.z), kSphereR, vx0, vy0, vr0);
-                diskOf(c1, kSphereR, sx, sy, sr);
-                for (unsigned y = 0; y < kHeight; ++y)
-                    for (unsigned x = 0; x < kWidth; ++x) {
-                        const float fx = float(x) + 0.5f, fy = float(y) + 0.5f;
-                        if (std::hypot(fx - sx, fy - sy) <= sr + 3.0f) continue;
-                        const float s1 = std::hypot(fx - vx1, fy - vy1) - vr1;
-                        const float s0 = std::hypot(fx - vx0, fy - vy0) - vr0;
-                        int g;
-                        if (std::fabs(s1) <= 3.0f) g = (s1 - s0) < -0.3f ? 0 : (s1 - s0) > 0.3f ? 1 : 2;
-                        else if (s1 < -5.0f) g = 3;
-                        else continue;
-                        const size_t k = (size_t(y) * kWidth + x) * 4u;
-                        const int r = img.rgba[k] > 127, gg = img.rgba[k + 1] > 127, b = img.rgba[k + 2] > 127;
-                        if (mode == 1) { cls[phase][g][r | (gg << 1) | (b << 2)] += 1; nCls[phase][g] += 1; }
-                        else { bins[phase][g][r ? 0 : gg ? 1 : b ? 2 : 3] += 1; nBin[phase][g] += 1; }
-                        const float d = std::fabs(cov(s1) - cov(s0));
-                        dc[phase][g] += d; dcBig[phase][g] += d > 0.1f ? 1.0 : 0.0; nDc[phase][g] += 1;
-                    }
-            }
-        }
-        e->setArm("reflect.edgeClasses", 0.0);
-        s->setPhotonView(PhotonView::Off);
-        const char *gname[4] = { "band leading", "band trailing", "band tangential", "interior" };
-        const char *cname[8] = { "miss/surf", "HIT/surf", "miss/RESTART", "HIT/RESTART", "miss/virt?", "HIT/virtual",
-                                 "miss/restart+virt?", "HIT/restart+virt?" };
-        for (int phase = 0; phase < 2; ++phase)
-            for (int g = 0; g < 4; ++g) {
-                std::printf("EDGE %s %-16s n=%7.0f  dcov %.3f (>0.1: %.3f)  count<=9 %.3f  <=17 %.3f  <=33 %.3f  >33 %.3f |",
-                            phase ? "parked" : "moving", gname[g], nCls[phase][g],
-                            nDc[phase][g] ? dc[phase][g] / nDc[phase][g] : 0.0,
-                            nDc[phase][g] ? dcBig[phase][g] / nDc[phase][g] : 0.0,
-                            bins[phase][g][0] / std::max(nBin[phase][g], 1.0), bins[phase][g][1] / std::max(nBin[phase][g], 1.0),
-                            bins[phase][g][2] / std::max(nBin[phase][g], 1.0), bins[phase][g][3] / std::max(nBin[phase][g], 1.0));
-                for (int c = 0; c < 8; ++c)
-                    if (cls[phase][g][c] > 0) std::printf(" %s %.3f", cname[c], cls[phase][g][c] / std::max(nCls[phase][g], 1.0));
-                std::printf("\n");
-            }
-        return 0;
-    }
+    // (THE EDGE'S NATURE, `--edge` - the band read through the trace's history-class overlay - is DELETED with the
+    // overlay and the moving hit's reflected-image history it classified: PHOTON-7 stage 6, Lumen's denoiser.)
     int armIdx = 0;
     std::vector<float> armSettled(sizeof(arms) / sizeof(arms[0]), -1.0f);
     for (const Arm &arm : arms) {
