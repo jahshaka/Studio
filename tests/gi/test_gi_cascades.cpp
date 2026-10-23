@@ -746,14 +746,38 @@ int main()
         CHECK(bad.cascades[0].pending != 0, "...with the rebuild still owed");
         CHECK(scene->published().gi.vctBound, "...and the chain still bound and rendering");
         e->setArm("gi.cascadeFault", -1.0);
-        render(e, 1);
+        // THE RETRY IS THE CASCADE'S SCROLL (PHOTON-7 stage 2's schedule): cascade 0's camera move takes the scroll path,
+        // spread over its tier's count of chunk frames (giCascadeScrollFrames) and committed in the frame after the last
+        // of them - so it lands within the count and its commit's frame, never later (the lag law of gi.scroll_lag).
+        GiParams::GiCascadeDesc d;
+        d.halfSize = c0.halfSize;
+        d.resolution = c0.resolution;
+        d.stepCells = c0.step / c0.cell;
+        const int bound = giCascadeScrollFrames(d) + 1;
+        int retry = 0;
+        for (; retry < bound && scene->published().gi.cascades[0].rebuilds == c0.rebuilds; ++retry) render(e, 1);
         st = scene->published().gi;
-        std::printf("   after the fault is cleared: rebuilds %llu, centre %.2f, pending %d\n",
-                    st.cascades[0].rebuilds, st.cascades[0].centre.x, st.cascades[0].pending);
-        CHECK(st.cascades[0].rebuilds == c0.rebuilds + 1u, "the NEXT FRAME retries, and succeeds");
+        std::printf("   after the fault is cleared: rebuilds %llu after %d frame(s) (the scroll's count and its commit: %d), "
+                    "centre %.2f, pending %d\n",
+                    st.cascades[0].rebuilds, retry, bound, st.cascades[0].centre.x, st.cascades[0].pending);
+        CHECK(st.cascades[0].rebuilds == c0.rebuilds + 1u,
+              "the retry succeeds within the cascade's scroll count and its commit's frame");
+        // A STEP OF 1.5 STEPS IS PAST THE SCRATCH'S LAYERS (one step's slab and a frame's travel), and the camera moved on
+        // more than one axis: the retry's scroll is CUT, the other axes and the cut's remainder follow as their own scrolls
+        // (PhotonComponent::planScroll: an axis left out asks again) - each within its count and commit frame, at most one
+        // a moved axis plus the cut's remainder.
+        int rest = 0;
+        for (; rest < 4 * bound &&
+               (scene->published().gi.cascades[0].pending || scene->published().gi.cascades[0].scrolling);
+             ++rest)
+            render(e, 1);
+        st = scene->published().gi;
+        std::printf("   ...the rest: %llu more scroll(s) in %d frame(s), centre %.2f %.2f %.2f, pending %d\n",
+                    st.cascades[0].scrolls - bad.cascades[0].scrolls - 1u, rest, st.cascades[0].centre.x,
+                    st.cascades[0].centre.y, st.cascades[0].centre.z, st.cascades[0].pending);
         CHECK(st.cascades[0].centre.x > c0.centre.x + step * 0.5f,
               "...and the cascade is where the camera is");
-        CHECK(st.cascades[0].pending == 0, "...and owes nothing");
+        CHECK(st.cascades[0].pending == 0, "...and owes nothing once the cut's remainder has scrolled");
     }
 
     // =====================================================================
