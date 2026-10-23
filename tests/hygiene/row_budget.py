@@ -24,12 +24,23 @@ def check(ok, what):
         FAILURES.append(what)
 
 
+def unsets_display(props):
+    """The row runs with no display (tests/CMakeLists.txt jah_no_display: DISPLAY=unset: in ENVIRONMENT_MODIFICATION) -
+    a CPU row: a Vulkan engine cannot boot without one."""
+    env = props.get("ENVIRONMENT_MODIFICATION") or []
+    env = [env] if isinstance(env, str) else env
+    return any(str(e).startswith("DISPLAY=unset:") for e in env)
+
+
 def budget_of(name, props, cmd=()):
     """An app row: CLASS app|vr|selftest, a pool, or a row whose command starts the app (a harness or a headless app row
-    registered by plain add_test) or a jahlab session (PHOTON-7 stage 1: the lab's rows are CLASS engine - the boot
+    registered by plain add_test) or a jahlab SESSION (PHOTON-7 stage 1: the lab's rows are CLASS engine - the boot
     declaration TIER/NEEDS is the Studio app's, a lab script sets its own tiers - but a session is an app process: Qt,
-    the engine, a scene built and the whole chain); every other row 10 s."""
-    if name.startswith("pool.") or any(str(c).endswith(("/bin/Jahshaka", "/jahlab")) for c in cmd):
+    the engine, a scene built and the whole chain); every other row 10 s. A jahlab row that runs with NO DISPLAY is not a
+    session (PHOTON-7 stage 1's read F6: lab.envs_build's `--env-check` is CPU work) and keeps the 10 s."""
+    if name.startswith("pool.") or any(str(c).endswith("/bin/Jahshaka") for c in cmd):
+        return 60.0
+    if any(str(c).endswith("/jahlab") for c in cmd) and not unsets_display(props):
         return 60.0
     return BUDGET.get(props.get("JAH_CLASS") or "", 10.0)
 
@@ -67,13 +78,15 @@ def main(source, build):
     lab = ("sh", "/t/gi/walk.sh", "/b/bin/jahlab", "/b/work")
     synth = [T("f.slow", JAH_CLASS="engine"), T("a.slow", JAH_CLASS="app"), T("a.ok", JAH_CLASS="app"),
              T("m.long", JAH_CLASS="engine", LABELS=["measure"]), T("pool.p", JAH_CLASS="app"), T("lint"),
-             T("l.ok", lab, JAH_CLASS="engine"), T("l.slow", lab, JAH_CLASS="engine")]
+             T("l.ok", lab, JAH_CLASS="engine"), T("l.slow", lab, JAH_CLASS="engine"),
+             T("l.cpu", ("sh", "/t/lab/envs_build.sh", "/b/bin/jahlab"),
+               ENVIRONMENT_MODIFICATION=["DISPLAY=unset:", "WAYLAND_DISPLAY=unset:"])]
     got = [n for n, _, _ in over(synth, {"f.slow": 12, "a.slow": 61, "a.ok": 59, "m.long": 500, "pool.p": 59,
-                                         "lint": 11, "l.ok": 40, "l.slow": 61})]
+                                         "lint": 11, "l.ok": 40, "l.slow": 61, "l.cpu": 11})]
     print("the rule catches (synthetic):")
-    check(sorted(got) == ["a.slow", "f.slow", "l.slow", "lint"], "a fixture over 10 s, an app row over 60 s, a jahlab "
-          "row over 60 s and a CPU row over 10 s are red; an app row under 60 s, a jahlab row under 60 s, a pool under "
-          "60 s and a measure row are not (%s)" % got)
+    check(sorted(got) == ["a.slow", "f.slow", "l.cpu", "l.slow", "lint"], "a fixture over 10 s, an app row over 60 s, a "
+          "jahlab session over 60 s, a CPU row over 10 s and a jahlab CPU row (no display) over 10 s are red; an app row "
+          "under 60 s, a jahlab session under 60 s, a pool under 60 s and a measure row are not (%s)" % got)
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_graph            # a listing from a copy of the CTestTestfile tree (never truncates a running gate's log)
     tests = json.loads(gate_graph.ctest_inventory(build)[0] or "{}").get("tests", [])
