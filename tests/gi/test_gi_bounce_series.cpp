@@ -34,6 +34,13 @@
 //       one code of a 64-pass Jacobi of the same state - the stop law's bound with the resume's own error in it. RED on
 //       the resume's old weight (the centres' distance, one face: 316 voxels over a code, the worst 2.36, no brick of
 //       cascade 0 resumed - High). (The coupling is the store's: at 50 the walls outside moved 0.72 codes at most.)
+//   (5) THE SLOW FADE ENDS WHERE THE STEP ENDS (PHOTON-7 stage 4's fix, the lead's bar; High and Epic, after the resume
+//       arm): the lamp from 400 to 200 in one frame, and - from 400 again - FADED to 200 linearly over kFadeFrames, slow
+//       enough that every inner-wall voxel, inside the range and beyond it, moves under ONE STEP of the half-float store
+//       a frame (2^-10 of its value; printed: the end states' difference over the frames); at each arm's rest every
+//       inner-wall voxel beyond the lamp's range box within one code of a 64-pass Jacobi of the end state. RED where a
+//       slow change is dropped (a move under a step recorded as none never resumes the bricks beyond the range, which
+//       stay at the old light).
 // (THE LEAK ITSELF is printed, not barred: the cones at coarse levels read a texel the wall only partly covers - a
 // march finding, VOXEL-LEAK-1. A pass-1 reading is never the operator: the outer cascades run first in a frame, so an
 // inner cascade's first pass already reads an outer one's bounce.)
@@ -64,6 +71,7 @@ const float kRho = 0.5f;     // their albedo
 const float kHalfX = 4.0f, kHalfZ = 4.0f, kHeight = 4.0f, kThick = 0.3f;
 
 const double kADiffuse = kRho * 0.701832;   // a' = rho x DA_hemi(1) (JahDiffuseAlbedo_piece_all.any)
+const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
 NodeId slab(Scene *s, const Vec3 &centre, const Vec3 &size, float emission)
 {
@@ -273,6 +281,9 @@ int main(int argc, char **argv)
         int lampRest = -1;
         bool lampOk = false;
         const bool lampArm = tiers[t] == GiQuality::High || tiers[t] == GiQuality::Epic;
+        NodeId lampNode = 0;
+        std::vector<char> outside;
+        Reading lj;   // the resume arm's Jacobi (the lamp at 200): the fade's start
         if (lampArm) {
             for (int f = 0, quiet = 0; f < 900 && quiet < 8; ++f) {   // the Jacobi's tail to its rest
                 run(1);
@@ -280,7 +291,8 @@ int main(int argc, char **argv)
                 quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
             }
             const float lampY = 0.5f, lampRange = 3.0f;
-            const NodeId lamp = m.scene->createNode();
+            lampNode = m.scene->createNode();
+            const NodeId lamp = lampNode;
             LightDesc ld;
             ld.type = LightType::Point;
             ld.colour = Colour(1.0f, 1.0f, 1.0f);
@@ -309,11 +321,10 @@ int main(int argc, char **argv)
             const Reading lf = read(m.scene);
             e->setArm("gi.bounceJacobi", 1.0);
             run(64);
-            const Reading lj = read(m.scene);
+            lj = read(m.scene);
             e->setArm("gi.bounceJacobi", 0.0);
             run(2);
             lampOk = lf.ok && lj.ok && lf.voxels == lj.voxels && lj.voxels == j64.voxels;
-            std::vector<char> outside;
             if (lampOk) {
                 // the voxels' positions in the selection's order, re-derived to tell the lamp's box from the rest
                 GiVoxelVolume v;
@@ -363,6 +374,80 @@ int main(int argc, char **argv)
                         100.0 * lampWorst, lampOver, lampMovedAll, lampMeanBefore, lampMeanAfter, 100.0 * lampOutsideMax,
                         size_t(std::count(outside.begin(), outside.end(), char(1))));
         }
+        // (5) THE SLOW FADE: from the lamp at 400 at rest, to 200 in one frame, and - from 400 again - FADED to 200 over
+        // kFadeFrames; each arm's rest against a 64-pass Jacobi of the end state (the resume arm's, the lamp at 200) at every
+        // inner-wall voxel beyond the lamp's range box (the resume arm's set). The fade is slow enough that every voxel
+        // of the room - the bricks inside the range (the sources the bricks beyond resume from) and beyond it - moves
+        // under one step of the store a frame (the end states' difference over the frames, printed).
+        size_t stepOver = 0, fadeOver = 0, beyond = 0;
+        double stepWorst = 0.0, fadeWorst = 0.0, travelBeyond = 0.0, travelInside = 0.0;
+        int stepRest = -1, fadeRest = -1;
+        bool fadeOk = false;
+        if (lampArm && lampOk) {
+            const auto toRest = [&](int cap) {
+                int f = 0, quiet = 0;
+                for (; f < cap && quiet < 8; ++f) {
+                    run(1);
+                    const GiStatus g = m.scene->published().gi;
+                    quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
+                }
+                return quiet >= 8 ? f - quiet : -1;
+            };
+            const auto setLamp = [&](float intensity) {
+                LightDesc ld;
+                ld.type = LightType::Point;
+                ld.colour = Colour(1.0f, 1.0f, 1.0f);
+                ld.intensity = intensity;
+                ld.range = 3.0f;
+                m.scene->setLight(lampNode, ld);
+            };
+            toRest(900);   // the resume arm's Jacobi tail (the lamp at 200)
+            // THE START: the lamp at 400, at rest, and its Jacobi (the fade's travel)
+            setLamp(400.0f);
+            toRest(900);
+            e->setArm("gi.bounceJacobi", 1.0);
+            run(64);
+            const Reading o400 = read(m.scene);
+            e->setArm("gi.bounceJacobi", 0.0);
+            run(2);
+            toRest(900);
+            // THE STEP ARM: 400 -> 200 in one frame
+            setLamp(200.0f);
+            stepRest = toRest(900);
+            const Reading sEnd = read(m.scene);
+            // back to 400, to the rest
+            setLamp(400.0f);
+            toRest(900);
+            // THE FADE ARM: 400 -> 200 linearly over kFadeFrames
+            for (int f = 1; f <= kFadeFrames; ++f) {
+                setLamp(400.0f - 200.0f * float(f) / float(kFadeFrames));
+                run(1);
+            }
+            fadeRest = toRest(900);
+            const Reading fEnd = read(m.scene);
+            fadeOk = o400.ok && sEnd.ok && fEnd.ok && o400.voxels == lj.voxels && sEnd.voxels == lj.voxels &&
+                     fEnd.voxels == lj.voxels && lj.voxels == outside.size();
+            if (fadeOk)
+                for (size_t i = 0; i < lj.voxels; ++i) {
+                    const double o = std::max(double(lj.L[i]), 1e-6);
+                    const double travel = std::fabs(double(o400.L[i]) - double(lj.L[i])) / o;
+                    if (!outside[i]) { travelInside = std::max(travelInside, travel); continue; }
+                    ++beyond;
+                    travelBeyond = std::max(travelBeyond, travel);
+                    const double rs = std::fabs(double(sEnd.L[i]) - double(lj.L[i])) / o;
+                    const double rf = std::fabs(double(fEnd.L[i]) - double(lj.L[i])) / o;
+                    stepWorst = std::max(stepWorst, rs);
+                    fadeWorst = std::max(fadeWorst, rf);
+                    stepOver += rs > 0.01 ? 1u : 0u;
+                    fadeOver += rf > 0.01 ? 1u : 0u;
+                }
+            std::printf("   the slow fade (the lamp 400 -> 200 over %d frames): the inner-wall voxels move %.2f codes at most "
+                        "inside the range (%.3f steps of the store a frame) and %.3f beyond it (%.3f steps a frame; %zu "
+                        "voxels) | the STEP arm at rest in %d frames: beyond, worst %.3f codes, %zu over one | the FADE arm at "
+                        "rest %d frames after: beyond, worst %.3f codes, %zu over one\n", kFadeFrames, 100.0 * travelInside,
+                        travelInside * 1024.0 / kFadeFrames, 100.0 * travelBeyond, travelBeyond * 1024.0 / kFadeFrames,
+                        beyond, stepRest, 100.0 * stepWorst, stepOver, fadeRest, 100.0 * fadeWorst, fadeOver);
+        }
         std::vector<double> mainL;
         for (const Reading &r : m.cascades) mainL.push_back(r.ok ? r.mean : -1.0);
         drop(m);
@@ -407,6 +492,11 @@ int main(int argc, char **argv)
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
             CHECK(lampOk && lampOver == 0u,
                   "(4) A STOPPED BRICK BESIDE A MOVING ONE RESTS WITHIN ONE CODE OF A 64-PASS JACOBI at every inner-wall voxel");
+            CHECK(fadeOk && travelInside * 1024.0 / kFadeFrames < 1.0 && travelBeyond * 1024.0 / kFadeFrames < 1.0 &&
+                      travelBeyond > 0.01 && stepRest >= 0 && fadeRest >= 0,
+                  "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
+            CHECK(fadeOk && stepOver == 0u && fadeOver == 0u,
+                  "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, both within one code of a 64-pass Jacobi");
         }
         std::printf("   (the tier's three arms: %d frames, %.1f s)\n", frames - tierF0,
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - tierT0).count());

@@ -296,10 +296,10 @@ foreach(_tier low medium high epic)
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 134)
-set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 145)
-set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 144)
-set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 144)
+set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 208)
+set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 200)
+set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 1645)
+set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 1645)
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
