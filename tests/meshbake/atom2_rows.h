@@ -16,6 +16,7 @@
 //                                largest stored error at its depth, non-decreasing (D10)
 
 #include "import/atomdag/adjacency.h"
+#include "jahshaka/engine/Types.h"   // kLevelDriftOverBound: the drift law the ray origin spends
 
 namespace atom2
 {
@@ -400,12 +401,14 @@ inline int oneStepDriftBound()
             std::printf(" | d%d %d %.4g %.4g", r.depth, r.triangles, double(r.drift), double(r.stored));
             if (r.depth == 0) continue;   // (an EMPTY level is not skipped: everything gone is a drift too)
             if (r.stored > 0.0f) worst = std::max(worst, r.drift / r.stored);
-            if (r.drift > 2.0f * r.stored * (1.0f + 1e-5f)) ++over;
+            // THE LAW IS THE ENGINE'S CONSTANT (Types.h kLevelDriftOverBound): the ray origin multiplies a stored
+            // bound by it to reach a distance from level 0 (PHOTON-7 stage 6, READ_B F3).
+            if (r.drift > jahshaka::engine::kLevelDriftOverBound * r.stored * (1.0f + 1e-5f)) ++over;
         }
         std::printf("\n   worst drift / stored %.3f\n", double(worst));
         char msg[200];
-        std::snprintf(msg, sizeof(msg), "%s: the drift from level 0 is within 2x the stored error at every depth (%d over)",
-                      s.name, over);
+        std::snprintf(msg, sizeof(msg), "%s: the drift from level 0 is within %gx the stored error at every depth (%d over)",
+                      s.name, double(jahshaka::engine::kLevelDriftOverBound), over);
         CHECK_LOUD(over == 0, msg);
     }
     return finish();

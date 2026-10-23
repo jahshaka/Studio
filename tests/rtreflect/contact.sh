@@ -15,8 +15,10 @@
 #       <= 1 px, every arm (measured down the foot's column, c3.py's method, spikes/photon-2/round5/ramp).
 #   (b) the foot's reflected top edge (the half-level crossing from the dark foot to the post's bright reflection)
 #       within 1 px of where the mirror puts it FROM THE LIFTED ORIGIN - the origin law's own, bounded offset: the ray
-#       starts the drawn cut's error (Epic's 1 px footprint at the floor point) above the floor, so it meets the foot that
-#       much higher (~1 px) - on the flat strip's RAYS and BOTH arms (BOTH is the one estimator since PHOTON-7 stage 6
+#       starts the drawn surface's bound (Epic's 1 px footprint x the drift ratio 2 at the floor point's Euclidean
+#       distance) above the floor, so it meets the foot that much higher (~2 px) - on the flat strip's RAYS arms; on its
+#       BOTH arms within 1 px of the interval between that and the plain mirror (the screen trace marches from the drawn
+#       surface itself, which needs no lift) (BOTH is the one estimator since PHOTON-7 stage 6
 #       commit 5: the screen trace answers the mirror's centre ray where the screen vouches for it, the ray the rest - the
 #       raster march's -2.1 px it replaced); the corrugated floor's (its zigzag is a fifth of a pixel) is printed.
 #   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2): inside the band where the flat mirror reflects the emitter panel
@@ -94,6 +96,7 @@ from PIL import Image
 shots = sys.argv[1]
 fails = []
 TY = math.tan(math.radians(22.5))
+DRIFT = 2.0   # Types.h kLevelDriftOverBound (the bake's ship law atom2.one_step_drift_bound)
 def load(name):
     path = os.path.join(shots, name + '.png')
     if not os.path.exists(path):
@@ -113,11 +116,12 @@ def seam(name, eye, gateEdge):
     H, W = lum.shape
     eye, f, r, u, tx, proj = frame(eye, (-1.88, 0.1, -3.0), W, H)
     foot = proj(np.array([-1.88, 0.02, -3.0])); mirTop = proj(np.array([-1.88, -0.08, -3.0]))
-    # THE LIFTED MIRROR: the floor point P reflecting the foot's top edge, the lift there (the drawn cut's error: the
-    # lab's Epic, atomPixelError 1, one footprint = the view distance x 2 tan(22.5) / H), the edge it meets that much
-    # higher - the mirror image of (0.12 + h) is (-0.08 + h)
+    # THE LIFTED MIRROR: the floor point P reflecting the foot's top edge, the lift there (the origin law, Types.h
+    # rayOriginDrawnFootprints: the lab's Epic, atomPixelError 1, x the bake's drift ratio kLevelDriftOverBound 2, over
+    # no band - the lab's headless view is a capture - in footprints of 2 tan(22.5) / H per metre of the point's
+    # EUCLIDEAN distance from the eye), the edge it meets that much higher - the mirror image of (0.12 + h) is (-0.08 + h)
     M = np.array([-1.88, -0.08, -3.0]); P = eye + (M - eye) * ((eye[1] - 0.02) / (eye[1] - M[1]))
-    h = 1.0 * ((P - eye) @ f) * 2.0 * TY / H
+    h = DRIFT * 1.0 * np.linalg.norm(P - eye) * 2.0 * TY / H
     liftedTop = proj(np.array([-1.88, -0.08 + h, -3.0]))
     cx = int(round(foot[0])); col = lum[:, cx - 3:cx + 4].mean(1)
     fy = int(round(foot[1]))
@@ -133,13 +137,20 @@ def seam(name, eye, gateEdge):
         if col[k] < thr <= col[k + 1]:
             seen = k + (thr - col[k]) / max(col[k + 1] - col[k], 1e-9); break
     edge = seen - liftedTop[1]
+    # BOTH: the screen trace answers from the DRAWN SURFACE itself (it marches the depth the view drew - no level to
+    # clear) and the ray from the lifted origin, so the edge lies between the two mirrors: its distance is to that
+    # interval (RAYS: to the lifted mirror alone).
+    lo, hi = min(liftedTop[1], mirTop[1]), max(liftedTop[1], mirTop[1])
+    off = edge if gateEdge != 'both' else (seen - hi if seen > hi else (seen - lo if seen < lo else 0.0))
     print('%-12s contact line row %.1f, first dark row %s -> SEAM %.1f px; top edge seen %.1f, the mirror %.1f, from the'
           ' lifted origin (%.2f mm) %.1f -> %+.1f px%s (dark %.1f bright %.1f)' %
           (name, foot[1], first, gap, seen, mirTop[1], 1000.0 * h, liftedTop[1], edge,
-           '' if gateEdge else ' [printed]', dark, bright))
+           '' if gateEdge == 'rays' else (' [to the two mirrors %+.1f]' % off if gateEdge == 'both' else ' [printed]'),
+           dark, bright))
     if not (gap <= 1.0): fails.append('%s: the seam at the contact %.1f px > 1' % (name, gap))
-    if gateEdge and not (abs(edge) <= 1.0):
-        fails.append('%s: the reflected top edge %+.1f px from the lifted mirror (> 1)' % (name, edge))
+    if gateEdge and not (abs(off) <= 1.0):
+        fails.append('%s: the reflected top edge %+.1f px from %s (> 1)' %
+                     (name, off, 'the lifted mirror' if gateEdge == 'rays' else 'the two mirrors'))
 # THE BOXES a reflected ray or a view ray must keep clear of (lo, hi), inflated by the margin
 BOXES = [((-1.93, 0.02, -3.15), (-1.83, 0.62, -3.0)),        # the foot and the post
          ((1.0, 0.02, -2.57), (2.8, 0.8, -2.17))]            # the crease block
@@ -205,9 +216,9 @@ def crease(name):
           (name, cols, lineCols, (' ' + str(worst)) if worst else ''))
     if cols < 200: fails.append('%s: the crease spans %d columns (< 200): the fixture moved' % (name, cols))
     if lineCols: fails.append('%s: %d columns of the crease hit their own floor (a line along it)' % (name, lineCols))
-for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), True), ('rays-1m', (-1.88, 0.62, -2.2), True),
-                        ('both-2p4', (-1.88, 1.02, -0.8), True), ('both-1m', (-1.88, 0.62, -2.2), True),
-                        ('chained-2p4', (-1.88, 1.02, -0.8), False), ('chained-1m', (-1.88, 0.62, -2.2), False)):
+for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), 'rays'), ('rays-1m', (-1.88, 0.62, -2.2), 'rays'),
+                        ('both-2p4', (-1.88, 1.02, -0.8), 'both'), ('both-1m', (-1.88, 0.62, -2.2), 'both'),
+                        ('chained-2p4', (-1.88, 1.02, -0.8), ''), ('chained-1m', (-1.88, 0.62, -2.2), '')):
     seam(name, eye, gate)
 for name, eye in (('chained-2p4', (-1.88, 1.02, -0.8)), ('chained-1m', (-1.88, 0.62, -2.2))):
     n = selfHits(name, eye)
