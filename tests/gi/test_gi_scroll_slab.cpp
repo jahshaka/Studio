@@ -30,6 +30,7 @@
 //      bit for bit. (A placement pin holds cascade 1, so the step scrolls cascade 0 alone.)
 //   H. A ONE-FRAME COMMIT (PHOTON-7 stage 2's read D2): the slab's chunks voxelised in the commit's own command buffer
 //      before the shift - the store a whole build's (red while the shift's first transition carried no dependency).
+//   B2. A CUT SCROLL'S REMAINDER THE CAMERA TAKES BACK (the read's W2): no zero-shift scroll, no rebuild, nothing owed.
 //   V. THE VRAM: every cascade's scratch at Epic, measured by the texture-memory door, against the per-size box-sized
 //      targets the scratch replaces (the same eleven volumes at res^3).
 //   EVERY LEVEL-0 VOLUME is compared - albedo, normal, emissive, its factor per half, the coverage and the position per
@@ -675,6 +676,32 @@ int main()
                     directDiff, built.direct.size());
         CHECK(built.direct.size() == after.direct.size() && directDiff == 0,
               "WALK = TELEPORT ON THE DIRECT: the scrolled cascade's direct term is the whole build's, bit for bit");
+    }
+
+    // ---- B2. a cut scroll's remainder the camera takes back (PHOTON-7 stage 2's read W2) ----------
+    // A cut scroll leaves its cascade owed the rest; if the camera comes back to where the cut placed the cascade
+    // before the rest is planned, nothing is owed - no zero-shift scroll (it would re-inject the whole cascade as a delta).
+    std::printf("\n== B2: a cut scroll's remainder taken back by the camera owes nothing ==\n");
+    {
+        e->setArm("gi.scrollFrames", kSpreadFrames);
+        run(1);
+        const GiStatus pre = scene->published().gi;
+        look(Vec3(cam.x - 1.5f * step, cam.y, cam.z));
+        untilScrolls(pre.cascades[0].scrolls + 1u, 400);
+        const GiStatus post = scene->published().gi;
+        look(Vec3(post.cascades[0].centre.x, cam.y, cam.z));   // back to the cut's own placement
+        run(30);
+        const GiStatus done = scene->published().gi;
+        std::printf("   the cut: x %.3f m; after the camera came back: scrolls %llu -> %llu, rebuilds %llu -> %llu, pending %d\n",
+                    double(post.cascades[0].centre.x - pre.cascades[0].centre.x), post.cascades[0].scrolls,
+                    done.cascades[0].scrolls, post.cascades[0].rebuilds, done.cascades[0].rebuilds, done.cascades[0].pending);
+        CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u && post.cascades[0].centre.x != pre.cascades[0].centre.x,
+              "B2: the cut scroll committed");
+        CHECK(done.cascades[0].scrolls == post.cascades[0].scrolls && done.cascades[0].rebuilds == post.cascades[0].rebuilds &&
+                  !done.cascades[0].pending && !done.cascades[0].scrolling,
+              "B2: THE REMAINDER THE CAMERA TOOK BACK IS NO SCROLL AND NO REBUILD - nothing is owed");
+        e->setArm("gi.scrollFrames", 0.0);
+        run(1);
     }
 
     // ---- V. the VRAM at Epic ---------------------------------------------------------------------

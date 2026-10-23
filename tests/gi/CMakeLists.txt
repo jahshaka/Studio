@@ -271,7 +271,7 @@ jah_gpu_row(gi.scroll_slab CLASS engine COMMAND test_gi_scroll_slab
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_slab PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 236)
+set_tests_properties(gi.scroll_slab PROPERTIES JAHSHAKA_TEST_FRAMES 272)
 
 # gi.shell_ends (PHOTON-7 stage 1's read F1) — EVERY CASCADE MARCHES THE WORLD CHAIN'S SHELLS: at the four desktop tiers
 # every cascade's shell list (GiStatus::CascadeStatus::shellEnds) equals sum 8 x cell_i over the chain (test_gi_shells.cpp
