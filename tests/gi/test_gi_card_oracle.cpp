@@ -4,9 +4,13 @@
 // captured and relit fresh).
 //
 // THE FIXTURE: a carded 12 m floor, four carded props, the sun, and a lamp of range 3 m between the first two props; the
-// fourth prop stands 8 m from the lamp, outside its range; a FIFTH, emissive (50) and floating 40 m away, is out of the
-// step's reach - its cards' bound stays under a code (its code is 0.5: the light it gathers cannot move one). The chain
-// at High, the rays on (the cards exist only there), the gather and the field off (the cards are the subject).
+// fourth prop stands 8 m from the lamp, outside its range; a FIFTH, a 6 m emissive (200) cube floating 40 m away, is out
+// of the step's reach - its cards' bound stays under a code (its code is 2: the light it gathers cannot move one; the
+// bound is a bound, so a nearer prop the change cannot move a code is still listed - the bound's slack, which the row
+// prints as the truth's 'relit anyway'). The
+// chain at High, the rays on (the cards exist only there) and THE GATHER ON - its hits are the cards' readers, and the
+// cards resident are the ones they read (PHOTON-7 stage 5, 5-2); the field off. The cards compared are the ones
+// resident in both readings.
 // THE STEP: the lamp 4 -> 8 at the scene's rest, run to the rest again (the chain owes nothing and the cache relights
 // nothing for 30 frames).
 // THE LAWS:
@@ -70,10 +74,19 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("card_oracle", 64, 64, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("card_oracle", 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene("card_oracle");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
+    // THE CHAIN, so the gather runs (its hits read the cards): an offscreen view takes the post chain only when it
+    // allows it, and the gather rides the chain's prepass (test_gi_gather_findings.cpp's armChain).
+    {
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 1;
+        view->setPostFx(fx);
+    }
+    view->setOffscreenContract(OffscreenContract::Live);
 
     const NodeId floor = addCardedCube(scene, Colour(0.7f, 0.7f, 0.7f), 0.9f);
     enginetest::setNodePosition(scene, floor, Vec3(0.0f, -0.05f, 0.0f));
@@ -92,12 +105,13 @@ int main()
         PbrParams p;
         p.albedo = Colour(0.5f, 0.5f, 0.5f);
         p.roughness = 0.8f;
-        p.emissive = Colour(50.0f, 50.0f, 50.0f);
+        p.emissive = Colour(200.0f, 200.0f, 200.0f);
         const MeshId mesh = scene->createMesh(d);
         const MaterialId mat = scene->createPbrMaterial(p);
         if (!far || !mesh || !mat || !scene->attachMesh(far, mesh, mat)) { std::printf("FAIL: the far prop\n"); return 1; }
         enginetest::poseRegistry()[scene][far] = enginetest::NodePose{};
-        enginetest::setNodePosition(scene, far, Vec3(0.0f, 2.0f, 40.0f));
+        enginetest::setNodePosition(scene, far, Vec3(0.0f, 3.0f, -40.0f));
+        enginetest::setNodeScale(scene, far, Vec3(6.0f, 6.0f, 6.0f));
     }
     enginetest::addDirectionalLight(scene, Vec3(0.3f, -1.0f, -0.4f), 2.0f);
     const NodeId lamp = scene->createNode();
@@ -115,26 +129,37 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::Off;
+    gi.gather = GiToggle::On;
     gi.cards = true;
     gi.bounces = true;
     gi.updateBudget = 0;
-    // THE REST: the chain owes nothing and the cache relit nothing for 30 frames in a row (cap 1500)
+    // THE REST: the chain owes nothing, and the cache admitted, captured and relit nothing, for 90 frames in a row - past
+    // the readers' window (60) and its read-back's lag, so the resident set the reads ask for has arrived (cap 1500)
     const auto settle = [&]() {
-        unsigned long long relights = ~0ull;
+        unsigned long long relights = ~0ull, admitted = ~0ull;
         int quiet = 0, f = 0;
-        for (; f < 1500 && quiet < 30; ++f) {
+        for (; f < 1500 && quiet < 90; ++f) {
             run(1);
             const GiStatus g = scene->published().gi;
-            const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights;
+            const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
+                               g.cards.admitted == admitted && g.cards.queueLength == 0u;
             relights = g.cards.relights;
+            admitted = g.cards.admitted;
             quiet = still ? quiet + 1 : 0;
         }
-        return quiet >= 30 ? f - quiet : -1;
+        return quiet >= 90 ? f - quiet : -1;
     };
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
     e->waitForAsyncShaders();
+    e->setArm("cards.demandCount", 1.0);
     const int rest0 = settle();
+    {
+        const GiStatus g = scene->published().gi;
+        std::printf("   the readers: the gather running %d (%llu rays a frame) | the table %u slots, %u cards | the gather's "
+                    "hits carded %llu / uncarded %llu (the reflection's %llu / %llu) | admitted %llu\n",
+                    int(g.gather.running), (unsigned long long)g.gather.raysPerFrame, g.cards.instanceSlots, g.cards.cardRecords,
+                    g.cards.demandHits[2], g.cards.demandHits[3], g.cards.demandHits[0], g.cards.demandHits[1], g.cards.admitted);
+    }
     std::printf("   the court at rest in %d frames (%u cards resident)\n", rest0, scene->published().gi.cards.cardsResident);
     CHECK(rest0 >= 0, "the court comes to rest");
     std::vector<CardRadiance> before;
@@ -214,11 +239,11 @@ int main()
         }
         if (w.node == props[0] || w.node == props[1]) { ++lampCards; lampRelit += wasRelit ? 1u : 0u; }
     }
-    std::printf("   %zu cards matched (%zu with no oracle twin): RELIT by the step %zu (worst %.3f codes, %zu texels over a "
+    std::printf("   %zu cards resident in both readings (%zu of the step's not resident in the oracle's): RELIT by the step %zu (worst %.3f codes, %zu texels over a "
                 "code), KEPT %zu (worst %.3f codes, %zu texels over a code); the lamp's props %zu of %zu relit; the far prop "
                 "%zu of %zu direct-only relit\n", cards, missing, relit, worstRelit, overRelit, kept, worstKept, overKept,
                 lampRelit, lampCards, farDirect, farCards);
-    CHECK(cards > 0 && missing == 0 && overRelit == 0 && overKept == 0,
+    CHECK(cards > 0 && overRelit == 0 && overKept == 0,
           "(1) EVERY CARD MATCHES THE ORACLE WITHIN ONE CODE - the relit and the kept alike");
     std::printf("   the truth (before the step against the oracle): %zu cards moved over a code, %zu did not - of those %zu were "
                 "relit anyway (the bound's slack); the far emissive prop %zu of %zu relit\n", truthMoved, truthStill,

@@ -230,7 +230,7 @@ const QStringList &giPlainKeys()
     static const QStringList keys = {
         QStringLiteral("giCascadeInstanceCap"), QStringLiteral("giDragMoverChannel"),
         QStringLiteral("giPccGrid"), QStringLiteral("giUpdateBudget"),
-        QStringLiteral("giCards"), QStringLiteral("giCardBudgetTexels"), QStringLiteral("giCardRadius"),
+        QStringLiteral("giCards"), QStringLiteral("giCardBudgetTexels"),
         QStringLiteral("giProbeHdr"),
         QStringLiteral("giProbeShadows"), QStringLiteral("giProbeOverlap"),
         QStringLiteral("giProbeSnapDeviation"), QStringLiteral("giProbeSnapSidesMin"),
@@ -290,7 +290,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "lights. The resolution is world.setShadowResolution and the per-light filter/bias rows "
           "are node.setProperty on the light; any other key here is REFUSED.",
           Needs::Document },
-        { "gi", "world.gi({tier, mode, quality, bounces, cascadeSet, cascadeInstanceCap, dragOnMoverChannel, cards, cardBudget, cardRadius, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, gather, ddgi}) -> bool",
+        { "gi", "world.gi({tier, mode, quality, bounces, cascadeSet, cascadeInstanceCap, dragOnMoverChannel, cards, cardBudget, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, gather, ddgi}) -> bool",
           "Global illumination — the full surface, of which world.photon is the product-named shorthand. "
           "'tier' is PHOTON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality, the irradiance field, whether the light bounces and the dynamic probes, all at once — THE TIER TABLE: every tier is a VOXEL tier with the irradiance field on and the camera cascades on — low = two cascades at 64^3, 1 bounce, no probes; medium = the chain at 64^3 feeding the field (voxel source); high = 128^3, its reflections TRACED wherever the scene traces rays on this machine (no reflection-probe grid is built there) and otherwise a probe grid with HDR shadowed captures; epic = high plus four times the gather's probes; and wherever the machine traces rays the SCREEN-PROBE GATHER is the diffuse at medium (36 rays a probe), high (64) and epic (64, four times the probes), the irradiance field its fallback, while low keeps the field and the cones as its diffuse (world.tierTable()'s 'gather' column) (no tier reserves dynamic probes since 2026-09-12: moving things are reflected every frame by screen-space reflections and planar mirrors, not by re-capturing probes). world.settings() lists every row with its four columns (tierSpace 'photon'). Setting it does NOT turn GI on or off (world.photon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
           "The individual knobs: mode off|vct|vct_pcc_hybrid, quality low|medium|high|epic (the engine row: epic is high plus four times the gather's probes), bounces 0 or 1 (a tier row: 1 at every tier — the surfaces re-emit what they gather and the renderer converges the whole series in the voxel volume by feedback, a pass a frame over the parts still changing, so there is no count of bounces to pick; the irradiance field is fed from that volume so it sees them too; 0 is THE DIRECT STORE ALONE: the voxels hold the lamps' direct light and no surface re-emits the sky, a measurement setting). THERE IS NO FIXED GI VOLUME AND NO KNOB FOR ONE: the voxels are always PHOTON's camera-centred cascade chain — voxel boxes centred on the camera, fine cells near the eye and coarse ones far away, re-centred as you travel at most one box per frame, so the bounce follows the camera and what escapes the outermost cascade reads the Sky Light rather than going dark; the irradiance field rides cascade 0 and is re-placed with it. 'boundsMin', 'boundsMax', 'autoBoundsMax' and 'cascades' are gone and refused by name. Read what was built with world.giStatus().cascades, .boundsMin / .boundsMax (the outermost cascade) and .voxelMetres. pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only, where a probe grid is placed: no traced reflections); the grid is placed in the content's fitted region (a placement heuristic, not a lighting volume), and one object can be kept out of that placement with node.setProperty(id, \"probeGridExcluded\", true). cascadeInstanceCap = how many objects ONE cascade may voxelise, 0 (the default) meaning no budget: the renderer keeps the ones that fill most of that cascade's own voxels, largest first and nearest first among equals, which is the lever for a scene dense enough that a whole re-voxelisation does not fit in a frame (world.giStatus().cascades[].attached against [].items says whether it is biting). cascadeSet = [{halfSize, resolution, stepCells?}, ...], at most 4 (the longest chain a tier builds), pins the table: halfSize is the HALF-extent in metres of that cascade's cube, resolution its voxel count per axis (16..256), stepCells how many cells the camera may travel before it re-centres (0 or absent DERIVES it, which is what every shipped tier does: every cascade steps the same distance as the outermost one, met with THE NEAR-FIELD GUARANTEE \u2014 the step is held small enough that the cascade covers a radius of 0.45 of its own half-size around the camera at every moment of any WALK (a cell of slack over that pays for the frame the per-frame re-centre test costs and for a rebuild that had to wait its turn; at the editor's 15 m/s fly a single frame is 0.25 m and spends it, which is deliberate \u2014 the guarantee is for walking pace), so the near field you are standing in is voxelised by that cascade and not by the coarser one behind (world.giStatus().cascades[].guaranteedRadius is what it resolved to; it was NEGATIVE at every tier but Low before 2026-09-18, which is what made a walk shimmer). A pinned one is the author's own number and is held only between one cell and half the resolution, since below that the volume re-centres for nothing and above it the camera leaves the box before it re-centres \u2014 pin one below the derived value and the guarantee shrinks with it.) The table must GROW OUTWARD — every row a bigger halfSize AND a bigger cell than the one before it, because each cascade hands the ray march over to the coarser one behind it — and one that does not is refused whole, never honoured halfway. Omit it and the quality tier decides. world.giStatus().cascades reports what was actually built. "
@@ -317,7 +317,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(gi.drag_mover renders it under both rules and compares the bytes); what changes is the "
           "picture DURING the drag, which is why this is a choice and not a fix. Cascades only: the "
           "single-volume arm re-voxelises nothing during a drag anyway. What it is DOING is "
-          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto and AUTO (the default; the World Mode table's High and Epic columns, Off at Low and Medium) means ON EXACTLY WHERE THE RAYS RUN (the cards' sun term is traced; there is no 'on'): a reflection ray's hit reads the hit surface's CARD first — its lit radiance at the card's texel, while the ray's footprint there is at most four card texels — and the voxels where no card answers, so a machine without rays captures nothing. Cards are the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors. With it on, every still, GI-lit object inside 'cardRadius' metres of the camera holds pages in a 2048-square five-layer atlas (albedo, normal, depth, emissive, shadow+roughness — 16 bytes a texel), captured through a prepass in THIS scene, with the sun's visibility TRACED one ray per card texel against the still world's shadow casters, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains oldest-first in Lumen's own priority (last used minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit re-captures without freeing a page; a light change re-captures nothing (the sun's move re-traces the cards' sun term, any light relights them); a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
+          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto and AUTO (the default; the World Mode table's High and Epic columns, Off at Low and Medium) means ON EXACTLY WHERE THE RAYS RUN (the cards' sun term is traced; there is no 'on'): a reflection ray's hit reads the hit surface's CARD first — its lit radiance at the card's texel, while the ray's footprint there is at most four card texels — and the voxels where no card answers, so a machine without rays captures nothing. Cards are the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors. With it on, every still, GI-lit object holds pages for the faces the rays READ — a hit reads its card and stamps it, a hit that finds none marks the face it wanted, and the faces no ray has read for a second give their pages to the ones a ray wants (so a sealed room's outer walls hold none and its pillars do) — in a 2048-square atlas (albedo, normal, depth, emissive, shadow+roughness, specular), captured through a prepass in THIS scene, with the sun's visibility TRACED one ray per card texel against the still world's shadow casters, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains in Lumen's own priority (last read minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit re-captures without freeing a page; a light change re-captures nothing (the sun's move re-traces the cards' sun term, any light relights them); a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
           "world.giStatus()'s 'dragMovers' (how many objects ride the channel right now, normally 1 "
           "during a drag and 0 at rest) and 'dragMoverGestures' (how many such gestures have ended — "
           "one per drag, never one per frame). "
@@ -855,8 +855,7 @@ bool WorldApi::gi(const QVariantMap &params)
         // below refuses the key and the handler that reads it is unreachable —
         // the lane's one user door, dead (the lead's read).
         QStringLiteral("gather"),
-        QStringLiteral("cards"), QStringLiteral("cardBudget"),
-        QStringLiteral("cardRadius")
+        QStringLiteral("cards"), QStringLiteral("cardBudget")
     };
     // THE LIT VOLUME IS THE RENDERER'S (owner decision D8, 2026-09-13). The
     // three keys that used to pin it — and cap its automatic fit — are refused
@@ -975,14 +974,6 @@ bool WorldApi::gi(const QVariantMap &params)
                 "because a 16-texel card and a 128-texel card are not the same work, and "
                 "texels rather than milliseconds because a wall clock measures nothing here."));
         scene->giCardBudgetTexels = v;
-    }
-    if (params.contains(QStringLiteral("cardRadius"))) {
-        const double v = params.value(QStringLiteral("cardRadius")).toDouble();
-        if (v < 0.0)
-            return fail(QStringLiteral(
-                "world.gi: cardRadius is 0 or more METRES (0 = the quality tier's own) — an "
-                "instance further than this from the camera holds no card pages at all."));
-        scene->giCardRadius = float(v);
     }
     // A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1). A plain bool: it is not
     // a tier question (a tier says how much a solve may cost; this says what a
@@ -1385,7 +1376,9 @@ static QVariantMap cardsToJs(const IEditorViewport::GiStatusInfo::CardsInfo &c)
         { QStringLiteral("emissiveFormat"), c.emissiveFormat },
         { QStringLiteral("instances"), c.instances },
         { QStringLiteral("cards"), c.cards },
-        { QStringLiteral("radius"), c.radius },
+        { QStringLiteral("admitted"), c.admitted },
+        { QStringLiteral("evicted"), c.evicted },
+        { QStringLiteral("compactionMoves"), c.compactionMoves },
         { QStringLiteral("queue"), c.queue },
         { QStringLiteral("budgetTexels"), c.budgetTexels },
         { QStringLiteral("capturesLastFrame"), c.capturesLastFrame },
@@ -3802,13 +3795,12 @@ QVariantMap WorldApi::get()
                              { "gather", giToggleToJs(scene->giGather) },
                              { "cascadeInstanceCap", scene->giCascadeInstanceCap },
                              { "dragOnMoverChannel", scene->giDragMoverChannel > 0 },
-                             // THE SURFACE CACHE's three rows, read back as
+                             // THE SURFACE CACHE's two rows, read back as
                              // authored (SURFACE-CACHE phase 2). `cards` is the
                              // off|auto|on word, not the resolved answer — what
                              // the renderer DID is world.giStatus().cards.
                              { "cards", giToggleToJs(scene->giCards) },
                              { "cardBudget", scene->giCardBudgetTexels },
-                             { "cardRadius", double(scene->giCardRadius) },
                              // PHOTON's quality tier (GI_UNIFIED_SPEC §2): the
                              // dial the three fields above resolve through.
                              { "tier", worldmodes::photonTierName(worldmodes::photonTier(scene)) } };

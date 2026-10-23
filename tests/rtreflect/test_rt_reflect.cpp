@@ -1678,7 +1678,6 @@ static int hitresMain(Engine *e)
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 8.0f, 128, 0.0f };
     gi.cards = true;
-    gi.cardResidencyRadius = 40.0f;
     CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
 
     PostFxDesc fx;
@@ -1978,7 +1977,6 @@ static int footprintSweepMain(Engine *e)
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
     gi.cards = true;
-    gi.cardResidencyRadius = 40.0f;
     s->setGlobalIllumination(gi);
     PostFxDesc fx;
     fx.allowOffscreen = true;

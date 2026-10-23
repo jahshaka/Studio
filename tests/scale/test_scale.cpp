@@ -1935,9 +1935,9 @@ static int tlasMain()
 // scale.atlas (archived: archive/tests/scale) — W9: THE FIXED CARD ATLAS, GLOBAL INVALIDATION, 64 LIGHTS.
 // Anchor: irisgl/engine/src/SurfaceCache.h:110-119 (kCardPageSize 128, kCardAtlasSize 2048
 // = 256 pages); OgreSurfaceCache.cpp:923 (the 7/8 stop), 1129 (kMaxCardLights 64).
-// Number: the cards held against the cards WANTED (every card of every candidate inside
-// the residency radius — the scene's own card lists), and the recaptures one lamp move
-// costs.
+// Number: the cards held against the cards the scene's items carry (residency is the
+// readers' demand, PHOTON-7 stage 5: the faces the rays read), and the recaptures one lamp
+// move costs.
 // ===========================================================================
 static int atlasMain()
 {
@@ -1948,18 +1948,16 @@ static int atlasMain()
     for (int f = 0; f < 900 && env.scene->published().gi.cards.queueLength > 0; ++f) frame(env, 1);
     const CardCacheStatus c = env.scene->published().gi.cards;
     REQUIRE(c.built, "the card atlas exists at High");
-    const iris::Vec3 eye = env.camera->getLocalPos();
     size_t wanted = 0, instances = 0;
     for (const auto &n : w.items) {
-        const iris::Vec3 d = n->getLocalPos() - eye;
-        if (std::sqrt(d.x() * d.x() + d.y() * d.y() + d.z() * d.z()) > c.residencyRadius) continue;
         ++instances;
         wanted += size_t(n->getMesh()->cards.size());
     }
-    std::printf("W9 atlas %u pages x %u px (%u used) | residency radius %.1f m | cards held %u on %u instances | "
-                "wanted %zu cards on %zu instances | lights in range of the relit cards %u, over the 64 %u\n",
-                c.pages, c.pageSize, c.pagesUsed, double(c.residencyRadius), c.cardsResident, c.instancesResident,
-                wanted, instances, c.lightsInRange, c.lightsDropped);
+    std::printf("W9 atlas %u pages x %u px (%u used) | cards held %u on %u instances (admitted %llu, evicted %llu) | "
+                "%zu cards on %zu instances in the world | lights in range of the relit cards %u, over the 64 %u\n",
+                c.pages, c.pageSize, c.pagesUsed, c.cardsResident, c.instancesResident,
+                (unsigned long long)c.admitted, (unsigned long long)c.evicted, wanted, instances, c.lightsInRange,
+                c.lightsDropped);
     // THE ONE LIGHT LIST on the P0 world (P1C-LIGHT-LIST): each cascade's lights, culled by range
     // against its box and over its budget by contribution — the overflow a count, never silent.
     {
@@ -1969,7 +1967,7 @@ static int atlasMain()
                         double(st.cascades[k].halfSize), st.cascades[k].lightsInRange,
                         st.cascades[k].lightsInjected, st.cascades[k].lightsOverBudget);
     }
-    target("W9", double(c.cardsResident), "cards", ("held, of " + std::to_string(wanted) + " wanted inside the radius").c_str());
+    target("W9", double(c.cardsResident), "cards", ("held, of " + std::to_string(wanted) + " in the world").c_str());
     target("W9", double(c.pagesUsed), "pages", ("used of " + std::to_string(c.pages) + " (the fixed 2k atlas)").c_str());
     target("W9", double(c.lightsDropped), "lights",
            "in range of the relit cards but over the relight's 64 (the dimmest there; 500 lamps in the world)");

@@ -266,7 +266,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giCascadeInstanceCap"] = scene->giCascadeInstanceCap;
     sceneObj["giCards"] = scene->giCards;
     sceneObj["giCardBudgetTexels"] = scene->giCardBudgetTexels;
-    sceneObj["giCardRadius"] = double(scene->giCardRadius);
     sceneObj["giDragMoverChannel"] = scene->giDragMoverChannel;
     if (!scene->giCascadeSet.isEmpty()) {
         QJsonArray set;

@@ -535,8 +535,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         }
         scene->giCardBudgetTexels = qBound(
             0, sceneObj.value("giCardBudgetTexels").toInt(scene->giCardBudgetTexels), 1 << 26);
-        scene->giCardRadius = float(qBound(
-            0.0, sceneObj.value("giCardRadius").toDouble(double(scene->giCardRadius)), 100000.0));
         scene->giDragMoverChannel = qBound(
             0, sceneObj.value("giDragMoverChannel").toInt(scene->giDragMoverChannel), 1);
         // CLAMPED TO THE RENDERER'S SLOT TABLE, AND SAID (io/cascadesetformat.h).

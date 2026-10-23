@@ -3111,7 +3111,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cards.emissiveFormat    = QString::fromStdString(st.cards.emissiveFormat);
     out.cards.instances         = int(st.cards.instancesResident);
     out.cards.cards             = int(st.cards.cardsResident);
-    out.cards.radius            = double(st.cards.residencyRadius);
+    out.cards.admitted          = double(st.cards.admitted);
+    out.cards.evicted           = double(st.cards.evicted);
+    out.cards.compactionMoves   = double(st.cards.compactionMoves);
     out.cards.queue             = int(st.cards.queueLength);
     out.cards.budgetTexels      = int(st.cards.budgetTexels);
     out.cards.capturesLastFrame = int(st.cards.capturesLastFrame);

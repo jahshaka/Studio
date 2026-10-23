@@ -270,7 +270,30 @@ jah_gpu_row(gi.card_oracle CLASS engine COMMAND test_gi_card_oracle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_oracle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 179)
+set_tests_properties(gi.card_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 355)
+
+# gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
+# TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
+# to the other and a teleport compared at the second - its pillars carded, no outer face read, the first room's unread
+# cards evicted, the read set resident in both runs and every card resident in both within a code
+# (test_gi_card_residency.cpp says the laws). A fixture.
+add_executable(test_gi_card_residency test_gi_card_residency.cpp)
+set_target_properties(test_gi_card_residency PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_residency PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_residency PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_residency JahshakaEngineMedia)
+jah_gpu_row(gi.card_residency CLASS engine COMMAND test_gi_card_residency
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1157)
 
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive

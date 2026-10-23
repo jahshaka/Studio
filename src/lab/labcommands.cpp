@@ -31,6 +31,10 @@ const std::vector<VerbDoc> &verbs()
         { "status", "status [file]", 0, 1,
           "the engine's AtomDrawStatus + RenderStats + the lab's state as ONE JSON line, appended to <file> (stdout without one)" },
         { "save", "save [file.jlab]", 0, 1, "the session as a .jlab (file or env, camera, tier, view, gi, occlusion, sun)" },
+        { "cards", "cards [file]", 0, 1,
+          "the surface cache's resident cards per object: its name, the cards resident and their faces (+x -x +y -y +z "
+          "-z), the frame each face was last read (Scene::readCardRadiance; PHOTON-7 stage 5's residency by the "
+          "readers' demand), appended to <file> (stdout without one)" },
         { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
         { "probe", "probe [file]", 0, 1,
           "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object (appended to file)" },

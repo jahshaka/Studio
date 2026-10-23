@@ -31,6 +31,7 @@
 #include <fstream>
 #include <functional>
 #include <set>
+#include <map>
 #include <sstream>
 
 namespace lab {
@@ -584,7 +585,13 @@ std::string Session::statusJson()
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
       << gi.cards.invalidIndirect << ",\"invalidMaterial\":" << gi.cards.invalidMaterial << ",\"invalidTransform\":"
-      << gi.cards.invalidTransform << "}";
+      << gi.cards.invalidTransform << ",\"pages\":" << gi.cards.pages << ",\"pagesUsed\":" << gi.cards.pagesUsed
+      << ",\"instancesResident\":" << gi.cards.instancesResident << ",\"cardsResident\":" << gi.cards.cardsResident
+      << ",\"indirectReported\":" << gi.cards.indirectReported << ",\"indirectByRegion\":" << gi.cards.indirectByRegion
+      << ",\"indirectOverflows\":" << gi.cards.indirectOverflows << ",\"admitted\":" << gi.cards.admitted
+      << ",\"evicted\":" << gi.cards.evicted << ",\"compactionMoves\":" << gi.cards.compactionMoves
+      << ",\"demandHits\":[" << gi.cards.demandHits[0] << "," << gi.cards.demandHits[1] << "," << gi.cards.demandHits[2]
+      << "," << gi.cards.demandHits[3] << "]}";
     // ...and THE CASCADES' SCROLL WORK (PHOTON-7 stage 2, the work law's door; cumulative since the chain was built):
     // the commits, the voxels their delta injections lit in the slabs and outside them (read back a few frames late:
     // `counted` injections), the slabs' cells, the cells the commits computed the direct over, the voxels every delta
@@ -753,6 +760,42 @@ bool Session::exec(const Command &c)
             out << js << "\n";
             ok = bool(out);
             std::printf("LAB STATUS -> %s\n", qPrintable(path));
+        }
+    } else if (c.verb == "cards") {
+        std::vector<CardRadiance> cards;
+        unsigned long long cacheFrame = 0ull;
+        ok = mScene->readCardRadiance(cards, cacheFrame);
+        if (mNodeNames.empty()) nameEngineNodes();
+        struct PerNode { unsigned count = 0u, texels = 0u; unsigned faces[6] = {}; unsigned long long read[6] = {}; };
+        std::map<unsigned long long, PerNode> by;
+        for (const CardRadiance &r : cards) {
+            PerNode &p = by[(unsigned long long)r.node];
+            ++p.count;
+            p.texels += r.size * r.size;
+            if (r.bucket < 6u) { ++p.faces[r.bucket]; p.read[r.bucket] = std::max(p.read[r.bucket], r.lastRead); }
+        }
+        std::ostringstream o;
+        static const char *kFace[6] = { "+x", "-x", "+y", "-y", "+z", "-z" };
+        for (const auto &kv : by) {
+            const auto it = std::lower_bound(mNodeNames.begin(), mNodeNames.end(), std::make_pair(kv.first, QString()));
+            const std::string name = (it != mNodeNames.end() && it->first == kv.first) ? it->second.toStdString()
+                                                                                       : std::to_string(kv.first);
+            o << "LAB CARDS " << name << "\t" << kv.second.count << " cards\t" << kv.second.texels << " texels\t";
+            for (unsigned b = 0; b < 6u; ++b)
+                if (kv.second.faces[b])
+                    o << kFace[b] << ":" << kv.second.faces[b] << "@" << (cacheFrame - kv.second.read[b]) << " ";
+            o << "\n";
+        }
+        o << "LAB CARDS TOTAL " << cards.size() << " cards on " << by.size() << " objects (cache frame " << cacheFrame
+          << "; @N = frames since the face was last read)\n";
+        if (a0.empty()) std::printf("%s", o.str().c_str());
+        else {
+            QString path = QString::fromStdString(a0);
+            if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+            std::ofstream out(path.toStdString(), std::ios::app);
+            out << o.str();
+            ok = ok && bool(out);
+            std::printf("LAB CARDS -> %s\n", qPrintable(path));
         }
     } else if (c.verb == "save") {
         Jlab j = mJlab;
