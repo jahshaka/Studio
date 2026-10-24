@@ -51,6 +51,11 @@ ENGINE_SUBSYSTEMS = [
     # THE SCENE'S ONE LIGHT LIST (P1C-LIGHT-LIST; round 21): every world-lighting consumer reads its lights from it — the
     # voxels' light injection and the cards' relight (gi), Atom's hit decode (atom); the light rows and scale.lights
     (r"SceneLightList", ["lights", "gi", "atom"], "the scene's one light list"),
+    # THE NO-RAY ROUTE'S SCREEN PRODUCERS (PHOTON-7 stage 7, 7-6): the screen integrate and the area lights' visibility
+    # (both producers' one host text) - the diffuse, the specular and the area shadow every opaque pixel of a no-ray
+    # chain reads (gi), the ray tier's own area visibility (rtreflect's chain shares it), the lights' rows
+    (r"src/OgreScreenIntegrate\.cpp$|src/OgreAreaVis\.cpp$", ["gi", "rtreflect", "lights", "*screenshots"],
+     "the screen GI producers (the no-ray integrate, the area lights' visibility)"),
     # Photon: the voxel chain, the cascades, the gather, the cards, the probes, the irradiance field
     # (+ the screenshot rows: the GI lights every pixel a picture row compares — CONTACT-OCCLUSION-1's GI change went red on
     # pool.world_sky's clouds_2d arm and atom.occlusion_exact_app, gate_selection_cases.json; the hdr/ssr/looks fixtures,
