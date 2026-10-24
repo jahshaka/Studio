@@ -37,7 +37,7 @@ fi
 if ! cmp -s "$OUT" "$COMMITTED"; then
     echo "api.contract: docs/SCRIPTING.md does NOT match the live ApiRegistry."
     echo ""
-    echo "  regenerate: ./Jahshaka --dump-api-docs docs/SCRIPTING.md"
+    echo "  regenerate: scripts/regen-api-docs.sh <build dir>  (the one way: under the card's lock)"
     echo ""
     echo "  (run it from build-linux/bin with the repo path to the docs file;"
     echo "   the file is GENERATED — never hand-edit it, and never resolve a"

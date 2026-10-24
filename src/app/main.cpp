@@ -111,6 +111,16 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
         return 2;
     }
+    // THE DOCS DUMP RUNS UNDER THE CARD'S LOCK OR NOT AT ALL (urgent #42; a rule broken twice becomes a refusal):
+    // `--dump-api-docs` boots the whole app and engine (the verbs register at the MainWindow's module boot), so it is
+    // an app instance on the card. scripts/gpu-exclusive.sh sets JAH_GPU_LOCK_HELD=1 for what it runs (the ctest rows
+    // under spec.sh's lock inherit it); a bare run is refused here, before QApplication, naming the one way.
+    if (!cli.dumpDocsPath.isEmpty() && qgetenv("JAH_GPU_LOCK_HELD") != "1") {
+        std::fprintf(stderr, "Jahshaka: --dump-api-docs runs only under the card's lock (JAH_GPU_LOCK_HELD=1, set by "
+                             "scripts/gpu-exclusive.sh); regenerate docs/SCRIPTING.md with "
+                             "scripts/regen-api-docs.sh <build dir>\n");
+        return 2;
+    }
     // ONE THREAD AND THE OWNER'S MODE DO NOT GO TOGETHER (ENGINE-UPGRADE-U3 worth-a-look 5): JAH_ENGINE_ONE_THREAD=1 is
     // a measurement's A arm for LOCKSTEP runs; a free-running run (interactive, or JAH_FREE_RUNNING=1) on one thread has
     // no render loop to draw its frames and would show nothing — refused here, like any other unhonourable request.
