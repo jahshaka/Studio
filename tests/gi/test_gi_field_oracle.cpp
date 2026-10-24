@@ -44,6 +44,11 @@
 //       inside the box) - A's box holding the plate, B's face (8.2 m) between the plate and the probes - and the outer
 //       cascades pinned alike. Every such probe within ONE CODE of itself across the two placements. RED with the cone
 //       ending at its box: A's rays read the plate in cascade 0 (opaque), B's in cascade 1 (part covered).
+//   (7) THE STORE IS A WORLD FUNCTION FOR EVERY VALUE A READER READS (PHOTON-7 stage 7: the store holds the two SIDES,
+//       the total their mean): after (1)'s step, each cascade's FRONT, BACK and TOTAL, voxel by voxel and channel by
+//       channel, within ONE CODE of the oracle's at its own value (1 % over the store's floor, kGiBrickFloor) - two paths
+//       to one world. RED while a side was derived as twice a stored mean minus the back (a dim side cancelled: 9 codes
+//       in cascade 0, 50 in cascade 1).
 // THE MARKS' VISIBILITY (Jahshaka/FieldAccumulate: the probe's depth moments - each ray's march's end, the support of
 // its radiance - bound the share of its rays a moved box can reach) is what (3) and (4) read.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
@@ -177,6 +182,9 @@ int main()
     const int rest1 = settle();
     const bool r1 = readProbes(scene, step);
     const GiStatus g1 = scene->published().gi;
+    // (7)'s step: every cascade's two sides and their mean, as the store holds them
+    std::vector<GiVoxelVolume> voxStep(4);
+    for (int c = 0; c < 4; ++c) scene->giVoxelLight(c, voxStep[c]);
     // THE ORACLE
     GiParams off;
     off.mode = GiMode::Off;
@@ -217,6 +225,42 @@ int main()
           "kept)");
     CHECK(restarts > 0u && atTarget == oracle.count && oracleAtTarget == oracle.count,
           "(2) THE STEP RESTARTED PROBES, and every probe ends at the target in both fields");
+    {
+        // (7) every value a reader reads, the step's against the oracle's
+        bool whole = true;
+        size_t overAll = 0;
+        for (int c = 0; c < 4; ++c) {
+            GiVoxelVolume vo;
+            const GiVoxelVolume &vs = voxStep[c];
+            if (!scene->giVoxelLight(c, vo) || !vo.available || !vs.available || vo.light.size() != vs.light.size() ||
+                vo.lightFront.size() != vo.light.size() || vo.lightBack.size() != vo.light.size() ||
+                vs.lightFront.size() != vs.light.size() || vs.lightBack.size() != vs.light.size()) {
+                whole = false;
+                continue;
+            }
+            const std::vector<float> *pairs[3][2] = { { &vs.lightFront, &vo.lightFront }, { &vs.lightBack, &vo.lightBack },
+                                                     { &vs.light, &vo.light } };
+            const char *names[3] = { "front", "back", "total" };
+            for (int k = 0; k < 3; ++k) {
+                double worst = 0.0;
+                size_t over = 0;
+                const std::vector<float> &a = *pairs[k][0], &b = *pairs[k][1];
+                for (size_t i = 0; i + 3 < b.size(); i += 4)
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const double code = 0.01 * std::max(std::fabs(double(b[i + ch])), double(kGiBrickFloor));
+                        const double d = std::fabs(double(a[i + ch]) - double(b[i + ch])) / code;
+                        worst = std::max(worst, d);
+                        over += d > 1.0 ? 1u : 0u;
+                    }
+                overAll += over;
+                std::printf("   (7) cascade %d (%dx%dx%d) %-5s: the step against the oracle worst %.3f codes, %zu channels "
+                            "over a code\n", c, vo.width, vo.height, vo.depth, names[k], worst, over);
+            }
+        }
+        CHECK(whole && overAll == 0u,
+              "(7) THE STORE IS A WORLD FUNCTION FOR EVERY VALUE A READER READS: every cascade's front, back and total "
+              "within a code of the oracle's");
+    }
 
     std::printf("   the re-marks: %llu restarts past one a probe (%.0f %% of the field)\n",
                 restarts > oracle.count ? restarts - oracle.count : 0ull,
