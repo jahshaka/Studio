@@ -14,7 +14,9 @@
 //       at rest, the frame the passes read their inputs as missing (the door gi.screenBindMissing) is DRAWN - every
 //       view presents it, the engine writes no error - and every view's picture is bit-identical to its picture of the
 //       frame before: nothing dispatched over another view's bindings, the products the last ones written; and again
-//       the frame after that third view is DESTROYED (its buffers freed: no job holds them). Before the fix the first
+//       the frame after that third view is DESTROYED (its buffers freed: no job holds them); the stand-down is the
+//       fork's stood-down mark (HlmsComputeJob::setStoodDown: nothing bound, transitioned or dispatched), and a job
+//       dispatching no group WITHOUT the mark still throws (BUGS-6's guard; the door gi.screenZeroUnmarked). Before the fix the first
 //       view's passes dispatched over the third's bindings and Ogre's barrier solver threw ("Transitioning texture ...
 //       from Undefined to a read-only layout"): the frame lost for every view.
 //   (2) THE CAPTURE: mid-rest (the area history still accumulating), a clean frame capture of the live view
@@ -325,6 +327,22 @@ int main()
                       "error, the pictures of the frame before");
         CHECK(drawn(f0, f1, 2) && drawn(f1, f2, 2) && err2 == err1 && same(f0.p.live, f1.p.live) &&
                   same(f0.p.twin, f1.p.twin) && same(f0.p.live, f2.p.live) && same(f0.p.twin, f2.p.twin), msg);
+        // ...AND THE MARK IS WHAT SKIPS: a job dispatching no group WITHOUT it still throws (the fork's BUGS-6 guard;
+        // the door gi.screenZeroUnmarked), the frame's error naming the guard - and the frame after is drawn again
+        e->setArm("gi.screenZeroUnmarked", 1.0);
+        run(1);
+        const auto &fe = e->published().frameErrors;
+        const bool guarded = !fe.empty() && fe.back().serial != err2 &&
+                             fe.back().text.find("num_thread_groups not set") != std::string::npos;
+        e->setArm("gi.screenZeroUnmarked", 0.0);
+        run(1);
+        const Three g0 = read3(nullptr);
+        run(1);
+        const Three g1 = read3(nullptr);
+        std::printf("   (1) an UNMARKED zero-group dispatch: %s; the frames after: %s\n",
+                    guarded ? "the guard threw" : "NO GUARD", drawn(g0, g1, 2) ? "drawn" : "LOST");
+        CHECK(guarded && drawn(g0, g1, 2),
+              "(1) an unmarked zero-group dispatch still throws (BUGS-6's guard), and the next frames are drawn");
     }
 
     // ---- (5) A DISPATCH THAT NEVER RAN IS NEITHER REGISTERED NOR AGED (the stage 7 read's F2) ----
