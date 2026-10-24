@@ -45,6 +45,11 @@ ENGINE_SUBSYSTEMS = [
     # the post chain: bloom, the display encode, the HDR meter, the screen-space passes it composes
     # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
     # defaults.exposure_plane and engine.atom_draw/parity, gate_selection_cases.json "S2 the chain")
+    # THE NO-RAY ROUTE'S SCREEN PRODUCERS' MEDIA (PHOTON-7 stage 7's read, F7) - the integrate's and the area
+    # visibility's compute shaders, the pixel's screen cone read and its area visibility read (both routes' product):
+    # the .cpp rule's rows below, BEFORE the post chain's Jah...Screen line (the table is first-match)
+    (r"media/Hlms/Jahshaka/Jah(ScreenIntegrate|ScreenAreaVis|ScreenCone|AreaVis)", ["gi", "rtreflect", "lights", "*screenshots"],
+     "the screen GI producers' media (the no-ray integrate, the area lights' visibility)"),
     (r"media/Hlms/Jahshaka/Jah(Bloom|DisplayEncode|HdrMeter|Srgb|Screen)|src/OgreChain\.cpp$",
      ["hdr", "ssr", "looks", "*picture", "defaults"],
      "the post chain (bloom, encode, meter)"),

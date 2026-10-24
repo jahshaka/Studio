@@ -482,6 +482,54 @@
    "new": "}}}   // namespace jahshaka::engine::inspect\n\nstatic int gatherFieldRestKey() { return 0x5a; }\n",
    "must": ["rtreflect.history_detectors"],
    "must_not": []
+  },
+  {
+   "case": "F7 (PHOTON-7 stage 7's read) a line of the no-ray screen integrate's shader selects the gi rows that test it (the post chain's Jah...Screen line caught it first: hdr, ssr, looks, the picture)",
+   "file": "irisgl/engine/media/Hlms/Jahshaka/JahScreenIntegrate_cs.glsl",
+   "old": "\tconst ivec2 full = ivec2( p.resolution.xy );\n",
+   "new": "\tconst ivec2 full = ivec2( p.resolution.yx );\n",
+   "must": [
+    "gi.screen_integrate",
+    "gi.card_lamp_shadow_area",
+    "gi.opaque_bindings"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "F7 a line of the no-ray area visibility's trace selects the gi rows that test it",
+   "file": "irisgl/engine/media/Hlms/Jahshaka/JahScreenAreaVis_cs.glsl",
+   "old": "\tjahAreaVisTrace( ivec2( gl_GlobalInvocationID.xy ) );\n",
+   "new": "\tjahAreaVisTrace( ivec2( gl_GlobalInvocationID.yx ) );\n",
+   "must": [
+    "gi.screen_integrate",
+    "gi.card_lamp_shadow_area",
+    "gi.opaque_bindings"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "F7 a line of the pixel's screen cone read selects the gi rows that test it",
+   "file": "irisgl/engine/media/Hlms/Jahshaka/JahScreenCone_piece_ps.any",
+   "old": "\tconst bool jahConeRoughLobe = max( 0.0f, tan( jahConeRoughness * 0.5f * 3.141592654f * 0.99f ) ) > 1.0f;\n",
+   "new": "\tconst bool jahConeRoughLobe = max( 0.0f, tan( jahConeRoughness * 0.5f * 3.141592654f * 0.98f ) ) > 1.0f;\n",
+   "must": [
+    "gi.screen_integrate",
+    "gi.card_lamp_shadow_area",
+    "gi.opaque_bindings"
+   ],
+   "must_not": []
+  },
+  {
+   "case": "F7 a line of the pixel's area visibility read (both routes' product) selects the gi rows that test it (it fell to the generic Jahshaka medium's picture set)",
+   "file": "irisgl/engine/media/Hlms/Jahshaka/JahAreaVis_piece_ps.any",
+   "old": "\t\tconst int jahAreaLight = min( i, 3 );\n",
+   "new": "\t\tconst int jahAreaLight = min( i, 2 );\n",
+   "must": [
+    "gi.screen_integrate",
+    "gi.card_lamp_shadow_area",
+    "gi.opaque_bindings"
+   ],
+   "must_not": []
   }
  ]
 }
