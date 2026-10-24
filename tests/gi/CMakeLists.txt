@@ -323,7 +323,7 @@ jah_gpu_row(gi.card_residency CLASS engine COMMAND test_gi_card_residency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1482)
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1487)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
