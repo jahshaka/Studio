@@ -1296,10 +1296,33 @@ def _function_depth(lines):
     return res
 
 
+_NAMING = {}   # (root, roots, exclude) -> {identifier: {file}} - files_naming's answers, one process's tree
+
+
 def files_naming(root, identifiers, roots=("src", "irisgl", "tests"), exclude=("irisgl/thirdparty",)):
     """Files under the given roots whose text names any of the identifiers (whole word).
-    One `git grep` — the tracked tree only, fast."""
+    One `git grep` for the identifiers not asked before - the tracked tree only, fast. THE ANSWERS ARE KEPT PER
+    IDENTIFIER for the process (the tree does not change under it): the serving selects one range per record's tip
+    (ci_gate_check.py serve), and the same header's identifiers were grepped again for every range - 510 greps, 100 of
+    a call's 128 s on PHOTON-7's master check (2026-10-24)."""
     if not identifiers: return {}
+    known = _NAMING.setdefault((root, tuple(roots), tuple(exclude)), {})
+    ask = sorted(t for t in identifiers if t not in known)
+    if ask:
+        found = _files_naming_grep(root, ask, roots, exclude)
+        for t in ask:
+            known[t] = set()
+        for f, toks in found.items():
+            for t in toks:
+                known.setdefault(t, set()).add(f)
+    hits = collections.defaultdict(set)
+    for t in identifiers:
+        for f in known.get(t, ()):
+            hits[f].add(t)
+    return hits
+
+
+def _files_naming_grep(root, identifiers, roots, exclude):
     pats = []
     for t in sorted(identifiers):
         pats += ["-e", t]
