@@ -1,0 +1,33 @@
+// samples.cold_open (URGENT #48's follow-up, the lead's ruling (b), 2026-10-24) - THE OWNER'S FIRST RUN AFTER A WIPE:
+// the smallest shipped sample (Showroom 2, 353 KB) imported and opened from a VIRGIN home on a COLD shader cache - the
+// row's home wiped before it, the shader cache with it (fresh_home.sh without --warm) - and only the open's law: the
+// archive imports, the project opens, 120 fixed-dt frames render, and the engine reports no error the suite does not
+// tolerate. No bakeAll, no reopen: the nine samples.cleanstart.* rows keep those, WARM.
+// MEASURED ONCE on the photon-7r merge's tree (2026-10-24): 47.34 s the process (the import 11 ms, the open 2.3 s, the
+// frames 6.4 s - the rest the boot's cold compile: 331 shaders, 101 Hlms permutations built in the frame, 15 UI-thread
+// stalls, the longest 10.6 s).
+var SAMPLE = "Showroom 2";
+var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: [" + SAMPLE + "] " + msg);
+    console.log("ok: [" + SAMPLE + "] " + msg);
+}
+// the engine errors the suite tolerates (cleanstart.js.in's list, its reasons there)
+var TOLERATED = ["setClipStates: the node has no clips"];
+app.engineErrors(true);
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
+assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
+assert(project.open(imported.guid) === true, "project.open on a cold shader cache");
+editor.frame(120, 1.0 / 60.0);
+var e = app.engineErrors(false);
+var bad = [];
+for (var i = 0; i < e.entries.length; i++) {
+    var ok = false;
+    for (var t = 0; t < TOLERATED.length; t++) if (e.entries[i].message.indexOf(TOLERATED[t]) >= 0) ok = true;
+    if (!ok) bad.push(e.entries[i]);
+}
+console.log("engineErrors: drains=" + e.drains + " recorded=" + e.recorded + " entries=" + JSON.stringify(e.entries));
+assert(e.drains > 0, "the frame loop ran (drains " + e.drains + ")");
+assert(bad.length === 0, "no unexpected engine errors " + JSON.stringify(bad));
+console.log("samples.cold_open: PASS");

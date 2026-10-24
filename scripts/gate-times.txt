@@ -177,15 +177,7 @@ samples.cleanstart.Showroom_2 41.44  quiet n=48
 samples.cleanstart.Skeletal_Animation 45.50  quiet n=44
 samples.cleanstart.Tornado 46.08  quiet n=18
 samples.cleanstart.World_Background 55.08  quiet n=46
-samples.freshhome.Matcaps 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Mirror_Room 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Particles 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Physics 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Showroom 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Showroom_2 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Skeletal_Animation 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.Tornado 0.00  ship 3a0422b4e (2026-10-13)
-samples.freshhome.World_Background 0.00  ship 3a0422b4e (2026-10-13)
+samples.cold_open 47.34  solo, the card lock held, :72, COLD (URGENT #48 follow-up, the lead's ruling (b), 2026-10-24: Showroom 2 from a virgin home on a cold shader cache - 331 shaders, 15 UI-thread stalls, the longest 10.6 s)
 samples.mirror_room_boots.boot1 31.75  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 samples.mirror_room_boots.boot2 32.06  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scale.cpu_walks 15.07  quiet n=46

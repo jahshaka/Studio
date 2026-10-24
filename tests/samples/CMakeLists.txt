@@ -15,10 +15,12 @@
 # assets.bakeAll and reopens again. See scripts/cleanstart.js.in for what each
 # step asserts and why.
 #
-# STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md): the subject is the COLD open from a
-# virgin home with a cold shader cache — nine processes on purpose (a pool cannot give an arm a
-# virgin home, and would save no boot) — so the nine rows and their setups run at the stage close
-# and the ship, never in a merge.
+# A VIRGIN HOME ON A WARM SHADER CACHE (URGENT #48's follow-up, the lead's ruling (b), 2026-10-24): each row's home is
+# wiped before every run by its own wrapper (fresh_home.sh --warm) and its boot's shader cache seeded from the tree's
+# shared app cache - a cold compile no longer fits the 60 s cap (samples.cleanstart.Particles timed out at 60.33 s on
+# the photon-7r merge's tree; it was priced 52.59 s cold). Every import, open, save, reopen and bake assertion stays.
+# THE OWNER'S COLD FIRST RUN is samples.cold_open's (below): the smallest sample on a virgin home and a cold cache, the
+# open's law alone. Nine processes on purpose (a pool cannot give an arm a virgin home).
 #
 # THE ONLY SAMPLE GATE (TEST_GATE_AUDIT.md §2, 2026-09-09). It absorbed
 # scripting.e2e.samples (exact-colour material probes for five samples in one
@@ -41,11 +43,10 @@ foreach(SAMPLE IN LISTS _samples)
     # VIRGIN, EVERY RUN. A HOME that survived the previous ctest is not a clean
     # start: its library already holds the sample, its store already holds the
     # objects, and the import half of this gate would be testing a re-import.
-    # The setup fixture wipes and recreates the directory before the test runs.
-    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS scripting)
-
+    # The wrapper wipes and recreates the directory before the app starts (its
+    # setup fixture samples.freshhome.* deleted with the cold cache, #48's follow-up).
     jah_gpu_row(samples.cleanstart.${_slug} CLASS app TIER document
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+             COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_${_slug}.js
              WORKING_DIRECTORY ${_home}/run
              DATA "samples/${SAMPLE}")
@@ -54,10 +55,29 @@ foreach(SAMPLE IN LISTS _samples)
     # still connects to the X server at plugin load).
     set_tests_properties(samples.cleanstart.${_slug} PROPERTIES
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-        FIXTURES_REQUIRED samples_home_${_slug}
         LABELS "scripting"
         TIMEOUT 60)
 endforeach()
+
+# samples.cold_open — THE OWNER'S FIRST RUN AFTER A WIPE (URGENT #48's follow-up, the lead's ruling (b)): the smallest
+# shipped sample (Showroom 2) imported and opened from a VIRGIN home on a COLD shader cache (fresh_home.sh WITHOUT
+# --warm: the home's cache wiped with it), the open's law alone - imported, opened, 120 frames, no engine error the
+# suite does not tolerate (scripts/cold_open.js.in). Measured once: 47.34 s (the boot's cold compile is most of it).
+set(_chome ${CMAKE_CURRENT_BINARY_DIR}/home-cold-open)
+file(MAKE_DIRECTORY ${_chome}/run)
+configure_file(scripts/cold_open.js.in ${CMAKE_CURRENT_BINARY_DIR}/cold_open.js @ONLY)
+jah_gpu_row(samples.cold_open CLASS app TIER document
+         COMMAND sh ${JAH_FRESH_HOME} ${_chome} -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/cold_open.js
+         WORKING_DIRECTORY ${_chome}/run
+         DATA "samples/Showroom 2")
+set_tests_properties(samples.cold_open PROPERTIES
+    ENVIRONMENT "HOME=${_chome};JAHSHAKA_DATA_ROOT=${_chome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 60)
+# (its frames, counted once in a scratch tree off the tip with a per-process renderOneFrame counter, never committed:
+# 706 - the startup gate's 523 and the open's and the script's 120 among them)
+set_property(TEST samples.cold_open PROPERTY JAHSHAKA_TEST_FRAMES 706)
 jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.cleanstart.Particles samples.cleanstart.Physics samples.cleanstart.Showroom samples.cleanstart.Showroom_2 samples.cleanstart.Skeletal_Animation samples.cleanstart.Tornado samples.cleanstart.World_Background)   # THE SHIP SET (TEST-CUT-1)
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
