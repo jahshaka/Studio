@@ -956,32 +956,54 @@ int main(int argc, char **argv)
         // (cut = 0.50, it is inside the near edge) and be MONOTONE and SMOOTH
         // in between — a step anywhere in it IS the seam the feather exists to
         // remove.
+        // IN LINEAR RADIANCE, NOT THE DISPLAY'S BYTES (PHOTON-7 stage 7, 7-5, measured): since the gather is the
+        // closed cutoff's answer (the probes' rough lobe, 7-3), the reference reads 1.69 linear red on this panel,
+        // which the tonemap saturates - so the display's red stayed at 1.0 over the first half of the hand-over and
+        // the sweep read a STEP the radiance does not have (0 0 0 0 0.039 0.109 0.109 in bytes; in radiance the
+        // traced share is 0.155 / 0.499 / 0.844 at cutoffs 0.30 / 0.35 / 0.40 - the gate's smoothstep exactly). The
+        // sweep is |rays at the cutoff - rays closed| in the scene's RGBA16F radiance (hdrReadback), over the same
+        // window, normalised by nothing: the law below is a ratio of its own steps.
         const float cuts[7] = { 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.50f };
         float sweep[7] = { 0.0f };
-        Image ref;
+        ImageF ref;
         {
             PostFxDesc closed = fx;
             closed.reflectionRoughnessCutoff = 0.05f;      // nothing traced at all
+            closed.hdrReadback = true;
             view->setPostFx(closed);
             render(e, 48);
-            view->readPixels(ref);
+            if (!view->readPixelsHdr(ref)) { std::printf("FAIL: readPixelsHdr (the closed reference)\n"); ++failures; }
         }
+        double refMean = 0.0, openMean = 0.0;
         for (int k = 0; k < 7; ++k) {
             PostFxDesc atCut = fx;
             atCut.reflectionRoughnessCutoff = cuts[k];
+            atCut.hdrReadback = true;
             view->setPostFx(atCut);
             render(e, 48);
-            Image img3;
-            view->readPixels(img3);
-            double sum = 0.0;
+            ImageF img3;
+            if (!view->readPixelsHdr(img3) || img3.width != ref.width || img3.height != ref.height) {
+                std::printf("FAIL: readPixelsHdr (cutoff %.2f)\n", cuts[k]);
+                ++failures;
+                continue;
+            }
+            double sum = 0.0, rs = 0.0, os = 0.0;
             unsigned n = 0;
             for (unsigned y = img3.height / 3; y < img3.height * 2 / 3; ++y)
                 for (unsigned x = img3.width / 3; x < img3.width * 2 / 3; ++x) {
                     sum += std::abs(double(img3.at(x, y).r) - double(ref.at(x, y).r));
+                    rs += ref.at(x, y).r;
+                    os += img3.at(x, y).r;
                     ++n;
                 }
             sweep[k] = n ? float(sum / double(n)) : 0.0f;
+            if (n) { refMean = rs / double(n); openMean = os / double(n); }
         }
+        // THE TWO ESTIMATORS' ENERGY, printed (the hand-over's two ends, linear red): the closed cutoff's (the
+        // probes' rough lobe) and the open one's (the traced reflection) - one integral, two producers.
+        std::printf("    the panel's red, linear: the closed cutoff (the probes' rough lobe) %.4f, the open one (the "
+                    "traced reflection) %.4f - %.2fx\n",
+                    refMean, openMean, openMean > 0.0 ? refMean / openMean : 0.0);
         view->setPostFx(fx);
         std::printf("    ONE panel at roughness 0.35, cutoff swept 0.20..0.50 — traced share:");
         for (int k = 0; k < 7; ++k) std::printf(" %.3f", sweep[k]);
