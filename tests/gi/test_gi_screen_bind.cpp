@@ -26,6 +26,10 @@
 //   (4) ONE AREA PRODUCER A VIEW: a Live view of a scene that traces rays (its chain does not gather: the no-ray
 //       route) - the scene's area visibility is the no-ray producer's alone, its residency the producer's own (before
 //       the fix the ray tier traced and registered its own visibility for the same view, both paid every frame).
+//   (5) A DISPATCH THAT NEVER RAN (the door gi.screenShaderCold: the three jobs' permutations built in the background,
+//       the views compiling in the background), mid-rest: a deferred trace neither ages nor flips the area history -
+//       the first frame that traces again is one rest frame past the last that did; a new view whose integrate still builds reads its targets as the
+//       chain seeded them (zero): every pixel finite.
 // A fixture (the engine alone, offscreen views). Counted in frames.
 
 #include "jahshaka/engine/Engine.h"
@@ -315,6 +319,58 @@ int main()
                       "error, the pictures of the frame before");
         CHECK(drawn(f0, f1, 2) && drawn(f1, f2, 2) && err2 == err1 && same(f0.p.live, f1.p.live) &&
                   same(f0.p.twin, f1.p.twin) && same(f0.p.live, f2.p.live) && same(f0.p.twin, f2.p.twin), msg);
+    }
+
+    // ---- (5) A DISPATCH THAT NEVER RAN IS NEITHER REGISTERED NOR AGED (the stage 7 read's F2) ----
+    {
+        // (mid-rest: the trace dispatches every frame - a held view dispatches nothing - and the rest count climbs on
+        // every frame it traces)
+        for (View *v : { live, twin }) v->setAsyncShaders(true);
+        if (settle(300) < 0) std::printf("   (5) NOT at rest before the cold shaders\n");
+        restart();
+        run(3);
+        // the frames the door holds the three jobs' shaders cold: each deferred frame (the status's reason) adds no rest
+        // frame - the first frame that traces again is ONE rest frame past the last one that traced
+        e->setArm("gi.screenShaderCold", 1.0);
+        unsigned lastRest = s1->published().areaVis.restFrames, deferred = 0u, aged = 0u, after = 0u;
+        for (int k = 0; k < 40 && !(deferred && after >= 2u); ++k) {
+            run(1);
+            const AreaVisStatus st = s1->published().areaVis;
+            if (!st.running && st.reason == "its shaders build in the background") {
+                ++deferred;
+            } else if (st.running) {
+                if (deferred && st.restFrames != lastRest + 1u) ++aged;
+                if (deferred) ++after;
+                lastRest = st.restFrames;
+            }
+        }
+        e->setArm("gi.screenShaderCold", 0.0);
+        e->waitForAsyncShaders();
+        // A NEW VIEW while the integrate's shaders build: its opaque passes read the integrate's targets as the chain
+        // made them (seeded zero) - every pixel finite
+        e->setArm("gi.screenShaderCold", 1.0);
+        View *fresh = stillView(e, "screen_bind_fresh", 128, 128, s1);
+        bool finite = fresh != nullptr;
+        if (fresh) {
+            fresh->setAsyncShaders(true);
+            enginetest::testCameraLookAt(fresh, eye, at);
+            for (int k = 0; k < 3; ++k) {
+                run(1);
+                ImageF pic;
+                if (fresh->readPixelsHdr(pic))
+                    for (float c : pic.rgba) finite = finite && std::isfinite(c);
+            }
+            e->destroyView(fresh);
+        }
+        e->setArm("gi.screenShaderCold", 0.0);
+        for (View *v : { live, twin }) v->setAsyncShaders(false);
+        e->waitForAsyncShaders();
+        run(2);
+        std::printf("   (5) the cold shaders: %u deferred frame(s), %u frame(s) traced after them (%u aged by a deferred "
+                    "frame); a new view's first frames %s\n", deferred, after, aged, finite ? "finite" : "NOT FINITE");
+        CHECK(deferred >= 1u && after >= 1u, "(5) premise: the door's permutation built in the background (frames deferred)");
+        CHECK(aged == 0u, "(5) a deferred trace neither ages nor flips the area history (the frame given back)");
+        CHECK(finite, "(5) a new view whose integrate is still building reads its seeded (zero) targets: every pixel finite");
     }
 
     // ---- (4) ONE AREA PRODUCER A VIEW (the stage 7 read's F1) ----
