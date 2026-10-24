@@ -532,6 +532,16 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.walk_rough (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S WALK: walk.sh --rough on photon-rough (its four rough
+# metal strips), the rough class's walking flicker M1 printed - the premise 7-3 is measured on (the voxel cone with no
+# history before it, the gather's probes after); the walk's own laws asserted. 960x540; three sessions.
+if(TARGET jahlab)
+    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 1342
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough --rough
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.walk_bistro is ARCHIVED (PHOTON-7 stage 5, the lead's ruling): its laws cannot fit 60 s at Bistro's ~25 ms a frame in
 # Debug - measured warm (scripts/lab/warm.sh), its hold cut to the frozen arm's minimum (the reflection held from frame
 # 611: 620), the live session 28.5 s, the frozen 16.5 s, then M1 past the cap. A MEASURE run by hand once at the master

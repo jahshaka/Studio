@@ -23,13 +23,8 @@
 namespace lab {
 namespace envs {
 
-namespace {
-
-constexpr float kRho = 0.5f;
-
-// ---- photon-room ---------------------------------------------------------------------------------------------------
-
-/// THE ROOM'S SHELL (photon-room's, and photon-glass's around its fixtures): the eight walls, the opening, the lamp.
+// THE ROOM'S SHELL (photon-room's, and photon-glass's, photon-ramp's and photon-rough's around their fixtures): the
+// eight walls, the opening, the lamp - envbuild.h declares it (photon_rough.cpp shares it).
 void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte)
 {
     using V = iris::Vec3;
@@ -52,6 +47,12 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
     lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
     lamp->setPropertyValue(QStringLiteral("distance"), 20.0f);
 }
+
+namespace {
+
+constexpr float kRho = 0.5f;
+
+// ---- photon-room ---------------------------------------------------------------------------------------------------
 
 Built buildRoom(unsigned seed, bool bake)
 {

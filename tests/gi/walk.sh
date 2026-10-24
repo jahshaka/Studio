@@ -43,6 +43,7 @@
 #          9.06 % (15); wall 8.4 / 10.2 / 13.1 (0 over), GPU busy 10.0 / 12.3 / 23.9 (1 over); the fly 8.3 / 9.3 / 9.3
 #          and 9.2 / 10.9 / 10.9 (0 over)
 # usage: walk.sh <jahlab> <work dir>
+#        walk.sh <jahlab> <work dir> --rough   (gi.walk_rough: photon-rough's walk, the rough class's M1 - 7-3)
 #        walk.sh <jahlab> <work dir> --bistro <model.fbx> <data root>   (gi.walk_bistro, the MEASURE row: its own
 #        data root - the bake and the shader cache of Bistro, never the fixtures' - and no class map: M1 'all' only)
 set -u
@@ -143,6 +144,19 @@ analyse() {   # scene - its M1, its laws and its clocks (walk_m1.py), into $WD/<
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" $1 $1-live $1-frozen $1-frozen2 \
         --tsv "$WD/data/stillness/$1-live.tsv" --classes > "$WD/$1-m1.out" 2>&1
 }
+if [ "$MODE" = "--rough" ]; then
+    # gi.walk_rough (PHOTON-7 stage 7, 7-3): THE ROUGH SPECULAR'S WALK - photon-rough's four rough metal strips (0.45 -
+    # 0.75), a 2 m walk along them, 0,1.6,2.4 -> 0,1.6,0.4 looking at 0,0,-3, 60 frames; the rough class's M1 is the
+    # premise 7-3 is measured on (the cone with no history before it, the gather's probes after) - PRINTED, the laws
+    # the walk's own (L2, L3); its hold the glass's (600: the 0.45 strip's ray reflection held before the frozen walk)
+    walk rough "--data-root $WD/data --env photon-rough" 600 0,1.6,2.4 0,0,-3 0,1.6,0.4 0,0,-3 60 "" 60 live frozen
+    python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" rough rough-live rough-frozen \
+        --tsv "$WD/data/stillness/rough-live.tsv" --classes
+    rc=$?
+    rm -rf "$WD/data/stillness/dump-"*
+    echo "gi.walk_rough: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+    exit $rc
+fi
 SETTLE=120    # the court (the header: the GI's rest at 80 + the gather's 17-frame hold, rounded up)
 GSETTLE=600   # the glass: its reflection HELD before a frozen walk (the door's precondition: rest from ~frame 80, + K_max + 1)
 walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
