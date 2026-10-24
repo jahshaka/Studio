@@ -55,8 +55,11 @@ ENGINE_SUBSYSTEMS = [
     # (+ the screenshot rows: the GI lights every pixel a picture row compares — CONTACT-OCCLUSION-1's GI change went red on
     # pool.world_sky's clouds_2d arm and atom.occlusion_exact_app, gate_selection_cases.json; the hdr/ssr/looks fixtures,
     # the picture set's families, are not the GI's)
+    # (+ the ray-traced reflection's rows: they READ the GI — the reflected surface's own light is the gather's and the
+    # voxels', and a hit the cards or cascades answer is the world cache's; PHOTON-7 stage 4's hitch fix, a PhotonGi.cpp +
+    # voxel-media change, left rtreflect.history_detectors red and unseen for 14 h, URGENT #39)
     (r"^media/Photon/|^src/photon/|Photon|Voxel|Cascade|Gather|Card|Probe|Irradiance|Ifd|Vct|EnvironmentCones|"
-     r"^src/OgreGi\.cpp$|SurfaceCache|JahshakaIbl|JahshakaPcc", ["gi", "*screenshots"],
+     r"^src/OgreGi\.cpp$|SurfaceCache|JahshakaIbl|JahshakaPcc", ["gi", "rtreflect", "*screenshots"],
      "Photon (voxels, cascades, gather, cards, probes)"),
     # THE CUT-OUTS' MASKS (ATOM-3 stage 2: AlphaMasks.h / OgreAlphaMasks.cpp, the mask jobs, the GLSL reader): the
     # id pass's and the caster cut's masked ranges (atom, shadow) and the rays' cut-out test (rtreflect, gi)
@@ -274,7 +277,7 @@ OGRE_VIEW_FUNCTIONS = {
 FUNCTION_NAME_KEYWORDS = [
     (r"Ssr|Reflect|Planar|Mirror", _REFL),
     (r"Shadow|Caster", ["shadow", "lights"]),
-    (r"Gi|Card|Probe|Voxel|Cascade|Gather|Photon|Irradiance|Ddgi|Vct", ["gi"]),
+    (r"Gi|Card|Probe|Voxel|Cascade|Gather|Photon|Irradiance|Ddgi|Vct", ["gi", "rtreflect"]),   # the reflection reads the GI (#39)
     (r"Atom|Lod|Hzb|Occlusion|Cluster", ["atom", "engine", "scale"]),
     (r"Bloom|Exposure|Tonemap|Chain|Pip|Letterbox|PostFx|Lut|Grade", _CHAIN),
     (r"Vr|Stereo|HiddenArea", ["vr"]),

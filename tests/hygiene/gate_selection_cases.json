@@ -466,6 +466,22 @@
    "require_tier": true,
    "must": [],
    "must_not": []
+  },
+  {
+   "case": "URGENT #39 a: a Photon source (PhotonGi.cpp, the Photon line of the table) reaches the ray-traced reflection's rows, which READ the GI — PHOTON-7 stage 4's hitch fix (irisgl 45e51f45: PhotonGi.cpp + the voxel media) left rtreflect.history_detectors red and unseen for 14 h (gi + the screenshot rows only before)",
+   "file": "irisgl/engine/src/photon/PhotonGi.cpp",
+   "old": "static const Ogre::uint32 kIfdTargetSamples = 25u;",
+   "new": "static const Ogre::uint32 kIfdTargetSamples = 26u;",
+   "must": ["rtreflect.history_detectors"],
+   "must_not": []
+  },
+  {
+   "case": "URGENT #39 b: a NEW OgreScene.cpp function named by a GI keyword (gatherFieldRestKey: 'Gather', FUNCTION_NAME_KEYWORDS) reaches the ray-traced reflection's rows beside gi (gi only before)",
+   "file": "irisgl/engine/src/OgreScene.cpp",
+   "old": "}}}   // namespace jahshaka::engine::inspect\n",
+   "new": "}}}   // namespace jahshaka::engine::inspect\n\nstatic int gatherFieldRestKey() { return 0x5a; }\n",
+   "must": ["rtreflect.history_detectors"],
+   "must_not": []
   }
  ]
 }
