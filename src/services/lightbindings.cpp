@@ -104,51 +104,6 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
     return true;
 }
 
-bool LightBindings::bindTexture(const iris::LightNodePtr &light, const QString &guid,
-                                Database *db, Project *project, QString *errorOut)
-{
-    if (!light) {
-        if (errorOut) *errorOut = QStringLiteral("no light node");
-        return false;
-    }
-    if (guid.isEmpty()) {
-        light->lightTextureGuid.clear();
-        light->lightTexturePath.clear();
-        light->markChanged(iris::NodeChange::Params);
-        return true;
-    }
-    if (!db) {
-        if (errorOut) *errorOut = QStringLiteral("no library");
-        return false;
-    }
-    const auto record = db->fetchAsset(guid);
-    if (record.guid.isEmpty()) {
-        if (errorOut) *errorOut = QStringLiteral("no asset with guid '%1'").arg(guid);
-        return false;
-    }
-    if (static_cast<ModelTypes>(record.type) != ModelTypes::Texture) {
-        if (errorOut)
-            *errorOut = QStringLiteral("'%1' is not an image asset").arg(record.name);
-        return false;
-    }
-
-    if (project && !project->getProjectGuid().isEmpty())
-        ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
-
-    const QString path = resolvePath(guid, project);
-    if (path.isEmpty() || !QFileInfo::exists(path)) {
-        if (errorOut)
-            *errorOut = QStringLiteral("the bytes of '%1' are not in the asset store")
-                            .arg(record.name);
-        return false;
-    }
-
-    light->lightTextureGuid = guid;
-    light->lightTexturePath = path;
-    light->markChanged(iris::NodeChange::Params);
-    return true;
-}
-
 void LightBindings::resolve(const iris::LightNodePtr &light, Database *db, Project *project)
 {
     if (!light) return;
@@ -159,8 +114,5 @@ void LightBindings::resolve(const iris::LightNodePtr &light, Database *db, Proje
         light->iesProfilePath.clear();
         light->iesNormalisation = 1.0f;
     }
-    light->lightTexturePath = light->lightTextureGuid.isEmpty()
-                                  ? QString()
-                                  : resolvePath(light->lightTextureGuid, project);
     light->markChanged(iris::NodeChange::Params);
 }

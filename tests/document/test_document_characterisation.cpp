@@ -375,17 +375,22 @@ int main(int argc, char **argv)
         // this engine, and the depth bias is the shadow node's own constant.
         advertises(refLight, { "lightType", "shadowMapType",
                                "shadowMapResolution", "doubleSided",
-                               "accurate", "iconSize", "name", "visible" }, "LightNode");
+                               "iconSize", "name", "visible" }, "LightNode");
         roundTrip(refLight, "lightType", int(iris::LightType::Spot), "LightNode");
         roundTrip(refLight, "shadowMapType", int(iris::ShadowMapType::VerySoft), "LightNode");
         roundTrip(refLight, "shadowMapResolution", 1024, "LightNode");
         roundTrip(refLight, "doubleSided", true, "LightNode");
-        roundTrip(refLight, "accurate", true, "LightNode");
         roundTrip(refLight, "iconSize", 1.5f, "LightNode");
         CHECK(!refLight->getPropertyValue("shadowAlpha").isValid() &&
               !refLight->getPropertyValue("shadowColor").isValid() &&
               !refLight->getPropertyValue("shadowBias").isValid(),
               "LightNode: the three dead shadow properties are gone, not merely hidden");
+        // The area approximation's switch and its mask are GONE (PHOTON-7 7-0: every area
+        // light is LTC on every path).
+        CHECK(!refLight->getPropertyValue("accurate").isValid() &&
+              !refLight->getPropertyValue("lightTexture").isValid() &&
+              !refLight->getPropertyValue("lightTexturePath").isValid(),
+              "LightNode: the area approximation's 'accurate' and its mask rows are gone");
         CHECK(refLight->getPropertyValue("intensity").isValid(),
               "LightNode: the pre-existing keys still resolve");
 

@@ -157,8 +157,8 @@ QVector<VerbInfo> NodeApi::verbs() const
           "reflection cannot do, and have their own verbs. 'options' is present on the ENUM rows "
           "(every node's mobility, a mesh's faceCullingMode) and lists the exact names the row accepts — the "
           "value is one of those names, never an ordinal. The light and decal ASSET bindings "
-          "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
-          "node.setLightTexture and node.setDecalTexture own them.",
+          "(IES profile, decal image) are not rows here — node.setLightProfile and "
+          "node.setDecalTexture own them.",
           Needs::Document },
         { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale, socket?} | null",
           "Everything scene.nodes() reports, for one node — or NULL when no node has that id "
@@ -205,12 +205,6 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "lightProfile", "node.lightProfile(id) -> {guid, path, normalisation, applies}",
           "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type/shadow combination actually honours it. Empty guid = none.",
-          Needs::Document },
-        { "setLightTexture", "node.setLightTexture(id, textureGuid) -> bool",
-          "Binds an image asset as an AREA light's mask/gobo; '' clears it. Pinned as a DEPENDENCY (no companion material). RENDERER LIMIT: only the fast approximation samples the mask — an 'accurate' (LTC) area light ignores it. All masks share one 512x512 sRGB pool (8 distinct images per process); whatever image is bound is resampled into it. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
-          Needs::Document },
-        { "lightTexture", "node.lightTexture(id) -> {guid, path, applies}",
-          "The light's bound area mask: the library guid, the resolved file, and whether this light actually samples it (area + not accurate). Empty guid = none.",
           Needs::Document },
         { "setDecalTexture", "node.setDecalTexture(id, textureGuid) -> bool",
           "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Undoable (the project pin it creates is not removed again — an unused pin is inert)."
@@ -1352,23 +1346,6 @@ QVariant NodeApi::lightProfile(const QString &id)
                         { "applies", applies } };
 }
 
-bool NodeApi::setLightTexture(const QString &id, const QString &assetGuid)
-{
-    auto light = lightOrFail(id, QStringLiteral("node.setLightTexture"));
-    if (!light) return false;
-    QString error;
-    const QString was = light->lightTextureGuid;
-    if (!LightBindings::bindTexture(light, assetGuid.trimmed(), host.db, host.project, &error))
-        return fail(QStringLiteral("node.setLightTexture: %1").arg(error));
-    Database *db = host.db;
-    Project *project = host.project;
-    const QString now = assetGuid.trimmed();
-    recordNodeEdit(QStringLiteral("light mask"),
-                   [light, now, db, project]() { LightBindings::bindTexture(light, now, db, project); },
-                   [light, was, db, project]() { LightBindings::bindTexture(light, was, db, project); });
-    return true;
-}
-
 iris::DecalNodePtr NodeApi::decalOrFail(const QString &id, const QString &verb)
 {
     auto node = nodeOrFail(id, verb);
@@ -1520,17 +1497,6 @@ QVariant NodeApi::particleTexture(const QString &id)
     }
     auto ps = node.staticCast<iris::ParticleSystemNode>();
     return QVariantMap{ { "path", ps->texture ? ps->texture->getSource() : QString() } };
-}
-
-QVariant NodeApi::lightTexture(const QString &id)
-{
-    auto light = lightOrFail(id, QStringLiteral("node.lightTexture"));
-    if (!light) return QVariant();
-    const bool applies = !light->lightTextureGuid.isEmpty() &&
-                         light->lightType == iris::LightType::Area && !light->accurate;
-    return QVariantMap{ { "guid", light->lightTextureGuid },
-                        { "path", light->lightTexturePath },
-                        { "applies", applies } };
 }
 
 // --- Physics (AI_SURFACE_PROGRAM_SPEC lane D #14) --------------------------

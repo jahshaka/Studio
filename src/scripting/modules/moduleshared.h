@@ -435,10 +435,8 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
         m["rectWidth"] = light->rectWidth;
         m["rectHeight"] = light->rectHeight;
         m["doubleSided"] = light->doubleSided;
-        m["accurate"] = light->accurate;
     }
     if (!light->iesProfileGuid.isEmpty()) m["lightProfile"] = light->iesProfileGuid;
-    if (!light->lightTextureGuid.isEmpty()) m["lightTexture"] = light->lightTextureGuid;
     // Lighting channels: reported only when the light is NOT on all of them.
     // On by default on every light in every scene, so an always-present key
     // would be 4294967295 of noise per light in every scene summary.

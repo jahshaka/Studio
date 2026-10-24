@@ -15,11 +15,11 @@ For more information see the LICENSE file
 // NodeEditCommand — an undo entry for a node edit whose apply half already
 // exists as a SERVICE call (AI_SURFACE_AUDIT F5).
 //
-// The asset-binding verbs (node.setLightProfile / setLightTexture /
-// setDecalTexture / setParticleTexture) and node.setPlanarReflector were all
+// The asset-binding verbs (node.setLightProfile / setDecalTexture /
+// setParticleTexture) and node.setPlanarReflector were all
 // "direct document write — not undoable yet". Each of them is already a single
 // call into the one shared implementation (LightBindings, SceneEditService,
-// planarreflectors::), so a per-verb command class would be five copies of the
+// planarreflectors::), so a per-verb command class would be four copies of the
 // same two lines. This carries the two calls instead.
 //
 // Contract for callers, and the reason it is safe:

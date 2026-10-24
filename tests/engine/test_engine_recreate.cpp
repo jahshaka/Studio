@@ -148,8 +148,7 @@ static bool runOnce(int iteration) {
         const NodeId area = enginetest::addDirectionalLight(s, Vec3(0.0f, 0.0f, -1.0f), 1.0f);
         enginetest::setNodePosition(s, area, Vec3(0.0f, 0.0f, 2.0f));
         LightDesc a;
-        a.type = LightType::Area;
-        a.accurate = true;                   // LT_AREA_LTC: the kind that needs the matrix
+        a.type = LightType::Area;            // LT_AREA_LTC (every area light): the kind that needs the matrix
         a.colour = Colour(1.0f, 1.0f, 1.0f);
         a.intensity = 40.0f;
         a.range = 20.0f;

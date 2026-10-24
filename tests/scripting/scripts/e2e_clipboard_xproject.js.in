@@ -102,7 +102,6 @@ var ies = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/ring_profile.
 assert(ies.length > 10, "an IES profile imported");
 var lamp = scene.addLight("spot", { position: { x: 0, y: 3, z: 0 } });
 assert(node.setLightProfile(lamp, ies), "the profile bound to the light");
-assert(node.setLightTexture(lamp, tex), "and a projector texture too");
 var lensCam = scene.addCamera ? scene.addCamera() : null;
 
 editor.select(lensCam ? [cube, lamp, lensCam] : [cube, lamp]);

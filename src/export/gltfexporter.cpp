@@ -1101,17 +1101,6 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 area["color"] = light->color.name();
                 area["intensity"] = double(light->intensity * kLightIntensityScale);
                 area["doubleSided"] = light->doubleSided;
-                area["accurate"] = light->accurate;
-                // three's RectAreaLight has no mask texture at all. Record the
-                // loss where a reader can see it rather than exporting a light
-                // that looks nothing like the viewport's.
-                if (!light->lightTextureGuid.isEmpty()) {
-                    area["maskDropped"] = true;
-                    c.warnings.append(
-                        QStringLiteral("area light '%1' has a mask texture; the web viewer's "
-                                       "RectAreaLight has no mask, so it exports untextured")
-                            .arg(node->getName()));
-                }
                 QJsonObject shim = orientationShimNode(node->getName() + ".orient");
                 QJsonObject shimJah; shimJah["areaLight"] = area;
                 QJsonObject shimExtras; shimExtras["jah"] = shimJah;

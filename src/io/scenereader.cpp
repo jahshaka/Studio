@@ -1382,8 +1382,7 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(lightNode->rectWidth);
     lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(lightNode->rectHeight);
     lightNode->doubleSided = nodeObj["doubleSided"].toBool(lightNode->doubleSided);
-    lightNode->accurate = nodeObj["accurate"].toBool(lightNode->accurate);
-    // Asset bindings: the guid is what was written; the path and the profile's
+    // Asset binding: the guid is what was written; the path and the profile's
     // photometric scale are runtime state, re-derived from the store on every
     // load exactly like the sky's texture (the renderer opens FILES, and the
     // library owns where they live).
@@ -1391,8 +1390,6 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->iesProfilePath = resolveAssetPath(lightNode->iesProfileGuid);
     lightNode->iesNormalisation =
         LightBindings::normalisationFor(lightNode->iesProfileGuid, handle);
-    lightNode->lightTextureGuid = nodeObj["lightTexture"].toString();
-    lightNode->lightTexturePath = resolveAssetPath(lightNode->lightTextureGuid);
     lightNode->color = iris::colorFromJson(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(lightNode->isVisible()));
 

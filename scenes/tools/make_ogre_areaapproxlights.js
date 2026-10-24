@@ -17,17 +17,14 @@
 //     area light is, so you can see the emitter. We have no unlit "show me the
 //     light" helper beyond the editor's light wires; the port leaves the
 //     emitters invisible, which is what the renderer actually does.
-//   * THEIR MASK TEXTURE. Their warm light carries a generated area mask
-//     (a gobo). node.setLightTexture binds one here too, and the port uses OUR
-//     own tile image rather than their generated one; only the fast
-//     approximation samples a mask, which is the mode this port authors.
-//   * THE F5 SWAP between approximate and LTC. Ours is the `accurate` row on
-//     the light, authored false (their LT_AREA_APPROX).
+//   * THEIR MASK TEXTURE and THE F5 SWAP between approximate and LTC. Every
+//     area light here is LTC on every path (PHOTON-7 7-0: the approximation is
+//     deleted, so the voxels, the cards, the rays and the pixel agree), and
+//     LTC has no mask term — their LT_AREA_APPROX and its gobo do not exist.
 
 var TREE = "@TREE@";
 var ARCHIVE = TREE + "/scenes/ogre/AreaApproxLights.zip";
 var PREVIEW = TREE + "/scenes/ogre/preview/areaapproxlights.png";
-var MASK = TREE + "/app/content/textures/tile.png";   // 2.4 KB — ours, and tiny
 
 assert(project.create("Area Lights").length > 0, "created the project");
 
@@ -41,16 +38,6 @@ photonOff();
 // (1,-1,-1), 5 x 5 cold at (5, 4, -5) aimed (-1,-1,1), both powerScale pi.
 var warm = ogreAreaLight("Warm Area", [-10, 6, 10], [1, -1, -1], [0.8, 0.4, 0.2], PI, 15, 15);
 var cold = ogreAreaLight("Cold Area", [5, 4, -5], [-1, -1, 1], [0.2, 0.4, 0.8], PI, 5, 5);
-
-// THE MASK, on the warm one only, like theirs. Ours, not theirs: their mask is
-// generated in C++ from their media; this is our own shipped tile image, bound
-// through the ordinary binding path so it travels inside the archive.
-var mask = assets.importFile(MASK);
-assert(mask && mask.length > 10, "imported the area mask -> " + mask);
-assert(node.setLightTexture(warm, mask), "the warm area light wears a mask");
-var bound = node.lightTexture(warm);
-assert(bound.applies === true,
-       "the renderer really samples it (approximate + not accurate): " + J(bound));
 
 // The two rows that make an area light an area light, read back off the
 // document so a reader can see the port did not just add two points.

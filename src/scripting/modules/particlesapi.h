@@ -30,8 +30,8 @@ For more information see the LICENSE file
 //     frame-time source for the whole process; §10.3).
 //
 // The emitter's particle IMAGE is not here either, and that is deliberate: it
-// is node.setParticleTexture, beside node.setDecalTexture and
-// node.setLightTexture. "Bind an asset texture to a node of type X" was already
+// is node.setParticleTexture, beside node.setDecalTexture. "Bind an asset
+// texture to a node of type X" was already
 // a node.* shape before particles had a namespace at all.
 
 #include <QVariantList>

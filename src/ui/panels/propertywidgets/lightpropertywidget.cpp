@@ -115,8 +115,8 @@ void setBindingLabel(QLabel *label, const QString &guid, const QString &path, Da
 // and each gesture becomes one SetNodePropertyCommand. No new verb was needed:
 // intensity, colour, range (`distance`), source radius, the spot cone, the area rectangle, the shadow
 // type/size/static flag and the shadow tint are all reflected keys already, and
-// the two asset-binding rows go through LightBindings, which is what
-// node.setLightProfile / node.setLightTexture call.
+// the asset-binding row goes through LightBindings, which is what
+// node.setLightProfile calls.
 LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     AccordianBladeWidget(parent),
     rows([this]() { return iris::SceneNodePtr(lightNode); }, [this]() { return services; },
@@ -144,31 +144,25 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness", 0.f, 1.f);
     spotFalloff = this->addFloatValueSlider("Spotlight Falloff", 0.1f, 8.f);
 
-    // Area lights only (engine viewport): the emitting rectangle and its modes.
+    // Area lights only (engine viewport): the emitting rectangle and its sides.
+    // Every area light is LTC (PHOTON-7 7-0): the fast approximation, its
+    // "Accurate (LTC)" switch and its Light Mask row are deleted.
     rectWidth = this->addFloatValueSlider("Rect Width", 0.05f, 20.f);
     rectHeight = this->addFloatValueSlider("Rect Height", 0.05f, 20.f);
     doubleSided = this->addCheckBox("Double Sided");
-    accurate = this->addCheckBox("Accurate (LTC)");
 
-    // Asset bindings. The panel owns only the widgets: resolution, the project
+    // The asset binding. The panel owns only the widgets: resolution, the project
     // dependency pin and the photometric re-calibration all live in
     // LightBindings, which is also what the scripting verbs call.
     profileRow = makeBindingRow(tr("IES Profile"), &profileLabel, &profilePick,
                                 &profileClear, &profileNote);
     this->addWidgetToContent(profileRow, tr("IES Profile"),
                              { QStringLiteral("photometric"), QStringLiteral("ies") });
-    maskRow = makeBindingRow(tr("Light Mask"), &maskLabel, &maskPick, &maskClear, &maskNote);
-    this->addWidgetToContent(maskRow, tr("Light Mask"),
-                             { QStringLiteral("gobo"), QStringLiteral("cookie") });
     connect(profilePick, &QPushButton::clicked, this, &LightPropertyWidget::pickProfile);
     connect(profileClear, &QPushButton::clicked, this, &LightPropertyWidget::clearProfile);
-    connect(maskPick, &QPushButton::clicked, this, &LightPropertyWidget::pickMask);
-    connect(maskClear, &QPushButton::clicked, this, &LightPropertyWidget::clearMask);
 
-    // LIGHTING CHANNELS, light side. Note the row above is called "Light Mask"
-    // and is a completely different thing (an area light's gobo IMAGE) — hence
-    // "Lighting Channels" here, and the description line, rather than the
-    // engine's `lightMask` spelling.
+    // LIGHTING CHANNELS, light side — "Lighting Channels" here, and the
+    // description line, rather than the engine's `lightMask` spelling.
     lightChannels = new LightChannelsWidget(this);
     lightChannels->setDescription(
         tr("This light only lights objects that share a channel with it. Shadows are NOT "
@@ -266,7 +260,6 @@ void LightPropertyWidget::wireRows()
     rowundo::bind(rectWidth, rows(QStringLiteral("rectWidth")));
     rowundo::bind(rectHeight, rows(QStringLiteral("rectHeight")));
     rowundo::bind(doubleSided, rows(QStringLiteral("doubleSided")));
-    rowundo::bind(accurate, rows(QStringLiteral("accurate")));
     rowundo::bind(shadowType, rows(QStringLiteral("shadowMapType"), [this](const QVariant &row) {
         return QVariant(int(evalShadowMapType(shadowType->getWidget()->itemText(row.toInt()))));
     }));
@@ -275,11 +268,6 @@ void LightPropertyWidget::wireRows()
     }));
     rowundo::bind(forwardShadingPriority, rows(QStringLiteral("forwardShadingPriority")));
     rowundo::bind(followsAtmosphere, rows(QStringLiteral("followsAtmosphere")));
-
-    // Accurate (LTC) area lights ignore the mask entirely — say so the moment
-    // the user flips the switch, not the next time the panel is rebuilt. (The
-    // value itself is written by the binding above; this is its consequence.)
-    connect(accurate, SIGNAL(valueChanged(bool)), this, SLOT(lightAccurateChanged(bool)));
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &LightPropertyWidget::lightChannelsChanged);
 }
@@ -335,16 +323,13 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
             rectWidth->setValue(lightNode->rectWidth);
             rectHeight->setValue(lightNode->rectHeight);
             doubleSided->setValue(lightNode->doubleSided);
-            accurate->setValue(lightNode->accurate);
             PropertyRows::setPanelVisible(rectWidth, true);
             PropertyRows::setPanelVisible(rectHeight, true);
             PropertyRows::setPanelVisible(doubleSided, true);
-            PropertyRows::setPanelVisible(accurate, true);
         } else {
             PropertyRows::setPanelVisible(rectWidth, false);
             PropertyRows::setPanelVisible(rectHeight, false);
             PropertyRows::setPanelVisible(doubleSided, false);
-            PropertyRows::setPanelVisible(accurate, false);
         }
 
         refreshBindingRows();
@@ -382,12 +367,6 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
     }
 }
 
-void LightPropertyWidget::lightAccurateChanged(bool accurate)
-{
-    Q_UNUSED(accurate)
-    refreshBindingRows();
-}
-
 void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 {
     if (loading || !lightNode) return;
@@ -410,10 +389,9 @@ void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 
 void LightPropertyWidget::refreshBindingRows()
 {
-    if (!profileRow || !maskRow) return;
+    if (!profileRow) return;
     if (!lightNode) {
         PropertyRows::setPanelVisible(profileRow, false);
-        PropertyRows::setPanelVisible(maskRow, false);
         return;
     }
     const auto type = lightNode->getLightType();
@@ -439,25 +417,9 @@ void LightPropertyWidget::refreshBindingRows()
                                     "Shadow Type to None, or use a spotlight."));
         profileLabel->setEnabled(!lost);
     }
-
-    // A mask is an area-light affordance, and only the fast approximation
-    // samples it.
-    const bool maskRelevant = type == iris::LightType::Area;
-    PropertyRows::setPanelVisible(maskRow, maskRelevant);
-    if (maskRelevant) {
-        setBindingLabel(maskLabel, lightNode->lightTextureGuid,
-                        lightNode->lightTexturePath, db);
-        maskClear->setEnabled(!lightNode->lightTextureGuid.isEmpty());
-        const bool lost = lightNode->accurate;
-        PropertyRows::setPanelVisible(maskNote, lost);
-        if (lost)
-            maskNote->setText(tr("Accurate (LTC) area lights ignore their mask — only the fast "
-                                 "approximation samples it. Turn Accurate off to use the mask."));
-        maskLabel->setEnabled(!lost);
-    }
 }
 
-// THE TWO ASSET ROWS. The binding is a SERVICE CALL (resolution, the project
+// THE ASSET ROW. The binding is a SERVICE CALL (resolution, the project
 // pin and the photometric re-calibration all live in LightBindings, which is
 // also what the verbs call), so the undo step replays that call rather than a
 // field write — NodeEditCommand's contract, the same one node.setLightProfile
@@ -486,30 +448,6 @@ void LightPropertyWidget::bindProfile(const QString &guid)
     refreshBindingRows();
 }
 
-void LightPropertyWidget::bindMask(const QString &guid)
-{
-    if (!lightNode) return;
-    const QString before = lightNode->lightTextureGuid;
-    if (before == guid) return;
-    QString error;
-    if (!LightBindings::bindTexture(lightNode, guid, db, project, &error)) {
-        if (maskNote) { maskNote->setText(error); PropertyRows::setPanelVisible(maskNote, true); }
-        refreshBindingRows();
-        return;
-    }
-    auto node = lightNode;
-    Database *database = db;
-    Project *proj = project;
-    panelundo::pushEdit(services, tr("Light Mask"),
-                        [node, guid, database, proj]() {
-                            LightBindings::bindTexture(node, guid, database, proj);
-                        },
-                        [node, before, database, proj]() {
-                            LightBindings::bindTexture(node, before, database, proj);
-                        });
-    refreshBindingRows();
-}
-
 void LightPropertyWidget::pickProfile()
 {
     if (!lightNode || !db) return;
@@ -522,20 +460,6 @@ void LightPropertyWidget::pickProfile()
 void LightPropertyWidget::clearProfile()
 {
     bindProfile(QString());
-}
-
-void LightPropertyWidget::pickMask()
-{
-    if (!lightNode || !db) return;
-    const QString guid = LibraryAssetPicker::pick(ModelTypes::Texture, db,
-                                                  tr("Choose an area light mask"), this);
-    if (guid.isEmpty()) return;
-    bindMask(guid);
-}
-
-void LightPropertyWidget::clearMask()
-{
-    bindMask(QString());
 }
 
 // THE SUN ROW. Directional lights only — on any other type the two rows say

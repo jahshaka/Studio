@@ -2145,9 +2145,9 @@ void light_on_node_and_camera_desc() {
 }
 
 void area_light_lights_the_wall() {
-    // A rectangular area light in front of a wall: both variants (fast approx and
-    // accurate LTC) must produce a lit region, and single-sided lights must go
-    // dark when turned away — double-sided ones must not.
+    // A rectangular area light in front of a wall (LTC: every area light, PHOTON-7
+    // 7-0) must produce a lit region, and single-sided lights must go dark when
+    // turned away — double-sided ones must not.
     Fixture fx;
     View *v = fx.view("area-view", 96, 96, kBlue); REQUIRE(v);
     Scene *s = fx.scene("area-scene");            REQUIRE(s);
@@ -2174,19 +2174,13 @@ void area_light_lights_the_wall() {
     d.rectWidth = 2.0f; d.rectHeight = 2.0f;
     CHECK(s->setLight(lightNode, d));
     render(fx.e); REQUIRE(v->readPixels(img));
-    const float approx = lum();
-    d.accurate = true;                                 // LT_AREA_LTC
-    CHECK(s->setLight(lightNode, d));
-    render(fx.e); REQUIRE(v->readPixels(img));
     const float ltc = lum();
-    std::printf("    wall centre: unlit %.2f  approx %.2f  ltc %.2f\n", unlit, approx, ltc);
-    CHECK(approx > unlit + 0.15f);
+    std::printf("    wall centre: unlit %.2f  ltc %.2f\n", unlit, ltc);
     CHECK(ltc > unlit + 0.15f);
 
     // Face the light AWAY from the wall (-Y becomes +Z): a single-sided rect
     // leaves the wall dark; double-sided lights it again.
     s->setNodeTransform(lightNode, Vec3(0, 0, 1.5f), Quat(-h, 0, 0, h), Vec3(1, 1, 1));
-    d.accurate = false;
     CHECK(s->setLight(lightNode, d));
     render(fx.e); REQUIRE(v->readPixels(img));
     const float away = lum();
@@ -2195,7 +2189,7 @@ void area_light_lights_the_wall() {
     render(fx.e); REQUIRE(v->readPixels(img));
     const float both = lum();
     std::printf("    turned away: single-sided %.2f  double-sided %.2f\n", away, both);
-    CHECK(away < approx - 0.1f);
+    CHECK(away < ltc - 0.1f);
     CHECK(both > away + 0.1f);
     CHECK(s->removeLight(lightNode));
 }
@@ -2305,128 +2299,9 @@ void ies_profile_shapes_a_spot() {
     std::remove(ies.c_str());
 }
 
-/// A 64x64 PPM split down the middle: left half `l`, right half `r`.
-void writeSplitPpm(const std::string &path, const int l[3], const int r[3]) {
-    FILE *f = std::fopen(path.c_str(), "wb");
-    if (!f) return;
-    std::fprintf(f, "P6 64 64 255\n");
-    for (int y = 0; y < 64; ++y)
-        for (int x = 0; x < 64; ++x) {
-            const int *c = x < 32 ? l : r;
-            std::fputc(c[0], f); std::fputc(c[1], f); std::fputc(c[2], f);
-        }
-    std::fclose(f);
-}
-
-void area_light_mask_tints_and_ltc_ignores_it() {
-    // A white wall lit by ONE area light whose mask is half red / half blue.
-    // The approximation samples the mask, so the light stops being white (the
-    // mask has NO green at all) and the two sides of the wall pick up different
-    // amounts of blue. LTC ("accurate") has no mask term whatsoever — turning it
-    // on must restore the plain white light. That second half is the point: the
-    // documented limitation is proven in pixels, not asserted in prose.
-    Fixture fx;
-    View *v = fx.view("areamask-view", 96, 96, kBlue); REQUIRE(v);
-    Scene *s = fx.scene("areamask-scene");             REQUIRE(s);
-    v->setScene(s);
-    enginetest::testCameraLookAt(v, Vec3(0, 0, 5), Vec3(0, 0, 0));
-    s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
-    MeshId mesh = s->createMesh(unitCubeData());
-    // Fairly smooth: the mask's SPECULAR sample picks its mip from roughness, so
-    // a mirror-ish wall resolves where on the mask each point is looking. (The
-    // diffuse sample is deliberately near-average — that is the renderer's
-    // design, not a bug — so a rough wall would see only the mask's mean tint.)
-    PbrParams p; p.albedo = Colour(0.9f, 0.9f, 0.9f); p.roughness = 0.35f;
-    MaterialId mat = s->createPbrMaterial(p);
-    NodeId wall = s->createNode();
-    CHECK(s->attachMesh(wall, mesh, mat));
-    s->setNodeTransform(wall, Vec3(0, 0, 0), Quat(), Vec3(6.0f, 6.0f, 0.2f));
-
-    const float h = 0.70710678f;
-    NodeId lightNode = s->createNode();
-    s->setNodeTransform(lightNode, Vec3(0, 0, 1.5f), Quat(h, 0, 0, h), Vec3(1, 1, 1));
-    LightDesc d;
-    d.type = LightType::Area;
-    // Low enough that no channel clips: a saturated wall reads 1.0 in every
-    // channel and every colour comparison below would be vacuously zero.
-    d.intensity = 0.05f;
-    d.range = 20.0f;
-    d.rectWidth = 3.0f;
-    d.rectHeight = 3.0f;
-    CHECK(s->setLight(lightNode, d));
-    render(fx.e, 2); Image img; REQUIRE(v->readPixels(img));
-
-    struct Sample { float r, g, b; };
-    auto sample = [&](unsigned x, unsigned y) {
-        const Colour c = img.at(x, y); return Sample{ c.r, c.g, c.b };
-    };
-    /// How BLUE a lit point is, independent of how bright it is.
-    auto blueness = [](const Sample &c) {
-        const float total = c.r + c.g + c.b;
-        return total > 1e-4f ? c.b / total : 0.0f;
-    };
-    auto show = [&](const char *what, const Sample &c) {
-        std::printf("    %s rgb %.3f %.3f %.3f (blueness %.3f)\n",
-                    what, c.r, c.g, c.b, blueness(c));
-    };
-    const unsigned kLeft = 20, kRight = 76, kRow = 48;
-
-    const Sample plainL = sample(kLeft, kRow), plainR = sample(kRight, kRow);
-    show("unmasked left ", plainL);
-    show("unmasked right", plainR);
-    CHECK_MSG(plainL.r < 0.95f && plainR.r < 0.95f,
-              "the test is only meaningful unclipped: %.3f / %.3f", plainL.r, plainR.r);
-    CHECK_MSG(plainL.g > 0.02f, "an unmasked white area light lights all three channels");
-    CHECK_MSG(std::fabs(blueness(plainL) - blueness(plainR)) < 0.02f,
-              "an unmasked white area light must not tint either side");
-
-    const std::string mask = "test_area_mask.ppm";
-    const int red[3] = { 255, 0, 0 }, blue[3] = { 0, 0, 255 };
-    writeSplitPpm(mask, red, blue);
-    d.texturePath = mask;
-    CHECK(s->setLight(lightNode, d));
-    render(fx.e, 3); REQUIRE(v->readPixels(img));
-    const Sample maskL = sample(kLeft, kRow), maskR = sample(kRight, kRow);
-    show("masked left   ", maskL);
-    show("masked right  ", maskR);
-    // The mask has no green anywhere: if it is being sampled at all, green dies.
-    CHECK_MSG(maskL.g < plainL.g * 0.1f && maskR.g < plainR.g * 0.1f,
-              "a red/blue mask must remove the light's green: %.3f -> %.3f, %.3f -> %.3f",
-              plainL.g, maskL.g, plainR.g, maskR.g);
-    // ...and the two halves of the mask must reach the two sides differently.
-    const float maskSplit = std::fabs(blueness(maskL) - blueness(maskR));
-    CHECK_MSG(maskSplit > 0.05f,
-              "a half-red/half-blue mask must tint the wall's two sides differently "
-              "(blueness %.3f vs %.3f)", blueness(maskL), blueness(maskR));
-
-    // LTC ignores the mask (OgreLight.h:594-596; every mask sample in
-    // AreaLights_piece_ps.any lives under hlms_lights_area_approx).
-    d.accurate = true;
-    CHECK(s->setLight(lightNode, d));
-    render(fx.e, 3); REQUIRE(v->readPixels(img));
-    const Sample ltcL = sample(kLeft, kRow), ltcR = sample(kRight, kRow);
-    show("accurate left ", ltcL);
-    show("accurate right", ltcR);
-    // Neutral again: green is back to a full third of the energy. (LTC is dimmer
-    // than the approximation, so this is a CHROMATIC test, never a brightness one.)
-    auto greenShare = [](const Sample &c) {
-        const float total = c.r + c.g + c.b;
-        return total > 1e-4f ? c.g / total : 0.0f;
-    };
-    CHECK_MSG(greenShare(ltcL) > 0.3f && greenShare(ltcR) > 0.3f,
-              "accurate (LTC) mode must DROP the mask — the light goes white again: "
-              "green share %.3f / %.3f (masked: %.3f / %.3f)",
-              greenShare(ltcL), greenShare(ltcR), greenShare(maskL), greenShare(maskR));
-    CHECK_MSG(std::fabs(blueness(ltcL) - blueness(ltcR)) < maskSplit * 0.5f,
-              "accurate mode must not carry the mask's left/right split");
-
-    CHECK(s->removeLight(lightNode));
-    std::remove(mask.c_str());
-}
-
 void two_area_lights_both_light() {
     // Ogre budgets ONE forward area light per kind and silently drops the rest
-    // (OgreHlms.cpp mNumAreaApproxLightsLimit(1)); we never called
+    // (OgreHlms.cpp mNumAreaLtcLightsLimit(1)); we never called
     // setAreaLightForwardSettings before this lane, so a scene's second area
     // light rendered nothing. One light on each side of a wall: both sides lit.
     Fixture fx;
@@ -2446,11 +2321,9 @@ void two_area_lights_both_light() {
     LightDesc d;
     // Unclipped, as everywhere else here: a saturated wall reads 1.0 whether
     // one light or two reach it, which is exactly the bug this test exists for.
-    // RE-KEYED BY AREA-SCALE-1 (PHOTON-II-1): the approximate area light lost its
-    // roughness booster and falls off by the disc law, ~5x less at this 1.2 m — so
-    // the intensity is 5x the old 0.05 and the margins below keep their meaning (the
-    // old key read 0.035 / 0.012 with one light, 0.047 / 0.047 with two: both sides
-    // lit, under the 0.05 margins).
+    // Every area light is LTC since PHOTON-7 7-0 (the approximation is deleted); at
+    // this key LTC reads 0.200 / 0.012 with one light and 0.212 / 0.212 with two
+    // (measured at 7-0): both sides lit, over the 0.05 margins.
     d.type = LightType::Area; d.intensity = 0.25f; d.range = 12.0f;
     d.rectWidth = 1.5f; d.rectHeight = 1.5f;
 
@@ -6707,7 +6580,6 @@ int main(int argc, char **argv) {
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
         { "area_light_lights_the_wall",             area_light_lights_the_wall },
         { "ies_profile_shapes_a_spot",              ies_profile_shapes_a_spot },
-        { "area_light_mask_tints_and_ltc_ignores_it", area_light_mask_tints_and_ltc_ignores_it },
         { "two_area_lights_both_light",             two_area_lights_both_light },
         { "overlay_lines_draw_on_top",              overlay_lines_draw_on_top },
         { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },

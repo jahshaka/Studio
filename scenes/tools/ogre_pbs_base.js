@@ -406,8 +406,8 @@ function ogrePalette(opts) {
 }
 
 /// One AREA light, their way: a rectangle of `w` x `h` at `pos` facing `dir`.
-/// AREA LIGHTS NEVER CAST SHADOWS — on either side, an engine rule and not a
-/// setting — and only the fast approximation samples a mask texture.
+/// Every area light is LTC (PHOTON-7 7-0: the approximation and its mask texture
+/// are deleted).
 function ogreAreaLight(name, pos, dir, colour, theirPower, w, h) {
     var id = scene.addLight("area", { position: { x: pos[0], y: pos[1], z: pos[2] },
                                       rotation: eulerForDirection(dir) });
@@ -418,7 +418,6 @@ function ogreAreaLight(name, pos, dir, colour, theirPower, w, h) {
     node.setProperty(id, "distance", SPOT_RANGE);
     node.setProperty(id, "rectWidth", w);
     node.setProperty(id, "rectHeight", h);
-    node.setProperty(id, "accurate", false);   // their LT_AREA_APPROX
     return id;
 }
 

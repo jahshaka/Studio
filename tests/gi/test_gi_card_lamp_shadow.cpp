@@ -261,7 +261,6 @@ int main()
         const NodeId lamp = as->createNode();
         LightDesc l;
         l.type = LightType::Area;
-        l.accurate = true;
         l.rectWidth = float(aw);
         l.rectHeight = float(ah);
         l.colour = Colour(1.0f, 1.0f, 1.0f);

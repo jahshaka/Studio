@@ -41,7 +41,7 @@ class LightPropertyWidget:public AccordianBladeWidget
 public:
     LightPropertyWidget(QWidget* parent=nullptr);
 
-    /// The library, for the two asset-binding rows (IES profile, area mask).
+    /// The library, for the asset-binding row (the IES profile).
     /// Injected by SceneNodePropertiesWidget like the other panels'.
     void setDatabase(Database *database) { db = database; }
 
@@ -59,17 +59,10 @@ public:
 
 protected slots:
 
-    /// The one row with a consequence beyond its own value: an accurate (LTC)
-    /// area light ignores its mask, and the panel says so.
-    void lightAccurateChanged(bool accurate);
-
-    /// Binds/clears the IES photometric profile and the area-light mask. Both
-    /// go through LightBindings — the SAME implementation the
-    /// node.setLightProfile / node.setLightTexture verbs use.
+    /// Binds/clears the IES photometric profile through LightBindings — the
+    /// SAME implementation the node.setLightProfile verb uses.
     void pickProfile();
     void clearProfile();
-    void pickMask();
-    void clearMask();
 
     /// Lighting channels, light side: which channels this light illuminates.
     void lightChannelsChanged(quint32 mask);
@@ -77,16 +70,13 @@ protected slots:
 private:
     /// Binds every row to its reflected property. Called once, from the ctor.
     void wireRows();
-    /// Binds (or clears) the IES profile / the area mask through LightBindings
-    /// and records ONE undo step. The pick and clear buttons are two front ends
-    /// on each of these.
+    /// Binds (or clears) the IES profile through LightBindings and records ONE
+    /// undo step. The pick and clear buttons are two front ends on it.
     void bindProfile(const QString &guid);
-    void bindMask(const QString &guid);
-    /// Repaints the two binding rows from the node, INCLUDING the honesty
-    /// annotations: a profile does nothing on a shadow-casting point light (the
-    /// renderer has no profile term there) and a mask does nothing on an
-    /// accurate/LTC area light. Both are silent in the renderer, so the panel
-    /// has to say them out loud.
+    /// Repaints the binding row from the node, INCLUDING the honesty
+    /// annotation: a profile does nothing on a shadow-casting point light (the
+    /// renderer has no profile term there). It is silent in the renderer, so
+    /// the panel has to say it out loud.
     void refreshBindingRows();
 
     QString evalShadowTypeName(iris::ShadowMapType shadowType);
@@ -108,13 +98,11 @@ private:
     HFloatSliderWidget* spotCutOffSoftness;
     HFloatSliderWidget* spotFalloff;
     HFloatSliderWidget* intensity;
-    // Area lights (engine viewport): rectangle size, emission sides, LTC toggle.
+    // Area lights (engine viewport): rectangle size, emission sides.
     HFloatSliderWidget* rectWidth;
     HFloatSliderWidget* rectHeight;
     CheckBoxWidget* doubleSided;
-    CheckBoxWidget* accurate;
-    /// Lighting channels (light masks) — NOT the "Light Mask" rows above, which
-    /// bind an area light's gobo image.
+    /// Lighting channels (light masks).
     LightChannelsWidget* lightChannels = nullptr;
     //EnumPicker* lightTypePicker;
 
@@ -129,11 +117,6 @@ private:
     QPushButton *profilePick = nullptr;
     QPushButton *profileClear = nullptr;
     QLabel *profileNote = nullptr;
-    QWidget *maskRow = nullptr;
-    QLabel *maskLabel = nullptr;
-    QPushButton *maskPick = nullptr;
-    QPushButton *maskClear = nullptr;
-    QLabel *maskNote = nullptr;
 
     /// THE SUN, directional lights only (SUN_AND_LIGHT_DEFAULTS Q1). The
     /// readout says which light IS the sun and why; the number is the row that

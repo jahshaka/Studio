@@ -996,7 +996,6 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["rectWidth"] = lightNode->rectWidth;
     sceneNodeObject["rectHeight"] = lightNode->rectHeight;
     sceneNodeObject["doubleSided"] = lightNode->doubleSided;
-    sceneNodeObject["accurate"] = lightNode->accurate;
     // FORWARD SHADING PRIORITY (directional lights only; 0 = the sun). Written
     // only when it is not the default, the pattern the node flags already use:
     // an absent key means the default, so no existing file grows a byte and a
@@ -1011,10 +1010,9 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     // SceneReader's header records).
     if (lightNode->lightType == iris::LightType::Directional && !lightNode->followsAtmosphere)
         sceneNodeObject["followsAtmosphere"] = false;
-    // Asset BINDINGS travel as guids; the resolved path and the profile's
+    // The asset BINDING travels as a guid; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
-    sceneNodeObject["lightTexture"] = lightNode->lightTextureGuid;
 	sceneNodeObject["color"] = iris::colorToJson(lightNode->color);
 
     // (`shadowAlpha`, `shadowColor` and `shadowBias` are no longer written —

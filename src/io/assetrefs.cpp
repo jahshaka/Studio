@@ -26,14 +26,12 @@ const QStringList &nodeAssetKeys()
     //   texture       writeParticleData  (the emitter's sprite)
     //   colourRampGuid writeParticleData (the ramp image asset)
     //   iesProfile    writeLightData     (photometric profile)
-    //   lightTexture  writeLightData     (projector / area mask)
     //   decalTexture/decalNormal/decalEmissive  writeDecalData
     static const QStringList kKeys = {
         QStringLiteral("mesh"),
         QStringLiteral("texture"),
         QStringLiteral("colourRampGuid"),
         QStringLiteral("iesProfile"),
-        QStringLiteral("lightTexture"),
         QStringLiteral("decalTexture"),
         QStringLiteral("decalNormal"),
         QStringLiteral("decalEmissive"),

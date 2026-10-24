@@ -817,23 +817,22 @@ int main(int argc, char **argv)
         // the same precedent as the material serialisation block above).
         QJsonObject j;
         j["lightType"] = "area"; j["rectWidth"] = 2.0; j["rectHeight"] = 0.5;
-        j["doubleSided"] = true; j["accurate"] = true;
+        j["doubleSided"] = true;
         auto fromJson = iris::LightNode::create();
         fromJson->setLightType(j["lightType"].toString() == "area" ? iris::LightType::Area
                                                                    : iris::LightType::Point);
         fromJson->rectWidth = (float)j["rectWidth"].toDouble(1.0f);
         fromJson->rectHeight = (float)j["rectHeight"].toDouble(1.0f);
         fromJson->doubleSided = j["doubleSided"].toBool(false);
-        fromJson->accurate = j["accurate"].toBool(false);
         fromJson->shadowMap.shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
         const LightDesc ad = SceneMirror::toLightDesc(fromJson.data());
         CHECK(ad.type == LightType::Area, "document area light maps to LightType::Area");
         CHECK(std::abs(ad.rectWidth - 2.0f) < 1e-5f && std::abs(ad.rectHeight - 0.5f) < 1e-5f,
               "rect size flows through toLightDesc");
-        CHECK(ad.doubleSided && ad.accurate, "doubleSided + accurate flow through toLightDesc");
+        CHECK(ad.doubleSided, "doubleSided flows through toLightDesc");
         CHECK(!ad.castShadows, "area lights never cast shadows, whatever Shadow Type says");
         auto dup = fromJson->createDuplicate().staticCast<iris::LightNode>();
-        CHECK(dup->rectWidth == fromJson->rectWidth && dup->doubleSided && dup->accurate,
+        CHECK(dup->rectWidth == fromJson->rectWidth && dup->doubleSided,
               "duplicate keeps the area-light fields");
 
         // Pixel proof: a document area light above the cube lights it through the mirror.
@@ -857,14 +856,9 @@ int main(int argc, char **argv)
         doc->getRootNode()->addChild(area);
         mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
-        const float litApprox = maxGreen();
-        area->accurate = true;                             // LT_AREA_LTC
-        mirror.sync(); enginetest::frames(engine, 2);
-        view->readPixels(img);
-        const float litLtc = maxGreen();
-        std::printf("    area light: unlit %.2f  approx %.2f  ltc %.2f\n", unlit, litApprox, litLtc);
-        CHECK(litApprox > unlit + 0.1f, "document area light (approx) lights the cube");
-        CHECK(litLtc > unlit + 0.1f, "accurate (LTC) area light lights the cube too");
+        const float litLtc = maxGreen();                   // LT_AREA_LTC: every area light (7-0)
+        std::printf("    area light: unlit %.2f  ltc %.2f\n", unlit, litLtc);
+        CHECK(litLtc > unlit + 0.1f, "document area light (LTC) lights the cube");
 
         // The helper wire is the emitting rectangle (wire kind 3) + icon billboard.
         area->color = QColor(255, 0, 255);                 // magenta wires

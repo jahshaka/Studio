@@ -6,7 +6,7 @@ PbsMaterials	3 of their 6 BRDF names exist here; their palette reflects a cubema
 LocalCubemaps	Probe placement is grid-only, and probes are REFUSED in this room today (our enclosure rule reads a wall of four panels as open). Their camera pose is inside the far wall, so the port saves the pose their source carries commented out.
 Refractions	Nothing structural. Their render-queue ordering has no verb here and needs none.
 Hdr	Their four exposure presets are a keyboard cycle; this port IS the first one (bright sunny day). Their HDR sky colour is above 1.0, which a picked colour cannot be, so the port uses the realistic sky.
-AreaApproxLights	Area lights never cast shadows, on either side. Their emitter quads are not drawn here; the mask is ours, not their generated one.
+AreaApproxLights	Area lights never cast shadows, on either side. Their emitter quads are not drawn here; every area light is LTC, so their mask and their F5 swap do not exist.
 IesProfiles	Their three profiles are Ogre's media; these three are ours (narrow beam, wide flood, batwing). Binding a profile re-calibrates by peak candela here, so the four lights differ in SHAPE only, and the port photographs the wall rather than their eye-level pose.
 ShadowMapFromCode	Our shadow node is fixed; theirs is authored per sample. Their PCF/ESM kernel names are our softness vocabulary (PCF -> Soft).
 PlanarReflections	Their perfect mirror is an unlit datablock sampling the reflection RTT; ours is a lit, fresnel-weighted PBR surface, so it is less mirror-perfect at grazing angles.

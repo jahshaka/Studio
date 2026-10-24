@@ -213,9 +213,6 @@ int main(int argc, char **argv)
     area->setLightType(iris::LightType::Area);
     area->rectWidth = 2.0f;
     area->rectHeight = 1.0f;
-    // ...and a mask texture, which three's RectAreaLight cannot carry at all.
-    area->lightTextureGuid = QStringLiteral("some-texture-guid");
-    area->lightTexturePath = tmp.filePath("mask.png");
     scene->rootNode->addChild(area);
 
     // camera
@@ -456,9 +453,10 @@ int main(int argc, char **argv)
     CHECK(foundArea, "area light in extras (width=2)");
 
     // IES profiles: the spot gets a sampled lobe, the point gets a recorded
-    // loss, and the area light's mask is recorded as dropped.
+    // loss. (An area light has no mask since PHOTON-7 7-0: every area light is
+    // LTC, which has no mask term.)
     {
-        bool spotLut = false, pointDropped = false, maskDropped = false;
+        bool spotLut = false, pointDropped = false;
         for (const auto &nv : nodes) {
             const QJsonObject jah = nv.toObject()["extras"].toObject()["jah"].toObject();
             if (jah.contains("iesProfile")) {
@@ -476,12 +474,9 @@ int main(int argc, char **argv)
                     pointDropped = true;
                 }
             }
-            if (jah.contains("areaLight") && jah["areaLight"].toObject()["maskDropped"].toBool())
-                maskDropped = true;
         }
         CHECK(spotLut, "spot light exports a 180-sample peak-normalised IES lobe");
         CHECK(pointDropped, "a point light's IES profile is recorded as dropped (no three equivalent)");
-        CHECK(maskDropped, "an area light's mask is recorded as dropped (RectAreaLight has none)");
     }
     CHECK(foundShadow, "per-light shadow settings in extras");
     CHECK(foundShim, "-Y to -Z orientation shim nodes present");
