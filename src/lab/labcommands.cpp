@@ -56,7 +56,9 @@ const std::vector<VerbDoc> &verbs()
           "and the unnamed gaps, their OVERLAP over the busy span (time two top-level rows count twice: a row whose "
           "begin timestamp opened while earlier work still ran - a barrier's wait), then every compositor pass "
           "(pass:<node>/<pass>, nested: inside another) and every GPU row (row:<name> - injection, cards, gather, "
-          "integrate, reflection, area visibility... - nested-row: inside a pass) in ms; then "
+          "integrate, reflection, area visibility... - nested-row: inside a pass) in ms, and the frame's counts (count:vct."
+          "bricks_passed<c> and vct.inject_marched<c> read back, landing a few frames late; cards.relit_texels_direct / "
+          "_indirect and captured_texels); then "
           "one SUMMARY line per name: frames, mean, p95, max. The frames after the N that wait for the records' GPU "
           "timestamps are not measured" },
         { "move", "move x,y,z,tx,ty,tz N", 2, 2,

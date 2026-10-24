@@ -1266,6 +1266,45 @@ bool Session::monitor(const Command &c)
     }
     std::vector<MonitorRecord> recs, got;
     std::set<unsigned long long> measured;
+    // THE COUNTS (the lead's addition for stage 10's ray budget): per frame, read from the published GI status after it -
+    // the READ-BACK ones land a few frames late (the feedback's brick-passes, the voxels the injections marched: their
+    // deltas over the frame, "landed"); the cards' texels the frame relit (direct: every relit card; indirect: the cards
+    // whose march through the cascades ran in the same dispatch) and captured are the host's own.
+    std::map<unsigned long long, std::map<std::string, double>> countsOf;   // engine frame -> name -> count
+    std::vector<unsigned long long> prevBricks, prevPasses, prevMarched;
+    const auto counts = [&](unsigned long long frameNo) {
+        const GiStatus &g = mScene->published().gi;
+        auto &m = countsOf[frameNo];
+        if (prevBricks.size() != g.cascades.size()) {
+            prevBricks.assign(g.cascades.size(), 0ull);
+            prevPasses.assign(g.cascades.size(), 0ull);
+            prevMarched.assign(g.cascades.size(), 0ull);
+            for (size_t i = 0; i < g.cascades.size(); ++i) {
+                prevBricks[i] = g.cascades[i].feedbackBricksRan;
+                prevPasses[i] = g.cascades[i].feedbackPasses;
+                prevMarched[i] = g.cascades[i].deltaMarched;
+            }
+        }
+        double bricks = 0.0, marched = 0.0;
+        for (size_t i = 0; i < g.cascades.size(); ++i) {
+            const GiStatus::CascadeStatus &cs = g.cascades[i];
+            const double b = double(cs.feedbackBricksRan - std::min(prevBricks[i], cs.feedbackBricksRan));
+            const double mv = double(cs.deltaMarched - std::min(prevMarched[i], cs.deltaMarched));
+            m["count:vct.bricks_passed" + std::to_string(i)] = b;
+            m["count:vct.inject_marched" + std::to_string(i)] = mv;
+            bricks += b;
+            marched += mv;
+            prevBricks[i] = cs.feedbackBricksRan;
+            prevPasses[i] = cs.feedbackPasses;
+            prevMarched[i] = cs.deltaMarched;
+        }
+        m["count:vct.bricks_passed"] = bricks;
+        m["count:vct.inject_marched"] = marched;
+        m["count:cards.relit_texels_direct"] = double(g.cards.relitTexelsLastFrame);
+        m["count:cards.relit_texels_indirect"] = double(g.cards.indirectTexelsLastFrame);
+        m["count:cards.captured_texels"] = double(g.cards.texelsLastFrame);
+    };
+    counts(0ull);   // the baseline of the cumulative counters
     const iris::Vec3 e0 = mCamera.position(), t0 = mCamera.target();
     for (int i = 1; i <= n && !mQuit; ++i) {
         if (walk) {
@@ -1274,6 +1313,7 @@ bool Session::monitor(const Command &c)
         }
         frame();
         measured.insert(mEngine->published().frame);
+        counts(mEngine->published().frame);
         got.clear();
         mEngine->popMonitorTee(tee, got);
         for (MonitorRecord &r : got) recs.push_back(std::move(r));
@@ -1331,6 +1371,11 @@ bool Session::monitor(const Command &c)
             std::fprintf(out, " %s=%.4f", kv.first.c_str(), kv.second);
             per[kv.first].push_back(kv.second);
         }
+        if (const auto ci = countsOf.find(r.frame); ci != countsOf.end())
+            for (const auto &kv : ci->second) {
+                std::fprintf(out, " %s=%.0f", kv.first.c_str(), kv.second);
+                per[kv.first].push_back(kv.second);
+            }
         std::fprintf(out, "\n");
         if (busy >= 0.0) busyAll.push_back(busy);
         if (busy >= 0.0 && r.unattributedGpuMs >= 0.0f) overlapAll.push_back(overlap);
