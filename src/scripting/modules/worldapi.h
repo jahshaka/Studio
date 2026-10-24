@@ -110,6 +110,7 @@ public:
     /// with no argument; refuses anything but "off", "auto" and "on".
     Q_INVOKABLE QString rayTracing(const QString &mode = QString());
     Q_INVOKABLE QString ssrMarch(const QString &rule = QString());
+    Q_INVOKABLE QVariantMap reflections(const QVariantMap &params = QVariantMap());
     /// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1) — how a wearer moves in this
     /// world. Reads with no argument; every key is validated and an unknown
     /// one is refused, like world.fog. The rows come from services/vrworld.h,

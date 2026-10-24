@@ -21,9 +21,13 @@ const std::vector<VerbDoc> &verbs()
         { "play", "play on|off|toggle", 1, 1,
           "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
           "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6)" },
-        { "reflections", "reflections both|rays", 1, 1,
-          "the view's reflection sources (PostFxDesc::ssrScreenMarch): the screen march beside the rays, or the rays "
-          "alone - PHOTON-2 stage 1b's measuring door (C1's SSR-vs-ray agreement); a graph rebuild, the histories restart" },
+        { "reflections", "reflections both|rays|screen", 1, 1,
+          "the view's reflection sources (PostFxDesc::reflectSources): both = the one estimator (the screen trace first, "
+          "the rays for the rest), rays = the rays alone, screen = the screen alone (its misses no sample) - the agreement "
+          "row's door (Both vs Rays); a graph rebuild, the histories restart" },
+        { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
+          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "
+          "rtreflect.contact's crease arm reads the reflection there, free of the receiver's own diffuse" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
@@ -37,7 +41,7 @@ const std::vector<VerbDoc> &verbs()
           "readers' demand), appended to <file> (stdout without one)" },
         { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
         { "probe", "probe [file]", 0, 1,
-          "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object (appended to file)" },
+          "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object, and its visible pixels by DAG depth (appended to file)" },
         { "measure", "measure D [file.tsv]", 1, 2,
           "an environment's stop D: the camera, settle, the probe, and each predicted quantity beside the measured one "
           "(a TSV row each: env, seed, tier, stop, quantity, predicted, measured)" },
@@ -76,7 +80,7 @@ const std::vector<VerbDoc> &verbs()
           "a WORLD ROW set on the document through the World panel's own setter (irisgl worldmodes::row - e.g. "
           "reflectionRoughnessCutoff 100, in the row's own units); the mirror pushes it with the next frame; no frame is "
           "drawn" },
-        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>|dumprgb=<name>] [freeze] [out=<name>]", 2, 9,
+        { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>|dumprgb=<name>] [freeze|freeze=world] [out=<name>]", 2, 9,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
           "per-frame change in 8-bit codes on the pixels the gather saw before the stop (history count >= age, "
@@ -90,7 +94,9 @@ const std::vector<VerbDoc> &verbs()
           "<data-root>/stillness/dump-<name>/ (M1's moving window, computed offline), `dumprgb=<name>` the pictures and "
           "cameras alone (a walk compared byte for byte); `freeze` switches the arm "
           "gi.freeze on at the script's first walk frame, only when the gather and the reflection HELD on the frame before "
-          "(M1's frozen walk from the converged picture; the run fails otherwise - settle longer), restored at the end. "
+          "(M1's frozen walk from the converged picture; the run fails otherwise - settle longer), restored at the end; "
+          "`freeze=world` sets it to 2 instead - THE WORLD HELD: the caches and the gather frozen, the reflections live "
+          "(rtreflect.walk_world: the reflection's own estimator alone). "
           "Writes "
           "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
         { "help", "help", 0, 0, "print this table" },

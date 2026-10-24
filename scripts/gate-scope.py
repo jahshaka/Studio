@@ -86,6 +86,10 @@ ENGINE_SUBSYSTEMS = [
     (r"Particle", ["particles"], "particles"),
     # reflections: planar, SSR, the ray-traced reflection
     (r"Planar|Reflect|Ssr|rq_reflect", ["ssr", "rtreflect", "mirror", "planar"], "reflections (planar, SSR, RT)"),
+    # THE STILLNESS DOOR (jahlab's measuring door: the walks, the holds, the dumps) and the readbacks it decodes (the
+    # reflection's history count and moving SE, the gather's history): the lab rows, the GI's and the reflection's walks
+    (r"src/Stillness\.cpp$|Stillness\.h$|src/ReadbackDecode\.(cpp|h)$", ["lab", "gi", "rtreflect"],
+     "the stillness door and the readbacks' decode"),
     (r"Vr|OpenXr", ["vr"], "VR"),
     (r"Skelet|Skin|Anim", ["skeletal", "avatar"], "skinning and animation"),
     (r"Decal|Distortion|Look|Hdr|Bloom|Dither", ["hdr", "looks", "distortion", "decals"], "the looks and decals"),

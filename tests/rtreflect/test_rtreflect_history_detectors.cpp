@@ -1,13 +1,11 @@
 // rtreflect.history_detectors — THE REFLECTION HISTORY'S TWO LAWS (PHOTON-5 stage 4;
 // SPECS/audits/PHOTON_AUDIT_2026-10-21.md F4; the mechanism PHOTON-2 stage 1b's).
 //
-// The ray tier's reflection is a temporal mean (rq_reflect.comp + rq_reflect_temporal.comp):
-// a moving eye's glossy texel remembers about thirty-two frames (the floor on 1/n,
-// kReflectHistoryFloor). Two things make that memory WRONG rather than merely old, and
-// ONE mechanism answers both since PHOTON-2 1b — the history is clamped to the box this
-// frame's samples span and its memory shortened by how far the clamp moved it (Lumen's
-// temporal denoiser; the radiance-key cap and the parallax drop that answered them before
-// are deleted):
+// The ray tier's reflection is a temporal mean (rq_reflect.comp + rq_reflect_resolve.comp + rq_reflect_temporal.comp):
+// a moving eye's glossy texel remembers at most Lumen's MaxFrames, twelve frames (PHOTON-7 stage 6; the 32-frame floor
+// before). Two things make that memory WRONG rather than merely old, and ONE mechanism answers both — the history is
+// clamped to the box this frame's RESOLVED samples span and its memory shortened by how far the clamp moved it (Lumen's
+// temporal denoiser; the radiance-key cap and the parallax drop that answered them before are deleted):
 //   (a) THE RADIANCE MOVED: a lamp's intensity stepped. The surface and what it reflects
 //       are the same, so no reprojection test fires; the old radiance drained out of a still
 //       surface's mean over the floor's ~94 frames at the base.
@@ -22,12 +20,16 @@
 //       picture the screen march reads - are read in HDR every frame; each one's number is the
 //       frames from the step until it holds 95 % of its own settled change. THE LAW (PHOTON-7
 //       stage 5, the lead's ruling; rule #21 - a bar measures only what its own code decides): the
-//       reflection arrives within 2 x kWarmupFrames of the frame ITS SOURCE does. The source's own
-//       catch-up is the GI's - the box's diffuse indirect is the gather's, settling while the
-//       relight is spread over GiQualityFacts::lightWorkFrames (L7: a lamp's indirect catching up
-//       over frames is not a pop), bounded by the GI's own laws (gi.hold_after_stop) - never the
-//       detectors'. Measured at stage 5: the source at 14, the reflection at 24 (the lamp step
-//       alone: 24 at the base, 11 with the cap, 7 at PHOTON-2 1b - before the spread).
+//       reflection arrives within 16 frames of the frame ITS SOURCE does (kArrivalLagFrames: the
+//       deleted warm-up's 2 x 8). The source's own catch-up is the GI's - the box's diffuse indirect is
+//       the gather's, settling while the relight is spread over GiQualityFacts::lightWorkFrames (L7: a
+//       lamp's indirect catching up over frames is not a pop), bounded by the GI's own laws
+//       (gi.hold_after_stop) - never the detectors'. Measured at stage 5: the source at 14, the
+//       reflection at 24 (the lamp step alone: 24 at the base, 11 with the cap, 7 at PHOTON-2 1b - before
+//       the spread). Under Lumen's denoiser (PHOTON-7 stage 6) a lamp step drains through the clamp against
+//       the RESOLVED neighbourhood: where that box is wide (a glossy floor's one-ray samples) the history
+//       stays inside it and drains at MaxFrames' 1/12 - 33 frames measured in Both, 22 in Rays (commit 6,
+//       the step alone).
 //   (b) PAN-SMEAR-1's pillar fixture (gi.reflect_motion, archived): a glossy floor, seven
 //       emissive pillars, a 24-frame slide at 0.25 m a frame, the moving floor against the
 //       floor the renderer settles to at the same pose, in 8-bit codes.
@@ -54,7 +56,6 @@ static int failures = 0;
 
 static const unsigned kWidth = 384;
 static const unsigned kHeight = 216;
-static const int kWarmupFrames = 8;    // rq_reflect.comp's kWarmupFrames
 
 static NodeId addBox(Scene *s, const PbrParams &p, const Vec3 &pos, const Vec3 &scale)
 {
@@ -112,6 +113,11 @@ static float meanDiff(const Image &a, const Image &b, unsigned y0, unsigned y1)
     return n ? float(sum / double(n)) : 1e9f;
 }
 
+/// The sources this row measures (its bars are Both's).
+static constexpr ReflectSources kSources = ReflectSources::Both;
+/// (a)'s law: the reflection arrives within this many frames of its source (the restated law, PHOTON-7 stage 5).
+static constexpr int kArrivalLagFrames = 16;
+
 static void rayTier(Scene *s, View *view)
 {
     GiParams gi;
@@ -124,8 +130,21 @@ static void rayTier(Scene *s, View *view)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
+    fx.reflectSources = kSources;   // THE MODE THIS ROW INTENDS (the mode label: never assumed - asserted below)
     fx.hdrReadback = true;
     view->setPostFx(fx);
+}
+
+/// THE MODE LABEL (PHOTON-7 stage 6): the sources the reflection RAN with, read from the engine and printed - this
+/// row's bars are Both's (the screen source while moving is what the slide judges: Rays with the hits flattened
+/// measured 0.506 where Both measured 1.366, so a number without its mode is no number).
+static void checkSources(Scene *s, const char *part)
+{
+    const int ran = s->published().rayQuery.reflectSources;
+    std::printf("-- %s: the reflection traced with the sources '%s'\n", part,
+                ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)));
+    CHECK_MSG(ran == int(kSources), "%s: the reflection ran '%s', the row intends '%s'", part,
+              ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)), reflectSourcesName(kSources));
 }
 
 /// The frames from the step until a trace holds 95 % of its settled change (and stays: one noisy
@@ -214,6 +233,7 @@ static LampStepArrivals lampStep(Engine *e, View *view)
     firstFrames(source, sBefore, sAfter);
     std::printf("\n   95 %% of the change held after: the source %d frames, the reflection %d frames (lag %d)\n",
                 out.source, out.reflection, out.reflection - out.source);
+    checkSources(s, "(a)");
     e->destroyScene(s);
     return out;
 }
@@ -274,6 +294,7 @@ static float slideTrail(Engine *e, View *view, float &stillOut)
     }
     std::printf("-- (b) slide 0.25 m/frame x 24: floor moving-vs-settled %.3f codes, worst 16-column band %.3f "
                 "(still control %.3f)\n", err, worstBand, stillOut);
+    checkSources(s, "(b)");
     e->destroyScene(s);
     return err;
 }
@@ -294,16 +315,15 @@ int main()
     }
 
     const LampStepArrivals a = lampStep(e, view);
-    // THE LAW (the header; PHOTON-7 stage 5, the lead's ruling): the reflection holds 95 % of a radiance change
-    // within 2 x kWarmupFrames frames of the frame its SOURCE does. Measured from the step alone: 24 at the base
-    // (the 1/32 floor's drain), 11 with the radiance cap (PHOTON-5), 7 with the clamp and its confidence
-    // (PHOTON-2 1b); at stage 5 the source 14, the reflection 24.
+    // THE LAW (the header; PHOTON-7 stage 5, the lead's ruling, restated): the reflection holds 95 % of a radiance
+    // change within kArrivalLagFrames of the frame its SOURCE does. Measured from the step alone: 24 at the base (the
+    // 1/32 floor's drain), 11 with the radiance cap (PHOTON-5), 7 with the clamp and its confidence (PHOTON-2 1b); at
+    // stage 5 the source 14, the reflection 24; 33 under Lumen's denoiser in Both (stage 6, the step alone).
     CHECK_MSG(a.source > 0 && a.reflection > 0, "(a) both arrivals measured (the source %d, the reflection %d)",
               a.source, a.reflection);
-    CHECK_MSG(a.source > 0 && a.reflection > 0 && a.reflection - a.source <= 2 * kWarmupFrames,
-              "(a) A LAMP STEP reaches the still glossy floor's reflection within 2 x kWarmupFrames = %d frames of its "
-              "source (lag %d: the source %d, the reflection %d)", 2 * kWarmupFrames, a.reflection - a.source,
-              a.source, a.reflection);
+    CHECK_MSG(a.source > 0 && a.reflection > 0 && a.reflection - a.source <= kArrivalLagFrames,
+              "(a) A LAMP STEP reaches the still glossy floor's reflection within %d frames of its source (lag %d: "
+              "the source %d, the reflection %d)", kArrivalLagFrames, a.reflection - a.source, a.source, a.reflection);
 
     float still = 0.0f;
     const float trail = slideTrail(e, view, still);

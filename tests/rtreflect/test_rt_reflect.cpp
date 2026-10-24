@@ -201,7 +201,6 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// through the same radiance readback the mirror is measured with.
 static int lampMain(Engine *e, bool target);
 static int hitresMain(Engine *e);
-static int footprintSweepMain(Engine *e);
 static int formatCheckMain(Engine *e, const std::string &logFile);
 static int envRayMatchMain(Engine *e);
 
@@ -213,9 +212,8 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
         if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
-    bool wantSweep = false, wantFormat = false, wantEnvMatch = false;
+    bool wantFormat = false, wantEnvMatch = false;
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
         if (std::strcmp(argv[i], "--format-check") == 0) wantFormat = true;
         if (std::strcmp(argv[i], "--env-ray-match") == 0) wantEnvMatch = true;
     }
@@ -238,7 +236,6 @@ int main(int argc, char **argv)
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
     if (wantLamp) return lampMain(e, wantLampTarget);
     if (wantHitres) return hitresMain(e);
-    if (wantSweep) return footprintSweepMain(e);
     if (wantFormat) return formatCheckMain(e, cfg.logFile);
     if (wantEnvMatch) return envRayMatchMain(e);
 
@@ -376,8 +373,14 @@ int main(int argc, char **argv)
     }
 
     CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
-    CHECK_MSG(rq.reflectRays > 0, "the trace dispatched rays (%d at full resolution)",
+    // (TRACED FRAMES, not this frame's rays: a still mirror's texels take their centre ray whole, stop after eight frames
+    // and the view HOLDS - no ray at all - long before this read.)
+    CHECK_MSG(rq.reflectFrame > 0u, "the trace ran (%u traced frames; %d rays this frame)", unsigned(rq.reflectFrame),
               rq.reflectRays);
+    // THE HOLD (PHOTON-7 stage 6): once the view holds, the trace dispatches no ray - the hold law, never rays at a fixed
+    // frame.
+    CHECK_MSG(!rq.reflectHeld || rq.reflectRays == 0, "a held view traces no ray (%d rays this frame, held %d)",
+              rq.reflectRays, int(rq.reflectHeld));
     // THE BAR. The cube's emissive is 4.0 linear; after the tonemap the wall
     // cannot read that literally, so the bar is on the DIFFERENCE from the arm
     // that has no ray: the reflection must be unmistakable rather than a tint.
@@ -472,158 +475,18 @@ int main(int argc, char **argv)
         render(e, 8);
     }
 
-    // ---- 6b: SCREEN FIRST -----------------------------------------------------
-    // (THE SAME DIFFUSE IN BOTH ARMS without a gather pin since PHOTON-7 7-5: this suite's view declares no offscreen
-    // contract, so its chain never gathers - and the gather is recorded only for a view whose chain does.)
-    // Where the march answers a pixel OUTRIGHT the ray tier must leave it
-    // alone. The claim is stated as a bound (a mean under 4/255 over the region
-    // the march owns) rather than as byte-equality, because the region is
-    // selected by COLOUR and a colour test cannot prove bit-equality of the
-    // pixels it selects — what the bound is worth is the number it measures,
-    // and that number is 0.00 (third reader, item 8).
-    //
-    // THE FIXTURE IS THE WHOLE ARGUMENT. The mirror wall and the cube behind the
-    // camera both go away; what is left is a glossy floor and a MATTE emissive
-    // cube standing in front of the camera, fully on screen. The march can see
-    // everything the floor reflects, at a face-on arrival, well inside its
-    // distance — its best case — and nothing in the shot is itself traced. If
-    // the ray tier is "screen first" this frame cannot move at all.
-    {
-        s->setNodeVisible(wall, false);
-        s->setNodeVisible(cube, false);
-        const NodeId floor = s->createNode();
-        const MaterialId fm = s->createPbrMaterial(wallParams);   // roughness 0, metal
-        const MeshId fmesh = s->createMesh(enginetest::unitCubeMesh());
-        const NodeId lamp = s->createNode();
-        PbrParams lampParams;
-        lampParams.albedo = Colour(0.05f, 0.05f, 0.05f);
-        lampParams.emissive = Colour(4.0f, 0.0f, 0.0f);
-        lampParams.roughness = 0.9f;                              // MATTE: never traced
-        const MaterialId lm = s->createPbrMaterial(lampParams);
-        CHECK(floor && fm && fmesh && s->attachMesh(floor, fmesh, fm) && lamp && lm &&
-                  s->attachMesh(lamp, fmesh, lm),
-              "the screen-first fixture exists (a glossy floor and a matte emitter above it)");
-        enginetest::setNodeScale(s, floor, Vec3(16.0f, 0.3f, 16.0f));
-        enginetest::setNodePosition(s, floor, Vec3(0.0f, -1.0f, 0.0f));
-        enginetest::setNodeScale(s, lamp, Vec3(2.0f, 2.0f, 2.0f));
-        enginetest::setNodePosition(s, lamp, Vec3(0.0f, 2.0f, 0.0f));
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.2f, -7.0f), Vec3(0.0f, 0.4f, 0.0f));
-        s->refreshGlobalIllumination();
-        // BOTH ARMS ARE READ ONCE THE PICTURE HOLDS STILL, never at a frame
-        // count (PHOTON-M3): a chain rebuild re-solves the GI and the settle
-        // runs one injection a frame, and with the float voxel store (fork ae2ed529f+155a56bf8
-        // (was 0080)) the emitter's un-clipped bounce keeps moving the floor for
-        // longer than 48 frames — the two arms, 48 frames apart, then differed
-        // by the settle (mean 7.09/255 over the march region) with the ray tier
-        // blameless. The house lesson: a wall-clock or frame-count settle
-        // measures nothing; read until the value stops moving.
-        const auto readStill = [&](Image &out) {
-            Image prev;
-            render(e, 48);
-            view->readPixels(prev);
-            for (int i = 0; i < 40; ++i) {
-                render(e, 8);
-                view->readPixels(out);
-                if (out.width == prev.width && out.height == prev.height &&
-                    std::equal(out.rgba.begin(), out.rgba.end(), prev.rgba.begin()))
-                    return;
-                prev = out;
-            }
-        };
-        Image withRays;
-        readStill(withRays);
-        unsigned same = 0, moved = 0, worstDiff = 0;
-        // The SAME binary, the same chain — only the tier's switch moves.
-        // (setRayTracing rebuilds the chain, so both arms settle the same way.)
-        e->setRayTracing(false);
-        Image marchOnly;
-        readStill(marchOnly);
-        e->setRayTracing(true);
-        render(e, 48);
-        for (unsigned y = 0; y < withRays.height; ++y)
-            for (unsigned x = 0; x < withRays.width; ++x) {
-                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
-                if (a.r == b.r && a.g == b.g && a.b == b.b) { ++same; continue; }
-                ++moved;
-                worstDiff = std::max(worstDiff,
-                                     unsigned(std::abs(a.r - b.r) * 255.0f + 0.5f));
-            }
-        const float movedPct = 100.0f * float(moved) / float(same + moved);
-        // WHERE THE MARCH IS CONFIDENT, measured rather than assumed. The
-        // resolve's weight is not a yes/no: it is the ENVELOPE (distance, the
-        // screen's edge, a reflection pointing back at the camera) times the
-        // roughness ramp times the hit mask's coverage, and over a floor the
-        // envelope is below 1 across most of the reflection. So "the march
-        // answered this pixel" is a matter of degree, and the pixels where it
-        // answered it OUTRIGHT are the bright interior of the reflection —
-        // which is what this measures: over the texels the march alone already
-        // shows a strong reflection on, the ray tier must leave the colour
-        // essentially where it was.
-        //
-        // (A frame-wide byte-identical claim would be false BY DESIGN, and the
-        // design is the one this suite is defending: where the march's envelope
-        // has faded, the ray answers instead of the probe — that is the whole
-        // point of "rays for the rest". The frame-wide split is printed so the
-        // size of that region is never hidden.)
-        double sumDelta = 0.0;
-        unsigned strong = 0, strongWorst = 0;
-        unsigned dgUnder2 = 0, dgUnder8 = 0, dgUnder32 = 0, dgOver32 = 0;
-        for (unsigned y = 0; y < withRays.height; ++y)
-            for (unsigned x = 0; x < withRays.width; ++x) {
-                const Colour &a = withRays.at(x, y), &b = marchOnly.at(x, y);
-                if (b.r - std::max(b.g, b.b) < 0.25f) continue;   // not a strong march hit
-                ++strong;
-                const float d = std::max(std::max(std::abs(a.r - b.r), std::abs(a.g - b.g)),
-                                         std::abs(a.b - b.b)) * 255.0f;
-                sumDelta += double(d);
-                strongWorst = std::max(strongWorst, unsigned(d + 0.5f));
-                if (d < 2.0f) ++dgUnder2; else if (d < 8.0f) ++dgUnder8; else if (d < 32.0f) ++dgUnder32; else ++dgOver32;
-                if (d >= 32.0f && dgOver32 <= 6)
-                    std::printf("      outlier (%u,%u): rays %.3f/%.3f/%.3f march %.3f/%.3f/%.3f\n", x, y,
-                                a.r, a.g, a.b, b.r, b.g, b.b);
-            }
-        std::printf("    delta histogram over the march region: <2: %u, <8: %u, <32: %u, >=32: %u\n",
-                    dgUnder2, dgUnder8, dgUnder32, dgOver32);
-        const float meanDelta = strong ? float(sumDelta / double(strong)) : 0.0f;
-        std::printf("    screen-first fixture: %u px byte-identical, %u moved (%.2f %%), "
-                    "worst red delta %u/255\n", same, moved, movedPct, worstDiff);
-        std::printf("    ...over the %u px the march answers OUTRIGHT: mean delta %.2f/255, "
-                    "worst %u/255\n", strong, meanDelta, strongWorst);
-        CHECK_MSG(strong > 100u, "the march alone really does answer a region (%u px)", strong);
-        // THE MEASURE IS THE SHARE THE RAYS LEAVE ALONE, NOT A MEAN (PHOTON-M3
-        // re-anchor, measured): the region above is a CHROMA classifier over the
-        // march-only picture, and it admits the RIM of the march's lamp hit —
-        // where the march's own answer fades (red 0.40-0.62) and the ray tier
-        // completes it to the lamp (1.0/0/0), which is the composite doing its
-        // job. The histogram is bimodal: 6,094 of 6,667 px within 2/255, 452 at
-        // 32+ on that rim, nothing in between to speak of. With the float voxel
-        // store (fork ae2ed529f+155a56bf8 (was 0080)) the floor's red bounce is brighter, more rim pixels
-        // cross the 0.25 chroma margin, and a MEAN over the region moved from
-        // 2.96 to 7.08/255 with the ray tier blameless. So: the share within
-        // 2/255 (measured 91.4 %) must stay above 85 %, and the rim is named.
-        const float untouchedShare = strong ? float(dgUnder2) / float(strong) : 0.0f;
-        std::printf("    ...share of the march region the rays leave within 2/255: %.1f %%\n",
-                    100.0f * untouchedShare);
-        CHECK_MSG(untouchedShare > 0.85f,
-                  "SCREEN FIRST: where the march answers outright the ray tier leaves the "
-                  "colour alone (%.1f %% of %u px within 2/255; the rest is the hit's rim)",
-                  100.0f * untouchedShare, strong);
-        s->setNodeVisible(floor, false);
-        s->setNodeVisible(lamp, false);
-        s->setNodeVisible(wall, true);
-        s->setNodeVisible(cube, true);
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
-        s->refreshGlobalIllumination();
-        render(e, 24);
-    }
+    // (6b, SCREEN FIRST - "where the march answers a pixel outright the ray tier must leave it alone" - is DELETED with
+    // the two-estimator contract it defended: since PHOTON-7 stage 6 the screen trace is the ONE estimator's first
+    // source, inside the trace (rq_reflect.comp), and no raster march answers a pixel of a ray chain.)
 
     // ---- 6c: A MIRROR DOES NOT GHOST UNDER CAMERA MOTION --------------------
     // (Second reader, H1.) The temporal mean exists for VARIANCE, and a mirror
-    // has none: every sample is the same ray. If the mean kept its floor there,
+    // has none: every sample is the same ray. If the mean kept its memory there,
     // a pan would drag the reflection of where the camera used to be across the
-    // wall for as long as the mean remembers. The blend is raised toward 1 as
-    // the lobe narrows, so one frame after a pan a mirror must already match a
-    // fresh render of the same pose.
+    // wall for as long as the mean remembers. The mirror ramp (PHOTON-7 stage 6,
+    // jah_reflect_draw.glsl) takes the lobe's centre ray where its footprint is
+    // under a texel and gives it ONE frame of memory, so one frame after a pan a
+    // mirror must already match a fresh render of the same pose.
     {
         const Vec3 eye(0.0f, 2.0f, -6.0f);
         enginetest::testCameraLookAt(view, eye, Vec3(0.0f, 2.0f, 5.0f));
@@ -1932,151 +1795,9 @@ static int hitresMain(Engine *e)
     return failures ? 1 : 0;
 }
 
-// ---------------------------------------------------------------------------
-/// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
-/// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
-/// --footprint-sweep`, gi.rt_reflect (archived: archive/tests/gi)'s own fixture (the mirror wall, the carded
-/// emissive cube behind the camera), the wall's roughness swept.
-///
-/// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
-/// each arm in its own view warmed 60 frames (the temporal mean at its floor):
-///   card  the card read ALONE (the gate open, the arm "cards.footprintTexels" huge):
-///         the per-pixel standard deviation of two CONSECUTIVE frames — the
-///         noise one texel-exact sample per frame leaves after the mean, which
-///         grows with the footprint (the speckle);
-///   voxel the voxel read ALONE (the gate shut, K = 0): its distance from the
-///         card arm's 60-frame mean (the converged answer the card read is
-///         unbiased towards) — the prefiltered read's bias, cells and coverage.
-/// Where the card's noise crosses the voxel's bias is where a texel-exact read
-/// stops paying; the footprint there, in card texels, is k. (A YOUNG view was
-/// the first instrument and says nothing: its two frames are the warm-up's fade
-/// from the probe, identical in both arms to four decimals.)
-static int footprintSweepMain(Engine *e)
-{
-    const unsigned kPx = 192u;
-    // The device exists once a view does (the startup-order law).
-    View *anchor = e->createOffscreenView("fpsweep-anchor", 16u, 16u, Colour(0, 0, 0));
-    Scene *s = e->createScene("fpsweep");
-    if (anchor && s) anchor->setScene(s);
-    if (!s || !e->rayQueryAvailable() || !e->rayTracing()) {
-        std::printf("no ray queries — nothing to sweep\n");
-        return 0;
-    }
-    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
-    PbrParams wallParams;
-    wallParams.albedo = Colour(1.0f, 1.0f, 1.0f);
-    wallParams.metalness = 1.0f;
-    wallParams.roughness = 0.3f;
-    const MaterialId wallMat = s->createPbrMaterial(wallParams);
-    const NodeId wall = s->createNode();
-    s->attachMesh(wall, s->createMesh(enginetest::unitCubeMesh()), wallMat);
-    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
-    enginetest::setNodePosition(s, wall, Vec3(0.0f, 2.0f, 5.0f));
-    MeshData md = enginetest::unitCubeMesh();
-    for (unsigned a = 0; a < 6u; ++a) {
-        MeshCardDesc c;
-        c.axis = static_cast<unsigned char>(a);
-        c.origin = Vec3(0, 0, 0);
-        c.halfU = 0.5f;
-        c.halfV = 0.5f;
-        c.halfDepth = 0.52f;
-        md.cards.push_back(c);
-    }
-    PbrParams cp;
-    cp.albedo = Colour(0.05f, 0.05f, 0.05f);
-    cp.emissive = Colour(0.9f, 0.0f, 0.0f);
-    cp.roughness = 0.6f;
-    const NodeId cube = s->createNode();
-    s->attachMesh(cube, s->createMesh(md), s->createPbrMaterial(cp));
-    enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
-    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
-    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
-    GiParams gi;
-    gi.mode = GiMode::Vct;
-    gi.quality = GiQuality::High;
-    gi.bounces = true;
-    // ONE PINNED CAMERA-CENTRED CASCADE where the deleted single volume was pinned
-    // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
-    gi.cascadeCount = 1;
-    gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    gi.cards = true;
-    s->setGlobalIllumination(gi);
-    PostFxDesc fx;
-    fx.allowOffscreen = true;
-    fx.ssr = 2;
-    fx.hdr = false;
-    int serial = 0;
-    const auto shots = [&](int frames, Image &a, Image &b) {
-        View *v = e->createOffscreenView(("fpsweep" + std::to_string(serial++)).c_str(), kPx, kPx,
-                                         Colour(0, 0, 0));
-        v->setScene(s);
-        v->setPostFx(fx);
-        enginetest::testCameraLookAt(v, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
-        render(e, frames);
-        v->readPixels(a);
-        render(e, 1);
-        v->readPixels(b);
-        e->destroyView(v);
-    };
-    {   // settle the scene once (GI, the cube's cards)
-        Image w0, w1;
-        shots(120, w0, w1);
-    }
-    const double kCubeT = 16.0;                     // the wall to the cube, metres
-    const double kTexel = 1.5 / 128.0;              // the 3 m cube's cards split to 1.5 m pages
-    const double kN = 32.0;                         // the temporal mean's memory (1 / kReflectHistoryFloor)
-    std::printf("perceptual  alpha   footprint(texels)  card 2-frame std   voxel |. - card mean|   (mean"
-                " over the cube's reflection, red, 0..1)\n");
-    double prevDiff = 0.0, prevF = 0.0, crossing = -1.0;
-    bool havePrev = false;
-    for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
-        wallParams.roughness = rough;
-        s->setPbrMaterial(wallMat, wallParams);
-        e->setArm("cards.footprintTexels", 1e9);
-        Image c0, c1, v0, v1;
-        shots(60, c0, c1);
-        e->setArm("cards.footprintTexels", 0.0);
-        shots(60, v0, v1);
-        double ec = 0.0, ev = 0.0;
-        int n = 0;
-        for (unsigned y = 0; y < kPx; ++y)
-            for (unsigned x = 0; x < kPx; ++x) {
-                const Colour a = c0.at(x, y), b = c1.at(x, y);
-                const double mean = 0.5 * (double(a.r) + double(b.r));
-                if (mean - std::max(double(a.g), double(a.b)) < 0.08) continue;   // the cube's reflection
-                ec += std::fabs(double(a.r) - double(b.r)) / std::sqrt(2.0);
-                ev += std::fabs(double(v1.at(x, y).r) - mean);
-                ++n;
-            }
-        if (n) { ec /= n; ev /= n; }
-        const double alpha = double(rough) * double(rough);
-        const double f = 2.0 * kCubeT * alpha / std::sqrt(kN) / kTexel;
-        std::printf("  %.2f     %.4f   %8.1f           %.4f             %.4f        (%d px)\n", rough, alpha,
-                    f, ec, ev, n);
-        const double diff = ec - ev;
-        if (havePrev && prevDiff < 0.0 && diff >= 0.0 && crossing < 0.0)
-            crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
-        prevDiff = diff; prevF = f; havePrev = true;
-    }
-    e->setArm("cards.footprintTexels", 4.0);
-    std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
-                crossing);
-    return 0;
-}
+// (THE FOOTPRINT SWEEP, `--footprint-sweep` - the measurement the card read's footprint gate stood on - is DELETED with
+// the gate: PHOTON-7 stage 6, law L5.)
 
-// ---------------------------------------------------------------------------
-/// RAY-FMT-CHECK (PHOTON P3; `--format-check`, the rows
-/// gi.rt_reflect_format_lavapipe (archived: archive/tests/gi) and gi.rt_reflect_format_refused_lavapipe (archived: archive/tests/gi)).
-///
-/// The tier's availability gate asks the device for STORAGE_IMAGE support of
-/// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
-/// device that lacks one is a no-rays device with ONE log line naming it. Both
-/// rows run on LAVAPIPE, the second device of the box: without the deny it must
-/// NOT refuse (both formats are core-mandatory storage formats, so every
-/// conformant driver stores to them — the check is a driver-defect guard), and
-/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` (fault injection) the same device must
-/// refuse through the one gate: no ray query, a view at the ray tier with no
-/// trace, frames that still draw, and the line in the log.
 static bool logContains(const std::string &path, const char *needle)
 {
     FILE *f = std::fopen(path.c_str(), "rb");

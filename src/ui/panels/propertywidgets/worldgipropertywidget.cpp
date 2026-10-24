@@ -432,7 +432,10 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
     // dropped — and "Rays" the ray tier's (PHOTON-F12-PCC: no grid is built,
     // the rays are the reflection), while probeCount 0 with neither is a build
     // that failed and must not read as a decision (gi.pcc_mirror's subject).
-    const QString text = st.probeGridByRays ? tr("Rays")
+    // (where the rays are the reflection, the row names its SOURCES - REFLECT-MODE-1's setting, world.reflections)
+    const int sources = qBound(0, scene->reflectionSources, 2);
+    const QString text = st.probeGridByRays ? (sources == 1 ? tr("Rays") : sources == 2 ? tr("Screen")
+                                                                                         : tr("Screen + Rays"))
                          : st.probeCount == 0
                              ? (st.probesDropped > 0 ? tr("Sky") : QString())
                              : (st.probeCount == 1 ? tr("1 probe")

@@ -672,6 +672,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(scene->smaaPreset), 3);
     scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(scene->ssrMode), 2);
     scene->ssrMarch = qBound(0, sceneObj.value("ssrMarch").toInt(scene->ssrMarch), 2);
+    scene->reflectionSources = qBound(0, sceneObj.value("reflectionSources").toInt(scene->reflectionSources), 2);
+    scene->reflectionResolution =
+        qBound(0, sceneObj.value("reflectionResolution").toInt(scene->reflectionResolution), 2);
     // Absent = 40, clamped to the row — the helper carries why (sceneformat.h).
     scene->reflectionRoughnessCutoff = sceneformat::readReflectionRoughnessCutoff(sceneObj);
     scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(scene->refractionsMode), 2);

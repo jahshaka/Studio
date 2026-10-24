@@ -275,6 +275,7 @@ bool Session::probe(std::vector<envs::ObjectReading> &out, AtomCutProbeSummary &
         r.drawnTriangles = o.drawnTriangles;
         r.pixels = o.pixels;
         r.drawnClusters = o.drawnClusters;
+        for (int d = 0; d < 16; ++d) r.depthPixels[d] = o.depthPixels[d];
         sum.drawnTriangles += o.drawnTriangles;
         if (o.pixels == 0) sum.hiddenTriangles += o.drawnTriangles;
         out.push_back(r);
@@ -407,15 +408,16 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || !mScreenMarch) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays`
-        // (the screen march off: the rays alone answer).
-        const bool headless = mOpt.headless, march = mScreenMarch;
-        fv.finish = [headless, march](FrameInputView &part, View *v) {
+        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
+        // `reflections screen` (the one estimator's sources narrowed to one).
+        const bool headless = mOpt.headless;
+        const ReflectSources sources = mReflectSources;
+        fv.finish = [headless, sources](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
-            if (!march) fx.ssrScreenMarch = false;
+            if (sources != ReflectSources::Both) fx.reflectSources = sources;
             part.postFx = fx;
         };
     }
@@ -520,8 +522,11 @@ bool Session::shot(const std::string &nameIn)
         std::printf("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
         return false;
     }
-    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu%s\n", qPrintable(path), img.width, img.height, colours.size(),
-                mFrames, extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
+    // (THE MODE LABEL: the sources the reflection traced this picture with - what it ran, read from the engine)
+    const int sources = mScene->published().rayQuery.reflectSources;
+    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu sources %s%s\n", qPrintable(path), img.width, img.height,
+                colours.size(), mFrames, sources < 0 ? "-" : reflectSourcesName(ReflectSources(sources)),
+                extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
     std::fflush(stdout);
     return true;
 }
@@ -626,6 +631,13 @@ std::string Session::statusJson()
         const RayQueryStatus &rq = mScene->published().rayQuery;
         o << ",\"hits\":{\"records\":" << rq.hitRecords << ",\"dropped\":" << rq.hitDropped << ",\"capacity\":"
           << rq.hitCapacity << "}";
+        // ...and THE RAY STRUCTURES (PHOTON-7 stage 6, one ray level per mesh): the near and far copies, the bottom
+        // levels held and their bytes, the ones built from a level above 0 (the far copies'), the top level, and the
+        // bottom-level builds ever
+        o << ",\"rays\":{\"instances\":" << rq.instances << ",\"farInstances\":" << rq.farInstances
+          << ",\"blasCount\":" << rq.blasCount << ",\"blasBytes\":" << rq.blasBytes << ",\"levelBlasCount\":"
+          << rq.levelBlasCount << ",\"levelBlasBytes\":" << rq.levelBlasBytes << ",\"tlasBytes\":" << rq.tlasBytes
+          << ",\"triangles\":" << rq.triangles << ",\"blasBuilds\":" << rq.blasBuilds << "}";
     }
     // THE LAST CUT PROBE (`probe` / `measure`): the drawn triangles of its frame summed over the objects, and those of
     // the objects with no visible pixel — the hidden share's numerator (the probe's frame, said beside the status's)
@@ -695,14 +707,15 @@ bool Session::exec(const Command &c)
         if (!onOff(a0, mDraw, v)) { ok = false; std::printf("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
     } else if (c.verb == "reflections") {
-        // THE REFLECTION'S SOURCES (PHOTON-2 stage 1b, C1's measuring door): both = the screen march beside the rays,
-        // rays = the rays alone (the march's passes leave the chain: a graph rebuild, the histories restart)
-        if (a0 == "both" || a0 == "rays") {
-            mScreenMarch = a0 == "both";
+        // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
+        // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
+        if (a0 == "both" || a0 == "rays" || a0 == "screen") {
+            mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
+                                                                                : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            std::printf("LAB REFUSED reflections '%s' (both|rays)\n", a0.c_str());
+            std::printf("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; std::printf("LAB REFUSED play '%s'\n", a0.c_str()); }
@@ -846,9 +859,14 @@ bool Session::exec(const Command &c)
                 QString path = QString::fromStdString(a0);
                 if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
                 std::ofstream out(path.toStdString(), std::ios::app);
-                for (const envs::ObjectReading &r : rd)
+                for (const envs::ObjectReading &r : rd) {
+                    // ...and its visible pixels by DAG depth, "depth:pixels" for every depth that drew one
                     out << mFrames << "\t" << r.name.toStdString() << "\t" << r.drawnTriangles << "\t" << r.drawnClusters
-                        << "\t" << r.pixels << "\n";
+                        << "\t" << r.pixels << "\t";
+                    for (int d = 0; d < 16; ++d)
+                        if (r.depthPixels[d]) out << d << ":" << r.depthPixels[d] << " ";
+                    out << "\n";
+                }
                 ok = bool(out);
             }
         }
@@ -897,6 +915,21 @@ bool Session::exec(const Command &c)
         ok = lamp(c);
     } else if (c.verb == "material") {
         ok = material(c);
+    } else if (c.verb == "photon") {
+        // THE SCENE'S PHOTON VIEW (Scene::setPhotonView, world.setPhotonView's names in PhotonView's order)
+        static const char *const kNames[] = { "off", "voxels", "probes", "cards", "screenProbes", "diffuse",
+                                              "reflections", "hits", "gatherHits" };
+        static_assert(sizeof(kNames) / sizeof(kNames[0]) == size_t(kPhotonViewCount), "one name a Photon view");
+        int mode = -1;
+        for (int i = 0; i < kPhotonViewCount; ++i)
+            if (a0 == kNames[i]) mode = i;
+        if (mode < 0) {
+            ok = false;
+            std::printf("LAB REFUSED photon '%s'\n", a0.c_str());
+        } else {
+            mScene->setPhotonView(PhotonView(mode));
+            std::printf("LAB PHOTON %s\n", a0.c_str());
+        }
     } else if (c.verb == "arm") {
         // A MEASURING ARM, asked on the engine's side (Engine::request: the affinity law)
         const double v = std::strtod(c.args[1].c_str(), nullptr);
@@ -972,6 +1005,10 @@ bool Session::stillness(const Command &c)
         else if (a.rfind("trail=", 0) == 0) spec.moveTrail = unsigned(std::max(0, std::atoi(a.c_str() + 6)));
         else if (a == "restarts") spec.classRestarts = true;
         else if (a == "freeze") spec.freezeWalk = true;   // M1's frozen walk, from the converged picture (P2-1)
+        else if (a == "freeze=world") {   // THE WORLD HELD: the caches and the gather frozen, the reflections live
+            spec.freezeWalk = true;
+            spec.freezeValue = 2.0;
+        }
         else if (a.rfind("dump=", 0) == 0 || a.rfind("dumprgb=", 0) == 0) {
             // THE MOVING WINDOW'S RAW MATERIAL (PHOTON-2 round 2, M1): <data-root>/stillness/dump-<name>/, emptied;
             // dumprgb= the pictures alone (a walk compared byte for byte: gi.walk's second frozen walk, PHOTON-7 stage 5)
@@ -992,7 +1029,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, freeze, out=<name>)\n", a.c_str()); return false; }
+        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;

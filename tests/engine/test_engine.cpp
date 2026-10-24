@@ -4871,7 +4871,7 @@ void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
     world.ssao = true;
     world.smaaPreset = 2;
     world.ssr = 1;
-    world.ssrScreenMarch = true;
+    world.reflectSources = ReflectSources::Both;
     world.refractions = true;
     world.distortion = true;
     world.distortionStrength = 0.75f;
@@ -4894,7 +4894,7 @@ void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
     CHECK_MSG(!eye.bloom, "bloom is dropped (the grade reads one bloom texture for both eyes)");
     CHECK_MSG(!eye.ssao, "SSAO is dropped (its passes are not per layer)");
     CHECK_MSG(eye.smaaPreset < 0, "SMAA is dropped (its passes are not per layer)");
-    CHECK_MSG(!eye.ssrScreenMarch, "the screen-space march is dropped (the rays run per layer)");
+    CHECK_MSG(eye.reflectSources == ReflectSources::Rays, "the screen sources are dropped (the rays run per layer)");
     CHECK_MSG(!eye.refractions, "refractions are dropped (their copy is not per layer)");
     CHECK_MSG(!eye.distortion, "distortion is dropped for the same reason");
     CHECK_MSG(!eye.hzb, "the depth pyramid is dropped (its compute is not per layer)");
@@ -4946,16 +4946,16 @@ void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
 
     // ...and a description that asks for nothing is untouched but for the two
     // fields whose DEFAULTS are not what a stereo view may have: the offscreen
-    // opt-in (no VR view ever renders a passthrough shape) and the screen-space
-    // march, which defaults to TRUE — the row that selects it is `ssr`, so the
-    // march flag rides along with a reflection row nobody has turned on yet.
+    // opt-in (no VR view ever renders a passthrough shape) and the reflection's
+    // sources, which default to Both — the row that selects them is `ssr`, so the
+    // sources ride along with a reflection row nobody has turned on yet.
     PostFxDesc plain;
     PostFxDesc plainEye = plain;
     applyVrViewPolicy(plainEye);
     plain.allowOffscreen = true;
-    plain.ssrScreenMarch = false;
+    plain.reflectSources = ReflectSources::Rays;
     CHECK_MSG(plainEye == plain,
-              "a bare description gains only the offscreen opt-in and loses the march");
+              "a bare description gains only the offscreen opt-in and loses the screen sources");
 }
 
 /// The offscreen guarantee itself: pushing a full post-fx description at an

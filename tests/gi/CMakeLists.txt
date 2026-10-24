@@ -138,6 +138,71 @@ set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
 
 
+# gi.ray_level_fixed — ONE RAY LEVEL PER MESH (PHOTON-7 stage 6): a 4 m camera walk builds no bottom-level structure
+# and re-points no near copy, every near copy is level 0, and walk vs a teleport 150 m away: every slot's near copy the
+# same structure by its device address (READ_A W5; test_ray_level_fixed.cpp states the law and the base's red). 105 frames.
+add_executable(test_ray_level_fixed test_ray_level_fixed.cpp)
+set_target_properties(test_ray_level_fixed PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ray_level_fixed PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_ray_level_fixed PRIVATE JahshakaEngine)
+add_dependencies(test_ray_level_fixed JahshakaEngineMedia)
+jah_gpu_row(gi.ray_level_fixed CLASS engine COMMAND test_ray_level_fixed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ray_level_fixed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.ray_level_fixed PROPERTIES JAHSHAKA_TEST_FRAMES 105)
+
+# gi.card_sun_lift — A CARD'S SUN RAY STARTS OUTSIDE THE LEVEL IT TRACES (PHOTON-7 stage 6, READ_A finding 3): a
+# convex 10.3 m cylinder cap carded at its coarse level (split 4 x 2, 2 cm texels; the level 5.4 cm inside the arc), the
+# sun overhead - every texel's sun ray lifted past the captured level's measured bound, none self-shadowed
+# (test_card_sun_lift.cpp states the law and the base's red). 49 frames.
+# gi.sun_contact_acne — THE SUN CONTACT NEVER SHADOWS A SURFACE BY ITSELF, AND ITS LIFT IS NO SMALLER THAN THE LAW
+# (PHOTON-7 stage 6, READ_A W1, READ_B F5): a two-level sphere drawn at its coarse level, whose facets' sag is 1.8x the
+# level's STORED bound (a drift inside the bake's 2x law), seen where half the law's lift is under the sag and the law
+# over it: the lit hemisphere with the contact job on equals it off; HALF the drawn term (rays.originCut 0.5) and none
+# of it (0) both red (test_sun_contact_acne.cpp). 65 frames.
+add_executable(test_card_sun_lift test_card_sun_lift.cpp)
+set_target_properties(test_card_sun_lift PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_card_sun_lift PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_card_sun_lift PRIVATE JahshakaEngine)
+add_dependencies(test_card_sun_lift JahshakaEngineMedia)
+jah_gpu_row(gi.card_sun_lift CLASS engine COMMAND test_card_sun_lift
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_sun_lift PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.card_sun_lift PROPERTIES JAHSHAKA_TEST_FRAMES 49)
+add_executable(test_sun_contact_acne test_sun_contact_acne.cpp)
+set_target_properties(test_sun_contact_acne PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_sun_contact_acne PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_sun_contact_acne PRIVATE JahshakaEngine)
+add_dependencies(test_sun_contact_acne JahshakaEngineMedia)
+jah_gpu_row(gi.sun_contact_acne CLASS engine COMMAND test_sun_contact_acne
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_acne PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.sun_contact_acne PROPERTIES JAHSHAKA_TEST_FRAMES 65)
+
 # gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1):
 # an open court keeps >= 1 probe at Medium, a bare floor printed, a sealed room its whole grid.
 add_executable(test_gi_probe_court test_gi_probe_court.cpp)

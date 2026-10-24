@@ -154,8 +154,9 @@ static int freeRunningArm()
 // THE RAY FEED (RAY-FEED-OBSERVER-1): the ray tier LIVE on the view (the viewport's post chain), so its change feed is
 // an observer with a lane half and its traced set — records, keys, pending key events, sets, words, rows — is folded
 // into the digest after the replay; the scene holds the four kinds of slot it keeps apart, every one changing with the
-// pose: a RE-LEVEL (a two-level cube the ray rule moves between its levels every frame, its scale alternating so the
-// far copy's hand-over width moves and the slot owes the ordered body in the lane), an ALPHA slot (a Cutout cube), a
+// pose: a CHAINED slot (a two-level cube 2.5 m from the camera or 400 m away, its scale alternating so the far copy's
+// hand-over width moves and the slot owes the ordered body in the lane - its near copy is level 0 wherever it stands
+// since PHOTON-7 stage 6, ONE RAY LEVEL PER MESH), an ALPHA slot (a Cutout cube), a
 // RIGGED slot (a GPU-skinned cube) and a MESH SWAP (a cube re-attached to the other of two meshes every frame).
 static int composeIdentityArm()
 {
@@ -211,8 +212,8 @@ static int composeIdentityArm()
     cut.alphaMode = PbrAlphaMode::Cutout;
     cut.alphaCutoff = 0.5f;
     const MaterialId plainMat = scene->createPbrMaterial(PbrParams()), cutMat = scene->createPbrMaterial(cut);
-    const NodeId relevel = scene->createDocumentNode(reserveNodeId());
-    scene->attachMesh(relevel, chainMesh, plainMat);
+    const NodeId chainedNode = scene->createDocumentNode(reserveNodeId());
+    scene->attachMesh(chainedNode, chainMesh, plainMat);
     const NodeId alphaNode = scene->createDocumentNode(reserveNodeId());
     scene->attachMesh(alphaNode, cubeMesh, cutMat);
     const NodeId rigNode = scene->createDocumentNode(reserveNodeId());
@@ -245,7 +246,7 @@ static int composeIdentityArm()
             part.changes.moved.push_back(r.id);
         }
         if (send) {
-            // The ray feed's four slots: the re-level 2.5 m from the camera or 400 m away (its scale alternating), the
+            // The ray feed's four slots: the chained cube 2.5 m from the camera or 400 m away (its scale alternating), the
             // alpha and the rigged cubes stepping with the pose, the swap re-attached to the pose's mesh.
             const auto place = [&](NodeId id, const Vec3 &at, float scale) {
                 NodeRecord r;
@@ -257,7 +258,7 @@ static int composeIdentityArm()
                 part.nodes.push_back(r);
                 part.changes.moved.push_back(id);
             };
-            place(relevel, pose ? Vec3(0.0f, 29.0f, -360.0f) : Vec3(0.0f, 28.5f, 38.0f), pose ? 0.7f : 0.5f);
+            place(chainedNode, pose ? Vec3(0.0f, 29.0f, -360.0f) : Vec3(0.0f, 28.5f, 38.0f), pose ? 0.7f : 0.5f);
             place(alphaNode, Vec3(-21.0f, 0.3f + 0.05f * float(pose), 0.0f), 0.5f);
             place(rigNode, Vec3(21.0f, 0.3f + 0.05f * float(pose), 0.0f), 0.5f);
             place(swapNode, Vec3(0.0f, 0.3f + 0.05f * float(pose), 21.0f), 0.5f);
@@ -280,7 +281,7 @@ static int composeIdentityArm()
     // share + 1 (9 = the frame thread's share 8) throws before its first stage; 17 + share throws AFTER it (decision
     // 22.4 a: the row staged, its tail and lane halves not collected — the redo starts the share over, the row kept).
     const int throwAt[10] = { 0, 0, 0, 0, 3, 9, 0, 20, 0, 0 };
-    unsigned long long digest[10] = {}, recomposes[10] = {}, raysTold[10] = {}, raysOwed[10] = {}, refits[10] = {};
+    unsigned long long digest[10] = {}, recomposes[10] = {}, raysTold[10] = {}, raysOwed[10] = {};
     unsigned composed[10] = {}, shares[10] = {}, atoms[10] = {}, queues[10] = {};
     const auto raysOf = [](const inspect::SceneEcho::GpuWalk &g, unsigned long long &told, unsigned long long &owed) {
         for (const inspect::SceneEcho::GpuWalk::Observer &o : g.observers)
@@ -289,7 +290,6 @@ static int composeIdentityArm()
     };
     unsigned long long told0 = 0, owed0 = 0;
     const bool raysLive = raysOf(echo->gpuWalk(), told0, owed0);
-    unsigned long long refits0 = scene->published().gpuScene.rayLevelRefits;
     for (int f = 0; f < 10; ++f) {
         e->setArm("gpuscene.serialCompose", double(pattern[f]));
         e->setArm("gpuscene.throwInLane", double(throwAt[f]));
@@ -301,8 +301,6 @@ static int composeIdentityArm()
         raysOwed[f] = owed - owed0;
         told0 = told;
         owed0 = owed;
-        refits[f] = scene->published().gpuScene.rayLevelRefits - refits0;
-        refits0 = scene->published().gpuScene.rayLevelRefits;
         digest[f] = g.composeDigest;
         composed[f] = g.slotsComposed;
         shares[f] = g.shares;
@@ -325,19 +323,16 @@ static int composeIdentityArm()
             CHECK(composed[f] >= 512u && shares[f] == 9u, "frame %d went wide: %u slots on %u shares", f, composed[f],
                   shares[f]);
     // THE RAY FEED IN THE DIGEST (RAY-FEED-OBSERVER-1): live, lane-split, its lane halves answering the movers and its
-    // ordered half replaying the slots whose facts moved (the re-level's hand-over width), the ray rule re-levelling.
+    // ordered half replaying the slots whose facts moved (the chained slot's far hand-over width).
     if (rays) {
         CHECK(raysLive, "the ray tier is live: its change feed is a registered observer with a lane half ('rays')");
         for (int f = 0; f < 10; ++f) {
-            std::printf("   frame %d: the ray feed handed %llu composed slots, owed %llu; the ray rule re-levelled %llu\n",
-                        f, raysTold[f], raysOwed[f], refits[f]);
+            std::printf("   frame %d: the ray feed handed %llu composed slots, owed %llu\n", f, raysTold[f], raysOwed[f]);
             if (pattern[f] || throwAt[f]) continue;   // a serial frame tells every slot whole; a throw's redo varies
             CHECK(raysTold[f] >= 512u && raysOwed[f] >= 1u && raysOwed[f] * 10u <= raysTold[f],
                   "frame %d: the ray feed's lane halves answered the movers (%llu of %llu owed the ordered body: the "
-                  "re-level's moved hand-over width, never the transform-only movers)", f, raysOwed[f], raysTold[f]);
+                  "chained slot's moved hand-over width, never the transform-only movers)", f, raysOwed[f], raysTold[f]);
         }
-        CHECK(refits[2] >= 1u && refits[3] >= 1u, "the ray rule re-levelled the chained cube every frame (%llu, %llu)",
-              refits[2], refits[3]);
     } else {
         std::printf("ok:   no ray-query device here: the ray feed is not a registered observer (its digest is not folded)\n");
     }

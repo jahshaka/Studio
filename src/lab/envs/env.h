@@ -136,6 +136,8 @@ struct ObjectReading
     QString name;
     unsigned long long drawnTriangles = 0;
     unsigned pixels = 0, drawnClusters = 0;
+    /// its visible pixels by the DAG depth they were drawn at (AtomCutProbeObject::depthPixels; 15 = 15 and deeper)
+    unsigned depthPixels[16] = {};
 };
 
 struct Env
