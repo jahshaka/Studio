@@ -118,9 +118,10 @@ if [ "$MODE" = "--bistro" ]; then
     timeout 30 "$LAB" --bake-only --data-root "$ROOT" "$MODEL" > "$WD/bake.log" 2>&1
     grep -q "CACHE HIT" "$WD/bake.log" || { echo "SKIP: $ROOT holds no bake of $MODEL - run jahlab --bake-only --data-root $ROOT $MODEL first, off the card"; exit 77; }
     # THE SHADER CACHE MUST BE WARM FOR THIS TREE (urgent #32): a row never compiles its scene's shaders inside its 60 s
-    JAHLAB="$LAB" bash "$HERE/../../scripts/lab/warm.sh" --check --data-root "$ROOT" "$MODEL" ||
-        { echo "FAIL: the Bistro shader cache is cold for this tree - warm it first (above; the walk's two poses:"
-          echo "  --camera -10.365,11.211,4.793,-4.461,9.705,-0.392 --camera -7.413,10.458,2.200,-4.461,9.705,-0.392)"; exit 1; }
+    # (the walk's tier - jahlab's default, epic - and its two poses: a stamp at another tier or other cameras is cold)
+    JAHLAB="$LAB" bash "$HERE/../../scripts/lab/warm.sh" --check --data-root "$ROOT" --tier epic \
+        --camera -10.365,11.211,4.793,-4.461,9.705,-0.392 --camera -7.413,10.458,2.200,-4.461,9.705,-0.392 "$MODEL" ||
+        { echo "FAIL: the Bistro shader cache is cold for this tree at the walk's tier and poses - warm it first (above)"; exit 1; }
     rm -rf "$ROOT/stillness/dump-bistro-"*
     SNAP="$WD/shadercache.snap"
     [ -d "$ROOT/shadercache" ] && cp -a "$ROOT/shadercache" "$SNAP" || SNAP=""

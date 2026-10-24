@@ -497,7 +497,8 @@ endif()
 # Debug - measured warm (scripts/lab/warm.sh), its hold cut to the frozen arm's minimum (the reflection held from frame
 # 611: 620), the live session 28.5 s, the frozen 16.5 s, then M1 past the cap. A MEASURE run by hand once at the master
 # check: walk.sh <jahlab> <work dir> --bistro <BistroExterior.fbx> <data root> under scripts/gpu-exclusive.sh, after
-# scripts/lab/warm.sh on that data root.
+# scripts/lab/warm.sh --tier epic at the walk's two poses on that data root (walk.sh says them; a stamp is keyed on the tier and
+# the cameras).
 
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36

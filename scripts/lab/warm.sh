@@ -5,18 +5,21 @@
 #
 # usage: warm.sh [--data-root DIR] [--size WxH] [--tier low|medium|high|epic] [--camera x,y,z,tx,ty,tz]...
 #                [--run-timeout S] <model file | --env NAME>
-#        warm.sh --check [--data-root DIR] <model file | --env NAME>
+#        warm.sh --check [--data-root DIR] [--tier T] [--camera x,y,z,tx,ty,tz]... <model file | --env NAME>
 #
 # THE WARM RUN: jahlab, offscreen, under the card's lock (scripts/gpu-exclusive.sh --run-timeout S, default 900), the scene
 # loaded, at every --camera (none: the scene's own) a settle (the Atom cut steady) and 30 frames, then a CLEAN quit -
 # the shader cache is saved at the quit (a model is baked first, OFF the card: jahlab --bake-only into the data root - a
 # run never bakes, it refuses a model whose bake is not cached, the urgent list's #30). On jahlab's exit 0 it STAMPS the
-# data root's cache: one line a scene in
-# <data-root>/shadercache/warm-stamps.txt, the scene's key (an environment's name; a model's path and size) and THE
-# TREE'S KEY - the sha256 of the jahlab binary (the engine is linked in: a C++ change can add a shader variant), of the
-# staged media tree beside it (every Hlms template and compute source jahlab reads) and of the Ogre fork's commit.
-# THE CHECK (--check): exit 0 when the data root's stamp for the scene carries this tree's key, else exit 3 naming the
-# warm command - what a run that loads a model does before it boots (walk.sh --bistro, by hand: gi.walk_bistro is archived). After a media edit, a C++ build
+# data root's cache: one line a scene AND TIER in <data-root>/shadercache/warm-stamps.txt - the scene's key (an
+# environment's name; a model's path and size), the TIER (jahlab's default epic when none is given), the CAMERAS it
+# warmed at ("scene" when none: the scene's own) and THE TREE'S KEY - the sha256 of the jahlab binary (the engine is
+# linked in: a C++ change can add a shader variant), of the staged media tree beside it (every Hlms template and compute
+# source jahlab reads) and of the Ogre fork's commit. A tier is its own permutations and a camera its own visible set
+# (stage 5's read W2: a Low warm stamped the scene warm for an Epic row, which then compiled inside its 60 s).
+# THE CHECK (--check, the same --tier and --camera a row runs at): exit 0 when a stamp for the scene at that tier
+# carries this tree's key and every camera asked for, else exit 3 naming the warm command - what a run that loads a
+# model does before it boots (walk.sh --bistro, by hand: gi.walk_bistro is archived). After a media edit, a C++ build
 # or a pin bump the cache is (partly) cold: the warm step is what is run, never a longer TIMEOUT.
 # THE DISPLAY: $DISPLAY when it names a rig (never :0 - refused), else a private Xvfb on a free :60-:99 at 1920x1080x24,
 # its pid recorded and killed at the end. The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab.
@@ -46,7 +49,7 @@ done
 if [ -n "$file" ]; then
     [ -f "$file" ] || { echo "warm.sh: no model $file" >&2; exit 2; }
     file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
-    scene="model:$file:$(stat -c %s "$file")"
+    scene="model:${file// /%20}:$(stat -c %s "$file")"   # (a stamp's fields hold no space)
 else
     scene="env:$env"
 fi
@@ -59,11 +62,23 @@ treekey() {
 }
 stamps="$dataroot/shadercache/warm-stamps.txt"
 key="$(treekey)"
+# THE STAMP'S FIELDS: <scene> tier=<tier> cams=<camera;camera...|scene> <tree key> (no field holds a space)
+stier="${tier:-epic}"
+scams="scene"; [ "${#cams[@]}" -gt 0 ] && scams="$(IFS=';'; echo "${cams[*]}")"
 if [ "$check" = 1 ]; then
-    if [ -f "$stamps" ] && grep -qxF "$scene $key" "$stamps"; then exit 0; fi
+    if [ -f "$stamps" ]; then
+        while read -r s_scene s_tier s_cams s_key; do
+            [ "$s_scene" = "$scene" ] && [ "$s_tier" = "tier=$stier" ] && [ "$s_key" = "$key" ] || continue
+            have=";${s_cams#cams=};" ok=1
+            if [ "${#cams[@]}" -eq 0 ]; then case "$have" in *";scene;"*) ;; *) ok=0 ;; esac; fi
+            for c in "${cams[@]}"; do case "$have" in *";$c;"*) ;; *) ok=0 ;; esac; done
+            [ "$ok" = 1 ] && exit 0
+        done < "$stamps"
+    fi
     subject="$file"; [ -n "$env" ] && subject="--env $env"
-    echo "warm.sh: the shader cache in $dataroot is COLD for $scene on this tree - run first, off any row:" >&2
-    echo "  scripts/lab/warm.sh --data-root $dataroot ${cams[*]:+--camera ...} $subject" >&2
+    camargs=""; for c in "${cams[@]}"; do camargs="$camargs --camera $c"; done
+    echo "warm.sh: the shader cache in $dataroot is COLD for $scene at tier $stier${cams[*]:+ and these cameras} on this tree - run first, off any row:" >&2
+    echo "  scripts/lab/warm.sh --data-root $dataroot --tier $stier$camargs $subject" >&2
     exit 3
 fi
 
@@ -111,9 +126,9 @@ mkdir -p "$dataroot"
 rc=$?
 grep -E '^LAB (LOAD|FIRST FRAME|END|REFUSED|FAILED)' "$work/warm.log" | cut -c1-200 | sed 's/^/  warm: /'
 if [ $rc -ne 0 ]; then echo "warm.sh: jahlab exited $rc - no stamp (the log's tail:)" >&2; tail -5 "$work/warm.log" >&2; exit $rc; fi
-# THE STAMP: this scene's line replaced by this tree's key
+# THE STAMP: this scene's line AT THIS TIER replaced by this run's cameras and this tree's key
 mkdir -p "$dataroot/shadercache"
-{ [ -f "$stamps" ] && grep -vF "$scene " "$stamps"; echo "$scene $key"; } > "$work/stamps.new"
+{ [ -f "$stamps" ] && grep -vF "$scene tier=$stier " "$stamps"; echo "$scene tier=$stier cams=$scams $key"; } > "$work/stamps.new"
 mv "$work/stamps.new" "$stamps"
-echo "warm.sh: $scene warmed in $dataroot (tree key ${key:0:12})"
+echo "warm.sh: $scene warmed at tier $stier in $dataroot (tree key ${key:0:12})"
 exit 0
