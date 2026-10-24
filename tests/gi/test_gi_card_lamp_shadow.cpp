@@ -39,9 +39,17 @@
 //       D G2 / ( 4 N.V ) x cos' / r^2 over the rectangle, the pixel's own view) - over the band the SIGNED mean under
 //       one code of the unoccluded specular; the per-point error, and the diffuse ratio's error on the same points,
 //       printed.
+// THE NO-RAY ROUTE'S ARMS (PHOTON-7 stage 7, 7-6 item 2; the owner's law: every light is blocked by a wall on every
+// path): rays off, the same half-occluded light, the matte floor again - the visibility the screen job marches through
+// the voxel chain (Jahshaka/ScreenAreaVis, the ray tier's law in one text), read back:
+//   (9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: (6)'s bar. RED before 7-6 item 2: a no-ray chain bound no
+//       visibility - the umbra read 0.9974 of the lit floor's radiance;
+//   (10) PRINTED: its penumbra against (7)'s numeric truth - its error the voxel cell (the march's start a cell off the
+//       surface) and VOXEL-LEAK-1's thin wall, named; and both producers' GPU time at 1080p (the ray tier's GPU rows, the
+//       no-ray route's passes' own timestamp pairs - which enclose a barrier's wait on the screen integrate in front).
 // A fixture (the engine alone, one offscreen view). Counted in frames. TWO ROWS (PHOTON-7 stage 7: whole, past a
 // fixture's 10 s budget), each its own fixture: gi.card_lamp_shadow (`lamp`: (1), (2)), gi.card_lamp_shadow_area
-// (`area`: (3)-(8)); every bar as written above.
+// (`area`: (3)-(10)); every bar as written above.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -110,7 +118,7 @@ int main(int argc, char **argv)
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     // ONE PART A ROW (PHOTON-7 stage 7: whole, past the fixture's 10 s budget), named by the argument: `lamp` - the
-    // lamp's two shadows on the card, (1) and (2); `area` - the area light's fixture, (3)-(8). None = both.
+    // lamp's two shadows on the card, (1) and (2); `area` - the area light's fixture, (3)-(10). None = both.
     const std::string part = argc > 1 ? argv[1] : "";
     const bool doLamp = part.empty() || part == "lamp", doArea = part.empty() || part == "area";
     GiParams gi;
@@ -514,67 +522,148 @@ int main(int argc, char **argv)
             iy = int(std::floor((1.0 - yn) * 0.5 * double(pic.height)));
             return zf > 0.0 && ix >= 0 && iy >= 0 && ix < int(pic.width) && iy < int(pic.height);
         };
-        // (6) the umbra against the lit, in the picture's radiance (green)
-        double pxUmbraSum = 0.0, pxLitSum = 0.0;
-        size_t pxUmbraN = 0, pxLitN = 0;
-        for (int i = 0; i <= 6; ++i)
-            for (int k = -3; k <= 3; ++k) {
-                const double ax = 0.6 + 0.05 * i, az = 0.1 * k;
-                int ux, uy, lx, ly;
-                if (!picOk || !projectTo(-ax, 0.0, az, ux, uy) || !projectTo(ax, 0.0, az, lx, ly)) continue;
-                pxUmbraSum += pic.at(unsigned(ux), unsigned(uy)).g;
-                pxLitSum += pic.at(unsigned(lx), unsigned(ly)).g;
-                ++pxUmbraN;
-                ++pxLitN;
+        // (6) and (7) on the ray tier - and (9) and (10) on the no-ray route (PHOTON-7 stage 7, 7-6): the umbra and the
+        // penumbra of the picture `pic` and the read-back visibility `avs`
+        const auto pixelArms = [&](const AreaVisStatus &avs, int restX, double areaTraceMs, double areaResolveMs,
+                                   bool noRay) {
+            // (6) the umbra against the lit, in the picture's radiance (green)
+            double pxUmbraSum = 0.0, pxLitSum = 0.0;
+            size_t pxUmbraN = 0, pxLitN = 0;
+            for (int i = 0; i <= 6; ++i)
+                for (int k = -3; k <= 3; ++k) {
+                    const double ax = 0.6 + 0.05 * i, az = 0.1 * k;
+                    int ux, uy, lx, ly;
+                    if (!picOk || !projectTo(-ax, 0.0, az, ux, uy) || !projectTo(ax, 0.0, az, lx, ly)) continue;
+                    pxUmbraSum += pic.at(unsigned(ux), unsigned(uy)).g;
+                    pxLitSum += pic.at(unsigned(lx), unsigned(ly)).g;
+                    ++pxUmbraN;
+                    ++pxLitN;
+                }
+            const double pxUmbraRatio = pxLitSum > 0.0 ? pxUmbraSum / pxLitSum : 1.0;
+            std::printf("   %s: the visibility %s (%u lights, n = %u, the trace %ux%u, held %d, %.1f MB; moving: the "
+                        "trace %.3f ms, the resolve %.3f ms the frame's largest); %zu umbra / %zu lit floor pixels: the umbra's "
+                        "radiance %.4f of the lit's\n",
+                        noRay ? "(9) the NO-RAY pixel's umbra" : "(6) the pixel's umbra",
+                        avs.running ? "running" : avs.reason.c_str(), avs.lights, avs.strata, avs.traceW, avs.traceH,
+                        avs.held ? 1 : 0, double(avs.vramBytes) / 1e6, areaTraceMs, areaResolveMs, pxUmbraN, pxLitN, pxUmbraRatio);
+            if (noRay)
+                CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
+                      "(9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
+            else
+                CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
+                      "(6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
+            // (7) the penumbra's visibility against the numeric truth
+            const bool visOk = avs.vis.size() == size_t(avs.visW) * avs.visH * 8u && avs.visW == pic.width;
+            size_t xRead = 0, xBand = 0, xPast = 0;
+            double xWorst = 0.0, xWorstAt = 0.0, xBandSigned = 0.0, xWorstOfBound = 0.0;
+            for (int t = -60; t <= 60; ++t) {
+                const double px = 0.01 * t, pz = 0.0;
+                int ix, iy;
+                if (!visOk || !projectTo(px, 0.0, pz, ix, iy)) continue;
+                const double vis = avs.vis[(size_t(iy) * avs.visW + size_t(ix)) * 8u] / 255.0;   // byte 0: light 0, diffuse
+                const double fFull = formFactor(px, pz, false);
+                if (!(fFull > 0.0)) continue;
+                // the truth's range over the resolve's footprint: +-1.5 trace texels = +-3 pixels, in world units along x
+                const double dx = px - eyeP.x, dy = 0.0 - eyeP.y, dz = pz - eyeP.z;
+                const double distW = std::sqrt(dx * dx + dy * dy + dz * dz);
+                const double pixW = distW * 2.0 * std::tan(22.5 * 3.14159265358979 / 180.0) / double(pic.height);
+                double tLo = 1.0, tHi = 0.0;
+                for (int sx = -3; sx <= 3; ++sx) {
+                    const double qx = px + pixW * sx;
+                    const double t0 = formFactor(qx, pz, true) / std::max(formFactor(qx, pz, false), 1e-12);
+                    tLo = std::min(tLo, t0);
+                    tHi = std::max(tHi, t0);
+                }
+                const double truth = formFactor(px, pz, true) / fFull;
+                ++xRead;
+                const double past = std::max(0.0, std::max(tLo - vis, vis - tHi));
+                const double bound = lawBound(px, pz) + 0.5 / 255.0;
+                if (past > bound) ++xPast;
+                xWorstOfBound = std::max(xWorstOfBound, past / bound);
+                if (std::fabs(vis - truth) > xWorst) { xWorst = std::fabs(vis - truth); xWorstAt = px; }
+                if (truth > 1e-6 && truth < 1.0 - 1e-6) {
+                    ++xBand;
+                    xBandSigned += (vis - truth) * 100.0;   // codes of the unoccluded direct (1 % a code)
+                }
             }
-        const double pxUmbraRatio = pxLitSum > 0.0 ? pxUmbraSum / pxLitSum : 1.0;
-        std::printf("   (6) the pixel's umbra: the visibility %s (%u lights, n = %u, the trace %ux%u, held %d, %.1f MB; moving: the "
-                    "trace %.3f ms, the resolve %.3f ms the frame's largest); %zu umbra / %zu lit floor pixels: the umbra's "
-                    "radiance %.4f of the lit's\n",
-                    avs.running ? "running" : avs.reason.c_str(), avs.lights, avs.strata, avs.traceW, avs.traceH,
-                    avs.held ? 1 : 0, double(avs.vramBytes) / 1e6, areaTraceMs, areaResolveMs, pxUmbraN, pxLitN, pxUmbraRatio);
-        CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
-              "(6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
-        // (7) the penumbra's visibility against the numeric truth
-        const bool visOk = avs.vis.size() == size_t(avs.visW) * avs.visH * 8u && avs.visW == pic.width;
-        size_t xRead = 0, xBand = 0, xPast = 0;
-        double xWorst = 0.0, xWorstAt = 0.0, xBandSigned = 0.0, xWorstOfBound = 0.0;
-        for (int t = -60; t <= 60; ++t) {
-            const double px = 0.01 * t, pz = 0.0;
-            int ix, iy;
-            if (!visOk || !projectTo(px, 0.0, pz, ix, iy)) continue;
-            const double vis = avs.vis[(size_t(iy) * avs.visW + size_t(ix)) * 8u] / 255.0;   // byte 0: light 0, diffuse
-            const double fFull = formFactor(px, pz, false);
-            if (!(fFull > 0.0)) continue;
-            // the truth's range over the resolve's footprint: +-1.5 trace texels = +-3 pixels, in world units along x
-            const double dx = px - eyeP.x, dy = 0.0 - eyeP.y, dz = pz - eyeP.z;
-            const double distW = std::sqrt(dx * dx + dy * dy + dz * dz);
-            const double pixW = distW * 2.0 * std::tan(22.5 * 3.14159265358979 / 180.0) / double(pic.height);
-            double tLo = 1.0, tHi = 0.0;
-            for (int sx = -3; sx <= 3; ++sx) {
-                const double qx = px + pixW * sx;
-                const double t0 = formFactor(qx, pz, true) / std::max(formFactor(qx, pz, false), 1e-12);
-                tLo = std::min(tLo, t0);
-                tHi = std::max(tHi, t0);
+            xBandSigned /= double(std::max<size_t>(xBand, 1u));
+            std::printf("   %s: %zu points along z = 0 read, %zu in the band: the worst |vis - truth| %.3f (at x "
+                        "%.2f m), %.3f of the bound past the footprint's range, %zu past; the band's signed mean %+.3f codes of the "
+                        "unoccluded direct\n", noRay ? "(10) the NO-RAY pixel's penumbra (printed: its error the voxel cell - the "
+                                                 "march's start a cell off the surface - and VOXEL-LEAK-1's thin wall)"
+                                               : "(7) the pixel's penumbra", xRead, xBand, xWorst, xWorstAt, xWorstOfBound, xPast, xBandSigned);
+            if (!noRay)
+                CHECK(visOk && xRead > 80u && xBand > 30u && xPast == 0u && std::fabs(xBandSigned) < 1.0,
+                      "(7) THE PIXEL'S PENUMBRA: every point within the strata law's bound, the band's signed mean under one code");
+        };
+        pixelArms(avs, restX, areaTraceMs, areaResolveMs, false);
+        // THE VISIBILITY'S GPU TIME AT 1080p (printed, both producers - one law, so the ray tier's is the no-ray route's
+        // reference): a 1920 x 1080 view of the same scene and camera, the monitor's rows "area.vis" and "area.resolve"
+        // over its first frames (each frame's, a few frames late)
+        const auto time1080 = [&](const char *label) {
+            View *hd = e->createOffscreenView("card_area_1080", 1920, 1080, Colour(0, 0, 0));
+            double noRayTraceMs = -1.0, noRayResolveMs = -1.0;
+            std::vector<double> traceAll, resolveAll, passTrace, passResolve, passIntegrate;
+            if (hd) {
+                hd->setScene(as);
+                PostFxDesc fx;
+                fx.allowOffscreen = true;
+                fx.ssr = 1;
+                hd->setPostFx(fx);
+                hd->setOffscreenContract(OffscreenContract::StillPicture);
+                enginetest::testCameraLookAt(hd, eyeP, atP);
+                e->setFrameMonitor(MonitorLevel::Review);
+                run(12);
+                e->setFrameMonitor(MonitorLevel::Off);
+                std::vector<MonitorRecord> records;
+                while (e->popMonitorRecords(records) > 0) {}
+                for (const MonitorRecord &r : records) {
+                    // (THE NO-RAY ROUTE'S GPU TIME is its two compute passes' own timestamp pairs - the frame's largest of
+                    // each: the 1080p view's, beside the small view's held ones)
+                    double ft = -1.0, fr = -1.0, fi = -1.0;
+                    for (const FramePass &fp : r.passes) {
+                        if (fp.pass == "Jahshaka screen integrate" && fp.gpuMs >= 0.0f) fi = std::max(fi, double(fp.gpuMs));
+                        if (fp.pass == "Jahshaka screen area visibility" && fp.gpuMs >= 0.0f) ft = std::max(ft, double(fp.gpuMs));
+                        if (fp.pass == "Jahshaka screen area visibility resolve" && fp.gpuMs >= 0.0f)
+                            fr = std::max(fr, double(fp.gpuMs));
+                    }
+                    if (ft >= 0.0) passTrace.push_back(ft);
+                    if (fr >= 0.0) passResolve.push_back(fr);
+                    if (fi >= 0.0) passIntegrate.push_back(fi);
+                    for (const CacheWork &w : r.cacheWork) {
+                        if (w.detail == "area.vis" && w.gpuMs >= 0.0f) {
+                            noRayTraceMs = std::max(noRayTraceMs, double(w.gpuMs));
+                            traceAll.push_back(double(w.gpuMs));
+                        }
+                        if (w.detail == "area.resolve" && w.gpuMs >= 0.0f) {
+                            noRayResolveMs = std::max(noRayResolveMs, double(w.gpuMs));
+                            resolveAll.push_back(double(w.gpuMs));
+                        }
+                    }
+                }
+                e->destroyView(hd);
+                run(2);
             }
-            const double truth = formFactor(px, pz, true) / fFull;
-            ++xRead;
-            const double past = std::max(0.0, std::max(tLo - vis, vis - tHi));
-            const double bound = lawBound(px, pz) + 0.5 / 255.0;
-            if (past > bound) ++xPast;
-            xWorstOfBound = std::max(xWorstOfBound, past / bound);
-            if (std::fabs(vis - truth) > xWorst) { xWorst = std::fabs(vis - truth); xWorstAt = px; }
-            if (truth > 1e-6 && truth < 1.0 - 1e-6) {
-                ++xBand;
-                xBandSigned += (vis - truth) * 100.0;   // codes of the unoccluded direct (1 % a code)
-            }
-        }
-        xBandSigned /= double(std::max<size_t>(xBand, 1u));
-        std::printf("   (7) the pixel's penumbra: %zu points along z = 0 read, %zu in the band: the worst |vis - truth| %.3f (at x "
-                    "%.2f m), %.3f of the bound past the footprint's range, %zu past; the band's signed mean %+.3f codes of the "
-                    "unoccluded direct\n", xRead, xBand, xWorst, xWorstAt, xWorstOfBound, xPast, xBandSigned);
-        CHECK(visOk && xRead > 80u && xBand > 30u && xPast == 0u && std::fabs(xBandSigned) < 1.0,
-              "(7) THE PIXEL'S PENUMBRA: every point within the strata law's bound, the band's signed mean under one code");
+            const auto median = [](std::vector<double> v) {
+                if (v.empty()) return -1.0;
+                std::sort(v.begin(), v.end());
+                return v[v.size() / 2u];
+            };
+            const bool passes = !passResolve.empty();   // the no-ray route's passes; the ray tier's rows
+            const auto most = [](const std::vector<double> &v) {
+                return v.empty() ? -1.0 : *std::max_element(v.begin(), v.end());
+            };
+            std::printf("   %s at 1080p (one LTC light, n = %u, the trace 960 x 540, %zu frames timed, %s): the trace %.3f ms "
+                        "median / %.3f largest, the resolve %.3f median / %.3f largest\n", label, nX,
+                        passes ? passResolve.size() : resolveAll.size(),
+                        passes ? "its passes' own timestamps" : "its GPU rows area.vis / area.resolve",
+                        passes ? median(passTrace) : median(traceAll), passes ? most(passTrace) : noRayTraceMs,
+                        passes ? median(passResolve) : median(resolveAll), passes ? most(passResolve) : noRayResolveMs);
+            if (passes)
+                std::printf("      (beside it, the screen integrate's pass %.3f ms median: a pass's timestamp pair encloses its "
+                            "barriers' wait on the compute work in front)\n", median(passIntegrate));
+        };
+        time1080("(6) the ray tier's visibility");
         // (8) THE GLOSSY LOBE'S OWN RATIO: the floor a glossy metal, the specular visibility read back against the numeric
         PbrParams glossy;
         glossy.albedo = Colour(kAlbedo, kAlbedo, kAlbedo);
@@ -687,6 +776,37 @@ int main(int argc, char **argv)
         std::printf("   (5) the voxels' centre march against 16 x 16 ratio marches (printed): the many-ray store at rest in %d "
                     "frames; the back wall's bounce at %zu of %zu points: worst %.3f codes of its radiance, mean %.3f "
                     "(signed %+.3f), %zu over one code\n", restV, vN, indA.size(), vWorst, vMean, vSigned, vOver);
+
+        // ---- (9) (10) THE NO-RAY ROUTE'S PIXEL (PHOTON-7 stage 7, 7-6): rays off, the same half-occluded light, the
+        // matte floor of (6) and (7) again - the visibility the screen job marches through the voxel chain, read back.
+        // RED before 7-6 item 2: a no-ray chain bound no visibility, and its umbra read the lit floor's direct.
+        e->setRayTracing(false);
+        {
+            PbrParams matte;
+            matte.albedo = Colour(kAlbedo, kAlbedo, kAlbedo);
+            matte.roughness = 0.9f;
+            as->setPbrMaterial(floorMat, matte);
+        }
+        e->setArm("area.visReadback", 1.0);
+        as->setGlobalIllumination(off);
+        run(2);
+        as->setGlobalIllumination(gi);
+        e->waitForAsyncShaders();
+        // (no cards without rays: the chain's rest alone, 60 quiet frames - then the visibility's own rest and hold)
+        int restN = -1;
+        for (int f = 0, quiet = 0; f < 1500; ++f) {
+            run(1);
+            const GiStatus g = as->published().gi;
+            quiet = !g.chainOwed && !g.feedbackOwed && !g.cascades.empty() ? quiet + 1 : 0;
+            if (quiet >= 60) { restN = f - quiet; break; }
+        }
+        run(int(nX * nX) + 16);
+        const AreaVisStatus avn = as->published().areaVis;
+        const bool picN = av->readPixelsHdr(pic);
+        pixelArms(avn, picN ? restN : -1, -1.0, -1.0, true);
+        time1080("(9) the no-ray visibility");
+        e->setArm("area.visReadback", 0.0);
+        e->setRayTracing(true);
         as->setGlobalIllumination(off);
         run(2);
     }

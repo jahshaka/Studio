@@ -343,7 +343,8 @@ target_compile_definitions(test_gi_card_lamp_shadow PRIVATE
 target_link_libraries(test_gi_card_lamp_shadow PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_lamp_shadow JahshakaEngineMedia)
 # (TWO ROWS, PHOTON-7 stage 7: whole past a fixture's 10 s budget - each part its own fixture: the lamp's two shadows
-# (1), (2); `_area` the area light's form factor, penumbra and pixel arms (3)-(8); every bar unchanged.)
+# (1), (2); `_area` the area light's form factor, penumbra and pixel arms (3)-(8), and the no-ray route's (9), (10);
+# every bar unchanged.)
 jah_gpu_row(gi.card_lamp_shadow CLASS engine COMMAND test_gi_card_lamp_shadow lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.card_lamp_shadow_area CLASS engine COMMAND test_gi_card_lamp_shadow area
@@ -351,7 +352,7 @@ jah_gpu_row(gi.card_lamp_shadow_area CLASS engine COMMAND test_gi_card_lamp_shad
 set_tests_properties(gi.card_lamp_shadow gi.card_lamp_shadow_area PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 243)
-set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 592)
+set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 793)
 
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
 # the field's and THE CARDS': a sealed room with a lamp inside and a red one outside, the red that reaches the inside
