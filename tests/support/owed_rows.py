@@ -2,8 +2,15 @@
 inside one lattice cell) - judged the ONE way both rows judge it (gi.hold_after_stop's ROOM sub-cell walk,
 rtreflect.still_after_stop's glass walk). The demand's read-back lags, so a face the walk's last frames first hit
 arrives after the stop, and admitting it is right; a plane the window entered before the stop is refined after it. So:
-  A CARD ROW is the WORK OF A DEMAND ARRIVAL whose stamps all predate the stop, admitted within the demand's period + its
-    read-back lag of it (CardCacheStatus::demandReadEvery + demandReadLag): its n cards captured at the capture budget,
+  A CARD ROW is the WORK OF A LEGITIMATE DEMAND ARRIVAL - stage 5's demand law, rule (a): a reader holds the demand
+    open while its stamps fall within S of the last change (the stop is the last pose change; S =
+    GiQualityFacts::cardDemandSettleFrames, the record's cards_settle_frames), and rule (b): free room takes a face at
+    its first mark. So an arrival is legitimate when its newest mark predates the stop and it lands within the
+    read-back's period + lag of the stop (CardCacheStatus::demandReadEvery + demandReadLag), OR its newest mark falls
+    after the stop but within S of it and it lands within the period + lag of that mark (a reader's first post-stop
+    graze inside its window: the gather's one hit 6 frames after a room walk's stop, the photon-7r merge's ruling). (The
+    reader's first stamp is not in the record: a newest mark within S proves the first within S; one past S is read
+    stray - the judge errs strict there.) Its n cards are captured at the capture budget,
     C = cardBudgetTexels / page^2 cards a frame, and their indirect at the indirect budget, I = cardIndirectTexels /
     page^2 a frame (the tier table's, as the stillness record carries them - a card is at most a page, so the bound is
     an upper one), the arrivals in their order (a later one's work queues behind an earlier one's) - through frame
@@ -29,6 +36,8 @@ def judge(w):
     stamp), and the last owed frame (0 with none)."""
     stop = int(w[0]["cards_frame"]) - 1
     L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"])
+    S = int(w[0]["cards_settle_frames"])
+    legit = lambda c, m: (m <= stop and c - stop <= L) or (stop < m <= stop + S and c - m <= L)
     page = int(w[0]["cards_page_size"]) ** 2
     C = max(1, int(w[0]["cards_budget_texels"]) // page) if page else 1
     I = max(1, int(w[0]["cards_indirect_texels"]) // page) if page else 1
@@ -43,7 +52,7 @@ def judge(w):
     windows = []   # (first frame, last frame, the arrival)
     cap_end = ind_end = None
     for a, c, m, n in arrivals:
-        if not (m <= stop and c - stop <= L):
+        if not legit(c, m):
             continue
         cap_end = max(a - 1, cap_end if cap_end is not None else a - 1) + -(-n // C)
         ind_end = max(a - 1, ind_end if ind_end is not None else a - 1) + -(-n // I)
@@ -58,15 +67,16 @@ def judge(w):
         other = [n for n in names if not n.startswith("cards.") and not n.startswith("ifd.")]
         if cards:
             own = [x for x in windows if x[0] <= f <= x[1]]
-            late = [x for x in arrivals if x[0] <= f and x[0] >= f - 1 and not (x[2] <= stop and x[1] - stop <= L)]
+            late = [x for x in arrivals if x[0] <= f and x[0] >= f - 1 and not legit(x[1], x[2])]
             if own and not late:
                 a, c, m, n = own[0][2]
-                owed.append((f, "cards: the arrival at frame %d (%d cards, mark %d, cache frame %d; stop %d, bound %d) - "
+                owed.append((f, "cards: the arrival at frame %d (%d cards, mark %d%s, cache frame %d; stop %d, bound %d) - "
                                 "its captures at %d a frame, its indirect at %d a frame, through frame %d"
-                             % (a, n, m, c, stop, L, C, I, own[0][1])))
+                             % (a, n, m, " - after the stop, within S = %d" % S if m > stop else "", c, stop, L, C, I,
+                                own[0][1])))
             else:
-                stray.append((f, "cards: arrival %s (stop %d, bound %d; budgets %d / %d a frame)"
-                              % (late or "none in its work window", stop, L, C, I)))
+                stray.append((f, "cards: arrival %s (stop %d, bound %d, S %d; budgets %d / %d a frame)"
+                              % (late or "none in its work window", stop, L, S, C, I)))
         if ifd:
             ok = int(r["ifd_follows"]) == follows0 and f <= D
             (owed if ok else stray).append(

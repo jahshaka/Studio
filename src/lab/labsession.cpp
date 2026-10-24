@@ -1019,6 +1019,16 @@ bool Session::stillness(const Command &c)
     }
     StillnessSpec spec;
     spec.script = script;
+    {   // THE CARDS' DEMAND SETTLE of the document's tier (the mirror's quality mapping, scenemirror.cpp)
+        GiQuality q = GiQuality::Medium;
+        switch (mDoc->giQuality) {
+        case iris::GiQuality::LOW: q = GiQuality::Low; break;
+        case iris::GiQuality::HIGH: q = GiQuality::High; break;
+        case iris::GiQuality::EPIC: q = GiQuality::Epic; break;
+        default: break;
+        }
+        spec.cardsSettleFrames = giQualityFacts(q).cardDemandSettleFrames;
+    }
     spec.frames = unsigned(std::atoi(c.args[1].c_str()));
     std::string out = "stillness-" + std::to_string(mFrames);
     for (size_t i = 2; i < c.args.size(); ++i) {
