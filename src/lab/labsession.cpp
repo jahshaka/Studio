@@ -968,6 +968,17 @@ bool Session::exec(const Command &c)
             r->set(mDoc, std::atoi(c.args[1].c_str()));
             std::printf("LAB ROW %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
         }
+    } else if (c.verb == "rays") {
+        iris::RayTracingMode m;
+        if (!iris::rayTracingModeFromName(QString::fromStdString(a0), m)) {
+            ok = false;
+            labFail("LAB REFUSED rays '%s' (auto|on|off)\n", a0.c_str());
+        } else {
+            mDoc->rayTracing = m;
+            std::printf("LAB RAYS %s\n", iris::rayTracingModeName(m));
+        }
+    } else if (c.verb == "monitor") {
+        ok = monitor(c);
     } else if (c.verb == "move") {
         ok = move(c);
     } else if (c.verb == "lights") {
@@ -1209,6 +1220,141 @@ bool Session::material(const Command &c)
     }
     labFail("LAB REFUSED material: '%s' (colour | roughness)\n", c.args[1].c_str());
     return false;
+}
+
+// ---- THE GPU MONITOR (PHOTON-7, the step before stage 10) ------------------------------------------------------------
+//
+// The engine's OWN frame monitor (irisgl engine/src/OgreFrameMonitor.cpp: Ogre-Next's compositor pass listeners and the
+// fork's GPU timestamp pairs, one per pass and one per GPU row - the compute dispatches the compositor never sees), read
+// through a TEE (Engine::openMonitorTee) so a host's own capture is never drained here. Nothing is drawn; the frames are
+// counted (the fixed 1/60 s grid). A row's time is its timestamp pair's: the begin written at TOP_OF_PIPE, the end at
+// BOTTOM_OF_PIPE, and only the DURATION comes back - so a row recorded behind a barrier opens while the work in front of it
+// still runs and its time ENCLOSES that wait (stage 7's no-ray resolve behind the integrate). The verb cannot split one
+// row's wait from its work with these timestamps; it measures the frame's double count instead - the OVERLAP: the
+// TOP-LEVEL passes and rows (CacheWork::topLevel; a row inside a pass is in its time, "nested-row:") and the unnamed
+// gaps summed, less the busy span - which bounds every such wait of the frame. (The split needs a row's absolute begin
+// and end, or a timestamp written at the barrier's destination stage after it: a fork change, named in the step's report.)
+namespace {
+/// The nearest-rank percentile (p in (0, 1]).
+double percentile(std::vector<double> v, double p)
+{
+    if (v.empty()) return 0.0;
+    std::sort(v.begin(), v.end());
+    const double rank = std::ceil(p * double(v.size()));
+    return v[size_t(std::max(1.0, std::min(rank, double(v.size())))) - 1u];
+}
+}   // namespace
+
+bool Session::monitor(const Command &c)
+{
+    const int n = std::atoi(c.args[0].c_str());
+    if (n < 1) { labFail("LAB REFUSED monitor: '%s' frames (at least 1)\n", c.args[0].c_str()); return false; }
+    iris::Vec3 eye, target;
+    const bool walk = c.args.size() > 2;
+    if (walk && !parsePose(c.args[2], eye, target)) {
+        labFail("LAB REFUSED monitor: '%s' is not x,y,z,tx,ty,tz\n", c.args[2].c_str());
+        return false;
+    }
+    std::FILE *out = std::fopen(c.args[1].c_str(), "w");
+    if (!out) { labFail("LAB FAILED monitor: cannot write %s\n", c.args[1].c_str()); return false; }
+    const unsigned tee = mEngine->openMonitorTee();
+    if (!tee) { std::fclose(out); labFail("LAB FAILED monitor: the engine opened no monitor tee\n"); return false; }
+    const bool ours = mEngine->published().monitor.level == MonitorLevel::Off;
+    if (ours) {
+        mEngine->request([](Engine &e) { e.setFrameMonitor(MonitorLevel::Review); });
+        frame();   // the monitor attaches on this frame's drain: not measured
+    }
+    std::vector<MonitorRecord> recs, got;
+    std::set<unsigned long long> measured;
+    const iris::Vec3 e0 = mCamera.position(), t0 = mCamera.target();
+    for (int i = 1; i <= n && !mQuit; ++i) {
+        if (walk) {
+            const float t = float(i) / float(n);
+            mCamera.set(e0 + (eye - e0) * t, t0 + (target - t0) * t);
+        }
+        frame();
+        measured.insert(mEngine->published().frame);
+        got.clear();
+        mEngine->popMonitorTee(tee, got);
+        for (MonitorRecord &r : got) recs.push_back(std::move(r));
+    }
+    // THE TAIL: a record is published once its GPU timestamps came back - a few frames later (the monitor's holding queue)
+    const auto have = [&]() {
+        size_t k = 0;
+        for (const MonitorRecord &r : recs) k += measured.count(r.frame);
+        return k;
+    };
+    int tail = 0;
+    constexpr int kTailCap = 32;
+    while (have() < measured.size() && tail < kTailCap && !mQuit) {
+        frame();
+        ++tail;
+        got.clear();
+        mEngine->popMonitorTee(tee, got);
+        for (MonitorRecord &r : got) recs.push_back(std::move(r));
+    }
+    if (ours) mEngine->request([](Engine &e) { e.setFrameMonitor(MonitorLevel::Off); });
+    mEngine->closeMonitorTee(tee);
+
+    std::sort(recs.begin(), recs.end(), [](const MonitorRecord &a, const MonitorRecord &b) { return a.frame < b.frame; });
+    std::map<std::string, std::vector<double>> per;   // name -> the ms of every frame it ran
+    std::vector<double> busyAll, overlapAll;
+    int index = 0;
+    unsigned unmeasured = 0, dropped = 0;
+    for (const MonitorRecord &r : recs) {
+        if (!measured.count(r.frame)) continue;
+        ++index;
+        std::map<std::string, double> names;
+        // (a name is one word in the file: its spaces become '_' - Ogre's pass ids carry them)
+        const auto word = [](std::string n) { std::replace(n.begin(), n.end(), ' ', '_'); return n; };
+        double passes = 0.0, rows = 0.0;
+        for (const FramePass &p : r.passes) {
+            if (p.gpuMs < 0.0f) continue;   // not measured (never faked as 0)
+            names[word((p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass)] += p.gpuMs;
+            if (p.topLevel) passes += p.gpuMs;
+        }
+        for (const CacheWork &w : r.cacheWork) {
+            if (w.gpuMs < 0.0f) continue;
+            names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
+            if (w.topLevel) rows += w.gpuMs;
+        }
+        dropped += r.gpuMarksDropped;
+        const double busy = r.frameGpuMs >= 0.0f && r.gpuIdleMs >= 0.0f ? double(r.frameGpuMs - r.gpuIdleMs) : -1.0;
+        // (NaN where it is not measured: a negative overlap is a reading - the clocks' quantum - not a flag)
+        const double overlap = busy >= 0.0 && r.unattributedGpuMs >= 0.0f
+                                   ? passes + rows + double(r.unattributedGpuMs) - busy : std::nan("");
+        if (busy < 0.0) ++unmeasured;
+        std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f unattr %.4f overlap %.4f "
+                          "dropped %u |", index, r.frame, double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows,
+                     double(r.unattributedGpuMs), overlap, r.gpuMarksDropped);
+        for (const auto &kv : names) {
+            std::fprintf(out, " %s=%.4f", kv.first.c_str(), kv.second);
+            per[kv.first].push_back(kv.second);
+        }
+        std::fprintf(out, "\n");
+        if (busy >= 0.0) busyAll.push_back(busy);
+        if (busy >= 0.0 && r.unattributedGpuMs >= 0.0f) overlapAll.push_back(overlap);
+    }
+    std::fprintf(out, "# SUMMARY %d frames measured of %d (tail %d, records without GPU time %u, GPU marks dropped %u)%s\n",
+                 index, int(measured.size()), tail, unmeasured, dropped, walk ? " - a walk" : " - still");
+    const auto line = [&](const std::string &name, const std::vector<double> &v) {
+        double s = 0.0;
+        for (double x : v) s += x;
+        std::fprintf(out, "S %s frames %zu mean %.4f p95 %.4f max %.4f\n", name.c_str(), v.size(),
+                     v.empty() ? 0.0 : s / double(v.size()), percentile(v, 0.95), v.empty() ? 0.0 : *std::max_element(v.begin(), v.end()));
+    };
+    line("frame:busy", busyAll);
+    line("frame:overlap", overlapAll);
+    for (const auto &kv : per) line(kv.first, kv.second);
+    std::fclose(out);
+    std::printf("LAB MONITOR %d of %d frames (tail %d) -> %s\n", index, int(measured.size()), tail, c.args[1].c_str());
+    std::fflush(stdout);
+    if (index != int(measured.size())) {
+        labFail("LAB FAILED monitor: %d of the %d frames' records came back within %d tail frames\n", index,
+                int(measured.size()), kTailCap);
+        return false;
+    }
+    return true;
 }
 
 bool Session::move(const Command &c)

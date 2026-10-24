@@ -45,6 +45,20 @@ const std::vector<VerbDoc> &verbs()
         { "measure", "measure D [file.tsv]", 1, 2,
           "an environment's stop D: the camera, settle, the probe, and each predicted quantity beside the measured one "
           "(a TSV row each: env, seed, tier, stop, quantity, predicted, measured)" },
+        { "rays", "rays auto|on|off", 1, 1,
+          "the document's Ray Tracing (iris::RayTracingMode, the mirror pushes it with the next frame): off = the no-ray "
+          "route at any tier - the voxel chain's reflection and the no-ray area visibility (PHOTON-7: its march priced "
+          "by `monitor`)" },
+        { "monitor", "monitor <frames> <file> [x,y,z,tx,ty,tz]", 2, 3,
+          "THE GPU MONITOR: render N frames on the fixed 1/60 s grid (still, or walking from the current pose to the one "
+          "given, linearly, the last frame at it) with the engine's frame monitor on; each frame appends ONE line to "
+          "<file> - its index, the engine frame, the frame's GPU span, idle and busy, the TOP-LEVEL passes' and rows' sums "
+          "and the unnamed gaps, their OVERLAP over the busy span (time two top-level rows count twice: a row whose "
+          "begin timestamp opened while earlier work still ran - a barrier's wait), then every compositor pass "
+          "(pass:<node>/<pass>, nested: inside another) and every GPU row (row:<name> - injection, cards, gather, "
+          "integrate, reflection, area visibility... - nested-row: inside a pass) in ms; then "
+          "one SUMMARY line per name: frames, mean, p95, max. The frames after the N that wait for the records' GPU "
+          "timestamps are not measured" },
         { "move", "move x,y,z,tx,ty,tz N", 2, 2,
           "a scripted camera move: N frames walking from the current pose to that one (eye and target linearly, the "
           "last frame exactly at it); N = 0 is a TELEPORT (one frame drawn at the pose)" },

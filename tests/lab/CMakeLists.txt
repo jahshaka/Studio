@@ -16,6 +16,14 @@ jah_gpu_row(lab.boots_and_shoots SHIP CLASS engine FRAMES 82
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.monitor (PHOTON-7, the step before stage 10) — `jahlab monitor`: the engine's own frame monitor per frame from the
+# lab on photon-area (Epic, rays on): every GI phase named with a positive time, and every frame's top-level passes and
+# rows adding up to its busy GPU span (monitor.sh). The boot's 30 frames, a 60-frame settle, a lamp step's 30.
+jah_gpu_row(lab.monitor CLASS engine FRAMES 127
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/monitor.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/monitor
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.monitor PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.script_stops (URGENT #50) — A REFUSED SCRIPT LINE STOPS THE SCRIPT, nonzero, naming the line and its reason; a
 # `try` line opts out (script_stops.sh). Three sessions of a frame on photon-contact at 320x180.
 jah_gpu_row(lab.script_stops CLASS engine FRAMES 3
