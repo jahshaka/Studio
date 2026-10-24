@@ -11,6 +11,8 @@ graphics_queue_allow.txt (the file, the line's code, how many times):
     hand-over into the swapchain (refused inside a bracket by _jahRequireGraphics);
   * the ray tier's three blocking one-shot submits (readTlasBlocking, traceBlocking,
     cardPickBlocking): their own command pools on the graphics family and their vkQueueSubmit.
+  * the GPU checkpoints' dump after a device loss (OgreGpuCheckpoints.cpp, PHOTON-7 stage 5): it reads EVERY
+    queue's last marks, the graphics queue named as one of them - a read of the queue's handle, never a recording.
 A code line (comments excluded) under irisgl/engine/src matching `mGraphicsQueue\\.` that the list
 does not hold — or more of one than it allows — is RED. RED ON BASE 836d4270a: 15 matches, 5 not
 allowed (OgreAtomPass.cpp frameCmd, OgreFrameMonitor.cpp's tag, OgreRayQuery.cpp frameCmd x2 and

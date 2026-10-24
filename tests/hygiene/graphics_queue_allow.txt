@@ -6,3 +6,4 @@
 1	OgreVrSession.cpp	VkCommandBuffer cmd = dev->mGraphicsQueue.getCurrentCmdBuffer();
 3	OgreRayQuery.cpp	pci.queueFamilyIndex = mDev->mGraphicsQueue.getFamilyIdx();
 3	OgreRayQuery.cpp	bool ok = vkQueueSubmit(mDev->mGraphicsQueue.mQueue, 1, &si, fence) == VK_SUCCESS;
+1	OgreGpuCheckpoints.cpp	dumpQueue("the graphics", d->mGraphicsQueue.mQueue);
