@@ -192,7 +192,6 @@ int main(int argc, char **argv)
         gi.mode = GiMode::Vct;
         gi.quality = tier;
         gi.ddgi = GiToggle::Off;
-        gi.gather = GiToggle::Off;
         gi.cards = false;
         gi.bounces = true;
         gi.updateBudget = 0;

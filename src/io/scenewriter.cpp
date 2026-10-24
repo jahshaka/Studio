@@ -277,7 +277,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // written like the probe knobs above: always, and read back onto the same
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
-    sceneObj["giGather"] = scene->giGather;
     // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would

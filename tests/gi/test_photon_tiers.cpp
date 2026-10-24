@@ -13,8 +13,9 @@
 //      row reads "Traced", and the trace resolution the renderer uses there is the
 //      engine's (reflectTrace), which is the row's own High/Epic column — so the
 //      shipped pictures do not move.
-//   4. THE GATHER ROW exists, is AUTO (the tier's) at every tier, and its text is
-//      the engine's gather row.
+//   4. THE GATHER HAS NO ROW (PHOTON-7 7-5: never turn a core stage off), every
+//      tier's sentence names its gather from the engine's table, Low at twice
+//      Medium's stride, and the VR column is the desktop's.
 //   5. THE TRI-STATE, RESOLVED ONE WAY: the field's column is a projection of the
 //      engine's `fieldDefault` (the answer GiParams::ddgi's Auto resolves to), every
 //      tier application writes a concrete 0/1 through, and a document's untouched
@@ -192,29 +193,22 @@ static void testSsrRow()
 
 static void testGatherRow()
 {
-    std::printf("\n-- 4. the gather row --\n");
-    const worldmodes::Row *g = worldmodes::row(QStringLiteral("giGather"));
-    CHECK(g != nullptr, "the gather has a row");
-    if (!g) return;
-    CHECK(g->tier[0] == -1 && g->tier[1] == -1 && g->tier[2] == -1 && g->tier[3] == -1,
-          "AUTO at every tier: the engine's table decides");
-    const QString text = g->costAt ? g->costAt(true) : g->cost;
-    std::printf("   %s\n", qPrintable(text));
+    std::printf("\n-- 4. the gather has no row --\n");
+    CHECK(worldmodes::row(QStringLiteral("giGather")) == nullptr,
+          "no row turns the screen-probe gather off (PHOTON-7 7-5)");
     for (PhotonTier t : kTiers) {
         const auto gf = worldmodes::photonGather(t);
-        QString n = worldmodes::photonTierName(t);
-        n[0] = n[0].toUpper();
-        if (gf.on)
-            CHECK(text.contains(QStringLiteral("%1 %2 rays a probe").arg(n).arg(gf.octRes * gf.octRes)),
-                  qPrintable(QStringLiteral("the text names %1's gather from the table").arg(n)));
+        const QString text = worldmodes::photonTierSentence(t);
+        CHECK(text.contains(QStringLiteral("(%1 rays a probe, a probe per %2x%2 px)")
+                                .arg(gf.octRes * gf.octRes).arg(gf.stride)),
+              qPrintable(QStringLiteral("%1's sentence names its gather from the table")
+                             .arg(worldmodes::photonTierName(t))));
     }
-    CHECK(worldmodes::photonGather(PhotonTier::Low).on && worldmodes::photonGather(PhotonTier::Medium).on &&
-              worldmodes::photonGather(PhotonTier::High).on && worldmodes::photonGather(PhotonTier::Epic).on,
-          "the gather row: on at every tier (PHOTON-7 7-4)");
     CHECK(worldmodes::photonGather(PhotonTier::Low).stride == 2u * worldmodes::photonGather(PhotonTier::Medium).stride &&
               worldmodes::photonGather(PhotonTier::Low).octRes == 8u,
           "...Low at twice Medium's stride with the 8x8 map (0.063 rays a pixel: Lumen High's density)");
-    CHECK(worldmodes::photonVrGather(PhotonTier::Epic).on == worldmodes::photonGather(PhotonTier::Epic).on,
+    CHECK(worldmodes::photonVrGather(PhotonTier::Epic).stride == worldmodes::photonGather(PhotonTier::Epic).stride &&
+              worldmodes::photonVrGather(PhotonTier::Epic).octRes == worldmodes::photonGather(PhotonTier::Epic).octRes,
           "...and the VR column follows the desktop's (GA-VR)");
 }
 

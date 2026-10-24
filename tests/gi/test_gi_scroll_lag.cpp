@@ -40,7 +40,6 @@ static GiParams tierGi(GiQuality q)
     gi.mode = GiMode::Vct;
     gi.quality = q;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::Off;
     gi.updateBudget = 0;
     gi.bounces = true;
     return gi;

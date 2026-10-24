@@ -150,7 +150,6 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::On;
-    gi.gather = GiToggle::Off;
     gi.cards = false;
     gi.bounces = true;
     const auto settle = [&]() {

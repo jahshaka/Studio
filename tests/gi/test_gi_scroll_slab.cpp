@@ -69,7 +69,6 @@ static const unsigned kSize = 128;
 static GiParams chainGi()
 {
     GiParams gi;
-    gi.gather = GiToggle::Off;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.bounces = true;

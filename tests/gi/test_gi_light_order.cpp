@@ -53,7 +53,6 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::Off;
     gi.updateBudget = 0;
     gi.bounces = true;
     gi.cascadeCount = 2;

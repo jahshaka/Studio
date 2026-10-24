@@ -608,7 +608,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
               "over a warm cache");
     unsigned lastCompiled = compiled;
     int quiet = 0;
-    // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the ungathered frames below draw the
+    // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the Atom-off frames below draw the
     // box WITH the cone tracer, which means nothing before the arm is bound; "quiet" alone does not
     // promise that, so the loop also runs until the arm has been bound for kWarmUpFrames frames
     // (the log line says so when it never was).
@@ -630,23 +630,19 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         if (armBound()) ++boundFrames;
     }
     // ...AND THE STATE A WARM CACHE DRAWS FIRST (the diagnosis: spikes/test-tier-1/coldgate/). On a
-    // warm cache the arm binds inside the first frames — before the visibility buffer has taken
-    // the box over and before the screen-probe gather is on — so the box is drawn once through
-    // STOCK PBS with the cone tracer and the probes' cube and no prepass. A cold boot, whose arm
-    // binds only after its compute set compiled, has handed the box to Atom by then and never
-    // draws that permutation; the second boot after every cache rebuild compiled it and ran this
-    // whole warm-up again. Drawn here on the cold boot: the id pass off, the gather parked.
+    // warm cache the arm binds inside the first frames — before the visibility buffer has taken the
+    // box over — so the box is drawn once through STOCK PBS with the cone tracer and the probes'
+    // cube and no prepass (the warm view is Live: it takes no gather). A cold boot, whose arm binds
+    // only after its compute set compiled, has handed the box to Atom by then and never draws that
+    // permutation; the second boot after every cache rebuild compiled it and ran this whole warm-up
+    // again. Drawn here on the cold boot: the id pass off.
     if (runPass && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
-        GiParams ungathered = warmGi;
-        ungathered.gather = GiToggle::Off;
         warmScene->setAtomDrawEnabled(false);
-        warmScene->setGlobalIllumination(ungathered);
         for (int i = 0; i < kWarmUpFrames; ++i) {
             engine->renderOneFrame();
             poll();
         }
         warmScene->setAtomDrawEnabled(true);
-        warmScene->setGlobalIllumination(warmGi);
     }
     // ...AND THE DELTA INJECTION (PHOTON-7 stage 4): a cascade rebuilt where it stands, a lamp's change and a whole
     // relight inject their direct term as a DELTA over the kept voxels (the feedback keeps the bounce), and the first one

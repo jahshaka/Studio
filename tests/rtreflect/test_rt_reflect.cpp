@@ -336,11 +336,8 @@ int main(int argc, char **argv)
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    // THE GATHER OFF (D4-PHOTON-TIERS): this suite's subject is the REFLECTION, and
-    // its rays-on / rays-off A/Bs would otherwise also switch the diffuse between the
-    // screen-probe gather and the cones (the gather needs the rays) — on the matte
-    // emitter of the screen-first fixture that was 2-8/255 over a third of the region.
-    gi.gather = GiToggle::Off;
+    // (No gather pin since PHOTON-7 7-5 - the gather has no row: its rays-on / rays-off A/Bs also switch the
+    // diffuse between the screen-probe gather and the cones, the gather needing the rays.)
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     // The camera stands BETWEEN the cube and the wall and looks at the wall.
@@ -475,6 +472,11 @@ int main(int argc, char **argv)
     }
 
     // ---- 6b: SCREEN FIRST -----------------------------------------------------
+    // DECLARED RED ON photon-7 UNTIL THE photon-7r MERGE (the lead's ruling, 2026-10-24): its premise - a rays-on
+    // picture against a rays-off one at the SAME diffuse - no longer exists since PHOTON-7 7-5 (the screen-probe gather
+    // needs the rays and has no row to turn it off, so the two arms differ in the floor's non-reflected specular share
+    // as well as in the reflection; measured 0.0 % of the march region within 2/255, mean 12.8). Stage 6 (photon-7r)
+    // rebuilds the reflection and this row; the case is replaced there, never re-derived here.
     // Where the march answers a pixel OUTRIGHT the ray tier must leave it
     // alone. The claim is stated as a bound (a mean under 4/255 over the region
     // the march owns) rather than as byte-equality, because the region is

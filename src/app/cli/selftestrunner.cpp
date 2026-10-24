@@ -340,26 +340,6 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: SUN CONTACT ARM - world.sunContact is ON\n");
     }
 
-    // THE GATHER-OFF ARM (PHOTON-GATHER-1d): `JAHSHAKA_SELFTEST_GATHER_OFF` pins
-    // world.gi({gather:false}) on the default scene and on fixture B — the A/B the
-    // gather's default-on is quoted against: with it, the four hash lines are the
-    // pre-gather picture byte for byte. A MEASUREMENT switch, the sun contact
-    // arm's shape: read here and nowhere else.
-    const bool gatherOffArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_GATHER_OFF");
-    if (gatherOffArm) {
-        ScriptEngine *armHost = window.scripting();
-        const ScriptResult r = armHost
-            ? armHost->evaluate(QStringLiteral("world.gi({ gather: false }) ? 'ok' : "
-                                               "(function(){ throw new Error('refused'); })()"),
-                                QStringLiteral("selftest-gather-off"), true, 0, ScriptRunPolicy::Off)
-            : ScriptResult();
-        if (!armHost || !r.ok) {
-            std::fprintf(stderr, "engine-selftest: the gather-off arm could not pin the row off\n");
-            return 1;
-        }
-        std::fprintf(stderr, "engine-selftest: GATHER-OFF ARM - world.gi({gather:false})\n");
-    }
-
     // Forty frames on the fixed clock, the resizes delivered between them.
     QElapsedTimer clock;
     clock.start();
@@ -636,8 +616,6 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     QByteArray fixtureB(kFixtureBScript);
     if (sunContactArm)
         fixtureB.replace("editor.frame(300);", "world.sunContact({ enabled: true });\neditor.frame(300);");
-    if (gatherOffArm)
-        fixtureB.replace("editor.frame(300);", "world.gi({ gather: false });\neditor.frame(300);");
     if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
     app.processEvents();
 

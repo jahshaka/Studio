@@ -139,7 +139,6 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::On;
     gi.cards = true;
     gi.bounces = true;
     gi.updateBudget = 0;

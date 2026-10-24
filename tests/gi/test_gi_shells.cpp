@@ -54,7 +54,6 @@ int main()
         gi.mode = GiMode::Vct;
         gi.quality = t.q;
         gi.ddgi = GiToggle::Off;
-        gi.gather = GiToggle::Off;
         gi.updateBudget = 0;
         gi.bounces = true;
         if (!scene->setGlobalIllumination(gi)) { std::printf("   %s: the chain did not build\n", t.name); allOk = false; continue; }

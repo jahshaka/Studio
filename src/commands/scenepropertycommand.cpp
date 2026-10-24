@@ -198,8 +198,6 @@ QVector<sceneprops::Field> buildFields()
     // above it, and in this table for the same reason: a world field the verb writes
     // outside WorldEdit is not undoable and is not rolled back when a later key
     // of the same call is refused.
-    add("giGather", [](const ScenePtr &s) { return QVariant(s->giGather); },
-        [](const ScenePtr &s, const QVariant &v) { s->giGather = v.toInt(); });
     add("giCards", [](const ScenePtr &s) { return QVariant(s->giCards); },
         [](const ScenePtr &s, const QVariant &v) { s->giCards = v.toInt(); });
     add("giCardBudgetTexels", [](const ScenePtr &s) { return QVariant(s->giCardBudgetTexels); },

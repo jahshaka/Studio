@@ -69,7 +69,6 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Epic;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::Off;
     gi.cards = false;
     gi.bounces = true;
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }

@@ -191,7 +191,6 @@ int main()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::Off;
-    gi.gather = GiToggle::Off;
     gi.bounces = true;
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 4.0f), Vec3(0.0f, 0.6f, 0.0f));
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the chain\n"); return 1; }

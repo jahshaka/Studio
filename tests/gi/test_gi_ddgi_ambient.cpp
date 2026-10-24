@@ -160,7 +160,6 @@ static const Colour kAmbientLower(0.10f, 0.10f, 0.12f);
 static GiParams vctBase()
 {
     GiParams gi;
-    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.bounces = true;
@@ -651,7 +650,6 @@ int main(int argc, char **argv)
         //      lives in a VCT scene — the cone-traced diffuse's own
         //      `ambient * escapeFraction` add.
         GiParams ref;
-        ref.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         ref.mode = GiMode::Vct;
         ref.quality = GiQuality::Low;        // the Low tier's cascade set (one store at every tier)
         // NO BOUNCE: the subject is the SKY the field and the cones see; the sky-lit wall's
