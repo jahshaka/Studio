@@ -123,6 +123,7 @@ lab.camera_cut 4.55  spec.sh test photon-2 --subsystem lab, the card lock held, 
 lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2026-10-22; 11.38 s on the run that warmed the shared cache)
 lab.dolly_matches_probe 1.99  solo, the card lock held, :73 (LAB-1 stage 3, 2026-10-22; the lab run itself, dolly.sh + the box set at two stops)
 lab.envs_build 6.83  solo, CPU (PHOTON-7 stage 6, READ_A finding 2, 2026-10-23: the eleven checks in parallel; photon-contact's corrugated chained floor the slowest, its bake 3.3 s)
+lab.script_stops 10.04  solo, the card lock held, :72 (URGENT #50, 2026-10-24: three jahlab sessions of a frame on photon-contact at 320x180)
 lab.stillness_control 4.06  solo, the card lock held, :71, warm (PHOTON-2 stage 0 fix round, 2026-10-22; jahlab on photon-room held at the stop, 960x540)
 lab.stillness_runs 7.95  solo, the card lock held, :71, warm (PHOTON-2 stage 1, 2026-10-22; jahlab on photon-glass, 960x540, the path check)
 library.model 7.20  ship 3a0422b4e (2026-10-13)

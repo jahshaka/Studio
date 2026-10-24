@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdarg>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -37,6 +38,25 @@
 namespace lab {
 
 using namespace jahshaka::engine;
+
+namespace {
+/// THE LAST REFUSAL'S REASON (URGENT #50): every LAB REFUSED / ... FAILED line is said through labFail, which keeps
+/// its text, so a refused --script line's STOP names the reason beside the line.
+std::string gLabLastFailure;
+void labFail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void labFail(const char *fmt, ...)
+{
+    char buf[2048];
+    va_list ap;
+    va_start(ap, fmt);
+    std::vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    std::fputs(buf, stdout);
+    std::string s(buf);
+    while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
+    gLabLastFailure = s.rfind("LAB ", 0) == 0 ? s.substr(4) : s;
+}
+}   // namespace
 
 namespace {
 
@@ -472,7 +492,7 @@ void Session::pushOverlay()
 bool Session::setView(int mode)
 {
     if (mode != 0 && !mScene->published().atomViewPaintable) {
-        std::printf("LAB REFUSED view %s: the view carries no id pass (the Low tier's view draws straight into its "
+        labFail("LAB REFUSED view %s: the view carries no id pass (the Low tier's view draws straight into its "
                     "window, or `draw off` shut the split)\n", atomViewNames()[size_t(mode)].c_str());
         return false;
     }
@@ -508,7 +528,7 @@ bool Session::shot(const std::string &nameIn)
         }
     }
     if (!ok || !img.width || !img.height) {
-        std::printf("LAB SHOT FAILED %s: %s\n", qPrintable(path), mEngine->lastError().c_str());
+        labFail("LAB SHOT FAILED %s: %s\n", qPrintable(path), mEngine->lastError().c_str());
         return false;
     }
     QImage q(img.rgba.data(), int(img.width), int(img.height), int(img.width * 4), QImage::Format_RGBA8888);
@@ -519,7 +539,7 @@ bool Session::shot(const std::string &nameIn)
         for (int x = 0; x < rgb.width(); x += 2) colours.insert(unsigned(s[x * 3]) << 16 | unsigned(s[x * 3 + 1]) << 8 | s[x * 3 + 2]);
     }
     if (!rgb.save(path, "PNG")) {
-        std::printf("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
+        labFail("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
         return false;
     }
     // (THE MODE LABEL: the sources the reflection traced this picture with - what it ran, read from the engine)
@@ -656,9 +676,10 @@ bool Session::execLine(const std::string &line, const char *source)
 {
     Command c;
     std::string err;
+    gLabLastFailure.clear();
     if (!parse(line, c, err)) {
         if (!err.empty()) {
-            std::printf("LAB REFUSED (%s) %s\n", source, err.c_str());
+            labFail("LAB REFUSED (%s) %s\n", source, err.c_str());
             std::fflush(stdout);
             if (std::string(source) == "script") mExit = 1;   // a script line the grammar refuses fails the run
         }
@@ -680,13 +701,13 @@ bool Session::exec(const Command &c)
         int mode = -1;
         if (a0 == "next") mode = (mAtomView + 1) % int(atomViewNames().size());
         for (size_t i = 0; i < atomViewNames().size(); ++i) if (atomViewNames()[i] == a0) mode = int(i);
-        if (mode < 0) { std::printf("LAB REFUSED view '%s'\n", a0.c_str()); ok = false; }
+        if (mode < 0) { labFail("LAB REFUSED view '%s'\n", a0.c_str()); ok = false; }
         else ok = setView(mode);
     } else if (c.verb == "tier") {
         int t = -1;
         if (a0 == "next") t = (mTier + 1) % 4;
         for (size_t i = 0; i < tierNames().size(); ++i) if (tierNames()[i] == a0) t = int(i);
-        if (t < 0) { std::printf("LAB REFUSED tier '%s'\n", a0.c_str()); ok = false; }
+        if (t < 0) { labFail("LAB REFUSED tier '%s'\n", a0.c_str()); ok = false; }
         else {
             mTier = t;
             // THE APP'S TABLE (irisgl worldmodes::setMode, world.mode's call): every tier row, Photon at the tier's name
@@ -698,13 +719,13 @@ bool Session::exec(const Command &c)
             setTitle();
         }
     } else if (c.verb == "gi") {
-        if (!onOff(a0, mGi, v)) { ok = false; std::printf("LAB REFUSED gi '%s'\n", a0.c_str()); }
+        if (!onOff(a0, mGi, v)) { ok = false; labFail("LAB REFUSED gi '%s'\n", a0.c_str()); }
         else { mGi = v; worldmodes::setPhoton(mDoc, v, worldmodes::photonTier(mDoc)); }
     } else if (c.verb == "occlusion") {
-        if (!onOff(a0, mOcclusion, v)) { ok = false; std::printf("LAB REFUSED occlusion '%s'\n", a0.c_str()); }
+        if (!onOff(a0, mOcclusion, v)) { ok = false; labFail("LAB REFUSED occlusion '%s'\n", a0.c_str()); }
         else { mOcclusion = v; mScene->setAtomOcclusionEnabled(v); }
     } else if (c.verb == "draw") {
-        if (!onOff(a0, mDraw, v)) { ok = false; std::printf("LAB REFUSED draw '%s'\n", a0.c_str()); }
+        if (!onOff(a0, mDraw, v)) { ok = false; labFail("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
     } else if (c.verb == "reflections") {
         // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
@@ -715,10 +736,10 @@ bool Session::exec(const Command &c)
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            std::printf("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
+            labFail("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
-        if (!onOff(a0, mPlaying, v)) { ok = false; std::printf("LAB REFUSED play '%s'\n", a0.c_str()); }
+        if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }
         else {
             mPlaying = v;
             mDoc->setPlaying(v);
@@ -741,7 +762,7 @@ bool Session::exec(const Command &c)
                         v ? "on" : "off", animated, tracks, clips);
         }
     } else if (c.verb == "overlay") {
-        if (!onOff(a0, mOverlay, v)) { ok = false; std::printf("LAB REFUSED overlay '%s'\n", a0.c_str()); }
+        if (!onOff(a0, mOverlay, v)) { ok = false; labFail("LAB REFUSED overlay '%s'\n", a0.c_str()); }
         else {
             mOverlay = v;
             if (v) pushOverlay();
@@ -843,9 +864,10 @@ bool Session::exec(const Command &c)
                                   : QString::fromStdString(a0);
         QString err;
         ok = writeJlab(path, j, err);
-        std::printf(ok ? "LAB SAVED %s\n" : "LAB SAVE FAILED %s\n", qPrintable(ok ? path : err));
+        if (ok) std::printf("LAB SAVED %s\n", qPrintable(path));
+        else labFail("LAB SAVE FAILED %s\n", qPrintable(err));
     } else if (c.verb == "envcam") {
-        if (!mEnv) { ok = false; std::printf("LAB REFUSED envcam: the session is not an environment (--env)\n"); }
+        if (!mEnv) { ok = false; labFail("LAB REFUSED envcam: the session is not an environment (--env)\n"); }
         else envCamera(std::strtod(a0.c_str(), nullptr));
     } else if (c.verb == "probe") {
         std::vector<envs::ObjectReading> rd;
@@ -871,10 +893,10 @@ bool Session::exec(const Command &c)
             }
         }
     } else if (c.verb == "measure") {
-        if (!mEnv) { ok = false; std::printf("LAB REFUSED measure: the session is not an environment (--env)\n"); }
+        if (!mEnv) { ok = false; labFail("LAB REFUSED measure: the session is not an environment (--env)\n"); }
         else if (!mEnv->atom) {
             ok = false;
-            std::printf("LAB REFUSED measure: %s's laws (the bounce residual, the keep rule) are read from Photon's own "
+            labFail("LAB REFUSED measure: %s's laws (the bounce residual, the keep rule) are read from Photon's own "
                         "status, not the cut probe — the Photon spec measures them\n", mEnv->name);
         } else {
             const double d = std::strtod(a0.c_str(), nullptr);
@@ -925,7 +947,7 @@ bool Session::exec(const Command &c)
             if (a0 == kNames[i]) mode = i;
         if (mode < 0) {
             ok = false;
-            std::printf("LAB REFUSED photon '%s'\n", a0.c_str());
+            labFail("LAB REFUSED photon '%s'\n", a0.c_str());
         } else {
             mScene->setPhotonView(PhotonView(mode));
             std::printf("LAB PHOTON %s\n", a0.c_str());
@@ -934,14 +956,14 @@ bool Session::exec(const Command &c)
         // A MEASURING ARM, asked on the engine's side (Engine::request: the affinity law)
         const double v = std::strtod(c.args[1].c_str(), nullptr);
         mEngine->request([&](Engine &e) { ok = e.setArm(c.args[0], v); });
-        if (!ok) std::printf("LAB REFUSED arm: no arm '%s' (or %s out of its range)\n", c.args[0].c_str(), c.args[1].c_str());
+        if (!ok) labFail("LAB REFUSED arm: no arm '%s' (or %s out of its range)\n", c.args[0].c_str(), c.args[1].c_str());
         else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
     } else if (c.verb == "row") {
         // A WORLD ROW, through the panel's own setter (PHOTON-7 stage 7, 7-3's reference: the reflection's cutoff)
         const worldmodes::Row *r = worldmodes::row(QString::fromStdString(c.args[0]));
         if (!r || !r->set) {
             ok = false;
-            std::printf("LAB REFUSED row: no settable world row '%s'\n", c.args[0].c_str());
+            labFail("LAB REFUSED row: no settable world row '%s'\n", c.args[0].c_str());
         } else {
             r->set(mDoc, std::atoi(c.args[1].c_str()));
             std::printf("LAB ROW %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
@@ -977,6 +999,7 @@ bool Session::exec(const Command &c)
     }
     std::printf("LAB %s (%s) %s\n", ok ? "OK" : "FAILED", c.source.c_str(), c.line.c_str());
     std::fflush(stdout);
+    if (!ok && gLabLastFailure.empty()) gLabLastFailure = "the verb '" + c.verb + "' failed (its lines above)";
     if (!ok && c.source == "script") mExit = 1;
     return ok;
 }
@@ -989,7 +1012,7 @@ bool Session::stillness(const Command &c)
     std::string script = c.args[0];
     if (!script.empty() && script[0] == '@') {
         std::ifstream in(script.substr(1));
-        if (!in) { std::printf("LAB REFUSED stillness: cannot read the script %s\n", script.c_str() + 1); return false; }
+        if (!in) { labFail("LAB REFUSED stillness: cannot read the script %s\n", script.c_str() + 1); return false; }
         std::stringstream ss;
         ss << in.rdbuf();
         script = ss.str();
@@ -1029,13 +1052,13 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { std::printf("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
+        else { labFail("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;
     Vec3 fe, ft;
     if (!parseStillnessScript(spec.script, moves, err) || !stillnessFinalPose(moves, fe, ft)) {
-        std::printf("LAB REFUSED %s\n", err.c_str());
+        labFail("LAB REFUSED %s\n", err.c_str());
         return false;
     }
     // THE CLASSES AT THE STOP'S POSE, from the environment's own objects (a model session counts every pixel as one)
@@ -1056,23 +1079,23 @@ bool Session::stillness(const Command &c)
     }
     spec.fovYDegrees = mCamera.node()->angle;
     StillnessRun run(*mEngine, *mScene, *mView);
-    if (!run.begin(spec, err)) { std::printf("LAB REFUSED %s\n", err.c_str()); return false; }
+    if (!run.begin(spec, err)) { labFail("LAB REFUSED %s\n", err.c_str()); return false; }
     const double t0 = msSinceStart();
     Vec3 eye, target;
     while (!mQuit && run.nextPose(eye, target)) {
         mCamera.set(iris::Vec3(eye.x, eye.y, eye.z), iris::Vec3(target.x, target.y, target.z));
         frame();
-        if (!run.frameDone(err)) { std::printf("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
+        if (!run.frameDone(err)) { labFail("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
     }
     StillnessReport rep;
-    if (!run.finish(rep, err)) { std::printf("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
+    if (!run.finish(rep, err)) { labFail("LAB STILLNESS FAILED %s\n", err.c_str()); return false; }
     const QString dir = QDir(mOpt.dataRoot).filePath(QStringLiteral("stillness"));
     QDir().mkpath(dir);
     const QString tsv = QDir(dir).filePath(QString::fromStdString(out) + QStringLiteral(".tsv"));
     {
         std::ofstream f(tsv.toStdString());
         f << rep.tsv();
-        if (!f) { std::printf("LAB STILLNESS FAILED cannot write %s\n", qPrintable(tsv)); return false; }
+        if (!f) { labFail("LAB STILLNESS FAILED cannot write %s\n", qPrintable(tsv)); return false; }
     }
     // THE PICTURES BESIDE THE TSV: each window's last frame, its heat (the largest change a pixel made over the
     // window, 32 grey levels a code: one code reads 32, eight or more white) and its late heat (the last quarter),
@@ -1121,24 +1144,24 @@ bool Session::lamp(const Command &c)
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
     walk(mDoc->getRootNode());
-    if (!found) { std::printf("LAB REFUSED lamp: no light named '%s'\n", c.args[0].c_str()); return false; }
+    if (!found) { labFail("LAB REFUSED lamp: no light named '%s'\n", c.args[0].c_str()); return false; }
     if (c.args[1] == "intensity") {
         char *end = nullptr;
         const double v = std::strtod(c.args[2].c_str(), &end);
-        if (!end || *end || v < 0.0) { std::printf("LAB REFUSED lamp: '%s' is not an intensity\n", c.args[2].c_str()); return false; }
+        if (!end || *end || v < 0.0) { labFail("LAB REFUSED lamp: '%s' is not an intensity\n", c.args[2].c_str()); return false; }
         found->setPropertyValue(QStringLiteral("intensity"), float(v));
         return true;
     }
     if (c.args[1] == "position") {
         iris::Vec3 p, unused;
         if (!parsePose(c.args[2] + ",0,0,0", p, unused)) {
-            std::printf("LAB REFUSED lamp: '%s' is not x,y,z\n", c.args[2].c_str());
+            labFail("LAB REFUSED lamp: '%s' is not x,y,z\n", c.args[2].c_str());
             return false;
         }
         found->setLocalPos(p);
         return true;
     }
-    std::printf("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
+    labFail("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
     return false;
 }
 
@@ -1151,14 +1174,14 @@ bool Session::material(const Command &c)
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
     walk(mDoc->getRootNode());
-    if (!found) { std::printf("LAB REFUSED material: no mesh named '%s'\n", c.args[0].c_str()); return false; }
+    if (!found) { labFail("LAB REFUSED material: no mesh named '%s'\n", c.args[0].c_str()); return false; }
     const iris::PbrMaterialPtr mat = found->getMaterial().dynamicCast<iris::PbrMaterial>();
-    if (!mat) { std::printf("LAB REFUSED material: '%s' wears no PBR material\n", c.args[0].c_str()); return false; }
+    if (!mat) { labFail("LAB REFUSED material: '%s' wears no PBR material\n", c.args[0].c_str()); return false; }
     if (c.args[1] == "colour") {
         iris::Vec3 rgb, unused;
         if (!parsePose(c.args[2] + ",0,0,0", rgb, unused) || rgb.x() < 0 || rgb.y() < 0 || rgb.z() < 0 ||
             rgb.x() > 1 || rgb.y() > 1 || rgb.z() > 1) {
-            std::printf("LAB REFUSED material: '%s' is not r,g,b in 0..1\n", c.args[2].c_str());
+            labFail("LAB REFUSED material: '%s' is not r,g,b in 0..1\n", c.args[2].c_str());
             return false;
         }
         mat->setValue("baseColor", QColor::fromRgbF(rgb.x(), rgb.y(), rgb.z()));
@@ -1168,13 +1191,13 @@ bool Session::material(const Command &c)
         char *end = nullptr;
         const double v = std::strtod(c.args[2].c_str(), &end);
         if (!end || *end || v < 0.0 || v > 1.0) {
-            std::printf("LAB REFUSED material: '%s' is not a roughness in 0..1\n", c.args[2].c_str());
+            labFail("LAB REFUSED material: '%s' is not a roughness in 0..1\n", c.args[2].c_str());
             return false;
         }
         mat->setValue("roughness", float(v));
         return true;
     }
-    std::printf("LAB REFUSED material: '%s' (colour | roughness)\n", c.args[1].c_str());
+    labFail("LAB REFUSED material: '%s' (colour | roughness)\n", c.args[1].c_str());
     return false;
 }
 
@@ -1182,7 +1205,7 @@ bool Session::move(const Command &c)
 {
     iris::Vec3 eye, target;
     if (!parsePose(c.args[0], eye, target)) {
-        std::printf("LAB REFUSED move: '%s' is not x,y,z,tx,ty,tz\n", c.args[0].c_str());
+        labFail("LAB REFUSED move: '%s' is not x,y,z,tx,ty,tz\n", c.args[0].c_str());
         return false;
     }
     const int n = std::atoi(c.args[1].c_str());
@@ -1206,29 +1229,29 @@ bool Session::pin(const Command &c)
 {
     using namespace jahshaka::engine;
     if (c.args[0] == "off") {
-        if (c.args.size() != 1) { std::printf("LAB REFUSED pin: 'pin off' takes nothing more\n"); return false; }
+        if (c.args.size() != 1) { labFail("LAB REFUSED pin: 'pin off' takes nothing more\n"); return false; }
         mScene->setGiPlacementPin(GiPlacementPin());   // a message: applied at the next frame's drain
         frame();
         std::printf("LAB PIN off\n");
         return true;
     }
-    if (c.args.size() < 2) { std::printf("LAB REFUSED pin: pin <c|all> x,y,z [scroll] | pin off\n"); return false; }
+    if (c.args.size() < 2) { labFail("LAB REFUSED pin: pin <c|all> x,y,z [scroll] | pin off\n"); return false; }
     const bool scroll = c.args.size() == 3 && c.args[2] == "scroll";
-    if (c.args.size() == 3 && !scroll) { std::printf("LAB REFUSED pin: '%s' (scroll)\n", c.args[2].c_str()); return false; }
+    if (c.args.size() == 3 && !scroll) { labFail("LAB REFUSED pin: '%s' (scroll)\n", c.args[2].c_str()); return false; }
     iris::Vec3 p, unused;
     if (!parsePose(c.args[1] + ",0,0,0", p, unused)) {
-        std::printf("LAB REFUSED pin: '%s' is not x,y,z\n", c.args[1].c_str());
+        labFail("LAB REFUSED pin: '%s' is not x,y,z\n", c.args[1].c_str());
         return false;
     }
     const GiStatus g = mScene->published().gi;
-    if (g.cascades.empty()) { std::printf("LAB REFUSED pin: the scene has no cascade chain\n"); return false; }
+    if (g.cascades.empty()) { labFail("LAB REFUSED pin: the scene has no cascade chain\n"); return false; }
     const int n = int(g.cascades.size());
     int only = -1;
     if (c.args[0] != "all") {
         char *end = nullptr;
         const long v = std::strtol(c.args[0].c_str(), &end, 10);
         if (!end || *end || v < 0 || v >= n) {
-            std::printf("LAB REFUSED pin: '%s' is not a cascade 0..%d or all\n", c.args[0].c_str(), n - 1);
+            labFail("LAB REFUSED pin: '%s' is not a cascade 0..%d or all\n", c.args[0].c_str(), n - 1);
             return false;
         }
         only = int(v);
@@ -1245,7 +1268,7 @@ bool Session::pin(const Command &c)
             if (only >= 0 && i != only) continue;
             bool armed = false;
             mEngine->request([&](Engine &e) { armed = e.setArm("gi.rebuildCascade", double(i)); });
-            if (!armed) { std::printf("LAB REFUSED pin: the engine refused the arm gi.rebuildCascade %d\n", i); return false; }
+            if (!armed) { labFail("LAB REFUSED pin: the engine refused the arm gi.rebuildCascade %d\n", i); return false; }
             frame();
         }
         mEngine->request([&](Engine &e) { e.setArm("gi.rebuildCascade", -1.0); });
@@ -1260,9 +1283,9 @@ bool Session::regions(const Command &c)
 {
     using namespace jahshaka::engine;
     const bool boxes = !c.args.empty() && c.args[0] == "boxes";
-    if (!c.args.empty() && !boxes) { std::printf("LAB REFUSED regions: '%s' (boxes)\n", c.args[0].c_str()); return false; }
+    if (!c.args.empty() && !boxes) { labFail("LAB REFUSED regions: '%s' (boxes)\n", c.args[0].c_str()); return false; }
     GiChangedRegions r;
-    if (!mScene->giChangedRegions(r)) { std::printf("LAB REGIONS FAILED: no list has closed (no frame drew the scene)\n"); return false; }
+    if (!mScene->giChangedRegions(r)) { labFail("LAB REGIONS FAILED: no list has closed (no frame drew the scene)\n"); return false; }
     static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp" };
     unsigned per[kGiRegionKindCount] = {};
     for (const GiChangedRegion &g : r.regions)
@@ -1284,7 +1307,7 @@ bool Session::voxels(const Command &c)
     using namespace jahshaka::engine;
     char *end = nullptr;
     const long ci = std::strtol(c.args[0].c_str(), &end, 10);
-    if (!end || *end || ci < 0) { std::printf("LAB REFUSED voxels: '%s' is not a cascade\n", c.args[0].c_str()); return false; }
+    if (!end || *end || ci < 0) { labFail("LAB REFUSED voxels: '%s' is not a cascade\n", c.args[0].c_str()); return false; }
     const std::string kind = c.args[1];
     // THE CHAIN'S ANSWER: no voxel work owed for two consecutive frames (GiStatus::chainOwed), cap 600 frames
     int waited = 0, quiet = 0;
@@ -1295,10 +1318,10 @@ bool Session::voxels(const Command &c)
         quiet = busy ? 0 : quiet + 1;
         if (quiet < 2) frame();
     }
-    if (quiet < 2) { std::printf("LAB VOXELS FAILED: the chain still owed voxel work after %d frames\n", waited); return false; }
+    if (quiet < 2) { labFail("LAB VOXELS FAILED: the chain still owed voxel work after %d frames\n", waited); return false; }
     if (kind == "stats") {
         const GiVoxelStats st = mScene->giVoxelStats(int(ci));
-        if (!st.available) { std::printf("LAB VOXELS FAILED: no stats for cascade %ld\n", ci); return false; }
+        if (!st.available) { labFail("LAB VOXELS FAILED: no stats for cascade %ld\n", ci); return false; }
         std::printf("LAB VOXELS STATS cascade %d %dx%dx%d format %s peak %.6g peakDirect %.6g (radiance) meanLit %.6g lit %lld "
                     "atMax %lld directAtMax %lld aboveOne %lld peakEmissive %.6g light %s direct %s store %s (waited %d "
                     "frames)\n",
@@ -1309,19 +1332,19 @@ bool Session::voxels(const Command &c)
     }
     GiVoxelVolume v;
     if (!mScene->giVoxelVolume(int(ci), v) || !v.available) {
-        std::printf("LAB VOXELS FAILED: no volume for cascade %ld\n", ci);
+        labFail("LAB VOXELS FAILED: no volume for cascade %ld\n", ci);
         return false;
     }
     const std::vector<float> *arr = kind == "direct" ? &v.direct : kind == "light" ? &v.light : kind == "back" ? &v.lightBack
                                   : kind == "albedo" ? &v.albedo : kind == "covp" ? &v.coverageP : kind == "covn" ? &v.coverageN
                                   : kind == "posp" ? &v.positionP : kind == "posn" ? &v.positionN : nullptr;
     if (!arr) {
-        std::printf("LAB REFUSED voxels: '%s' (direct|light|back|albedo|covp|covn|posp|posn|stats)\n", kind.c_str());
+        labFail("LAB REFUSED voxels: '%s' (direct|light|back|albedo|covp|covn|posp|posn|stats)\n", kind.c_str());
         return false;
     }
     const int res[3] = { v.width, v.height, v.depth };
     if (arr->size() != size_t(res[0]) * res[1] * res[2] * 4u) {
-        std::printf("LAB VOXELS FAILED: cascade %ld keeps no '%s' volume\n", ci, kind.c_str());
+        labFail("LAB VOXELS FAILED: cascade %ld keeps no '%s' volume\n", ci, kind.c_str());
         return false;
     }
     // THE WORLD CELL of voxel 0 (the origin is an exact multiple of the cell: the lattice's own corner) and the box's span
@@ -1335,12 +1358,12 @@ bool Session::voxels(const Command &c)
             if (ch == ',') { if (!cur.empty()) b.push_back(float(std::strtod(cur.c_str(), nullptr))); cur.clear(); }
             else cur += ch;
         }
-        if (b.size() != 6) { std::printf("LAB REFUSED voxels: '%s' is not x0,y0,z0,x1,y1,z1\n", c.args[3].c_str()); return false; }
+        if (b.size() != 6) { labFail("LAB REFUSED voxels: '%s' is not x0,y0,z0,x1,y1,z1\n", c.args[3].c_str()); return false; }
         for (int a = 0; a < 3; ++a) {
             // the voxels whose CENTRE lies in [b_a, b_a+3]
             lo[a] = std::max(0, int(std::ceil((double(b[size_t(a)]) - v.origin[a]) / v.cell[a] - 0.5)));
             hi[a] = std::min(res[a], int(std::floor((double(b[size_t(a + 3)]) - v.origin[a]) / v.cell[a] - 0.5)) + 1);
-            if (hi[a] <= lo[a]) { std::printf("LAB REFUSED voxels: the box misses cascade %ld\n", ci); return false; }
+            if (hi[a] <= lo[a]) { labFail("LAB REFUSED voxels: the box misses cascade %ld\n", ci); return false; }
         }
     }
     QString path = QString::fromStdString(c.args.size() > 2 ? c.args[2] : "voxels-" + c.args[0] + "-" + kind + ".vox");
@@ -1445,12 +1468,31 @@ int Session::run(const Options &opt)
     if (!mJlab.draw) execLine("draw off", "flag");
     if (mJlab.overlay) execLine("overlay on", "flag");
 
+    int scriptLine = 0;
     while (!mQuit) {
         if (!mScriptLines.empty()) {
             const std::string line = mScriptLines.front();
             mScriptLines.pop_front();
-            execLine(line, "script");
-            continue;
+            ++scriptLine;
+            // A REFUSED SCRIPT LINE STOPS THE SCRIPT (URGENT #50): no later line runs on a session that is not what its
+            // script says - nonzero, the line and its reason named; `try <line>` opts the one line out (said, the
+            // run's exit untouched)
+            size_t b = 0;
+            while (b < line.size() && std::isspace((unsigned char)line[b])) ++b;
+            const bool tryLine = line.compare(b, 4, "try ") == 0;
+            const std::string body = tryLine ? line.substr(b + 4) : line;
+            if (execLine(body, tryLine ? "script-try" : "script")) continue;
+            if (tryLine) {
+                std::printf("LAB TRY (line %d) '%s' refused - %s - the script goes on\n", scriptLine, body.c_str(),
+                            gLabLastFailure.c_str());
+                std::fflush(stdout);
+                continue;
+            }
+            std::printf("LAB SCRIPT STOPPED at line %d: '%s' - %s\n", scriptLine, line.c_str(), gLabLastFailure.c_str());
+            std::fflush(stdout);
+            mExit = 1;
+            mScriptLines.clear();
+            break;
         }
         if (mOpt.headless) {
             // NOTHING DRAWS UNASKED OFFSCREEN: the lab waits for the next line (an agent's stdin) or ends

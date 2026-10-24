@@ -16,6 +16,14 @@ jah_gpu_row(lab.boots_and_shoots SHIP CLASS engine FRAMES 82
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.script_stops (URGENT #50) — A REFUSED SCRIPT LINE STOPS THE SCRIPT, nonzero, naming the line and its reason; a
+# `try` line opts out (script_stops.sh). Three sessions of a frame on photon-contact at 320x180.
+jah_gpu_row(lab.script_stops CLASS engine FRAMES 3
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/script_stops.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/script_stops
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.script_stops PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.envs_build (stage 2) — `jahlab --env-check` per environment, the eight in parallel (envs_build.sh): each builds
 # (its meshes through the bake's stages) under 5 s, and rebuilds AND re-bakes deterministically: the same seed gives
 # the same triangle count, scene hash and bake hash (the bake pool's threaded output), the next seed another hash. CPU.

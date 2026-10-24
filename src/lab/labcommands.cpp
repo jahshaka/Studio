@@ -238,6 +238,8 @@ std::string helpText()
     o << "  W/A/S/D move, Q/E down/up, Shift x4, right mouse button held = look\n\n"
          "commands (--script lines, stdin lines and the keys' lines):\n";
     for (const VerbDoc &v : verbs()) o << "  " << v.usage << "\n      " << v.what << "\n";
+    o << "\na --script line the lab refuses STOPS the script there (exit 1, LAB SCRIPT STOPPED naming the line and its "
+         "reason);\n  try <line>\n      opts that one line out: its refusal is said (LAB TRY) and the script goes on\n";
     return o.str();
 }
 
