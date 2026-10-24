@@ -19,10 +19,17 @@
 #   --warm          ...and the boot's shader cache comes WARM from THE TREE'S ONE SHARED CACHE
 #                   (<build>/tests/.shadercache — the build tree's tests/ dir above <home>): hard-linked into
 #                   <home>/.local/share/Jahshaka/shadercache (the cache writes by rename, never in place, so a link is
-#                   never written through; its writer lock file is never linked). A green run whose cache grew
-#                   PROMOTES it as the shared one (a rename). A cold cache costs ~4 s a boot and is its own
-#                   measurement — a suite that asserts ON the cold cache (the VR warm-up, the shadow cache probes) runs
-#                   without --warm.
+#                   never written through; its writer lock file is never linked), and the shared cache's GENERATION
+#                   (its manifest's hash) stamped beside it (<home>/.shadercache-seed). A GREEN run's cache REPLACES the
+#                   shared one (a rename, under the shared cache's lock) when (1) a layer both hold carries ANOTHER KEY
+#                   (the shared one is stale: an engine rebuild, a media edit), or (2) the keys are equal and the shared
+#                   cache is still the generation this home was seeded from (the home's cache is that union plus what
+#                   this run compiled); (3) equal keys and ANOTHER home promoted since the seed: SKIPPED and logged (its
+#                   variants stay; this home's new ones compile once on a later run - a cost, never a wrong cache).
+#                   SIZE DECIDES NOTHING (urgent #36: a replace-by-size kept a stale 70 MB union for a day - after a key
+#                   change no single fixture's fresh cache outgrew it, and every engine row compiled cold). A cold cache
+#                   costs ~4 s a boot and is its own measurement — a suite that asserts ON the cold cache (the VR
+#                   warm-up, the shadow cache probes) runs without --warm.
 #   --cache <key>   (with --warm) the tree's shared cache NAMED <key>: <build>/tests/.shadercache-<key>, its own lock —
 #                   a set of rows that boots a different shader set keeps its own union (ENGINE-UPGRADE-1: the engine
 #                   fixtures' `engine` cache beside the app rows' 268 MB one, whose replay cost a fixture 0.4-0.8 s a boot
@@ -82,32 +89,53 @@ done
 cache_rel=.local/share/Jahshaka/shadercache
 shared=""
 [ -n "$tests_dir" ] && shared="$tests_dir/.shadercache${key:+-$key}"
+# A CACHE'S GENERATION: the hash of its manifest (every save rewrites it: `saved <ms>`), `none` without one
+generation() {
+    if [ -f "$1/cache-manifest.txt" ]; then sha256sum < "$1/cache-manifest.txt" | cut -c1-64; else echo none; fi
+}
+# A LAYER BOTH CACHES HOLD UNDER ANOTHER KEY (exit 0): the manifests' file lines carry each file's layer key (the fifth
+# field); the layers are pipeline.cache, microcode.cache and the hlms.N.bin files (one key)
+keys_differ() {
+    awk 'FNR == 1 { f++ }
+         $1 == "file" { l = $2; sub(/^hlms\..*/, "hlms", l); layer[f, l] = 1; k[f, l, $5] = 1 }
+         END { for (x in k) { split(x, p, SUBSEP); o = 3 - p[1]
+                              if (layer[o, p[2]] && !((o, p[2], p[3]) in k)) d = 1 }
+               exit d ? 0 : 1 }' "$1/cache-manifest.txt" "$2/cache-manifest.txt"
+}
 
 # THE WIPE AFTER (item 7): green -> a grown cache promoted, the home deleted; red -> the home moved to the evidence
 wipe_after() {
 rc="$1"
 if [ "$rc" = 0 ]; then
-    # a GREEN run: its cache grew past the shared one -> it becomes the shared one (a rename on one filesystem)
-    if [ "$warm" = 1 ] && [ -d "$home/$cache_rel" ]; then
-        mine=$(du -sk "$home/$cache_rel" 2>/dev/null | cut -f1); theirs=0
-        [ -d "$shared" ] && theirs=$(du -sk "$shared" 2>/dev/null | cut -f1)
-        if [ "${mine:-0}" -gt "${theirs:-0}" ]; then
-            rm -f "$home/$cache_rel/cache.lock"
-            # THE PROMOTION UNDER THE TREE'S CACHE LOCK, EXCLUSIVE (fix round item 7): no --warm links from a cache half
-            # swapped, two promotions never interleave, and the swap's leftovers (a .shadercache-next.* of a run that died
-            # mid-swap) go under the same lock; a lock not had in 60 s = no promotion (the run stays green)
-            (
-                flock -w 60 9 || exit 0
-                for o in "$shared"-next.*; do [ -e "$o" ] && rm -rf "$o"; done
-                theirs=0; [ -d "$shared" ] && theirs=$(du -sk "$shared" 2>/dev/null | cut -f1)
-                [ "${mine:-0}" -gt "${theirs:-0}" ] || exit 0
-                nxt="$shared-next.$$"
-                mv "$home/$cache_rel" "$nxt" \
-                    && { [ ! -d "$shared" ] || mv "$shared" "$nxt.old"; } \
-                    && mv "$nxt" "$shared" && rm -rf "$nxt.old"
+    # a GREEN run: its cache replaces the shared one by the three rules (the --warm help above; size decides nothing)
+    if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -f "$home/$cache_rel/cache-manifest.txt" ]; then
+        rm -f "$home/$cache_rel/cache.lock"
+        seed=$(cat "$home/.shadercache-seed" 2>/dev/null || echo none)
+        # THE PROMOTION UNDER THE TREE'S CACHE LOCK, EXCLUSIVE (fix round item 7): no --warm links from a cache half
+        # swapped, two promotions never interleave, and the swap's leftovers (a .shadercache-next.* of a run that died
+        # mid-swap) go under the same lock; a lock not had in 60 s = no promotion (the run stays green)
+        (
+            flock -w 60 9 || { echo "fresh_home.sh: the shared cache's lock not had in 60 s - no promotion" >&2; exit 0; }
+            for o in "$shared"-next.*; do [ -e "$o" ] && rm -rf "$o"; done
+            mine=$(generation "$home/$cache_rel"); theirs=$(generation "$shared")
+            [ "$mine" = "$theirs" ] && exit 0   # the run saved nothing: the home holds the shared cache as linked
+            why=""
+            if [ "$theirs" = none ]; then
+                why="there was no shared cache"
+            elif keys_differ "$home/$cache_rel" "$shared"; then
+                why="a layer's key differs (the shared cache was stale)"
+            elif [ "$theirs" != "$seed" ]; then
+                echo "fresh_home.sh: the shared cache NOT replaced - another home promoted since this one was seeded" \
+                     "(its variants stay; this run's new ones compile once on a later run)" >&2
                 exit 0
-            ) 9>"$shared.lock" || true
-        fi
+            fi
+            nxt="$shared-next.$$"
+            mv "$home/$cache_rel" "$nxt" \
+                && { [ ! -d "$shared" ] || mv "$shared" "$nxt.old"; } \
+                && mv "$nxt" "$shared" && rm -rf "$nxt.old"
+            [ -z "$why" ] || echo "fresh_home.sh: the shared cache REPLACED by this home's - $why" >&2
+            exit 0
+        ) 9>"$shared.lock" || true
     fi
     if [ "${JAH_KEEP_HOME:-}" = 1 ]; then
         echo "fresh_home.sh: JAH_KEEP_HOME=1 — the green run's home is kept: $home" >&2
@@ -161,6 +189,7 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     (
         flock -s -w 60 9 || exit 0
         [ -d "$shared" ] || exit 0
+        generation "$shared" > "$home/.shadercache-seed"   # the generation linked (the promotion's rule 2)
         ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
             mkdir -p "$home/$cache_rel/$(dirname "$f")"
             ln "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || true

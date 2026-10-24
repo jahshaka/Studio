@@ -432,10 +432,13 @@ def the_rules_catch():
 
 
 def fresh_home_behaves(source):
-    """THE WIPE AFTER, RUN (fix round item 7): tests/support/fresh_home.sh on a toy build tree — green: the home gone, a
-    grown cache promoted as the tree's one shared cache; red: the home moved to the evidence; TWELVE concurrent --warm
-    runs, each promoting a bigger cache while the others link: every run exits 0, no .shadercache-next.* is left, the
-    shared cache is whole (one of the runs' caches, complete)."""
+    """THE WIPE AFTER, RUN (fix round item 7): tests/support/fresh_home.sh on a toy build tree — green: the home gone, its
+    cache promoted as the tree's one shared cache by THE THREE RULES (urgent #36: size decides nothing) - (1) a layer's
+    key differs: replaced; (2) equal keys and the shared cache still the generation the home was seeded from: replaced;
+    (3) equal keys and another home promoted since the seed: skipped and logged, the next run warm for both; red: the
+    home moved to the evidence; TWELVE concurrent --warm runs linking and promoting: every run exits 0, no
+    .shadercache-next.* is left, the shared cache is whole (one of the runs' caches, complete). A toy run writes its
+    cache as the engine does - each file and the manifest by RENAME (a linked file is never written through)."""
     import shutil
     import tempfile
     fh = os.path.join(os.path.abspath(source), "tests", "support", "fresh_home.sh")
@@ -449,11 +452,27 @@ def fresh_home_behaves(source):
         td = os.path.join(b, "tests")
         cache = ".local/share/Jahshaka/shadercache"
         home = os.path.join(td, "x", "home-a")
-        w = "mkdir -p %s/%s && head -c 4096 /dev/zero > %s/%s/a.bin" % (home, cache, home, cache)
-        r = subprocess.run(["sh", fh, "--warm", home, "--", "sh", "-c", w], capture_output=True, text=True)
+        saved = [0]
+
+        def put(h, files, keep=()):
+            """A toy run's cache write: each (name, layer key) file by rename, then the manifest (the files `keep`
+            names - linked from the shared cache - listed beside them under their key) by rename."""
+            saved[0] += 1
+            d = "%s/%s" % (h, cache)
+            sh = ["mkdir -p %s" % d]
+            for n, _k in files:
+                sh.append("mkdir -p $(dirname %s/%s) && head -c 4096 /dev/urandom > %s/%s.tmp && mv %s/%s.tmp %s/%s"
+                          % (d, n, d, n, d, n, d, n))
+            lines = ["jahshaka-shader-cache 2", "saved %d" % saved[0]] + \
+                    ["file %s 4096 0 %s" % (n, k) for n, k in list(keep) + list(files)]
+            sh.append("printf '%s\\n' > %s/m.tmp && mv %s/m.tmp %s/cache-manifest.txt" % ("\\n".join(lines), d, d, d))
+            return " && ".join(sh)
+        sc = lambda *names: all(os.path.isfile(os.path.join(td, ".shadercache", n)) for n in names)
+        r = subprocess.run(["sh", fh, "--warm", home, "--", "sh", "-c", put(home, [("a.bin", "K1")])],
+                           capture_output=True, text=True)
         gone = lambda h: os.path.isdir(h) and os.listdir(h) == ["run"] and not os.listdir(os.path.join(h, "run"))
-        check(r.returncode == 0 and gone(home) and os.path.isfile(os.path.join(td, ".shadercache", "a.bin")),
-              "fresh_home: a green run deletes its home (an empty <home>/run kept: a row's cwd) and PROMOTES its grown cache as the shared one (%d %s)"
+        check(r.returncode == 0 and gone(home) and sc("a.bin") and "there was no shared cache" in r.stderr,
+              "fresh_home: a green run deletes its home (an empty <home>/run kept: a row's cwd) and PROMOTES its cache as the shared one (%d %s)"
               % (r.returncode, r.stderr[-120:]))
         # JAH_KEEP_HOME=1 (TOOLING-6 item 3): a DIAGNOSIS run keeps a GREEN run's home where it is and says so
         kh = os.path.join(td, "x", "home-keep")
@@ -485,7 +504,7 @@ def fresh_home_behaves(source):
         # A KEYED CACHE (ENGINE-UPGRADE-1): --cache <key> promotes into and links from .shadercache-<key>, never the
         # default one; a bad key is refused
         hk = os.path.join(td, "x", "home-k")
-        wk = "mkdir -p %s/%s && head -c 8192 /dev/zero > %s/%s/k.bin" % (hk, cache, hk, cache)
+        wk = put(hk, [("k.bin", "K1")])
         r = subprocess.run(["sh", fh, "--warm", "--cache", "engine", hk, "--", "sh", "-c", wk], capture_output=True, text=True)
         rk = subprocess.run(["sh", fh, "--warm", "--cache", "engine", hk, "--", "sh", "-c",
                              "test -f %s/%s/k.bin && test ! -f %s/%s/a.bin" % (hk, cache, hk, cache)], capture_output=True)
@@ -495,11 +514,62 @@ def fresh_home_behaves(source):
               and bad.returncode == 2,
               "fresh_home: --cache <key> keeps its own shared cache (.shadercache-<key>: promoted there, linked from there, "
               "the default one untouched) and refuses a key outside [a-z0-9_] (%d %d %d)" % (r.returncode, rk.returncode, bad.returncode))
+        # RULE (2), IN SEQUENCE: a home seeded from the shared cache holds it and adds its own - replaced, and the next
+        # home links both (a warm load of the first's variants)
+        h1, h2 = os.path.join(td, "x", "home-s1"), os.path.join(td, "x", "home-s2")
+        r1 = subprocess.run(["sh", fh, "--warm", h1, "--", "sh", "-c", "test -f %s/%s/a.bin && %s"
+                             % (h1, cache, put(h1, [("s1.bin", "K1")], keep=[("a.bin", "K1")]))], capture_output=True, text=True)
+        r2 = subprocess.run(["sh", fh, "--warm", h2, "--", "sh", "-c", "test -f %s/%s/s1.bin && %s"
+                             % (h2, cache, put(h2, [("s2.bin", "K1")], keep=[("a.bin", "K1"), ("s1.bin", "K1")]))],
+                            capture_output=True, text=True)
+        check(r1.returncode == 0 and r2.returncode == 0 and sc("a.bin", "s1.bin", "s2.bin"),
+              "fresh_home: rule (2) - equal keys, the generation seeded: two homes in turn each REPLACE the shared cache, "
+              "the second linked the first's variants (%d %d)" % (r1.returncode, r2.returncode))
+        # RULE (1): the keys differ (an engine rebuild) - the home's cache holds only what it compiled (its stale layers
+        # dropped) and is SMALLER than the stale union: replaced all the same, and the next home links it
+        hc = os.path.join(td, "x", "home-key")
+        stale = "rm -f %s/%s/s1.bin %s/%s/s2.bin" % (hc, cache, hc, cache)
+        r = subprocess.run(["sh", fh, "--warm", hc, "--", "sh", "-c", "%s && %s" % (stale, put(hc, [("a.bin", "K2")]))],
+                           capture_output=True, text=True)
+        hc2 = os.path.join(td, "x", "home-key2")
+        r2 = subprocess.run(["sh", fh, "--warm", hc2, "--", "sh", "-c", "test -f %s/%s/a.bin && %s"
+                             % (hc2, cache, put(hc2, [("b.bin", "K2")], keep=[("a.bin", "K2")]))], capture_output=True, text=True)
+        check(r.returncode == 0 and "a layer's key differs" in r.stderr and r2.returncode == 0 and sc("a.bin", "b.bin")
+              and not sc("s1.bin"),
+              "fresh_home: rule (1) - a layer's key differs: the smaller fresh cache REPLACES the stale union (logged), "
+              "and the next home is warm on it (%d %d %s)" % (r.returncode, r2.returncode, r.stderr[-120:]))
+        # RULE (3), A PARALLEL PAIR: both seeded from one generation; the first promotes, the second (its run ending
+        # after the first's promotion) is SKIPPED and logged; the next run links the first's and adds the second's
+        p1, p2 = os.path.join(td, "x", "home-p1"), os.path.join(td, "x", "home-p2")
+        go = os.path.join(td, "go")
+        pa = subprocess.Popen(["sh", fh, "--warm", p1, "--", "sh", "-c", "while [ ! -e %s ]; do sleep 0.05; done; %s"
+                               % (go, put(p1, [("p1.bin", "K2")], keep=[("a.bin", "K2"), ("b.bin", "K2")]))],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        pb = subprocess.Popen(["sh", fh, "--warm", p2, "--", "sh", "-c",
+                               "while [ ! -e %s ]; do sleep 0.05; done; while [ ! -e %s/.shadercache/p1.bin ]; do sleep 0.05; "
+                               "done; %s" % (go, td, put(p2, [("p2.bin", "K2")], keep=[("a.bin", "K2"), ("b.bin", "K2")]))],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        import time
+        for _ in range(200):   # both homes seeded (their stamps written) before either run goes on
+            if os.path.isfile(os.path.join(p1, ".shadercache-seed")) and os.path.isfile(os.path.join(p2, ".shadercache-seed")):
+                break
+            time.sleep(0.05)
+        open(go, "w").close()
+        ea, eb = pa.communicate(timeout=60)[1], pb.communicate(timeout=60)[1]
+        p3 = os.path.join(td, "x", "home-p3")
+        r3 = subprocess.run(["sh", fh, "--warm", p3, "--", "sh", "-c", "test -f %s/%s/p1.bin && %s"
+                             % (p3, cache, put(p3, [("p2.bin", "K2")], keep=[("a.bin", "K2"), ("b.bin", "K2"), ("p1.bin", "K2")]))],
+                            capture_output=True, text=True)
+        check(pa.returncode == 0 and pb.returncode == 0 and "NOT replaced" in eb and "NOT replaced" not in ea
+              and r3.returncode == 0 and sc("a.bin", "b.bin", "p1.bin", "p2.bin"),
+              "fresh_home: rule (3) - a parallel pair: the second promotion SKIPPED and logged (the first's variants "
+              "stay), and the next run warm on the first's adds the second's (%d %d %d %s)"
+              % (pa.returncode, pb.returncode, r3.returncode, eb[-120:]))
         procs = []
         for k in range(12):
             h = os.path.join(td, "x", "home-c%d" % k)
-            cmd = ("test -f %s/%s/a.bin || exit 7; mkdir -p %s/%s/d%d && head -c %d /dev/zero > %s/%s/d%d/f.bin"
-                   % (h, cache, h, cache, k, 8192 * (k + 2), h, cache, k))
+            cmd = ("test -f %s/%s/a.bin || exit 7; %s"
+                   % (h, cache, put(h, [("d%d/f.bin" % k, "K2")], keep=[("a.bin", "K2"), ("b.bin", "K2")])))
             procs.append(subprocess.Popen(["sh", fh, "--warm", h, "--", "sh", "-c", cmd], stdout=subprocess.DEVNULL,
                                           stderr=subprocess.PIPE, text=True))
         rcs = [p_.wait() for p_ in procs]
