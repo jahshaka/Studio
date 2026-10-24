@@ -305,6 +305,14 @@ int main(int argc, char **argv)
                     (unsigned long long)mc, (unsigned long long)mw);
         CHECK(cold.value("final").toObject().contains("paramsMisfits") && mc == 0u && mw == 0u,
               "no compute dispatch had parameters that do not fit its program (both sessions)");
+        // ...AND THE COUNTER IS LIVE (its negative control, stage 5's read W5): under the door shader.forceParamsMisfit
+        // the next dispatch is refused and counted - exactly one - and nothing more once the door is off
+        const qulonglong dc = cold.value("misfitDoor").toVariant().toULongLong();
+        const qulonglong ac = cold.value("misfitAfter").toVariant().toULongLong();
+        std::printf("    the door: refused under it %llu (from %llu), after it %llu\n", (unsigned long long)dc,
+                    (unsigned long long)mc, (unsigned long long)ac);
+        CHECK(cold.contains("misfitDoor") && dc == mc + 1u && ac == dc,
+              "the misfit counter reads one under the door shader.forceParamsMisfit, and none more without it");
     }
 
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
