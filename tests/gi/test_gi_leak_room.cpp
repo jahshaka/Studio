@@ -54,7 +54,9 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
-static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames);}
+// THE FRAMES THE ROW RENDERS (every frame goes through here): printed at the end, the row's FRAMES (source.testing_rules R7)
+static int gFrames = 0;
+static void render(Engine *e, int frames = 8) { enginetest::frames(e, frames); gFrames += frames; }
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
 // (its fix round, B1): gi.gather measures the same room with a third arm
@@ -586,7 +588,8 @@ int main()
         render(e, 2);
     }
 
-    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
+    std::printf("\n%d frames rendered\n", gFrames);
+    std::printf("%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

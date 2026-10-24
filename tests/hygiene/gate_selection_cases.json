@@ -255,7 +255,7 @@
    "must_not": [],
    "why_has": [
     "variable JAH_RQ_GEN_DIR",
-    "variable JAH_RQ_HEADERS",
+    "variable JAH_RQ_INCLUDE",
     "target JahshakaRayQuerySpv"
    ],
    "note": "the rows are the same either way (jahshaka_engine_ray_query(JahshakaEngine) already spans every engine fixture, so no `must` row can tell — 12d8158d1 selects the same 640): the case pins the READ by its why — the second if()'s body (the SPIR-V rules' variables), which the first if()'s two message() calls never named"

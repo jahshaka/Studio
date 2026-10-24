@@ -219,7 +219,7 @@ OGRE_SCENE_FUNCTIONS = {
     "dropSkeletonFollowers": ["skeletal", "avatar"],
     **{f: ["gi", "rtreflect", "shadow"] for f in ("rayTracingResolved", "rayTracingResolvedFor", "setRayTracing")},
     **{f: ["gi"] for f in ("walkCardLights", "cardEligible", "cardColumnKey", "cardLightKey", "cardSceneFacts",
-                           "foldCardEnvironment", "cardCandidates", "readCardTexel", "readCardAt", "dumpCardAtlas")},
+                           "foldCardEnvironment", "cardCandidates", "readCardTexel", "readCardRadiance", "readCardAt", "dumpCardAtlas")},
     "gpuSlotChanged": ["atom", "engine", "scale"],
     # ENGINE-UPGRADE-U4 decision 17.1: the card feed's halves (the lane half in the compose task, the ordered half in
     # the replay) and their shared read — the change feed the cards' scans and the compose's identity row read

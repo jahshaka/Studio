@@ -290,7 +290,7 @@ jah_gpu_row(gi.field_oracle CLASS engine COMMAND test_gi_field_oracle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_oracle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 2326)
+set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 3279)
 
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
 # TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
@@ -314,7 +314,7 @@ jah_gpu_row(gi.card_residency CLASS engine COMMAND test_gi_card_residency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1141)
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1482)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
@@ -337,7 +337,7 @@ jah_gpu_row(gi.card_lamp_shadow CLASS engine COMMAND test_gi_card_lamp_shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_lamp_shadow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 419)
+set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 528)
 
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
 # the field's and THE CARDS': a sealed room with a lamp inside and a red one outside, the red that reaches the inside
@@ -354,7 +354,7 @@ target_compile_definitions(test_gi_leak_room PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_leak_room PRIVATE JahshakaEngine)
 add_dependencies(test_gi_leak_room JahshakaEngineMedia)
-jah_gpu_row(gi.leak_room CLASS engine COMMAND test_gi_leak_room
+jah_gpu_row(gi.leak_room CLASS engine FRAMES 384 COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
@@ -384,8 +384,8 @@ foreach(_tier low medium high epic)
 endforeach()
 set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 208)
 set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 200)
-set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 1645)
-set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 1645)
+set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 1866)
+set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 1866)
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
