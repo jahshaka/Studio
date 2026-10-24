@@ -542,6 +542,16 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.low_gather (PHOTON-7 stage 7, 7-4) — LOW GAINS THE GATHER: low_gather.sh on photon-court, Low against Medium within
+# their sampling noise (at Medium, its own gather row against Low's by the arms, each converged at two rest seeds), the Low
+# tier's gather shape asserted, the gather's GPU rows over a 30-frame walk and its VRAM printed. 960x540; two sessions.
+if(TARGET jahlab)
+    jah_gpu_row(gi.low_gather CLASS engine TOKENS 8 FRAMES 1650
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/low_gather.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/low_gather
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.low_gather PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.walk_bistro is ARCHIVED (PHOTON-7 stage 5, the lead's ruling): its laws cannot fit 60 s at Bistro's ~25 ms a frame in
 # Debug - measured warm (scripts/lab/warm.sh), its hold cut to the frozen arm's minimum (the reflection held from frame
 # 611: 620), the live session 28.5 s, the frozen 16.5 s, then M1 past the cap. A MEASURE run by hand once at the master

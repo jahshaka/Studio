@@ -208,11 +208,12 @@ static void testGatherRow()
             CHECK(text.contains(QStringLiteral("%1 %2 rays a probe").arg(n).arg(gf.octRes * gf.octRes)),
                   qPrintable(QStringLiteral("the text names %1's gather from the table").arg(n)));
     }
-    CHECK(!worldmodes::photonGather(PhotonTier::Low).on &&
-              worldmodes::photonGather(PhotonTier::Medium).on &&
-              worldmodes::photonGather(PhotonTier::High).on &&
-              worldmodes::photonGather(PhotonTier::Epic).on,
-          "the gather row: off at Low, on at Medium, High and Epic");
+    CHECK(worldmodes::photonGather(PhotonTier::Low).on && worldmodes::photonGather(PhotonTier::Medium).on &&
+              worldmodes::photonGather(PhotonTier::High).on && worldmodes::photonGather(PhotonTier::Epic).on,
+          "the gather row: on at every tier (PHOTON-7 7-4)");
+    CHECK(worldmodes::photonGather(PhotonTier::Low).stride == 2u * worldmodes::photonGather(PhotonTier::Medium).stride &&
+              worldmodes::photonGather(PhotonTier::Low).octRes == 8u,
+          "...Low at twice Medium's stride with the 8x8 map (0.063 rays a pixel: Lumen High's density)");
     CHECK(worldmodes::photonVrGather(PhotonTier::Epic).on == worldmodes::photonGather(PhotonTier::Epic).on,
           "...and the VR column follows the desktop's (GA-VR)");
 }

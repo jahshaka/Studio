@@ -581,6 +581,11 @@ std::string Session::statusJson()
       << ",\"ifdMarkedByMoves\":" << gi.ifdMarkedByMoves << ",\"ifdMarkedByRegion\":" << gi.ifdMarkedByRegion
       << ",\"ifdMarkAlls\":" << gi.ifdMarkAlls << ",\"ifdRestarts\":" << gi.ifdRestarts
       << ",\"ifdFollows\":" << gi.ifdFollows << ",\"ifdDispatched\":" << gi.ifdDispatchedLastFrame;
+    // ...the screen-probe gather's shape and memory (PHOTON-7 stage 7: the tier's row as it ran, its resident VRAM)
+    o << ",\"gather\":{\"running\":" << (gi.gather.running ? "true" : "false") << ",\"stride\":" << gi.gather.stride
+      << ",\"raysPerProbe\":" << gi.gather.raysPerProbe << ",\"probes\":" << gi.gather.probes
+      << ",\"raysPerFrame\":" << gi.gather.raysPerFrame << ",\"vramBytes\":" << gi.gather.vramBytes
+      << ",\"historyBytes\":" << gi.gather.historyBytes << ",\"restFrames\":" << gi.gather.restFrames << "}";
     o << ",\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
