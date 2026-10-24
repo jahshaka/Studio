@@ -70,7 +70,8 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
-    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+    # (TIMEOUT 60, the law's cap: every test under a minute - priced 23.23 s, 1966 frames under the sanitizer)
+    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 60 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1966)

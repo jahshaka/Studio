@@ -34,8 +34,9 @@
 //      worthless if walking tripped it.
 //
 // Its own binary like every GI suite.
-// NO RAYS: this suite measures the voxel chain / the field / the cones / the probes on a chain without the
-// screen-probe gather (the gather needs the rays and has no row to turn it off, PHOTON-7 7-5).
+// ITS VIEW IS AN UNDECLARED OFFSCREEN VIEW (no View::setOffscreenContract), whatever the rays: its chain never gathers
+// (ChainDesc::probeGather is a still picture's, PHOTON-7 7-5) and shades through the no-ray route's screen integrate
+// (7-6) - this suite measures the voxel chain, the field, the cones and the probes beneath it, never the gather.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
