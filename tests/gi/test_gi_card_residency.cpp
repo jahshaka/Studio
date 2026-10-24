@@ -19,9 +19,9 @@
 //   (3) THE VALUES, printed: every lit texel of every card resident in both runs against the other run's, in codes
 //       (1 % of its radiance per channel over the store's floor) past one step of the R11G11B10F store. NOT YET A LAW:
 //       the cascades' placements at one pose are path-dependent (the scroll's hysteresis: after the walk c1-c3 trail the
-//       eye), and a cone ends at its cascade's box face (jah_voxel_march.glsl), so a card's marched indirect depends on
-//       where the boxes stand until the cone march hands over at the world's shells (stage 5's cone-shell item, whose
-//       commit makes this a law).
+//       eye), and what a card's marched indirect reads depends on where the boxes stand. The cone shells landed
+//       (0b8ba090) and did not remove it - a diffuse cone already hands over by its footprint (the premise measured
+//       false); the remainder is STORE-PLACEMENT-1's, whose fix makes this a law (the spec's cone-shell item).
 //   (5) A LATE FIRST READER KEEPS THE DEMAND OPEN FOR ITS OWN SETTLE (PHOTON-7 stage 5's read W3): a fourth run, the
 //       teleport again with the test door cards.gatherLate = 8 (the gather's stamps within 8 frames of the arrival
 //       dropped: it reads first 8 frames late, inside the settle's S = 10) - every card of the teleport's read set
@@ -364,8 +364,8 @@ int main()
             over += codes > 1.0 ? 1u : 0u;
         }
     }
-    std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code (the cone-shell "
-                "commit's law)\n", common, worst, over);
+    std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code "
+                "(STORE-PLACEMENT-1's law)\n", common, worst, over);
     CHECK(common > 0u, "(3) the cards resident in both runs compared");
 
     // (4) THE COMPACTION: from the crowded room (its read set in quarter pages) to room B (whole pages): the arrivals find
