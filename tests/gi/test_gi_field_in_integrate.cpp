@@ -14,12 +14,19 @@
 // THE LAWS:
 //   (1) THE CONTROL: B against B - every pixel identical (the instrument is exact);
 //   (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every lit channel of A within TWO ULPS of the fp16 value stored (the
-//       larger of A's and B's), DERIVED (the lead's ruling, 7-3): the pass's route rounds once, its sum at the end; the
-//       integrate's rounds the field term into its rgba16f texture, then its sum at the end - so |A - B| <= 1/2 ulp (A's
-//       sum) + 1/2 ulp (B's field term, at its own binade, at most the sum's) + 1/2 ulp (B's sum) <= 1.5 ulps of the
-//       result, and 2 bounds it. (Its bar was "2^-10 of the larger" until 7-3 - 1 to 2 ulps by binade, never derived:
-//       one pixel of 40,960 read 1.006 of it once the rough specular moved the sum's rounding.) The mean in those old
-//       quanta stays printed;
+//       larger of A's and B's), DERIVED FROM THE CODE (the lead's ruling, 7-3), by counting the fp16 roundings each
+//       route makes. The PBS pass runs at full precision (HlmsPbs's default precision mode full32: midf is float), so
+//       its arithmetic rounds nothing to fp16. THE PASS'S ROUTE (A) rounds ONCE: the shaded radiance stored into the
+//       scene's RGBA16F target (the readback's source: no post pass writes it in this view - no refraction,
+//       distortion or AO). THE INTEGRATE'S ROUTE (B) rounds TWICE: the composed fallback E/pi stored into the gather's
+//       rgba16f texture (rq_probe_integrate.comp), then the shaded radiance into the scene target. The field read
+//       itself is one text in fp32 on both routes (jah_field_read.glsl). So |A - B| <= 1/2 ulp (A's store) + 1/2 ulp
+//       of the TERM (B's texture) carried through the shading + 1/2 ulp (B's store). The term reaches the result
+//       scaled by the diffuse BRDF (the albedo, <= 1), which can put the result a binade BELOW the term: half a term
+//       ulp is then up to ONE ulp of the result. Hence 1/2 + 1 + 1/2 = 2 ulps, the bound, at the result's binade -
+//       reached (the worst at 2.00 ulps at 7-3: a term scaled across a binade edge). (It was "2^-10 of the larger"
+//       until 7-3 - 1 to 2 ulps by binade, never derived - and then "<= 1.5", which missed the binade the albedo
+//       drops.) The mean in the old quanta stays printed;
 //   (3) THE COMPARISON HAS THE POWER TO SEE A BIAS (the lead's ruling, 7-3): (2) compares at least 1,000 lit pixels
 //       whose fallback is NONZERO - the integrate's own composed E/pi (its readback, gather.irradianceReadback) - enough
 //       to see a 0.05-quantum bias at 3 sigma at the measured spread (printed, with its standard error). (It counted
@@ -184,7 +191,8 @@ int main()
     CHECK(controlDiff == 0u, "(1) THE CONTROL: the integrate's route twice, every pixel identical");
     CHECK(lit > 0u && outside == 0u,
           "(2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every lit channel of the pass's route within two ulps of the "
-          "stored value (derived: three half-ulp roundings)");
+          "stored value (derived: A's one fp16 store, B's two - the term's half ulp counting up to one ulp of the "
+          "result across the albedo's binade)");
     CHECK(irrShaped && powered >= 1000u,
           "(3) THE COMPARISON HAS THE POWER: at least 1,000 lit pixels whose fallback is nonzero (the integrate's own "
           "readback)");
