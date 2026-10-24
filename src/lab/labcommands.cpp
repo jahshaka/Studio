@@ -35,8 +35,6 @@ const std::vector<VerbDoc> &verbs()
         { "status", "status [file]", 0, 1,
           "the engine's AtomDrawStatus + RenderStats + the lab's state as ONE JSON line, appended to <file> (stdout without one)" },
         { "save", "save [file.jlab]", 0, 1, "the session as a .jlab (file or env, camera, tier, view, gi, occlusion, sun)" },
-        { "cardswatch", "cardswatch <file>|off", 1, 1,
-          "MEASURING ARM (reverted): per frame the cards' radiance change and the reflection's rest, appended to <file>" },
         { "cards", "cards [file]", 0, 1,
           "the surface cache's resident cards per object: its name, the cards resident and their faces (+x -x +y -y +z "
           "-z), the frame each face was last read (Scene::readCardRadiance; PHOTON-7 stage 5's residency by the "

@@ -20,7 +20,6 @@
 
 #include <chrono>
 #include <deque>
-#include <map>
 #include <memory>
 #include <string>
 
@@ -126,12 +125,6 @@ private:
     jahshaka::engine::ReflectSources mReflectSources = jahshaka::engine::ReflectSources::Both;
     bool mQuit = false;
     int mExit = 0;
-    // MEASURING ARM (reverted by the next commit): `cardswatch <file>` - per frame the cards and the reflection's rest
-    std::FILE *mCardsWatch = nullptr;
-    std::map<std::pair<unsigned long long, unsigned>, std::vector<float>> mCardsPrev;
-    std::vector<unsigned> mTexelLast;          ///< per trace texel: the frame its history count last rose
-    std::vector<unsigned short> mTexelPrev;    ///< ...and its count then
-    void cardsWatchFrame();
     unsigned long long mFrames = 0;
     unsigned long long mSceneTriangles = 0;
     int mShotSerial = 0;
