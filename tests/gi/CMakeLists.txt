@@ -434,7 +434,8 @@ set_tests_properties(gi.screen_integrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 
 # gi.screen_bind (PHOTON-7 stage 7, the lead's two risk fixes) — THE NO-RAY SCREEN PASSES' SHARED JOBS BIND NOTHING
 # STALE (the door gi.screenBindMissing: a pass without its inputs writes nothing, every slot its own stand-in; three
-# views, one destroyed; test_gi_screen_bind.cpp says the laws). A fixture.
+# views, one destroyed), AND A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE (a frame capture and a still at
+# another size, the live view against a twin scene's in one process; test_gi_screen_bind.cpp says the laws). A fixture.
 add_executable(test_gi_screen_bind test_gi_screen_bind.cpp)
 set_target_properties(test_gi_screen_bind PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

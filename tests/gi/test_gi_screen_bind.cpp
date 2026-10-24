@@ -1,11 +1,13 @@
 // gi.screen_bind (PHOTON-7 stage 7, the lead's two risk fixes) - THE NO-RAY SCREEN PASSES' SHARED JOBS BIND NOTHING
-// STALE.
+// STALE, AND A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE.
 //
 // The no-ray route's three compute passes (Jahshaka/ScreenIntegrate, ScreenAreaVis, ScreenAreaVisResolve) run SHARED
 // jobs (CompositorPassCompute finds them by name, uncloned): every view's ScreenGiListener sets their bindings in front
 // of its own dispatch.
 // THE FIXTURE: two identical scenes (a floor, a back wall, a plate under an area light 1 x 0.5 m facing down, a dim sky),
-// High, rays off, each with its own 256 x 256 still picture under one camera - S1's view the LIVE one, S2's its TWIN.
+// High, rays off, each with its own 256 x 256 still picture under one camera - S1's view the LIVE one, S2's its TWIN:
+// the no-screenshot arm, in the same process on the same frames (the premise, measured on every frame before a
+// screenshot: the two pictures bit-identical).
 // THE LAWS:
 //   (1) THE STAND-DOWN: a third view of S2 at another size and camera renders last (the jobs' last bindings are its);
 //       at rest, the frame the passes read their inputs as missing (the door gi.screenBindMissing) is DRAWN - every
@@ -14,6 +16,13 @@
 //       the frame after that third view is DESTROYED (its buffers freed: no job holds them). Before the fix the first
 //       view's passes dispatched over the third's bindings and Ogre's barrier solver threw ("Transitioning texture ...
 //       from Undefined to a read-only layout"): the frame lost for every view.
+//   (2) THE CAPTURE: mid-rest (the area history still accumulating), a clean frame capture of the live view
+//       (View::requestFrameCapture: its chain a second time, the same frame): the capture is the frame presented, byte
+//       for byte, and the live view's next frames are bit-identical to its twin's (before the fix: the capture's trace
+//       advanced the live view's history a second time on that frame - a different picture until it held).
+//   (3) THE SCREENSHOT AT ANOTHER SIZE (EngineSceneViewport::takeScreenshot's route: a still picture of S1 of its own,
+//       192 x 128, the live view's camera): while it renders and after it is destroyed, the live view's frames are
+//       bit-identical to its twin's.
 // A fixture (the engine alone, offscreen views). Counted in frames.
 
 #include "jahshaka/engine/Engine.h"
@@ -128,7 +137,11 @@ int main()
     View *twin = stillView(e, "screen_bind_twin", 256, 256, s2);
     if (!live || !twin) { std::printf("FAIL: the views\n"); return 1; }
     const Vec3 eye(0.0f, 1.9f, 2.6f), at(0.0f, 0.3f, -0.5f);
-    for (View *v : { live, twin }) enginetest::testCameraLookAt(v, eye, at);
+    float nudge = 0.0f;
+    const auto aim = [&]() {
+        for (View *v : { live, twin }) enginetest::testCameraLookAt(v, Vec3(eye.x + nudge, eye.y, eye.z), at);
+    };
+    aim();
     e->waitForAsyncShaders();
 
     // THE SETTLE: both scenes' GI at rest, their area visibility held (every stratum once)
@@ -141,6 +154,12 @@ int main()
             quiet = rest ? quiet + 1 : 0;
         }
         return quiet >= 20 ? f - quiet : -1;
+    };
+    // A STEP OF THE CAMERA (both views, the same): the area history restarts - mid-rest for the next n^2 frames
+    const auto restart = [&]() {
+        nudge += 0.002f;
+        aim();
+        run(1);
     };
     struct Pics { ImageF live, twin; };
     const auto read = [&]() {
@@ -156,6 +175,73 @@ int main()
                 s2->published().areaVis.reason.c_str());
     if (rest0 < 0) { std::printf("FAIL: the scenes reach their rest\n"); return 1; }
     char msg[384];
+
+    // ---- (2) THE CAPTURE, mid-rest ----
+    {
+        restart();
+        run(3);
+        const AreaVisStatus st = s1->published().areaVis;
+        bool premise = true;
+        for (int k = 0; k < 2; ++k) {
+            run(1);
+            const Pics p = read();
+            premise = premise && same(p.live, p.twin);
+        }
+        const bool armed = live->requestFrameCapture(false, true);
+        Image shot, presented;
+        bool taken = false;
+        bool twins = true;
+        std::string first;
+        for (int k = 0; k < 8; ++k) {
+            run(1);
+            if (!taken && live->frameCaptureState() == FrameCaptureState::Ready)
+                taken = live->takeFrameCapture(shot, false, &presented);
+            const Pics p = read();
+            if (!same(p.live, p.twin) && twins) first = "frame +" + std::to_string(k + 1) + ": " + diff(p.live, p.twin);
+            twins = twins && same(p.live, p.twin);
+        }
+        const AreaVisStatus after = s1->published().areaVis;
+        std::printf("   (2) the capture at rest frame %u (held %d; %u after), the premise %s; capture %s, %ux%u; %s\n",
+                    st.restFrames, int(st.held), after.restFrames, premise ? "held" : "FAILED",
+                    taken ? "taken" : "NOT TAKEN", shot.width, shot.height, twins ? "the twins identical" : first.c_str());
+        CHECK(premise && !st.held && st.running, "(2) premise: mid-rest, the live view and its twin bit-identical");
+        CHECK(armed && taken && shot.width == 256u && shot.rgba == presented.rgba,
+              "(2) the clean capture is the frame presented, byte for byte (it takes the view's area visibility)");
+        CHECK(twins, "(2) after the capture the live view's frames are bit-identical to its twin's");
+    }
+
+    // ---- (3) THE SCREENSHOT AT ANOTHER SIZE, mid-rest ----
+    {
+        if (settle(300) < 0) std::printf("   (3) NOT at rest before the screenshot\n");
+        restart();
+        run(3);
+        const AreaVisStatus st = s1->published().areaVis;
+        const Pics p0 = read();
+        const bool premise = same(p0.live, p0.twin);
+        View *shot = stillView(e, "screen_bind_shot", 192, 128, s1);
+        bool twins = shot != nullptr;
+        std::string first;
+        enginetest::testCameraLookAt(shot, Vec3(eye.x + nudge, eye.y, eye.z), at);
+        for (int k = 0; k < 6; ++k) {
+            run(1);
+            const Pics p = read();
+            if (!same(p.live, p.twin) && twins) first = "with it, frame +" + std::to_string(k + 1) + ": " + diff(p.live, p.twin);
+            twins = twins && same(p.live, p.twin);
+        }
+        ImageF shotPic;
+        const bool shotRead = shot && shot->readPixelsHdr(shotPic) && shotPic.width == 192u;
+        if (shot) e->destroyView(shot);
+        for (int k = 0; k < 6; ++k) {
+            run(1);
+            const Pics p = read();
+            if (!same(p.live, p.twin) && twins) first = "after it, frame +" + std::to_string(k + 1) + ": " + diff(p.live, p.twin);
+            twins = twins && same(p.live, p.twin);
+        }
+        std::printf("   (3) the screenshot at rest frame %u (held %d), the premise %s; %s\n", st.restFrames,
+                    int(st.held), premise ? "held" : "FAILED", twins ? "the twins identical" : first.c_str());
+        CHECK(premise && !st.held && shotRead, "(3) premise: mid-rest, the twins identical, the screenshot read");
+        CHECK(twins, "(3) while the screenshot renders and after, the live view's frames are bit-identical to its twin's");
+    }
 
     // ---- (1) THE STAND-DOWN, at rest ----
     {
