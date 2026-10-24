@@ -20,9 +20,9 @@ endif()
 # The working directory is UNCHANGED (nothing about asset resolution moves);
 # only the data root is redirected, which takes the settings file, the library
 # database and the asset store with it.
-set(_selftest_root ${CMAKE_CURRENT_BINARY_DIR}/selftest-data)
-file(MAKE_DIRECTORY ${_selftest_root})
-set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
+set(_selftest_home ${CMAKE_CURRENT_BINARY_DIR}/selftest-home)
+file(MAKE_DIRECTORY ${_selftest_home})
+set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}HOME=${_selftest_home};JAHSHAKA_DATA_ROOT=${_selftest_home}/.local/share/Jahshaka;")
 
 # THE SELF-TEST, ONCE — under the validation layer (TEST_GATE_AUDIT.md §2).
 # There used to be a second row, app.engine_selftest, running the identical
@@ -39,22 +39,23 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # satisfies its centre-pixel check (engine_selftest.sh says why, in full).
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (a hash-free selftest under the layer; it was in the lock by flake history only).
-# budget 50 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
-# THE DATA ROOT IS WIPED BEFORE EVERY RUN (2026-10-20): selftest-data persists across runs of one build dir, and a
-# JahLibrary.db left by an older build carries an older schema — the app's reset keeps the storages, wants their sidecar
-# directory, an older AssetStore has none, the library is REFUSED and the self-test exits 4 ("the self-test exited 4" on
-# main's build-linux in an 8-wide run; green in a fresh ship tree). A row owns its own state (shadercache.app 67cefee33,
-# api.contract cd0587fdc: the same fault).
-jah_fresh_home_fixture(app.engine_selftest_validation.fresh_root selftest_data_root "${_selftest_root}" LABELS "app")
-jah_ship_row(app.engine_selftest_validation.fresh_root)
+# THE HOME IS WIPED BEFORE EVERY RUN AND THE SHADER CACHE COMES WARM (URGENT #48's follow-up, the lead's ruling (a),
+# 2026-10-24): fresh_home.sh --warm - the home virgin (selftest-data used to persist across runs of one build dir, and a
+# JahLibrary.db left by an older build carries an older schema: the self-test exited 4 on main's build-linux,
+# 2026-10-20; a row owns its own state), the boot's shader cache the tree's one shared app cache, a green run's grown
+# cache promoted. COLD it no longer fits the 60 s cap: on the photon-7r merge's tree it compiled 355 shaders under the
+# layer and timed out at pose 1. WARM the layer still sees every vkCreateShaderModule and every pipeline creation, so the
+# Vulkan API guard is whole; the cold path's own work (glslang's CPU, the async workers' concurrent creations) is TSan's
+# (the cold validation of a subset: the leftover list). The wipe fixture (app.engine_selftest_validation.fresh_root) is
+# deleted: the wrapper wipes inside the row.
 jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
-         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_selftest_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
-    FIXTURES_REQUIRED selftest_data_root
-    TIMEOUT 60 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+    TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48)
 
 # app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only

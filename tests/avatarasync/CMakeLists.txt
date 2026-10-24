@@ -22,7 +22,10 @@ target_compile_definitions(test_avatar_async PRIVATE
 
 set(_avatar_async_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async)
 file(MAKE_DIRECTORY ${_avatar_async_home}/run)
-jah_gpu_row(avatar.responsive SHIP CLASS app TIER epic NEEDS photon COMMAND test_avatar_async
+# (THE HOME VIRGIN, THE SHADER CACHE WARM: fresh_home.sh --warm - URGENT #48's follow-up, 2026-10-24: cold, the suite
+# compiled every variant each run and passed the 60 s cap on the photon-7r merge's tree)
+jah_gpu_row(avatar.responsive SHIP CLASS app TIER epic NEEDS photon
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_avatar_async_home} -- $<TARGET_FILE:test_avatar_async>
          WORKING_DIRECTORY ${_avatar_async_home}/run)
 set_tests_properties(avatar.responsive PROPERTIES JAHSHAKA_TEST_FRAMES 921)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.responsive PROPERTIES
@@ -39,12 +42,7 @@ file(MAKE_DIRECTORY ${_avatar_async_timing_home}/run)
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(avatar.responsive )
 
-# FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
-# refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
-# SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
-# such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
-# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
-if(TEST avatar.responsive)
-    jah_fresh_home_fixture(avatar.responsive.fresh_home avatarResponsiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async" WARM LABELS "avatar")
-    set_property(TEST avatar.responsive APPEND PROPERTY FIXTURES_REQUIRED avatarResponsiveFreshHome)
-endif()
+# FRESH HOMES (PROJECT-NAMES-1): a project name is unique in a library, so a row that creates a project in a home
+# nothing wipes went red on its second run in the same tree. avatar.responsive's home is wiped by its own wrapper at the
+# start of every run (fresh_home.sh --warm, its COMMAND above; its wipe fixture avatar.responsive.fresh_home deleted with
+# the suite's own wipe, URGENT #48's follow-up).

@@ -315,18 +315,11 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
-    // A FRESH library per run: this suite asserts ABSOLUTE row counts around a
-    // cancel ("the library is exactly as it was"), and a home that persists
-    // across gates accumulates a second copy of everything. Guarded on the
-    // directory NAME so it can never point at a real user's home.
-    {
-        const QString home = qEnvironmentVariable("HOME");
-        if (QFileInfo(home).fileName() == QLatin1String("e2e-home-avatar-async"))
-            QDir(QDir(home).filePath(QStringLiteral(".local/share/Jahshaka"))).removeRecursively();
-        else
-            std::printf("info: HOME is not the suite's scratch home (%s) — not resetting\n",
-                        home.toUtf8().constData());
-    }
+    // A FRESH library per run (this suite asserts ABSOLUTE row counts around a cancel, "the library is exactly as it
+    // was"): the row's wrapper wipes the whole home before every run and seeds the boot's shader cache WARM from the
+    // tree's shared app cache (tests/support/fresh_home.sh --warm; URGENT #48's follow-up, 2026-10-24) - this suite's
+    // own wipe of the data root, the shader cache with it, made every run a cold compile, over the 60 s cap on the
+    // photon-7r merge's tree, so it is deleted.
     // AFTER the wipe (the archive.responsive (archived: archive/tests/archive) ordering lesson): unseeded, the
     // modal donate dialog meets app.quit() and the process never exits.
     testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
