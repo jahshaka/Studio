@@ -53,11 +53,11 @@ jah_gpu_row(open.frames SHIP CLASS app TIER epic NEEDS photon
          WORKING_DIRECTORY ${_frames_home}/run)
 # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12): 539 frames, ~23-25 s with the WARM
 # home it runs in (a cold home's startup build is 40 s of its own: that is not this row's shape).
-# TIMEOUT 300: three opens of the dragon sample plus two archive imports, cold
+# TIMEOUT 60 (URGENT #48: was 300): three opens of the dragon sample plus two archive imports, cold
 # (the home is not wiped between runs, so only the first is a cold bake).
 set_tests_properties(open.frames PROPERTIES
     ENVIRONMENT "HOME=${_frames_home};JAHSHAKA_DATA_ROOT=${_frames_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "openasync")
+    TIMEOUT 60 LABELS "openasync")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 

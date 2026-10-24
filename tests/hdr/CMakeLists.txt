@@ -32,7 +32,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+    set_tests_properties(hdr.drag_stable_asan PROPERTIES TIMEOUT 60 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.drag_stable_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1950)
 endif()
@@ -49,7 +49,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.meter_asan SHIP CLASS engine COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
+    set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 60 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.meter_asan PROPERTIES JAHSHAKA_TEST_FRAMES 5038)
 endif()
@@ -79,7 +79,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.bloom_amount_asan SHIP CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 60 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.bloom_amount_asan PROPERTIES JAHSHAKA_TEST_FRAMES 26)
 endif()
@@ -91,7 +91,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
     jah_gpu_row(hdr.dither_asan SHIP CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 60 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(hdr.dither_asan PROPERTIES JAHSHAKA_TEST_FRAMES 30)
 endif()
@@ -125,6 +125,6 @@ jah_gpu_row(hdr.bloom_showroom SHIP CLASS app TIER document
          WORKING_DIRECTORY ${_bloom_home}/run)
 set_tests_properties(hdr.bloom_showroom PROPERTIES
     FIXTURES_REQUIRED bloomShowroomHome
-    TIMEOUT 300 LABELS "scripting"
+    TIMEOUT 60 LABELS "scripting"
     ENVIRONMENT "HOME=${_bloom_home};JAHSHAKA_DATA_ROOT=${_bloom_home}/.local/share/Jahshaka")
 set_tests_properties(hdr.bloom_showroom PROPERTIES JAHSHAKA_TEST_FRAMES 737)

@@ -75,7 +75,7 @@ jah_gpu_row(shadergraph.emitter_parity SHIP CLASS engine
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.emitter_parity PROPERTIES JAHSHAKA_TEST_FRAMES 92)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 120 LABELS "pieces")
+set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 60 LABELS "pieces")
 
 # pieces.mirror — the document -> mirror -> renderer hop for a graph material
 # that carries a generated piece. Same source slice as tests/materialpreview
@@ -127,5 +127,5 @@ jah_gpu_row(pieces.mirror SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(pieces.mirror PROPERTIES JAHSHAKA_TEST_FRAMES 127)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(pieces.mirror PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "pieces")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "pieces")
 

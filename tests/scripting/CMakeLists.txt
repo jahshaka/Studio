@@ -43,7 +43,7 @@ jah_gpu_row(scripting.live CLASS app TIER low NEEDS NONE TEST_WINDOW
 set_tests_properties(scripting.live PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 60)
 jah_ship_row(scripting.live)   # THE SHIP SET (TEST-CUT-1)
 
 # host.sync_getters — THE DOOR, COUNTED (ENGINE-UPGRADE-U3 stage 2): 600 editor frames — 300 driver ticks (--script-live,
@@ -61,7 +61,7 @@ jah_gpu_row(host.sync_getters SHIP CLASS app TIER low NEEDS NONE FRAMES 630
 set_tests_properties(host.sync_getters PROPERTIES
     ENVIRONMENT "HOME=${_hsgHome};JAHSHAKA_DATA_ROOT=${_hsgHome}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 120)
+    TIMEOUT 60)
 
 # host.error_door (archived: archive/tests/host) — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decision 44, D1): 300
 # FREE-RUNNING driver frames (JAH_FREE_RUNNING=1) with every scene message refused (engine.arm messages.refuse) and
@@ -85,7 +85,7 @@ jah_gpu_row(editor.drag_latency SHIP CLASS app TIER low NEEDS NONE FRAMES 260
 set_tests_properties(editor.drag_latency PROPERTIES
     ENVIRONMENT "HOME=${_edlHome};JAHSHAKA_DATA_ROOT=${_edlHome}/.local/share/Jahshaka;JAH_FREE_RUNNING=1"
     LABELS "scripting"
-    TIMEOUT 120)
+    TIMEOUT 60)
 
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 8)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
@@ -120,12 +120,12 @@ foreach(_row author import restore)
                      ${CMAKE_CURRENT_BINARY_DIR}/material-live-roundtrip ${_row}
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
-set_tests_properties(material.live_roundtrip.author PROPERTIES LABELS "scripting" TIMEOUT 240
+set_tests_properties(material.live_roundtrip.author PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_SETUP material_live_roundtrip_author)
-set_tests_properties(material.live_roundtrip.import PROPERTIES LABELS "scripting" TIMEOUT 130
+set_tests_properties(material.live_roundtrip.import PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_SETUP material_live_roundtrip_import
     FIXTURES_REQUIRED material_live_roundtrip_author DEPENDS material.live_roundtrip.author)
-set_tests_properties(material.live_roundtrip.restore PROPERTIES LABELS "scripting" TIMEOUT 120
+set_tests_properties(material.live_roundtrip.restore PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_REQUIRED "material_live_roundtrip_author;material_live_roundtrip_import"
     DEPENDS "material.live_roundtrip.author;material.live_roundtrip.import")
 # scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, stage-close (lane
@@ -136,7 +136,7 @@ set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
 file(MAKE_DIRECTORY ${_ect_home}/run)
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
                   ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
-jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing SHIP CLASS app TIER document   RUN_TIMEOUT 180
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing SHIP CLASS app TIER document   RUN_TIMEOUT 60
     COMMAND sh "${JAH_FRESH_HOME}" --warm "${_ect_home}" --
             $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
     WORKING_DIRECTORY ${_ect_home}/run)
@@ -192,7 +192,7 @@ jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS phot
 set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
     ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED skySwapTransientFreshHome
-    LABELS "scripting" TIMEOUT 240)
+    LABELS "scripting" TIMEOUT 60)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
@@ -262,7 +262,7 @@ jah_ship_row(scripting.e2e.clip_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clip_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)   # two processes: 98 s measured on a cold shader cache, 8 s warm
+    TIMEOUT 60)   # two processes: 98 s measured on a cold shader cache, 8 s warm
 
 # scripting.e2e.tex_ref — a texture is referenced by its ASSET GUID (TEX-REF-1):
 # a cube's maps bound from a file and by guid, an imported textured model and an
@@ -284,7 +284,7 @@ jah_ship_row(scripting.e2e.tex_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.tex_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
+    TIMEOUT 60)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle (archived: archive/tests/perf):
@@ -306,7 +306,7 @@ jah_gpu_row(scripting.e2e.perf_capture_frames SHIP CLASS app TIER low NEEDS NONE
 set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_home}/perf"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 60)
 
 # assets_import.bundle_export_{texture,material,pack,sky} — JAF-EXPORTS-1: the Assets tray's exports
 # are the share file (assets.exportBundle, one entry or a pack); each kind's file re-imports into
@@ -425,7 +425,7 @@ set_tests_properties(scripting.e2e.one_asset PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_asset_home
     LABELS "scripting"
-    TIMEOUT 120)
+    TIMEOUT 60)
 
 # scripting.e2e.tray_panel — the asset tray shows EVERY ASSET A SCENE USES,
 # once (owner 2026-09-12, lane L13): the tray PANEL (editor.trayAssets reads
@@ -440,14 +440,14 @@ file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(scripting.e2e.tray_panel SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 550 = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
+# TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 550) = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
 # declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(scripting.e2e.tray_panel PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED tray_panel_home
     LABELS "scripting"
-    TIMEOUT 550)
+    TIMEOUT 60)
 
 # gi.one_writer — ONE WRITER PER VOXEL VOLUME (PHOTON-WRITER-1): a drag and a
 # lamp moving while the camera walks, on Showroom 2, read against the engine's
@@ -466,7 +466,7 @@ set_tests_properties(gi.one_writer PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_writer_home
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 60)
 
 # gi.pcc_mirror.ray_tier (archived: archive/tests/gi) — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
 # Showroom 2 at Epic: no grid with rays on, the grid with rays off, gone again with rays back
@@ -607,9 +607,9 @@ jah_ship_row(scripting.e2e.clipboard_budget)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES
     ENVIRONMENT "HOME=${_cbud_home}"
     LABELS "scripting"
-    # TIMEOUT 120: the policy's floor (tests/CMakeLists.txt) — 6x the measured 13.35 s (n=4, 13.33-13.86 s,
+    # TIMEOUT 60 (URGENT #48: was 120): the policy's floor (tests/CMakeLists.txt) — 6x the measured 13.35 s (n=4, 13.33-13.86 s,
     # 2026-10-11, three processes, solo on :72, the gate slot free) is 80 s, under it.
-    TIMEOUT 120)
+    TIMEOUT 60)
 set_property(TEST scripting.e2e.clipboard_budget APPEND PROPERTY ENVIRONMENT_MODIFICATION
              "JAHSHAKA_DATA_ROOT=unset:")
 jah_no_display(scripting.e2e.clipboard_budget)
@@ -663,7 +663,7 @@ jah_gpu_row(scripting.e2e.player_bounce SHIP CLASS app TIER epic NEEDS photon
 set_tests_properties(scripting.e2e.player_bounce PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 60)
 
 # scripting.e2e.new_scene — project.create(name, {template, location}), which IS
 # the New Scene dialog's two controls (WORLD-MODEL-1: Basic / Empty / World) (owner review R1 / R1b, lane
@@ -719,7 +719,7 @@ set_tests_properties(scripting.e2e.material_share PROPERTIES
     FIXTURES_REQUIRED materialShareHome
     FIXTURES_SETUP materialShareFile
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 60)
 
 configure_file(scripts/e2e_material_share_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
@@ -734,7 +734,7 @@ set_tests_properties(scripting.e2e.material_share_import PROPERTIES
     ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
     LABELS "scripting"
-    TIMEOUT 120)
+    TIMEOUT 60)
 
 # The far side: a library that has never seen the material, the image or the
 # project, and one archive.
@@ -760,7 +760,7 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     ENVIRONMENT "HOME=${_paHome};JAHSHAKA_DATA_ROOT=${_paHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED presetApplyHome
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 60)
 
 # scripting.e2e.preset_edit (archived: archive/tests/scripting) — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
 # PROJECT'S TO EDIT, and the FIRST EDIT is what makes the copy (the owner's

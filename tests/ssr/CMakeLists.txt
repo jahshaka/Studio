@@ -39,7 +39,7 @@ target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 # fallback beside it) is `gi.rt_reflect` (archived: archive/tests/gi) / `gi.rt_reflect_norays` (archived: archive/tests/gi).
 jah_gpu_row(ssr.engine SHIP CLASS engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
+set_tests_properties(ssr.engine PROPERTIES TIMEOUT 60 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 set_tests_properties(ssr.engine PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 
@@ -53,7 +53,7 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     # ...and the same ruling for the sanitised twin (see ssr.engine above).
-    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
     set_tests_properties(ssr.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 endif()

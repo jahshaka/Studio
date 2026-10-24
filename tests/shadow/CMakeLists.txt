@@ -33,7 +33,7 @@ jah_gpu_row(shadow.cutout_caster SHIP CLASS app TIER epic NEEDS photon bloom ssa
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 # budget 60 s: the measurement (TESTING-SPEED-B3): one process, 1,552 frames, 43.8-52 s loaded (the 377 s price was the
 # six-process era's: stale).
-set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272)
+set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 60)
 # gpu.cutout_soak.primitives / .tornado — a cut-out material must never lose the GPU (CUTOUT-CASTER-1): every cut-out path
 # draws under the Khronos validation layer — plain cut-outs on a cube and a sphere and the live graph cut-out the hang was
 # found on (.primitives), the Tornado sample (.tornado) — through the viewport and the offscreen screenshot path, with a
@@ -46,8 +46,8 @@ set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 272
 # scenes as two rows, each its own process on its own data root (the soak's one-process claim was its minutes).
 # Measured once each (2026-10-20, solo, the card lock held): primitives 37.4 s / 1,020 frames, tornado 36.7 s / 1,002.
 # TIMEOUT 6 x the solo run, rounded up.
-set(_soak_timeout_primitives 230)
-set(_soak_timeout_tornado 220)
+set(_soak_timeout_primitives 60)
+set(_soak_timeout_tornado 60)
 foreach(_part primitives tornado)
     jah_gpu_row(gpu.cutout_soak.${_part} SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
              COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh

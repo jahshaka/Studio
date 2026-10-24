@@ -17,9 +17,9 @@
 # frames, high_sky 39.5 s / 1,115, scaled 30.2 s / 506. TIMEOUT 6 x the solo run, rounded up.
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/scripts/reopen_fidelity.js _reopen_js)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/reopen_fidelity.js)
-set(_reopen_timeout_main 290)
-set(_reopen_timeout_high_sky 240)
-set(_reopen_timeout_scaled 190)
+set(_reopen_timeout_main 60)
+set(_reopen_timeout_high_sky 60)
+set(_reopen_timeout_scaled 60)
 foreach(_part main high_sky scaled)
     if(_part STREQUAL "main")
         set(_row scene.reopen_fidelity)

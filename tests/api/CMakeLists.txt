@@ -28,7 +28,7 @@ jah_ship_row(api.contract)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(api.contract PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED api_contract_home
-    TIMEOUT 120
+    TIMEOUT 60
     LABELS "scripting")
 # `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):
 # generating the docs needs the registry and a document, never a pixel. Run with

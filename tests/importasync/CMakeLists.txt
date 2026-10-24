@@ -60,7 +60,7 @@ add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_ship_row(import.async)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(import.async PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 120 LABELS "importer")
+                     TIMEOUT 60 LABELS "importer")
 
 # import.shutdown — the owner-reported ZOMBIE: quitting while (or right
 # after) a threaded import ran left the process alive headless with an
@@ -83,7 +83,7 @@ jah_gpu_row(import.shutdown SHIP CLASS app TIER epic NEEDS photon COMMAND test_i
          WORKING_DIRECTORY ${_shutdown_home}/run)
 set_tests_properties(import.shutdown PROPERTIES
     ENVIRONMENT "HOME=${_shutdown_home};JAHSHAKA_DATA_ROOT=${_shutdown_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "importer")
+    TIMEOUT 60 LABELS "importer")
 
 # The race lane (scripts/sanitize.sh tsan). import.async IS the threaded-import
 # contract — prepare on a worker, commit on the DB thread, progress callbacks

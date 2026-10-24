@@ -18,7 +18,7 @@ target_compile_definitions(test_scene_mirror PRIVATE
 target_link_libraries(test_scene_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_scene_mirror JahshakaEngineMedia)
 jah_gpu_row(mirror.document_to_engine SHIP CLASS engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 856)
 
 # mirror.vr_proxies (archived: archive/tests/mirror) — THE WEARER, DRAWN AT THE DESK AND IN EVERY EYE (VR_SPEC

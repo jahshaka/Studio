@@ -6,7 +6,7 @@
 # count and the bar together (the capture pool and capture.offline_unique.timing (archived: archive/tests/capture) were archived by TEST-CUT-1).
 # RUN_TIMEOUT = 6x the measured run after the admission (2026-10-09 on :71: 32 s). TIER document: a bar measures
 # the boot its scene counts on (the recording view takes the scene's own chain at its own tier).
-set(_cap_timing_first_recording 200)
+set(_cap_timing_first_recording 60)
 foreach(_arm first_recording)
     jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_${_arm}.js
                       ${CMAKE_CURRENT_BINARY_DIR}/capture_${_arm}.timing.js)

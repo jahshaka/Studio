@@ -34,7 +34,7 @@ jah_gpu_row(sockets.e2e SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "socket ver
 set_tests_properties(sockets.e2e PROPERTIES
     ENVIRONMENT "HOME=${_sockets_home};JAHSHAKA_DATA_ROOT=${_sockets_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 60)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its

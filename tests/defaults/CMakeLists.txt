@@ -28,7 +28,7 @@ jah_gpu_row(defaults.exposure_plane SHIP CLASS engine COMMAND test_exposure_plan
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(defaults.exposure_plane PROPERTIES JAHSHAKA_TEST_FRAMES 675)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 120 LABELS "mirror")
+    TIMEOUT 60 LABELS "mirror")
 
 # defaults.primitive_table (archived: archive/tests/defaults) — THE ONE PRIMITIVE TABLE as a contract (owner review
 # R6 / answer Q4, lane SMALL-UI-A). No engine and no display: the app's own

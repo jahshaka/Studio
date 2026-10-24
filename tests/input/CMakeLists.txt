@@ -20,7 +20,7 @@ target_link_libraries(test_input_actions PRIVATE Qt6::Gui)
 add_test(NAME input.actions COMMAND test_input_actions
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(input.actions)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(input.actions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+set_tests_properties(input.actions PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      LABELS "document")
 # No display, no engine, no GPU — and enforced, not asserted.
 jah_no_display(input.actions)

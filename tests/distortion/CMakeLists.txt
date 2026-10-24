@@ -30,7 +30,7 @@ target_link_libraries(test_distortion PRIVATE JahshakaEngine)
 jah_gpu_row(distortion.engine SHIP CLASS engine COMMAND test_distortion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(distortion.engine PROPERTIES JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(distortion.engine PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(distortion.engine PROPERTIES TIMEOUT 60 LABELS "engine")
 
 if(JAHSHAKA_ASAN)
     jahshaka_distortion_test(test_distortion_asan)
@@ -43,7 +43,7 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): distortion.engine is the merge row.
-    set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

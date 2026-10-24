@@ -35,7 +35,7 @@ target_link_libraries(test_drawers_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::
 add_test(NAME drawers.db COMMAND test_drawers_db
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(drawers.db)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(drawers.db PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "drawers")
+set_tests_properties(drawers.db PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "drawers")
 
 # The leak lane (scripts/sanitize.sh lsan).
 jah_lsan_lane(drawers.db)

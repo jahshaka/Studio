@@ -42,7 +42,7 @@ jah_gpu_row(log.engine SHIP CLASS app TIER epic NEEDS photon TEST_WINDOW
          WORKING_DIRECTORY ${_lg_home}/run)
 set_tests_properties(log.engine PROPERTIES
     ENVIRONMENT "HOME=${_lg_home};JAHSHAKA_DATA_ROOT=${_lg_home}/.local/share/Jahshaka"
-    TIMEOUT 300
+    TIMEOUT 60
     LABELS "log")
 
 # log.perf — the periodic performance sampler (SESSION_LOG_SPEC §10 phase 4

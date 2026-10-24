@@ -164,7 +164,7 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     jah_ship_row(source.gate_scope_rules)   # THE SHIP SET (TEST-CUT-1)
-    set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
+    set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.gate_scope_rules)
     # gate.selection — THE SELECTOR'S REPLAY (MODULAR-GATE-1): the recorded lanes' diffs
     # re-selected against this build's graph (gate_selection_cases.json): every REAL red of
@@ -175,7 +175,7 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_selection.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     jah_ship_row(gate.selection)   # THE SHIP SET (TEST-CUT-1)
-    set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene;tooling")
+    set_tests_properties(gate.selection PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
     # R1 every measuring row is inside the GPU lock; R2 every stage-close row is priced; R3 no
@@ -186,7 +186,7 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/testing_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     jah_ship_row(source.testing_rules)   # THE SHIP SET (TEST-CUT-1)
-    set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
+    set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.testing_rules)
     # source.row_budget — A ROW IS A SECONDS-LONG GUARD (DOCS/PROCESS.md): every kept guard's price (scripts/gate-times.txt)
     # within its class's budget (a fixture or CPU row 10 s, an app row 60 s); a `measure` row runs at the ship only. One
@@ -197,6 +197,14 @@ if(Python3_Interpreter_FOUND)
     jah_ship_row(source.row_budget)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(source.row_budget PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.row_budget)
+    # source.timeout_cap — EVERY TEST IS CAPPED AT 60 s (the owner's law, 2026-10-20; URGENT #48): every registered row has
+    # a TIMEOUT within 60 s and no run bound past it, and no code line of tests/**/CMakeLists.txt writes one over 60
+    # (timeout_cap.py; fed violations first).
+    add_test(NAME source.timeout_cap
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/timeout_cap.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.timeout_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.timeout_cap)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked
@@ -277,7 +285,7 @@ add_test(NAME source.gpu_rows_closure
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
 jah_ship_row(source.gpu_rows_closure)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
+set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.gpu_rows_closure)
 
 # source.row_declares_needs — TEST-NEEDS-1: every row that starts the app declares the World Mode
@@ -291,7 +299,7 @@ add_test(NAME source.row_declares_needs
                  --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
                  --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
 jah_ship_row(source.row_declares_needs)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 120 LABELS "hygiene;tooling")
+set_tests_properties(source.row_declares_needs PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.row_declares_needs)
 
 # source.scene_no_friends — ENGINE-UPGRADE-2 stage 2: OgreScene declares no friend (the ray

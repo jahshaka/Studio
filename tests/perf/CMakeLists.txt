@@ -25,7 +25,7 @@ jah_gpu_row(perf.offscreen_isolation SHIP CLASS app TIER low NEEDS NONE NEEDS_WH
 set_tests_properties(perf.offscreen_isolation PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "perf"
-    TIMEOUT 240)
+    TIMEOUT 60)
 
 # perf.epic_steady_state (archived: archive/tests/perf) — the GROWTH-ONLY steady-state gate (fps audit F11).
 #

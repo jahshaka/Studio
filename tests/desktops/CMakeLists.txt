@@ -34,7 +34,7 @@ target_link_libraries(test_desktops_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6:
 add_test(NAME desktops.db COMMAND test_desktops_db
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(desktops.db)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(desktops.db PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")
+set_tests_properties(desktops.db PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")
 
 # The leak lane (scripts/sanitize.sh lsan): database + model objects only.
 jah_lsan_lane(desktops.db )

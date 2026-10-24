@@ -40,7 +40,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set_tests_properties(view.window_on_render_thread PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
         FAIL_REGULAR_EXPRESSION "Validation Error;X ERROR"
-        TIMEOUT 180 LABELS "ui")
+        TIMEOUT 60 LABELS "ui")
     jah_tsan_render(view.window_on_render_thread)   # the render thread's TSan arm (U3 decision 47)
 endif()
 
@@ -343,7 +343,7 @@ jah_gpu_row(ui.space_docks SHIP CLASS app TIER low NEEDS NONE COMMAND test_space
 set_tests_properties(ui.space_docks PROPERTIES JAHSHAKA_TEST_FRAMES 631)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
-    TIMEOUT 480 LABELS "ui")
+    TIMEOUT 60 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(ui.space_docks)   # spawns the app
 jah_lsan_lane(ui.space_docks)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
@@ -367,7 +367,7 @@ file(MAKE_DIRECTORY ${_shot_home}/run)
 # (the script says why: synthesised input goes to whatever is under the pointer), and registered
 # only where the tools it drives exist. FRAMES 260 is an OBSERVATION under the Live render policy
 # (the green runs rendered 260; the red run, which waits out its bounded polls, rendered 692).
-# TIMEOUT 260 = the cold price 41.99 s x 6.
+# TIMEOUT 60 (URGENT #48: was 260) = the cold price 41.99 s x 6.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XDOTOOL xdotool)
     find_program(JAH_CURL curl)

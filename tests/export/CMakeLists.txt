@@ -27,7 +27,7 @@ jah_document_graph(test_web_export)
 add_test(NAME export.web COMMAND test_web_export
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(export.web)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(export.web PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
+set_tests_properties(export.web PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
 jah_no_display(export.web)
 
 # Embedded preview (Linux/X11): failure paths, the RE-ENTRY state machine

@@ -27,7 +27,7 @@ target_link_libraries(test_hzb PRIVATE JahshakaEngine)
 add_dependencies(test_hzb JahshakaEngineMedia)
 jah_gpu_row(chain.hzb SHIP CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(chain.hzb PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # engine.lod_rule_parity — REVIVED BY ATOM-5 (archived at 163d90223) and PROMOTED INTO THE SHIP SET at its merge: the cut's
 # C++ twin and the device's rule are held equal here (a change to one side without the other reds it — the subsystem's guard);

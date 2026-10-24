@@ -46,6 +46,6 @@ target_link_libraries(test_material_bundle PRIVATE IrisGL Qt6::Widgets Qt6::Sql 
 add_test(NAME materials.bundle COMMAND test_material_bundle
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(materials.bundle)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(materials.bundle PROPERTIES
+set_tests_properties(materials.bundle PROPERTIES TIMEOUT 60
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
 jah_no_display(materials.bundle)

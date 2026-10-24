@@ -12,7 +12,7 @@ target_link_libraries(test_math_parity PRIVATE Qt6::Gui)
 add_test(NAME math.parity COMMAND test_math_parity
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(math.parity)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(math.parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+set_tests_properties(math.parity PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      LABELS "document")
 
 # No Vulkan, no app process, no allocation the suite does not own.

@@ -25,6 +25,6 @@ target_link_libraries(test_light_falloff PRIVATE JahshakaEngine)
 add_dependencies(test_light_falloff JahshakaEngineMedia)
 jah_gpu_row(lights.falloff SHIP CLASS engine COMMAND test_light_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(lights.falloff PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(lights.falloff PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(lights.falloff PROPERTIES JAHSHAKA_TEST_FRAMES 54)
 

@@ -44,4 +44,4 @@ target_link_libraries(test_engine_material_preview PRIVATE IrisGL JahshakaEngine
 add_dependencies(test_engine_material_preview JahshakaEngineMedia)
 jah_gpu_row(materialpreview.engine SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_material_preview WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(materialpreview.engine PROPERTIES JAHSHAKA_TEST_FRAMES 96)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(materialpreview.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(materialpreview.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")

@@ -23,7 +23,7 @@ target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets Qt6::Test)
 add_test(NAME shortcuts.registry COMMAND test_shortcut_registry
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(shortcuts.registry)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(shortcuts.registry PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+set_tests_properties(shortcuts.registry PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
 # The leak lane (scripts/sanitize.sh lsan): the registry owns QAction/QShortcut
 # objects whose parenting is exactly the kind of thing this lane checks.

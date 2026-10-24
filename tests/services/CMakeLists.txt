@@ -25,7 +25,7 @@ target_include_directories(test_services PRIVATE
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(services.core)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+set_tests_properties(services.core PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 
 # services.looks (archived: archive/tests/services) — the looks catalogue (POST_LOOKS_SPEC.md §4.1). Links the
 # presentation table and IrisGL (the document half of the catalogue lives
@@ -56,7 +56,7 @@ jah_document_graph(test_memory_ownership)
 add_test(NAME services.memory COMMAND test_memory_ownership
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(services.memory)   # THE SHIP SET (TEST-CUT-1)
-set_tests_properties(services.memory PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+set_tests_properties(services.memory PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "services")
 jah_no_display(services.memory)
 

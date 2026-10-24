@@ -26,7 +26,7 @@ target_link_libraries(test_engine_asset_viewer PRIVATE IrisGL JahshakaEngine Qt6
 add_dependencies(test_engine_asset_viewer JahshakaEngineMedia)
 jah_gpu_row(assets.engine SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_asset_viewer WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(assets.engine PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
 # EnginePreviewScene, the base class the four preview surfaces share
 # (ENGINEERING_DEBT_SPEC item 6): the Ogre create/destroy order, attach
@@ -49,4 +49,4 @@ target_link_libraries(test_preview_scene_lifecycle PRIVATE IrisGL JahshakaEngine
 add_dependencies(test_preview_scene_lifecycle JahshakaEngineMedia)
 jah_gpu_row(preview.lifecycle SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_scene_lifecycle WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(preview.lifecycle PROPERTIES JAHSHAKA_TEST_FRAMES 21)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(preview.lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(preview.lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")

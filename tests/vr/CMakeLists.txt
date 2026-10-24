@@ -83,11 +83,11 @@ jah_gpu_row(vr.mirror_live SHIP CLASS vr TIER epic NEEDS photon
 # (90 frames, was 200) and the Player's hand-back two (60, was 120): 859 frames (2026-10-12, TESTING-SPEED-B4) -> 671,
 # counted 2026-10-20 (B3's meter, one solo run: 46.4 s, was 62.5 s on the same fresh tree's cold cache).
 set_tests_properties(vr.mirror_live PROPERTIES JAHSHAKA_TEST_FRAMES 671)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 330 = 6 x the run log's quiet median 53.9 s (46 quiet PASS runs since 2026-10-01, worst 168.6 s);
+# TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 330) = 6 x the run log's quiet median 53.9 s (46 quiet PASS runs since 2026-10-01, worst 168.6 s);
 # declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(vr.mirror_live PROPERTIES
     LABELS "scripting"
-    TIMEOUT 330
+    TIMEOUT 60
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")

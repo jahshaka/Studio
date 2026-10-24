@@ -33,7 +33,7 @@ jahshaka_looks_test(test_looks)
 target_link_libraries(test_looks PRIVATE JahshakaEngine)
 jah_gpu_row(looks.engine SHIP CLASS engine COMMAND test_looks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(looks.engine PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(looks.engine PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(looks.engine PROPERTIES JAHSHAKA_TEST_FRAMES 81)
 
 if(JAHSHAKA_ASAN)
@@ -45,7 +45,7 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine"
 
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(looks.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 81)

@@ -18,5 +18,5 @@ target_link_libraries(test_gizmo_overlay PRIVATE IrisGL JahshakaEngine Qt6::Gui 
 add_dependencies(test_gizmo_overlay JahshakaEngineMedia)
 jah_gpu_row(gizmo.overlay SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_overlay WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(gizmo.overlay PROPERTIES JAHSHAKA_TEST_FRAMES 38)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 

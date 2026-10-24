@@ -54,7 +54,7 @@ jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
     FIXTURES_REQUIRED selftest_data_root
-    TIMEOUT 660 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
+    TIMEOUT 60 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
@@ -99,7 +99,7 @@ jah_gpu_row(app.test_needs_boot SHIP CLASS app TIER epic NEEDS photon bloom
          WORKING_DIRECTORY ${_tnb_home}/run)
 set_tests_properties(app.test_needs_boot PROPERTIES
     ENVIRONMENT "HOME=${_tnb_home};JAHSHAKA_DATA_ROOT=${_tnb_home}/.local/share/Jahshaka"
-    TIMEOUT 300
+    TIMEOUT 60
     LABELS "app")
 
 # app.start_in_vr (archived: archive/tests/app) — THE VR PREFERENCES (VR-START-1): Start in VR (on) and the headset runtime (WiVRn);

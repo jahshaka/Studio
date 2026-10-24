@@ -142,7 +142,7 @@ jah_gpu_row(meshbake.archive_bakes SHIP CLASS app TIER low NEEDS NONE
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(meshbake.archive_bakes PROPERTIES
     ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
-    TIMEOUT 400 LABELS "meshbake")
+    TIMEOUT 60 LABELS "meshbake")
 
 # meshbake.shipped_bakes (archived: archive/tests/meshbake) (SHIPPED-BAKES-1's app arm): a FRESH data root boots —
 # its seed BAKES every shipped mesh (the primitives, the Teapot, the preview

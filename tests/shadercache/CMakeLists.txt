@@ -38,7 +38,7 @@ target_compile_definitions(test_shader_cache_app PRIVATE
 jah_gpu_row(shadercache.app SHIP CLASS app TIER document   COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # budget 60 s: the measurement — three launches, 976 frames: 42.8-60.8 s loaded at the tip (cold 33-35, warm 4.6, cleared 19).
-set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
+set_tests_properties(shadercache.app PROPERTIES TIMEOUT 60 LABELS "shadercache")
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
@@ -64,11 +64,11 @@ target_compile_definitions(test_async_after_open PRIVATE
 jah_gpu_row(shader.async_after_open.seed SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COMMAND test_async_after_open --seed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 180 LABELS "shadercache"   # 6 x its solo 28.2 s
+set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 60 LABELS "shadercache"   # 6 x its solo 28.2 s
     FIXTURES_SETUP asyncAfterOpenSeed)
 jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache"
+set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)
 
 # shader.async_soak (archived: archive/tests/shader) (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending

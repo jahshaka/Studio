@@ -68,7 +68,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 # parallel schedule cannot change its answer. Its own working directory because
 # both rows write an Ogre log.
 set_tests_properties(scenegraph.smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "benchmark-smoke")
 
 # THE RIG-PERF BENCH (SPECS/AVATAR_RIG_PERF_SPEC.md P0 / P3).
 #
@@ -101,7 +101,7 @@ jah_gpu_row(rigperf.smoke SHIP CLASS engine COMMAND bench_rigperf --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "benchmark-smoke")
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of

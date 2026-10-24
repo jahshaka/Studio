@@ -44,5 +44,5 @@ jah_gpu_row(cameras.exposure SHIP CLASS engine COMMAND test_camera_exposure
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.exposure PROPERTIES JAHSHAKA_TEST_FRAMES 1662)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 120 LABELS "mirror")
+    TIMEOUT 60 LABELS "mirror")
 

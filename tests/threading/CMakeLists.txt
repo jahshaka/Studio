@@ -28,7 +28,7 @@ add_dependencies(test_staging_race JahshakaEngineMedia)
 jah_gpu_row(threading.staging_race SHIP CLASS engine COMMAND test_staging_race
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(threading.staging_race PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "threading")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "threading")
 
 # The race lane (scripts/sanitize.sh tsan): this suite IS an async contract —
 # a worker building document nodes while the render loop runs — so it is a
@@ -101,7 +101,7 @@ jah_gpu_row(threading.texture_wait_watchdog SHIP CLASS app TIER low NEEDS NONE
 set_tests_properties(threading.texture_wait_watchdog PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_wd};JAHSHAKA_DATA_ROOT=${_thr_home_wd}/.local/share/Jahshaka;JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
     FIXTURES_REQUIRED threading_home_texture_wait_watchdog
-    LABELS "threading" TIMEOUT 240)
+    LABELS "threading" TIMEOUT 60)
 
 # The SEGV's precondition, greped off the logs both runs just wrote
 # (nogrouplesstexture.cmake carries the mechanism, and fails on an empty directory).

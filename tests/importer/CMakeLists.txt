@@ -77,7 +77,7 @@ jah_gpu_row(importer.meshformats SHIP CLASS engine COMMAND test_importer_meshfor
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.meshformats PROPERTIES JAHSHAKA_TEST_FRAMES 6)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(importer.meshformats PROPERTIES
-                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "importer")
 
 # Import SECURITY suite (deep audit 2026-09 List A item 1): texture-path and
 # mtllib containment through the ONE pipeline, IES bounds, the per-type source

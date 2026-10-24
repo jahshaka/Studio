@@ -22,5 +22,5 @@ add_dependencies(test_pick_fov_cap JahshakaEngineMedia)
 jah_gpu_row(picking.fov_cap SHIP CLASS engine COMMAND test_pick_fov_cap WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(picking.fov_cap PROPERTIES JAHSHAKA_TEST_FRAMES 9)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(picking.fov_cap PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 120 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine")
 

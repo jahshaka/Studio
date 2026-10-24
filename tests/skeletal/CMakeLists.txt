@@ -25,7 +25,7 @@ target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6:
 add_dependencies(test_gpu_clips JahshakaEngineMedia)
 jah_gpu_row(skeletal.gpu_clips SHIP CLASS engine COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.gpu_clips PROPERTIES JAHSHAKA_TEST_FRAMES 66)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
+set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
 # AVATAR_RIG_PERF_SPEC P1b: skeleton SHARING and its lifetime rules (§3.2/§3.3),
 # which is also the spike the spec asked for before P1b was estimated — kept as
@@ -54,7 +54,7 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share (archived: archive/tests/skeletal) is the merge row.
-    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 60 LABELS "engine"
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     jah_no_display(skeletal.share_asan)
 endif()

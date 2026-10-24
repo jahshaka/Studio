@@ -96,7 +96,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
         jah_gpu_row(atom.component_asan SHIP CLASS engine COMMAND test_atom_component_asan
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+        set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine"
             ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
         set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
     endif()
@@ -115,12 +115,12 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     if(NOT EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
         add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
+        set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 60 LABELS "engine")
         if(EXISTS "${_lvp_icd}")
             add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
             set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
-                TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+                TIMEOUT 60 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
         endif()
     endif()
     # UNDER THE VALIDATION LAYER, failing on any report: our recorder's barriers and the
@@ -165,7 +165,7 @@ jah_gpu_row(atom.pass_table SHIP CLASS app TIER document FRAMES 552
          WORKING_DIRECTORY ${_pt_home}/run)
 # TIMEOUT = 6x the measured 42.9 s (solo, the cold shader cache of a fresh fork pin: the boot's compile is most of it).
 set_tests_properties(atom.pass_table PROPERTIES
-    TIMEOUT 258 LABELS "scripting"
+    TIMEOUT 60 LABELS "scripting"
     ENVIRONMENT "HOME=${_pt_home};JAHSHAKA_DATA_ROOT=${_pt_home}/.local/share/Jahshaka")
 jah_fresh_home_fixture(atom.pass_table.fresh_home atomPassTableHome "${_pt_home}" WARM LABELS "scripting")
 set_property(TEST atom.pass_table APPEND PROPERTY FIXTURES_REQUIRED atomPassTableHome)

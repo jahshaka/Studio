@@ -27,7 +27,7 @@ jah_gpu_row(avatar.responsive SHIP CLASS app TIER epic NEEDS photon COMMAND test
 set_tests_properties(avatar.responsive PROPERTIES JAHSHAKA_TEST_FRAMES 921)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
-    TIMEOUT 360 LABELS "avatar")
+    TIMEOUT 60 LABELS "avatar")
 # avatar.responsive.timing (archived: archive/tests/avatar) — THE MILLISECOND BARS, stage-close (lane D6B-GATE-SHAPE; audit §5,
 # F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1 on a quiet box, under the
 # GPU-timing lock; the push row asserts the rest and prints the readings.

@@ -45,18 +45,18 @@ function(jahshaka_engine_test target)
     # gate the owner wants to finish in ten.
     # LABELLED like every engine row (D6B-GATE-SHAPE; audit §8: the three engine API rows
     # were the tree's only unlabelled engine suites, invisible to -L engine).
-    set_tests_properties(${target} PROPERTIES TIMEOUT 120 LABELS "engine")
+    set_tests_properties(${target} PROPERTIES TIMEOUT 60 LABELS "engine")
 endfunction()
 
 jahshaka_engine_test(test_engine)
 jah_ship_row(test_engine)   # THE SHIP SET (TEST-CUT-1)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 240 = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
+# TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 240) = 6 x the run log's quiet median 39.1 s (40 quiet PASS runs since 2026-10-01, worst 46.7 s);
 # declared 120 was below the policy, honest only with the +900 s widening (now deleted).
 # budget 20 s: the measurement (TESTING-SPEED-B3) — 96 cases, 2,882 frames, 15.9-16.1 s at load 6 (42-51 s loaded at the
 # base; 39 s quiet): every auto-exposure wait is FRAMES now (settleExposure: rendered until the measured exposure stops
 # moving — 192 frames to converge measured_exposure's chain — in place of wall-clock renderFor seconds with an 8 ms sleep
 # a frame), and the heavy-frame case builds its ~640 M triangles a frame from a 2.5 M shell.
-set_tests_properties(test_engine PROPERTIES TIMEOUT 240)
+set_tests_properties(test_engine PROPERTIES TIMEOUT 60)
 target_link_libraries(test_engine PRIVATE JahshakaEngine)
 
 # Create/destroy/create in one process — needs the OgreVulkanDevice.cpp patch (OGRE_PLATFORM_DEPS.md).
@@ -78,7 +78,7 @@ jah_gpu_row(test_engine_recreate SHIP CLASS engine COMMAND test_engine_recreate 
 # `createMesh` must REFUSE a hand-built level that names a vertex the mesh has not.
 # The same arm also runs inside test_engine_recreate's three cycles, because a
 # destroy that used to throw belongs in the suite that destroys three engines.
-set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # Decals (DECALS_SPEC.md): pixel-asserted projected textures, and the permanent
 # home of the phase-0 spike's UV / -Y / pool findings.
@@ -92,7 +92,7 @@ target_compile_definitions(test_decals PRIVATE
 target_link_libraries(test_decals PRIVATE JahshakaEngine)
 add_dependencies(test_decals JahshakaEngineMedia)
 jah_gpu_row(decals.engine SHIP CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(decals.engine PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(decals.engine PROPERTIES TIMEOUT 60 LABELS "engine")
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
 
@@ -306,13 +306,13 @@ if(JAHSHAKA_ASAN)
     # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
     # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
     # Use-after-free / overflow detection is the point here and stays on.
-    # TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (40 quiet PASS runs since 2026-10-01, worst 88.4 s);
+    # TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 430) = 6 x the run log's quiet median 71.1 s (40 quiet PASS runs since 2026-10-01, worst 88.4 s);
     # declared 420 was below the policy, honest only with the +900 s widening (now deleted).
     # STAGE-CLOSE (TESTING-SPEED-B3): an ASAN twin keeps its row and moves to the stage close; test_engine
     # (the same suite, uninstrumented) is the merge tier's.
-        # TIMEOUT 120 = the floor (6 x the solo runs 9.3 / 18.1 s are under it; TEST-CUT-1 stage 3, 2026-10-20)
+        # TIMEOUT 60 (URGENT #48: was 120) = the floor (6 x the solo runs 9.3 / 18.1 s are under it; TEST-CUT-1 stage 3, 2026-10-20)
         set_tests_properties(test_engine_asan.part${_part} PROPERTIES
-            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 120 LABELS "engine")
+            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}" TIMEOUT 60 LABELS "engine")
     endforeach()
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)

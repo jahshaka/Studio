@@ -31,11 +31,11 @@ file(MAKE_DIRECTORY ${_theme_sheets_home}/run)
 jah_gpu_row(theme.sheets SHIP CLASS app TIER low NEEDS NONE COMMAND test_theme_sheets
          WORKING_DIRECTORY ${_theme_sheets_home}/run)
 set_tests_properties(theme.sheets PROPERTIES JAHSHAKA_TEST_FRAMES 591)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
-# TESTING-CLEANUP-2B item 2: TIMEOUT 430 = 6 x the run log's quiet median 71.1 s (43 quiet PASS runs since 2026-10-01, worst 196.7 s);
+# TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 430) = 6 x the run log's quiet median 71.1 s (43 quiet PASS runs since 2026-10-01, worst 196.7 s);
 # declared 300 was below the policy, honest only with the +900 s widening (now deleted).
 set_tests_properties(theme.sheets PROPERTIES
     ENVIRONMENT "HOME=${_theme_sheets_home};JAHSHAKA_DATA_ROOT=${_theme_sheets_home}/.local/share/Jahshaka"
-    TIMEOUT 430 LABELS "ui")
+    TIMEOUT 60 LABELS "ui")
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW, TSAN-GCC15-THREAD-REGISTRY (testing/defects.json, recheck 2026-11-15)
 jah_tsan_blocked(theme.sheets)   # spawns the app
 jah_lsan_lane(theme.sheets)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing

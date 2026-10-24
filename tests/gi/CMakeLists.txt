@@ -39,7 +39,7 @@ add_test(NAME photon.tiers COMMAND test_photon_tiers
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_ship_row(photon.tiers)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    LABELS "document" TIMEOUT 120)
+    LABELS "document" TIMEOUT 60)
 set_tests_properties(photon.tiers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(photon.tiers)
 
@@ -101,7 +101,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
     jah_gpu_row(gi.rayquery_asan SHIP CLASS engine COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine"
+    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 60 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.rayquery_asan PROPERTIES JAHSHAKA_TEST_FRAMES 180)
@@ -132,7 +132,7 @@ add_dependencies(test_cloud_2d JahshakaEngineMedia)
 jah_gpu_row(cloud_2d.energy SHIP CLASS engine COMMAND test_cloud_2d energy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 120 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine")
 set_tests_properties(cloud_2d.energy PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 
 # VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
