@@ -224,13 +224,24 @@ int main(int argc, char **argv)
     const auto escapeOf = [](double lSky, double S) { return lSky * (1.0 - kADiffuse) / (kADiffuse * (S - lSky)); };
     const double sStar = kE / (1.0 - kADiffuse);
     // ONE TIER A ROW (gi.bounce_series.<tier>: a fixture's 10 s budget, source.row_budget), named by the argument;
-    // none = every tier.
+    // none = every tier. AND AT HIGH AND EPIC ONE PART A ROW (the second argument; PHOTON-7 stage 7: past the 10 s budget
+    // whole): `series` - the sky-leak, main and operator arms and the resume arm, laws (1)-(4); `fade` - the main room to
+    // its rest and the resume arm's state rebuilt (unjudged: the lamp arms start from it), then (5)'s FADE arm and (6),
+    // which rides on the fade; `lamp` - the same state, then (5)'s STEP arm and (7), the carried route from the step's end
+    // (the lamp at 200 at rest - the world the fade also ends in, within (5)'s code). None = every part.
+    const std::string part = argc > 2 ? argv[2] : "";
+    const bool doSeries = part.empty() || part == "series";
+    const bool doFade = part.empty() || part == "fade";
+    const bool doStep = part.empty() || part == "lamp";
+    const bool doLamp = doFade || doStep;
     for (int t = 0; t < 4; ++t) {
         if (argc > 1 && std::string(argv[1]) != names[t]) continue;
         std::printf("\n== %s ==\n", names[t]);
         const auto tierT0 = std::chrono::steady_clock::now();
         const int tierF0 = frames;
-        // THE SKY-LEAK ARM: the escape share, per cascade
+        // THE SKY-LEAK ARM: the escape share, per cascade (the series half)
+        std::vector<double> esc, skyL;
+        if (doSeries) {
         Arm sky = arm(tiers[t], 0.0f, 1.0f, true);
         if (!sky.scene || sky.cascades.empty() || !sky.cascades[0].ok) {
             CHECK(false, "the sky-leak arm's room and store");
@@ -238,7 +249,6 @@ int main(int argc, char **argv)
             continue;
         }
         CHECK(sky.restFrames >= 0, "the sky-leak arm comes to rest");
-        std::vector<double> esc, skyL;
         std::printf("   the sky-leak arm (E 0, S 1) at rest in %d frames: the ESCAPE e per cascade (a' %.4f):", sky.restFrames,
                     kADiffuse);
         for (size_t c = 0; c < sky.cascades.size(); ++c) {
@@ -249,6 +259,7 @@ int main(int argc, char **argv)
         }
         std::printf("\n");
         drop(sky);
+        }
 
         // THE MAIN ARM: the feedback to its rest, then the 64-pass Jacobi
         Arm m = arm(tiers[t], kE, 0.0f, false);
@@ -265,7 +276,7 @@ int main(int argc, char **argv)
                     "brick-passes a brick), %llu stops, %llu resumes, %llu saturated\n", m.restFrames, passes, bricksRan,
                     bricks0, bricks0 ? double(bricksRan) / bricks0 : 0.0, atRest.cascades[0].feedbackStops,
                     atRest.cascades[0].feedbackResumes, atRest.cascades[0].feedbackSaturated);
-        CHECK(m.restFrames >= 0, "THE FEEDBACK STOPS: the chain owes nothing at its rest");
+        if (doSeries) CHECK(m.restFrames >= 0, "THE FEEDBACK STOPS: the chain owes nothing at its rest");
         const Reading fb = m.cascades[0];
         // THE JACOBI OVER CASCADE 0 (the door set to 1): restarted from its direct term, every brick a pass a frame, the
         // outer cascades holding their state - the feedback's rest, so cascade 0's two answers are fixed points of one
@@ -283,8 +294,9 @@ int main(int argc, char **argv)
             afterJ.cascades.size() > 1 ? afterJ.cascades[1].feedbackBricksRan - atRest.cascades[1].feedbackBricksRan : 0ull;
         std::printf("   the Jacobi's window: cascade 0 ran %llu brick-passes (%.1f a brick), cascade 1 %llu\n", jRan,
                     bricks0 ? double(jRan) / bricks0 : 0.0, outerRan);
-        CHECK(jRan >= 56ull * bricks0 && outerRan == 0ull,
-              "the Jacobi door ran every brick of cascade 0 a frame, the outer cascades held");
+        if (doSeries)
+            CHECK(jRan >= 56ull * bricks0 && outerRan == 0ull,
+                  "the Jacobi door ran every brick of cascade 0 a frame, the outer cascades held");
         // (4) THE RESUME ARM: a lamp over the floor's centre, the room at its rest (the Jacobi's tail stopped first, so
         // every brick the lamp's sphere does not activate is STOPPED) - at the ray tiers' chain only (High, Epic: 128^3, a
         // 0.625 m brick); at Low and Medium (64^3, 1.25 m bricks) the walls a brick outside the range sit at the room's own
@@ -405,7 +417,7 @@ int main(int argc, char **argv)
         double stepWorst = 0.0, fadeWorst = 0.0, travelBeyond = 0.0, travelInside = 0.0;
         int stepRest = -1, fadeRest = -1;
         bool fadeOk = false;
-        if (lampArm && lampOk) {
+        if (lampArm && lampOk && doLamp) {
             const auto toRest = [&](int cap) {
                 int f = 0, quiet = 0;
                 for (; f < cap && quiet < 8; ++f) {
@@ -424,22 +436,30 @@ int main(int argc, char **argv)
                 m.scene->setLight(lampNode, ld);
             };
             toRest(900);   // the resume arm's Jacobi tail (the lamp at 200)
-            // THE START: the lamp at 400, at rest, and its Jacobi (the fade's travel)
+            // THE START: the lamp at 400, at rest, and (the fade's travel) its Jacobi
             setLamp(400.0f);
             toRest(900);
-            e->setArm("gi.bounceJacobi", 1.0);
-            run(64);
-            const Reading o400 = read(m.scene);
-            e->setArm("gi.bounceJacobi", 0.0);
-            run(2);
-            toRest(900);
+            Reading o400, sEnd, fEnd;
+            if (doFade) {
+                e->setArm("gi.bounceJacobi", 1.0);
+                run(64);
+                o400 = read(m.scene);
+                e->setArm("gi.bounceJacobi", 0.0);
+                run(2);
+                toRest(900);
+            }
             // THE STEP ARM: 400 -> 200 in one frame
-            setLamp(200.0f);
-            stepRest = toRest(900);
-            const Reading sEnd = read(m.scene);
-            // back to 400, to the rest
-            setLamp(400.0f);
-            toRest(900);
+            if (doStep) {
+                setLamp(200.0f);
+                stepRest = toRest(900);
+                sEnd = read(m.scene);
+                if (doFade) {
+                    // back to 400, to the rest
+                    setLamp(400.0f);
+                    toRest(900);
+                }
+            }
+            if (doFade) {
             // THE FADE ARM: 400 -> 200 linearly over kFadeFrames - and (6) cascade 0's relight rounds through it
             unsigned long long rounds0 = m.scene->published().gi.cascades.empty()
                                              ? 0ull : m.scene->published().gi.cascades[0].relightRounds;
@@ -462,22 +482,29 @@ int main(int argc, char **argv)
             fadeRounds = roundsDone;
             fadeRoundBound = int(2u * lwf + 2u);
             fadeRest = toRest(900);
-            const Reading fEnd = read(m.scene);
-            fadeOk = o400.ok && sEnd.ok && fEnd.ok && o400.voxels == lj.voxels && sEnd.voxels == lj.voxels &&
-                     fEnd.voxels == lj.voxels && lj.voxels == outside.size();
+            fEnd = read(m.scene);
+            }
+            // each arm against the end state's Jacobi (the resume arm's, the lamp at 200), beyond the range
+            fadeOk = lj.voxels == outside.size() && (!doFade || (o400.ok && fEnd.ok && o400.voxels == lj.voxels &&
+                                                                 fEnd.voxels == lj.voxels)) &&
+                     (!doStep || (sEnd.ok && sEnd.voxels == lj.voxels));
             if (fadeOk)
                 for (size_t i = 0; i < lj.voxels; ++i) {
                     const double o = std::max(double(lj.L[i]), 1e-6);
-                    const double travel = std::fabs(double(o400.L[i]) - double(lj.L[i])) / o;
+                    const double travel = doFade ? std::fabs(double(o400.L[i]) - double(lj.L[i])) / o : 0.0;
                     if (!outside[i]) { travelInside = std::max(travelInside, travel); continue; }
                     ++beyond;
                     travelBeyond = std::max(travelBeyond, travel);
-                    const double rs = std::fabs(double(sEnd.L[i]) - double(lj.L[i])) / o;
-                    const double rf = std::fabs(double(fEnd.L[i]) - double(lj.L[i])) / o;
-                    stepWorst = std::max(stepWorst, rs);
-                    fadeWorst = std::max(fadeWorst, rf);
-                    stepOver += rs > 0.01 ? 1u : 0u;
-                    fadeOver += rf > 0.01 ? 1u : 0u;
+                    if (doStep) {
+                        const double rs = std::fabs(double(sEnd.L[i]) - double(lj.L[i])) / o;
+                        stepWorst = std::max(stepWorst, rs);
+                        stepOver += rs > 0.01 ? 1u : 0u;
+                    }
+                    if (doFade) {
+                        const double rf = std::fabs(double(fEnd.L[i]) - double(lj.L[i])) / o;
+                        fadeWorst = std::max(fadeWorst, rf);
+                        fadeOver += rf > 0.01 ? 1u : 0u;
+                    }
                 }
             std::printf("   the slow fade (the lamp 400 -> 200 over %d frames): the inner-wall voxels move %.2f codes at most "
                         "inside the range (%.3f steps of the store a frame) and %.3f beyond it (%.3f steps a frame; %zu "
@@ -485,7 +512,9 @@ int main(int argc, char **argv)
                         "rest %d frames after: beyond, worst %.3f codes, %zu over one\n", kFadeFrames, 100.0 * travelInside,
                         travelInside * 1024.0 / kFadeFrames, 100.0 * travelBeyond, travelBeyond * 1024.0 / kFadeFrames,
                         beyond, stepRest, 100.0 * stepWorst, stepOver, fadeRest, 100.0 * fadeWorst, fadeOver);
-            // (7) THE CARRIED ROUTE: from the fade's end (the lamp at 200, at rest), FADED to 400 with the carry door set
+            // (7) THE CARRIED ROUTE: from the step's end (the lamp at 200, at rest - the world the fade also ends in),
+            // FADED to 400 with the carry door set
+            if (doStep) {
             const GiStatus c0 = m.scene->published().gi;
             e->setArm("gi.feedbackCarriedRoute", 1.0);
             for (int f = 1; f <= kCarryFadeFrames; ++f) {
@@ -519,21 +548,27 @@ int main(int argc, char **argv)
                         "frame, the carried section the only route): at rest in %d frames - cascade 0 resumed %llu bricks, carried %llu; beyond the range %zu "
                         "voxels moved over a code; vs Jacobi-64 worst %.3f codes, %zu over one\n", kCarryFadeFrames,
                         carryRest, carryResumes, carryCarried, carryMoved, 100.0 * carryWorst, carryOver);
+            }
         }
         std::vector<double> mainL;
         for (const Reading &r : m.cascades) mainL.push_back(r.ok ? r.mean : -1.0);
         drop(m);
 
-        // THE OPERATOR'S ARM: the sky held at the room's answer
-        Arm op = arm(tiers[t], kE, float(sStar), false);
-        const bool opOk = op.scene && !op.cascades.empty() && op.cascades[0].ok;
-        const double lOp = opOk ? op.cascades[0].mean : 0.0;
-        drop(op);
+        // THE OPERATOR'S ARM: the sky held at the room's answer (the series half)
+        bool opOk = !doSeries;
+        double lOp = 0.0;
+        if (doSeries) {
+            Arm op = arm(tiers[t], kE, float(sStar), false);
+            opOk = op.scene && !op.cascades.empty() && op.cascades[0].ok;
+            lOp = opOk ? op.cascades[0].mean : 0.0;
+            drop(op);
+        }
 
         if (!fb.ok || !j64.ok || fb.voxels != j64.voxels || !opOk) {
             CHECK(false, "the store reads back the same inner-wall voxels in every arm");
             continue;
         }
+        if (doSeries) {
         const double ec = esc[0];
         const double limit = kE / (1.0 - kADiffuse * (1.0 - ec));
         double worst = 0.0;
@@ -564,16 +599,23 @@ int main(int argc, char **argv)
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
             CHECK(lampOk && lampOver == 0u,
                   "(4) A STOPPED BRICK BESIDE A MOVING ONE RESTS WITHIN ONE CODE OF A 64-PASS JACOBI at every inner-wall voxel");
+        }
+        }
+        if (lampArm && doFade) {
             std::printf("   (6) the fade is a SUSTAINED change: cascade 0's relight went round its owed box %d times in %d frames, the "
                         "longest wait %d frames (the floor's bound: 2 x lightWorkFrames + 2 = %d)\n", fadeRounds, kFadeFrames,
                         fadeRoundGap, fadeRoundBound);
             CHECK(fadeRoundGap >= 0 && fadeRoundGap <= fadeRoundBound,
                   "(6) A SUSTAINED CHANGE NEVER STARVES CASCADE 0: its relight rounds within the floor's bound");
             CHECK(fadeOk && travelInside * 1024.0 / kFadeFrames < 1.0 && travelBeyond * 1024.0 / kFadeFrames < 1.0 &&
-                      travelBeyond > 0.01 && stepRest >= 0 && fadeRest >= 0,
+                      travelBeyond > 0.01 && fadeRest >= 0,
                   "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
-            CHECK(fadeOk && stepOver == 0u && fadeOver == 0u,
-                  "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, both within one code of a 64-pass Jacobi");
+            CHECK(fadeOk && fadeOver == 0u,
+                  "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the FADE arm within one code of a 64-pass Jacobi");
+        }
+        if (lampArm && doStep) {
+            CHECK(fadeOk && stepRest >= 0 && stepOver == 0u,
+                  "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the STEP arm within one code of a 64-pass Jacobi");
             CHECK(carryOk && carryRest >= 0 && carryMoved > 0u,
                   "(7) the carried route: the fade moves voxels beyond the range over a code, and the feedback comes to rest");
             CHECK(carryOk && carryOver == 0u,

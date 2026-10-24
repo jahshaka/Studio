@@ -435,16 +435,33 @@ target_compile_definitions(test_gi_bounce_series PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_bounce_series PRIVATE JahshakaEngine)
 add_dependencies(test_gi_bounce_series JahshakaEngineMedia)
-foreach(_tier low medium high epic)
+# (High and Epic in THREE ROWS each, PHOTON-7 stage 7: whole they passed the fixture's 10 s budget - the series part
+# (the sky-leak, main and operator arms and the resume arm: laws (1)-(4)); `_fade` (the main room and the resume arm's
+# state rebuilt, then (5)'s FADE arm and (6), which rides on the fade); `_lamp` (the same state, then (5)'s STEP arm and
+# (7), the carried route from the step's end); every bar unchanged.)
+foreach(_tier low medium)
     jah_gpu_row(gi.bounce_series.${_tier} CLASS engine COMMAND test_gi_bounce_series ${_tier}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
+foreach(_tier high epic)
+    jah_gpu_row(gi.bounce_series.${_tier} CLASS engine COMMAND test_gi_bounce_series ${_tier} series
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.bounce_series.${_tier}_fade CLASS engine COMMAND test_gi_bounce_series ${_tier} fade
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.bounce_series.${_tier}_lamp CLASS engine COMMAND test_gi_bounce_series ${_tier} lamp
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.bounce_series.${_tier} gi.bounce_series.${_tier}_fade gi.bounce_series.${_tier}_lamp PROPERTIES
+                         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+endforeach()
 set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 208)
 set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 200)
-set_tests_properties(gi.bounce_series.high PROPERTIES JAHSHAKA_TEST_FRAMES 1866)
-set_tests_properties(gi.bounce_series.epic PROPERTIES JAHSHAKA_TEST_FRAMES 1866)
+foreach(_tier high epic)
+    set_tests_properties(gi.bounce_series.${_tier} PROPERTIES JAHSHAKA_TEST_FRAMES 302)
+    set_tests_properties(gi.bounce_series.${_tier}_fade PROPERTIES JAHSHAKA_TEST_FRAMES 1530)
+    set_tests_properties(gi.bounce_series.${_tier}_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 459)
+endforeach()
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
 # CASCADE BUILT WHERE IT IS: three slabs in one scroll, a spread scroll (and a step cut to the scratch's layers), an edit
