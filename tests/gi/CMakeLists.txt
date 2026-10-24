@@ -358,6 +358,27 @@ jah_gpu_row(gi.leak_room CLASS engine FRAMES 384 COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.opaque_bindings (PHOTON-7 stage 7, 7-1) — THE OPAQUE PASSES READ ONLY SCREEN-SPACE GI (L4): the door
+# (PhotonStatus.h photonPassBindings) lists every Photon texture each named colour pass binds; at every tier on a ray
+# chain, a no-ray chain and a live offscreen chain the opaque passes list only the five screen products, and the refractives pass (the
+# control) a world cache (test_gi_opaque_bindings.cpp says the laws). Red on the base; the ray arms green at 7-5, the
+# no-ray and live arms at 7-6. A fixture.
+add_executable(test_gi_opaque_bindings test_gi_opaque_bindings.cpp)
+set_target_properties(test_gi_opaque_bindings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_opaque_bindings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_opaque_bindings PRIVATE JahshakaEngine)
+add_dependencies(test_gi_opaque_bindings JahshakaEngineMedia)
+jah_gpu_row(gi.opaque_bindings CLASS engine FRAMES 745 COMMAND test_gi_opaque_bindings
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.opaque_bindings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
