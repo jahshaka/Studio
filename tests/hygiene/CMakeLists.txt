@@ -205,6 +205,13 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.timeout_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.timeout_cap)
+    # tooling.warm_app_cache — scripts/warm-app-cache.sh's NO-OP PATH (URGENT #52): warm at the build's key it answers
+    # at once and boots nothing; no stamp, a moved key, a replaced or missing cache read cold (warm_app_cache.sh; a
+    # scratch tests dir, never the tree's shared cache).
+    add_test(NAME tooling.warm_app_cache
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/warm_app_cache.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(tooling.warm_app_cache PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.warm_app_cache)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked
