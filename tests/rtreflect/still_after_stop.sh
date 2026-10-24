@@ -1,8 +1,10 @@
 #!/bin/bash
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and its round 2: SPECS/PHOTON_2_SPEC.md rev 6's bars, R1;
 # split in round 4: (e) is rtreflect.lamp_step_held's, lamp_step_held.sh) — THE GLASS IS STILL AFTER A STOP. jahlab on photon-glass (the glossy pane pair at roughness 0.1 / 0.3, the pillars, the
-# mirror, the declared mover - parked), a 1.2 m walk INSIDE one c0 lattice cell (no GI row may fire after the stop: the
-# reflection's own law, alone), the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's
+# mirror, the declared mover - parked), a 1.2 m walk INSIDE one c0 lattice cell - EVERY GI ROW AFTER THE STOP OWED BY
+# THE MOTION, within its bound (the room's law, gi.hold_after_stop's, PHOTON-7 stage 5, 5-5: the demand's read-back
+# lags, so a card arrival and a field plane's refinement come after the stop; tests/support/owed_rows.py judges both
+# rows), so the reflection's law is judged on a still world - the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's
 # placement pin). Two 600-frame windows: P1's stop on the standard error runs most texels to K_max, so the view holds
 # on the 513th rest frame and a 530-frame window ended before it (the round-3 red at 2fb7f67b).
 # THE LAW (physics: under still lights and geometry a reflection is a function of the world and the eye): once the eye
@@ -47,7 +49,7 @@ python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])
 sys.path.insert(0, sys.argv[3])
-import rise_law
+import owed_rows, rise_law
 fails = list(rise_law.selfcheck())   # the law's instrument first: the read's synthetic bursts are rises, a flat tail none
 def window(name, which="walk"):
     p = os.path.join(wd, "data", "stillness", name + ".tsv")
@@ -62,8 +64,11 @@ log = open(os.path.join(wd, "run.log")).read()
 if rows is None or len(rows) != win + 1:
     fails.append("the walk window's %d frames: %s" % (win + 1, "no TSV" if rows is None else len(rows)))
     rows = None
-if not re.search(r"LAB STILLNESS walk stop=\S+ frames=%d visible=gather lastGiRow=-1 " % win, log):
-    fails.append("the walk stayed in one lattice cell: no GI row after the stop")
+if rows:
+    owed, stray, lastOwed = owed_rows.judge(rows)
+    print("the post-stop GI rows owed by the motion: %s; stray: %s" % (owed or "none", stray or "none"))
+    if stray: fails.append("every post-stop GI row owed by the motion within its bound (the room's law): %s" % stray[:4])
+    giAt = lambda a, b: [(int(r["frame"]), r["gi_rows"]) for r in rows[a:b] if r["gi_rows"] != "-"]
 if rows and not (int(rows[1]["mirror_px"]) > 0 and int(rows[1]["glossy_px"]) > 0):
     fails.append("the panes and the mirror are counted")
 if rows:
@@ -81,11 +86,13 @@ if rows:
     print("(a) glossy mean change, 10-frame windows from 17 to the hold: %s" % " ".join("%.4f" % w for w in win10))
     over = [(a, w) for (a, b), w in zip(spans, win10) if w > 0.05]
     if over: fails.append("(a) <= 0.05 codes from frame 17: %s" % " ".join("%d:%.4f" % x for x in over))
+    for a, w in over: print("(a) the GI rows inside the window from %d: %s" % (a, giAt(a, a + 10) or "none"))
     # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
     _, _, sigma, rising = rise_law.judge(glossy, 17, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))
     print("(a) the rise law's noise (sqrt of the mean change, the tail's successive differences): %.5f; rises %d" % (sigma, len(rising)))
     if rising: fails.append("(a) decreasing to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
                             % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in rising[:10]))
+    if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r[1] - 10), r[1] + 11) for r in rising], []))) or "none"))
     mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
     print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
     if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)

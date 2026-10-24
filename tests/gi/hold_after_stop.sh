@@ -67,11 +67,10 @@ python3 -I - "$WD" "$HERE/../support" <<'PY'
 import csv, os, re, sys
 wd = sys.argv[1]
 sys.path.insert(0, sys.argv[2])
-import rise_law
+import owed_rows, rise_law
 def window(name, part="walk"):
     return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == part]
-def rows_of(r):
-    return [] if r["gi_rows"] == "-" else [it.split(":")[0] for it in r["gi_rows"].split(",")]
+rows_of = owed_rows.rows_of
 def held_from(w):
     return next((int(r["frame"]) for r in w if r["held"] == "1"), None)
 def windows_to(w, h):
@@ -106,34 +105,7 @@ fails = list(rise_law.selfcheck())   # the law's instrument first: the read's sy
 w = window("room-sub")
 h = held_from(w)
 over = [(int(r["frame"]), int(r["plaster_max"])) for r in w[1:] if int(r["plaster_max"]) > 1]
-stop = int(w[0]["cards_frame"]) - 1          # the cache's frame of the walk's last move (frame 0 is the first still one)
-L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"])
-D = int(w[0]["ifd_restart_depth"]) + int(w[0]["ifd_mark_lag"])
-follows0 = int(w[0]["ifd_follows"])
-arrivals = []                                 # (window frame, cache frame, the arrivals' newest mark, cards)
-for k in range(len(w)):
-    got = int(w[k]["cards_admitted"]) - int(w[k - 1]["cards_admitted"]) if k else 0
-    if got > 0:
-        arrivals.append((int(w[k]["frame"]), int(w[k]["cards_frame"]), int(w[k]["cards_arrival_mark"]), got))
-owed, stray = [], []
-for r in w[1:]:
-    f, names = int(r["frame"]), rows_of(r)
-    if not names:
-        continue
-    cards = [n for n in names if n.startswith("cards.")]
-    ifd = [n for n in names if n.startswith("ifd.")]
-    other = [n for n in names if not n.startswith("cards.") and not n.startswith("ifd.")]
-    if cards:
-        a = [x for x in arrivals if x[0] <= f and x[0] >= f - 1]
-        ok = bool(a) and all(m <= stop and c - stop <= L for _, c, m, _ in a)
-        (owed if ok else stray).append((f, "cards: arrival %s (stop %d, bound %d)" % (a or "none", stop, L)))
-    if ifd:
-        ok = int(r["ifd_follows"]) == follows0 and f <= D
-        (owed if ok else stray).append((f, "ifd: the refinement of a plane entered before the stop (window moves since %d, bound %d)"
-                                           % (int(r["ifd_follows"]) - follows0, D)))
-    if other:
-        stray.append((f, "no motion's cause: %s" % other))
-last = max([f for f, _ in owed] or [0])
+owed, stray, last = owed_rows.judge(w)   # tests/support/owed_rows.py: the law, one implementation for both rows
 print("room sub-cell: post-stop rows owed by the motion %s; stray %s; held from frame %s (the last owed row %d + 17 = %d); plaster frames over a code: %s"
       % (owed or "none", stray or "none", h, last, last + 17, over[:6]))
 if stray: fails.append("(1) room sub-cell: every post-stop GI row owed by the motion within its bound: %s" % stray[:4])
