@@ -533,13 +533,27 @@ if(TARGET jahlab)
 endif()
 
 # gi.walk_rough (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S WALK: walk.sh --rough on photon-rough (its four rough
-# metal strips), the rough class's walking flicker M1 printed - the premise 7-3 is measured on (the voxel cone with no
-# history before it, the gather's probes after); the walk's own laws asserted. 960x540; three sessions.
+# metal strips): the rough class's LIVE RESIDUAL at or under the cone's recorded 48.32 % over a code, M1 and the settle
+# after a cut printed; the walk's own laws asserted. 960x540; four sessions.
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 1342
+    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 1740
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough --rough
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
+# gi.rough_lobe_quadrature / gi.rough_reference (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S TWO LAWS (rough_spec.sh):
+# the split sum's own error - the shipped read against the brute-force quadrature of the same probe map, within a code -
+# and the lobe at rest against the traced reflection's 4,096-sample reference, beating the cone's recorded error.
+if(TARGET jahlab)
+    jah_gpu_row(gi.rough_lobe_quadrature CLASS engine TOKENS 8 FRAMES 270
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_quad --quadrature
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rough_lobe_quadrature PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(gi.rough_reference CLASS engine TOKENS 8 FRAMES 4560
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_ref --reference
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rough_reference PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
 # gi.low_gather (PHOTON-7 stage 7, 7-4) — LOW GAINS THE GATHER: low_gather.sh on photon-court, Low against Medium within

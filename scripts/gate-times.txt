@@ -85,7 +85,9 @@ gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 16.07  quiet n=41
 gi.walk 49.05  solo, the card lock held, :83, warm (PHOTON-7 stage 0, 2026-10-22; jahlab on photon-court and photon-glass, 960x540, eight sessions, the court's M1 beside the glass's frozen arms; PHOTON-7 stage 5, 5-4: the field spends its whole grant on the walk restarts (the cones still hop at the box face)) (PHOTON-7 stage 5: the holds cut to the frames the laws need - the court 120, the glass 600 - and the glass M1 beside its second frozen walk: 59.6 -> 50.4 s; the second frozen walk dumps its pictures alone: 49.1 s)
-gi.walk_rough 25.42  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: photon-rough's walk - the rough class's M1, the rough specular's premise; the walk's own laws)
+gi.walk_rough 28.03  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: photon-rough's walk, the probes' prefiltered lobe - the live residual at or under the cone's recorded 48.32 %, M1 and the settle after a cut printed; four sessions)
+gi.rough_lobe_quadrature 3.95  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: the split sum keeps the energy - the shipped read against the brute-force quadrature of the same probe map, one session)
+gi.rough_reference 19.74  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: the held lobe against the traced reflection's 4,096-sample reference, beating the cone's recorded error; two sessions)
 gi.low_gather 12.40  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-4: Low gains the gather - at Medium its own row against Low's by the arms, two rest seeds each; the Low tier's shape; GPU rows over a 30-frame walk)
 gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)

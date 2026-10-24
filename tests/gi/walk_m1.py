@@ -135,7 +135,8 @@ for i in frames:
     ok = (flg & 1).astype(bool) & (dist > 0) & (z > 1e-3) & (px >= 0) & (py >= 0) & (px <= W - 1.001) & (py <= H - 1.001)
     x0 = np.clip(np.floor(px), 0, W - 2).astype(np.int32); y0 = np.clip(np.floor(py), 0, H - 2).astype(np.int32)
     fx = np.clip(px - x0, 0, 1)[..., None].astype(np.float32); fy = np.clip(py - y0, 0, 1)[..., None].astype(np.float32)
-    res = np.abs(lb - sample(la, x0, y0, fx, fy)).max(axis=2) - np.abs(fb - sample(fa, x0, y0, fx, fy)).max(axis=2)
+    live_res = np.abs(lb - sample(la, x0, y0, fx, fy)).max(axis=2)
+    res = live_res - np.abs(fb - sample(fa, x0, y0, fx, fy)).max(axis=2)
     if cls is not None:
         unclassified += int((ok & (cls == 0)).sum())
         counted += int(ok.sum())
@@ -145,6 +146,8 @@ for i in frames:
         if m is None or not m.any(): continue
         v = res[m]
         row[n] = (float(v.mean()), float(np.percentile(v, 99)), float((v > 1.0).mean()), int(m.sum()))
+        lv = live_res[m]
+        row['live ' + n] = (float(lv.mean()), float(np.percentile(lv, 99)), float((lv > 1.0).mean()), int(m.sum()))
     rows.append(row)
 
 # (L3) the classes cover the counted pixels
@@ -165,6 +168,15 @@ for pname, lo, hi in parts:
                   'over1': float(np.mean([v[2] for v in vals])), 'px': int(np.mean([v[3] for v in vals]))}
         print('%s %s M1 %-8s pairs %3d  mean %+.3f  p99 %.2f  >1 code %.2f %%  px %d' % (
               scene, pname, n, out[n]['pairs'], out[n]['mean'], out[n]['p99'], 100.0 * out[n]['over1'], out[n]['px']))
+        # ...AND THE LIVE ARM'S OWN RESIDUAL (PHOTON-7 stage 7, 7-3): M1 subtracts the frozen arm's, which carries every
+        # stochastic input both arms draw alike (the gather's probes are traced in both: a reader of the probes with no
+        # history of its own flickers the same in both arms and M1 cancels it) - the absolute walking change, the
+        # motion's resampling in it, compared between two estimators on one path
+        lvals = [r['live ' + n] for r in sel if ('live ' + n) in r]
+        if lvals:
+            print('%s %s live residual %-8s mean %.3f  p99 %.2f  >1 code %.2f %%' % (
+                  scene, pname, n, float(np.mean([v[0] for v in lvals])), float(np.mean([v[1] for v in lvals])),
+                  100.0 * float(np.mean([v[2] for v in lvals]))))
     result['parts'][pname] = {'m1': out}
 
 # THE HITCH LAW AND THE FRAME CLOCK (the live walk's moving frames, its trail but the converged hold before it)

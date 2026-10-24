@@ -903,6 +903,16 @@ bool Session::exec(const Command &c)
         mEngine->request([&](Engine &e) { ok = e.setArm(c.args[0], v); });
         if (!ok) std::printf("LAB REFUSED arm: no arm '%s' (or %s out of its range)\n", c.args[0].c_str(), c.args[1].c_str());
         else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
+    } else if (c.verb == "row") {
+        // A WORLD ROW, through the panel's own setter (PHOTON-7 stage 7, 7-3's reference: the reflection's cutoff)
+        const worldmodes::Row *r = worldmodes::row(QString::fromStdString(c.args[0]));
+        if (!r || !r->set) {
+            ok = false;
+            std::printf("LAB REFUSED row: no settable world row '%s'\n", c.args[0].c_str());
+        } else {
+            r->set(mDoc, std::atoi(c.args[1].c_str()));
+            std::printf("LAB ROW %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
+        }
     } else if (c.verb == "move") {
         ok = move(c);
     } else if (c.verb == "lights") {

@@ -72,6 +72,10 @@ const std::vector<VerbDoc> &verbs()
           "line each) - where a lamp is, for a pin or a camera (PHOTON-7 stage 1's Bistro read)" },
         { "arm", "arm <name> <value>", 2, 2,
           "a measuring arm (Engine::setArm, the engine's arm registry - e.g. gather.classOff 1); no frame is drawn" },
+        { "row", "row <id> <value>", 2, 2,
+          "a WORLD ROW set on the document through the World panel's own setter (irisgl worldmodes::row - e.g. "
+          "reflectionRoughnessCutoff 100, in the row's own units); the mirror pushes it with the next frame; no frame is "
+          "drawn" },
         { "stillness", "stillness <script|@file> <frames> [path] [age=N] [trail=N] [restarts] [dump=<name>|dumprgb=<name>] [freeze] [out=<name>]", 2, 9,
           "THE STILLNESS DOOR (PHOTON-2; irisgl Stillness.h): the move script (teleport:x,y,z,tx,ty,tz / "
           "walk:x,y,z,tx,ty,tz:N / hold:N, '/'-separated, or @file), the stop, then <frames> frames measured: the "
