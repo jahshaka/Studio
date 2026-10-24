@@ -247,6 +247,16 @@ int main(int argc, char **argv)
     }
     CHECK(cold.value("live").toInt() == 0 && warm.value("live").toInt() == 0,
           "liveCompiles is 0 for both sessions after the open");
+    // THE COMPUTE PARAMETERS FIT THEIR PROGRAMS (PHOTON-7 stage 5): the warm launch is the one whose GI builds while its
+    // compute permutations land from the compile threads - a refused dispatch is counted, never dispatched
+    {
+        const qulonglong mc = cold.value("final").toObject().value("paramsMisfits").toVariant().toULongLong();
+        const qulonglong mw = warm.value("final").toObject().value("paramsMisfits").toVariant().toULongLong();
+        std::printf("    compute dispatches refused for parameters not fitting their program: cold %llu, warm %llu\n",
+                    (unsigned long long)mc, (unsigned long long)mw);
+        CHECK(cold.value("final").toObject().contains("paramsMisfits") && mc == 0u && mw == 0u,
+              "no compute dispatch had parameters that do not fit its program (both sessions)");
+    }
 
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;
