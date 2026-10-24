@@ -358,6 +358,25 @@ jah_gpu_row(gi.leak_room CLASS engine FRAMES 384 COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.relight_credit (stage 5's read B1) — A LAMP'S RELIGHT AFTER A SHADER WAIT SPENDS ONE FRAME'S COUNT: the test door
+# gi.relightShaderHold holds every cascade's relight 40 frames over a lamp step; then no frame relights more than the
+# count plus the spending cascades' credit caps (test_gi_relight_credit.cpp says the laws). A fixture.
+add_executable(test_gi_relight_credit test_gi_relight_credit.cpp)
+set_target_properties(test_gi_relight_credit PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_relight_credit PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_relight_credit PRIVATE JahshakaEngine)
+add_dependencies(test_gi_relight_credit JahshakaEngineMedia)
+jah_gpu_row(gi.relight_credit CLASS engine FRAMES 410 COMMAND test_gi_relight_credit
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.relight_credit PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.opaque_bindings (PHOTON-7 stage 7, 7-1) — THE OPAQUE PASSES READ ONLY SCREEN-SPACE GI (L4): the door
 # (PhotonStatus.h photonPassBindings) lists every Photon texture each named colour pass binds; at every tier on a ray
 # chain, a no-ray chain and a live offscreen chain the opaque passes list only the five screen products, and the refractives pass (the
