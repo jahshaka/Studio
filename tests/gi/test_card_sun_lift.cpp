@@ -15,7 +15,8 @@
 // split 4 x 2 into 2.0 cm texels), level 0 96 segments (0.83 degrees), level 1 6 segments (13.3 degrees: its chords'
 // middles 5.4 cm inside the arc - the measured bound, under the nominal page's 8.0 cm texel, so the card captures level
 // 1), a sun 3 degrees off overhead, the card cache on. Every texel of the eight cards along v = 0.5, 64 per card: the
-// sun term, the lift it started at, against the level's bound. Frames: 1 + 48 = 49.
+// sun term, the lift it started at, against the level's bound. A still picture with two uncarded walls beside the cap
+// (the readers that make its cards resident, since PHOTON-7 stage 5). Frames: 1 + the cards' residency (<= 400).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -122,9 +123,38 @@ int main()
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 16.0f, 128, 0.0f };
     gi.cards = true;
+    // THE CARDS' READERS (PHOTON-7 stage 5, 5-2, at the photon-7r merge: a card is resident while a reader's rays hit it -
+    // the gather's and the reflection's - never by its distance from the eye): a still picture gathers, and two
+    // UNCARDED walls 6 m tall beside the cap (x +-7 m, past its 5.14 m half-width - their shadows fall outside it: the
+    // sun is 3 degrees off overhead) hold the gather's probes whose rays come down on the cap's top, both halves.
+    {
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 1;
+        view->setPostFx(fx);
+        view->setOffscreenContract(OffscreenContract::StillPicture);
+        PbrParams wp;
+        wp.albedo = Colour(0.5f, 0.5f, 0.5f);
+        wp.roughness = 0.9f;
+        for (float x : { -7.0f, 7.0f }) {
+            const NodeId wall = s->createNode();
+            const MeshId wm = s->createMesh(enginetest::unitCubeMesh());
+            const MaterialId wmat = s->createPbrMaterial(wp);
+            if (!wall || !wm || !wmat || !s->attachMesh(wall, wm, wmat)) { std::printf("FAIL: a wall\n"); return 1; }
+            enginetest::setNodeScale(s, wall, Vec3(0.2f, 6.0f, 6.0f));
+            enginetest::setNodePosition(s, wall, Vec3(x, 3.0f, 0.0f));
+        }
+    }
     CHECK(s->setGlobalIllumination(gi), "GI builds with the card row on");
-    enginetest::testCameraLookAt(view, Vec3(0.0f, 7.0f, 12.0f), Vec3(0.0f, 1.0f, 0.0f));
-    enginetest::frames(e, 48);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 9.0f, 14.0f), Vec3(0.0f, 1.0f, 0.0f));
+    // (to residency: the cap's eight cards admitted and captured - the demand's settle and its read-back lag)
+    int f = 0;
+    for (; f < 400; ++f) {
+        enginetest::frames(e, 1);
+        const CardCacheStatus c = s->published().gi.cards;
+        if (c.built && c.cardsResident == 8u && c.queueLength == 0u && f >= 48) break;
+    }
+    std::printf("   the cap's cards resident after %d frames\n", f + 1);
     const CardCacheStatus st = s->published().gi.cards;
     CHECK(st.built && st.cardsResident == 8u, "the cap holds its card split 4 x 2 (%u resident)", st.cardsResident);
     CHECK(st.queueLength == 0u, "every card is captured (%u queued)", st.queueLength);

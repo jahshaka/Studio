@@ -468,9 +468,17 @@ int main(int argc, char **argv)
         rough.roughness = 0.8f;              // far above the cutoff's 0.4 default
         CHECK(s->setPbrMaterial(wallMat, rough), "the wall accepts roughness 0.8");
         const float redRough = measure(e, view, "wall at roughness 0.8", 20);
-        CHECK_MSG(redRough < redPlain + 0.03f,
-                  "ABOVE THE GATE NO RAY IS SPENT: %.4f, the probe's own photograph answers",
-                  redRough);
+        // RE-POINTED AT THE MERGE (PHOTON-7 stage 7, 7-3 and 7-6): above the gate the wall's specular is the chain's own
+        // lobe - this undeclared view's no-ray screen integrate's cone, which reaches the emissive cube behind the
+        // camera (a rough wall reflects its light: the red excess is physics, not a ray) - so "no ray is spent" is
+        // stated as what it means: the same wall with the rays OFF reads the same (the traced share zero).
+        e->setRayTracing(false);
+        const float redRoughNoRays = measure(e, view, "wall at roughness 0.8, rays off", 24);
+        e->setRayTracing(true);
+        render(e, 24);
+        CHECK_MSG(std::fabs(redRough - redRoughNoRays) < 0.005f,
+                  "ABOVE THE GATE NO RAY IS SPENT: rays on %.4f, rays off %.4f - the chain's own lobe answers",
+                  redRough, redRoughNoRays);
         CHECK(s->setPbrMaterial(wallMat, wallParams), "the wall goes back to a mirror");
         render(e, 8);
     }
