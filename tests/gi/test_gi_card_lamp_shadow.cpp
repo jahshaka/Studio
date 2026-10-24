@@ -22,6 +22,23 @@
 //       band's signed mean under one code; the trace's rays and GPU ms printed;
 //   (5) PRINTED: the bounce on the back wall with the voxels' area visibility one march to the centre (shipped)
 //       against 16 x 16 ratio marches (the measuring arm gi.voxelAreaStrata).
+// THE PIXEL'S ARMS (PHOTON-7 stage 7, 7-A: the pixel takes the cards' law - the ray tier's jahAreaVis, the ratio over
+// the same strata, the fork's hook multiplying the LTC terms): the same half-occluded light, the camera moved UNDER the
+// plate (it hides the floor's umbra from above), the visibility read back (the test door area.visReadback):
+//   (6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the floor's full-umbra pixels (x in [-0.9, -0.6]) against the lit
+//       ones at the mirrored distance (x in [0.6, 0.9]) in the picture's radiance - under a quarter (the direct is zero
+//       there and the bounce is what is left). RED before 7-A: the LTC light reached the umbra whole (ratio ~1).
+//   (7) THE PIXEL'S PENUMBRA: along the floor's z = 0 line, the read-back visibility of light 0 against the truth - the
+//       numeric visible form factor over the full one - within the strata law's bound (4)'s, plus the RGBA8 store's
+//       half step, plus the truth's own range over the resolve's footprint (+-1.5 trace texels); over the band the
+//       SIGNED mean under one code of the unoccluded direct (the estimator unbiased).
+//   (8) THE GLOSSY LOBE TAKES ITS OWN RATIO (the spec's rule: the diffuse-weighted visible fraction stood for the
+//       LTC specular's by up to 4.6 codes of a 0.3-rough metal's unoccluded specular - over a code - so the pixel
+//       carries a second, specular-weighted set): the floor turned to a glossy metal (perceptual roughness 0.3), the
+//       read-back specular visibility along z = 0 against the numeric specular-weighted visible fraction (GGX
+//       D G2 / ( 4 N.V ) x cos' / r^2 over the rectangle, the pixel's own view) - over the band the SIGNED mean under
+//       one code of the unoccluded specular; the per-point error, and the diffuse ratio's error on the same points,
+//       printed.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -42,7 +59,7 @@ static int failures = 0;
     } while (0)
 
 namespace {
-NodeId cube(Scene *s, const Vec3 &at, const Vec3 &size, const Colour &albedo, bool movable) {
+NodeId cube(Scene *s, const Vec3 &at, const Vec3 &size, const Colour &albedo, bool movable, MaterialId *matOut = nullptr) {
     const NodeId node = s->createNode();
     if (movable) s->setNodeMovable(node, true);   // before its geometry: no reclassification rebuild
     MeshData d = enginetest::unitCubeMesh();
@@ -53,6 +70,7 @@ NodeId cube(Scene *s, const Vec3 &at, const Vec3 &size, const Colour &albedo, bo
     const MeshId mesh = s->createMesh(d);
     const MaterialId mat = s->createPbrMaterial(p);
     if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    if (matOut) *matOut = mat;
     enginetest::poseRegistry()[s][node] = enginetest::NodePose{};
     enginetest::setNodePosition(s, node, at);
     enginetest::setNodeScale(s, node, size);
@@ -253,7 +271,8 @@ int main()
     }
     av->setOffscreenContract(OffscreenContract::Live);
     const float kAlbedo = 0.6f;
-    cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false);
+    MaterialId floorMat = 0;
+    cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false, &floorMat);
     cube(as, Vec3(0.0f, 1.0f, -1.05f), Vec3(2.0f, 2.0f, 0.1f), Colour(0.5f, 0.5f, 0.6f), false);
     const Vec3 areaAt(0.0f, 1.2f, 0.0f);
     const double aw = 1.0, ah = 0.5, kIntensity = 3.0, kRange = 20.0;
@@ -433,6 +452,185 @@ int main()
                 bandSigned, bandAbs, (unsigned long long)gp.cards.lampRaysLastTrace, lampMsMax, lampFrames);
     CHECK(restP >= 0 && pRead > 90 && pBand > 40 && pPast == 0u && std::fabs(bandCodes) < 1.0,
           "(4) THE AREA LIGHT'S PENUMBRA: every texel within the strata law's bound, the band's mean under one code");
+
+    // ---- (6) (7) (8) THE PIXEL'S ARMS (PHOTON-7 stage 7, 7-A) ----
+    e->setArm("area.visReadback", 1.0);
+    const Vec3 eyeP(0.0f, 0.3f, 2.6f), atP(0.0f, 0.0f, -0.5f);
+    enginetest::testCameraLookAt(av, eyeP, atP);
+    {
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 1;
+        fx.hdrReadback = true;
+        av->setPostFx(fx);
+    }
+    // the trace's and the resolve's GPU time while the view moves in (the frame monitor's rows, a few frames late)
+    e->setFrameMonitor(MonitorLevel::Review);
+    run(12);
+    e->setFrameMonitor(MonitorLevel::Off);
+    double areaTraceMs = -1.0, areaResolveMs = -1.0;
+    {
+        std::vector<MonitorRecord> records;
+        while (e->popMonitorRecords(records) > 0) {}
+        for (const MonitorRecord &r : records)
+            for (const CacheWork &w : r.cacheWork) {
+                if (w.detail == "area.vis" && w.gpuMs >= 0.0f) areaTraceMs = std::max(areaTraceMs, double(w.gpuMs));
+                if (w.detail == "area.resolve" && w.gpuMs >= 0.0f) areaResolveMs = std::max(areaResolveMs, double(w.gpuMs));
+            }
+    }
+    const int restX = settleOn(as);
+    const unsigned nX = std::max(as->published().areaVis.strata, 1u);
+    run(int(nX * nX) + 16);   // the visibility's rest: every stratum once, then the hold
+    const AreaVisStatus avs = as->published().areaVis;
+    ImageF pic;
+    const bool picOk = av->readPixelsHdr(pic);
+    // the camera's projection (testCameraDescLookAt's basis, the default 45-degree vertical field, a square target)
+    const auto projectTo = [&](double wx, double wy, double wz, int &ix, int &iy) {
+        const double fx0 = atP.x - eyeP.x, fy0 = atP.y - eyeP.y, fz0 = atP.z - eyeP.z;
+        const double fl = std::sqrt(fx0 * fx0 + fy0 * fy0 + fz0 * fz0);
+        const double f[3] = { fx0 / fl, fy0 / fl, fz0 / fl };
+        double r[3] = { f[1] * 0.0 - f[2] * 1.0, f[2] * 0.0 - f[0] * 0.0, f[0] * 1.0 - f[1] * 0.0 };
+        const double rl = std::sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+        for (double &c : r) c /= rl;
+        const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+        const double d[3] = { wx - eyeP.x, wy - eyeP.y, wz - eyeP.z };
+        const double zf = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+        const double tanY = std::tan(22.5 * 3.14159265358979 / 180.0), tanX = tanY * double(pic.width) / double(pic.height);
+        const double xn = (d[0] * r[0] + d[1] * r[1] + d[2] * r[2]) / (zf * tanX);
+        const double yn = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / (zf * tanY);
+        ix = int(std::floor((xn + 1.0) * 0.5 * double(pic.width)));
+        iy = int(std::floor((1.0 - yn) * 0.5 * double(pic.height)));
+        return zf > 0.0 && ix >= 0 && iy >= 0 && ix < int(pic.width) && iy < int(pic.height);
+    };
+    // (6) the umbra against the lit, in the picture's radiance (green)
+    double pxUmbraSum = 0.0, pxLitSum = 0.0;
+    size_t pxUmbraN = 0, pxLitN = 0;
+    for (int i = 0; i <= 6; ++i)
+        for (int k = -3; k <= 3; ++k) {
+            const double ax = 0.6 + 0.05 * i, az = 0.1 * k;
+            int ux, uy, lx, ly;
+            if (!picOk || !projectTo(-ax, 0.0, az, ux, uy) || !projectTo(ax, 0.0, az, lx, ly)) continue;
+            pxUmbraSum += pic.at(unsigned(ux), unsigned(uy)).g;
+            pxLitSum += pic.at(unsigned(lx), unsigned(ly)).g;
+            ++pxUmbraN;
+            ++pxLitN;
+        }
+    const double pxUmbraRatio = pxLitSum > 0.0 ? pxUmbraSum / pxLitSum : 1.0;
+    std::printf("   (6) the pixel's umbra: the visibility %s (%u lights, n = %u, the trace %ux%u, held %d, %.1f MB; moving: the "
+                "trace %.3f ms, the resolve %.3f ms the frame's largest); %zu umbra / %zu lit floor pixels: the umbra's "
+                "radiance %.4f of the lit's\n",
+                avs.running ? "running" : avs.reason.c_str(), avs.lights, avs.strata, avs.traceW, avs.traceH,
+                avs.held ? 1 : 0, double(avs.vramBytes) / 1e6, areaTraceMs, areaResolveMs, pxUmbraN, pxLitN, pxUmbraRatio);
+    CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
+          "(6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
+    // (7) the penumbra's visibility against the numeric truth
+    const bool visOk = avs.vis.size() == size_t(avs.visW) * avs.visH * 8u && avs.visW == pic.width;
+    size_t xRead = 0, xBand = 0, xPast = 0;
+    double xWorst = 0.0, xWorstAt = 0.0, xBandSigned = 0.0, xWorstOfBound = 0.0;
+    for (int t = -60; t <= 60; ++t) {
+        const double px = 0.01 * t, pz = 0.0;
+        int ix, iy;
+        if (!visOk || !projectTo(px, 0.0, pz, ix, iy)) continue;
+        const double vis = avs.vis[(size_t(iy) * avs.visW + size_t(ix)) * 8u] / 255.0;   // byte 0: light 0, diffuse
+        const double fFull = formFactor(px, pz, false);
+        if (!(fFull > 0.0)) continue;
+        // the truth's range over the resolve's footprint: +-1.5 trace texels = +-3 pixels, in world units along x
+        const double dx = px - eyeP.x, dy = 0.0 - eyeP.y, dz = pz - eyeP.z;
+        const double distW = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const double pixW = distW * 2.0 * std::tan(22.5 * 3.14159265358979 / 180.0) / double(pic.height);
+        double tLo = 1.0, tHi = 0.0;
+        for (int sx = -3; sx <= 3; ++sx) {
+            const double qx = px + pixW * sx;
+            const double t0 = formFactor(qx, pz, true) / std::max(formFactor(qx, pz, false), 1e-12);
+            tLo = std::min(tLo, t0);
+            tHi = std::max(tHi, t0);
+        }
+        const double truth = formFactor(px, pz, true) / fFull;
+        ++xRead;
+        const double past = std::max(0.0, std::max(tLo - vis, vis - tHi));
+        const double bound = lawBound(px, pz) + 0.5 / 255.0;
+        if (past > bound) ++xPast;
+        xWorstOfBound = std::max(xWorstOfBound, past / bound);
+        if (std::fabs(vis - truth) > xWorst) { xWorst = std::fabs(vis - truth); xWorstAt = px; }
+        if (truth > 1e-6 && truth < 1.0 - 1e-6) {
+            ++xBand;
+            xBandSigned += (vis - truth) * 100.0;   // codes of the unoccluded direct (1 % a code)
+        }
+    }
+    xBandSigned /= double(std::max<size_t>(xBand, 1u));
+    std::printf("   (7) the pixel's penumbra: %zu points along z = 0 read, %zu in the band: the worst |vis - truth| %.3f (at x "
+                "%.2f m), %.3f of the bound past the footprint's range, %zu past; the band's signed mean %+.3f codes of the "
+                "unoccluded direct\n", xRead, xBand, xWorst, xWorstAt, xWorstOfBound, xPast, xBandSigned);
+    CHECK(visOk && xRead > 80u && xBand > 30u && xPast == 0u && std::fabs(xBandSigned) < 1.0,
+          "(7) THE PIXEL'S PENUMBRA: every point within the strata law's bound, the band's signed mean under one code");
+    // (8) THE GLOSSY LOBE'S OWN RATIO: the floor a glossy metal, the specular visibility read back against the numeric
+    PbrParams glossy;
+    glossy.albedo = Colour(kAlbedo, kAlbedo, kAlbedo);
+    glossy.metalness = 1.0f;
+    glossy.roughness = 0.3f;
+    as->setPbrMaterial(floorMat, glossy);
+    const int restG = settleOn(as);
+    run(int(nX * nX) + 16);
+    const AreaVisStatus avg = as->published().areaVis;
+    const bool visG = avg.vis.size() == size_t(avg.visW) * avg.visH * 8u && avg.visW == pic.width;
+    {
+        const double rough = 0.3, a = rough * rough, a2 = a * a;
+        size_t m = 0, band = 0;
+        double worstS = 0.0, worstD = 0.0, bandSigned = 0.0, bandDiffAbs = 0.0;
+        for (int t = -50; t <= 50; t += 2) {
+            const double px = 0.01 * t, pz = 0.0;
+            int ix, iy;
+            if (!visG || !projectTo(px, 0.0, pz, ix, iy)) continue;
+            const double vx = eyeP.x - px, vy = eyeP.y - 0.0, vz = eyeP.z - pz, vl = std::sqrt(vx * vx + vy * vy + vz * vz);
+            const double V[3] = { vx / vl, vy / vl, vz / vl };
+            const double NoV = std::max(V[1], 1e-4);
+            const int nx = 100, nz = 50;
+            const double dA = (aw / nx) * (ah / nz), y = areaAt.y;
+            double sAll = 0.0, sVis = 0.0, dAll = 0.0, dVis = 0.0;
+            for (int i = 0; i < nx; ++i)
+                for (int k = 0; k < nz; ++k) {
+                    const double qx = -0.5 * aw + (i + 0.5) * aw / nx, qz = -0.5 * ah + (k + 0.5) * ah / nz;
+                    const double lx = qx - px, ly = y, lz = qz - pz, r2 = lx * lx + ly * ly + lz * lz, rl = std::sqrt(r2);
+                    const double L[3] = { lx / rl, ly / rl, lz / rl };
+                    const double NoL = L[1], cosL = L[1];   // the floor's +y, the light's -y
+                    const double H[3] = { V[0] + L[0], V[1] + L[1], V[2] + L[2] };
+                    const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+                    const double NoH = H[1] / hl;
+                    const double dd = NoH * NoH * (a2 - 1.0) + 1.0, D = a2 / (3.14159265358979 * dd * dd);
+                    const double G2 = 2.0 * NoL * NoV / (NoV * std::sqrt(a2 + (1.0 - a2) * NoL * NoL) +
+                                                         NoL * std::sqrt(a2 + (1.0 - a2) * NoV * NoV));
+                    const double wSpec = D * G2 / (4.0 * NoV) * cosL / r2 * dA;
+                    const double wDiff = NoL * cosL / r2 * dA;
+                    const bool blocked = !plate.empty() &&
+                                         crosses(Vec3(float(px), 0.0f, float(pz)), Vec3(float(qx), float(y), float(qz)),
+                                                 plate[0], plate[1]);
+                    sAll += wSpec;
+                    dAll += wDiff;
+                    if (!blocked) { sVis += wSpec; dVis += wDiff; }
+                }
+            if (!(sAll > 0.0) || !(dAll > 0.0)) continue;
+            const double truthS = sVis / sAll, truthD = dVis / dAll;
+            const size_t at = (size_t(iy) * avg.visW + size_t(ix)) * 8u;
+            const double visS = avg.vis[at + 4u] / 255.0;   // byte 4: light 0, specular
+            ++m;
+            worstS = std::max(worstS, std::fabs(visS - truthS) * 100.0);
+            worstD = std::max(worstD, std::fabs(truthD - truthS) * 100.0);
+            if (truthS > 1e-6 && truthS < 1.0 - 1e-6) {
+                ++band;
+                bandSigned += (visS - truthS) * 100.0;
+                bandDiffAbs += std::fabs(truthD - truthS) * 100.0;
+            }
+        }
+        bandSigned /= double(std::max<size_t>(band, 1u));
+        bandDiffAbs /= double(std::max<size_t>(band, 1u));
+        std::printf("   (8) the glossy lobe (perceptual 0.3 metal; at rest in %d frames): %zu points, %zu in the band: the "
+                    "specular visibility's worst error %.2f codes of the unoccluded specular, the band's signed mean %+.3f; "
+                    "the diffuse ratio on the same points: worst %.2f, the band's mean %.2f codes\n",
+                    restG, m, band, worstS, bandSigned, worstD, bandDiffAbs);
+        CHECK(restG >= 0 && visG && m > 40u && band > 20u && std::fabs(bandSigned) < 1.0,
+              "(8) THE GLOSSY LOBE TAKES ITS OWN RATIO: the specular visibility's band signed mean under one code");
+    }
+    e->setArm("area.visReadback", 0.0);
 
     // (5) PRINTED: THE BOUNCE THE VOXELS' CENTRE MARCH LEAVES (the lead's ruling: measured before the voxels change).
     // The back wall's card indirect - the bounce it gathers from the store, the floor's penumbra in its view - with
