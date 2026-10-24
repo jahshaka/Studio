@@ -117,7 +117,9 @@ int main()
         fx.ssr = 1;
         view->setPostFx(fx);
     }
-    view->setOffscreenContract(OffscreenContract::Live);
+    // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
+    // chain gathers, and a Live view takes the field's answer)
+    view->setOffscreenContract(OffscreenContract::StillPicture);
     cube(scene, Vec3(0.0f, -0.05f, 0.0f), Vec3(8.0f, 0.1f, 8.0f), Colour(0.6f, 0.6f, 0.6f), false);   // the floor
     cube(scene, Vec3(0.0f, 2.0f, -4.05f), Vec3(8.0f, 4.0f, 0.1f), Colour(0.5f, 0.5f, 0.6f), false);   // the back wall
     Vec3 blockerAt[2] = { Vec3(-1.2f, 1.2f, 0.0f), Vec3(1.2f, 1.2f, 0.0f) };
@@ -268,7 +270,9 @@ int main()
         fx.ssr = 1;
         av->setPostFx(fx);
     }
-    av->setOffscreenContract(OffscreenContract::Live);
+    // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
+    // chain gathers, and a Live view takes the field's answer)
+    av->setOffscreenContract(OffscreenContract::StillPicture);
     const float kAlbedo = 0.6f;
     MaterialId floorMat = 0;
     cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false, &floorMat);

@@ -140,7 +140,9 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         fx.ssr = 1;
         view->setPostFx(fx);
     }
-    view->setOffscreenContract(OffscreenContract::Live);
+    // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
+    // chain gathers, and a Live view takes the field's answer)
+    view->setOffscreenContract(OffscreenContract::StillPicture);
     out.a = buildRoom(scene, Vec3(-12.0f, 0.0f, 0.0f), crowded);
     out.b = buildRoom(scene, Vec3(12.0f, 0.0f, 0.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };

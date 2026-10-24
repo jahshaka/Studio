@@ -403,7 +403,9 @@ int main()
             fx.ssr = 1;
             cv->setPostFx(fx);
         }
-        cv->setOffscreenContract(OffscreenContract::Live);
+        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
+        // chain gathers, and a Live view takes the field's answer)
+        cv->setOffscreenContract(OffscreenContract::StillPicture);
         const float T = 0.2f;
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, cv, T, 0.0f, true);
         // THE GLOSSY PANEL before the +Z wall (its card's lobe is the lobe arm's subject)

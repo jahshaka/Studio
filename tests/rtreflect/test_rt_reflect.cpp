@@ -336,8 +336,9 @@ int main(int argc, char **argv)
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    // (No gather pin since PHOTON-7 7-5 - the gather has no row: its rays-on / rays-off A/Bs also switch the
-    // diffuse between the screen-probe gather and the cones, the gather needing the rays.)
+    // (No gather pin since PHOTON-7 7-5 - the gather has no row, and this suite's offscreen view declares no
+    // contract, so its chain takes the field's answer and never gathers: the rays-on / rays-off A/Bs switch the
+    // reflection alone.)
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     // The camera stands BETWEEN the cube and the wall and looks at the wall.
@@ -472,11 +473,8 @@ int main(int argc, char **argv)
     }
 
     // ---- 6b: SCREEN FIRST -----------------------------------------------------
-    // DECLARED RED ON photon-7 UNTIL THE photon-7r MERGE (the lead's ruling, 2026-10-24): its premise - a rays-on
-    // picture against a rays-off one at the SAME diffuse - no longer exists since PHOTON-7 7-5 (the screen-probe gather
-    // needs the rays and has no row to turn it off, so the two arms differ in the floor's non-reflected specular share
-    // as well as in the reflection; measured 0.0 % of the march region within 2/255, mean 12.8). Stage 6 (photon-7r)
-    // rebuilds the reflection and this row; the case is replaced there, never re-derived here.
+    // (THE SAME DIFFUSE IN BOTH ARMS without a gather pin since PHOTON-7 7-5: this suite's view declares no offscreen
+    // contract, so its chain never gathers - and the gather is recorded only for a view whose chain does.)
     // Where the march answers a pixel OUTRIGHT the ray tier must leave it
     // alone. The claim is stated as a bound (a mean under 4/255 over the region
     // the march owns) rather than as byte-equality, because the region is
@@ -956,13 +954,13 @@ int main(int argc, char **argv)
         // (cut = 0.50, it is inside the near edge) and be MONOTONE and SMOOTH
         // in between — a step anywhere in it IS the seam the feather exists to
         // remove.
-        // IN LINEAR RADIANCE, NOT THE DISPLAY'S BYTES (PHOTON-7 stage 7, 7-5, measured): since the gather is the
-        // closed cutoff's answer (the probes' rough lobe, 7-3), the reference reads 1.69 linear red on this panel,
-        // which the tonemap saturates - so the display's red stayed at 1.0 over the first half of the hand-over and
-        // the sweep read a STEP the radiance does not have (0 0 0 0 0.039 0.109 0.109 in bytes; in radiance the
-        // traced share is 0.155 / 0.499 / 0.844 at cutoffs 0.30 / 0.35 / 0.40 - the gate's smoothstep exactly). The
-        // sweep is |rays at the cutoff - rays closed| in the scene's RGBA16F radiance (hdrReadback), over the same
-        // window, normalised by nothing: the law below is a ratio of its own steps.
+        // IN LINEAR RADIANCE, NOT THE DISPLAY'S BYTES (PHOTON-7 stage 7, 7-5, measured): a closed-cutoff answer above
+        // the tonemap's knee saturates the display - measured while this view wrongly gathered (the gather bound into
+        // a chain that does not gather: its lobe on top of the cone's specular, 1.69 linear red here), the display's
+        // red stayed at 1.0 over the first half of the hand-over and the sweep read a STEP the radiance did not have
+        // (in radiance the traced share was 0.155 / 0.499 / 0.844 at cutoffs 0.30 / 0.35 / 0.40, the gate's smoothstep
+        // exactly). The sweep is |rays at the cutoff - rays closed| in the scene's RGBA16F radiance (hdrReadback),
+        // over the same window: the law below is a ratio of its own steps.
         const float cuts[7] = { 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.50f };
         float sweep[7] = { 0.0f };
         ImageF ref;
@@ -999,9 +997,10 @@ int main(int argc, char **argv)
             sweep[k] = n ? float(sum / double(n)) : 0.0f;
             if (n) { refMean = rs / double(n); openMean = os / double(n); }
         }
-        // THE TWO ESTIMATORS' ENERGY, printed (the hand-over's two ends, linear red): the closed cutoff's (the
-        // probes' rough lobe) and the open one's (the traced reflection) - one integral, two producers.
-        std::printf("    the panel's red, linear: the closed cutoff (the probes' rough lobe) %.4f, the open one (the "
+        // THE TWO ESTIMATORS' ENERGY, printed (the hand-over's two ends, linear red): the closed cutoff's (on this
+        // view, which does not gather, the cone's specular) and the open one's (the traced reflection) - one integral,
+        // two producers.
+        std::printf("    the panel's red, linear: the closed cutoff (the cone's specular) %.4f, the open one (the "
                     "traced reflection) %.4f - %.2fx\n",
                     refMean, openMean, openMean > 0.0 ? refMean / openMean : 0.0);
         view->setPostFx(fx);

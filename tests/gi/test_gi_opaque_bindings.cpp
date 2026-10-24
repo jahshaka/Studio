@@ -23,12 +23,11 @@
 // AND ONCE, AT HIGH (7-5):
 //   (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
 //       picture behind it weighed by zero) on the ray chain - its own pass after the opaque one - against the no-ray
-//       chain - drawn inside the opaque pass with the prepass's properties withdrawn (F2) - each at the GI's rest: the
-//       same function of the same world caches, lights and shadow maps, stored once into the RGBA16F target, so within
-//       ONE fp16 ulp of the larger value per channel (a gathering chain used to light it with the environment alone:
-//       PHOTON-GATHER-1d's withdrawal). NOT against the live ray chain: there the pane reads about 29 % more - a hole in
-//       F2's withdrawal on a PrePassUse ray chain without the gather (spikes/photon-7/stage7/7-5/blended_live.txt), the
-//       live arm's to close at 7-6, when its blended queues take their own pass too.
+//       chain and the live ray chain - drawn inside the opaque pass with the prepass's properties withdrawn (F2) - each
+//       at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
+//       RGBA16F target, so within ONE fp16 ulp of the larger value per channel (a gathering chain used to light it with
+//       the environment alone: PHOTON-GATHER-1d's withdrawal). The live arm read +29 % until the gather was recorded
+//       only for a view whose chain gathers (7-5: a live view's opaque pass bound the gather beside the world caches).
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
@@ -245,10 +244,11 @@ int main()
                 }
             return true;
         };
-        std::vector<float> rayPane, livePane;
-        int restRay = -1, restLive = -1;
+        std::vector<float> rayPane, livePane, liveRayPane;
+        int restRay = -1, restLive = -1, restLiveRay = -1;
         const bool okRay = settledPane(OffscreenContract::StillPicture, rayPane, restRay);
         const GatherStatus gRay = scene->published().gi.gather;
+        const bool okLiveRay = settledPane(OffscreenContract::Live, liveRayPane, restLiveRay);   // the live ray chain
         scene->setRayTracing(RayTracingMode::Off);   // the no-ray chain: the same still picture, no rays
         const bool okLive = settledPane(OffscreenContract::StillPicture, livePane, restLive);
         const GatherStatus gLive = scene->published().gi.gather;
@@ -257,26 +257,29 @@ int main()
             v = std::max(std::fabs(v), 6.103515625e-05);
             return std::ldexp(1.0, int(std::floor(std::log2(v))) - 10);
         };
-        double worstUlps = 0.0, meanRay = 0.0, meanLive = 0.0;
+        double worstUlps = 0.0, meanRay = 0.0, meanLive = 0.0, meanLiveRay = 0.0;
         size_t past = 0;
-        const size_t n = std::min(rayPane.size(), livePane.size());
+        const size_t n = std::min(std::min(rayPane.size(), livePane.size()), liveRayPane.size());
         for (size_t i = 0; i < n; ++i) {
-            const double a = rayPane[i], b = livePane[i];
-            const double ulps = std::fabs(a - b) / ulpOf(std::max(a, b));
-            worstUlps = std::max(worstUlps, ulps);
-            if (ulps > 1.0) ++past;
+            const double a = rayPane[i];
+            for (const double b : { double(livePane[i]), double(liveRayPane[i]) }) {
+                const double ulps = std::fabs(a - b) / ulpOf(std::max(a, b));
+                worstUlps = std::max(worstUlps, ulps);
+                if (ulps > 1.0) ++past;
+            }
             meanRay += a;
-            meanLive += b;
+            meanLive += livePane[i];
+            meanLiveRay += liveRayPane[i];
         }
-        if (n) { meanRay /= double(n); meanLive /= double(n); }
+        if (n) { meanRay /= double(n); meanLive /= double(n); meanLiveRay /= double(n); }
         std::printf("\n   (5) the blended pane (alpha 1), %zu channel samples: the ray chain (gather %s, at rest after %d "
-                    "frames) mean %.5f, the no-ray chain (gather %s, at rest after %d) mean %.5f; worst %.2f fp16 ulps, "
-                    "%zu past one\n",
-                    n, gRay.on ? "on" : "OFF", restRay, meanRay, gLive.on ? "on" : "off", restLive, meanLive, worstUlps,
-                    past);
-        CHECK(okRay && okLive && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,
+                    "frames) mean %.5f, the live ray chain (at rest after %d) mean %.5f, the no-ray chain (gather %s, at "
+                    "rest after %d) mean %.5f; worst %.2f fp16 ulps, %zu past one\n",
+                    n, gRay.on ? "on" : "OFF", restRay, meanRay, restLiveRay, meanLiveRay, gLive.on ? "on" : "off",
+                    restLive, meanLive, worstUlps, past);
+        CHECK(okRay && okLive && okLiveRay && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,
               "(5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane on the gathering chain within one fp16 "
-              "ulp of the no-ray chain's");
+              "ulp of the live ray chain's and the no-ray chain's");
     }
     std::printf("\ngi.opaque_bindings: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;
