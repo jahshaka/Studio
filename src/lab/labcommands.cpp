@@ -58,7 +58,8 @@ const std::vector<VerbDoc> &verbs()
           "(pass:<node>/<pass>, nested: inside another) and every GPU row (row:<name> - injection, cards, gather, "
           "integrate, reflection, area visibility... - nested-row: inside a pass) in ms, and the frame's counts (count:vct."
           "bricks_passed<c> and vct.inject_marched<c> read back, landing a few frames late; cards.relit_texels_direct / "
-          "_indirect and captured_texels); then "
+          "_indirect and captured_texels), the frame's cascade rebuilds and shader compiles, and its untimed work "
+          "(untimed:<name>=units: work inside another row's time); then "
           "one SUMMARY line per name: frames, mean, p95, max. The frames after the N that wait for the records' GPU "
           "timestamps are not measured" },
         { "move", "move x,y,z,tx,ty,tz N", 2, 2,

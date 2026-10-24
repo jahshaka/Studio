@@ -1353,8 +1353,12 @@ bool Session::monitor(const Command &c)
             names[word((p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass)] += p.gpuMs;
             if (p.topLevel) passes += p.gpuMs;
         }
+        std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
         for (const CacheWork &w : r.cacheWork) {
-            if (w.gpuMs < 0.0f) continue;
+            if (w.gpuMs < 0.0f) {
+                untimed[word("untimed:" + w.detail)] += double(w.units);
+                continue;
+            }
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
             if (w.topLevel) rows += w.gpuMs;
         }
@@ -1365,12 +1369,14 @@ bool Session::monitor(const Command &c)
                                    ? passes + rows + double(r.unattributedGpuMs) - busy : std::nan("");
         if (busy < 0.0) ++unmeasured;
         std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f unattr %.4f overlap %.4f "
-                          "dropped %u |", index, r.frame, double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows,
-                     double(r.unattributedGpuMs), overlap, r.gpuMarksDropped);
+                          "dropped %u rebuilds %u compiles %u |", index, r.frame, double(r.frameGpuMs), double(r.gpuIdleMs),
+                     busy, passes, rows, double(r.unattributedGpuMs), overlap, r.gpuMarksDropped, r.cascadeRebuilds,
+                     r.shaderCompiles);
         for (const auto &kv : names) {
             std::fprintf(out, " %s=%.4f", kv.first.c_str(), kv.second);
             per[kv.first].push_back(kv.second);
         }
+        for (const auto &kv : untimed) std::fprintf(out, " %s=%.0f", kv.first.c_str(), kv.second);   // (units, never ms)
         if (const auto ci = countsOf.find(r.frame); ci != countsOf.end())
             for (const auto &kv : ci->second) {
                 std::fprintf(out, " %s=%.0f", kv.first.c_str(), kv.second);
