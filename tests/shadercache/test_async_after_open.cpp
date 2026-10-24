@@ -10,9 +10,12 @@
 // permutations, which no startup set holds — never the startup build behind the splash (53-58 s
 // of the old 87-s cold launch, Debug, a loaded box; spikes/testing-speed-b3/profile.txt). So the
 // cold home is seeded with THE STARTUP SEED: the shader cache a launch that only boots and quits
-// leaves (`e2e-async-after-open-seed/`, kept beside the row's home). A seed the build no longer matches (the cache's
-// fingerprint moved) is refused by the app, which then compiles the startup set itself — the run stays valid, only
-// slower — and the row deletes the stale seed so the next run makes a fresh one.
+// leaves (`e2e-async-after-open-seed/`, kept beside the row's home), STAMPED WITH THE TREE'S KEY (urgent #38; the
+// stamp scripts/lab/warm.sh writes): the app binary (its size and modification time: a relink - an engine or app
+// change - moves them), the sha256 of its staged media and the Ogre install's BUILT_FROM (the fork commit). A seed
+// whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the startup
+// set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s: the
+// cold launch built the startup set itself).
 //
 // THE SEED IS ITS OWN ROW (TOOLING-7 stage 2; the trap file's "split into rows that run parts of the same law"):
 // `test_async_after_open --seed` is shader.async_after_open.seed, the FIXTURES_SETUP row that makes the seed when it is
@@ -26,7 +29,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QCryptographicHash>
+#include <QDateTime>
+#include <QDirIterator>
 #include <QProcess>
+#include <algorithm>
 #include <cstdio>
 
 static int failures = 0;
@@ -37,6 +44,32 @@ static constexpr double kSettledMeanTolerance = 0.5;
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 namespace {
+
+/// THE TREE'S KEY (the header): what the startup seed - a shader cache - is a function of.
+QString treeKey()
+{
+    QCryptographicHash h(QCryptographicHash::Sha256);
+    const QFileInfo bin(QStringLiteral(JAHSHAKA_BINARY));
+    h.addData(QByteArray::number(bin.size()) + " " + QByteArray::number(bin.lastModified().toMSecsSinceEpoch()) + "\n");
+    QStringList media;
+    QDirIterator it(bin.absolutePath() + QStringLiteral("/media"), QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) media << it.next();
+    std::sort(media.begin(), media.end());
+    for (const QString &f : media) {
+        QFile file(f);
+        if (!file.open(QIODevice::ReadOnly)) continue;
+        h.addData(f.toUtf8());
+        h.addData(QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256));
+    }
+    QFile built(QStringLiteral(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
+    if (built.open(QIODevice::ReadOnly)) h.addData(built.readAll());
+    return QString::fromLatin1(h.result().toHex());
+}
+QString readStamp(const QString &path)
+{
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly) ? QString::fromLatin1(f.readAll()).trimmed() : QString();
+}
 
 QJsonObject runApp(const QString &home, const QString &outDir)
 {
@@ -169,41 +202,56 @@ int main(int argc, char **argv)
     const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-async-after-open"));
     const QString seed = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seed/shadercache"));
 
-    // THE STARTUP SEED'S ROW (the header): made when missing; a present seed is the row's whole answer.
+    const QString stamp = QFileInfo(seed).absolutePath() + QStringLiteral("/tree-key.txt");
+    const QString key = treeKey();
+    const bool seedFresh = QDir(seed).exists() && readStamp(stamp) == key;
+
+    // THE STARTUP SEED'S ROW (the header): made when missing or STALE (its stamp not this tree's key); a fresh seed is
+    // the row's whole answer.
     if (app.arguments().contains(QStringLiteral("--seed"))) {
-        if (QDir(seed).exists()) {
-            std::printf("    the startup seed is there (made by an earlier run of this row): nothing to do\nPASS\n");
+        if (seedFresh) {
+            std::printf("    the startup seed is this tree's (its stamp the tree's key): nothing to do\nPASS\n");
             return 0;
         }
+        if (QDir(seed).exists())
+            std::printf("    the startup seed is STALE (its stamp is not this tree's key): re-seeding\n");
+        QDir(QFileInfo(seed).absolutePath()).removeRecursively();
         const QString seedHome = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seeding"));
-        const bool seeded = seedLaunch(seedHome) &&
-                            QDir().mkpath(QFileInfo(seed).absolutePath()) &&
-                            QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);
+        bool seeded = seedLaunch(seedHome) &&
+                      QDir().mkpath(QFileInfo(seed).absolutePath()) &&
+                      QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);
+        if (seeded) {
+            QFile f(stamp);
+            seeded = f.open(QIODevice::WriteOnly | QIODevice::Truncate) && f.write(key.toLatin1()) > 0;
+        }
         QDir(seedHome).removeRecursively();
         std::printf("    the startup seed: %s\n%s\n", seeded ? "made by a boot-and-quit launch" : "COULD NOT be made",
                     seeded ? "PASS" : "FAIL");
         return seeded ? 0 : 1;
     }
 
+    // A SEED NOT THIS TREE'S IS REFUSED (the header): the row never builds the startup set inside its own run
+    if (!seedFresh) {
+        std::printf("FAIL: the startup seed is %s for this tree - run shader.async_after_open.seed first (the row's fixture "
+                    "chain does)\n", QDir(seed).exists() ? "STALE (its stamp is not the tree's key)" : "missing");
+        return 1;
+    }
     QDir(home).removeRecursively();            // an empty library; the shader cache is the seed's
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
     QDir().mkpath(home + "/cold");
     QDir().mkpath(home + "/warm");
-    // ...copied into the cold home every run (no seed — the row run alone without its setup — is the stale seed's case:
-    // the cold launch compiles the startup set itself, valid and slower)
-    if (!copyTree(seed, home + "/.local/share/Jahshaka/shadercache"))
-        std::printf("    no startup seed (run shader.async_after_open.seed first): the cold launch builds the startup set\n");
+    // ...copied into the cold home every run
+    if (!copyTree(seed, home + "/.local/share/Jahshaka/shadercache")) {
+        std::printf("FAIL: the startup seed could not be copied into the cold home\n");
+        return 1;
+    }
 
     const QJsonObject cold = runApp(home, home + "/cold");
-    // A STALE SEED (the app's cache fingerprint moved since it was made): the cold launch compiled the
-    // startup set itself — valid, slower; the next run makes a fresh seed.
+    // THE COLD LAUNCH'S STARTUP COMPILES, printed: the seed is this tree's (its stamp, above), so this is a shader or two
+    // the boot-and-quit seed does not reach - a stale seed (300 here) is refused before the launch, never deleted after
     const int startupCompiled = cold.value("startup").toObject().value("compiledThisRun").toInt(-1);
     std::printf("    the cold launch's startup: compiled %d shader(s) before the script ran\n", startupCompiled);
-    if (startupCompiled > 0) {
-        QDir(QFileInfo(seed).absolutePath()).removeRecursively();
-        std::printf("    the startup seed was stale (the cache fingerprint moved): deleted, the next run re-seeds\n");
-    }
     const QJsonObject warm = runApp(home, home + "/warm");
     CHECK(!cold.isEmpty() && !warm.isEmpty(), "both launches reported");
     report("cold", cold);

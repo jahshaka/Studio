@@ -55,7 +55,8 @@ set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
 target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
 target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+    JAHSHAKA_OGRE_INSTALL="${OGRE_NEXT_PREFIX}")
 # THE SEED, ITS OWN ROW (TOOLING-7 stage 2; the derivation in test_async_after_open.cpp's header): the startup build is
 # not this row's subject, and a fresh tree (every ship tree) paid it inside the row — 64 s solo, over the minute. The
 # seed row boots the SAME World Mode (the tier and features below) and quits, only when the seed is missing; the row
