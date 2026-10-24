@@ -260,6 +260,8 @@ OGRE_VIEW_FUNCTIONS = {
     "setVrSsrOverride": ["vr"] + _REFL,
     # PHOTON-7 stage 0's read R1: the hit list's creation size, every build's (chainDesc asks for it)
     "hitListCreateRows": _CHAIN + ["gi", "vr"],
+    # PHOTON-7 stage 7, 7-6: the no-ray route's screen integrate, armed on the chain that carries its compute pass
+    "syncScreenGiListener": _CHAIN + ["gi"],
     **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
     **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "applyShadows", "dropWorkspaceForShadowRebuild",
                                          "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},
