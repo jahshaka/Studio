@@ -1348,18 +1348,40 @@ bool Session::monitor(const Command &c)
         // (a name is one word in the file: its spaces become '_' - Ogre's pass ids carry them)
         const auto word = [](std::string n) { std::replace(n.begin(), n.end(), ' ', '_'); return n; };
         double passes = 0.0, rows = 0.0;
+        // A ROW'S OWN TIME where it encloses others (self:<name>, the work none of its children names) and whether it
+        // SUBMITTED inside it (submitted:<name>=1: its own time holds the GPU's wait for the CPU, a bubble)
+        const auto selfOf = [&](const std::string &n, float ms, float self, bool submitted) {
+            if (submitted) names[word("submitted:" + n)] = 1.0;   // a leaf too: its time holds a bubble
+            if (self < 0.0f || ms < 0.0f || double(ms) - double(self) < 1e-4) return;   // a leaf: its own time IS its time
+            names[word("self:" + n)] += double(self);
+        };
         for (const FramePass &p : r.passes) {
             if (p.gpuMs < 0.0f) continue;   // not measured (never faked as 0)
-            names[word((p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass)] += p.gpuMs;
+            const std::string n = (p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass;
+            names[word(n)] += p.gpuMs;
+            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfSubmitted);
             if (p.topLevel) passes += p.gpuMs;
         }
         std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
+        // WHAT TRIGGERED A GI ROW (why:<name>:<WorkReason>=units) and its CPU ms (cpu:<name>) - the hitch table's columns
+        static const char *const kReason[] = { "None", "Build", "Rebuild", "Refresh", "Sweep", "Moved", "Caster", "Light",
+                                               "Material", "Sky", "Ambient", "Fog", "Mobility", "Added", "Removed",
+                                               "Bounds", "Resolution", "Camera", "Permutation", "Request" };
+        for (const CacheWork &w : r.cacheWork) {
+            if (w.reason != WorkReason::None) {
+                const size_t ri = size_t(w.reason);
+                untimed[word(std::string("why:") + w.detail + ":" +
+                             (ri < sizeof(kReason) / sizeof(kReason[0]) ? kReason[ri] : "?"))] += double(w.units);
+            }
+            if (w.ms >= 0.0f && w.ms > 0.05f) untimed[word("cpu:" + w.detail)] += double(w.ms);
+        }
         for (const CacheWork &w : r.cacheWork) {
             if (w.gpuMs < 0.0f) {
                 untimed[word("untimed:" + w.detail)] += double(w.units);
                 continue;
             }
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
+            selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfSubmitted);
             if (w.topLevel) rows += w.gpuMs;
         }
         dropped += r.gpuMarksDropped;
@@ -1369,14 +1391,15 @@ bool Session::monitor(const Command &c)
                                    ? passes + rows + double(r.unattributedGpuMs) - busy : std::nan("");
         if (busy < 0.0) ++unmeasured;
         std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f unattr %.4f overlap %.4f "
-                          "dropped %u rebuilds %u compiles %u |", index, r.frame, double(r.frameGpuMs), double(r.gpuIdleMs),
-                     busy, passes, rows, double(r.unattributedGpuMs), overlap, r.gpuMarksDropped, r.cascadeRebuilds,
-                     r.shaderCompiles);
+                          "dropped %u rebuilds %u compiles %u wall %.2f gap %.4f %s |", index, r.frame,
+                     double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows, double(r.unattributedGpuMs), overlap,
+                     r.gpuMarksDropped, r.cascadeRebuilds, r.shaderCompiles, double(r.totalMs), double(r.widestGapMs),
+                     r.widestGap.empty() ? "-" : word(r.widestGap).c_str());
         for (const auto &kv : names) {
             std::fprintf(out, " %s=%.4f", kv.first.c_str(), kv.second);
             per[kv.first].push_back(kv.second);
         }
-        for (const auto &kv : untimed) std::fprintf(out, " %s=%.0f", kv.first.c_str(), kv.second);   // (units, never ms)
+        for (const auto &kv : untimed) std::fprintf(out, " %s=%.4g", kv.first.c_str(), kv.second);   // (units; cpu: ms)
         if (const auto ci = countsOf.find(r.frame); ci != countsOf.end())
             for (const auto &kv : ci->second) {
                 std::fprintf(out, " %s=%.0f", kv.first.c_str(), kv.second);
