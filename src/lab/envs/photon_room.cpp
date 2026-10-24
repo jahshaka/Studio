@@ -25,7 +25,7 @@ namespace envs {
 
 // THE ROOM'S SHELL (photon-room's, and photon-glass's, photon-ramp's and photon-rough's around their fixtures): the
 // eight walls, the opening, the lamp - envbuild.h declares it (photon_rough.cpp shares it).
-void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte)
+void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte, bool withLamp)
 {
     using V = iris::Vec3;
     const float t = 0.3f, h = 4.0f, top = 8.0f;
@@ -39,6 +39,7 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
     fixedBox(b, unit, "wall-z1-right", V(0.5f, 0, h), V(h, top, h + t), matte);
     fixedBox(b, unit, "wall-z1-below", V(-0.5f, 0, h), V(0.5f, 3.5f, h + t), matte);
     fixedBox(b, unit, "wall-z1-above", V(-0.5f, 4.5f, h), V(0.5f, top, h + t), matte);
+    if (!withLamp) return;
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
     lamp->setName(QStringLiteral("lamp"));

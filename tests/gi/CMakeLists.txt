@@ -573,6 +573,17 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.walk_area (PHOTON-7 stage 7: the walk 7-A owed, at the stage's master check) — THE AREA LIGHT'S PENUMBRA WALK:
+# walk.sh --area on photon-area (a plate's 3 m penumbra across the floor, a glossy strip through it): M1 and the live
+# residual per class printed (the area visibility's history stepping while the camera moves); the walk's own laws
+# asserted. 960x540; three sessions.
+if(TARGET jahlab)
+    jah_gpu_row(gi.walk_area CLASS engine TOKENS 8 FRAMES 1342
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_area --area
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_area PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.rough_lobe_quadrature / gi.rough_reference (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S TWO LAWS (rough_spec.sh):
 # the split sum's own error - the shipped read against the brute-force quadrature of the same probe map, within a code -
 # and the lobe at rest against the traced reflection's 4,096-sample reference, beating the cone's recorded error.

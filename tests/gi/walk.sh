@@ -44,6 +44,7 @@
 #          and 9.2 / 10.9 / 10.9 (0 over)
 # usage: walk.sh <jahlab> <work dir>
 #        walk.sh <jahlab> <work dir> --rough   (gi.walk_rough: photon-rough's walk, the rough specular's live residual - 7-3)
+#        walk.sh <jahlab> <work dir> --area    (gi.walk_area: photon-area's penumbra walk, M1 and the live residual printed)
 #        walk.sh <jahlab> <work dir> --bistro <model.fbx> <data root>   (gi.walk_bistro, the MEASURE row: its own
 #        data root - the bake and the shader cache of Bistro, never the fixtures' - and no class map: M1 'all' only)
 set -u
@@ -144,6 +145,23 @@ analyse() {   # scene - its M1, its laws and its clocks (walk_m1.py), into $WD/<
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" $1 $1-live $1-frozen $1-frozen2 \
         --tsv "$WD/data/stillness/$1-live.tsv" --classes > "$WD/$1-m1.out" 2>&1
 }
+if [ "$MODE" = "--area" ]; then
+    # gi.walk_area (PHOTON-7 stage 7: the walk 7-A owed, run at the stage's master check) - THE AREA LIGHT'S PENUMBRA
+    # WALK: photon-area's plate throwing a 3 m penumbra across the floor and a glossy metal strip through it; a 2.5 m walk
+    # sideways under the plate's height, 2,1.4,2.5 -> -0.5,1.4,2.5 looking at 0,0,-1.5, 60 frames; the hold the glass's
+    # (600: the strip's ray reflection held before the frozen walk). PRINTED: M1 (live less frozen: the area
+    # visibility's history - one stratum a texel a frame, the ratio's two sums - stepping while the camera moves) and
+    # THE LIVE RESIDUAL (the live arm's own frame-to-frame residual), per class: the floor's plaster and the strip's
+    # glossy. The walk's own laws (L2, L3) asserted - the area visibility's bars are gi.card_lamp_shadow_area's.
+    walk area "--data-root $WD/data --env photon-area" 600 2,1.4,2.5 0,0,-1.5 -0.5,1.4,2.5 0,0,-1.5 60 "" 60 live frozen
+    python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" area area-live area-frozen \
+        --tsv "$WD/data/stillness/area-live.tsv" --classes > "$WD/area-m1.out" 2>&1
+    rc=$?
+    cat "$WD/area-m1.out"
+    rm -rf "$WD/data/stillness/dump-"*
+    echo "gi.walk_area: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+    exit $rc
+fi
 if [ "$MODE" = "--rough" ]; then
     # gi.walk_rough (PHOTON-7 stage 7, 7-3): THE ROUGH SPECULAR'S WALK - photon-rough's four rough metal strips (0.45 -
     # 0.75), a 2 m walk along them, 0,1.6,2.4 -> 0,1.6,0.4 looking at 0,0,-3, 60 frames; its hold the glass's (600: the

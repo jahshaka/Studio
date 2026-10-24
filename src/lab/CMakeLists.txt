@@ -24,6 +24,7 @@ add_executable(jahlab
     envs/atom_flat.cpp
     envs/photon_room.cpp
     envs/photon_rough.cpp
+    envs/photon_area.cpp
     envs/photon_court.cpp
     envs/photon_shells.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
