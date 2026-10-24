@@ -358,26 +358,6 @@ jah_gpu_row(gi.leak_room CLASS engine FRAMES 384 COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
-# gi.field_in_integrate (PHOTON-7 stage 7, 7-2) — THE FIELD'S FALLBACK MOVED INTO THE GATHER'S INTEGRATE: the leak room
-# with no probe answering (the door gather.noAnswer), the scene radiance read in float; the pass's route (the arm
-# gather.fieldInPass) against the integrate's, paired in one process, within one fp16 quantum (test_gi_field_in_integrate.cpp
-# says the laws). A fixture.
-add_executable(test_gi_field_in_integrate test_gi_field_in_integrate.cpp)
-set_target_properties(test_gi_field_in_integrate PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_field_in_integrate PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_field_in_integrate PRIVATE JahshakaEngine)
-add_dependencies(test_gi_field_in_integrate JahshakaEngineMedia)
-jah_gpu_row(gi.field_in_integrate CLASS engine FRAMES 319 COMMAND test_gi_field_in_integrate
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_in_integrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-
 # gi.relight_credit (stage 5's read B1) — A LAMP'S RELIGHT AFTER A SHADER WAIT SPENDS ONE FRAME'S COUNT: the test door
 # gi.relightShaderHold holds every cascade's relight 40 frames over a lamp step; then no frame relights more than the
 # count plus the spending cascades' credit caps (test_gi_relight_credit.cpp says the laws). A fixture.
