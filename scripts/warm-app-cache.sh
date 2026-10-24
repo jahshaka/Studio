@@ -27,22 +27,28 @@
 #                    promoted, nonzero on a failed boot (its log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
+#   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
+# THE STAMP IS WRITTEN ONLY WHEN THE BOOT'S CACHE IS THE SHARED ONE: promoted (fresh_home.sh: "REPLACED", or its rule (2)
+# silently), or nothing to promote (the boot compiled nothing the shared cache lacked). A promotion fresh_home SKIPPED -
+# its rule (3), "NOT replaced" (another home promoted since this one was seeded), or its lock not had ("no promotion") -
+# leaves the stamp unwritten: the cache stays cold at the key and the next call warms again (exit 0: the boot passed).
 # THE BOOT: `Jahshaka --engine-selftest` - the app's own startup warm-up gate (the born World's set: Epic, every
 # feature) PLUS the self-test's six poses (the default scene, fixture B with the rays on and off, the motion pose, the
 # mover) - a superset of the warm-up path, and the set of the row the cap broke first (app.engine_selftest_validation).
 # A row booting a test tier with features off (JAHSHAKA_TEST_NEEDS) compiles its own variants once more; what it adds is
 # promoted by its own green run.
 set -u
-BUILD=""; CHECK=0; TESTS=""
+BUILD=""; CHECK=0; TESTS=""; APP=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
+        --app) APP="${2:?--app needs an executable}"; shift 2 ;;
         -*) echo "warm-app-cache: unknown flag $1" >&2; exit 64 ;;
         *) BUILD="$1"; shift ;;
     esac
 done
-[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>]" >&2; exit 64; }
+[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] [--app <exe>]" >&2; exit 64; }
 BUILD=$(cd "$BUILD" && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/.." && pwd)
@@ -87,7 +93,7 @@ echo "cold at $KEY: $why"
 [ "$CHECK" = 1 ] && exit 3
 
 # ---- THE BOOT (once, uncapped: not a test) -------------------------------------------------------------------------
-BIN="$BUILD/bin/Jahshaka"
+BIN="${APP:-$BUILD/bin/Jahshaka}"
 [ -x "$BIN" ] || { echo "warm-app-cache: no app at $BIN" >&2; exit 2; }
 HOME_DIR="$TESTS/warm-app-cache-home"
 XPID=""
@@ -121,6 +127,12 @@ fi
 if [ ! -f "$SHARED/cache-manifest.txt" ]; then
     echo "warm-app-cache: the boot passed but no shared cache was promoted ($SHARED) - not warm"
     exit 1
+fi
+skipped=$(grep -m1 -E 'fresh_home.sh: the shared cache NOT replaced|fresh_home.sh: .*no promotion' "$LOG")
+if [ -n "$skipped" ]; then
+    echo "warm-app-cache: the boot passed in ${wall} s but its cache was NOT promoted (${skipped#fresh_home.sh: }) - not" \
+         "stamped: the cache stays cold at $KEY and the next call warms again"
+    exit 0
 fi
 printf '%s\n%s\n' "$KEY" "$(layer_keys "$SHARED")" > "$STAMP"
 echo "warm-app-cache: warm at $KEY - the boot ${wall} s, the shared cache $(du -sh "$SHARED" | cut -f1)" \

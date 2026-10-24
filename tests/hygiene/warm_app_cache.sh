@@ -34,5 +34,36 @@ out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
 rm -rf "$T/.shadercache"
 out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the shared cache is gone' && ok "no shared cache: cold, exit 3" || no "gone cache: '$out' rc $rc"
+# THE STAMP ONLY ON A PROMOTION (the lead's gap, #52): a FAKE app (--app; it compiles nothing, touches no card - the
+# lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
+# A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
+B="$T/b"; mkdir -p "$B/tests/.shadercache"; touch "$B/CMakeCache.txt"
+manifest() { printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' "$1" "$2"; }
+manifest 1 2 > "$B/tests/.shadercache/cache-manifest.txt"
+cat > "$T/fake-app" <<'APP'
+#!/bin/sh
+# the fake boot: the home's cache grows (a NEW manifest - its seeded one is a hard link of the shared one); with
+# FAKE_RACE set, another home's promotion lands first (the shared manifest rewritten at the same keys)
+c="$HOME/.local/share/Jahshaka/shadercache"
+mkdir -p "$c"; rm -f "$c/cache-manifest.txt"
+printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$c/cache-manifest.txt"
+if [ -n "${FAKE_RACE:-}" ]; then
+    rm -f "$FAKE_RACE/cache-manifest.txt"
+    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$FAKE_RACE/cache-manifest.txt"
+fi
+exit 0
+APP
+chmod +x "$T/fake-app"
+out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" --app "$T/fake-app"); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
+    ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests"); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'no warm-up recorded' && ok "...so the next call reads cold and warms again" || no "after the skip: '$out' rc $rc"
+out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" --app "$T/fake-app"); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q "warm-app-cache: warm at $key" && [ -e "$B/tests/.shadercache.warm-key" ] &&
+    grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
+    ok "a promotion that lands (the shared cache replaced by the boot's grown one): stamped" || no "landed promotion: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests"); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads warm" || no "after the landing: '$out' rc $rc"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail
