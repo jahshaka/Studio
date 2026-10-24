@@ -10,8 +10,9 @@
 // permutations, which no startup set holds — never the startup build behind the splash (53-58 s
 // of the old 87-s cold launch, Debug, a loaded box; spikes/testing-speed-b3/profile.txt). So the
 // cold home is seeded with THE STARTUP SEED: the shader cache a launch that only boots and quits
-// leaves (`e2e-async-after-open-seed/`, kept beside the row's home), STAMPED WITH THE TREE'S KEY (urgent #38; the
-// stamp scripts/lab/warm.sh writes): the app binary (its size and modification time: a relink - an engine or app
+// leaves (`e2e-async-after-open-seed/`, kept beside the row's home), STAMPED WITH THE TREE'S KEY (urgent #38; a stamp
+// in the manner of scripts/lab/warm.sh's, with its own key - warm.sh's hashes the jahlab binary and reads the fork's
+// HEAD): the app binary (its size and modification time: a relink - an engine or app
 // change - moves them), the sha256 of its staged media and the Ogre install's BUILT_FROM (the fork commit). A seed
 // whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the startup
 // set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s: the
