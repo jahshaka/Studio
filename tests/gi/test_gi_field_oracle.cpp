@@ -10,7 +10,9 @@
 // THE STEP (A): the inside lamp 3 -> 6 at the field's rest (it moves every probe: the whole room is its light), run to
 // the rest again (GiStatus::giAtRest held 30 frames).
 // THE LAWS:
-//   (1) EVERY PROBE MATCHES THE ORACLE: every interior irradiance texel of every probe within ONE CODE of the oracle's
+//   (1) EVERY PROBE MATCHES THE ORACLE (on the mark ring's KEEP PATH: the test door gi.fieldMarkRingFull holds the ring
+//       full on every other frame, so a frame's report is kept for the next ticket - stage 5's read B3): every interior
+//       irradiance texel of every probe within ONE CODE of the oracle's
 //       (1 % of the oracle's value per channel - a code is per texel, the world caches' one definition - over the
 //       store's floor) after ONE STEP of the RGBA16F atlas (half floats: 2^-10 of the value) - the probes the step
 //       restarted and the probes it kept alike (what they kept is still the answer: the marks missed nothing that
@@ -139,6 +141,10 @@ int main()
     view->setScene(scene);
     enginetest::leakroom::Room room = enginetest::leakroom::build(scene, view, 0.3f);
     e->setArm("gi.fieldStopOff", 1.0);   // every probe to the target (the header)
+    // (1) RUNS ON THE MARK RING'S KEEP PATH (stage 5's read B3; the test door gi.fieldMarkRingFull): the ring reads full
+    // on every other frame, so that frame's report is KEPT for the next ticket - (1) holds only if no mark is lost
+    // (the old drop: the next CLEAR wiped the dropped frame's listing while its REPORTED words blocked a re-listing)
+    e->setArm("gi.fieldMarkRingFull", 1.0);
     run(1);
     GiParams gi;
     gi.mode = GiMode::Vct;
@@ -199,14 +205,17 @@ int main()
     }
     const unsigned long long restarts = g1.ifdRestarts - g0.ifdRestarts;
     const unsigned long long byMoves = g1.ifdMarkedByMoves - g0.ifdMarkedByMoves;
+    const unsigned long long kept = g1.ifdReportsKept - g0.ifdReportsKept;
     std::printf("   %u probes (target %u): at rest in %d / %d / %d frames | the step restarted %llu (marked by the "
                 "moves %llu, by regions %llu, whole-field marks %llu) | the truth: %zu probes moved over a code (worst "
                 "%.2f codes) | the step against the oracle: worst %.3f codes, %zu probes over a code | at the target: "
-                "the step %zu, the oracle %zu\n",
+                "the step %zu, the oracle %zu | the step's reports a full ring kept: %llu\n",
                 oracle.count, g1.ifdTargetSamples, rest0, rest1, rest2, restarts, byMoves,
                 g1.ifdMarkedByRegion - g0.ifdMarkedByRegion, g1.ifdMarkAlls - g0.ifdMarkAlls, moved, worstMoved, worst,
-                over, atTarget, oracleAtTarget);
-    CHECK(over == 0u, "(1) EVERY PROBE MATCHES THE ORACLE: within one code after the atlas's step");
+                over, atTarget, oracleAtTarget, kept);
+    CHECK(over == 0u && kept > 0u,
+          "(1) EVERY PROBE MATCHES THE ORACLE: within one code after the atlas's step - on the ring's keep path (reports "
+          "kept)");
     CHECK(restarts > 0u && atTarget == oracle.count && oracleAtTarget == oracle.count,
           "(2) THE STEP RESTARTED PROBES, and every probe ends at the target in both fields");
 
@@ -217,6 +226,7 @@ int main()
     run(2);
     e->destroyView(view);
     e->destroyScene(scene);
+    e->setArm("gi.fieldMarkRingFull", 0.0);   // (3) onwards: the shipped ring
     run(1);
 
     // (3) TWO SEALED ROOMS 2 m APART INSIDE THE FIELD, the first's lamp stepped
