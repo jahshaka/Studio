@@ -398,6 +398,25 @@ jah_gpu_row(gi.opaque_bindings CLASS engine FRAMES 745 COMMAND test_gi_opaque_bi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.opaque_bindings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.screen_integrate (PHOTON-7 stage 7, 7-6) — THE NO-RAY ROUTE'S PRODUCER MOVED, THE PHYSICS DID NOT: the screen
+# integrate's picture against the voxel route the pixel ran before 7-6 (the door gi.screenIntegrateOff), paired in one
+# process at the GI's rest, High, rays off (test_gi_screen_integrate.cpp says the laws). A fixture.
+add_executable(test_gi_screen_integrate test_gi_screen_integrate.cpp)
+set_target_properties(test_gi_screen_integrate PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_screen_integrate PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_screen_integrate PRIVATE JahshakaEngine)
+add_dependencies(test_gi_screen_integrate JahshakaEngineMedia)
+jah_gpu_row(gi.screen_integrate CLASS engine FRAMES 400 COMMAND test_gi_screen_integrate
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.screen_integrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door

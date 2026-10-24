@@ -13,18 +13,19 @@
 // THE LAWS, per arm:
 //   (1) the door saw the opaque pass ("Jahshaka opaque") in the frames read (never vacuous);
 //   (2) L4: every record of the opaque passes ("Jahshaka opaque", "Jahshaka atom decode", both hosts) lists ONLY the
-//       five screen products (photonScreenProducts(): the diffuse, the rough specular, the reflection, the sun
-//       contact, the area visibility);
+//       six screen products (photonScreenProducts(): the diffuse, the rough specular, the cone's hit, the reflection,
+//       the sun contact, the area visibility);
 //   (3) THE CONTROL: the door can see a world cache - the refractives pass lists one (the voxel volumes or the field);
-//   (4) a ray arm: THE BLENDED SURFACES DRAW IN THEIR OWN PASS ("Jahshaka blended"), which reads the world caches the
-//       refractives pass reads (it lists one) - a blended fragment has no screen product (7-5).
+//   (4) THE BLENDED SURFACES DRAW IN THEIR OWN PASS ("Jahshaka blended"), which reads the world caches the refractives
+//       pass reads (it lists one) - a blended fragment has no screen product (7-5 on a gathering chain; 7-6 on every
+//       chain: a chain that does not gather has the screen integrate's products, so it is a screen-GI chain too).
 // Every record of every arm is printed. Red on the base (the opaque passes bind the 40 voxel volumes and the field's
-// two textures at Epic); the ray arms go green at 7-5, the no-ray and live arms at 7-6.
+// two textures at Epic); the ray arms went green at 7-5, the no-ray and live arms at 7-6.
 // AND ONCE, AT HIGH (7-5):
 //   (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
-//       picture behind it weighed by zero) on the ray chain - its own pass after the opaque one - against the no-ray
-//       chain and the live ray chain - drawn inside the opaque pass with the prepass's properties withdrawn (F2) - each
-//       at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
+//       picture behind it weighed by zero) on the ray chain against the no-ray chain and the live ray chain - on every
+//       one its own pass after the opaque one (7-6; before it the two drew it inside the opaque pass with the
+//       prepass's properties withdrawn) - each at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
 //       RGBA16F target, so within ONE fp16 ulp of the larger value per channel (a gathering chain used to light it with
 //       the environment alone: PHOTON-GATHER-1d's withdrawal). The live arm read +29 % until the gather was recorded
 //       only for a view whose chain gathers (7-5: a live view's opaque pass bound the gather beside the world caches).
@@ -173,12 +174,10 @@ int main()
             std::snprintf(msg, sizeof msg, "[%s, %s] (3) the control: the refractives pass lists a world cache",
                           t.name, ch.name);
             CHECK(refractivesWorld, msg);
-            if (ch.rays && ch.contract == OffscreenContract::StillPicture) {
-                std::snprintf(msg, sizeof msg,
-                              "[%s, %s] (4) the blended surfaces draw in their own pass, which lists a world cache",
-                              t.name, ch.name);
-                CHECK(sawBlended && blendedWorld, msg);
-            }
+            std::snprintf(msg, sizeof msg,
+                          "[%s, %s] (4) the blended surfaces draw in their own pass, which lists a world cache", t.name,
+                          ch.name);
+            CHECK(sawBlended && blendedWorld, msg);
         }
     }
 
