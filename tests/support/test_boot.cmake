@@ -71,13 +71,15 @@ function(jah_test_boot_env _out _tier)
     set(${_out} "JAHSHAKA_TEST_TIER=set:${_tier}" "JAHSHAKA_TEST_NEEDS=set:${_v}" PARENT_SCOPE)
 endfunction()
 
-# THE WIDTH PER CLASS — the card's slots a row of the class takes (tests/cmake/vram_rows.cmake: 8 slots): a fixture
-# (engine, selftest) 1 — eight at once —, an app or VR row 2 — four at once —, `none` 0 (a row that boots no Vulkan).
-# Constants: a row measured heavier than its class says TOKENS <k> at its site; a measuring row takes all 8.
-set(JAH_SLOTS_engine 1)
-set(JAH_SLOTS_selftest 1)
-set(JAH_SLOTS_app 2)
-set(JAH_SLOTS_vr 2)
+# THE WIDTH PER CLASS — the card's slots a row of the class takes (tests/cmake/vram_rows.cmake: 8 slots): EVERY GPU ROW
+# TAKES ALL EIGHT, so GPU rows run ONE AT A TIME (urgent #44, PHOTON-7 stage 7, 2026-10-24); `none` 0 (a row that boots
+# no Vulkan still overlaps them). WHY: a row's 60 s cap is ITS OWN cost, and on one card a neighbour inflates it - a spec
+# call ran 24 GPU rows beside gi.card_lamp_shadow (11.18 s alone) and timed it out at 60 s, gi.opaque_bindings read 28 s
+# against 5.34 alone; eight fixtures at once had made a row's wall time a function of whatever else the call held.
+set(JAH_SLOTS_engine 8)
+set(JAH_SLOTS_selftest 8)
+set(JAH_SLOTS_app 8)
+set(JAH_SLOTS_vr 8)
 set(JAH_SLOTS_none 0)
 
 # jah_card_slots(<class> <out-var> [TIER <tier> NEEDS <list>|NONE]) — the class's slots; an app row's TIER + NEEDS are

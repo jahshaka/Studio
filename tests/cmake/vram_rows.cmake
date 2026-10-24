@@ -1,8 +1,8 @@
 # THE CARD'S SLOTS (TESTING-SIMPLE; DOCS/PROCESS.md). One ctest process at a time holds the card (scripts/gpu-exclusive.sh:
 # spec.sh test / merge and sprint.sh ship hold it around their ctest); INSIDE that process ctest schedules every GPU row on
 # the `vram` resource of this build's resource spec — a WIDTH PER CLASS, as constants (tests/support/test_boot.cmake):
-# a fixture (CLASS engine|selftest) takes 1 of the 8 slots (8 run at once), an app or VR row or a pool 2 (4 at once), a
-# measuring row all 8 (alone). A row measured heavier than its class says `TOKENS <k>` (its slots) at its site.
+# EVERY GPU row takes all 8 slots, so GPU rows run one at a time (urgent #44: a row's 60 s is its own cost, never its
+# neighbours'); a row that boots no Vulkan takes none and overlaps them.
 set(JAH_CARD_SLOTS 8)
 
 # The build's ctest resource spec: one `vram` resource with the card's slots (ctest reads CTEST_RESOURCE_SPEC_FILE).
