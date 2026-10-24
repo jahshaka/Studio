@@ -444,8 +444,90 @@ void Session::frame()
     mMirror->sync(SceneMirror::FrameViews{ { fv } });
     mEngine->renderOneFrame();
     ++mFrames;
+    if (mCardsWatch) cardsWatchFrame();
     if (mFrames % (kStatsWindowFrames / 2) == 0) mEngine->publishRenderStats(kStatsWindowFrames);
     if (mOverlay && mFrames % kOverlayEveryFrames == 0) pushOverlay();
+}
+
+void Session::cardsWatchFrame()
+{
+    std::vector<CardRadiance> cards;
+    unsigned long long cf = 0ull;
+    mScene->readCardRadiance(cards, cf);
+    std::vector<CardFaceDemand> faces;
+    unsigned long long ff = 0ull;
+    mScene->readCardFaceDemand(faces, ff);
+    std::map<std::pair<unsigned long long, unsigned>, const CardFaceDemand *> face;
+    for (const CardFaceDemand &f : faces) face[{ (unsigned long long)f.node, f.bucket }] = &f;
+    const auto &pub = mScene->published();
+    const GiStatus &g = pub.gi;
+    const auto &rq = pub.rayQuery;
+    double sAll = 0.0, sRefl = 0.0, lRefl = 0.0, dMax = 0.0;
+    size_t nAll = 0, nRefl = 0;
+    unsigned changed = 0;
+    std::ostringstream fresh;
+    std::map<std::pair<unsigned long long, unsigned>, std::vector<float>> now;
+    for (const CardRadiance &r : cards) {
+        const std::pair<unsigned long long, unsigned> k{ (unsigned long long)r.node, r.card };
+        const auto fi = face.find({ (unsigned long long)r.node, r.bucket });
+        const bool readByRefl = fi != face.end() && fi->second->hits[0] > 0ull;
+        const auto it = mCardsPrev.find(k);
+        if (it == mCardsPrev.end()) {
+            fresh << r.node << ":" << r.bucket;
+            if (fi != face.end())
+                fresh << "(mark r" << fi->second->mark[0] << "/g" << fi->second->mark[1] << " hits r" << fi->second->hits[0]
+                      << "/g" << fi->second->hits[1] << ")";
+            fresh << " ";
+        } else if (it->second.size() == r.rgb.size()) {
+            double s = 0.0, l = 0.0, m = 0.0;
+            for (size_t i = 0; i < r.rgb.size(); ++i) {
+                const double d = std::fabs(double(r.rgb[i]) - double(it->second[i]));
+                s += d;
+                l += std::fabs(double(r.rgb[i]));
+                m = std::max(m, d);
+            }
+            if (m > 0.0) ++changed;
+            dMax = std::max(dMax, m);
+            sAll += s;
+            nAll += r.rgb.size();
+            if (readByRefl) { sRefl += s; lRefl += l; nRefl += r.rgb.size(); }
+        }
+        now[k] = r.rgb;
+    }
+    mCardsPrev.swap(now);
+    unsigned rising = 0;
+    if (!rq.reflectHistoryCount.empty()) {
+        const auto &cnt = rq.reflectHistoryCount;
+        if (mTexelPrev.size() != cnt.size()) { mTexelPrev.assign(cnt.size(), 0); mTexelLast.assign(cnt.size(), 0u); }
+        for (size_t i = 0; i < cnt.size(); ++i) {
+            if (cnt[i] > mTexelPrev[i]) { mTexelLast[i] = unsigned(mFrames); ++rising; }
+            mTexelPrev[i] = cnt[i];
+        }
+    }
+    std::fprintf(mCardsWatch, "%llu\t%llu\t%zu\t%llu\t%llu\t%llu\t%llu\t%u\t%d\t%d\t%d\t%.6g\t%.6g\t%.6g\t%.6g\t%u\t%u\t%s\n",
+                 mFrames, cf, cards.size(), (unsigned long long)g.cards.admitted,
+                 (unsigned long long)g.cards.capturesLastFrame, (unsigned long long)g.cards.relights,
+                 (unsigned long long)g.cards.indirectRelights, rq.reflectRestFrames, rq.reflectHeld ? 1 : 0,
+                 rq.reflectRestActive, rq.reflectRestCapped, nAll ? sAll / double(nAll) : -1.0,
+                 nRefl ? sRefl / double(nRefl) : -1.0, lRefl > 0.0 ? sRefl / lRefl : -1.0, dMax, changed, rising,
+                 fresh.str().c_str());
+    if (mFrames % 50 == 0 || rq.reflectHeld) {
+        // the three texels whose count rose LAST (the rest's longest-active), their count and moving SE
+        std::vector<size_t> idx(mTexelLast.size());
+        for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+        std::partial_sort(idx.begin(), idx.begin() + std::min<size_t>(3, idx.size()), idx.end(),
+                          [&](size_t a, size_t b) { return mTexelLast[a] > mTexelLast[b]; });
+        std::fprintf(mCardsWatch, "# frame %llu longest-rising texels (grid %ux%u):", mFrames, rq.reflectHistoryW,
+                     rq.reflectHistoryH);
+        for (size_t j = 0; j < std::min<size_t>(3, idx.size()); ++j) {
+            const size_t i = idx[j];
+            std::fprintf(mCardsWatch, " [%zu,%zu last %u n %u se %.3f]", rq.reflectHistoryW ? i % rq.reflectHistoryW : 0,
+                         rq.reflectHistoryW ? i / rq.reflectHistoryW : 0, mTexelLast[i], unsigned(mTexelPrev[i]),
+                         i < rq.reflectHistorySe.size() ? double(rq.reflectHistorySe[i]) : -1.0);
+        }
+        std::fprintf(mCardsWatch, "\n");
+    }
+    std::fflush(mCardsWatch);
 }
 
 void Session::renderFrames(int n)
@@ -802,6 +884,18 @@ bool Session::exec(const Command &c)
             out << js << "\n";
             ok = bool(out);
             std::printf("LAB STATUS -> %s\n", qPrintable(path));
+        }
+    } else if (c.verb == "cardswatch") {
+        if (mCardsWatch) { std::fclose(mCardsWatch); mCardsWatch = nullptr; }
+        if (a0 != "off") {
+            mCardsWatch = std::fopen(a0.c_str(), "w");
+            ok = mCardsWatch != nullptr;
+            if (ok) {
+                mEngine->request([](Engine &e) { e.setArm("cards.demandCount", 1.0); e.setArm("reflect.historyReadback", 1.0); });
+                std::fprintf(mCardsWatch, "frame\tcache_frame\tresident\tadmitted\tcaptures_last\trelights\tindirect\t"
+                                          "refl_rest\trefl_held\trefl_active\trefl_capped\tcard_dmean\tcard_dmean_refl\t"
+                                          "card_drel_refl\tcard_dmax\tcards_changed\ttexels_rising\tnew_cards\n");
+            }
         }
     } else if (c.verb == "cards") {
         std::vector<CardRadiance> cards;
