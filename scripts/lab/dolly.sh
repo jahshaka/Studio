@@ -14,7 +14,10 @@
 # status per stop), measure.tsv (environments), table.tsv (the table) — and the table on stdout.
 # THE DISPLAY: $DISPLAY when it names a rig (never :0 — refused), else a private Xvfb on a free :60-:99 at 1920x1080x24,
 # its pid recorded in <out-dir>/xvfb.pid and killed at the end. THE LOCK: scripts/gpu-exclusive.sh (re-entrant under a
-# holder). The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab. Exit: jahlab's (0 = every stop measured).
+# holder). THE BAKE: a model is baked first, OFF the card (jahlab --bake-only into the data root; a cached bake costs a
+# hash) - a run on a model never bakes under the lock (jahlab refuses a model whose bake is not cached, exit 5; the
+# urgent list's #30). The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab. Exit: jahlab's (0 = every stop
+# measured; 4 = the bake failed).
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 tree="$(cd "$here/../.." && pwd)"
@@ -93,6 +96,13 @@ for raw in open(stops):
 print("quit")
 open(out + "/stops.names", "w").write("\n".join(names) + "\n")
 PY
+
+# ---- the bake (a model: off the card) ---------------------------------------------------------------------------
+if [ -n "$file" ]; then
+    nice -n 19 "$lab" --bake-only "$file" --data-root "$dataroot" > "$out/bake.log" 2>&1 ||
+        { echo "dolly.sh: the bake failed (the log's tail:)" >&2; tail -5 "$out/bake.log" >&2; exit 4; }
+    grep -E '^LAB BAKE-ONLY' "$out/bake.log" | cut -c1-220
+fi
 
 # ---- the run ----------------------------------------------------------------------------------------------------
 subject=()

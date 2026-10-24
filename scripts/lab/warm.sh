@@ -9,7 +9,9 @@
 #
 # THE WARM RUN: jahlab, offscreen, under the card's lock (scripts/gpu-exclusive.sh --run-timeout S, default 900), the scene
 # loaded, at every --camera (none: the scene's own) a settle (the Atom cut steady) and 30 frames, then a CLEAN quit -
-# the shader cache is saved at the quit. On jahlab's exit 0 it STAMPS the data root's cache: one line a scene in
+# the shader cache is saved at the quit (a model is baked first, OFF the card: jahlab --bake-only into the data root - a
+# run never bakes, it refuses a model whose bake is not cached, the urgent list's #30). On jahlab's exit 0 it STAMPS the
+# data root's cache: one line a scene in
 # <data-root>/shadercache/warm-stamps.txt, the scene's key (an environment's name; a model's path and size) and THE
 # TREE'S KEY - the sha256 of the jahlab binary (the engine is linked in: a C++ change can add a shader variant), of the
 # staged media tree beside it (every Hlms template and compute source jahlab reads) and of the Ogre fork's commit.
@@ -85,6 +87,14 @@ if [ -z "$display" ]; then
 fi
 cleanup() { [ -n "$xpid" ] && kill "$xpid" 2>/dev/null; rm -rf "$work"; }
 trap cleanup EXIT
+
+# ---- the bake (a model: off the card) ---------------------------------------------------------------------------
+mkdir -p "$dataroot"
+if [ -n "$file" ]; then
+    nice -n 19 "$lab" --bake-only "$file" --data-root "$dataroot" > "$work/bake.log" 2>&1 ||
+        { echo "warm.sh: the bake of $file failed (the log's tail:)" >&2; tail -5 "$work/bake.log" >&2; exit 4; }
+    grep -E '^LAB BAKE-ONLY' "$work/bake.log" | cut -c1-200 | sed 's/^/  warm: /'
+fi
 
 # ---- the run ----------------------------------------------------------------------------------------------------
 {

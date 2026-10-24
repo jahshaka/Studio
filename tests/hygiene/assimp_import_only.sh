@@ -23,8 +23,8 @@
 #   src/services/meshbakestore.cpp          bake BUILDS: a stale/absent bake rebuilt
 #                                           from its source on a worker
 #   src/ui/dialogs/importsettingsdialog.cpp the import dialog's light pre-read
-#   src/lab/labscene.cpp                    jahlab's import (LAB-1): the first open of a file parses and BAKES it into
-#                                           the lab's data root; every later open reads the bake
+#   src/lab/labscene.cpp                    jahlab's import (LAB-1): `jahlab --bake-only` parses and BAKES a file into
+#                                           the lab's data root; every run reads the bake
 # White-box test suites (tests/) are not covered: a suite's fixture parse is
 # tests/support/testmesh.h, with no library behind it.
 #

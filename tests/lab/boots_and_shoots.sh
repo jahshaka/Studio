@@ -1,9 +1,10 @@
 #!/bin/bash
 # lab.boots_and_shoots (LAB-1 stage 1): `jahlab --headless --script` on the kit-bashed box set (tests/meshbake's
-# kitBash() written to an OBJ): it loads, BAKES into the lab's data root, shows the Triangles view, renders 30 frames,
-# shoots a PNG and dumps the engine's status; the Atom cut drew (cutTriangles > 0) and its pixels are on screen (the
-# Density view's visible Atom pixels > 0, the shot's false colours). A SECOND RUN of the same script skips the parse and
-# the bake (the cache's law: "CACHE HIT"), and its status equals the first run's cut.
+# kitBash() written to an OBJ): `jahlab --bake-only` BAKES it into the lab's data root (CPU, no engine: a run on a model
+# never bakes - it refuses a model whose bake is not cached, the urgent list's #30), then a run loads it, shows the
+# Triangles view, renders 30 frames, shoots a PNG and dumps the engine's status; the Atom cut drew (cutTriangles > 0) and
+# its pixels are on screen (the Density view's visible Atom pixels > 0, the shot's false colours). Both runs of the
+# script skip the parse and the bake (the cache's law: "CACHE HIT"), and the second's status equals the first's cut.
 # usage: boots_and_shoots.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -20,6 +21,9 @@ status s.json
 quit
 S
 fail=0
+"$LAB" --bake-only --data-root "$WD/data" "$WD/kitbash.obj" > "$WD/bake.log" 2>&1 ||
+    { echo "FAIL: the bake-only step exited $?"; tail -5 "$WD/bake.log"; exit 1; }
+grep -E '^LAB BAKE-ONLY' "$WD/bake.log"
 for run in 1 2; do
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --script "$WD/s.txt" "$WD/kitbash.obj" \
         > "$WD/run$run.log" 2>&1
@@ -27,8 +31,10 @@ for run in 1 2; do
     grep -E '^LAB (LOAD|FIRST|SHOT|END)' "$WD/run$run.log"
     [ $rc -eq 0 ] || { echo "FAIL: run $run exited $rc"; tail -20 "$WD/run$run.log"; exit 1; }
 done
-grep -q '^LAB LOAD kitbash.obj: BAKED' "$WD/run1.log" || { echo "FAIL: the first run did not bake"; fail=1; }
-grep -q '^LAB LOAD kitbash.obj: CACHE HIT' "$WD/run2.log" || { echo "FAIL: the second run did not hit the bake cache"; fail=1; }
+grep -q '^LAB BAKE-ONLY kitbash.obj: BAKED' "$WD/bake.log" || { echo "FAIL: the bake-only step did not bake"; fail=1; }
+for run in 1 2; do
+    grep -q '^LAB LOAD kitbash.obj: CACHE HIT' "$WD/run$run.log" || { echo "FAIL: run $run did not hit the bake cache"; fail=1; }
+done
 python3 -I - "$WD" <<'PY' || fail=1
 import json, os, re, sys
 wd = sys.argv[1]
