@@ -1,5 +1,6 @@
 // gi.screen_bind (PHOTON-7 stage 7, the lead's two risk fixes) - THE NO-RAY SCREEN PASSES' SHARED JOBS BIND NOTHING
-// STALE, A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE, AND A VIEW HAS ONE AREA PRODUCER.
+// STALE, A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE, A VIEW HAS ONE AREA PRODUCER, AND A DECLINED FRAME
+// DRAWS NO SKY THROUGH WALLS.
 //
 // The no-ray route's three compute passes (Jahshaka/ScreenIntegrate, ScreenAreaVis, ScreenAreaVisResolve) run SHARED
 // jobs (CompositorPassCompute finds them by name, uncloned): every view's ScreenGiListener sets their bindings in front
@@ -30,6 +31,11 @@
 //       the views compiling in the background), mid-rest: a deferred trace neither ages nor flips the area history -
 //       the first frame that traces again is one rest frame past the last that did; a new view whose integrate still builds reads its targets as the
 //       chain seeded them (zero): every pixel finite.
+//   (6) A FRAME THE GATHER DECLINES (the door gi.screenBindMissing reaches the ray tier's gather too): a still picture
+//       of a ray scene at rest draws the frame the gather declined as the frame before (the last gather registered);
+//       and a gathering view whose gather never ran draws no sky ambient - its floor within 2 % under a sky ten times
+//       brighter, the specular environment's share (the chain's flag compiles upstream's SH ambient out, not the
+//       registration).
 // A fixture (the engine alone, offscreen views). Counted in frames.
 
 #include "jahshaka/engine/Engine.h"
@@ -405,6 +411,81 @@ int main()
         lv->setScene(nullptr);
         e->destroyView(lv);
         e->destroyScene(s3);
+        e->setRayTracing(false);
+        run(2);
+    }
+
+    // ---- (6) A FRAME THE GATHER DECLINES DRAWS NO SKY THROUGH THE WALLS (the stage 7 read's F3) ----
+    {
+        e->setRayTracing(true);
+        Scene *s4 = buildScene(e, "screen_bind_gather");
+        if (!s4) { std::printf("FAIL: the gather scene\n"); return 1; }
+        s4->setRayTracing(RayTracingMode::On);
+        View *gv = stillView(e, "screen_bind_gather", 256, 256, s4);   // a still picture of a ray scene: it gathers
+        if (!gv) { std::printf("FAIL: the gather view\n"); return 1; }
+        enginetest::testCameraLookAt(gv, eye, at);
+        e->waitForAsyncShaders();
+        int quiet = 0, f = 0;
+        ImageF prev, pic;
+        for (; f < 400 && quiet < 10; ++f) {
+            run(1);
+            gv->readPixelsHdr(pic);
+            quiet = s4->published().gi.giAtRest && same(prev, pic) ? quiet + 1 : 0;
+            prev = pic;
+        }
+        const unsigned long long shown = gv->published().presented;
+        e->setArm("gi.screenBindMissing", 1.0);
+        run(1);
+        ImageF declined;
+        gv->readPixelsHdr(declined);
+        const bool drawn = gv->published().presented == shown + 1ull;
+        e->setArm("gi.screenBindMissing", 0.0);
+        run(1);
+        ImageF after;
+        gv->readPixelsHdr(after);
+        // ...AND A GATHERING VIEW WHOSE GATHER NEVER RAN (the door on from its first frame): no producer registered,
+        // the chain's flag compiles the sky's SH out - the floor's radiance the same under a sky ten times brighter
+        e->setArm("gi.screenBindMissing", 1.0);
+        View *nv = stillView(e, "screen_bind_never", 256, 256, s4);
+        enginetest::testCameraLookAt(nv, eye, at);
+        e->waitForAsyncShaders();
+        run(3);
+        const auto floorMean = [&](View *v) {
+            ImageF im;
+            double sum = 0.0;
+            unsigned n = 0;
+            if (v->readPixelsHdr(im))
+                for (unsigned y = 215; y < 250 && y < im.height; ++y)
+                    for (unsigned x = 90; x < 166 && x < im.width; ++x) {
+                        const Colour c = im.at(x, y);
+                        sum += c.r + c.g + c.b;
+                        ++n;
+                    }
+            return n ? sum / n : -1.0;
+        };
+        const double dim = floorMean(nv);
+        {
+            float sh[27] = { 0 };
+            sh[0] = 0.8f; sh[1] = 0.9f; sh[2] = 1.2f;
+            s4->setAmbientSh(sh);
+        }
+        run(1);
+        const double bright = floorMean(nv);
+        e->setArm("gi.screenBindMissing", 0.0);
+        std::printf("   (6) the gather at rest after %d frames; the declined frame %s, %s; the frame after %s; a gather that "
+                    "never ran: the floor %.5f under the dim sky, %.5f under ten times it\n", f - quiet,
+                    drawn ? "drawn" : "LOST", diff(prev, declined).c_str(), diff(prev, after).c_str(), dim, bright);
+        CHECK(quiet >= 10 && drawn && same(prev, declined) && same(prev, after),
+              "(6) a frame the gather declines draws the last gather: the picture its picture of the frame before");
+        // (what moves is the specular's environment - a 0.9-rough floor's few per cent of Fresnel; the sky's SH as a
+        // diffuse term would add the albedo times the sky's irradiance, several times the floor's whole radiance)
+        CHECK(dim > 0.0 && std::fabs(bright - dim) <= 0.02 * dim,
+              "(6) a gathering pass with no gather registered draws no sky ambient (the chain's flag compiles it out): "
+              "the floor within 2 % under a sky ten times brighter");
+        e->destroyView(nv);
+        gv->setScene(nullptr);
+        e->destroyView(gv);
+        e->destroyScene(s4);
         e->setRayTracing(false);
         run(2);
     }
