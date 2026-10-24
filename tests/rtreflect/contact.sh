@@ -125,6 +125,12 @@ def load(name):
         fails.append('%s: no shot' % name); return None
     img = np.asarray(Image.open(path).convert('RGB')).astype(float)
     return img @ np.array([0.2126, 0.7152, 0.0722])
+# A LAW IN CODES COMPARES EXACT CODES (the photon-7r merge's crease: an exact 2-code grey step, (98, 99, 102) over
+# (96, 97, 100), read 2.000000000000014 > 2 in float luma and failed the "no more than" it meets): the luma in integer
+# ten-thousandths of a code (Rec. 709's weights x 10^4 on the integer codes), so a bar of B codes is B x 10^4, exactly.
+CODE = 10000
+def codes(lum):
+    return np.rint(lum * CODE).astype(np.int64)
 def frame(eye, tgt, W, H):
     eye = np.array(eye, float); f = np.array(tgt, float) - eye; f /= np.linalg.norm(f)
     r = np.cross(f, [0, 1, 0]); r /= np.linalg.norm(r); u = np.cross(r, f)
@@ -218,10 +224,11 @@ def selfHits(name, eye):
         # against its ROW's median: the emitter's mirror image is uniform along a row, and its row-to-row drift (the
         # metal's Fresnel with the angle, 2 codes over the band) is the row median's
         offPx = 0
+        lumC = codes(lum)
         for y in range(H):
-            row = lum[y][okF[y]]
+            row = lumC[y][okF[y]]
             if row.size < 16: continue
-            offPx += int((np.abs(row - np.median(row)) > 3.0).sum())
+            offPx += int((np.abs(row - np.median(row)) > 3 * CODE).sum())
         print('%-12s the %-7s floor\'s panel band: %d px, %d more than 3 codes off their row (rays that hit their own '
               'floor)' % (name, floor, band.size, offPx))
         out[floor] = offPx
@@ -229,6 +236,7 @@ def selfHits(name, eye):
 def crease(name):
     lum = load(name)
     if lum is None: return
+    lum = codes(lum)   # (exact codes: the head of codes())
     H, W = lum.shape
     eye, f, r, u, tx, proj = frame((1.9, 1.3, 0.45), (1.9, 0.1, -2.75), W, H)
     a = proj(np.array([1.0, 0.02, -2.17])); b = proj(np.array([2.8, 0.02, -2.17]))
@@ -238,9 +246,9 @@ def crease(name):
         k = int(math.ceil(c))   # the first floor row below the crease line (its upper neighbour is the block's)
         cols += 1
         j1 = abs(lum[k, x] - lum[k + 1, x]); j2 = abs(lum[k + 1, x] - lum[k + 2, x])
-        if j1 > j2 + 2.0:
+        if j1 > j2 + 2 * CODE:
             lineCols += 1
-            if len(worst) < 5: worst.append((x, k, [int(v) for v in lum[k - 1:k + 3, x]]))
+            if len(worst) < 5: worst.append((x, k, [round(v / CODE, 2) for v in lum[k - 1:k + 3, x]]))
     print('%-12s the crease: %d columns, %d whose first floor row steps off the rows below (a line)%s' %
           (name, cols, lineCols, (' ' + str(worst)) if worst else ''))
     if cols < 200: fails.append('%s: the crease spans %d columns (< 200): the fixture moved' % (name, cols))
