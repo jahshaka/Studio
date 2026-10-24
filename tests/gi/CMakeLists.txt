@@ -286,11 +286,20 @@ target_compile_definitions(test_gi_field_oracle PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_field_oracle PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_oracle JahshakaEngineMedia)
-jah_gpu_row(gi.field_oracle CLASS engine COMMAND test_gi_field_oracle
+# (THREE ROWS, PHOTON-7 stage 7: whole past a fixture's 10 s budget - each part its own fixtures: the leak room's step
+# against its oracle (1), (2), (7); `_marks` the two sealed rooms and the open step (3), (4); `_shells` the probes outside
+# cascade 0 and the cone shells (5), (6); every bar unchanged.)
+jah_gpu_row(gi.field_oracle CLASS engine COMMAND test_gi_field_oracle step
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_oracle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 3279)
+jah_gpu_row(gi.field_oracle_marks CLASS engine COMMAND test_gi_field_oracle marks
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.field_oracle_shells CLASS engine COMMAND test_gi_field_oracle shells
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_oracle gi.field_oracle_marks gi.field_oracle_shells PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 780)
+set_tests_properties(gi.field_oracle_marks PROPERTIES JAHSHAKA_TEST_FRAMES 1508)
+set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 979)
 
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
 # TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
