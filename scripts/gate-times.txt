@@ -203,7 +203,7 @@ scripting.e2e.perf_capture_frames.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.player_bounce 24.70  ship 3a0422b4e (2026-10-13)
 scripting.e2e.preset_apply 9.60  ship 3a0422b4e (2026-10-13)
 scripting.e2e.preset_apply.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-scripting.e2e.sky_swap_transient 37.57  quiet n=47; budget 70 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it
+scripting.e2e.sky_swap_transient 37.57  quiet n=47 (TESTING-SPEED-B2, the lead 2026-10-12): under an app row's 60 s budget; the cold path is the subject — the boot lane lowers it
 scripting.e2e.sky_swap_transient.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tex_ref 9.90  ship 3a0422b4e (2026-10-13)
 scripting.e2e.tex_ref.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

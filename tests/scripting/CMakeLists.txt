@@ -175,9 +175,12 @@ file(MAKE_DIRECTORY ${_pumpdefer_home}/run)
 # after a sky power change, a sun move, a sky type change either way and the
 # cloud layer on/off equals the frame after it within 2/255 — the change frame
 # used to sample a reflection cube nothing had written, with the SH one host
-# push behind it. Engine UP (a picture); the home is WIPED first, so no cached
-# shader or face stands between a change and its first frame. ~10 s solo.
-# budget 70 s: the measurement (TESTING-SPEED-B2, the lead 2026-10-12); the cold path is the subject — the boot lane lowers it.
+# push behind it — and, with the Photon chain on, the picture settled after a
+# haze change equals the one settled a frame later (no part of the change lands
+# behind it: the sun's tint once did, PHOTON-7 stage 7). Engine UP (a picture);
+# the home is WIPED first, so no cached shader or face stands between a change
+# and its first frame. Priced 37.6 s (scripts/gate-times.txt), under an app row's 60 s;
+# the cold path is the subject — the boot lane lowers it.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
 jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS photon

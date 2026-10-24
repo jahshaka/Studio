@@ -21,12 +21,16 @@
 // 2/255 on every probe and channel. The probes are the repro's ground points and
 // a glossy metal sphere (the reflection cube's own reader).
 //
-// WHY GI IS OFF FOR THE FIRST SIX. editor.screenshot settles GI before it
-// photographs (a shot is the picture at rest); with GI off nothing owes a
-// settle, so its frames ARE the first after the change — the sky/IBL swap in
-// isolation, where the defect lived. The last two arms turn the Photon chain on
-// (field off: the repro; field on: the shipped tier) and photograph through
-// camera.screenshot, which never settles — frame 0 by construction.
+// WHY GI IS OFF FOR THE FIRST SIX. Every shot — editor.screenshot and
+// camera.screenshot alike (EngineSceneViewport::takeScreenshot) — is a fresh
+// still-picture view that settles GI to rest before it photographs; with GI off
+// nothing owes a settle, so its frame IS the first after the change — the
+// sky/IBL swap in isolation, where the defect lived. The last two arms turn the
+// Photon chain on (field off: the repro; field on: the shipped tier): there a
+// shot is the picture SETTLED after the change, and the one an editor frame
+// later must equal it — no part of the change may land a frame behind the rest
+// (PHOTON-7 stage 7: the sun's atmosphere tint, taken from the last frame's air,
+// arrived a record late and relit every card behind the settled shot).
 //
 // Engine UP (the assertion is a picture). Fresh home: the run starts from an
 // empty data root, so nothing a previous run cached (a shader, a probe face)
@@ -111,12 +115,13 @@ assert(moved >= 3, "the cloud layer going on moved the picture (" + moved + ")")
 moved = arm("clouds_off", function () { world.clouds({ enabled: false }); });
 assert(moved >= 3, "the cloud layer going off moved the picture (" + moved + ")");
 
-// ---- THE CHAIN ON: frame 0 BY CONSTRUCTION --------------------------------
-// editor.screenshot settles GI before it photographs, and whether the first
-// shot after a change is frame 0 then depends on whether the chain happened to
-// be at rest when the settle looked. camera.screenshot takes no settle at all
-// (cameraapi.cpp -> takeScreenshot): its frames ARE the first frames after the
-// change, whatever GI owes. A scene camera at the editor camera's pose.
+// ---- THE CHAIN ON: THE SETTLED PICTURE, AND NOTHING LANDING AFTER IT -------
+// camera.screenshot settles GI before it photographs, as editor.screenshot does
+// (cameraapi.cpp -> EngineSceneViewport::takeScreenshot: a fresh still-picture
+// view, read back at giAtRest), so with the chain on f0 is the picture at rest
+// after the change and f1 the one at rest an editor frame later: equal within
+// 2/255 unless part of the change lands a frame after the rest. A scene camera
+// at the editor camera's pose.
 var cam = scene.addCamera({ position: { x: 0, y: 40, z: 40 } });
 node.transform(cam, { rotation: { x: -45, y: 0, z: 0 } });
 editor.selectNone();
