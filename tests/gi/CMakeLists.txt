@@ -471,6 +471,25 @@ jah_gpu_row(gi.area_contact CLASS engine FRAMES 300 COMMAND test_gi_area_contact
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.area_contact PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.rough_lobe_room (PHOTON-7 stage 7's read, F4; L9) — THE NO-RAY PRODUCER AND ITS PIXEL DECIDE THE ROUGH LOBE FROM
+# ONE ROUGHNESS, THE FOOTPRINT'S (the widened alpha of a normal-mapped surface): a closed room's normal-mapped floor
+# stays dark to a sky ten times brighter (test_gi_rough_lobe_room.cpp says the law). A fixture.
+add_executable(test_gi_rough_lobe_room test_gi_rough_lobe_room.cpp)
+set_target_properties(test_gi_rough_lobe_room PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_rough_lobe_room PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_rough_lobe_room PRIVATE JahshakaEngine)
+add_dependencies(test_gi_rough_lobe_room JahshakaEngineMedia)
+jah_gpu_row(gi.rough_lobe_room CLASS engine FRAMES 400 COMMAND test_gi_rough_lobe_room
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rough_lobe_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
