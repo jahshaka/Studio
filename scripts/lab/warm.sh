@@ -70,7 +70,7 @@ fi
 # ---- the display ------------------------------------------------------------------------------------------------
 xpid="" display=""
 case "${DISPLAY:-}" in
-    "" | :0 | :0.*) [ -n "${DISPLAY:-}" ] && echo "warm: DISPLAY=$DISPLAY is the owner's display - a private Xvfb is used instead" ;;
+    "" | :0 | :0.* | *:0 | *:0.*) [ -n "${DISPLAY:-}" ] && echo "warm: DISPLAY=$DISPLAY is the owner's display - a private Xvfb is used instead" ;;
     *) display="$DISPLAY" ;;
 esac
 work="$(mktemp -d "${TMPDIR:-/tmp}/warm.XXXXXX")"

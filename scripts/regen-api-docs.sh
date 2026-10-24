@@ -21,7 +21,11 @@ tree="$(cd "$here/.." && pwd)"
 bin="$(cd "$build" && pwd)/bin"
 [ -x "$bin/Jahshaka" ] || { echo "regen-api-docs.sh: no Jahshaka in $bin" >&2; exit 66; }
 [ -n "${DISPLAY:-}" ] || { echo "regen-api-docs.sh: set DISPLAY to your own Xvfb (never :0)" >&2; exit 64; }
-[ "$DISPLAY" = ":0" ] && { echo "regen-api-docs.sh: DISPLAY=:0 is the owner's session - use your own Xvfb" >&2; exit 64; }
+# THE OWNER'S DISPLAY BY EVERY SPELLING (stage 5's read B8: the literal ":0" alone let :0.0 / unix:0 / localhost:0
+# through): display 0 on any host or screen is his session.
+case "$DISPLAY" in
+    :0 | :0.* | *:0 | *:0.*) echo "regen-api-docs.sh: DISPLAY=$DISPLAY is the owner's session - use your own Xvfb" >&2; exit 64 ;;
+esac
 own=0
 if [ -z "$root" ]; then
     root="$(mktemp -d "${TMPDIR:-/tmp}/regen-api-docs.XXXXXX")"

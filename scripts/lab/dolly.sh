@@ -48,7 +48,7 @@ rm -f "$out/status.jsonl" "$out/measure.tsv" "$out/table.tsv" "$out"/stop*.png
 # ---- the display ------------------------------------------------------------------------------------------------
 xpid=""
 case "${DISPLAY:-}" in
-    "" | :0 | :0.*) display=""; [ -n "${DISPLAY:-}" ] && echo "dolly: DISPLAY=$DISPLAY is the owner's display — a private Xvfb is used instead" ;;
+    "" | :0 | :0.* | *:0 | *:0.*) display=""; [ -n "${DISPLAY:-}" ] && echo "dolly: DISPLAY=$DISPLAY is the owner's display — a private Xvfb is used instead" ;;
     *) display="$DISPLAY" ;;
 esac
 if [ -n "$display" ]; then
