@@ -18,9 +18,16 @@
 //   (a) a glossy metal floor (perceptual roughness 0.2 - above the mirror ramp, where the
 //       mean HAS a memory; a true mirror takes every sample whole) reflecting a matte box
 //       lit by one lamp; the lamp's intensity doubles at frame 40. The floor patch where
-//       the box is reflected is read in HDR every frame; the number is the frames from the
-//       step until it holds 95 % of its settled change (24 at the base, 11 with the cap; the
-//       law 2 x kWarmupFrames).
+//       the box is reflected AND THE BOX'S OWN PATCH - THE REFLECTION'S SOURCE, the shaded
+//       picture the screen march reads - are read in HDR every frame; each one's number is the
+//       frames from the step until it holds 95 % of its own settled change. THE LAW (PHOTON-7
+//       stage 5, the lead's ruling; rule #21 - a bar measures only what its own code decides): the
+//       reflection arrives within 2 x kWarmupFrames of the frame ITS SOURCE does. The source's own
+//       catch-up is the GI's - the box's diffuse indirect is the gather's, settling while the
+//       relight is spread over GiQualityFacts::lightWorkFrames (L7: a lamp's indirect catching up
+//       over frames is not a pop), bounded by the GI's own laws (gi.hold_after_stop) - never the
+//       detectors'. Measured at stage 5: the source at 14, the reflection at 24 (the lamp step
+//       alone: 24 at the base, 11 with the cap, 7 at PHOTON-2 1b - before the spread).
 //   (b) PAN-SMEAR-1's pillar fixture (gi.reflect_motion, archived): a glossy floor, seven
 //       emissive pillars, a 24-frame slide at 0.25 m a frame, the moving floor against the
 //       floor the renderer settles to at the same pose, in 8-bit codes.
@@ -121,8 +128,30 @@ static void rayTier(Scene *s, View *view)
     view->setPostFx(fx);
 }
 
-/// (a) THE LAMP STEP: frames from the step until the reflection holds 95 % of its change.
-static int lampStep(Engine *e, View *view)
+/// The frames from the step until a trace holds 95 % of its settled change (and stays: one noisy
+/// frame is no arrival); -1 when it never does.
+static int arrivalOf(const std::vector<double> &trace, size_t stepAt, double &before, double &after)
+{
+    before = after = 0.0;
+    for (size_t i = stepAt - 10; i < stepAt; ++i) before += trace[i] / 10.0;
+    for (size_t i = trace.size() - 20; i < trace.size(); ++i) after += trace[i] / 20.0;
+    const auto frac = [&](size_t i) { return (trace[i] - before) / std::max(after - before, 1e-9); };
+    for (size_t i = stepAt; i < trace.size(); ++i) {
+        if (frac(i) < 0.95) continue;
+        bool holds = true;
+        for (size_t k = i; k < std::min(i + 5, trace.size()); ++k) holds = holds && frac(k) >= 0.90;
+        if (holds) return int(i - stepAt) + 1;
+    }
+    return -1;
+}
+
+/// (a) THE LAMP STEP: the frames from the step until the reflection, and until its source (the
+/// reflected box's own on-screen patch), hold 95 % of their change.
+struct LampStepArrivals {
+    int reflection = -1;
+    int source = -1;
+};
+static LampStepArrivals lampStep(Engine *e, View *view)
 {
     Scene *s = e->createScene("lampstep");
     view->setScene(s);
@@ -149,47 +178,44 @@ static int lampStep(Engine *e, View *view)
     enginetest::testCameraLookAt(view, eye, target);
     rayTier(s, view);
 
-    // The box's front face centre (0, 1, -2.5) mirrored in the floor: where its reflection is.
-    float px = 0, py = 0;
+    // The box's front face centre (0, 1, -2.5) mirrored in the floor: where its reflection is;
+    // and the face itself: the reflection's source.
+    float px = 0, py = 0, sx = 0, sy = 0;
     project(eye, target, Vec3(0.0f, -1.0f, -2.5f), px, py);
-    const int cx = int(px), cy = int(py);
+    project(eye, target, Vec3(0.0f, 1.0f, -2.5f), sx, sy);
+    const int cx = int(px), cy = int(py), ox = int(sx), oy = int(sy);
 
     enginetest::frames(e, 120);   // the view warm, the mean converged at the old intensity
-    std::vector<double> trace;
+    std::vector<double> trace, source;
     ImageF img;
-    for (int f = 0; f < 40; ++f) {
+    const auto read = [&]() {
         enginetest::frames(e, 1);
         view->readPixelsHdr(img);
         trace.push_back(patchLuma(img, cx, cy, 3));
-    }
+        source.push_back(patchLuma(img, ox, oy, 3));
+    };
+    for (int f = 0; f < 40; ++f) read();
     l.intensity = 12.0f;
     s->setLight(lamp, l);
     const size_t stepAt = trace.size();
-    for (int f = 0; f < 220; ++f) {
-        enginetest::frames(e, 1);
-        view->readPixelsHdr(img);
-        trace.push_back(patchLuma(img, cx, cy, 3));
-    }
-    double before = 0.0, after = 0.0;
-    for (size_t i = stepAt - 10; i < stepAt; ++i) before += trace[i] / 10.0;
-    for (size_t i = trace.size() - 20; i < trace.size(); ++i) after += trace[i] / 20.0;
-    int reached = -1;
-    for (size_t i = stepAt; i < trace.size(); ++i) {
-        const double frac = (trace[i] - before) / std::max(after - before, 1e-9);
-        if (frac >= 0.95) {
-            bool holds = true;   // and stays there (one noisy frame is no arrival)
-            for (size_t k = i; k < std::min(i + 5, trace.size()); ++k)
-                holds = holds && (trace[k] - before) / std::max(after - before, 1e-9) >= 0.90;
-            if (holds) { reached = int(i - stepAt) + 1; break; }
-        }
-    }
+    for (int f = 0; f < 220; ++f) read();
+    LampStepArrivals out;
+    double before = 0.0, after = 0.0, sBefore = 0.0, sAfter = 0.0;
+    out.reflection = arrivalOf(trace, stepAt, before, after);
+    out.source = arrivalOf(source, stepAt, sBefore, sAfter);
+    const auto firstFrames = [&](const std::vector<double> &t, double b, double a) {
+        for (size_t i = stepAt; i < stepAt + 12 && i < t.size(); ++i)
+            std::printf(" %.0f%%", 100.0 * (t[i] - b) / std::max(a - b, 1e-9));
+    };
     std::printf("-- (a) lamp 6 -> 12 at frame 40: reflection patch (%d,%d) %.4f -> %.4f; first frames after "
                 "the step:", cx, cy, before, after);
-    for (size_t i = stepAt; i < stepAt + 12 && i < trace.size(); ++i)
-        std::printf(" %.0f%%", 100.0 * (trace[i] - before) / std::max(after - before, 1e-9));
-    std::printf("\n   95 %% of the change held after %d frames\n", reached);
+    firstFrames(trace, before, after);
+    std::printf("\n   its source, the box's own patch (%d,%d) %.4f -> %.4f:", ox, oy, sBefore, sAfter);
+    firstFrames(source, sBefore, sAfter);
+    std::printf("\n   95 %% of the change held after: the source %d frames, the reflection %d frames (lag %d)\n",
+                out.source, out.reflection, out.reflection - out.source);
     e->destroyScene(s);
-    return reached;
+    return out;
 }
 
 /// (b) THE SLIDE: the moving floor against the settled floor, 8-bit codes.
@@ -267,13 +293,17 @@ int main()
         return 0;
     }
 
-    const int frames95 = lampStep(e, view);
-    // THE LAW (the lead's ruling on the measurement): 95 % of a radiance change holds within
-    // 2 x kWarmupFrames frames. Measured: 24 at the base (the 1/32 floor's drain), 11 with the
-    // radiance cap (PHOTON-5), 7 with the clamp and its confidence (PHOTON-2 1b).
-    CHECK_MSG(frames95 > 0 && frames95 <= 2 * kWarmupFrames,
-              "(a) A LAMP STEP reaches the still glossy floor's reflection within 2 x kWarmupFrames = %d frames "
-              "(%d; 24 at the base)", 2 * kWarmupFrames, frames95);
+    const LampStepArrivals a = lampStep(e, view);
+    // THE LAW (the header; PHOTON-7 stage 5, the lead's ruling): the reflection holds 95 % of a radiance change
+    // within 2 x kWarmupFrames frames of the frame its SOURCE does. Measured from the step alone: 24 at the base
+    // (the 1/32 floor's drain), 11 with the radiance cap (PHOTON-5), 7 with the clamp and its confidence
+    // (PHOTON-2 1b); at stage 5 the source 14, the reflection 24.
+    CHECK_MSG(a.source > 0 && a.reflection > 0, "(a) both arrivals measured (the source %d, the reflection %d)",
+              a.source, a.reflection);
+    CHECK_MSG(a.source > 0 && a.reflection > 0 && a.reflection - a.source <= 2 * kWarmupFrames,
+              "(a) A LAMP STEP reaches the still glossy floor's reflection within 2 x kWarmupFrames = %d frames of its "
+              "source (lag %d: the source %d, the reflection %d)", 2 * kWarmupFrames, a.reflection - a.source,
+              a.source, a.reflection);
 
     float still = 0.0f;
     const float trail = slideTrail(e, view, still);
