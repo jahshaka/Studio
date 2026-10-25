@@ -1360,16 +1360,19 @@ bool Session::monitor(const Command &c)
         double passes = 0.0, rows = 0.0;
         // A ROW'S OWN TIME where it encloses others (self:<name>, the work none of its children names) and whether it
         // SUBMITTED inside it (submitted:<name>=1: its own time holds the GPU's wait for the CPU, a bubble)
-        const auto selfOf = [&](const std::string &n, float ms, float self, bool submitted) {
+        // ...and an OVERRUN (overrun:<name>=ms): its children sum past it beyond the rounding - an overlap or a double count
+        const auto selfOf = [&](const std::string &n, float ms, float self, bool measured, bool submitted) {
             if (submitted) names[word("submitted:" + n)] = 1.0;   // a leaf too: its time holds a bubble
-            if (self < 0.0f || ms < 0.0f || double(ms) - double(self) < 1e-4) return;   // a leaf: its own time IS its time
+            if (!measured || ms < 0.0f) return;
+            if (self < 0.0f) { names[word("overrun:" + n)] += -double(self); return; }
+            if (double(ms) - double(self) < 1e-4) return;   // a leaf: its own time IS its time
             names[word("self:" + n)] += double(self);
         };
         for (const FramePass &p : r.passes) {
             if (p.gpuMs < 0.0f) continue;   // not measured (never faked as 0)
             const std::string n = (p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass;
             names[word(n)] += p.gpuMs;
-            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfSubmitted);
+            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted);
             if (p.topLevel) passes += p.gpuMs;
         }
         std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
@@ -1391,7 +1394,8 @@ bool Session::monitor(const Command &c)
                 continue;
             }
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
-            selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfSubmitted);
+            selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfMeasured,
+                   w.selfSubmitted);
             if (w.topLevel) rows += w.gpuMs;
         }
         dropped += r.gpuMarksDropped;

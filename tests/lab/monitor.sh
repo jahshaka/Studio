@@ -14,7 +14,9 @@
 #   (4) NOTHING UNNAMED (PHOTON-7's naming step): on every frame the gaps no row names (unattr) are at most 0.1 ms, and
 #       every GPU row that encloses others (gi.step) leaves at most 0.1 ms of its own time to no child (self:, unless it
 #       submitted inside it - a bubble, the GPU waiting for the CPU, submitted:) - a dispatch through the Photon door
-#       directly inside gi.step files its own row (photonDispatch).
+#       directly inside gi.step files its own row (photonDispatch);
+#   (5) NO OVERRUN: no row's children sum past it beyond the timestamps' rounding (1e-3 ms; overrun:) - an overlap or a
+#       double count the monitor reports and never clamps.
 # usage: monitor.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
@@ -56,6 +58,9 @@ for part, n in (('boot', 30), ('step', 30)):
             if name.startswith(('self:row:', 'self:nested-row:')) and float(ms) > 0.1 and \
                     ('submitted:' + name[5:]) not in tok:
                 fails.append('(4) %s frame %s: %s leaves %.4f ms to no child' % (part, kv.get('F', '?'), name[5:], float(ms)))
+        for name, ms in tok.items():
+            if name.startswith('overrun:'):
+                fails.append('(5) %s frame %s: the children of %s overrun it by %.4f ms' % (part, kv.get('F', '?'), name[8:], float(ms)))
         worst_self = max([float(v) for k, v in tok.items() if k.startswith(('self:row:', 'self:nested-row:'))] + [0.0])
         names['__worst_self_' + part] = max(names.get('__worst_self_' + part, 0.0), worst_self)
         names['__worst_unattr_' + part] = max(names.get('__worst_unattr_' + part, 0.0), unattr)
@@ -69,7 +74,7 @@ want = [('the injection', r'vct\.inject\.'), ('the bounce feedback', r'vct\.feed
         ('the reflection\'s resolve', r'rq\.reflect\.resolve$'), ('the area visibility\'s trace', r'area\.vis$'),
         ('the area visibility\'s resolve', r'area\.resolve$')]
 for label, pat in want:
-    hit = {k: v for k, v in names.items() if re.search(pat, k) and not k.startswith(('self:', 'submitted:', '__'))}
+    hit = {k: v for k, v in names.items() if re.search(pat, k) and not k.startswith(('self:', 'submitted:', 'overrun:', '__'))}
     best = max(hit.values()) if hit else 0.0
     print('  %-30s %s' % (label, ('%d row(s), max %.4f ms' % (len(hit), best)) if hit else 'NONE'))
     if not hit or not best > 0.0: fails.append('(2) %s: no positive time (%s)' % (label, pat))
