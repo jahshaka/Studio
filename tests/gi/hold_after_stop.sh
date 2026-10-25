@@ -7,7 +7,9 @@
 #     demand's read-back lags, so a face the walk's last frames first hit arrives after the stop, and admitting it is
 #     right): (1) EVERY GI ROW AFTER THE STOP IS OWED BY THE MOTION, within its bound - a card row is a DEMAND ARRIVAL
 #     whose stamps all predate the stop, admitted within the demand's period + its read-back lag of it
-#     (CardCacheStatus::demandReadEvery + demandReadLag) and captured the frame after; a field row is the REFINEMENT
+#     (CardCacheStatus::demandReadEvery + demandReadLag) and captured the frame after, or a ROUND whose every root is
+#     owed (PHOTON-7 stage 10, R3 (c): an owed arrival's card-to-card rounds, the rest's one decision - owed_rows.py);
+#     a field row is the REFINEMENT
 #     of a plane the window entered before the stop (no window move after it), within the restart's depth + the
 #     marks' lag (GiStatus::ifdRestartDepth + ifdMarkLag) - every post-stop row printed with its cause and its stamp,
 #     any other cause or a row past its bound RED; (2) the gather held <= the last such row + 17; the plaster's
@@ -50,7 +52,9 @@ LAB=${1:?jahlab}; WD=${2:?work dir}
 HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 ROOM=1.5,2,3,1.5,1.5,-4
-printf 'stillness teleport:0.3,2,3,0.3,1.5,-4/hold:300/walk:%s:30 60 out=room-sub\nquit\n' "$ROOM" > "$WD/room-sub.lab"
+# (120 frames: R3 - the stop's whole consequence, its arrivals' card-to-card rounds and the rest's one decision, lies
+# before the hold, and (2)'s bound is the last owed row + 17: measured 74, past the old 60-frame window)
+printf 'stillness teleport:0.3,2,3,0.3,1.5,-4/hold:300/walk:%s:30 120 out=room-sub\nquit\n' "$ROOM" > "$WD/room-sub.lab"
 printf 'camera %s\nframes 300\nlamp lamp intensity 12\nstillness teleport:%s/hold:1 120 out=room-lamp\nquit\n' "$ROOM" "$ROOM" > "$WD/room-lamp.lab"
 printf 'stillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-x\nquit\n' > "$WD/court-x.lab"
 printf 'arm gather.classOff 1\nstillness teleport:0,3,18,0,3,-6/hold:300/walk:0,3,3,0,3,-21:60 120 trail=60 restarts out=court-off\nquit\n' > "$WD/court-off.lab"
