@@ -81,11 +81,20 @@ jah_gpu_row(lab.camera_cut CLASS engine FRAMES 78
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.camera_cut PROPERTIES TIMEOUT 60 LABELS "lab")
 
-# lab.no_self_drain (PHOTON-7's walk hitch) — NO SUBMISSION INSIDE THE GI PLAN OR THE CARD TABLES, NO SELF-DRAIN: on
-# photon-glass (boot 40 + a walk of 80 under `monitor`) the walk crosses a field follow and a card capture, no `submitted:`
-# on gi.plan / cards.tables(.pass) and no queue self-drain on any frame (the fork's JahQueueCounters; no_self_drain.sh).
+# lab.no_self_drain (PHOTON-7's walk hitch) — NO DRAIN (the hitch step's bar): on photon-glass (boot 40 + a walk of 80
+# under `monitor`) the walk crosses a field follow and a card capture, and the graphics queue counts no self-drain on any
+# frame (the fork's JahQueueCounters); the submissions inside gi.plan / cards.tables(.pass) are printed (no_self_drain.sh).
 jah_gpu_row(lab.no_self_drain CLASS engine FRAMES 120
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/no_self_drain.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/no_self_drain
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.no_self_drain PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.commit_reach (PHOTON-7's walk hitch, 2) — A SCROLL COMMIT COMPUTES ITS SLAB AND THE VOXELS WHOSE MARCH TOWARD A LIGHT
+# MEETS A MOVED FACE: on photon-court (its sun, no lamp) a straight -z walk under `monitor`; every inner commit computes at
+# most one face's band past its slab, where the light-blind rule computed two (commit_reach.sh).
+jah_gpu_row(lab.commit_reach CLASS engine FRAMES 180
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/commit_reach.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/commit_reach
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.commit_reach PROPERTIES TIMEOUT 60 LABELS "lab")
