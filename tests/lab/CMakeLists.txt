@@ -80,3 +80,12 @@ jah_gpu_row(lab.camera_cut CLASS engine FRAMES 78
             ${CMAKE_CURRENT_BINARY_DIR}/work/camera_cut
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.camera_cut PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.no_self_drain (PHOTON-7's walk hitch) — A MID-FRAME SUBMISSION NEVER MAKES THE CPU WAIT THE FRAME'S OWN WORK: on
+# photon-glass (boot 40 + a walk of 80 under `monitor`) the run has fenced mid-frame flushes, a field follow and a card
+# capture, and the graphics queue counts no self-drain on any frame (the fork's JahQueueCounters; no_self_drain.sh).
+jah_gpu_row(lab.no_self_drain CLASS engine FRAMES 120
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/no_self_drain.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/no_self_drain
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.no_self_drain PROPERTIES TIMEOUT 60 LABELS "lab")
