@@ -184,6 +184,15 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_serve_red.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(gate.serve_red PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(gate.serve_red)
+    # gate.reach_cache (URGENT FIX LIST #57) — A CACHED REACH IS THE FRESH ONE: ci_gate_check.py serve's per-ancestor
+    # selection (Reach.of) cached on disk in the build dir, keyed by the ancestor, the tip, the build stamp, the ctest
+    # inventory and the selector's scripts; on two ancestors of HEAD the disk's answer equals the fresh one, the key moves,
+    # and a corrupt file is recomputed. Needs the BUILT tree (the graph) and git.
+    add_test(NAME gate.reach_cache
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_reach_cache.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.reach_cache PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(gate.reach_cache)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
     # R1 every measuring row is inside the GPU lock; R2 every stage-close row is priced; R3 no
     # copied `ctest -LE` tier; R4 no RUN_SERIAL without its verdict; R5 every app/lint row has a

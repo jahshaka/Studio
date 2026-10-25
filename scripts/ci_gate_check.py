@@ -19,6 +19,8 @@ Every other row RUNS, with the reason. The serving decides nothing else: a red i
 Exit 0; 2 when the build or the tip cannot be read.
 """
 import argparse
+import glob
+import hashlib
 import importlib.util
 import json
 import os
@@ -111,18 +113,75 @@ def fork_rows(build, graph, inv):
     return {n for n, t in inv.items() if (t.get("exes") or set()) & fe or (t.get("kind") == "app" and app in fe)}
 
 
-class Reach:
-    """The rows a range A..C reaches (gate-scope's selection on one graph and one inventory); None = every row."""
+def reach_key(build, a, tip):
+    """THE KEY OF ONE ANCESTOR'S REACH (URGENT FIX LIST #57, the builder's half): what Reach.of(a) reads, hashed - the
+    ancestor and the tip, the build's stamp (BUILT_FROM), its ctest inventory's files (path, mtime, size: the lead's own
+    rule in spec.sh's reach cache), and the selector's scripts (gate-scope.py, gate_graph.py, this file). Any change of
+    any of them is a new key; the range's commits are fixed by their two shas."""
+    h = hashlib.sha256()
+    h.update(f"{a}..{tip}\n".encode())
+    for f in (os.path.join(build, "BUILT_FROM"), os.path.join(HERE, "gate-scope.py"), os.path.join(HERE, "gate_graph.py"),
+              os.path.abspath(__file__)):
+        try:
+            with open(f, "rb") as fh:
+                h.update(fh.read())
+        except OSError:
+            h.update(b"-")
+    for f in sorted([os.path.join(build, "CTestTestfile.cmake")]
+                    + glob.glob(os.path.join(build, "tests", "*", "CTestTestfile.cmake"))
+                    + glob.glob(os.path.join(build, "tests", "*", "*", "CTestTestfile.cmake"))):
+        try:
+            st = os.stat(f)
+            h.update(f"{f}:{st.st_mtime_ns}:{st.st_size}\n".encode())
+        except OSError:
+            h.update(b"-")
+    return h.hexdigest()[:20]
 
-    def __init__(self, gs, build, tip):
+
+class Reach:
+    """The rows a range A..C reaches (gate-scope's selection on one graph and one inventory); None = every row.
+    Each ancestor's answer is CACHED ON DISK (`disk`, the default: <build>/ci-reach/<reach_key>.json - URGENT FIX LIST
+    #57: a master check's every call paid each ancestor's selection again at the same tip); the graph and the
+    inventory are loaded only when an answer has to be computed."""
+
+    def __init__(self, gs, build, tip, disk=True):
         import copy
-        import gate_graph
         self.gs, self.build, self.tip, self.copy = gs, build, tip, copy
-        self.graph = gate_graph.NinjaGraph.load(build)
-        self.inv0 = gs.load_inventory(build)
-        gs.classify_rows(self.inv0, self.graph, build)
-        self.fork = fork_rows(build, self.graph, self.inv0)
+        self.disk = disk
+        self._graph = self._inv0 = self._fork = None
         self.cache = {}
+        self.hits = self.computed = 0
+
+    def _load(self):
+        if self._inv0 is None:
+            import gate_graph
+            self._graph = gate_graph.NinjaGraph.load(self.build)
+            self._inv0 = self.gs.load_inventory(self.build)
+            self.gs.classify_rows(self._inv0, self._graph, self.build)
+            self._fork = fork_rows(self.build, self._graph, self._inv0)
+
+    def labels_inv(self):
+        """The ctest inventory alone (its labels): no graph, so a serving whose every answer is cached loads none."""
+        if self._inv0 is not None:
+            return self._inv0
+        if getattr(self, "_labels", None) is None:
+            self._labels = self.gs.load_inventory(self.build)
+        return self._labels
+
+    @property
+    def graph(self):
+        self._load()
+        return self._graph
+
+    @property
+    def inv0(self):
+        self._load()
+        return self._inv0
+
+    @property
+    def fork(self):
+        self._load()
+        return self._fork
 
     def same_tree(self, a):
         """Is commit `a`'s tree this tip's (the same Studio tree, so the same irisgl pin and fork)?"""
@@ -131,6 +190,18 @@ class Reach:
     def of(self, a):
         if a in self.cache:
             return self.cache[a]
+        path = os.path.join(self.build, "ci-reach", reach_key(self.build, a, self.tip) + ".json") if self.disk else None
+        if path:
+            try:
+                with open(path) as fh:
+                    doc = json.load(fh)
+                reach = None if doc.get("reach") is None else set(doc["reach"])
+                self.cache[a] = reach
+                self.hits += 1
+                return reach
+            except (OSError, ValueError):
+                pass
+        self.computed += 1
         reach = None
         if a == self.tip or subprocess.run(["git", "diff", "--quiet", a, self.tip], cwd=self.gs.ROOT).returncode == 0:
             reach = set()                          # the same tree: nothing reaches anything
@@ -146,6 +217,15 @@ class Reach:
             except SystemExit:
                 reach = None
         self.cache[a] = reach
+        if path:
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = path + ".tmp"
+                with open(tmp, "w") as fh:
+                    json.dump({"a": a, "tip": self.tip, "reach": None if reach is None else sorted(reach)}, fh)
+                os.replace(tmp, path)
+            except OSError:
+                pass
         return reach
 
 
@@ -170,7 +250,7 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
         return "its declaration changed (or is unknown)"
     if not rec.get("data_hash") or rec.get("data_hash") != fact.get("data_hash"):
         return "its data changed (or is unknown)"
-    if row in reach.fork and a_fork != tip_fork:
+    if a_fork != tip_fork and row in reach.fork:   # (the fork's rows read the graph: only when the pin moved)
         return "the fork pin moved and the row reaches the fork"
     r = reach.of(rec["tip"]["studio"])
     if r is None or row in r:
@@ -230,7 +310,7 @@ def serve(build, tip, rows):
              os.path.join(gs.ROOT, "irisgl"))
     served, run, red = {}, {}, {}
     for row in rows:
-        labels = set((reach.inv0.get(row) or {}).get("labels") or ())
+        labels = set((reach.labels_inv().get(row) or {}).get("labels") or ())
         if labels & gate_runlog.MEASURING:
             run[row] = "a measurement is never served"
             continue
