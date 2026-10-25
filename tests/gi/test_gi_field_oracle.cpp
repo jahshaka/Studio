@@ -43,7 +43,13 @@
 //       pinned; cascade 0 PINNED at two placements, both holding every such probe's cascade-0 shell (D_0 plus two cells
 //       inside the box) - A's box holding the plate, B's face (8.2 m) between the plate and the probes - and the outer
 //       cascades pinned alike. Every such probe within ONE CODE of itself across the two placements. RED with the cone
-//       ending at its box: A's rays read the plate in cascade 0 (opaque), B's in cascade 1 (part covered).
+//       ending at its box: A's rays read the plate in cascade 0 (opaque), B's in cascade 1 (part covered). B's c0 lies
+//       3.7 m off the camera - a placement the engine never makes - so this arm's store is built WITHOUT the bounce
+//       (the direct term: a world function at any placement), the cones' law alone (the lead's ruling, 10-2e).
+//   (6b) THE STORE IS A WORLD FUNCTION AT THE PLACEMENTS THE ENGINE CAN REACH (PHOTON-7 stage 10, 10-2e; L1): the same
+//       fixture, the same camera, cascade 0 built at each end of its one re-centre step, the bounce ON (the TLAS route's
+//       hits read their level by the camera): every cascade's two sides at the world cells both hold inside the field's
+//       window, and every probe, within a code. PRINTED: each level's margin M, its level radius, the range it costs.
 //   (7) THE STORE IS A WORLD FUNCTION FOR EVERY VALUE A READER READS (PHOTON-7 stage 7: the store holds the two SIDES,
 //       the total their mean): after (1)'s step, each cascade's FRONT, BACK and TOTAL, voxel by voxel and channel by
 //       channel, within ONE CODE of the oracle's at its own value (1 % over the store's floor, kGiBrickFloor) - two paths
@@ -61,6 +67,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -146,6 +153,8 @@ int main(int argc, char **argv)
     // room's step against its oracle, laws (1), (2) and (7); `marks` - the two sealed rooms and the open step, (3) and (4);
     // `shells` - the probes outside cascade 0 and the cone shells, (5) and (6). Each part its own fixtures; none = all.
     const std::string part = argc > 1 ? argv[1] : "";
+    // (THE MEASURING HOOK of 10-2e's margin: JAH_HIT_LEVEL_MARGIN=<cells> sets the door gi.hitLevelMargin for the run)
+    if (const char *m = std::getenv("JAH_HIT_LEVEL_MARGIN")) e->setArm("gi.hitLevelMargin", std::atof(m));
     const bool doStep = part.empty() || part == "step", doMarks = part.empty() || part == "marks",
                doShells = part.empty() || part == "shells";
     GiParams gi;
@@ -672,7 +681,13 @@ int main(int argc, char **argv)
             };
             // one placement: the chain rebuilt WHOLE at the pinned cameras (cascade 0's given, the outer ones at 9.5 m),
             // the window pinned over x [6, 16]
-            const auto placeAt = [&](float c0x, Probes &out, GiStatus &st) {
+            // (6)'s cone law reads the FIELD's cones across c0's face: the pinned c0 is off the camera by 3.7 m, a
+            // placement the engine never makes, so the store under it is built WITHOUT the bounce (the direct term, a
+            // world function at any placement) - the cones' handover alone, as the row was written. (6b) below holds
+            // the store's own placement law at the placements the engine CAN reach.
+            GiParams giCones = gi;
+            giCones.bounces = false;
+            const auto placeAt = [&](float c0x, Probes &out, GiStatus &st, const GiParams &with) {
                 GiPlacementPin pin;
                 pin.on = true;
                 pin.field = true;
@@ -682,7 +697,7 @@ int main(int argc, char **argv)
                 s6->setGiPlacementPin(pin);
                 s6->setGlobalIllumination(off);
                 run(2);
-                if (!s6->setGlobalIllumination(gi)) return -1;
+                if (!s6->setGlobalIllumination(with)) return -1;
                 e->waitForAsyncShaders();
                 const int rest = settle6();
                 st = s6->published().gi;
@@ -690,8 +705,8 @@ int main(int argc, char **argv)
             };
             Probes pa, pb;
             GiStatus sa, sb;
-            const int restA = placeAt(9.5f, pa, sa);    // cascade 0 [4.5, 14.5]: it holds the plate
-            const int restB = placeAt(13.2f, pb, sb);   // cascade 0 [8.2, 18.2]: its face between the plate and the probes
+            const int restA = placeAt(9.5f, pa, sa, giCones);    // cascade 0 [4.5, 14.5]: it holds the plate
+            const int restB = placeAt(13.2f, pb, sb, giCones);   // cascade 0 [8.2, 18.2]: its face between the plate and the probes
             std::vector<unsigned> set6;
             double c0aLo = 0.0, c0bLo = 0.0;
             const bool placed6 = restA >= 0 && restB >= 0 && sa.cascades.size() >= 2u && sb.cascades.size() >= 2u &&
@@ -730,6 +745,157 @@ int main(int argc, char **argv)
                         restA, restB, set6.size(), worst6, over6);
             CHECK(placed6 && !set6.empty() && over6 == 0u,
                   "(6) A PROBE'S RAY HANDS OVER ON WORLD SHELLS: every band-free probe within one code across two placements");
+            // (6b) THE STORE IS A WORLD FUNCTION AT THE PLACEMENTS THE ENGINE CAN REACH (PHOTON-7 stage 10, 10-2e; the
+            // lead's ruling, L1): the same camera, cascade 0 built at EACH END of its one re-centre step (its built camera
+            // a step either side of the camera along x: the furthest the hysteresis lets it lag), the bounce ON - the
+            // TLAS route's hits read the level by the camera. Every cascade's two sides at the world cells both grids hold
+            // inside the field's window within a code, plus the store's achievable quantum (1.5e-7 at the floor at r 0.8);
+            // and the probes within a code. PRINTED: each level's margin M (cells), its level radius and the usable range
+            // it costs (the half size less the level radius).
+            {
+                Probes qa, qb;
+                GiStatus ta, tb;
+                const float step0 = sa.cascades.empty() ? 0.0f : sa.cascades[0].step;
+                const int rA = placeAt(9.5f - step0, qa, ta, gi);
+                std::vector<GiVoxelVolume> va(4), vb(4);
+                for (int c = 0; c < 4; ++c) s6->giVoxelLight(c, va[size_t(c)]);
+                GiVoxelVolume fa2, fb2;   // DIAG
+                s6->giVoxelVolume(0, fa2);
+                const int rB = placeAt(9.5f + step0, qb, tb, gi);
+                for (int c = 0; c < 4; ++c) s6->giVoxelLight(c, vb[size_t(c)]);
+                s6->giVoxelVolume(0, fb2);
+                size_t cmp = 0, overS = 0;
+                double worstS = 0.0;
+                float wAt[3] = { 0.f, 0.f, 0.f }, wVals[2] = { 0.f, 0.f };
+                int wC = -1;
+                double worstPer[4] = { 0.0, 0.0, 0.0, 0.0 };
+                size_t overPer[4] = { 0, 0, 0, 0 };
+                float wAtPer[4][3] = {}, wValPer[4][2] = {};
+                int wSidePer[4] = { 0, 0, 0, 0 };
+                for (int c = 0; c < 4; ++c) {
+                    const GiVoxelVolume &a = va[size_t(c)], &b = vb[size_t(c)];
+                    if (!a.available || !b.available) continue;
+                    for (size_t q = 0; q < size_t(a.width) * a.height * a.depth; ++q) {
+                        const size_t ix[3] = { q % size_t(a.width), (q / size_t(a.width)) % size_t(a.height),
+                                               q / (size_t(a.width) * size_t(a.height)) };
+                        float wpos[3];
+                        int jb[3];
+                        bool in = true;
+                        for (int k = 0; k < 3 && in; ++k) {
+                            wpos[k] = a.origin[k] + (float(ix[k]) + 0.5f) * a.cell[k];
+                            const float lo = k == 0 ? tb.ifdMin.x : k == 1 ? tb.ifdMin.y : tb.ifdMin.z;
+                            const float hi = k == 0 ? tb.ifdMax.x : k == 1 ? tb.ifdMax.y : tb.ifdMax.z;
+                            jb[k] = int(std::floor((wpos[k] - b.origin[k]) / b.cell[k]));
+                            const int n = k == 0 ? b.width : k == 1 ? b.height : b.depth;
+                            in = wpos[k] >= lo && wpos[k] <= hi && jb[k] >= 0 && jb[k] < n;
+                        }
+                        // (what the hits read: the cells inside the cascade's level radius of the camera - beyond it a
+                        // TLAS hit reads the next one out; the outermost by its box)
+                        if (in && size_t(c) + 1 < tb.cascades.size()) {
+                            const float dm = std::max({ std::fabs(wpos[0] - 9.5f), std::fabs(wpos[1] - 1.0f), std::fabs(wpos[2]) });
+                            in = dm <= tb.cascades[size_t(c)].hitLevelRadius;
+                        }
+                        if (!in) continue;
+                        const size_t r = (size_t(jb[2]) * size_t(b.height) + size_t(jb[1])) * size_t(b.width) + size_t(jb[0]);
+                        for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront,
+                                                                             &GiVoxelVolume::lightBack }) {
+                            const std::vector<float> &x = a.*side, &y = b.*side;
+                            if (x.size() < 4 * q + 3 || y.size() < 4 * r + 3) continue;
+                            ++cmp;
+                            for (int ch = 0; ch < 3; ++ch) {
+                                const double o = std::max(std::fabs(double(x[4 * q + size_t(ch)])), double(kGiBrickFloor));
+                                const double d = std::max(0.0, std::fabs(double(y[4 * r + size_t(ch)]) -
+                                                                           double(x[4 * q + size_t(ch)])) - 1.5e-7) / (0.01 * o);
+                                if (d > worstPer[c]) {
+                                    worstPer[c] = d;
+                                    for (int k = 0; k < 3; ++k) wAtPer[c][k] = wpos[k];
+                                    wValPer[c][0] = x[4 * q + size_t(ch)];
+                                    wValPer[c][1] = y[4 * r + size_t(ch)];
+                                    wSidePer[c] = side == &GiVoxelVolume::lightFront ? 0 : 1;
+                                }
+                                overPer[c] += d > 1.0 ? 1u : 0u;
+                                if (d > worstS) {
+                                    worstS = d;
+                                    for (int k = 0; k < 3; ++k) wAt[k] = wpos[k];
+                                    wC = c;
+                                    wVals[0] = x[4 * q + size_t(ch)];
+                                    wVals[1] = y[4 * r + size_t(ch)];
+                                }
+                                overS += d > 1.0 ? 1u : 0u;
+                            }
+                        }
+                    }
+                }
+                double worstQ = 0.0;
+                size_t overQ = 0;
+                size_t probesIn = 0;
+                {
+                    // (the probes whose cones read inside the levels: a probe within cascade 0's level radius less its
+                    // shell D_0 of the camera - its c0 shell inside c0's level, its outer shells inside the outer levels)
+                    const double r0 = tb.cascades.empty() ? 0.0 : double(tb.cascades[0].hitLevelRadius) -
+                                                                      8.0 * double(tb.cascades[0].cell);
+                    const double szq[3] = { double(tb.ifdMax.x - tb.ifdMin.x), double(tb.ifdMax.y - tb.ifdMin.y),
+                                            double(tb.ifdMax.z - tb.ifdMin.z) };
+                    const double loq[3] = { double(tb.ifdMin.x), double(tb.ifdMin.y), double(tb.ifdMin.z) };
+                    for (unsigned p = 0; p < qa.count && p < qb.count; ++p) {
+                        const unsigned slot[3] = { p % qb.dims[0], (p / qb.dims[0]) % qb.dims[1], p / (qb.dims[0] * qb.dims[1]) };
+                        double wq[3];
+                        for (int a = 0; a < 3; ++a) {
+                            const unsigned i = (slot[a] + qb.dims[a] - qb.offset[a]) % qb.dims[a];
+                            const double n = double(qb.dims[a]), block = szq[a] / n, sp = (szq[a] + 2.0 * block) / n;
+                            wq[a] = loq[a] - block + double(i) * sp;
+                        }
+                        if (std::max({ std::fabs(wq[0] - 9.5), std::fabs(wq[1] - 1.0), std::fabs(wq[2]) }) > r0) continue;
+                        ++probesIn;
+                        const double c = probeCodes(qb, qa, p);
+                        worstQ = std::max(worstQ, c);
+                        overQ += c > 1.0 ? 1u : 0u;
+                    }
+                }
+                std::printf("   (6b) cascade 0 at its step's two ends (built at x %.3f and %.3f, the camera at 9.5), the bounce on, "
+                            "at rest in %d / %d frames: the store under the probes, %zu sides compared - worst %.3f codes, %zu "
+                            "channels over one; the %zu probes inside the levels worst %.3f codes, %zu over one\n", 9.5f - step0, 9.5f + step0,
+                            rA, rB, cmp, worstS, overS, probesIn, worstQ, overQ);
+                if (fa2.available && fb2.available) {   // DIAG: c0's worst voxel's direct in both
+                    for (int k = 0; k < 3; ++k) wAt[k] = wAtPer[0][k];
+                    std::printf("     DIAG c0 worst at %.2f %.2f %.2f side %d: %.6g against %.6g\n", wAt[0], wAt[1], wAt[2],
+                                wSidePer[0], wValPer[0][0], wValPer[0][1]);
+                    int qa3[3], qb3[3];
+                    for (int k = 0; k < 3; ++k) {
+                        qa3[k] = int(std::floor((wAt[k] - fa2.origin[k]) / fa2.cell[k]));
+                        qb3[k] = int(std::floor((wAt[k] - fb2.origin[k]) / fb2.cell[k]));
+                    }
+                    const size_t ia = (size_t(qa3[2]) * fa2.height + size_t(qa3[1])) * fa2.width + size_t(qa3[0]);
+                    const size_t ib = (size_t(qb3[2]) * fb2.height + size_t(qb3[1])) * fb2.width + size_t(qb3[0]);
+                    std::printf("     DIAG c0 worst: direct A %.4g %.4g %.4g B %.4g %.4g %.4g | front A %.4g %.4g %.4g B %.4g %.4g %.4g | "
+                                "albedo A %.3f B %.3f\n",
+                                fa2.direct.size() > 4 * ia + 2 ? fa2.direct[4 * ia] : -1.f, fa2.direct.size() > 4 * ia + 2 ? fa2.direct[4 * ia + 1] : -1.f,
+                                fa2.direct.size() > 4 * ia + 2 ? fa2.direct[4 * ia + 2] : -1.f, fb2.direct.size() > 4 * ib + 2 ? fb2.direct[4 * ib] : -1.f,
+                                fb2.direct.size() > 4 * ib + 2 ? fb2.direct[4 * ib + 1] : -1.f, fb2.direct.size() > 4 * ib + 2 ? fb2.direct[4 * ib + 2] : -1.f,
+                                fa2.lightFront[4 * ia], fa2.lightFront[4 * ia + 1], fa2.lightFront[4 * ia + 2], fb2.lightFront[4 * ib],
+                                fb2.lightFront[4 * ib + 1], fb2.lightFront[4 * ib + 2], fa2.albedo[4 * ia], fb2.albedo[4 * ib]);
+                }
+                std::printf("     DIAG per cascade worst/over: c0 %.2f/%zu c1 %.2f/%zu c2 %.2f/%zu c3 %.2f/%zu\n", worstPer[0], overPer[0],
+                            worstPer[1], overPer[1], worstPer[2], overPer[2], worstPer[3], overPer[3]);
+                if (wC >= 0)
+                    std::printf("   (6b) the store's worst: cascade %d at %.2f %.2f %.2f (max-norm %.2f m from the camera; its level "
+                                "radius %.2f m): %.6g against %.6g\n", wC, wAt[0], wAt[1], wAt[2],
+                                std::max({ std::fabs(wAt[0] - 9.5f), std::fabs(wAt[1] - 1.0f), std::fabs(wAt[2]) }),
+                                size_t(wC) < tb.cascades.size() ? double(tb.cascades[size_t(wC)].hitLevelRadius) : -1.0, wVals[0],
+                                wVals[1]);
+                for (size_t c = 0; c < tb.cascades.size(); ++c) {
+                    const auto &k = tb.cascades[c];
+                    std::printf("   (6b) level %zu: half %.3f m, cell %.4f m, step %.3f m | guaranteed %.3f m, the hit's level "
+                                "radius %.3f m - its margin M %.1f cells; the usable range it costs %.3f m (%.0f %% of the half)%s\n",
+                                c, double(k.halfSize), double(k.cell), double(k.step), double(k.guaranteedRadius),
+                                double(k.hitLevelRadius), k.cell > 0.0f ? double((k.guaranteedRadius - k.hitLevelRadius) / k.cell) : 0.0,
+                                double(k.halfSize - k.hitLevelRadius), k.halfSize > 0.0f ? 100.0 * double(k.halfSize - k.hitLevelRadius) /
+                                double(k.halfSize) : 0.0, c + 1 == tb.cascades.size() ? " (the outermost: by its box)" : "");
+                }
+                CHECK(rA >= 0 && rB >= 0 && cmp > 0u && overS == 0u && overQ == 0u && probesIn > 0u,
+                      "(6b) THE STORE IS A WORLD FUNCTION AT REACHABLE PLACEMENTS: the store under the probes and the probes "
+                      "within a code across cascade 0's step");
+            }
             s6->setGiPlacementPin(GiPlacementPin());
             s6->setGlobalIllumination(off);
             run(2);
