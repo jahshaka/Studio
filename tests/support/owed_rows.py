@@ -6,8 +6,9 @@ arrives after the stop, and admitting it is right; a plane the window entered be
     open while its stamps fall within S of the last change (the stop is the last pose change; S =
     GiQualityFacts::cardDemandSettleFrames, the record's cards_settle_frames), and rule (b): free room takes a face at
     its first mark. So an arrival is legitimate when its newest mark predates the stop and it lands within the
-    read-back's period + lag of the stop (CardCacheStatus::demandReadEvery + demandReadLag), OR its newest mark falls
-    after the stop but within S of it and it lands within the period + lag of that mark (a reader's first post-stop
+    read-back's period + lag + 1 of the stop (CardCacheStatus::demandReadEvery + demandReadLag, and the frame a stamp
+    on an issue frame waits: judge() says why), OR its newest mark falls after the stop but within S of it and it lands
+    within the period + lag + 1 of that mark (a reader's first post-stop
     graze inside its window: the gather's one hit 6 frames after a room walk's stop, the photon-7r merge's ruling). (The
     reader's first stamp is not in the record: a newest mark within S proves the first within S; one past S is read
     stray - the judge errs strict there.) Its n cards are captured at the capture budget,
@@ -35,7 +36,12 @@ def judge(w):
     """(owed, stray, last): the post-stop GI rows owed by the motion and the stray ones, each (frame, its cause and
     stamp), and the last owed frame (0 with none)."""
     stop = int(w[0]["cards_frame"]) - 1
-    L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"])
+    # THE READ-BACK'S WORST LANDING: a period, the lag AND ONE FRAME - the read is ISSUED when the cache plans the frame
+    # (SurfaceCache::issueDemandRead, before the frame's readers run), so a stamp written on an issue frame is read by the
+    # NEXT issue, a whole period later: a mark at 340 (340 = 0 mod 4) landed at 349 = 340 + 4 + 4 + 1 (PHOTON-7 10-1, the
+    # cards' ray gather moved the room walk's first post-stop graze onto an issue frame; the bound period + lag judged
+    # that arrival stray). A stamp one frame after an issue lands at period + lag, so this is the bound's worst case.
+    L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"]) + 1
     S = int(w[0]["cards_settle_frames"])
     legit = lambda c, m: (m <= stop and c - stop <= L) or (stop < m <= stop + S and c - m <= L)
     page = int(w[0]["cards_page_size"]) ** 2
