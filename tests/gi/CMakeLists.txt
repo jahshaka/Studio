@@ -591,7 +591,11 @@ foreach(_tier high epic)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     jah_gpu_row(gi.bounce_series.${_tier}_lamp CLASS engine COMMAND test_gi_bounce_series ${_tier} lamp
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.bounce_series.${_tier} gi.bounce_series.${_tier}_fade gi.bounce_series.${_tier}_lamp PROPERTIES
+    # (8) THE RAY TIER (PHOTON-7 stage 10, 10-2b): the voxel sides by TLAS rays - e = 0, and the Jacobi at the ray tier
+    jah_gpu_row(gi.bounce_series.${_tier}_rays CLASS engine COMMAND test_gi_bounce_series ${_tier} rays
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.bounce_series.${_tier} gi.bounce_series.${_tier}_fade gi.bounce_series.${_tier}_lamp
+                         gi.bounce_series.${_tier}_rays PROPERTIES
                          ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 endforeach()
 set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 208)
@@ -600,6 +604,7 @@ foreach(_tier high epic)
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES JAHSHAKA_TEST_FRAMES 302)
     set_tests_properties(gi.bounce_series.${_tier}_fade PROPERTIES JAHSHAKA_TEST_FRAMES 1530)
     set_tests_properties(gi.bounce_series.${_tier}_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 459)
+    set_tests_properties(gi.bounce_series.${_tier}_rays PROPERTIES JAHSHAKA_TEST_FRAMES 188)
 endforeach()
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE

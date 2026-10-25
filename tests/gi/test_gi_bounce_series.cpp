@@ -55,6 +55,13 @@
 //       code of a 64-pass Jacobi of the end state; the arm can fail (the voxels beyond move over a code). RED with the
 //       carried section unread (High: 296 voxels over a code, the worst 2.25; the door's other half alone,
 //       the passed bricks' moves read, is green either way: under a 120-frame fade the bounces' moves alone resume them).
+//   (8) AT THE RAY TIER (PHOTON-7 stage 10, 10-2b; the part `rays`, High and Epic): the voxel sides are gathered by TLAS
+//       rays (rq_voxel_sides.comp) - the sky-leak arm with the rays on: the sides' gather ran (its dispatches and sides
+//       read back, GiStatus::voxelSides), and the inner-wall voxels of cascades 0 and 1 read under 1 % of the sky (L9's
+//       bar; e printed per cascade - no TLAS ray inside the watertight room escapes, and the residue is the hit read's
+//       FOOTPRINT: a long ray reads a coarse level, whose texel holds a wall's two sides as one; the coarser cascades'
+//       inner-wall cells hold both faces of the 0.3 m walls themselves and are printed only); and the main arm's
+//       feedback against its 64-pass Jacobi within a code (law (1) at the ray tier: the TLAS gather converges).
 // (THE LEAK ITSELF is printed, not barred: the cones at coarse levels read a texel the wall only partly covers - a
 // march finding, VOXEL-LEAK-1. A pass-1 reading is never the operator: the outer cascades run first in a frame, so an
 // inner cascade's first pass already reads an outer one's bounce.)
@@ -234,11 +241,76 @@ int main(int argc, char **argv)
     const bool doFade = part.empty() || part == "fade";
     const bool doStep = part.empty() || part == "lamp";
     const bool doLamp = doFade || doStep;
+    const bool doRays = part == "rays";
     for (int t = 0; t < 4; ++t) {
         if (argc > 1 && std::string(argv[1]) != names[t]) continue;
         std::printf("\n== %s ==\n", names[t]);
         const auto tierT0 = std::chrono::steady_clock::now();
         const int tierF0 = frames;
+        // (8) THE RAY TIER (the part `rays`): the sky-leak arm and the main arm's Jacobi with the rays on
+        if (doRays) {
+            e->setRayTracing(true);
+            Arm sky = arm(tiers[t], 0.0f, 1.0f, true);
+            const GiStatus::VoxelSideCounts vs = sky.status.voxelSides;
+            size_t inner = 0, lit = 0;
+            double peak = 0.0, peak01 = 0.0;
+            std::printf("   (8) the ray tier's sky-leak arm (E 0, S 1) at rest in %d frames:", sky.restFrames);
+            for (size_t c = 0; c < sky.cascades.size(); ++c) {
+                const Reading &r = sky.cascades[c];
+                double cp = 0.0;
+                for (float L : r.L) cp = std::max(cp, double(L));
+                if (c < 2u) {
+                    inner += r.voxels;
+                    for (float L : r.L) lit += L != 0.0f ? 1u : 0u;
+                    peak01 = std::max(peak01, cp);
+                }
+                peak = std::max(peak, cp);
+                std::printf("  c%zu %zu voxels, e %.5f, the brightest %.6g", c, r.voxels, r.ok ? escapeOf(r.mean, 1.0) : -1.0,
+                            cp);
+            }
+            std::printf("\n   (8) the sides' TLAS gather: %llu dispatches, %llu rays - %llu cards, %llu cascades, %llu back "
+                        "faces, %llu no sample, %llu sky; %llu sides (%llu with no sample), %llu waits\n",
+                        vs.dispatches, vs.rays, vs.card, vs.voxel, vs.backFaces, vs.noSample, vs.sky, vs.sides,
+                        vs.emptySides, vs.waits);
+            CHECK(sky.restFrames >= 0 && vs.dispatches > 0ull && vs.sides > 0ull && vs.waits == 0ull,
+                  "(8) the sides' TLAS gather ran at the ray tier (its counts read back, no pass waited)");
+            std::printf("   (8) cascades 0 and 1: %zu inner-wall voxels, %zu lit at all, the brightest %.6g (%.4f %% of the sky)\n",
+                        inner, lit, peak01, 100.0 * peak01);
+            CHECK(inner > 0u && peak01 < 0.01,
+                  "(8) AT THE RAY TIER no inner-wall voxel of cascades 0 and 1 reads 1 % of the sky (the voxel rays' e: "
+                  "0.205 at High)");
+            drop(sky);
+            Arm m = arm(tiers[t], kE, 0.0f, false);
+            if (!m.scene || m.cascades.empty() || !m.cascades[0].ok) {
+                CHECK(false, "(8) the ray tier's main arm's room and store");
+                drop(m);
+                e->setRayTracing(false);
+                continue;
+            }
+            const Reading fb = m.cascades[0];
+            e->setArm("gi.bounceJacobi", 1.0);
+            run(64);
+            const Reading j64 = read(m.scene);
+            e->setArm("gi.bounceJacobi", 0.0);
+            run(2);
+            double worst = 0.0;
+            size_t over = 0;
+            const bool same = fb.ok && j64.ok && fb.voxels == j64.voxels;
+            for (size_t i = 0; same && i < fb.L.size(); ++i) {
+                const double rel = std::fabs(double(fb.L[i]) - double(j64.L[i])) / std::max(double(j64.L[i]), 1e-6);
+                worst = std::max(worst, rel);
+                over += rel > 0.01 ? 1u : 0u;
+            }
+            const double limit = kE / (1.0 - kADiffuse);
+            std::printf("   (8) the ray tier's main arm at rest in %d frames: feedback %.5f, Jacobi-64 %.5f (the limit "
+                        "E / (1 - a') %.5f: %+.2f %%); feedback vs Jacobi-64 worst %.3f codes, %zu over one\n",
+                        m.restFrames, fb.mean, j64.mean, limit, 100.0 * (j64.mean / limit - 1.0), 100.0 * worst, over);
+            CHECK(m.restFrames >= 0 && same && over == 0u,
+                  "(8) THE TLAS GATHER CONVERGES: the ray tier's feedback within a code of its 64-pass Jacobi");
+            drop(m);
+            e->setRayTracing(false);
+            continue;
+        }
         // THE SKY-LEAK ARM: the escape share, per cascade (the series half)
         std::vector<double> esc, skyL;
         if (doSeries) {
