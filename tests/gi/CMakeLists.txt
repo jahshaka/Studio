@@ -392,6 +392,28 @@ set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1487)
 
+# gi.gather_sliver (PHOTON-7 stage 10) — THE GRID ANSWERS EVERY PIXEL: a 1-px sliver of a wall seen past two black
+# plates (between them, and at the view's edge) is answered by a probe on every settling frame, its noise within the
+# open wall's, and held within a code of the plate-free view's; the placement's ms printed at 1080p, High and Epic
+# (test_gi_gather_sliver.cpp says the laws). A fixture.
+add_executable(test_gi_gather_sliver test_gi_gather_sliver.cpp)
+set_target_properties(test_gi_gather_sliver PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_sliver PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_sliver PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_sliver JahshakaEngineMedia)
+jah_gpu_row(gi.gather_sliver CLASS engine COMMAND test_gi_gather_sliver
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_sliver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 305)
+
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
 # the shadow following the moved MOVER (the movable channel: its LampShadow region, inside the lamp's range) within a
