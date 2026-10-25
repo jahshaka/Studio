@@ -561,6 +561,19 @@ int main()
                     "VOXEL-LEAK-1): card %.4f, store %.4f\n",
                     restOn, restOff, onFar.cards, pointCount, onFar.voxels, cardFar, voxFar, directFar,
                     leak(onNear, offNear, true), leak(onNear, offNear, false));
+        {
+            const GiStatus gd = s->published().gi;
+            // THE CARD-TO-CARD RE-LISTING (10-2c, the lead's ruling): the read lists' overflow share and the geometric
+            // bound's re-listings, printed
+            const CardCacheStatus::GatherCounts &gc = gd.cards.gather;
+            std::printf("   the cards: %llu relights, %llu of the indirect (%llu reported: %llu card to card, %llu with the "
+                        "geometric bound; %llu by region, %llu overflows); the TLAS gather %llu dispatches, %llu texels, "
+                        "%llu over their read list (%.2f %%)\n",
+                        gd.cards.relights, gd.cards.indirectRelights, gd.cards.indirectReported, gd.cards.indirectByCards,
+                        gd.cards.indirectByBound, gd.cards.indirectByRegion, gd.cards.indirectOverflows, gc.dispatches,
+                        gc.texels, gc.readsOverflowed,
+                        gc.texels ? 100.0 * double(gc.readsOverflowed) / double(gc.texels) : 0.0);
+        }
         CHECK(restOn >= 0 && restOff >= 0 && onFar.cards == pointCount && offFar.cards == pointCount && onFar.voxels > 0,
               "the carded room comes to rest and its +Z wall reads in the cards and the store");
         std::printf("   the +Z face's lamp tables: the red lamp tabled at %zu of %zu points, its bit set at %zu; the green "
