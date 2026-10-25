@@ -36,6 +36,17 @@
 //       (read at B at least lambda_min a frame) resident in it. RED under the readers' MOST clock (the demand closed S
 //       frames after the change, before the late reader's first read-back: 106 of the 106 lost); the reflection never
 //       reads here, so a least clock would never close it (the rule: each reader from its own first stamp).
+//   (7) THE STORE AT REST HOLDS (PHOTON-7 stage 10; the lead's ruling on the TLAS route's orbit): in every run, at B's
+//       rest, one more frame - every cascade's two sides read before and after it, each changed channel's move in STORE
+//       STEPS at its own magnitude (the half's 2^-10 of the value, 2^-24 under its smallest normal) against its brick's
+//       ROUNDING BOUND 0.5 / (1 - r) steps (r the brick's word 2: the measured contraction, the operator's bound before
+//       one): round-to-nearest cannot bring a contraction closer than that to its fixed point, and the scheduler takes a
+//       move within it as no move (about 1.5e-7 radiance at the floor at r 0.8). PRINTED: the channels that moved, the
+//       bricks they lie in, the worst move over its bound; THE LAW: none over its bound - and THE CONVEX EDGE (the top
+//       front edge of a court box, the walk's cascade 0 cell 67,93,84) within a code of the same placement's Jacobi
+//       re-solve (gi.bounceJacobi, 64 frames; plus that achievable quantum). RED before the scheduler's rule and the share's precision (a period-2
+//       store orbit at the subnormal floor, and the edge toggling 230-1725 steps through a bounce share taken at a
+//       level-0 texel holding one quantum, kept the crowded room's B awake for good).
 //   (4) THE ATLAS COMPACTS: a third run teleports from a CROWDED room (a 7 x 3 x 7 grid of 0.8 m cubes: its read set
 //       fills the atlas with quarter-page cards) to room B (whole pages): the arrivals find no free page and the atlas
 //       merges its sub-cut pages (compaction moves > 0, each moved card re-captured), and B comes to rest carded.
@@ -55,6 +66,8 @@
 using namespace jahshaka::engine;
 
 static int failures = 0;
+/// (7)'s census over every run: the channels that moved in the frame after B's rest, those over their brick's bound
+static unsigned long long gOrbitMoved = 0ull, gOrbitOver = 0ull;
 #define CHECK(cond, msg)                                                                                              \
     do {                                                                                                              \
         if (cond) std::printf("  ok   %s\n", msg);                                                                    \
@@ -136,7 +149,13 @@ struct Run {
     Room a, b;
     /// each cascade's placement at B (the pinned arm (6) takes the walk's)
     std::vector<Vec3> builtAtB;
+    /// (7)'s CONVEX EDGE (the toggle the readback named, PHOTON-7 stage 10): cascade 0's front at the world point of the
+    /// walk's toggling cell c0 67,93,84 - the top front edge of a court box - at B's rest (ok: the cascade holds it)
+    bool edgeOk = false, edgeRefOk = false;
+    float edge[3] = { 0.f, 0.f, 0.f }, edgeRef[3] = { 0.f, 0.f, 0.f };
 };
+/// the edge's world point: the walk's cascade 0 cell 67,93,84 at B (the readback's, spikes/photon-7/stage10/10-2)
+static const float kEdgeWorld[3] = { 12.30f, 4.02f, 4.10f };
 
 bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0,
              const std::vector<Vec3> *pinTo = nullptr) {
@@ -248,6 +267,147 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         out.builtAtB.clear();
         for (const auto &cs : gb.cascades) out.builtAtB.push_back(cs.builtCam);
     }
+    {
+        // (7) THE STORE AT REST HOLDS: one frame more, every cascade's two sides before and after it against the bricks'
+        // rounding bounds (the header)
+        const int cascades = int(scene->published().gi.cascades.size());
+        std::vector<GiVoxelVolume> v0(size_t(std::max(cascades, 0)));
+        std::vector<GiFeedbackBricks> st(v0.size());
+        for (int c = 0; c < cascades; ++c) {
+            scene->giVoxelLight(c, v0[size_t(c)]);
+            scene->giFeedbackBricks(c, st[size_t(c)]);
+        }
+        if (!v0.empty() && v0[0].available) {
+            const GiVoxelVolume &z = v0[0];
+            int q[3];
+            bool inside = true;
+            for (int k = 0; k < 3; ++k) {
+                q[k] = int(std::floor((kEdgeWorld[k] - z.origin[k]) / z.cell[k]));
+                const int n = k == 0 ? z.width : k == 1 ? z.height : z.depth;
+                inside = inside && q[k] >= 0 && q[k] < n;
+            }
+            const size_t i = inside ? (size_t(q[2]) * size_t(z.height) + size_t(q[1])) * size_t(z.width) + size_t(q[0]) : 0;
+            if (inside && z.lightFront.size() >= 4 * i + 3) {
+                out.edgeOk = true;
+                for (int k = 0; k < 3; ++k) out.edge[k] = z.lightFront[4 * i + size_t(k)];
+            }
+        }
+        run(1);
+        unsigned long long moved = 0ull, over = 0ull, measured = 0ull;
+        size_t bricksMoved = 0;
+        double worst = 0.0, worstAmp = 0.0, worstBound = 0.0, worstR = 0.0, mostSteps = 0.0;
+        for (int c = 0; c < cascades; ++c) {
+            GiVoxelVolume v1, full;
+            const GiVoxelVolume &a = v0[size_t(c)];
+            const GiFeedbackBricks &f = st[size_t(c)];
+            if (!scene->giVoxelLight(c, v1) || !a.available || !v1.available || !f.available) continue;
+            bool any = false;
+            for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront, &GiVoxelVolume::lightBack })
+                any = any || (a.*side) != (v1.*side);
+            if (!any) continue;
+            // (the voxels' OPERATOR BOUND - what a voxel re-emits of what it gathers: its albedo times its opacity, the
+            // bounce's own factor - read for the moved cascades alone)
+            const bool haveAlbedo = scene->giVoxelVolume(c, full) && full.albedo.size() == a.lightFront.size();
+            const size_t W = size_t(a.width), H = size_t(a.height);
+            std::vector<char> hit(f.r.size(), 0);
+            for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront, &GiVoxelVolume::lightBack }) {
+                const std::vector<float> &x = a.*side, &y = v1.*side;
+                if (x.size() != y.size()) continue;
+                for (size_t i = 0; i + 3 < x.size(); i += 4) {
+                    const size_t q = i / 4, bx = (q % W) / 8u, by = ((q / W) % H) / 8u, bz = q / (W * H) / 8u;
+                    const size_t b = bx + f.dims[0] * (by + size_t(f.dims[1]) * bz);
+                    if (b >= f.r.size()) continue;
+                    const double op = haveAlbedo ? std::min(0.999, double(std::max({ full.albedo[i], full.albedo[i + 1],
+                                                                                     full.albedo[i + 2] })) *
+                                                                       double(full.albedo[i + 3]))
+                                                 : 0.999;
+                    const bool isMeasured = (f.flags[b] & 2048u) != 0u;
+                    const double rr = isMeasured ? std::min(std::min(std::max(double(f.r[b]), 0.0), 0.999), op) : op;
+                    const double bound = 0.5 / (1.0 - rr);
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const double d = std::fabs(double(y[i + ch]) - double(x[i + ch]));
+                        if (!(d > 0.0)) continue;
+                        const double m = std::max({ std::fabs(double(x[i + ch])), std::fabs(double(y[i + ch])), 6.1035156e-5 });
+                        const double steps = d / std::ldexp(1.0, int(std::floor(std::log2(m))) - 10);
+                        ++moved;
+                        measured += isMeasured ? 1u : 0u;
+                        mostSteps = std::max(mostSteps, steps);
+                        const bool isOver = steps > std::max(1.0, bound) + 1e-9;
+                        over += isOver ? 1u : 0u;
+                        if (isOver && over <= 6u) {
+                            const size_t qx = q % W, qy = (q / W) % H, qz = q / (W * H);
+                            std::printf("     (7) over at test frame %d (parity %d): cascade %d %s cell %zu %zu %zu (%.2f %.2f %.2f) "
+                                        "channel %d: %.6g -> %.6g (%.0f steps, bound %.2f; albedo x opacity %.3f; normal %.2f %.2f "
+                                        "%.2f)\n", frames, frames & 1, c,
+                                        side == &GiVoxelVolume::lightFront ? "front" : "back", qx, qy, qz,
+                                        a.origin[0] + (qx + 0.5f) * a.cell[0], a.origin[1] + (qy + 0.5f) * a.cell[1],
+                                        a.origin[2] + (qz + 0.5f) * a.cell[2], ch, x[i + ch], y[i + ch], steps, bound, op,
+                                        a.normal.size() > i + 2 ? a.normal[i] : -1.f, a.normal.size() > i + 2 ? a.normal[i + 1] : -1.f,
+                                        a.normal.size() > i + 2 ? a.normal[i + 2] : -1.f);
+                        }
+                        if (steps / bound > worst) {
+                            worst = steps / bound;
+                            worstAmp = steps;
+                            worstBound = bound;
+                            worstR = isMeasured ? double(f.r[b]) : -1.0;
+                        }
+                        if (!hit[b]) { hit[b] = 1; ++bricksMoved; }
+                    }
+                }
+            }
+        }
+        if (over > 0u) {
+            // (its time series: every over-bound channel of cascade 0 over the next four frames, by the frame's parity)
+            {
+                std::vector<GiVoxelVolume> ser(4);
+                std::vector<int> fr(4);
+                for (int k = 0; k < 4; ++k) {
+                    scene->giVoxelLight(0, ser[size_t(k)]);
+                    fr[size_t(k)] = frames;
+                    run(1);
+                }
+                const GiVoxelVolume &a0 = v0[0];
+                int shownS = 0;
+                for (size_t i = 0; i + 3 < a0.lightFront.size() && shownS < 4; i += 4)
+                    for (int ch = 0; ch < 3 && shownS < 4; ++ch) {
+                        bool varies = false;
+                        for (int k = 1; k < 4; ++k)
+                            varies = varies || ser[size_t(k)].lightFront[i + ch] != ser[0].lightFront[i + ch];
+                        if (!varies) continue;
+                        const size_t W0 = size_t(a0.width), H0 = size_t(a0.height), q = i / 4;
+                        std::printf("     (7) series c0 cell %zu %zu %zu ch %d:", q % W0, (q / W0) % H0, q / (W0 * H0), ch);
+                        for (int k = 0; k < 4; ++k)
+                            std::printf(" [frame %d p%d] %.4g / back %.4g", fr[size_t(k)], fr[size_t(k)] & 1,
+                                        ser[size_t(k)].lightFront[i + ch],
+                                        ser[size_t(k)].lightBack.size() > i + ch ? ser[size_t(k)].lightBack[i + ch] : -1.f);
+                        std::printf("\n");
+                        ++shownS;
+                    }
+            }
+            // (the failure's evidence: the moved cascades' direct terms and totals one frame further - a toggle that
+            // returns is a period-2 orbit; its direct term toggling with it names an injection, standing still the bounce)
+            for (int c = 0; c < cascades; ++c) {
+                GiVoxelVolume f1, f2;
+                if (!scene->giVoxelVolume(c, f1)) continue;
+                run(1);
+                if (!scene->giVoxelVolume(c, f2)) continue;
+                size_t dDirect = 0, dTotal = 0, dDirectBack = 0;
+                for (size_t i = 0; i < f1.direct.size() && i < f2.direct.size(); ++i) dDirect += f1.direct[i] != f2.direct[i];
+                for (size_t i = 0; i < f1.directBack.size() && i < f2.directBack.size(); ++i)
+                    dDirectBack += f1.directBack[i] != f2.directBack[i];
+                for (size_t i = 0; i < f1.lightFront.size() && i < f2.lightFront.size(); ++i)
+                    dTotal += f1.lightFront[i] != f2.lightFront[i];
+                std::printf("     (7) cascade %d over the next frame: %zu front channels moved, its direct %zu, its direct back "
+                            "%zu\n", c, dTotal, dDirect, dDirectBack);
+            }
+        }
+        gOrbitMoved += moved;
+        gOrbitOver += over;
+        std::printf("   (7) %s at B's rest, one frame more: %llu channels moved in %zu bricks (%llu in bricks with a measured "
+                    "r), the largest move %.1f steps; %llu over their rounding bound (the worst %.1f steps against %.2f, its "
+                    "brick's measured r %.3f: %.2f x)\n", name, moved, bricksMoved, measured, mostSteps, over, worstAmp,
+                    worstBound, worstR, worst);
+    }
     if (gatherLate) e->setArm("cards.gatherLate", 0.0);
     const GiStatus g = scene->published().gi;
     out.evicted = g.cards.evicted;
@@ -256,6 +416,30 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     out.pagesUsed = g.cards.pagesUsed;
     const bool ok = scene->readCardRadiance(out.cards, out.frame);
     for (const CardRadiance &c : out.cards) out.newest = std::max(out.newest, c.lastRead);
+    if (walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
+        // (7)'s REFERENCE for the convex edge: the same placement re-solved by THE JACOBI DOOR (gi.bounceJacobi: every
+        // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the
+        // same grid; read once it holds (64 frames: bounce_series' Jacobi-64)
+        e->setArm("gi.bounceJacobi", 4.0);
+        run(64);
+        GiVoxelVolume z;
+        if (scene->giVoxelLight(0, z) && z.available) {
+            int q[3];
+            bool inside = true;
+            for (int k = 0; k < 3; ++k) {
+                q[k] = int(std::floor((kEdgeWorld[k] - z.origin[k]) / z.cell[k]));
+                const int n = k == 0 ? z.width : k == 1 ? z.height : z.depth;
+                inside = inside && q[k] >= 0 && q[k] < n;
+            }
+            const size_t i = inside ? (size_t(q[2]) * size_t(z.height) + size_t(q[1])) * size_t(z.width) + size_t(q[0]) : 0;
+            if (inside && z.lightFront.size() >= 4 * i + 3) {
+                out.edgeRefOk = true;
+                for (int k = 0; k < 3; ++k) out.edgeRef[k] = z.lightFront[4 * i + size_t(k)];
+            }
+        }
+        e->setArm("gi.bounceJacobi", 0.0);
+        run(2);
+    }
     GiParams off;
     off.mode = GiMode::Off;
     scene->setGlobalIllumination(off);
@@ -456,6 +640,22 @@ int main()
                 c.cards.size(), c.pagesUsed, c.admitted, c.evicted, c.compaction, readC, unreadAtB);
     CHECK(okC && c.restA >= 0 && c.restB >= 0 && c.compaction > 0u && c.evicted > 0u && unreadAtB == 0u,
           "(4) THE ATLAS COMPACTS: the crowded room's quarter pages merged to free whole ones, and room B carded at rest");
+
+    {
+        // (7)'s CONVEX EDGE against its reference: the walk's toggling cell at B's rest against the same placement's
+        // Jacobi re-solve, within a code (1 % over the store's floor) plus the store's achievable quantum under the
+        // iteration (0.5 / (1 - r) steps: 1.5e-7 at the floor at r 0.8)
+        bool within = w.edgeOk && w.edgeRefOk;
+        for (int k = 0; k < 3 && within; ++k)
+            within = std::fabs(double(w.edge[k]) - double(w.edgeRef[k])) <=
+                     0.01 * std::max(double(std::fabs(w.edgeRef[k])), double(kGiBrickFloor)) + 1.5e-7;
+        std::printf("   (7) the convex edge (%.2f %.2f %.2f) at B's rest: the walk %.6g %.6g %.6g, its Jacobi re-solve %.6g %.6g "
+                    "%.6g\n", kEdgeWorld[0], kEdgeWorld[1], kEdgeWorld[2], w.edge[0], w.edge[1], w.edge[2], w.edgeRef[0],
+                    w.edgeRef[1], w.edgeRef[2]);
+        CHECK(within, "(7) THE CONVEX EDGE HOLDS: the walk's toggling cell within a code of its Jacobi re-solve");
+    }
+    CHECK(gOrbitOver == 0u,
+          "(7) THE STORE AT REST HOLDS: every channel that moves after B's rest is within its brick's rounding bound");
 
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
