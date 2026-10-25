@@ -1127,8 +1127,11 @@ int main()
     // is the owner's decision, not this suite's.)
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
-        view->setCamera(enginetest::testCameraDescLookAt(Vec3(4.0f, 3.0f, 6.0f),
-                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        {   // DIAG (to remove): the camera's z by env
+            const char *cz = std::getenv("P7_CAMZ");
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(4.0f, 3.0f, cz ? float(std::atof(cz)) : 6.0f),
+                                                             Vec3(0.0f, 1.0f, 0.0f)));
+        }
         const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
         enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
         enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
@@ -1140,11 +1143,69 @@ int main()
             const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
             scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
         };
+        const auto diag = [&](const char *when) {   // DIAG (to remove)
+            const GiStatus g = scene->published().gi;
+            std::printf("   DIAG %s:", when);
+            for (const auto &c : g.cascades)
+                std::printf(" [c centre %.2f %.2f %.2f rebuilds %llu scrolls %llu pending %d]", c.centre.x, c.centre.y, c.centre.z,
+                            c.rebuilds, c.scrolls, c.pending);
+            std::printf(" atRest %d regionFrame %llu\n", int(g.giAtRest), (unsigned long long)g.regionFrame);
+            std::fflush(stdout);
+        };
+        diag("after the settle");
+        {   // DIAG (to remove): frames more to rest
+            int more = 0;
+            while (!scene->published().gi.giAtRest && more < 600) { render(e, 1); ++more; }
+            std::printf("   DIAG at rest %d frames after the 60\n", more);
+        }
         for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
+        diag("after the gesture");
         Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
         // ...and the SAME POSE at rest, after everything has caught up.
         render(e, 120);
         Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
+        diag("at rest");
+        if (const char *dp = std::getenv("P7_DUMP")) {   // DIAG (to remove): the two pictures as PPM
+            for (int k = 0; k < 2; ++k) {
+                const Image &im = k ? rest : motion;
+                std::string path = std::string(dp) + (k ? "_rest.ppm" : "_motion.ppm");
+                if (FILE *f = std::fopen(path.c_str(), "wb")) {
+                    std::fprintf(f, "P6 %u %u 255\n", kSize, kSize);
+                    for (unsigned y = 0; y < kSize; ++y)
+                        for (unsigned x = 0; x < kSize; ++x) {
+                            const Colour cc = im.at(x, y);
+                            unsigned char px[3] = { (unsigned char)std::min(255.f, cc.r * 255.f + 0.5f),
+                                                    (unsigned char)std::min(255.f, cc.g * 255.f + 0.5f),
+                                                    (unsigned char)std::min(255.f, cc.b * 255.f + 0.5f) };
+                            std::fwrite(px, 1, 3, f);
+                        }
+                    std::fclose(f);
+                }
+            }
+        }
+        if (std::getenv("P7_TRUTH")) {   // DIAG (to remove): the chain rebuilt fresh at the final pose = the truth
+            GiParams off; off.mode = GiMode::Off;
+            scene->setGlobalIllumination(off);
+            render(e, 2);
+            scene->setGlobalIllumination(cascadeGi());
+            render(e, 120);
+            Image truth; view->readPixels(truth);
+            diag("truth");
+            for (int k = 0; k < 2; ++k) {
+                const Image &im = k ? rest : motion;
+                int w = 0; unsigned o = 0;
+                for (unsigned y = 0; y < kSize; ++y)
+                    for (unsigned x = 0; x < kSize; ++x) {
+                        const Colour a = im.at(x, y), b = truth.at(x, y);
+                        const int d = int(std::max(std::max(std::fabs(a.r - b.r), std::fabs(a.g - b.g)),
+                                                   std::fabs(a.b - b.b)) * 255.0f + 0.5f);
+                        w = std::max(w, d);
+                        if (d >= 10) ++o;
+                    }
+                std::printf("   DIAG %s vs truth: max %d/255, %u px >= 10\n", k ? "rest" : "motion", w, o);
+            }
+            std::fflush(stdout);
+        }
         int worstDiff = 0; unsigned over10 = 0;
         for (unsigned y = 0; y < kSize; ++y)
             for (unsigned x = 0; x < kSize; ++x) {
