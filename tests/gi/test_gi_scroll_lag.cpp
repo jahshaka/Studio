@@ -6,7 +6,10 @@
 // GiStatus::CascadeStatus::lagLast / lagMax: the frames from the frame the camera's step test first owed a cascade a
 // move to the rebuild that placed it for the camera.
 //   THE TABLE: each desktop tier's counts, from its own resolved chain, printed against the table the count's comment
-//     states (Epic / High 3 / 7 / 31 / 641, Medium 9 / 20 / 31 / 641, Low 9 / 213).
+//     states (Epic / High 6 / 13 / 11 / 641, Medium 3 / 7 / 11 / 641, Low 3 / 213 - at the placement quantum, PHOTON-7
+//     stage 10, 10-2e: the step each cascade places by is the largest power of two at most a cell past its derived
+//     step (High 33 / 33 / 15 / 8 cells -> 32 / 32 / 16 / 8, Medium 15 / 15 / 15 / 8 -> 16 / 16 / 16 / 8, Low 15 / 8 ->
+//     16 / 8), and the same count of the same slack walks it: was 3 / 7 / 31 / 641, 9 / 20 / 31 / 641, 9 / 213).
 //   THE DOLLY: Epic, 1.4 m/s (0.0233 m a frame) down a 60 m floor with props, past the outermost cascade's step - cascade
 //     0's lag at most 4 frames (its 3 chunk frames and the commit's), every one of its scrolls committed; and EVERY
 //     cascade's lag within its own motion slack in frames (the outer cascades share the general slot: the read's W1).
@@ -80,8 +83,8 @@ int main()
     std::printf("== the scroll counts per tier (giCascadeScrollFrames, from each tier's resolved chain) ==\n");
     {
         const struct { GiQuality q; const char *name; std::vector<int> want; } tiers[] = {
-            { GiQuality::Low, "Low", { 9, 213 } }, { GiQuality::Medium, "Medium", { 9, 20, 31, 641 } },
-            { GiQuality::High, "High", { 3, 7, 31, 641 } }, { GiQuality::Epic, "Epic", { 3, 7, 31, 641 } } };
+            { GiQuality::Low, "Low", { 3, 213 } }, { GiQuality::Medium, "Medium", { 3, 7, 11, 641 } },
+            { GiQuality::High, "High", { 6, 13, 11, 641 } }, { GiQuality::Epic, "Epic", { 6, 13, 11, 641 } } };
         bool all = true;
         for (const auto &t : tiers) {
             if (!scene->setGlobalIllumination(tierGi(t.q))) { std::printf("   %s: no chain\n", t.name); all = false; continue; }

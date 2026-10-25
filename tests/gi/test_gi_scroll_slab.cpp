@@ -45,6 +45,11 @@
 //   half, the area weight - and nothing else needs to be: the commit regenerates every mip from level 0.
 // A, B, C, E, F run a two-cascade table at 64 cells (a dyadic cell, 10 m / 64: the arithmetic every shipped table has),
 // so a store read is 0.26 M voxels. A fixture (the engine alone, one offscreen view).
+// ON THE PLACEMENT LATTICE (PHOTON-7 stage 10, 10-2e): a cascade's centre is the camera rounded to its QUANTUM (its step,
+// a power of two of cells) and it re-centres once the camera is (0.5 + h) of a step off that centre - so a step is a
+// move FROM THE CENTRE (offCentre below), where it was a move from the last re-centre's camera; every shift is a whole
+// quantum (or a cut of one). A's bounds guard (no slab a multiple of the dispatch's four) needs the lattice at Q = 2:
+// A runs its own chain with cascade 0's step pinned at two cells.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -222,6 +227,7 @@ int main()
                 double(step), double(step / cell));
 
     // THE REFERENCE: a whole build of the chain AT THE CASCADES' CURRENT PLACEMENTS (the pin restores each builtCam).
+    const GiParams *chain = &small;   // the chain the arms run (A pins its own) - the reference is built from the same
     const auto rebuildWhole = [&]() {
         const GiStatus now = scene->published().gi;
         GiPlacementPin pin;
@@ -231,9 +237,16 @@ int main()
         GiParams off; off.mode = GiMode::Off;
         scene->setGlobalIllumination(off);
         run(2);
-        scene->setGlobalIllumination(small);
+        scene->setGlobalIllumination(*chain);
         run(8);
         scene->setGiPlacementPin(GiPlacementPin());
+    };
+    // A STEP ON THE LATTICE: the camera at cascade `i`'s CENTRE plus d steps on each axis whose d is not 0 (the others
+    // where the camera is) - 1.05 steps off the centre crosses its (0.5 + h) band and rounds to the next lattice point.
+    const auto offCentre = [&](size_t i, float dx, float dy, float dz) {
+        const GiStatus::CascadeStatus &c = scene->published().gi.cascades[i];
+        return Vec3(dx != 0.0f ? c.centre.x + dx * c.step : cam.x, dy != 0.0f ? c.centre.y + dy * c.step : cam.y,
+                    dz != 0.0f ? c.centre.z + dz * c.step : cam.z);
     };
     // Frames until cascade 0 has committed `want` scrolls (or `cap` frames).
     const auto untilScrolls = [&](unsigned long long want, int cap) {
@@ -319,13 +332,15 @@ int main()
     // ---- H. one-frame commits (PHOTON-7 stage 2's read D2) ----------------------------------------
     // THE ROW THAT SEES THE COMMIT'S BARRIER (PhotonVoxelScroll::commit): the slab spread over ONE frame, so the slab's
     // chunks are voxelised in the commit's own command buffer before the shift - a 16-cell step on x (a two-frame commit
-    // here), then the step back, which commits in one frame on y. Measured 2026-10-23: when the shift's first transition
+    // here), then a step on y, which commits in one frame. (On the lattice the step is y alone: the step back on x the
+    // old H1 also made is a whole quantum there and goes first - it was LEFT OUT by the scratch on the old placement,
+    // whose y shift was the larger, so the old H1's measured scroll was y alone too.) Measured 2026-10-23: when the shift's first transition
     // carried no dependency (the solver's per-frame reset: oldAccess Undefined, no source stage) the one-frame store lost
     // 186 INTERIOR cells against a whole build (a mid-frame submit used to hide it); with the store's prior use given to
     // the solver, a whole build's. Run first, from home, then home restored.
     std::printf("\n== H: one-frame commits are the store a whole build writes ==\n");
     {
-        const Vec3 steps[2] = { Vec3(16.2f * cell, 0.0f, 0.0f), Vec3(-16.2f * cell, 16.2f * cell, 0.0f) };
+        const Vec3 steps[2] = { Vec3(16.2f * cell, 0.0f, 0.0f), Vec3(0.0f, 16.2f * cell, 0.0f) };
         for (int k = 0; k < 2; ++k) {
             e->setArm("gi.scrollFrames", 1.0);
             run(1);
@@ -359,10 +374,27 @@ int main()
     // ---- A. one scroll, three slabs ----------------------------------------------------------
     std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
     {
+        // ITS OWN CHAIN: cascade 0's step pinned at TWO cells, the lattice at Q = 2 (on a step of 16 every shift is a
+        // multiple of four, and the bounds guard is never met). Built at home.
+        GiParams q2 = small;
+        q2.cascadeSet[0].stepCells = 2.0f;
+        chain = &q2;
+        {
+            GiParams off; off.mode = GiMode::Off;
+            scene->setGlobalIllumination(off);
+            run(2);
+            scene->setGlobalIllumination(q2);
+            run(8);
+            e->waitForAsyncShaders();
+        }
         const GiStatus pre = scene->published().gi;
-        // x past its band by a little (a shift of 2 cells), y and z riding along (6 cells each): 14 layers, within the
-        // scratch's; none a multiple of 4.
-        const Vec3 to(home.x - 1.9f * cell, home.y + 6.1f * cell, home.z - 6.4f * cell);
+        std::printf("   A's chain: cascade 0 step %.0f cells, centre %.4f %.4f %.4f\n", double(pre.cascades[0].step / cell),
+                    double(pre.cascades[0].centre.x), double(pre.cascades[0].centre.y), double(pre.cascades[0].centre.z));
+        // x past its band (1.05 steps off the centre: a shift of 2 cells), y and z RIDING ALONG (0.55 of a step off the
+        // centre each, under the band but past the rounding: 2 cells each): three slabs, 6 layers - the Q = 2 scratch's
+        // (one step, the even placement's cell and a frame of the fastest camera's travel) - none a multiple of 4.
+        // (Was x 1.9 cells past the camera with y and z riding 6 cells each on the 15-cell step's 20-layer scratch.)
+        const Vec3 to = offCentre(0, -1.05f, 0.55f, -0.55f);
         look(to);
         const int n = untilScrolls(pre.cascades[0].scrolls + 1u, 32);
         const GiStatus post = scene->published().gi;
@@ -379,6 +411,15 @@ int main()
         rebuildWhole();
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
         CHECK(sameStore(scrolled, built, "A"), "A SCROLLED STORE IS THE WHOLE BUILD'S, FLOAT FOR FLOAT");
+        // THE FIXTURE's CHAIN RESTORED, at home (the arms below start there).
+        chain = &small;
+        look(home);
+        GiParams off; off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+        scene->setGlobalIllumination(small);
+        run(8);
+        e->waitForAsyncShaders();
     }
 
     // ---- B. the spread, and a step past the scratch's layers ---------------------------------
@@ -388,7 +429,9 @@ int main()
         run(1);
         const GiStatus pre = scene->published().gi;
         const Vec3 from = cam;
-        const Vec3 to(from.x - 1.5f * step, from.y - 5.2f * cell, from.z + 6.6f * cell);
+        // x 1.6 steps off the CENTRE (the lattice's anchor): the target two quanta away, past the scratch's layers, so
+        // the scroll is cut (was 1.5 steps off the camera: from the centre 1.5 rounds to one quantum and nothing is cut).
+        const Vec3 to(offCentre(0, -1.6f, 0.0f, 0.0f).x, from.y - 5.2f * cell, from.z + 6.6f * cell);
         look(to);
         int flight = 0;
         bool placedStill = true, notAtRest = true, sawFlight = false;
@@ -406,7 +449,7 @@ int main()
         const unsigned long long spent = post.cascades[0].scrollFrames - pre.cascades[0].scrollFrames;
         const int sx = int(std::lround((post.cascades[0].centre.x - pre.cascades[0].centre.x) / cell));
         std::printf("   the first scroll committed after %d frame(s), %llu of them building chunks; its x shift %d cells "
-                    "(the step asked %.1f)\n", flight + 1, spent, sx, double(-1.5f * step / cell));
+                    "(the step asked %.1f)\n", flight + 1, spent, sx, double((to.x - pre.cascades[0].centre.x) / cell));
         CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u, "the spread scroll commits");
         CHECK(sawFlight && spent >= 2u, "...SPREAD over several frames (the slab's 4-cell layers, eight a frame)");
         CHECK(placedStill, "...the cascade's placement - its readers' box - unchanged until the commit");
@@ -437,7 +480,7 @@ int main()
         run(1);
         const GiStatus pre = scene->published().gi;
         const Vec3 from = cam;
-        const Vec3 to(from.x + 1.05f * step, from.y, from.z);
+        const Vec3 to = offCentre(0, 1.05f, 0.0f, 0.0f);   // (was 1.05 steps from the camera)
         look(to);
         run(3);   // in flight: a few chunks built
         const bool flying = scene->published().gi.cascades[0].scrolling;
@@ -481,7 +524,7 @@ int main()
         e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre2 = scene->published().gi;
-        look(Vec3(cam.x - 1.05f * step, cam.y, cam.z));
+        look(offCentre(0, -1.05f, 0.0f, 0.0f));   // (was 1.05 steps from the camera: the lattice's step is from the centre)
         run(3);
         const bool flying = scene->published().gi.cascades[0].scrolling;
         // A prop INSIDE the live box (and the target's): the dirty path marks the cascade itself.
@@ -592,7 +635,7 @@ int main()
         const GiStatus pre = scene->published().gi;
         // THE STEP SCROLLS CASCADE 0 ALONE, so the counts are its commit's: a placement pin holds cascade 1 at its own
         // camera and places cascade 0 for the stepped one (an outer commit re-injects cascade 0 as a delta too).
-        const Vec3 target(cam.x + 1.05f * step, cam.y, cam.z);
+        const Vec3 target = offCentre(0, 1.05f, 0.0f, 0.0f);   // (was 1.05 steps from the camera)
         {
             GiPlacementPin pin;
             pin.on = true;
@@ -762,8 +805,10 @@ int main()
         e->setArm("gi.scrollFrames", 3.0);
         run(1);
         const GiStatus pre = scene->published().gi;
-        const float up = 1.05f * pre.cascades[1].step;
-        look(Vec3(cam.x + up, cam.y, cam.z));
+        // (1.05 of cascade 1's steps off ITS centre: was off the camera - the lattice's step is from the centre)
+        const Vec3 toI = offCentre(1, 1.05f, 0.0f, 0.0f);
+        const float up = toI.x - cam.x;
+        look(toI);
         bool together = false;
         unsigned long long s0 = pre.cascades[0].scrolls, s1 = pre.cascades[1].scrolls;
         std::string when;

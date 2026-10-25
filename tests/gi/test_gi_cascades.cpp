@@ -579,8 +579,9 @@ int main()
     // The same rule the mirror states for a half-specified row (audit B10): a
     // request the renderer cannot honour is not honoured halfway. A table whose
     // cascades do not grow outward gives Ogre a NEGATIVE `cascadeMaxLod` and
-    // the march never hands over; a pinned step below one cell re-centres every
-    // frame, and one above half the resolution lets the camera leave the box.
+    // the march never hands over; a pinned step below the lattice's two cells
+    // re-centres every frame, and one above half the resolution lets the camera
+    // leave the box.
     std::printf("\n== case 8: pinned tables are validated ==\n");
     {
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
@@ -609,8 +610,11 @@ int main()
                     st.cascades[0].step, st.cascades[0].cell,
                     st.cascades[1].step, st.cascades[1].cell);
         CHECK(st.cascades.size() == 2, "the table itself is honoured");
-        CHECK(std::fabs(st.cascades[0].step - st.cascades[0].cell) < 1e-4f,
-              "a step below one cell is floored at one cell");
+        // (THE FLOOR IS THE LATTICE's, PHOTON-7 stage 10, 10-2e: the step IS the placement quantum Q = 2^K cells, K >= 1 -
+        // the even placement every cascade has always stood on (a one-cell step was never a placement: the centre moved
+        // by two cells). Was "floored at one cell".)
+        CHECK(std::fabs(st.cascades[0].step - 2.0f * st.cascades[0].cell) < 1e-4f,
+              "a step below the lattice's floor is floored at TWO cells (Q = 2, the even placement)");
         CHECK(std::fabs(st.cascades[1].step - st.cascades[1].cell * 32.0f) < 1e-3f,
               "and a step beyond half the resolution is capped there");
     }
@@ -1140,7 +1144,8 @@ int main()
     // rebuild: a moving item's regions in every cascade it reaches within the same frame budget). With every rotation
     // marked, cascade 0's reserved slot rebuilds it every frame and the one-writer rule holds cascades 1..3's whole
     // rebuilds for the whole motion (cascade 1: none in 60 frames) - the box in cascade 0 at the live pose, the rest at
-    // the pose before it moved. DECLARED RED until stage 8 (measured 174 / 233 / 143 codes, 1,298 / 2,765 / 1,962 px).
+    // the pose before it moved. DECLARED RED until stage 8 (measured 174 / 233 / 143 codes, 1,298 / 2,765 / 1,962 px at
+    // irisgl d480f0bd; 176 / 249 / 140 codes, 1,730 / 1,993 / 2,578 px on 10-2e's placement lattice).
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
         struct Pose { const char *name; Vec3 cam; int faces; };
@@ -1600,7 +1605,8 @@ int main()
     // THE RULE: the innermost cascade guarantees a near-field radius around the
     // head — `kGiNearFieldRadiusFraction` of its own half-size — inside which
     // the bounce is ALWAYS read from it and never from the coarser cascade
-    // behind. It is pure arithmetic on the table (halfSize - step - cell), so
+    // behind. It is pure arithmetic on the table (halfSize - step - cell, at the
+    // step's placement quantum: the step the engine places by), so
     // 16a asserts it for EVERY TIER AND BOTH COLUMNS with no scene at all, and
     // 16b walks a camera and proves the geometry the arithmetic claims.
     // =====================================================================
@@ -1618,11 +1624,14 @@ int main()
                 giResolveCascadeSteps(f.cascades, f.cascadeCount);
                 std::printf("   %-6s %-7s:", qNames[q], pNames[pr]);
                 for (int i = 0; i < f.cascadeCount; ++i) {
-                    const float r  = giCascadeGuaranteedRadius(f.cascades[i]);
-                    const float rq = giNearFieldRadius(f.cascades[i]);
+                    // AT THE STEP THE ENGINE PLACES BY: the derived (or pinned) step's placement quantum (PHOTON-7
+                    // stage 10, 10-2e: giPlacementQuantumCells - the largest power of two at most one cell past it).
+                    GiParams::GiCascadeDesc d = f.cascades[i];
+                    d.stepCells = giPlacementQuantumCells(d.stepCells);
+                    const float r  = giCascadeGuaranteedRadius(d);
+                    const float rq = giNearFieldRadius(d);
                     std::printf("  c%d half %5.1f res %3d step %5.2f m r %6.2f/%5.2f", i,
-                                f.cascades[i].halfSize, f.cascades[i].resolution,
-                                f.cascades[i].stepCells * giCascadeCell(f.cascades[i]), r, rq);
+                                d.halfSize, d.resolution, d.stepCells * giCascadeCell(d), r, rq);
                     // CASCADE 0 IS THE PRODUCT CLAIM — the near field is what a
                     // walker reads. It must meet the required radius exactly.
                     if (i == 0 && r < rq - 1e-4f) allOk = false;
@@ -1658,7 +1667,10 @@ int main()
         // on the first frame — with one rebuild a frame (and a field follow able
         // to own the slot) frame 1 would then read a centre from the old pose
         // and fail an assertion about a walk that had not begun. Park, let the
-        // queue empty, and only then measure (the pattern of case 2).
+        // queue empty, and only then measure (the pattern of case 2). UNTIL IT IS
+        // EMPTY, not a fixed count (PHOTON-7 stage 10, 10-2e: on the lattice the
+        // 4.5 m relocation is two cut scrolls of cascade 0's six chunk frames, and
+        // the old eight frames left the first five of the walk reading the old pose).
         //
         // AND IT STARTS OFF THE LATTICE. x0 is 0.37 m, not 0: the re-centre
         // planes are absolute world space, so a walk that begins on a plane
@@ -1669,6 +1681,14 @@ int main()
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0, 2.0f, z0),
                                                          Vec3(x0 + 1.0f, 2.0f, z0 - 1.0f)));
         render(e, 8);
+        int parked = 8;
+        const auto owed = [&]() {
+            for (const GiStatus::CascadeStatus &c : scene->published().gi.cascades)
+                if (c.pending || c.scrolling) return true;
+            return false;
+        };
+        for (; parked < 240 && owed(); ++parked) render(e, 1);
+        std::printf("   parked %d frames (the queue empty: %s)\n", parked, owed() ? "no" : "yes");
         const GiStatus w0 = scene->published().gi;
         CHECK(!w0.cascades.empty(), "the chain is up before the walk is measured");
         if (w0.cascades.empty()) { std::printf("   (no chain: the walk is skipped)\n"); }
@@ -1714,10 +1734,28 @@ int main()
         CHECK(worstGuarantee >= required,
               "...and it clears the required radius OUTRIGHT, with the motion slack "
               "unspent (the tolerance above is the bound, not the budget)");
+        // (ON THE LATTICE, PHOTON-7 stage 10, 10-2e: the centre is the camera rounded to the quantum and it re-centres
+        // past (0.5 + h) of a step, so the supremum of the travel is 0.6 of a step - not one step, as it was against the
+        // last re-centre's camera. The reported guarantee keeps the whole step and a cell (giCascadeGuaranteedRadius: the
+        // scroll counts derive from it), so the walk holds it with 0.4 of a step to spare. Was "the hysteresis itself
+        // costs no radius: the supremum of the travel is one step, not 1.1 of them".)
         CHECK(worstGuarantee >= w1.cascades[0].guaranteedRadius - stride,
-              "...and the guarantee giStatus reports is the one the walk measured, to "
-              "within the frame the per-frame test costs (the hysteresis itself costs "
-              "no radius: the supremum of the travel is one step, not 1.1 of them)");
+              "...and the guarantee giStatus reports holds on the walk, to within the frame the "
+              "per-frame test costs (the lattice's supremum is 0.6 of a step; the report keeps a whole one)");
+        {
+            // ...and the scroll's own lag: its chunk frames and its commit's (giCascadeScrollFrames, the count scroll_lag
+            // holds to the table), walked while the readers keep the old box.
+            GiParams::GiCascadeDesc d;
+            d.halfSize = w1.cascades[0].halfSize;
+            d.resolution = w1.cascades[0].resolution;
+            d.stepCells = w1.cascades[0].step / w1.cascades[0].cell;
+            const float bound = (0.5f + kGiStepHysteresis) * w1.cascades[0].step + float(1 + giCascadeScrollFrames(d)) * stride;
+            std::printf("   the lattice's supremum: %.3f m (0.6 of the %.3f m step and %d frames of the scroll's lag)\n",
+                        double(bound), double(w1.cascades[0].step), 1 + giCascadeScrollFrames(d));
+            CHECK(worstOff <= bound + 1e-4f,
+                  "...and the walk's worst offset is the lattice's supremum: (0.5 + h) of a step, the frame the test "
+                  "costs and the scroll's chunk frames");
+        }
         CHECK(w1.cascadeFullRebuilds == 0, "a 10 m walk is not a teleport");
         }
     }
@@ -1732,16 +1770,21 @@ int main()
     // even number of its cells, within one cell of the camera on each axis (16a's `- cell` is that bound), and the
     // camera's own two neighbours across an odd/even boundary land on the same centre as the rounding says.
     // =====================================================================
-    std::printf("\n== case 16c: the centre is an even cell, at odd and even camera cells ==\n");
+    // ON THE LATTICE (PHOTON-7 stage 10, 10-2e): the centre is a multiple of the cascade's QUANTUM Q = 2^K cells (its
+    // step) and within half a quantum of the camera - the old even placement was the lattice at Q = 2 ("an EVEN
+    // multiple", "within one cell"). The camera's phases are the same fractions of the quantum they were of Q = 2:
+    // 1/8, 3/8, 5/8, 7/8 of it (even + 1/4, even + 3/4, odd + 1/4, odd + 3/4 cells), both sides of the rounding.
+    std::printf("\n== case 16c: the centre is on its quantum's lattice, at every phase of the camera ==\n");
     {
         const GiStatus g0 = scene->published().gi;
         CHECK(!g0.cascades.empty(), "the chain is up for the placement case");
         if (!g0.cascades.empty()) {
             const float cell0 = g0.cascades[0].cell;
+            const float q0 = g0.cascades[0].step / cell0;   // cascade 0's quantum, cells
             bool allEven = true, allNear = true;
-            const float phases[4] = { 2.25f, 2.75f, 3.25f, 3.75f };   // cells: even + 1/4, even + 3/4, odd + 1/4, odd + 3/4
+            const float phases[4] = { 1.125f, 1.375f, 1.625f, 1.875f };   // quanta: the four phases of Q = 2's cells
             for (float ph : phases) {
-                const Vec3 p(11.0f * 2.0f * cell0 + ph * cell0, 1.5f + ph * cell0, -6.0f * 2.0f * cell0 - ph * cell0);
+                const Vec3 p(11.0f * q0 * cell0 + ph * q0 * cell0, 1.5f + ph * q0 * cell0, -6.0f * q0 * cell0 - ph * q0 * cell0);
                 GiPlacementPin pin;
                 pin.on = true;
                 pin.cascadeBuiltCam.assign(g0.cascades.size(), p);
@@ -1753,23 +1796,24 @@ int main()
                 e->setArm("gi.rebuildCascade", -1.0);
                 render(e, 4);
                 const GiStatus g = scene->published().gi;
-                std::printf("   camera (%.4f, %.4f, %.4f) = %.2f cells of cascade 0 into its lattice:", p.x, p.y, p.z, ph);
+                std::printf("   camera (%.4f, %.4f, %.4f) = %.3f quanta of cascade 0 into its lattice:", p.x, p.y, p.z, ph);
                 for (size_t i = 0; i < g.cascades.size(); ++i) {
                     const GiStatus::CascadeStatus &c = g.cascades[i];
                     const float cc[3] = { c.centre.x, c.centre.y, c.centre.z }, pp[3] = { p.x, p.y, p.z };
-                    std::printf("  c%zu centre (%.4f, %.4f, %.4f)", i, c.centre.x, c.centre.y, c.centre.z);
+                    const double q = double(c.step) / double(c.cell);   // its quantum, cells
+                    std::printf("  c%zu centre (%.4f, %.4f, %.4f) Q %.0f", i, c.centre.x, c.centre.y, c.centre.z, q);
                     for (int a = 0; a < 3; ++a) {
-                        const double k = double(cc[a]) / double(c.cell);
-                        if (std::fabs(k - std::round(k)) > 1e-6 || (long long)std::llround(k) % 2 != 0) allEven = false;
-                        if (std::fabs(double(pp[a]) - double(cc[a])) > double(c.cell) * (1.0 + 1e-5)) allNear = false;
+                        const double k = double(cc[a]) / (double(c.cell) * q);
+                        if (std::fabs(k - std::round(k)) > 1e-5) allEven = false;
+                        if (std::fabs(double(pp[a]) - double(cc[a])) > 0.5 * q * double(c.cell) * (1.0 + 1e-5)) allNear = false;
                     }
                 }
                 std::printf("\n");
             }
             scene->setGiPlacementPin(GiPlacementPin());
             render(e, 2);
-            CHECK(allEven, "every cascade's centre is an EVEN multiple of its cell, at odd and even camera cells (Q = 2)");
-            CHECK(allNear, "...within one cell of the camera on every axis (the near-field guarantee's `- cell`)");
+            CHECK(allEven, "every cascade's centre is a multiple of its QUANTUM (Q = 2^K cells, its step), at every phase");
+            CHECK(allNear, "...within half a quantum of the camera on every axis (the lattice's rounding)");
         }
     }
 
@@ -1779,7 +1823,8 @@ int main()
     // The placement pin used to be a PREFIX of the chain (cascade i pinned iff i < cascadeBuiltCam's size), so an inner
     // cascade could never follow the eye while an outer one held. GiPlacementPin::cascadeFree leaves cascade i free:
     // every cascade pinned at a far point p, cascade 0 left free, then a forced whole rebuild of each - cascade 0 is
-    // placed for the EYE (within one of its cells), every other cascade for p.
+    // placed for the EYE, every other cascade for p: within half a quantum (the lattice's rounding, PHOTON-7 stage 10,
+    // 10-2e; was "within one of its cells", half of Q = 2).
     // =====================================================================
     std::printf("\n== case 16d: a pin leaves cascade 0 free ==\n");
     {
@@ -1803,13 +1848,14 @@ int main()
             e->setArm("gi.rebuildCascade", -1.0);
             render(e, 4);
             const GiStatus g = scene->published().gi;
-            const auto near = [](const Vec3 &c, const Vec3 &q, float cell) {
-                return std::fabs(c.x - q.x) <= cell * (1.0f + 1e-5f) && std::fabs(c.y - q.y) <= cell * (1.0f + 1e-5f) &&
-                       std::fabs(c.z - q.z) <= cell * (1.0f + 1e-5f);
+            const auto near = [](const Vec3 &c, const Vec3 &q, float halfQuantum) {
+                const float t = halfQuantum * (1.0f + 1e-5f);
+                return std::fabs(c.x - q.x) <= t && std::fabs(c.y - q.y) <= t && std::fabs(c.z - q.z) <= t;
             };
-            const bool freeAtEye = near(g.cascades[0].centre, eye, g.cascades[0].cell);
+            const bool freeAtEye = near(g.cascades[0].centre, eye, 0.5f * g.cascades[0].step);
             bool pinnedAtP = true;
-            for (size_t i = 1; i < g.cascades.size(); ++i) pinnedAtP = pinnedAtP && near(g.cascades[i].centre, p, g.cascades[i].cell);
+            for (size_t i = 1; i < g.cascades.size(); ++i)
+                pinnedAtP = pinnedAtP && near(g.cascades[i].centre, p, 0.5f * g.cascades[i].step);
             for (size_t i = 0; i < g.cascades.size(); ++i)
                 std::printf("   c%zu centre (%.3f, %.3f, %.3f)%s\n", i, g.cascades[i].centre.x, g.cascades[i].centre.y,
                             g.cascades[i].centre.z, i == 0 ? " (free)" : " (pinned)");

@@ -19,11 +19,10 @@
 //       a face read less may arrive in one run and not the other - counted, printed);
 //   (3) THE VALUES, printed: every lit texel of every card resident in both runs against the other run's, in codes
 //       (1 % of its radiance per channel over the store's floor) past one step of the RGBA16F store (PHOTON-7 stage 10,
-//       10-2d: the radiance store's quantum under the code). NOT YET A LAW:
-//       the cascades' placements at one pose are path-dependent (the scroll's hysteresis: after the walk c1-c3 trail the
-//       eye), and what a card's marched indirect reads depends on where the boxes stand. The cone shells landed
-//       (0b8ba090) and did not remove it - a diffuse cone already hands over by its footprint (the premise measured
-//       false); the remainder is STORE-PLACEMENT-1's, whose fix makes this a law (the spec's cone-shell item).
+//       10-2d: the radiance store's quantum under the code) - A LAW since 10-2e (the lead's ruling): none over a code.
+//       The cascades' placements at one pose are path-dependent (the scroll's hysteresis: after the walk c1-c3 trail the
+//       eye), and a hit read by the box that held it read another level from another placement; a TLAS hit now reads
+//       its level by its distance to the GI camera, inside every placement the engine can reach (giHitLevelRadius).
 //   (6) THE HISTORY PART OF walk = teleport (PHOTON-7 stage 10, 10-2d; the lead's ruling: residency is path-independent
 //       at rest): a fifth run, the teleport with cascades 1 and 2 PINNED to the walk's final placement (the placement
 //       part removed: 10-3's), holds THE SAME RESIDENT SET as the walk (every card of the one resident in the other, by
@@ -57,6 +56,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
@@ -460,6 +460,8 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);
     e->setArm("cards.demandCount", 1.0);   // the readers' hits counted: the read rates (2) reads
+    // (THE MEASURING HOOK of 10-2e's margin: JAH_HIT_LEVEL_MARGIN=<cells> sets the door gi.hitLevelMargin for the run)
+    if (const char *m = std::getenv("JAH_HIT_LEVEL_MARGIN")) e->setArm("gi.hitLevelMargin", std::atof(m));
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
@@ -588,9 +590,8 @@ int main()
             over += codes > 1.0 ? 1u : 0u;
         }
     }
-    std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code "
-                "(STORE-PLACEMENT-1's law)\n", common, worst, over);
-    CHECK(common > 0u, "(3) the cards resident in both runs compared");
+    std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code\n", common, worst, over);
+    CHECK(common > 0u && over == 0u, "(3) WALK = TELEPORT: every card resident in both within a code (10-2e: the hit's level by the camera)");
 
     // (6) THE HISTORY PART: the walk against the teleport pinned to its placement - the same resident set, 0 texels over
     //     a code
