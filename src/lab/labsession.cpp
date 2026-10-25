@@ -610,7 +610,10 @@ std::string Session::statusJson()
     o << ",\"gather\":{\"running\":" << (gi.gather.running ? "true" : "false") << ",\"stride\":" << gi.gather.stride
       << ",\"raysPerProbe\":" << gi.gather.raysPerProbe << ",\"probes\":" << gi.gather.probes
       << ",\"raysPerFrame\":" << gi.gather.raysPerFrame << ",\"vramBytes\":" << gi.gather.vramBytes
-      << ",\"historyBytes\":" << gi.gather.historyBytes << ",\"restFrames\":" << gi.gather.restFrames << "}";
+      << ",\"historyBytes\":" << gi.gather.historyBytes << ",\"restFrames\":" << gi.gather.restFrames
+      // ...and its twins against their cap (PHOTON-7 stage 10: the cap is an L7 count; a real scene's demand reads it)
+      << ",\"adaptive\":" << gi.gather.adaptive << ",\"adaptiveCap\":" << gi.gather.adaptiveCap
+      << ",\"adaptiveRequested\":" << gi.gather.adaptiveRequested << "}";
     o << ",\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
