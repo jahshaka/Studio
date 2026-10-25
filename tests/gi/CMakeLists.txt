@@ -754,3 +754,17 @@ if(TARGET jahlab)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.hold_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
+
+# gi.inject_fold (PHOTON-7's walk hitch, 2) — THE INJECTION's BOXES FOLD PAIR BY PAIR, NEVER INTO THEIR UNION: a two-axis
+# step's 22 regions fold to the injection's 16 boxes, every input cell held, the moved faces apart, under half the cascade
+# covered (the union spanned it whole: Bistro Interior's c0 / c1 commits at 100 % of 128^3). Pure geometry: no display.
+add_executable(test_inject_fold test_inject_fold.cpp)
+set_target_properties(test_inject_fold PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_inject_fold PRIVATE ${CMAKE_SOURCE_DIR})
+add_test(NAME gi.inject_fold COMMAND test_inject_fold WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.inject_fold PROPERTIES LABELS "gi" TIMEOUT 60)
+set_tests_properties(gi.inject_fold PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(gi.inject_fold)
