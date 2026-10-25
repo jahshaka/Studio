@@ -22,6 +22,10 @@
 //   (4) THE FIELD - the field on (every shipped tier runs it): every probe whose lattice point lies inside the room
 //       holds no texel of 1 % of R (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
 //       aperture-0 march's escape let the sky through the walls (10-0's P3).
+//   (6) THE e = 0 COUNTER (10-2a: at the ray tier the cards' indirect is gathered by TLAS rays, rq_card_gather.comp) -
+//       the cards' TLAS gather ran (its dispatches and rays counted, read back: GiStatus::cards.gather) and the relight
+//       read it; every carded point of (2)'s grid has an escaped share of EXACTLY 0 (the Gather layer's a: inside a
+//       watertight room no ray misses); the control: the outer +x wall's points (seen in (1)) escape to the sky.
 //   (5) THE NO-RAY ROUTE'S PICTURE (High, the rays off and the field off: the screen integrate answers every pixel) -
 //       the middle of the picture inside the room, its brightest pixel under 1 % of R. RED before the pixel's diffuse
 //       became the caches' ray integral (the refresh's paths 4 and 7): the four cones' escape read 31.5 % of R. (The
@@ -213,6 +217,17 @@ int main()
                     "mean %.4f\n", restOut, out0.roofCells, R, double(kAlbedo), outer.cards, outer.texels, outer.mean,
                     outerZ.cards, outerZ.mean);
         const double outerMean = std::max(outer.mean, outerZ.mean);
+        // (6)'s control: the outer +x wall's escaped share, an 8 x 8 grid on its outer face (x = 2.4)
+        double outerE = 0.0;
+        unsigned outerGathered = 0u;
+        for (int a = 0; a < 8; ++a)
+            for (int b = 0; b < 8; ++b) {
+                const Vec3 at(2.4f, 0.15f + 2.7f * (a + 0.5f) / 8.0f, -1.85f + 3.7f * (b + 0.5f) / 8.0f);
+                CardSample cs;
+                if (!scene->readCardAt(at, Vec3(1, 0, 0), cs) || !cs.ok) continue;
+                if (cs.gather[3] > 0.0f) ++outerGathered;
+                outerE = std::max(outerE, double(cs.gather[3]));
+            }
         check(restOut >= 0 && out0.ok && R > 0.5 * kAlbedo && outerMean > 0.25 * R,
               "(1) THE CONTROL - THE SKY IS ON: the roof's voxels read over half the albedo times the sky, the outer "
               "walls' cards over a quarter of that");
@@ -230,8 +245,8 @@ int main()
             { Vec3(2.0f, 0.15f, -1.85f), Vec3(0, 2.7f, 0), Vec3(0, 0, 3.7f), Vec3(-1, 0, 0), "the +x wall" },
             { Vec3(-1.85f, 0.15f, -2.0f), Vec3(3.7f, 0, 0), Vec3(0, 2.7f, 0), Vec3(0, 0, 1), "the -z wall" },
             { Vec3(-1.85f, 0.15f, 2.0f), Vec3(3.7f, 0, 0), Vec3(0, 2.7f, 0), Vec3(0, 0, -1), "the +z wall" } };
-        double worst = 0.0;
-        unsigned facesRead = 0u;
+        double worst = 0.0, innerE = 0.0;
+        unsigned facesRead = 0u, innerEscaped = 0u, innerPoints = 0u;
         for (const Inner &f : faces) {
             unsigned read = 0u;
             double peak = 0.0, sum = 0.0;
@@ -243,6 +258,9 @@ int main()
                     CardSample cs;
                     if (!scene->readCardAt(at, f.n, cs) || !cs.ok) continue;
                     ++read;
+                    ++innerPoints;
+                    if (cs.gather[3] != 0.0f) ++innerEscaped;
+                    innerE = std::max(innerE, double(cs.gather[3]));
                     const double v = std::max(cs.radiance[0], std::max(cs.radiance[1], cs.radiance[2]));
                     peak = std::max(peak, v);
                     sum += v;
@@ -256,6 +274,22 @@ int main()
                     restIn, facesRead, R > 0.0 ? 100.0 * worst / R : -1.0);
         check(restIn >= 0 && facesRead == 6u && R > 0.0 && worst < 0.01 * R,
               "(2) THE CARDS: no card point of the sealed room's faces reads 1 % of the roof's");
+        {
+            const GiStatus st = scene->published().gi;
+            const CardCacheStatus::GatherCounts &gc = st.cards.gather;
+            std::printf("   (6) the cards' TLAS gather: %llu dispatches, %llu rays - %llu cards, %llu cascades, %llu back "
+                        "faces, %llu no sample, %llu sky; %llu texels (%llu with no sample); by rays %d, %llu waits\n",
+                        gc.dispatches, gc.rays, gc.card, gc.voxel, gc.backFaces, gc.noSample, gc.sky, gc.texels,
+                        gc.emptyTexels, int(st.cards.gatherByRays), st.cards.gatherWaits);
+            std::printf("   (6) inside: %u carded points, %u with an escaped share, the largest %.6f; the control: the "
+                        "outer +x wall %u of its points escape, the largest share %.4f\n",
+                        innerPoints, innerEscaped, innerE, outerGathered, outerE);
+            check(gc.dispatches > 0ull && gc.rays > 0ull && gc.sky > 0ull && st.cards.gatherByRays,
+                  "(6) the cards' TLAS gather ran and the relight read it (its counts read back)");
+            check(outerGathered > 0u && outerE > 0.05, "(6) the control: the outer wall's rays escape to the sky");
+            check(innerPoints > 0u && innerEscaped == 0u,
+                  "(6) THE e = 0 COUNTER: no ray of a carded point inside the sealed room escapes");
+        }
         double vWorst = 0.0;
         bool vOk = true;
         for (int c = 0; c < 2; ++c) {
