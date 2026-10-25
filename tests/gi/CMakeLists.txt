@@ -386,11 +386,29 @@ target_compile_definitions(test_gi_card_residency PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_card_residency PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_residency JahshakaEngineMedia)
-jah_gpu_row(gi.card_residency CLASS engine COMMAND test_gi_card_residency
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_residency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 6052)
+# ONE ROW A LAW GROUP (PHOTON-7 stage 10, the lead's ruling: each within the fixture's 10 s, every run the fewest frames
+# its law needs): gi.card_residency the walk and the teleport ((1) (2) (3) (7)), _pinned the history part (6), _crowded
+# the compaction (4), _late the late first reader (5), _held the band card held in and out at B (8); gi.card_truth the
+# two caches against the 128-ray truth - a `measure` row (JAH_MEASURE_ROWS: its table and its red for 10-3).
+foreach(_row walk pinned crowded late held truth)
+    if(_row STREQUAL "walk")
+        set(_name gi.card_residency)
+    elseif(_row STREQUAL "truth")
+        set(_name gi.card_truth)
+    else()
+        set(_name gi.card_residency_${_row})
+    endif()
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_card_residency ${_row}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
+endforeach()
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1048)
+set_tests_properties(gi.card_residency_pinned PROPERTIES JAHSHAKA_TEST_FRAMES 977)
+set_tests_properties(gi.card_residency_crowded PROPERTIES JAHSHAKA_TEST_FRAMES 566)
+set_tests_properties(gi.card_residency_late PROPERTIES JAHSHAKA_TEST_FRAMES 643)
+set_tests_properties(gi.card_residency_held PROPERTIES JAHSHAKA_TEST_FRAMES 937)
+set_tests_properties(gi.card_truth PROPERTIES JAHSHAKA_TEST_FRAMES 5012)
 
 # gi.gather_sliver (PHOTON-7 stage 10) — THE GRID ANSWERS EVERY PIXEL: a 1-px sliver of a wall seen past two black
 # plates (between them, and at the view's edge) is answered by a probe on every settling frame, its noise within the
@@ -413,28 +431,6 @@ jah_gpu_row(gi.gather_sliver CLASS engine COMMAND test_gi_gather_sliver
 set_tests_properties(gi.gather_sliver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 833)
-
-# gi.card_truth (PHOTON-7 stage 10, (8)'s truth) — THE TWO CACHES AGAINST THE TRUTH: gi.card_residency's room B, the
-# band card and the +x wall's cards held in or out, at the tier's 16 rays and the estimators' 128 (the door
-# gi.truthRays), the frozen gather's hits matched ray by ray - the truth table printed; the voxel's lit-wall bias its
-# law, declared red for 10-3 (test_gi_card_residency.cpp says the laws). The same source, built with JAH_CARD_TRUTH.
-add_executable(test_gi_card_truth test_gi_card_residency.cpp)
-set_target_properties(test_gi_card_truth PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_card_truth PRIVATE JAH_CARD_TRUTH=1
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_card_truth PRIVATE JahshakaEngine)
-add_dependencies(test_gi_card_truth JahshakaEngineMedia)
-jah_gpu_row(gi.card_truth CLASS engine COMMAND test_gi_card_truth
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_truth PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_truth PROPERTIES JAHSHAKA_TEST_FRAMES 5732)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
