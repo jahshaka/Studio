@@ -188,6 +188,52 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                         int(g.chainOwed), int(g.feedbackOwed), int(g.cards.built), g.cards.relights, g.cards.admitted,
                         g.cards.queueLength, g.cards.relitLastFrame, g.cards.indirectLastFrame, g.cards.indirectReported,
                         g.cards.indirectByRegion, g.cards.indirectOverflows);
+            std::printf("     the sides' TLAS gather: %llu dispatches, %llu waits, %llu route changes\n", g.voxelSides.dispatches,
+                        g.voxelSides.waits, g.voxelSides.routeChanges);
+            // DIAG: does the store move? cascade 0's total over 1 and 8 frames
+            for (int c = 0; c < 2; ++c) {
+                GiVoxelVolume v0, v1, v8;
+                scene->giVoxelLight(c, v0);
+                run(1);
+                scene->giVoxelLight(c, v1);
+                run(7);
+                scene->giVoxelLight(c, v8);
+                const auto cmp = [](const GiVoxelVolume &a, const GiVoxelVolume &b, size_t &n, double &worst, double &worstRel) {
+                    n = 0; worst = 0.0; worstRel = 0.0;
+                    for (const std::vector<float> GiVoxelVolume::*f : { &GiVoxelVolume::light, &GiVoxelVolume::lightFront,
+                                                                        &GiVoxelVolume::lightBack }) {
+                        const std::vector<float> &x = a.*f, &y = b.*f;
+                        if (x.size() != y.size()) continue;
+                        for (size_t i = 0; i + 3 < x.size(); i += 4)
+                            for (int ch = 0; ch < 3; ++ch) {
+                                const double d = std::fabs(double(x[i + ch]) - double(y[i + ch]));
+                                if (d > 0.0) ++n;
+                                worst = std::max(worst, d);
+                                worstRel = std::max(worstRel, d / (0.01 * std::max(double(std::fabs(y[i + ch])), 1e-4)));
+                            }
+                    }
+                };
+                size_t n1, n8; double w1, r1, w8, r8;
+                {   // where the 1-frame changes are (the first four), and their values
+                    int shown = 0;
+                    const size_t W = size_t(v0.width), H = size_t(v0.height);
+                    for (const std::vector<float> GiVoxelVolume::*f : { &GiVoxelVolume::lightFront, &GiVoxelVolume::lightBack })
+                        for (size_t i = 0; i + 3 < (v0.*f).size() && shown < 4; i += 4)
+                            if ((v0.*f)[i] != (v1.*f)[i] || (v0.*f)[i + 1] != (v1.*f)[i + 1] || (v0.*f)[i + 2] != (v1.*f)[i + 2]) {
+                                const size_t q = i / 4;
+                                std::printf("       DIAG c%d %s at %.2f %.2f %.2f (cell %zu %zu %zu of %d): %.4g %.4g %.4g -> %.4g "
+                                            "%.4g %.4g\n", c, f == &GiVoxelVolume::lightFront ? "front" : "back",
+                                            v0.origin[0] + (q % W + 0.5f) * v0.cell[0], v0.origin[1] + ((q / W) % H + 0.5f) * v0.cell[1],
+                                            v0.origin[2] + (q / (W * H) + 0.5f) * v0.cell[2], q % W, (q / W) % H, q / (W * H), v0.width,
+                                            (v0.*f)[i], (v0.*f)[i + 1], (v0.*f)[i + 2], (v1.*f)[i], (v1.*f)[i + 1], (v1.*f)[i + 2]);
+                                ++shown;
+                            }
+                }
+                cmp(v0, v1, n1, w1, r1);
+                cmp(v0, v8, n8, w8, r8);
+                std::printf("     DIAG c%d store: 1 frame %zu channels changed (worst %.3g, %.2f codes); 8 frames %zu (worst %.3g, "
+                            "%.2f codes)\n", c, n1, w1, r1, n8, w8, r8);
+            }
             for (size_t k = 0; k < g.cascades.size(); ++k) {
                 const auto &c = g.cascades[k];
                 std::printf("     c%zu centre (%.2f %.2f %.2f) half %.1f pending %d scrolling %d rebuilds %llu scrolls %llu "
