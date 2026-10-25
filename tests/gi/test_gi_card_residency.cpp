@@ -262,6 +262,108 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         }
     }
     out.restB = settle();
+    if (!crowded && out.b.pillars.size() > 8u) {   // DIAG (to remove): room B pillar 8's +x face - its card, the voxels there
+        const NodeId pn = out.b.pillars[8];
+        const Vec3 c = out.b.centre;
+        const float fx = c.x + 2.4f + 0.2f;   // the face's plane
+        double cr[3] = {}, ci[3] = {};
+        int nc = 0;
+        for (int a = 0; a < 4; ++a)
+            for (int b = 0; b < 4; ++b) {
+                CardSample cs;
+                if (scene->readCardTexel(pn, 1u, 0.125f + 0.25f * float(a), 0.125f + 0.25f * float(b), cs) && cs.ok && cs.lit) {
+                    for (int k = 0; k < 3; ++k) { cr[k] += cs.radiance[k]; ci[k] += cs.indirect[k]; }
+                    ++nc;
+                }
+            }
+        std::printf("   DIAGF card (node %u card 1): %d texels lit, mean radiance %.6f %.6f %.6f, indirect %.6f %.6f %.6f\n",
+                    unsigned(pn), nc, nc ? cr[0] / nc : 0.0, nc ? cr[1] / nc : 0.0, nc ? cr[2] / nc : 0.0, nc ? ci[0] / nc : 0.0,
+                    nc ? ci[1] / nc : 0.0, nc ? ci[2] / nc : 0.0);
+        for (int casc = 0; casc < 2; ++casc) {
+            GiVoxelVolume vl, va;
+            if (!scene->giVoxelLight(casc, vl) || !scene->giVoxelVolume(casc, va) || !vl.available) continue;
+            // the column of voxels holding the face: x the cell the plane falls in and the one inside, y 0.3..3.2, z the face
+            const int qx = int(std::floor((fx - vl.origin[0]) / vl.cell[0]));
+            double sF[3] = {}, sB[3] = {}, sL[3] = {}, sD[3] = {}, cov = 0.0;
+            int n = 0;
+            for (int dx = -1; dx <= 0; ++dx)
+                for (float y = 0.3f; y < 3.2f; y += vl.cell[1])
+                    for (float z = c.z + 2.25f; z < c.z + 2.55f; z += vl.cell[2]) {
+                        const int q[3] = { qx + dx, int(std::floor((y - vl.origin[1]) / vl.cell[1])),
+                                           int(std::floor((z - vl.origin[2]) / vl.cell[2])) };
+                        if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= vl.width || q[1] >= vl.height || q[2] >= vl.depth) continue;
+                        const size_t i = (size_t(q[2]) * size_t(vl.height) + size_t(q[1])) * size_t(vl.width) + size_t(q[0]);
+                        const double a = va.albedo.size() > 4 * i + 3 ? va.albedo[4 * i + 3] : 0.0;
+                        if (!(a > 0.0)) continue;
+                        for (int k = 0; k < 3; ++k) {
+                            sF[k] += vl.lightFront[4 * i + k] / a;
+                            sB[k] += vl.lightBack[4 * i + k] / a;
+                            sL[k] += vl.light[4 * i + k] / a;
+                            sD[k] += va.direct.size() > 4 * i + 3 ? va.direct[4 * i + k] / a : 0.0;
+                        }
+                        cov += a;
+                        ++n;
+                    }
+            {   // the face's centre voxels in rgb, and the +x wall's inner face beside it: its voxels and its card
+                const int qy = int(std::floor((1.75f - vl.origin[1]) / vl.cell[1]));
+                const auto rgbAt = [&](float x, float y, float z, const char *what) {
+                    const int q[3] = { int(std::floor((x - vl.origin[0]) / vl.cell[0])), int(std::floor((y - vl.origin[1]) / vl.cell[1])),
+                                       int(std::floor((z - vl.origin[2]) / vl.cell[2])) };
+                    if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= vl.width || q[1] >= vl.height || q[2] >= vl.depth) return;
+                    const size_t i = (size_t(q[2]) * size_t(vl.height) + size_t(q[1])) * size_t(vl.width) + size_t(q[0]);
+                    const double a = va.albedo.size() > 4 * i + 3 ? va.albedo[4 * i + 3] : 0.0;
+                    std::printf("   DIAGF c%d %s (%d,%d,%d) c %.2f front/c %.4f %.4f %.4f back/c %.4f %.4f %.4f direct/c %.4f %.4f %.4f n %.2f %.2f %.2f\n",
+                                casc, what, q[0], q[1], q[2], a, a > 0 ? vl.lightFront[4 * i] / a : 0.0, a > 0 ? vl.lightFront[4 * i + 1] / a : 0.0,
+                                a > 0 ? vl.lightFront[4 * i + 2] / a : 0.0, a > 0 ? vl.lightBack[4 * i] / a : 0.0,
+                                a > 0 ? vl.lightBack[4 * i + 1] / a : 0.0, a > 0 ? vl.lightBack[4 * i + 2] / a : 0.0,
+                                a > 0 && va.direct.size() > 4 * i + 2 ? va.direct[4 * i] / a : 0.0,
+                                a > 0 && va.direct.size() > 4 * i + 2 ? va.direct[4 * i + 1] / a : 0.0,
+                                a > 0 && va.direct.size() > 4 * i + 2 ? va.direct[4 * i + 2] / a : 0.0,
+                                vl.normal[4 * i] * 2.0 - 1.0, vl.normal[4 * i + 1] * 2.0 - 1.0, vl.normal[4 * i + 2] * 2.0 - 1.0);
+                };
+                (void)qy;
+                rgbAt(fx - 0.01f, 1.75f, c.z + 2.4f, "pillar +x face");
+                rgbAt(c.x + 4.0f + 0.01f, 1.75f, c.z + 2.4f, "+x wall inner");
+                rgbAt(c.x + 4.0f - 0.01f, 1.75f, c.z + 2.4f, "+x wall inner-air");
+                if (casc == 0) {
+                    CardSample ws;
+                    if (scene->readCardAt(Vec3(c.x + 4.0f, 1.75f, c.z + 2.4f), Vec3(-1.0f, 0.0f, 0.0f), ws) && ws.ok)
+                        std::printf("   DIAGF +x wall card at the pillar: radiance %.4f %.4f %.4f indirect %.4f %.4f %.4f albedo %.3f %.3f %.3f\n",
+                                    ws.radiance[0], ws.radiance[1], ws.radiance[2], ws.indirect[0], ws.indirect[1], ws.indirect[2],
+                                    ws.albedo[0], ws.albedo[1], ws.albedo[2]);
+                    CardSample ps;
+                    if (scene->readCardAt(Vec3(fx, 1.75f, c.z + 2.4f), Vec3(1.0f, 0.0f, 0.0f), ps) && ps.ok)
+                        std::printf("   DIAGF pillar +x card centre: radiance %.4f %.4f %.4f indirect %.4f %.4f %.4f albedo %.3f %.3f %.3f\n",
+                                    ps.radiance[0], ps.radiance[1], ps.radiance[2], ps.indirect[0], ps.indirect[1], ps.indirect[2],
+                                    ps.albedo[0], ps.albedo[1], ps.albedo[2]);
+                }
+            }
+            if (casc == 0) {   // per voxel at mid height, across the face in z, the face cell and the one inside, and one out
+                const int qy = int(std::floor((1.75f - vl.origin[1]) / vl.cell[1]));
+                for (int dx = -1; dx <= 1; ++dx) {
+                    std::printf("   DIAGF c0 x %d:", qx + dx);
+                    for (float z = c.z + 2.1f; z < c.z + 2.7f; z += vl.cell[2]) {
+                        const int q[3] = { qx + dx, qy, int(std::floor((z - vl.origin[2]) / vl.cell[2])) };
+                        if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] >= vl.width || q[1] >= vl.height || q[2] >= vl.depth) continue;
+                        const size_t i = (size_t(q[2]) * size_t(vl.height) + size_t(q[1])) * size_t(vl.width) + size_t(q[0]);
+                        const double a = va.albedo.size() > 4 * i + 3 ? va.albedo[4 * i + 3] : 0.0;
+                        const float nx = vl.normal.size() > 4 * i ? vl.normal[4 * i] * 2.0f - 1.0f : 0.0f;
+                        const float nz = vl.normal.size() > 4 * i + 2 ? vl.normal[4 * i + 2] * 2.0f - 1.0f : 0.0f;
+                        std::printf(" [z%d c%.2f L%.3f D%.3f n(%.2f,%.2f) cP%.2f/%.2f/%.2f cN%.2f/%.2f/%.2f]", q[2], a,
+                                    a > 0 ? vl.lightFront[4 * i] / a : 0.0, a > 0 && va.direct.size() > 4 * i ? va.direct[4 * i] / a : 0.0,
+                                    nx, nz, va.coverageP[4 * i], va.coverageP[4 * i + 1], va.coverageP[4 * i + 2],
+                                    va.coverageN[4 * i], va.coverageN[4 * i + 1], va.coverageN[4 * i + 2]);
+                    }
+                    std::printf("\n");
+                }
+            }
+            std::printf("   DIAGF voxels c%d (cell %.3f, x cells %d..%d): %d occupied, mean c %.3f | light/c %.6f %.6f %.6f | front/c %.6f "
+                        "%.6f %.6f | back/c %.6f %.6f %.6f | direct/c %.6f %.6f %.6f\n", casc, vl.cell[0], qx - 1, qx, n,
+                        n ? cov / n : 0.0, n ? sL[0] / n : 0.0, n ? sL[1] / n : 0.0, n ? sL[2] / n : 0.0, n ? sF[0] / n : 0.0,
+                        n ? sF[1] / n : 0.0, n ? sF[2] / n : 0.0, n ? sB[0] / n : 0.0, n ? sB[1] / n : 0.0, n ? sB[2] / n : 0.0,
+                        n ? sD[0] / n : 0.0, n ? sD[1] / n : 0.0, n ? sD[2] / n : 0.0);
+        }
+    }
     {
         const GiStatus gb = scene->published().gi;
         out.builtAtB.clear();
@@ -617,6 +719,47 @@ int main()
                     std::max(0.0, std::fabs(double(a.rgb[k]) - double(b.rgb[k])) - std::ldexp(o, -10)) / (0.01 * o);
                 worstP = std::max(worstP, codes);
                 overP += codes > 1.0 ? 1u : 0u;
+            }
+        }
+        {   // DIAG (to remove): the cards only in one, and the common cards moved most
+            for (const auto &kv : inP)
+                if (!inW.count(kv.first))
+                    std::printf("   DIAG6 only in the pinned: node#%d card %u bucket %u size %u lastRelit %llu\n", kv.first.first,
+                                kv.first.second, kv.second->bucket, kv.second->size, kv.second->lastRelit);
+            for (const auto &kv : inW)
+                if (!inP.count(kv.first))
+                    std::printf("   DIAG6 only in the walk: node#%d card %u bucket %u size %u\n", kv.first.first, kv.first.second,
+                                kv.second->bucket, kv.second->size);
+            std::vector<std::pair<double, std::pair<int, unsigned>>> worstCards;
+            for (const auto &kv : inW) {
+                auto it = inP.find(kv.first);
+                if (it == inP.end() || it->second->size != kv.second->size) continue;
+                double wc = 0.0, sa = 0.0, sb = 0.0, wa = 0.0, wb = 0.0;
+                size_t wk = 0;
+                for (size_t k = 0; k < kv.second->rgb.size(); ++k) {
+                    const double o = std::max(double(it->second->rgb[k]), 5.9604645e-6);
+                    const double cc = std::fabs(double(kv.second->rgb[k]) - double(it->second->rgb[k])) / (0.01 * o);
+                    if (cc > wc) { wc = cc; wa = kv.second->rgb[k]; wb = it->second->rgb[k]; wk = k; }
+                    sa += kv.second->rgb[k]; sb += it->second->rgb[k];
+                }
+                if (wc > 2.0) {
+                    const size_t S = kv.second->size, tx = (wk / 3) % S, ty = (wk / 3) / S, ch = wk % 3;
+                    std::printf("   DIAG6 worst texel of node#%d card %u: (texel %zu,%zu ch %zu) walk %.6f pinned %.6f | neighbours walk/pinned:",
+                                kv.first.first, kv.first.second, tx, ty, ch, wa, wb);
+                    for (int dy = -2; dy <= 2; ++dy)
+                        for (int dx = -2; dx <= 2; ++dx) {
+                            const long X = long(tx) + dx, Y = long(ty) + dy;
+                            if (X < 0 || Y < 0 || X >= long(S) || Y >= long(S) || (dx && dy)) continue;
+                            const size_t j = (size_t(Y) * S + size_t(X)) * 3 + ch;
+                            std::printf(" (%+d,%+d) %.4f/%.4f", dx, dy, kv.second->rgb[j], it->second->rgb[j]);
+                        }
+                    std::printf("\n");
+                }
+                worstCards.push_back({ wc, kv.first });
+                if (wc > 1.0)
+                    std::printf("   DIAG6 moved: node#%d card %u bucket %u worst %.1f codes, mean walk %.6f pinned %.6f\n",
+                                kv.first.first, kv.first.second, kv.second->bucket, wc, sa / double(kv.second->rgb.size()),
+                                sb / double(it->second->rgb.size()));
             }
         }
         std::printf("   (6) the teleport pinned to the walk's c1 and c2 placement: at rest in A %d, in B %d | resident: the "

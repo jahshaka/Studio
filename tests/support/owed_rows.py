@@ -61,10 +61,13 @@ def judge(w):
     I = max(1, int(w[0]["cards_indirect_texels"]) // page) if page else 1
     D = int(w[0]["ifd_restart_depth"]) + int(w[0]["ifd_mark_lag"])
     follows0 = int(w[0]["ifd_follows"])
-    arrivals = []   # (window frame, cache frame, the arrivals' newest mark, cards)
+    # (window frame, cache frame, the arrivals' newest mark, cards) - a DEMAND's arrivals: the rest's decision's admission
+    # (its row's cards_decisions moving, R3 (b)) is no demand arrival - its work is judged by its root, 'd'
+    arrivals = []
     for k in range(len(w)):
         got = int(w[k]["cards_admitted"]) - int(w[k - 1]["cards_admitted"]) if k else 0
-        if got > 0:
+        dec_moved = k and int(w[k].get("cards_decisions", "0") or 0) > int(w[k - 1].get("cards_decisions", "0") or 0)
+        if got > 0 and not dec_moved:
             arrivals.append((int(w[k]["frame"]), int(w[k]["cards_frame"]), int(w[k]["cards_arrival_mark"]), got))
     # EACH LEGITIMATE ARRIVAL'S WORK WINDOW: its captures and its indirect at the budgets, queued behind the earlier ones
     windows = []   # (first frame, last frame, the arrival)
