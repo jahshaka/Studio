@@ -46,6 +46,12 @@
 //       re-solve (gi.bounceJacobi, 64 frames; plus that achievable quantum). RED before the scheduler's rule and the share's precision (a period-2
 //       store orbit at the subnormal floor, and the edge toggling 230-1725 steps through a bounce share taken at a
 //       level-0 texel holding one quantum, kept the crowded room's B awake for good).
+//   (8) L1 - A CARD'S PRESENCE MOVES ITS READERS BY UNDER A CODE (PHOTON-7 stage 10): room B's pillar 8's +x face held
+//       resident in one pinned run and absent in another (cards.force); every other card resident in both within a code.
+//       AND THE NO POP: at the held-out run's rest the card is let in, then held out again - no pixel moves more than 1
+//       code a frame through either. DECLARED RED FOR STAGE 8 (its no-pop law for a cache refinement): a card's writes
+//       move the readers' view-wide rest keys, so a held view drops to the settling EMA for as long as the rounds run
+//       (measured: keyMoves 556 -> 637 over 81 frames, 2-3 codes a frame at the interior, 51 at a sub-lattice sliver).
 //   (4) THE ATLAS COMPACTS: a third run teleports from a CROWDED room (a 7 x 3 x 7 grid of 0.8 m cubes: its read set
 //       fills the atlas with quarter-page cards) to room B (whole pages): the arrivals find no free page and the atlas
 //       merges its sub-cut pages (compaction moves > 0, each moved card re-captured), and B comes to rest carded.
@@ -153,15 +159,21 @@ struct Run {
     /// walk's toggling cell c0 67,93,84 - the top front edge of a court box - at B's rest (ok: the cascade holds it)
     bool edgeOk = false, edgeRefOk = false;
     float edge[3] = { 0.f, 0.f, 0.f }, edgeRef[3] = { 0.f, 0.f, 0.f };
+    /// (8)'s NO POP (the held-out run): the card's ARRIVAL then its DEPARTURE at B's rest - the largest change of any
+    /// pixel in one frame through each (display codes), and whether the picture came to rest again after each
+    int popIn = -1, popOut = -1;
+    bool popInRest = false, popOutRest = false;
 };
 /// the edge's world point: the walk's cascade 0 cell 67,93,84 at B (the readback's, spikes/photon-7/stage10/10-2)
 static const float kEdgeWorld[3] = { 12.30f, 4.02f, 4.10f };
 
 bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0,
-             const std::vector<Vec3> *pinTo = nullptr) {
+             const std::vector<Vec3> *pinTo = nullptr, int holdCard = 0) {
     const char *name = crowded ? "residency_crowded" : walk ? "residency_walk" : gatherLate ? "residency_late"
-                                                                         : pinTo ? "residency_pinned"
-                                                                                 : "residency_teleport";
+                                                     : holdCard > 0 ? "residency_held_in"
+                                                     : holdCard < 0 ? "residency_held_out"
+                                                     : pinTo ? "residency_pinned"
+                                                             : "residency_teleport";
     View *view = e->createOffscreenView(name, 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
@@ -177,6 +189,9 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     view->setOffscreenContract(OffscreenContract::StillPicture);
     out.a = buildRoom(scene, Vec3(-12.0f, 0.0f, 0.0f), crowded);
     out.b = buildRoom(scene, Vec3(12.0f, 0.0f, 0.0f));
+    // (8)'s ARMS: room B's pillar 8's +x face (its card 1, the band face the measurements found) HELD resident or absent
+    if (holdCard && out.b.pillars.size() > 8u)
+        e->setArm("cards.force", double(holdCard) * double(unsigned(out.b.pillars[8]) * 64u + 1u));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     const auto look = [&](float x) {
         enginetest::testCameraLookAt(view, Vec3(x, 1.7f, 2.5f), Vec3(x + 0.5f, 1.5f, -2.0f));
@@ -416,6 +431,35 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     out.pagesUsed = g.cards.pagesUsed;
     const bool ok = scene->readCardRadiance(out.cards, out.frame);
     for (const CardRadiance &c : out.cards) out.newest = std::max(out.newest, c.lastRead);
+    if (holdCard < 0 && out.b.pillars.size() > 8u) {
+        // (8)'s NO POP (after the held run's cards are read): at B's rest the held-out card is let IN, then held OUT again -
+        // each transition 120 frames, every frame's picture against the frame before; the arrival and the departure must
+        // never be a step (1 code a frame)
+        const double card = double(unsigned(out.b.pillars[8]) * 64u + 1u);
+        for (int phase = 0; phase < 2; ++phase) {
+            e->setArm("cards.force", phase == 0 ? card : -card);
+            Image prev, cur;
+            bool havePrev = view->readPixels(prev);
+            int worst = 0, quiet = 0;
+            for (int f = 0; f < 120; ++f) {
+                run(1);
+                if (!view->readPixels(cur)) continue;
+                int frameMax = 0;
+                if (havePrev && cur.rgba.size() == prev.rgba.size())
+                    for (size_t i = 0; i < cur.rgba.size(); ++i)
+                        if (i % 4u != 3u) frameMax = std::max(frameMax, std::abs(int(cur.rgba[i]) - int(prev.rgba[i])));
+                worst = std::max(worst, frameMax);
+                quiet = frameMax == 0 ? quiet + 1 : 0;
+                prev.rgba.swap(cur.rgba);
+                prev.width = cur.width;
+                prev.height = cur.height;
+                havePrev = true;
+            }
+            (phase == 0 ? out.popIn : out.popOut) = worst;
+            (phase == 0 ? out.popInRest : out.popOutRest) = quiet >= 30;
+        }
+    }
+    if (holdCard) e->setArm("cards.force", 0.0);
     if (walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
         // (7)'s REFERENCE for the convex edge: the same placement re-solved by THE JACOBI DOOR (gi.bounceJacobi: every
         // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the
@@ -471,6 +515,10 @@ int main()
     const bool okP = runOnce(e, false, pnd, frames, false, 0, &w.builtAtB);
     const bool okC = runOnce(e, false, c, frames, true);
     const bool okL = runOnce(e, false, l, frames, false, 8);
+    // (8) L1: the band face's card held resident in one pinned run and absent in another (cards.force)
+    Run hin, hout;
+    const bool okHin = runOnce(e, false, hin, frames, false, 0, &w.builtAtB, +1);
+    const bool okHout = runOnce(e, false, hout, frames, false, 0, &w.builtAtB, -1);
     std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
                 "compaction moves %llu\n", w.restA, w.restB, w.cards.size(), w.pagesUsed, w.admitted, w.evicted,
                 w.compaction);
@@ -627,6 +675,57 @@ int main()
         CHECK(okP && pnd.restB >= 0 && onlyW == 0u && onlyP == 0u && commonP > 0u && overP == 0u,
               "(6) THE HISTORY PART: the teleport pinned to the walk's placement holds the walk's resident set and its "
               "values within a code");
+    }
+
+    // (8) L1 - A VALUE AT A WORLD POINT IS INDEPENDENT OF A CARD'S RESIDENCY (PHOTON-7 stage 10, the lead's ruling on (3)):
+    //     room B's pillar 8's +x face - the band face whose card the walk and a teleport hold or not - held resident in one
+    //     pinned run and absent in another (cards.force); every OTHER card resident in both within a code. A hit on the
+    //     face reads its card or the voxels there, so the two must agree within the cards' own scatter: a card's arrival or
+    //     departure moves its readers by under a code. (Red with the voxel read along the RAY: 98 codes, the pillar's lit
+    //     -z face read into its +x face; then 5.2 with the read along the hit's normal at the footprint's level - the
+    //     coarse texel's area mean against the card's point value.)
+    {
+        const std::map<NodeId, int> idI = key(hin), idO = key(hout);
+        std::map<std::pair<int, unsigned>, const CardRadiance *> inI, inO;
+        for (const CardRadiance &k : hin.cards) if (idI.count(k.node)) inI[{ idI.at(k.node), k.card }] = &k;
+        for (const CardRadiance &k : hout.cards) if (idO.count(k.node)) inO[{ idO.at(k.node), k.card }] = &k;
+        const int heldId = hin.b.pillars.size() > 8u && idI.count(hin.b.pillars[8]) ? idI.at(hin.b.pillars[8]) : -1;
+        const std::pair<int, unsigned> heldKey{ heldId, 1u };
+        const bool heldIn = inI.count(heldKey) != 0u, heldOut = inO.count(heldKey) == 0u;
+        size_t onlyI = 0, onlyO = 0, both = 0, overH = 0;
+        double worstH = 0.0;
+        for (const auto &kv : inI)
+            if (kv.first != heldKey && !inO.count(kv.first)) ++onlyI;
+        for (const auto &kv : inO)
+            if (!inI.count(kv.first)) ++onlyO;
+        for (const auto &kv : inO) {
+            auto it = inI.find(kv.first);
+            if (it == inI.end() || it->second->size != kv.second->size) continue;
+            ++both;
+            const CardRadiance &a = *kv.second, &b = *it->second;
+            for (size_t k = 0; k < a.rgb.size(); ++k) {
+                const double o = std::max(double(b.rgb[k]), 5.9604645e-6);
+                if (!(a.rgb[k] > 0.0f) && !(b.rgb[k] > 0.0f)) continue;
+                const double codes =
+                    std::max(0.0, std::fabs(double(a.rgb[k]) - double(b.rgb[k])) - std::ldexp(o, -10)) / (0.01 * o);
+                worstH = std::max(worstH, codes);
+                overH += codes > 1.0 ? 1u : 0u;
+            }
+        }
+        std::printf("   (8) the band face's card held resident / absent (pinned): %s / %s | the other cards: %zu only with it, "
+                    "%zu only without, %zu in both: worst %.3f codes, %zu texels over a code\n", heldIn ? "resident" : "NOT resident",
+                    heldOut ? "absent" : "NOT absent", onlyI, onlyO, both, worstH, overH);
+        CHECK(okHin && okHout && hin.restB >= 0 && hout.restB >= 0 && heldIn && heldOut && onlyI == 0u && onlyO == 0u &&
+                  both > 0u && overH == 0u,
+              "(8) L1: A CARD'S PRESENCE MOVES ITS READERS BY UNDER A CODE (the card and the voxel answer agree at its face)");
+        std::printf("   (8) THE NO POP, at B's rest: the card let in - the largest pixel change in one frame %d codes (%s); held out "
+                    "again - %d codes (%s)\n", hout.popIn, hout.popInRest ? "at rest again" : "NOT at rest in 120 frames",
+                    hout.popOut, hout.popOutRest ? "at rest again" : "NOT at rest in 120 frames");
+        // (DECLARED RED FOR STAGE 8: the readers' view-wide rest keys take a card's writes - its capture, its relights, the
+        // departure's re-march - so a held view settles on its EMA while the rounds run; stage 8's per-texel resumes hold
+        // a refined cell's picture and hand the re-rest over in N frames)
+        CHECK(hout.popIn >= 0 && hout.popOut >= 0 && hout.popIn <= 1 && hout.popOut <= 1,
+              "(8) THE NO POP: a card's arrival or departure at rest moves no pixel more than 1 code a frame");
     }
 
     // (4) THE COMPACTION: from the crowded room (its read set in quarter pages) to room B (whole pages): the arrivals find
