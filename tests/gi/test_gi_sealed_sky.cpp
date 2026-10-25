@@ -19,11 +19,17 @@
 //       the walls are two or more of those cells thick) reads under 1 % of R. (The coarser cascades' voxels hold both
 //       faces of a wall in one cell, their sides by orientation, not by inside and outside - the outermost's mix the
 //       sky-lit roof with the ceiling: 10-1's evidence, spikes/photon-7/stage10/10-1.)
+//   (4) THE FIELD - the field on (every shipped tier runs it): every probe whose lattice point lies inside the room
+//       holds no texel of 1 % of R (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
+//       aperture-0 march's escape let the sky through the walls (10-0's P3).
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
 // and the bounce's mean of a voxel's two sides, which let half of each sky-lit outer face light the inside).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+
+#include <cstdint>
+#include <cstring>
 
 #include <algorithm>
 #include <cmath>
@@ -102,7 +108,7 @@ int main()
             run(1);
             const GiStatus g = scene->published().gi;
             const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
-                               g.cards.admitted == admitted && g.cards.queueLength == 0u;
+                               g.cards.admitted == admitted && g.cards.queueLength == 0u && !g.ifdWorking;
             relights = g.cards.relights;
             admitted = g.cards.admitted;
             quiet = still ? quiet + 1 : 0;
@@ -183,7 +189,7 @@ int main()
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = tiers[t];
-        gi.ddgi = GiToggle::Off;
+        gi.ddgi = GiToggle::On;
         gi.cards = true;
         gi.bounces = true;
         gi.updateBudget = 0;
@@ -255,6 +261,53 @@ int main()
         }
         check(vOk && R > 0.0 && vWorst < 0.01 * R,
               "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads 1 % of the roof's");
+        // (4) THE FIELD's probes inside the room (gi.field_oracle's slot rule: the window's slot to its lattice point)
+        {
+            const GiStatus st = scene->published().gi;
+            GiFieldAtlas a;
+            unsigned inside = 0u, above = 0u;
+            double fWorst = 0.0, fAbove = 0.0;
+            const bool fok = st.ifdBound && scene->giFieldAtlas(a) && a.available && a.irradBytesPerTexel == 8u;
+            if (fok) {
+                const unsigned count = a.probes[0] * a.probes[1] * a.probes[2], res = a.irradBordered - 2u;
+                const float sz[3] = { st.ifdMax.x - st.ifdMin.x, st.ifdMax.y - st.ifdMin.y, st.ifdMax.z - st.ifdMin.z };
+                const float o0[3] = { st.ifdMin.x, st.ifdMin.y, st.ifdMin.z };
+                for (unsigned p = 0; p < count; ++p) {
+                    const unsigned sl[3] = { p % a.probes[0], (p / a.probes[0]) % a.probes[1], p / (a.probes[0] * a.probes[1]) };
+                    float wp[3];
+                    for (int k = 0; k < 3; ++k) {
+                        const unsigned n = a.probes[k];
+                        const unsigned local = (sl[k] + n - a.windowOffset[k] % n) & (n - 1u);
+                        const float block = sz[k] / float(n), spacing = (sz[k] + 2.0f * block) / float(n);
+                        wp[k] = o0[k] - block + float(local) * spacing;
+                    }
+                    const bool in = std::fabs(wp[0]) < 2.0f && std::fabs(wp[2]) < 2.0f && wp[1] > 0.0f && wp[1] < 3.0f;
+                    const bool up = wp[1] > 4.5f;   // the control: open sky above the box
+                    if (!in && !up) continue;
+                    ++(in ? inside : above);
+                    double &worstHere = in ? fWorst : fAbove;
+                    const unsigned x0 = (p * a.irradBordered) % a.irradWidth + 1u;
+                    const unsigned y0 = ((p * a.irradBordered) / a.irradWidth) * a.irradBordered + 1u;
+                    for (unsigned t = 0; t < res * res; ++t) {
+                        const unsigned x = x0 + t % res, y = y0 + t / res;
+                        uint16_t h[4];
+                        std::memcpy(h, &a.irradiance[(size_t(y) * a.irradWidth + x) * 8u], sizeof(h));
+                        for (int c = 0; c < 3; ++c) {
+                            // a half's bits to its value (normal, subnormal; the field holds no Inf or NaN here)
+                            const int ex = (h[c] >> 10) & 0x1f, man = h[c] & 0x3ff;
+                            const double v = ex ? std::ldexp(1.0 + man / 1024.0, ex - 15) : std::ldexp(man / 1024.0, -14);
+                            worstHere = std::max(worstHere, (h[c] & 0x8000) ? -v : v);
+                        }
+                    }
+                }
+            }
+            std::printf("   (4) the field: bound %d, %u probes inside the room, the brightest texel %.6f (%.4f %% of R); "
+                        "the control, %u probes in the open above, the brightest %.4f\n",
+                        int(st.ifdBound), inside, fWorst, R > 0.0 ? 100.0 * fWorst / R : -1.0, above, fAbove);
+            check(fok && above > 0u && fAbove > 0.5, "(4) the control: the field's probes in the open above the box hold the sky");
+            check(fok && inside > 0u && R > 0.0 && fWorst < 0.01 * R,
+                  "(4) THE FIELD: no probe inside the sealed room holds 1 % of the roof's");
+        }
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
