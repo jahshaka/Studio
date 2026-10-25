@@ -1272,6 +1272,7 @@ bool Session::monitor(const Command &c)
     // whose march through the cascades ran in the same dispatch) and captured are the host's own.
     std::map<unsigned long long, std::map<std::string, double>> countsOf;   // engine frame -> name -> count
     std::vector<unsigned long long> prevBricks, prevPasses, prevMarched;
+    std::map<std::string, unsigned long long> prevCommit;   // the scroll commits' cumulative cells, by count name
     const auto counts = [&](unsigned long long frameNo) {
         const GiStatus &g = mScene->published().gi;
         auto &m = countsOf[frameNo];
@@ -1292,6 +1293,15 @@ bool Session::monitor(const Command &c)
             const double mv = double(cs.deltaMarched - std::min(prevMarched[i], cs.deltaMarched));
             m["count:vct.bricks_passed" + std::to_string(i)] = b;
             m["count:vct.inject_marched" + std::to_string(i)] = mv;
+            // A SCROLL COMMIT's SLAB AND ITS INJECTION (PHOTON-7's hitch table): the entering slabs' cells and the cells its
+            // direct term was computed over, read back a few frames late like the march (GiStatus commitSlabCells / Inject)
+            const auto commitDelta = [&](const std::string &name, unsigned long long now) {
+                const auto it = prevCommit.find(name);
+                m[name] = it == prevCommit.end() ? 0.0 : double(now - std::min(it->second, now));
+                prevCommit[name] = now;
+            };
+            commitDelta("count:vct.commit_slab" + std::to_string(i), cs.commitSlabCells);
+            commitDelta("count:vct.commit_inject" + std::to_string(i), cs.commitInjectCells);
             bricks += b;
             marched += mv;
             prevBricks[i] = cs.feedbackBricksRan;
