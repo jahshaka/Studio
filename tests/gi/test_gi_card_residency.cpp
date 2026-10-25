@@ -39,6 +39,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <map>
 #include <memory>
 #include <string>
@@ -129,6 +131,7 @@ struct Run {
     Room a, b;
 };
 
+static std::vector<Vec3> g_walkBuilt;   // S10 arm: the walk's placements at B
 bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0) {
     const char *name = crowded ? "residency_crowded" : walk ? "residency_walk" : gatherLate ? "residency_late"
                                                                                           : "residency_teleport";
@@ -190,7 +193,34 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         return quiet >= 90 ? f - quiet : -1;
     };
     look(-12.0f);
+    if (std::getenv("P7_SKYKICK")) { float sh0[27] = { 0 }; scene->setAmbientSh(sh0); }
     if (!scene->setGlobalIllumination(gi)) return false;
+    // S10 P2's ARM (the scratch tree only): the cascades pinned at room B's eye from the start, both runs alike
+    if (const char *pinArm = std::getenv("P7_PIN")) {
+        GiPlacementPin pin;
+        pin.on = true;
+        const Vec3 at(12.0f, 1.7f, 2.5f);
+        const std::string m(pinArm);
+        pin.cascadeBuiltCam.assign(m == "c012" ? 3u : 4u, at);
+        if (m == "c3") pin.cascadeFree = { 1u, 1u, 1u, 0u };
+        if (m == "c23") pin.cascadeFree = { 1u, 1u, 0u, 0u };
+        if (m == "c12") pin.cascadeFree = { 1u, 0u, 0u, 1u };
+        scene->setGiPlacementPin(pin);
+        std::printf("   S10 P2 pin arm %s\n", pinArm);
+    }
+    // S10 MECHANISM ARM: the teleport takes the WALK's final placement for the named cascades (built there, no scroll
+    // history), the walk runs free - placement against history
+    if (const char *pw = std::getenv("P7_PINWALK")) {
+        if (!walk && !crowded && !gatherLate && g_walkBuilt.size() >= 4u) {
+            GiPlacementPin pin;
+            pin.on = true;
+            pin.cascadeBuiltCam = g_walkBuilt;
+            const std::string m(pw);
+            pin.cascadeFree = { 1u, m == "c12" ? 0u : 1u, 0u, 1u };
+            scene->setGiPlacementPin(pin);
+            std::printf("   S10 teleport pinned to the walk's placement (%s)\n", pw);
+        }
+    }
     e->waitForAsyncShaders();
     out.restA = settle();
     if (gatherLate) e->setArm("cards.gatherLate", double(gatherLate));   // (5): the gather reads first N frames late
@@ -224,6 +254,29 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         }
     }
     out.restB = settle();
+    {   // S10 arm: the placements at B
+        const GiStatus g = scene->published().gi;
+        if (walk && !crowded && !gatherLate) {
+            g_walkBuilt.clear();
+            for (const auto &cs : g.cascades) g_walkBuilt.push_back(cs.builtCam);
+        }
+        for (size_t i = 0; i < g.cascades.size(); ++i)
+            std::printf("   S10 %s at B: cascade %zu centre (%.3f %.3f %.3f) half %.2f cell %.4f\n", walk ? "walk" : "teleport", i,
+                        g.cascades[i].centre.x, g.cascades[i].centre.y, g.cascades[i].centre.z, g.cascades[i].halfSize,
+                        g.cascades[i].cell);
+    }
+    if (std::getenv("P7_SKYKICK")) {
+        // S10 MECHANISM ARM: every card's indirect re-gathered at the final placement (the sky's change: every card's
+        // indirect), then the sky restored and every card re-gathered again
+        float sh1[27] = { 0 };
+        sh1[0] = sh1[1] = sh1[2] = 1e-3f;
+        scene->setAmbientSh(sh1);
+        settle();
+        float sh0[27] = { 0 };
+        scene->setAmbientSh(sh0);
+        settle();
+        std::printf("   S10 sky kick done (%s)\n", walk ? "walk" : "teleport");
+    }
     if (gatherLate) e->setArm("cards.gatherLate", 0.0);
     const GiStatus g = scene->published().gi;
     out.evicted = g.cards.evicted;
