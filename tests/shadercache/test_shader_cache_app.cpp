@@ -94,6 +94,10 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     // — we assert compile COUNTS, not wall time — but pinning it keeps the
     // suite from writing into the user's real cache directory.
     env.insert("XDG_CACHE_HOME", home + "/cache");
+    // THE DATA ROOT'S CACHE IS THIS ROW'S SUBJECT, never the build's seed (COLD-BOOT-1 S1): a build whose bin/ carries
+    // a shadercache-seed would serve run 1's and run 3's "cold" launches from it (compiled 0, microcodeLoaded true).
+    // The seed's own rows are shadercache.seed and shadercache.seed_boot.
+    env.insert("JAHSHAKA_SHADER_SEED", "none");
     app.setProcessEnvironment(env);
     app.setWorkingDirectory(home + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
