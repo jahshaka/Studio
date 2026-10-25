@@ -690,7 +690,7 @@ jah_gpu_row(gi.sealed_sky CLASS engine COMMAND test_gi_sealed_sky
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_sky PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 337)
+set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 469)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
