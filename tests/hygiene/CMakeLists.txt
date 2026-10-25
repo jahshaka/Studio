@@ -177,6 +177,13 @@ if(Python3_Interpreter_FOUND)
     jah_ship_row(gate.selection)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(gate.selection PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
+    # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
+    # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is
+    # served-red; an ancestor's red runs; a PASS serves as before; NOTRUN / NOADMIT are not results). No build, no git.
+    add_test(NAME gate.serve_red
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_serve_red.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(gate.serve_red PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(gate.serve_red)
     # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
     # R1 every measuring row is inside the GPU lock; R2 every stage-close row is priced; R3 no
     # copied `ctest -LE` tier; R4 no RUN_SERIAL without its verdict; R5 every app/lint row has a

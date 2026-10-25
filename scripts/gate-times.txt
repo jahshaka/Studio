@@ -57,6 +57,7 @@ frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stag
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
+gate.serve_red 0.10  solo, CPU only (URGENT #54, 2026-10-25: ci_gate_check serve's served-red decision on synthetic records)
 gi.card_sun_lift 1.92  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A finding 3, 2026-10-23: one engine fixture, a convex carded cap, 49 frames)
 gi.cascades_asan 23.23  quiet n=41
 gi.directional_seam 7.11  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F2, 2026-10-23; the High chain, the reader parity harness's axis read, a roofed strip)
