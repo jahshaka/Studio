@@ -70,6 +70,47 @@ jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom 
 set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 1200 LABELS "shadercache"
     FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)
 
+# THE SHIPPED MICROCODE SEED (COLD-BOOT-1 S1; EngineConfig::shaderCacheSeedDir, <exe dir>/shadercache-seed): a build's
+# own warm microcode layer, read only when a launch's cache holds none at this build's key, never written.
+# shadercache.seed — the CONTRACT at the engine, every branch an engine cycle on real directories (test_shader_seed.cpp's
+# header): off / made by scripts/shadercache/make-seed.sh / loaded (0 compiled) / unused / stale / corrupt / absent, the
+# seed byte-identical after them all. 6 cycles x 3 frames.
+add_executable(test_shader_seed test_shader_seed.cpp)
+set_target_properties(test_shader_seed PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_shader_seed PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_shader_seed PRIVATE JahshakaEngine)
+add_dependencies(test_shader_seed JahshakaEngineMedia)
+jah_gpu_row(shadercache.seed CLASS engine FRAMES 18
+         COLD "the seed and the cache are the subject — the suite states its own directories and attacks them"
+         COMMAND test_shader_seed WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.seed PROPERTIES TIMEOUT 60 LABELS "shadercache")
+# shadercache.seed_boot.twin + shadercache.seed_boot — THE ACCEPTANCE at the app (test_shader_seed_boot.cpp's header): a
+# virgin data root and HOME, the startup gate cold (the twin, whose saved cache make-seed.sh turns into the seed) and
+# seeded (glslang <= 5 % of the twin's count, the seed byte-identical after), the gate's wall and longest stall printed
+# side by side. A FIXTURE PAIR: a cold boot is ~29 s and a seeded one ~23 s, one row holding both would sit at the cap.
+# FRAMES: the B3 meter (spikes/testing-speed-b3/framecount) on the builder's first green run, 2026-10-25 — 446 / 445.
+add_executable(test_shader_seed_boot test_shader_seed_boot.cpp)
+set_target_properties(test_shader_seed_boot PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_shader_seed_boot PRIVATE Qt6::Core)
+target_compile_definitions(test_shader_seed_boot PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+jah_gpu_row(shadercache.seed_boot.twin CLASS app TIER document FRAMES 446 COMMAND test_shader_seed_boot --twin
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.seed_boot.twin PROPERTIES TIMEOUT 120 LABELS "shadercache"
+    FIXTURES_SETUP shaderSeedBoot)
+jah_gpu_row(shadercache.seed_boot CLASS app TIER document FRAMES 445 COMMAND test_shader_seed_boot
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.seed_boot PROPERTIES TIMEOUT 120 LABELS "shadercache"
+    FIXTURES_REQUIRED shaderSeedBoot DEPENDS shadercache.seed_boot.twin)
+
 # shader.async_soak (archived: archive/tests/shader) (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.
 # STAGE-CLOSE (TESTING-SPEED-B3): the soak is the ship's; shader.async_after_open is the merge tier's guard of

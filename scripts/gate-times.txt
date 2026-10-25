@@ -179,6 +179,9 @@ settings.store 0.56  quiet n=12
 shader.async_after_open 28.57  solo 2026-10-20 (TOOLING-7: the seed split out; 64.06 s solo before on the same fresh tree, the seed made inside the row)
 shader.async_after_open.seed 28.22  solo 2026-10-20 (TOOLING-7: the seed-MAKING run, a fresh tree; a tree that has its seed answers in ~0 s)
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.seed 5.74  solo 2026-10-25 (COLD-BOOT-1 S1, the builder's first green run on its tree, the card held)
+shadercache.seed_boot 23.24  solo 2026-10-25 (COLD-BOOT-1 S1: the seeded boot alone; its twin is the fixture)
+shadercache.seed_boot.twin 28.37  solo 2026-10-25 (COLD-BOOT-1 S1: the cold twin + make-seed.sh)
 shadergraph.emitter_parity 3.14  quiet n=47
 shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shell.contract 0.00  ship 3a0422b4e (2026-10-13)
