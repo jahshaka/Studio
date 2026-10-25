@@ -60,7 +60,7 @@ gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has 
 gate.serve_red 0.10  solo, CPU only (URGENT #54, 2026-10-25: ci_gate_check serve's served-red decision on synthetic records)
 gate.reach_cache 3.47  solo, CPU only, cold cache (URGENT #57, the builder's half, 2026-10-25: ci_gate_check serve's per-ancestor reach cached on disk; two ancestors of HEAD computed fresh and read back; warm 1.5 s)
 gi.card_sun_lift 1.92  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A finding 3, 2026-10-23: one engine fixture, a convex carded cap, 49 frames)
-gi.cascades_asan 23.23  quiet n=41
+gi.cascades_asan 33.4  solo, photon-7 stage 10 2026-10-25 (case 12: three poses + the fresh-build oracle, +850 frames)
 gi.directional_seam 7.11  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F2, 2026-10-23; the High chain, the reader parity harness's axis read, a roofed strip)
 gi.shell_ends 2.75  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F1, 2026-10-23: the four desktop tiers' chains, every cascade's shell list)
 gi.voxel_ray_wall 1.71  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 10-1, 2026-10-25: the caches' occupancy ray - a short wall in the outer cascade swept 0-85 degrees, the edge cell, the side read, the origin plane; one fixture, 93 frames)

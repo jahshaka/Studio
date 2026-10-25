@@ -70,11 +70,12 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
-    # (TIMEOUT 60, the law's cap: every test under a minute - priced 23.23 s, 1966 frames under the sanitizer)
+    # (TIMEOUT 60, the law's cap: every test under a minute - priced 33.4 s, 2816 frames under the sanitizer; PHOTON-7
+    # stage 10's case 12: three poses, each with a fresh build as its oracle, +850 frames)
     set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 60 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1966)
+    set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 2816)
 endif()
 
 # THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the

@@ -1117,52 +1117,109 @@ int main()
     // rig measured that on the shipped arm at 960x540 as **max 152/255 with
     // 86,653 pixels at or above 10** — 16.7 % of the frame.
     //
-    // Under the chain the answer is affordable per frame, so it is taken per
-    // frame: the mover's box marks the cascades it reaches and the scheduler
-    // spends one of them. The measurement is a DIFF — the last frame of the
-    // gesture against the SAME POSE at rest. If the voxels follow the object,
-    // the two are the same picture.
+    // Under the chain the mover's box marks the cascades it reaches and the
+    // scheduler spends them. Two measurements: the last frame of the motion
+    // against the SAME POSE at rest, and the rest against the oracle below.
     //
     // (The monolithic arm is deliberately NOT asserted here: what to do about it
     // is the owner's decision, not this suite's.)
+    //
+    // THE ORACLE (PHOTON-7 stage 10, 2026-10-25): the rest picture is compared with a FRESH BUILD of the chain at the
+    // final pose (GI off, then on) - "after the motion stops, the picture equals a fresh rest of the final scene". The
+    // motion-against-rest diff alone was a FALSE GREEN: the walk's moved test read the world box only (giAabbMoved, a
+    // size/64 quantum), a yaw moves a cube's box as cos t + sin t - flat at 45 degrees - so the marks thinned out and
+    // stopped at 35 degrees, and the voxels held the cube at 35 degrees while it stood at 59, at rest too, for ever
+    // (rest against the fresh build 209 / 226 / 185 codes at the three poses below, 2,000-4,700 px; motion against rest
+    // 6-16 codes because both held the same stale copy). The walk now sees ANY affine change - the item's local-box
+    // corners carried by the recorded and the current world transform (giPoseMoved: 82-86 codes left, the last
+    // sub-quantum pose) - and REST IS EXACT: an item off its record by less than the quantum is read again by the next
+    // walk and marked once when it has stopped (walkItems' giMove: 1 code, 0 px).
+    // THREE POSES of cascade 0's box against the turner: a CORNER (two of its faces cut the turner's footprint), ONE
+    // face, NO face - the precondition is checked, so a placement change that moves a pose fails loudly here.
+    // THE MOTION LAW (motion against rest within 16 codes, none off by 10) is STAGE 8's (PHOTON-7 stage 8, the region
+    // rebuild: a moving item's regions in every cascade it reaches within the same frame budget). With every rotation
+    // marked, cascade 0's reserved slot rebuilds it every frame and the one-writer rule holds cascades 1..3's whole
+    // rebuilds for the whole motion (cascade 1: none in 60 frames) - the box in cascade 0 at the live pose, the rest at
+    // the pose before it moved. DECLARED RED until stage 8 (measured 174 / 233 / 143 codes, 1,298 / 2,765 / 1,962 px).
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
-        view->setCamera(enginetest::testCameraDescLookAt(Vec3(4.0f, 3.0f, 6.0f),
-                                                         Vec3(0.0f, 1.0f, 0.0f)));
-        const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
-        enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
-        enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
-        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the gesture");
-        render(e, 60);
-        // 60 frames of rotation, one frame each — the gesture.
-        const auto yaw = [&](float deg) {
-            const float r = deg * 3.14159265358979323846f / 180.0f * 0.5f;
-            const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
-            scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
+        struct Pose { const char *name; Vec3 cam; int faces; };
+        const Pose poses[3] = { { "corner",   Vec3(4.0f, 3.0f, 6.0f), 2 },
+                                { "one face", Vec3(2.5f, 3.0f, 6.0f), 1 },
+                                { "no face",  Vec3(2.5f, 3.0f, 2.5f), 0 } };
+        const auto diffOf = [&](const Image &a, const Image &b, int &worst, unsigned &over10) {
+            worst = 0; over10 = 0;
+            for (unsigned y = 0; y < kSize; ++y)
+                for (unsigned x = 0; x < kSize; ++x) {
+                    const Colour p = a.at(x, y), q = b.at(x, y);
+                    const int d = int(std::max(std::max(std::fabs(p.r - q.r), std::fabs(p.g - q.g)),
+                                               std::fabs(p.b - q.b)) * 255.0f + 0.5f);
+                    worst = std::max(worst, d);
+                    if (d >= 10) ++over10;
+                }
         };
-        for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
-        Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
-        // ...and the SAME POSE at rest, after everything has caught up.
-        render(e, 120);
-        Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
-        int worstDiff = 0; unsigned over10 = 0;
-        for (unsigned y = 0; y < kSize; ++y)
-            for (unsigned x = 0; x < kSize; ++x) {
-                const Colour a = motion.at(x, y), b = rest.at(x, y);
-                const int d = int(std::max(std::max(std::fabs(a.r - b.r), std::fabs(a.g - b.g)),
-                                           std::fabs(a.b - b.b)) * 255.0f + 0.5f);
-                worstDiff = std::max(worstDiff, d);
-                if (d >= 10) ++over10;
+        // The turner's footprint over the whole motion: a 2 m cube about the vertical, half-diagonal sqrt 2.
+        const float reach = 1.41422f;
+        for (const Pose &pose : poses) {
+            view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
+            const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
+            enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
+            enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
+            CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the motion");
+            render(e, 60);
+            int faces = 0;
+            {
+                const GiStatus g = scene->published().gi;
+                if (!g.cascades.empty()) {
+                    const auto &c0 = g.cascades[0];
+                    const float lo[2] = { c0.centre.x - c0.halfSize, c0.centre.z - c0.halfSize };
+                    const float hi[2] = { c0.centre.x + c0.halfSize, c0.centre.z + c0.halfSize };
+                    for (int k = 0; k < 2; ++k) {
+                        if (lo[k] > -reach && lo[k] < reach) ++faces;
+                        if (hi[k] > -reach && hi[k] < reach) ++faces;
+                    }
+                    std::printf("   [%s] camera %.1f %.1f %.1f: cascade 0 at %.2f %.2f %.2f, half %.2f m - %d of its faces "
+                                "cut the turner\n", pose.name, pose.cam.x, pose.cam.y, pose.cam.z,
+                                c0.centre.x, c0.centre.y, c0.centre.z, c0.halfSize, faces);
+                }
             }
-        std::printf("   motion vs rest: max %d/255, %u px >= 10 of %u "
-                    "(the monolithic arm measured 152 and 86,653 at 960x540)\n",
-                    worstDiff, over10, kSize * kSize);
-        CHECK(worstDiff <= 16, "the moving object is lit at the pose it is IN, not the one it left");
-        CHECK(over10 == 0, "...with not one pixel off by 10");
-        GiParams down; down.mode = GiMode::Off;
-        CHECK(scene->setGlobalIllumination(down), "the gesture's chain comes down");
-        render(e, 2);
-        scene->removeNode(turner);
+            CHECK(faces == pose.faces, "the pose is the one named (cascade 0's faces across the turner)");
+            // 60 frames of rotation, one degree a frame - a scripted mover (no host gesture: an edit every frame).
+            const auto yaw = [&](float deg) {
+                const float r = deg * 3.14159265358979323846f / 180.0f * 0.5f;
+                const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
+                scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
+            };
+            for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
+            Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
+            // ...the SAME POSE at rest, after everything has caught up...
+            render(e, 120);
+            Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
+            // ...and THE ORACLE: the chain built fresh at that pose.
+            GiParams off; off.mode = GiMode::Off;
+            CHECK(scene->setGlobalIllumination(off), "the chain comes down for the fresh build");
+            render(e, 2);
+            CHECK(scene->setGlobalIllumination(cascadeGi()), "...and is built fresh at the final pose");
+            render(e, 120);
+            Image truth; CHECK(view->readPixels(truth), "the fresh build reads back");
+            int restMax = 0, motionMax = 0, motionTruthMax = 0;
+            unsigned restOver = 0, motionOver = 0, motionTruthOver = 0;
+            diffOf(rest, truth, restMax, restOver);
+            diffOf(motion, rest, motionMax, motionOver);
+            diffOf(motion, truth, motionTruthMax, motionTruthOver);
+            std::printf("   [%s] rest vs the fresh build: max %d/255, %u px >= 10; motion vs rest: max %d/255, %u px >= 10; "
+                        "motion vs the fresh build: max %d/255, %u px >= 10 (of %u; the monolithic arm measured 152 and "
+                        "86,653 at 960x540)\n", pose.name, restMax, restOver, motionMax, motionOver, motionTruthMax,
+                        motionTruthOver, kSize * kSize);
+            CHECK(restMax <= 1 && restOver == 0,
+                  "AT REST THE OBJECT IS LIT AT THE POSE IT IS IN: the picture equals a fresh build there (within a code)");
+            // STAGE 8's (declared red until its region rebuild: see the head of the case).
+            CHECK(motionMax <= 16, "the moving object is lit at the pose it is IN, not the one it left");
+            CHECK(motionOver == 0, "...with not one pixel off by 10");
+            CHECK(scene->setGlobalIllumination(off), "the motion's chain comes down");
+            render(e, 2);
+            scene->removeNode(turner);
+        }
     }
 
     // =====================================================================

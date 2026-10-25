@@ -323,9 +323,9 @@ endif()
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "decals.engine=60"
-        "test_engine=2882"
+        "test_engine=2903"              # +21: the monitor reason case's L turned in its own box (PHOTON-7 stage 10)
         "test_engine_asan.part1=490"    # TEST-CUT-1: its plain twin's half (test_engine --part 1/2, the meter, 2026-10-20)
-        "test_engine_asan.part2=2416"   # (test_engine --part 2/2: the heavy-frame and the monitor cases are here)
+        "test_engine_asan.part2=2437"   # (test_engine --part 2/2: the heavy-frame and the monitor cases are here; +21 the L)
         "test_engine_recreate=48"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")

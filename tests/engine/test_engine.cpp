@@ -1320,6 +1320,24 @@ MeshData unitCubeData() {
     return d;
 }
 
+/// An L in the unit box [-0.5, 0.5]^3: a bar across the back half (z < 0) and a leg in the front-left quarter - its
+/// bounding box centred on the origin, so a 180 degree turn about y keeps the box and moves the shape.
+MeshData lShapeData() {
+    MeshData d;
+    const MeshData cube = unitCubeData();
+    const float pieces[2][6] = { { 1.0f, 1.0f, 0.5f,   0.0f,  0.0f, -0.25f },     // scale xyz, offset xyz
+                                 { 0.5f, 1.0f, 0.5f, -0.25f,  0.0f,  0.25f } };
+    for (const auto &pc : pieces) {
+        const unsigned base = unsigned(d.positions.size() / 3);
+        for (size_t i = 0; i < cube.positions.size(); i += 3)
+            for (int k = 0; k < 3; ++k) d.positions.push_back(cube.positions[i + k] * pc[k] + pc[3 + k]);
+        d.normals.insert(d.normals.end(), cube.normals.begin(), cube.normals.end());
+        d.uvs.insert(d.uvs.end(), cube.uvs.begin(), cube.uvs.end());
+        for (unsigned idx : cube.indices) d.indices.push_back(base + idx);
+    }
+    return d;
+}
+
 void shadows_darken_the_ground() {
     Fixture fx;
     View *v = fx.view("shadow-view", 96, 96, kBlue); REQUIRE(v);
@@ -6026,6 +6044,32 @@ void monitor_records_work_with_its_reason() {
                 casterRelit = true;
     CHECK_MSG(casterRelit, "a caster that moved inside a lamp's reach dirties it with reason Caster");
     recs.clear();
+
+    // (2b) A CASTER TURNED INSIDE ITS OWN BOX -> the same, reason Caster (PHOTON-7 stage 10, 2026-10-25). An L turned
+    //      180 degrees about its box's centre keeps its world box to the float and casts a different shadow; the caster
+    //      walk's box test alone never saw it (EnginePrivate.h localBoxCornersMoved: the corners of its local box).
+    {
+        const MeshId ellMesh = rig.s->createMesh(lShapeData());
+        PbrParams grey; grey.albedo = Colour(0.6f, 0.6f, 0.6f); grey.roughness = 0.9f;
+        const NodeId ell = rig.s->createNode();
+        rig.s->attachMesh(ell, ellMesh, rig.s->createPbrMaterial(grey));
+        rig.s->setNodeTransform(ell, Vec3(1.2f, 0.6f, -1.0f), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+        renderAndFlush(fx.e, 6);        // its arrival is a change of its own
+        fx.e->popMonitorRecords(recs); recs.clear();
+        rig.s->setNodeTransform(ell, Vec3(1.2f, 0.6f, -1.0f), Quat(0.0f, 1.0f, 0.0f, 0.0f), Vec3(0.8f, 0.8f, 0.8f));
+        renderAndFlush(fx.e, 1);
+        fx.e->popMonitorRecords(recs);
+        bool turnRelit = false;
+        for (const MonitorRecord &r : recs)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::ShadowMap && w.reason == WorkReason::Caster)
+                    turnRelit = true;
+        CHECK_MSG(turnRelit, "a caster turned inside its own box (an L, 180 degrees) dirties the lamp's map with reason Caster");
+        recs.clear();
+        rig.s->removeNode(ell);
+        renderAndFlush(fx.e, 2);
+        fx.e->popMonitorRecords(recs); recs.clear();
+    }
 
     // (3) AN IDLE STRETCH -> nothing the caches redo carries a reason of `None`
     //     here, because at rest nothing should redo anything. If it DOES, the
