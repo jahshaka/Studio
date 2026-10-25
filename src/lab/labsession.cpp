@@ -1361,8 +1361,10 @@ bool Session::monitor(const Command &c)
         // A ROW'S OWN TIME where it encloses others (self:<name>, the work none of its children names) and whether it
         // SUBMITTED inside it (submitted:<name>=1: its own time holds the GPU's wait for the CPU, a bubble)
         // ...and an OVERRUN (overrun:<name>=ms): its children sum past it beyond the rounding - an overlap or a double count
-        const auto selfOf = [&](const std::string &n, float ms, float self, bool measured, bool submitted) {
+        // ...and staging:<name>=1 when the UPLOAD STAGING submitted inside its own stretches (the submission's cause)
+        const auto selfOf = [&](const std::string &n, float ms, float self, bool measured, bool submitted, bool staging) {
             if (submitted) names[word("submitted:" + n)] = 1.0;   // a leaf too: its time holds a bubble
+            if (staging) names[word("staging:" + n)] = 1.0;
             if (!measured || ms < 0.0f) return;
             if (self < 0.0f) { names[word("overrun:" + n)] += -double(self); return; }
             if (double(ms) - double(self) < 1e-4) return;   // a leaf: its own time IS its time
@@ -1372,7 +1374,7 @@ bool Session::monitor(const Command &c)
             if (p.gpuMs < 0.0f) continue;   // not measured (never faked as 0)
             const std::string n = (p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass;
             names[word(n)] += p.gpuMs;
-            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted);
+            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted, p.selfStaging);
             if (p.topLevel) passes += p.gpuMs;
         }
         std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
@@ -1395,7 +1397,7 @@ bool Session::monitor(const Command &c)
             }
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
             selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfMeasured,
-                   w.selfSubmitted);
+                   w.selfSubmitted, w.selfStaging);
             if (w.topLevel) rows += w.gpuMs;
         }
         dropped += r.gpuMarksDropped;
@@ -1405,9 +1407,13 @@ bool Session::monitor(const Command &c)
                                    ? passes + rows + double(r.unattributedGpuMs) - busy : std::nan("");
         if (busy < 0.0) ++unmeasured;
         std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f unattr %.4f overlap %.4f "
-                          "dropped %u rebuilds %u compiles %u wall %.2f gap %.4f %s |", index, r.frame,
+                          "dropped %u rebuilds %u compiles %u wall %.2f sflush %u swrap %u swait %u swaitsub %u swaitms %.3f "
+                          "skb %.0f qflush %u qfenced %u qdrain %u qdrainms %.3f gap %.4f %s |", index, r.frame,
                      double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows, double(r.unattributedGpuMs), overlap,
-                     r.gpuMarksDropped, r.cascadeRebuilds, r.shaderCompiles, double(r.totalMs), double(r.widestGapMs),
+                     r.gpuMarksDropped, r.cascadeRebuilds, r.shaderCompiles, double(r.totalMs), r.stagingFlushes,
+                     r.stagingWraps, r.stagingWaits, r.stagingWaitSubmits, double(r.stagingWaitMs),
+                     double(r.stagingBytes) / 1024.0, r.queueFlushes, r.queueFencedFlushes, r.queueSelfDrains,
+                     double(r.queueSelfDrainMs), double(r.widestGapMs),
                      r.widestGap.empty() ? "-" : word(r.widestGap).c_str());
         for (const auto &kv : names) {
             std::fprintf(out, " %s=%.4f", kv.first.c_str(), kv.second);
