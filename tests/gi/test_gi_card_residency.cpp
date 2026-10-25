@@ -18,11 +18,18 @@
 //       RESIDENT SET (the spec's acceptance) down to the demand settle's law (GiQualityFacts::cardDemandSettleFrames:
 //       a face read less may arrive in one run and not the other - counted, printed);
 //   (3) THE VALUES, printed: every lit texel of every card resident in both runs against the other run's, in codes
-//       (1 % of its radiance per channel over the store's floor) past one step of the R11G11B10F store. NOT YET A LAW:
+//       (1 % of its radiance per channel over the store's floor) past one step of the RGBA16F store (PHOTON-7 stage 10,
+//       10-2d: the radiance store's quantum under the code). NOT YET A LAW:
 //       the cascades' placements at one pose are path-dependent (the scroll's hysteresis: after the walk c1-c3 trail the
 //       eye), and what a card's marched indirect reads depends on where the boxes stand. The cone shells landed
 //       (0b8ba090) and did not remove it - a diffuse cone already hands over by its footprint (the premise measured
 //       false); the remainder is STORE-PLACEMENT-1's, whose fix makes this a law (the spec's cone-shell item).
+//   (6) THE HISTORY PART OF walk = teleport (PHOTON-7 stage 10, 10-2d; the lead's ruling: residency is path-independent
+//       at rest): a fifth run, the teleport with cascades 1 and 2 PINNED to the walk's final placement (the placement
+//       part removed: 10-3's), holds THE SAME RESIDENT SET as the walk (every card of the one resident in the other, by
+//       the run-independent ids) and (3)'s values read 0 texels over a code. RED before 10-2d: the walk 264 cards, the
+//       teleport 248 (the walk's cards read before its last move stayed while there was room), 93.5 codes - since the
+//       cards read cards, an answer depends on which cards are resident (spikes/photon-7/stage10/10-2).
 //   (5) A LATE FIRST READER KEEPS THE DEMAND OPEN FOR ITS OWN SETTLE (PHOTON-7 stage 5's read W3): a fourth run, the
 //       teleport again with the test door cards.gatherLate = 8 (the gather's stamps within 8 frames of the arrival
 //       dropped: it reads first 8 frames late, inside the settle's S = 10) - every face of the teleport's read set
@@ -127,11 +134,15 @@ struct Run {
     unsigned pagesUsed = 0u;
     int restA = -1, restB = -1;
     Room a, b;
+    /// each cascade's placement at B (the pinned arm (6) takes the walk's)
+    std::vector<Vec3> builtAtB;
 };
 
-bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0) {
+bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0,
+             const std::vector<Vec3> *pinTo = nullptr) {
     const char *name = crowded ? "residency_crowded" : walk ? "residency_walk" : gatherLate ? "residency_late"
-                                                                                          : "residency_teleport";
+                                                                         : pinTo ? "residency_pinned"
+                                                                                 : "residency_teleport";
     View *view = e->createOffscreenView(name, 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
@@ -191,6 +202,14 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     };
     look(-12.0f);
     if (!scene->setGlobalIllumination(gi)) return false;
+    // (6)'s ARM: cascades 1 and 2 pinned to the walk's final placement (built there, no scroll history), 0 and 3 free
+    if (pinTo && pinTo->size() >= 4u) {
+        GiPlacementPin pin;
+        pin.on = true;
+        pin.cascadeBuiltCam = *pinTo;
+        pin.cascadeFree = { 1u, 0u, 0u, 1u };
+        scene->setGiPlacementPin(pin);
+    }
     e->waitForAsyncShaders();
     out.restA = settle();
     if (gatherLate) e->setArm("cards.gatherLate", double(gatherLate));   // (5): the gather reads first N frames late
@@ -224,6 +243,11 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         }
     }
     out.restB = settle();
+    {
+        const GiStatus gb = scene->published().gi;
+        out.builtAtB.clear();
+        for (const auto &cs : gb.cascades) out.builtAtB.push_back(cs.builtCam);
+    }
     if (gatherLate) e->setArm("cards.gatherLate", 0.0);
     const GiStatus g = scene->published().gi;
     out.evicted = g.cards.evicted;
@@ -255,9 +279,10 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
-    Run w, t, c, l;
+    Run w, t, c, l, pnd;
     const bool okW = runOnce(e, true, w, frames);
     const bool okT = runOnce(e, false, t, frames);
+    const bool okP = runOnce(e, false, pnd, frames, false, 0, &w.builtAtB);
     const bool okC = runOnce(e, false, c, frames, true);
     const bool okL = runOnce(e, false, l, frames, false, 8);
     std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
@@ -373,7 +398,7 @@ int main()
         for (size_t k = 0; k < a.rgb.size(); ++k) {
             const double o = std::max(double(b.rgb[k]), 5.9604645e-6);
             if (!(a.rgb[k] > 0.0f) && !(b.rgb[k] > 0.0f)) continue;
-            const double step = std::ldexp(o, (k % 3u) == 2u ? -5 : -6);
+            const double step = std::ldexp(o, -10);   // the RGBA16F store's step (10-2d)
             const double codes = std::max(0.0, std::fabs(double(a.rgb[k]) - double(b.rgb[k])) - step) / (0.01 * o);
             worst = std::max(worst, codes);
             over += codes > 1.0 ? 1u : 0u;
@@ -382,6 +407,42 @@ int main()
     std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code "
                 "(STORE-PLACEMENT-1's law)\n", common, worst, over);
     CHECK(common > 0u, "(3) the cards resident in both runs compared");
+
+    // (6) THE HISTORY PART: the walk against the teleport pinned to its placement - the same resident set, 0 texels over
+    //     a code
+    {
+        const std::map<NodeId, int> idP = key(pnd);
+        std::map<std::pair<int, unsigned>, const CardRadiance *> inP;
+        for (const CardRadiance &k : pnd.cards) if (idP.count(k.node)) inP[{ idP.at(k.node), k.card }] = &k;
+        size_t onlyW = 0, onlyP = 0, commonP = 0, overP = 0;
+        double worstP = 0.0;
+        for (const auto &kv : inW)
+            if (!inP.count(kv.first)) ++onlyW;
+        for (const auto &kv : inP)
+            if (!inW.count(kv.first)) ++onlyP;
+        for (const auto &kv : inW) {
+            auto it = inP.find(kv.first);
+            if (it == inP.end() || it->second->size != kv.second->size) continue;
+            ++commonP;
+            const CardRadiance &a = *kv.second, &b = *it->second;
+            for (size_t k = 0; k < a.rgb.size(); ++k) {
+                const double o = std::max(double(b.rgb[k]), 5.9604645e-6);
+                if (!(a.rgb[k] > 0.0f) && !(b.rgb[k] > 0.0f)) continue;
+                const double codes =
+                    std::max(0.0, std::fabs(double(a.rgb[k]) - double(b.rgb[k])) - std::ldexp(o, -10)) / (0.01 * o);
+                worstP = std::max(worstP, codes);
+                overP += codes > 1.0 ? 1u : 0u;
+            }
+        }
+        std::printf("   (6) the teleport pinned to the walk's c1 and c2 placement: at rest in A %d, in B %d | resident: the "
+                    "walk %zu cards, the pinned teleport %zu (the free teleport %zu) - %zu only in the walk, %zu only in the "
+                    "pinned | %zu in both: worst %.3f codes, %zu texels over a code\n",
+                    pnd.restA, pnd.restB, w.cards.size(), pnd.cards.size(), t.cards.size(), onlyW, onlyP, commonP, worstP,
+                    overP);
+        CHECK(okP && pnd.restB >= 0 && onlyW == 0u && onlyP == 0u && commonP > 0u && overP == 0u,
+              "(6) THE HISTORY PART: the teleport pinned to the walk's placement holds the walk's resident set and its "
+              "values within a code");
+    }
 
     // (4) THE COMPACTION: from the crowded room (its read set in quarter pages) to room B (whole pages): the arrivals find
     //     no free page, the evictions free scattered quarter-page slots, and the atlas merges the sub-cut pages to free

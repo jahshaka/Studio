@@ -12,7 +12,7 @@
 //   (2) THE SHADOW FOLLOWS THE MOVED MOVER: the mover stepped 1.0 m along +z inside the lamp's range (its LampShadow
 //       region stales the direct of the cards in the lamp's sphere; a mover changes no voxel, so no bounce change lists
 //       the floor), at rest every sampled point within one code of a whole re-solve (the GI torn down and built again)
-//       plus one step of the R11G11B10F store - RED where the LampShadow region does not reach the cards.
+//       plus one step of the radiance store (RGBA16F since 10-2d) - RED where the LampShadow region does not reach the cards.
 // (An EDIT inside a lamp's range stales the same sphere; a still caster's move also moves the store, whose change
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
 //   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'
@@ -248,9 +248,9 @@ int main(int argc, char **argv)
             if (r1[i * 3u] < 0.0 || ro[i * 3u] < 0.0) continue;
             ++compared;
             double codes = 0.0;
-            for (int c = 0; c < 3; ++c) {   // per channel: a code past one step of the store (6 / 6 / 5 mantissa bits)
+            for (int c = 0; c < 3; ++c) {   // per channel: a code past one step of the radiance store (RGBA16F, 10-2d)
                 const double o = std::max(ro[i * 3u + c], 5.9604645e-6);
-                const double step = std::ldexp(o, c == 2 ? -5 : -6);
+                const double step = std::ldexp(o, -10);
                 codes = std::max(codes, std::max(0.0, std::fabs(r1[i * 3u + c] - ro[i * 3u + c]) - step) / (0.01 * o));
             }
             worst = std::max(worst, codes);
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
         // D = intensity x pi (OgreScene's power scale), F = the rectangle's form factor at the texel, (1 / pi) x the
         // integral of cos x cos' / r^2 over the rectangle on a 200 x 100 midpoint grid, bounded over the texel the read
         // picked (its centre within half a texel of the point: F's least and largest on that square), the bar the three
-        // stored values' half steps (R11G11B10F: 2^-7 of each on green).
+        // stored values' half steps (the radiance RGBA16F's, the indirect and flat terms' R11G11B10F 2^-7 on green).
         View *av = e->createOffscreenView("card_area", 256, 256, Colour(0, 0, 0));
         Scene *as = e->createScene("card_area");
         if (!av || !as) { std::printf("FAIL: the area view/scene\n"); return 1; }
@@ -367,7 +367,9 @@ int main(int argc, char **argv)
                         fHi = std::max(fHi, f);
                     }
                 const double scale = kD * kIntensity * 3.14159265358979 * windowAt(px, pz);
-                const double tol = std::ldexp(double(cs.radiance[1]) + cs.indirect[1] + cs.flat[1], -7);
+                // (the stored values' half steps: the radiance RGBA16F's 2^-11 since 10-2d, the indirect and flat terms'
+                // R11G11B10F 2^-7 on green)
+                const double tol = std::ldexp(double(cs.radiance[1]), -11) + std::ldexp(double(cs.indirect[1]) + cs.flat[1], -7);
                 const double past = std::max(0.0, std::max(scale * fLo - dk, dk - scale * fHi));
                 const double rel = std::fabs(dk / (scale * 0.5 * (fLo + fHi)) - 1.0);
                 aWorst = std::max(aWorst, past / std::max(tol, 1e-12));

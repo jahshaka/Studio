@@ -15,9 +15,9 @@
 // nothing for 30 frames).
 // THE LAWS:
 //   (1) EVERY CARD MATCHES THE ORACLE: every lit texel of every resident card within ONE CODE of the oracle's (1 % of the
-//       oracle's radiance per channel over the store's floor) PLUS ONE STEP OF THE RADIANCE STORE (R11G11B10F rounds to
-//       nearest with 6 / 6 / 5 mantissa bits: two values a code apart can store a step further apart - a step is at most
-//       2^-6 / 2^-6 / 2^-5 of the value; the row's own quantum, R3) - the cards the step relit (their direct half: the
+//       oracle's radiance per channel over the store's floor) PLUS ONE STEP OF THE RADIANCE STORE (RGBA16F since PHOTON-7
+//       stage 10's 10-2d, rounding to nearest with 10 mantissa bits: two values a code apart can store a step further
+//       apart - a step is at most 2^-10 of the value; the row's own quantum, R3) - the cards the step relit (their direct half: the
 //       lamp's sphere; their indirect: the light they gather moved a code) and the cards it did not (what they kept is
 //       still the answer: the stale set missed nothing that moved a code) alike;
 //   (2) THE STEP RELIT THE CARDS IN THE LAMP'S RANGE (the direct half's region, exact by the range) AND KEPT THE FAR
@@ -215,7 +215,7 @@ int main()
             double rel = 0.0;
             for (int k = 0; k < 3; ++k) {
                 const double code = 0.01 * std::max(double(o.rgb[t + k]), 5.9604645e-6);
-                const double step = std::ldexp(std::max(double(o.rgb[t + k]), 5.9604645e-6), k == 2 ? -5 : -6);
+                const double step = std::ldexp(std::max(double(o.rgb[t + k]), 5.9604645e-6), -10);   // RGBA16F (10-2d)
                 // in codes, the store's step taken off (a texel one step apart from the oracle beyond a code fails)
                 rel = std::max(rel, std::max(0.0, std::fabs(double(w.rgb[t + k]) - double(o.rgb[t + k])) - step) / code);
             }
