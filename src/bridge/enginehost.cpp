@@ -221,6 +221,10 @@ EngineConfig EngineHost::resolveConfig()
     if (shaderCacheEnabled()) {
         const QString dataDir = shaderCacheDirectory();
         if (!dataDir.isEmpty()) cfg.shaderCacheDir = dataDir.toStdString();
+        // THE SHIPPED MICROCODE SEED (COLD-BOOT-1 S1): the build's own warm microcode layer, found beside the
+        // binary as the media are, read by the engine only when the directory above has no microcode layer at
+        // this build's key — a first launch serves its SPIR-V from it instead of running glslang.
+        cfg.shaderCacheSeedDir = shaderCacheSeedDirectory().toStdString();
     }
     // ---- The engine's log, forwarded (SESSION_LOG_SPEC F3-B) ----------------
     // Installed through the CONFIG rather than through Engine::setLogSink so it
@@ -251,6 +255,14 @@ QString EngineHost::shaderCacheDirectory()
     const QString base = AppPaths::dataRoot();
     if (base.isEmpty()) return QString();
     return QDir(base).filePath(QStringLiteral("shadercache"));
+}
+
+QString EngineHost::shaderCacheSeedDirectory()
+{
+    const QString env = qEnvironmentVariable("JAHSHAKA_SHADER_SEED");
+    if (env == QLatin1String("none")) return QString();
+    if (!env.isEmpty()) return QDir(env).absolutePath();
+    return QCoreApplication::applicationDirPath() + QStringLiteral("/shadercache-seed");
 }
 
 bool EngineHost::shaderCacheEnabled()

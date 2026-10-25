@@ -241,7 +241,7 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
-                         "microcodeEntries, hlmsCachesLoaded, "
+                         "microcodeEntries, hlmsCachesLoaded, seedDir, seedState, seedEntries, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
                          "save:{copied, messages, worstMs, chunkWorstMs, chunkMaxEntries, chunkEntries, frames, frameOverruns, written}, "
                          "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
@@ -255,7 +255,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "offered it one: pipelineCacheReason says which of absent / accepted / outdated / "
           "rejected / silent happened ('outdated' is the ordinary cost of a driver update; "
           "'silent' means the render system has the broken-pipeline-cache workaround on and this "
-          "layer does nothing at all on this device). The counters work whether or not the cache "
+          "layer does nothing at all on this device). THE SEED (COLD-BOOT-1): a build may carry its own "
+          "warm microcode layer beside the binary (seedDir, <exe dir>/shadercache-seed; JAHSHAKA_SHADER_SEED "
+          "names another or 'none'), read only when the directory holds no microcode layer at this build's "
+          "key and never written; seedState says what this launch did with it — off / unused (the "
+          "directory's own layer loaded) / absent / loaded (seedEntries entries; microcodeLoaded is then "
+          "true) / stale (made by another fork, glslang, build type or render system: not read) / corrupt / "
+          "rejected. The counters work whether or not the cache "
           "itself is enabled. liveCompiles counts the shaders compiled on the UI thread AFTER the "
           "startup splash outside a compile dialog (an open in flight, or the open's compile "
           "dialog) — each one froze the window for its compile and is a named defect "
@@ -994,6 +1000,9 @@ QVariantMap AppApi::shaderCache()
     m["pipelineCacheReason"] = QString::fromStdString(s.pipelineCacheReason);
     m["microcodeLoaded"]     = s.microcodeLoaded;
     m["microcodeEntries"]    = s.microcodeEntries;
+    m["seedDir"]             = QString::fromStdString(s.seedDir);
+    m["seedState"]           = QString::fromStdString(s.seedState);
+    m["seedEntries"]         = s.seedEntries;
     m["hlmsCachesLoaded"]    = s.hlmsCachesLoaded;
     m["compiledThisRun"]     = s.compiledThisRun;
     m["loadedThisRun"]       = s.loadedThisRun;

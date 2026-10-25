@@ -31,6 +31,10 @@ public:
     /// platform gives us no writable data location. Static because
     /// --clear-shader-cache runs BEFORE any engine exists.
     static QString shaderCacheDirectory();
+    /// THE SHIPPED MICROCODE SEED (COLD-BOOT-1 S1; EngineConfig::shaderCacheSeedDir): `<exe dir>/shadercache-seed`,
+    /// beside the media, read-only. JAHSHAKA_SHADER_SEED names another directory (a row's own seed) or `none` (no
+    /// seed); unset or empty = the build's. Empty = no seed.
+    static QString shaderCacheSeedDirectory();
     /// Deletes that directory. Safe with no engine running; the next launch is
     /// cold. This is our `r.InvalidateCachedShaders`.
     static bool clearShaderCacheOnDisk();

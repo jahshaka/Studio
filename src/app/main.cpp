@@ -416,6 +416,9 @@ int main(int argc, char *argv[])
                                                                    : QStringLiteral("false") };
         r << SessionHeader::Row { QStringLiteral("shaderCacheDir"),
                                   EngineHost::shaderCacheDirectory() };
+        const QString seed = EngineHost::shaderCacheSeedDirectory();
+        r << SessionHeader::Row { QStringLiteral("shaderCacheSeed"),
+                                  seed.isEmpty() ? QStringLiteral("(none)") : seed };
         return r;
     });
     SessionHeader::addProvider(QStringLiteral("mcp"), [&cli] {
