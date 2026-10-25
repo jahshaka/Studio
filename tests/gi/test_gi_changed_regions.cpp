@@ -607,62 +607,87 @@ int main()
                 scrolls = c0.scrolls;
                 ++commitFrames;
                 if (commitFrames == 1) dump(r, "cascade 0's first commit frame");
-                // THE EXACT BOXES AT THE NEW CORNER (stage 3's read F7): per moved axis the slab's side and the trailing
-                // face, each its march's reach deep (the shell's end D_0 = 8 cells plus cascade 1's first cell, in cascade
-                // 0's cells, + 1), aligned out to the injection's 4-cell groups - PhotonComponent::rebuildCascade's boxes.
+                // THE COMMIT's LIST, BY ITS LAW (PHOTON-7's walk hitch, 2: the light-blind rule this read reproduced - both
+                // faces of every moved axis, each the march's reach deep, across the whole cascade - is deleted; a commit
+                // computes its entering slab and the kept voxels whose march toward a light meets a moved face, within the
+                // reach). So: the LEAVING slab listed exactly (per moved axis, the old box's cells the new one dropped,
+                // across the union of the old and new boxes on the other axes); the ENTERING slab covered by the listed
+                // injection boxes; every injection box's cell within the reach (the shell's end D_0 = 8 cells plus cascade
+                // 1's first cell, in cascade 0's cells, + 1) plus the sweep's 2-cell pad and the 4-cell groups (+ 6) of a
+                // moved face (the entering slab or the leaving one); at most the injection's 16 boxes.
                 const int res = c0.resolution;
                 const float cell = c0.cell;
                 const int reach = int(std::ceil((8.0 * double(cell) + double(g.cascades[1].cell)) / double(cell))) + 1;
                 const Vec3 corner(c0.centre.x - c0.halfSize, c0.centre.y - c0.halfSize, c0.centre.z - c0.halfSize);
                 const float dc[3] = { c0.centre.x - prevCentre.x, c0.centre.y - prevCentre.y, c0.centre.z - prevCentre.z };
-                std::vector<Box> want;
-                const auto box = [&](int axis, int lo, int hi) {
-                    float l[3], h[3];
-                    const float c[3] = { corner.x, corner.y, corner.z };
-                    for (int a = 0; a < 3; ++a) {
-                        const int bl = a == axis ? std::max(0, lo) : 0, bh = a == axis ? std::min(res, hi) : res;
-                        l[a] = c[a] + cell * float(bl / 4 * 4);
-                        h[a] = c[a] + cell * float(std::min(res, (bh + 3) / 4 * 4));
-                    }
-                    want.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
-                };
                 int sh[3];
                 for (int a = 0; a < 3; ++a) sh[a] = int(std::lround(dc[a] / cell));
-                for (int a = 0; a < 3; ++a) {
-                    const int s = sh[a];
-                    if (s == 0) continue;
-                    const int kLo = s < 0 ? -s : 0, kHi = s > 0 ? res - s : res;
-                    if (kHi < res) { box(a, kHi - reach, res); box(a, 0, reach); }
-                    else { box(a, 0, kLo + reach); box(a, res - reach, res); }
-                }
-                // ...AND THE LEAVING SLAB (PHOTON-7 stage 5's ruling: the producer lists it beside the entering one), per
-                // moved axis: the old box's cells the new one dropped, across the union of the old and new boxes on the
-                // other axes (PhotonComponent::rebuildCascade's moved faces).
+                const float cc[3] = { corner.x, corner.y, corner.z };
+                std::vector<Box> leaving, entering;
                 for (int a = 0; a < 3; ++a) {
                     if (sh[a] == 0) continue;
-                    float l[3], h[3];
-                    const float c[3] = { corner.x, corner.y, corner.z };
+                    float l[3], h[3], el[3], eh[3];
                     for (int k = 0; k < 3; ++k) {
-                        const float nLo = c[k], nHi = c[k] + float(res) * cell;
+                        const float nLo = cc[k], nHi = cc[k] + float(res) * cell;
                         const float oLo = nLo - float(sh[k]) * cell, oHi = nHi - float(sh[k]) * cell;
                         if (k == a) {
                             l[k] = sh[a] > 0 ? oLo : nHi;
                             h[k] = sh[a] > 0 ? nLo : oHi;
+                            el[k] = sh[a] > 0 ? oHi : nLo;   // the new box's cells the old did not hold
+                            eh[k] = sh[a] > 0 ? nHi : oLo;
                         } else {
                             l[k] = std::min(oLo, nLo);
                             h[k] = std::max(oHi, nHi);
+                            el[k] = nLo;
+                            eh[k] = nHi;
                         }
                     }
-                    want.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
+                    leaving.push_back(Box{ Vec3(l[0], l[1], l[2]), Vec3(h[0], h[1], h[2]) });
+                    entering.push_back(Box{ Vec3(el[0], el[1], el[2]), Vec3(eh[0], eh[1], eh[2]) });
                 }
-                unsigned matched = 0;
-                for (const Box &w : want)
-                    for (const GiChangedRegion *q : slab0)
-                        if (same(*q, w, 1e-3f)) { ++matched; break; }
-                std::printf("   commit %d: shift (%.0f, %.0f, %.0f) cells, %zu boxes wanted, %zu listed, %u equal\n",
-                            commitFrames, double(dc[0] / cell), double(dc[1] / cell), double(dc[2] / cell), want.size(),
-                            slab0.size(), matched);
-                if (!want.empty() && slab0.size() == want.size() && matched == want.size()) ++slabsOk;
+                std::vector<const GiChangedRegion *> inject;
+                unsigned leavingMatched = 0;
+                for (const GiChangedRegion *q : slab0) {
+                    bool isLeaving = false;
+                    for (const Box &w : leaving) isLeaving = isLeaving || same(*q, w, 1e-3f);
+                    if (isLeaving) ++leavingMatched;
+                    else inject.push_back(q);
+                }
+                const float far = float(reach + 6) * cell;
+                const auto nearFace = [&](float x, float y, float z) {
+                    const float p[3] = { x, y, z };
+                    for (const std::vector<Box> *set : { &entering, &leaving })
+                        for (const Box &f : *set) {
+                            const float lo[3] = { f.lo.x, f.lo.y, f.lo.z }, hi[3] = { f.hi.x, f.hi.y, f.hi.z };
+                            bool in = true;
+                            for (int k = 0; k < 3; ++k) in = in && p[k] >= lo[k] - far && p[k] <= hi[k] + far;
+                            if (in) return true;
+                        }
+                    return false;
+                };
+                unsigned farCells = 0, slabMissed = 0;
+                for (const GiChangedRegion *q : inject)
+                    for (float z = q->lo.z + 0.5f * cell; z < q->hi.z; z += 4.0f * cell)
+                        for (float y = q->lo.y + 0.5f * cell; y < q->hi.y; y += 4.0f * cell)
+                            for (float x = q->lo.x + 0.5f * cell; x < q->hi.x; x += 4.0f * cell)
+                                farCells += nearFace(x, y, z) ? 0u : 1u;
+                for (const Box &e : entering)
+                    for (float z = e.lo.z + 0.5f * cell; z < e.hi.z; z += 4.0f * cell)
+                        for (float y = e.lo.y + 0.5f * cell; y < e.hi.y; y += 4.0f * cell)
+                            for (float x = e.lo.x + 0.5f * cell; x < e.hi.x; x += 4.0f * cell) {
+                                bool held = false;
+                                for (const GiChangedRegion *q : inject)
+                                    held = held || (x >= q->lo.x && x <= q->hi.x && y >= q->lo.y && y <= q->hi.y &&
+                                                    z >= q->lo.z && z <= q->hi.z);
+                                slabMissed += held ? 0u : 1u;
+                            }
+                std::printf("   commit %d: shift (%.0f, %.0f, %.0f) cells, %zu listed: %u leaving slab(s) of %zu, %zu injection "
+                            "box(es); entering-slab samples missed %u, injection samples beyond the reach %u\n",
+                            commitFrames, double(dc[0] / cell), double(dc[1] / cell), double(dc[2] / cell), slab0.size(),
+                            leavingMatched, leaving.size(), inject.size(), slabMissed, farCells);
+                if (!leaving.empty() && leavingMatched == leaving.size() && !inject.empty() && inject.size() <= 16u &&
+                    slabMissed == 0u && farCells == 0u)
+                    ++slabsOk;
             } else if (c0.scrolling) {
                 ++scrollFrames;
                 if (!slab0.empty()) ++chunkSlabFrames;
@@ -672,7 +697,8 @@ int main()
         std::printf("   commits %d (Slab regions of cascade 0 inside its box on %d), chunk frames %d (listing a Slab %d)\n",
                     commitFrames, slabsOk, scrollFrames, chunkSlabFrames);
         CHECK(commitFrames >= 1 && slabsOk == commitFrames,
-              "A COMMIT LISTS EXACTLY ITS INJECTION BOXES AND ITS LEAVING SLAB AS SLAB REGIONS OF CASCADE 0, AT ITS NEW CORNER");
+              "A COMMIT LISTS ITS LEAVING SLAB EXACTLY AND ITS INJECTION BOXES (THE ENTERING SLAB COVERED, NOTHING BEYOND A "
+              "MOVED FACE'S REACH) AS SLAB REGIONS OF CASCADE 0, AT ITS NEW CORNER");
         CHECK(chunkSlabFrames == 0, "...and its chunk frames list none");
     }
 
