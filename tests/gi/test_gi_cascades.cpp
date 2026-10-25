@@ -1716,6 +1716,53 @@ int main()
         }
     }
 
+    // =====================================================================
+    // CASE 16d — A PIN LEAVES A CASCADE FREE (PHOTON-7 stage 10-0's P2: the outer cascade pinned ALONE)
+    //
+    // The placement pin used to be a PREFIX of the chain (cascade i pinned iff i < cascadeBuiltCam's size), so an inner
+    // cascade could never follow the eye while an outer one held. GiPlacementPin::cascadeFree leaves cascade i free:
+    // every cascade pinned at a far point p, cascade 0 left free, then a forced whole rebuild of each - cascade 0 is
+    // placed for the EYE (within one of its cells), every other cascade for p.
+    // =====================================================================
+    std::printf("\n== case 16d: a pin leaves cascade 0 free ==\n");
+    {
+        const Vec3 eye(0.0f, 2.0f, 6.0f);
+        view->setCamera(enginetest::testCameraDescLookAt(eye, Vec3(0.0f, 1.0f, 0.0f)));
+        render(e, 2);
+        const GiStatus g0 = scene->published().gi;
+        CHECK(g0.cascades.size() >= 2u, "the chain is up for the free-cascade case");
+        if (g0.cascades.size() >= 2u) {
+            const Vec3 p(40.0f, 6.0f, -40.0f);
+            GiPlacementPin pin;
+            pin.on = true;
+            pin.cascadeBuiltCam.assign(g0.cascades.size(), p);
+            pin.cascadeFree.assign(g0.cascades.size(), 0u);
+            pin.cascadeFree[0] = 1u;
+            scene->setGiPlacementPin(pin);
+            for (size_t i = 0; i < g0.cascades.size(); ++i) {
+                e->setArm("gi.rebuildCascade", double(i));
+                render(e, 2);
+            }
+            e->setArm("gi.rebuildCascade", -1.0);
+            render(e, 4);
+            const GiStatus g = scene->published().gi;
+            const auto near = [](const Vec3 &c, const Vec3 &q, float cell) {
+                return std::fabs(c.x - q.x) <= cell * (1.0f + 1e-5f) && std::fabs(c.y - q.y) <= cell * (1.0f + 1e-5f) &&
+                       std::fabs(c.z - q.z) <= cell * (1.0f + 1e-5f);
+            };
+            const bool freeAtEye = near(g.cascades[0].centre, eye, g.cascades[0].cell);
+            bool pinnedAtP = true;
+            for (size_t i = 1; i < g.cascades.size(); ++i) pinnedAtP = pinnedAtP && near(g.cascades[i].centre, p, g.cascades[i].cell);
+            for (size_t i = 0; i < g.cascades.size(); ++i)
+                std::printf("   c%zu centre (%.3f, %.3f, %.3f)%s\n", i, g.cascades[i].centre.x, g.cascades[i].centre.y,
+                            g.cascades[i].centre.z, i == 0 ? " (free)" : " (pinned)");
+            scene->setGiPlacementPin(GiPlacementPin());
+            render(e, 2);
+            CHECK(freeAtEye, "a cascade left FREE under a pin (GiPlacementPin::cascadeFree) is placed for the eye");
+            CHECK(pinnedAtP, "...and every other cascade for the pin's camera");
+        }
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;
