@@ -23,8 +23,9 @@
 //       face) - RED ON THE BASE: the aperture-0 march takes a wall crossed at a grazing angle by the lateral crossing
 //       rate (0.087 a plane at 85 degrees) over the one or two planes a 1 m wall gives it, and passes the rest;
 //   (2) THE EDGE CELL - a ray from outside B at normal incidence through its wall-ceiling edge cell HITS there;
-//   (3) THE SIDE - every sweep hit reads the side of W's voxel facing the ray (the lit face; the store's own value,
-//       un-premultiplied), and the other side holds under 1 % of it (so the choice is a real one);
+//   (3) THE SIDE - every sweep hit reads the side of W's voxel the ray is on (its entry point against the voxel's faces
+//       along the canonical normal: the lit face; the store's own value, un-premultiplied), and the other side - W's
+//       unlit face, whose rays leave W and must never read its lit side through it - holds under 1 % of it;
 //   (4) THE ORIGIN PLANE - a ray 10 degrees off P's top, started one cascade-0 cell above it with its origin plane,
 //       ESCAPES (P's own coarse cells are the hemisphere's boundary), and the same ray with no origin plane HITS in
 //       P's own cell (so it is the plane that lets it through, not an empty cell).
@@ -214,7 +215,24 @@ int main()
         const size_t vi = idx(cellOf(r.start[0] + (tHit + 1e-3) * r.dir[0], 0), wy,
                               cellOf(r.start[2] + (tHit + 1e-3) * r.dir[2], 2)) * 4u;
         const double nx = v.normal[vi] * 2.0 - 1.0, ny = v.normal[vi + 1] * 2.0 - 1.0, nz = v.normal[vi + 2] * 2.0 - 1.0;
-        const double along = -(nx * r.dir[0] + ny * r.dir[1] + nz * r.dir[2]);
+        // the side the ray's entry point lies on, along the canonical normal's dominant axis (jah_voxel_ray.glsl): the
+        // voxel's faces' coverage-weighted plane on that axis
+        double along = -(nx * r.dir[0] + ny * r.dir[1] + nz * r.dir[2]);
+        {
+            const double an[3] = { std::fabs(nx), std::fabs(ny), std::fabs(nz) };
+            const int na = an[0] >= an[1] ? (an[0] >= an[2] ? 0 : 2) : (an[1] >= an[2] ? 1 : 2);
+            const double oP = v.coverageP[vi + na], oN = v.coverageN[vi + na];
+            if (oP + oN > 0.0) {
+                const double pP = oP > 0.0 ? std::min(std::max(v.positionP[vi + na] / oP, 0.0), 1.0) : 0.0;
+                const double pN = oN > 0.0 ? std::min(std::max(v.positionN[vi + na] / oN, 0.0), 1.0) : 0.0;
+                const int ci = na == 0 ? cellOf(r.start[0] + (tHit + 1e-3) * r.dir[0], 0) : na == 1 ? wy
+                                       : cellOf(r.start[2] + (tHit + 1e-3) * r.dir[2], 2);
+                const double m = v.origin[na] + (ci + (oP * pP + oN * pN) / (oP + oN)) * cell;
+                const double e = r.start[na] + tHit * r.dir[na];
+                const double sd = (e - m) * ((na == 0 ? nx : na == 1 ? ny : nz) >= 0.0 ? 1.0 : -1.0);
+                if (sd != 0.0) along = sd;
+            }
+        }
         const float *front = &v.lightFront[vi], *back = &v.lightBack[vi];
         const float *facing = along < 0.0 ? back : front, *other = along < 0.0 ? front : back;
         const double w = front[3];
