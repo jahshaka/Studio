@@ -1302,6 +1302,11 @@ bool Session::monitor(const Command &c)
             };
             commitDelta("count:vct.commit_slab" + std::to_string(i), cs.commitSlabCells);
             commitDelta("count:vct.commit_inject" + std::to_string(i), cs.commitInjectCells);
+            // ...and the voxels its delta injections LIT (their direct changed) in the slabs and outside them (the band),
+            // landing with the read-back (commitCounted) - the hitch step's 2: what the reach past the slab changed
+            commitDelta("count:vct.commit_lit_slab" + std::to_string(i), cs.commitLitSlab);
+            commitDelta("count:vct.commit_lit_band" + std::to_string(i), cs.commitLitBand);
+            commitDelta("count:vct.commit_counted" + std::to_string(i), cs.commitCounted);
             bricks += b;
             marched += mv;
             prevBricks[i] = cs.feedbackBricksRan;
