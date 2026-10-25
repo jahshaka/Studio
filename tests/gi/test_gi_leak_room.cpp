@@ -272,7 +272,7 @@ int main()
         const float k = 0.70710678f;
         const Vec3 frontEye(k * 3.4f, 0.0f, -k * 3.4f);
         const Vec3 behind(-k * 3.0f, 0.0f, k * 3.0f), inFront(k * 3.0f, 0.0f, -k * 3.0f);
-        const auto measure = [&](bool seam, float &frontGi, float &frontLit, float &storeFront) {
+        const auto measure = [&](bool seam, float &frontGi, float &frontLit, float &storeFront, float &storeBack) {
             Scene *s = e->createScene(seam ? "seam-pair" : "twosided-pair");
             view->setScene(s);
             s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -326,6 +326,7 @@ int main()
             // camera's side (Engine::voxelReaderParity's point read, the ray hit's read) - the
             // light the voxel sends TOWARDS the front, which is the flag's whole effect.
             storeFront = 0.0f;
+            storeBack = 0.0f;
             {
                 GiVoxelVolume v;
                 if (s->giVoxelVolume(0, v) && v.available) {
@@ -342,9 +343,14 @@ int main()
                     c.biasDirLS = Vec3(0, 0, 0);
                     c.tanHalfAngle = 0.0f;
                     c.lod = 0.0f;
+                    // ...and the same voxel read from BEHIND (the lamp's side): the travel reversed
+                    VoxelReaderCone cb = c;
+                    cb.dirLS = Vec3(-c.dirLS.x, -c.dirLS.y, -c.dirLS.z);
                     std::vector<VoxelReaderAnswer> fr, co;
-                    if (e->voxelReaderParity(s, { c }, fr, co) && !co.empty() && co[0].hitRead[3] > 0.0f)
-                        storeFront = co[0].hitRead[1] / co[0].hitRead[3];
+                    if (e->voxelReaderParity(s, { c, cb }, fr, co) && co.size() == 2u) {
+                        if (co[0].hitRead[3] > 0.0f) storeFront = co[0].hitRead[1] / co[0].hitRead[3];
+                        if (co[1].hitRead[3] > 0.0f) storeBack = co[1].hitRead[1] / co[1].hitRead[3];
+                    }
                 }
             }
             // ...and the same camera with the lamp IN FRONT, so a subject that
@@ -359,11 +365,11 @@ int main()
         };
 
         float seamFront = 0.0f, seamLit = 0.0f, twoFront = 0.0f, twoLit = 0.0f;
-        float seamStore = 0.0f, twoStore = 0.0f;
-        measure(true, seamFront, seamLit, seamStore);
-        measure(false, twoFront, twoLit, twoStore);
-        std::printf("   the store read from the front, lamp behind: seam %.4f, two-sided %.4f\n",
-                    double(seamStore), double(twoStore));
+        float seamStore = 0.0f, twoStore = 0.0f, seamBack = 0.0f, twoBack = 0.0f;
+        measure(true, seamFront, seamLit, seamStore, seamBack);
+        measure(false, twoFront, twoLit, twoStore, twoBack);
+        std::printf("   the store, lamp behind: read from the front seam %.4f, two-sided %.4f; from behind seam %.4f, "
+                    "two-sided %.4f\n", double(seamStore), double(twoStore), double(seamBack), double(twoBack));
         CHECK(seamLit > 0.05f && twoLit > 0.05f,
               "both subjects are there and face the camera (the lamp in front lights them)");
         char msg[256];
@@ -372,19 +378,21 @@ int main()
                       "BEHIND: the seam pair's unlit side gains %.4f from the bounce against "
                       "the genuinely two-sided pair's %.4f", double(seamFront), double(twoFront));
         CHECK(seamFront < twoFront * 0.25f + 0.004f, msg);
-        // THE OTHER HALF, READ IN THE STORE (PHOTON-VOXEL-3 round 9): the flag's effect is
-        // light the plate's voxels send towards the FRONT. The camera on the front used to
-        // show it on the plate itself - its own cones read its own voxels, a leak the origin
-        // rule closed (a cone never reads the surface it leaves, so the front pixel now
-        // stays dark for both pairs, which is the opaque plate's physics). The instrument
-        // moves to the voxel itself, read from the front: the two-sided pair's voxel holds
-        // front-facing light (the pin's abs(NdotL) injection), the seam pair's none.
+        // THE OTHER HALF, READ IN THE STORE (PHOTON-VOXEL-3 round 9; PHOTON-7 stages 7 and 10): the flag's
+        // effect is a voxel that keeps TWO SIDES - the side facing the lamp lit, the side facing the camera its own.
+        // The store holds the two (stage 7) and a read takes the side its travel meets, so the instrument is the
+        // voxel read FROM BEHIND: the two-sided pair's back holds the lamp's light (the flag: its back quad is a
+        // surface of its own), the seam pair's - one surface, its voxel one-sided, its back the inside of a solid
+        // (stage 10's one-sided write) - none. READ FROM THE FRONT both are dark: an opaque plate lit from behind
+        // sends no light forward (L9). (This law read "the two-sided pair's voxel, read from the front, holds
+        // light": that light was the bounce's mean of a voxel's two sides - the back's lamp light gathered into the
+        // front by its neighbours - which stage 10 deleted as a leak carrier.)
         std::snprintf(msg, sizeof(msg),
-                      "...and a genuinely two-sided pair still IS, which is the pin's answer "
-                      "and the half that stops the fix being \"never flag anything\": its voxel, "
-                      "read from the front, holds light (%.4f) and the seam pair's does not (%.4f)",
-                      double(twoStore), double(seamStore));
-        CHECK(twoStore > 0.02f && seamStore < twoStore * 0.25f + 0.004f, msg);
+                      "...and a genuinely two-sided pair still IS, which is the half that stops the fix being "
+                      "\"never flag anything\": its voxel, read from behind, holds the lamp's light (%.4f) and the "
+                      "seam pair's does not (%.4f); read from the front, neither does (%.4f, %.4f)",
+                      double(twoBack), double(seamBack), double(twoStore), double(seamStore));
+        CHECK(twoBack > 0.02f && seamBack < twoBack * 0.25f + 0.004f && twoStore < 0.004f && seamStore < 0.004f, msg);
     }
 
     view->setScene(nullptr);
