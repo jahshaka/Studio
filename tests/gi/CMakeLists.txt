@@ -648,6 +648,29 @@ set_tests_properties(gi.shell_ends PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.shell_ends PROPERTIES JAHSHAKA_TEST_FRAMES 27)
 
+# gi.voxel_ray_wall (PHOTON-7 stage 10, 10-1; L9) — THE CACHES' RAY READS OCCUPANCY: a short 0.4 m wall in the outer
+# cascade's cells stops a ray at 0-85 degrees off its normal, the wall-ceiling edge cell stops it, the hit reads the side
+# facing the ray, and the surface a ray leaves is never its occluder (test_gi_voxel_ray.cpp says the laws; red on the
+# base: the harness answered the aperture-0 march - today's ray - which passes 19-59 % through the 1 m wall at every
+# angle; the edge cell held on the base, its ray reading both halves). A fixture.
+add_executable(test_gi_voxel_ray test_gi_voxel_ray.cpp)
+set_target_properties(test_gi_voxel_ray PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_ray PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_ray PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_ray JahshakaEngineMedia)
+jah_gpu_row(gi.voxel_ray_wall CLASS engine COMMAND test_gi_voxel_ray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_ray_wall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.voxel_ray_wall PROPERTIES JAHSHAKA_TEST_FRAMES 93)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's
