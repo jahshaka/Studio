@@ -412,7 +412,7 @@ jah_gpu_row(gi.gather_sliver CLASS engine COMMAND test_gi_gather_sliver
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_sliver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 305)
+set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 833)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and

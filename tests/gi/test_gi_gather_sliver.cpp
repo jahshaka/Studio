@@ -20,12 +20,19 @@
 //       both slivers has a probe answer on every frame - its answered share w (the history's mean of the frames a
 //       probe answered) is 1 on every frame read. RED before: w under 1 on all 12,288 pixel-frames of each;
 //   (2) ITS NOISE IS ITS SURFACE'S: each sliver's frame-to-frame sd (relative) within the range of the wall's own
-//       pixels in the open region (x 8..88) on the same rows - RED before: 0.56 and 0.73 against 0.004..0.036;
+//       pixels in the open region (x 8..88) on the same rows - RED before: 0.56 and 0.73 against 0.004..0.036; one
+//       twin a cell alone: 0.033 / 0.031; with the twins' blend (each bilinear corner its uniform probe or its twin,
+//       the filter's taps the neighbouring cells' twins - Lumen's): 0.026 / 0.026;
 //   (3) HELD WITHIN A CODE OF ITS TRUTH: at rest (held), each sliver column's mean irradiance within one code (1 %) of
-//       the same column's in the plate-free view, every channel - RED before: 1.15 and 3.31 codes.
+//       the same column's in the plate-free view, every channel - the rest 256 frames long in both views (the
+//       measuring door gather.restFrames: a 16-frame mean of a sliver's one or two twins scatters 2-7 % a cell row, the
+//       column's standard error ~1 code; the law is the bias, not that scatter). RED before: 1.15 and 3.31 codes
+//       (at the shipped 16).
 // And PRINTED: the placement's GPU ms (gather.place, its two passes) on a 1920 x 1080 view at High and Epic (the four
-// quarter samples before: 0.0225 and 0.0297 ms; every pixel: 0.0655 and 0.168 ms), and the twins requested against the
-// cap.
+// quarter samples before: 0.0225 and 0.0297 ms, one run; every pixel: 0.066-0.116 and 0.157-0.178 ms over four runs -
+// the clocks are not locked), the filter's and the integrate's beside it (the twins' blend), and the twins requested
+// against the cap. And the sliver's sd against the open wall's MEAN, as information (1.62 x: a 1-px sliver answered by
+// one or two twins against a wall answered by four probes each filtered with eight).
 // A fixture (the engine alone, offscreen views). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -50,6 +57,7 @@ constexpr unsigned kW = 256u, kH = 256u;
 constexpr float kEyeY = 8.0f, kPlateDepth = 0.5f, kFovDeg = 60.0f;
 constexpr unsigned kSlits[2] = { 128u, 255u };
 constexpr unsigned kOpenX0 = 8u, kOpenX1 = 88u;
+constexpr unsigned kRestFrames = 256u;
 
 NodeId addBox(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
 {
@@ -78,7 +86,7 @@ struct Run {
     /// (1): per sliver, the pixel-frames with no probe answer; (2): per sliver, its pixels' mean relative sd, and the
     /// open region's range of per-pixel relative sd on the same rows
     unsigned unanswered[2] = { 0u, 0u };
-    double slitSd[2] = { 0.0, 0.0 }, openSdMin = 1e9, openSdMax = 0.0;
+    double slitSd[2] = { 0.0, 0.0 }, openSdMin = 1e9, openSdMax = 0.0, openSdMean = 0.0;
     /// (3): the held picture's column means per sliver (rgb) and the pixels in it
     double held[2][3] = { { 0, 0, 0 }, { 0, 0, 0 } };
     unsigned heldPixels[2] = { 0u, 0u };
@@ -173,15 +181,20 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
             const double r = relSd(size_t(y) * kW + x);
             out.openSdMin = std::min(out.openSdMin, r);
             out.openSdMax = std::max(out.openSdMax, r);
+            out.openSdMean += r / double(kH * (kOpenX1 - kOpenX0 + 1u));
         }
 
-    // (3): the rest mean, held - its picture read back
+    // (3): the rest mean, held - its picture read back. THE REST 256 FRAMES LONG (the measuring door gather.restFrames;
+    // shipped: the settle, 16): (3) asks whether the sliver's answer is its surface's, and a 16-frame mean of one or two
+    // twins scatters +-2-7 % a cell row (measured) - the column's standard error ~0.9 %, a code; at 256 frames ~0.2 %
     e->setArm("gather.restOff", 0.0);
+    e->setArm("gather.restFrames", double(kRestFrames));
     int held = 0;
-    for (int k = 0; k < 120 && held < 4; ++k) {
+    for (int k = 0; k < int(kRestFrames) + 120 && held < 4; ++k) {
         frames(e, 1, count);
         const GatherStatus &gs = scene->published().gi.gather;
-        held = gs.restFrames > gs.settleFrames + 1u ? held + 1 : 0;
+        // (held past the rest's length: GatherStatus::settleFrames is the settle's, not the door's rest length)
+        held = gs.restFrames > kRestFrames + 1u ? held + 1 : 0;
     }
     const GatherStatus &gs = scene->published().gi.gather;
     if (held >= 4 && gs.irradiance.size() == size_t(kW) * kH * 4u)
@@ -194,6 +207,7 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
             for (int c = 0; c < 3; ++c) out.held[s][c] /= std::max(double(out.heldPixels[s]), 1.0);
         }
     e->setArm("gather.irradianceReadback", 0.0);
+    e->setArm("gather.restFrames", 0.0);
     out.ok = out.settle >= 0 && held >= 4 && out.framesRead >= 32u;
     e->destroyView(view);
     e->destroyScene(scene);
@@ -201,7 +215,7 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
 }
 
 /// THE PRICE: the placement's two passes (the monitor's gather.place) on a 1920 x 1080 view of the plated scene
-float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned &cap)
+float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned &cap, float &filterMs, float &integrateMs)
 {
     View *view = e->createOffscreenView("sliver_price", 1920u, 1080u, Colour(0, 0, 0));
     Scene *scene = e->createScene("sliver_price");
@@ -231,16 +245,27 @@ float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned 
     frames(e, 8, count);
     float ms = -1.0f;
     {
+        // (the MEDIAN of 32 frames' readings: the clocks are not locked, and one run's minimum over 8 moved 0.066 ->
+        // 0.100 ms between two runs of the same build)
         enginetest::GpuTimingWindow window(e);
-        float best = 1e9f;
-        for (int k = 0; k < 8; ++k) {
+        std::vector<float> got, fil, integ;
+        for (int k = 0; k < 32; ++k) {
             frames(e, 1, count);
             const GatherStatus &gs = scene->published().gi.gather;
-            if (gs.placeMs >= 0.0f) best = std::min(best, gs.placeMs);
+            if (gs.placeMs >= 0.0f) got.push_back(gs.placeMs);
+            if (gs.filterMs >= 0.0f) fil.push_back(gs.filterMs);
+            if (gs.integrateMs >= 0.0f) integ.push_back(gs.integrateMs);
             requested = gs.adaptiveRequested;
             cap = gs.adaptiveCap;
         }
-        ms = best < 1e9f ? best : -1.0f;
+        const auto median = [](std::vector<float> &v) {
+            if (v.empty()) return -1.0f;
+            std::sort(v.begin(), v.end());
+            return v[v.size() / 2u];
+        };
+        ms = median(got);
+        filterMs = median(fil);
+        integrateMs = median(integ);
     }
     e->setArm("gather.restOff", 0.0);
     e->destroyView(view);
@@ -270,8 +295,9 @@ int main()
     const char *what[2] = { "x 128 (between the plates)", "x 255 (the view's edge)" };
     for (int s = 0; s < 2; ++s)
         std::printf("   (1)(2) the sliver at %s: %u of %u pixel-frames unanswered | its mean relative sd %.4f, the open "
-                    "wall's pixels %.4f..%.4f\n", what[s], sl.unanswered[s], sl.framesRead * kH, sl.slitSd[s],
-                    sl.openSdMin, sl.openSdMax);
+                    "wall's pixels %.4f..%.4f (their mean %.4f: the sliver %.2f x it)\n", what[s], sl.unanswered[s],
+                    sl.framesRead * kH, sl.slitSd[s], sl.openSdMin, sl.openSdMax, sl.openSdMean,
+                    sl.slitSd[s] / std::max(sl.openSdMean, 1e-9));
     CHECK(okS && sl.unanswered[0] == 0u && sl.unanswered[1] == 0u,
           "(1) EVERY FRAME ANSWERED: every pixel of both slivers has a probe answer on every settling frame");
     CHECK(okS && sl.slitSd[0] <= sl.openSdMax && sl.slitSd[1] <= sl.openSdMax,
@@ -291,10 +317,12 @@ int main()
     CHECK(within, "(3) HELD WITHIN A CODE OF ITS TRUTH: each sliver column's held irradiance within 1 % of the plate-free view's");
 
     unsigned rqH = 0u, capH = 0u, rqE = 0u, capE = 0u;
-    const float msH = placeMs(e, GiQuality::High, count, rqH, capH);
-    const float msE = placeMs(e, GiQuality::Epic, count, rqE, capE);
-    std::printf("   THE PRICE (1920 x 1080, gather.place's two passes): High %.4f ms (twins asked %u of a cap %u), Epic "
-                "%.4f ms (%u of %u)\n", double(msH), rqH, capH, double(msE), rqE, capE);
+    float fH = -1.0f, iH = -1.0f, fE = -1.0f, iE = -1.0f;
+    const float msH = placeMs(e, GiQuality::High, count, rqH, capH, fH, iH);
+    const float msE = placeMs(e, GiQuality::Epic, count, rqE, capE, fE, iE);
+    std::printf("   THE PRICE (1920 x 1080, the median of 32 frames): gather.place High %.4f ms (twins asked %u of a cap %u), "
+                "Epic %.4f ms (%u of %u) | gather.filter High %.4f, Epic %.4f | gather.integrate High %.4f, Epic %.4f\n",
+                double(msH), rqH, capH, double(msE), rqE, capE, double(fH), double(fE), double(iH), double(iE));
 
     std::printf("\nframes %d\n%s (%d failure%s)\n", count, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
