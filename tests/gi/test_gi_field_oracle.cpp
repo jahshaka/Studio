@@ -331,6 +331,8 @@ int main(int argc, char **argv)
         const int rest4 = settle2();
         const bool q1 = readProbes(s2, rs);
         const GiStatus k1 = s2->published().gi;
+        std::vector<GiVoxelVolume> vox3Step(4);
+        for (int c = 0; c < 4; ++c) s2->giVoxelLight(c, vox3Step[c]);
         s2->setGlobalIllumination(off);
         run(2);
         s2->setGlobalIllumination(gi);
@@ -389,6 +391,56 @@ int main(int argc, char **argv)
                     kGap, rest3, rest4, rest5, movedB, inB, held3, ro.count, restarts3, byMoves3,
                     k1.ifdMarkedByRegion - k0.ifdMarkedByRegion, k1.ifdMarkAlls - k0.ifdMarkAlls, keptB, heldRestarted3, held3,
                     inB - keptB - std::min(inB - keptB, movedB), inB - movedB, movedKept3, worst3, over3);
+        {   // THE STORE UNDER THE PROBES (printed): every cascade's total, the step's against the oracle's rebuild
+            for (int c = 0; c < 4; ++c) {
+                GiVoxelVolume vo;
+                const GiVoxelVolume &vs = vox3Step[c];
+                if (!s2->giVoxelLight(c, vo) || !vo.available || !vs.available || vo.light.size() != vs.light.size()) continue;
+                double worst = 0.0, at[2] = { 0.0, 0.0 };
+                size_t over = 0, worstI = 0;
+                for (size_t i = 0; i + 3 < vo.light.size(); i += 4)
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const double code = 0.01 * std::max(std::fabs(double(vo.light[i + ch])), double(kGiBrickFloor));
+                        const double d = std::fabs(double(vs.light[i + ch]) - double(vo.light[i + ch])) / code;
+                        if (d > worst) { worst = d; worstI = i / 4; at[0] = vs.light[i + ch]; at[1] = vo.light[i + ch]; }
+                        over += d > 1.0 ? 1u : 0u;
+                    }
+                const size_t W = size_t(vo.width), H = size_t(vo.height);
+                const size_t ix[3] = { worstI % W, (worstI / W) % H, worstI / (W * H) };
+                float wp[3];
+                for (int a = 0; a < 3; ++a) wp[a] = vo.origin[a] + (float(ix[a]) + 0.5f) * vo.cell[a];
+                std::printf("   (3) the store, cascade %d (%dx%dx%d): the step against the oracle worst %.3f codes (at %.2f,%.2f,%.2f: "
+                            "%.6g against %.6g), %zu channels over a code\n", c, vo.width, vo.height, vo.depth, worst,
+                            wp[0], wp[1], wp[2], at[0], at[1], over);
+                // by region: the brightest total outside both rooms' boxes near A / near B, and inside each (step | oracle)
+                double mx[4][2] = {};
+                for (size_t i = 0; i + 3 < vo.light.size(); i += 4) {
+                    const size_t v = i / 4, q[3] = { v % W, (v / W) % H, v / (W * H) };
+                    float w[3];
+                    for (int a = 0; a < 3; ++a) w[a] = vo.origin[a] + (float(q[a]) + 0.5f) * vo.cell[a];
+                    int region = -1;
+                    for (int k = 0; k < 2; ++k)
+                        if (std::fabs(w[0] - cx[k]) < 0.9f && std::fabs(w[1] - 1.0f) < 0.9f && std::fabs(w[2]) < 0.9f)
+                            region = 2 + k;
+                    if (region < 0) region = std::fabs(w[0] - cx[0]) < std::fabs(w[0] - cx[1]) ? 0 : 1;
+                    for (int ch = 0; ch < 3; ++ch) {
+                        mx[region][0] = std::max(mx[region][0], double(vs.light[i + ch]));
+                        mx[region][1] = std::max(mx[region][1], double(vo.light[i + ch]));
+                    }
+                }
+                std::printf("   (3)   the brightest (step | oracle): outside near A %.4g | %.4g, outside near B %.4g | %.4g, "
+                            "room A's box %.4g | %.4g, room B's box %.4g | %.4g\n", mx[0][0], mx[0][1], mx[1][0], mx[1][1],
+                            mx[2][0], mx[2][1], mx[3][0], mx[3][1]);
+            }
+        }
+        {   // THE SIDES' ROUTE (10-2b): the ray tier's gathers, the passes that waited for the structure (the voxel rays)
+            // and the route changes (each resumed its cascade whole) - the build, the step and the oracle's rebuild
+            const GiStatus k2 = s2->published().gi;
+            std::printf("   (3) the sides' TLAS gather: %llu dispatches, %llu waits; the route changes (the cascades' own): the "
+                        "build %llu, after the step %llu, the oracle's rebuild %llu\n",
+                        k2.voxelSides.dispatches, k2.voxelSides.waits, k0.voxelSides.routeChanges,
+                        k1.voxelSides.routeChanges, k2.voxelSides.routeChanges);
+        }
         CHECK(rest3 >= 0 && rest4 >= 0 && rest5 >= 0 && q0 && q1 && q2 && inB > 0 && over3 == 0u && movedKept3 == 0u,
               "(3)(i) SAFETY: every probe the truth moved restarted, every probe within its oracle");
         CHECK(restarts3 > 0u && k1.ifdMarkedByRegion == k0.ifdMarkedByRegion && k1.ifdMarkAlls == k0.ifdMarkAlls &&

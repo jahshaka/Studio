@@ -728,9 +728,9 @@ endif()
 # first); M1 per class (live less frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and
 # the GPU clock PRINTED - the bars are the later stages'; it asserts only its instrument's laws: frozen = frozen, the arms
 # start equal, the classes cover the counted pixels (walk.sh says the laws and the base). 960x540; eight sessions:
-# court 7 + 3 x 370 frames, glass 7 + 3 x 710. ALL THE CARD'S SLOTS (TOKENS 8): its GPU clock is read alone.
+# court 7 + 3 x 231 frames, glass 7 + 3 x 710. ALL THE CARD'S SLOTS (TOKENS 8): its GPU clock is read alone.
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk CLASS engine TOKENS 8 FRAMES 1154
+    jah_gpu_row(gi.walk CLASS engine TOKENS 8 FRAMES 1274
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk PROPERTIES TIMEOUT 60 LABELS "engine")

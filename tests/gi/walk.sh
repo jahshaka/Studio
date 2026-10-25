@@ -204,7 +204,8 @@ PYEOF
     echo "gi.walk_rough: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
     exit $rc
 fi
-SETTLE=120    # the court (the header: the GI's rest at 80 + the gather's 17-frame hold, rounded up)
+SETTLE=160    # the court: its cards' last relight at frame 127 + the gather's 17-frame hold, rounded up (PHOTON-7 10-2: the
+              # card-to-card re-listing's rounds at 4 cards a frame, the RGBA16F store's quantum - was the GI's rest at 80)
 GSETTLE=600   # the glass: its reflection HELD before a frozen walk (the door's precondition: rest from ~frame 80, + K_max + 1)
 walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
 walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
