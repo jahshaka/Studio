@@ -27,7 +27,8 @@
 //       the same column's in the plate-free view, every channel - the rest 256 frames long in both views (the
 //       measuring door gather.restFrames: a 16-frame mean of a sliver's one or two twins scatters 2-7 % a cell row, the
 //       column's standard error ~1 code; the law is the bias, not that scatter). RED before: 1.15 and 3.31 codes
-//       (at the shipped 16).
+//       (at the shipped 16). AS INFORMATION: the shipped 16-frame rest FREEZES ~0.9 % of standard error into a
+//       sliver's held picture (one or two twins' 16 x 64 rays), against the open wall's four filtered probes.
 // And PRINTED: the placement's GPU ms (gather.place, its two passes) on a 1920 x 1080 view at High and Epic (the four
 // quarter samples before: 0.0225 and 0.0297 ms, one run; every pixel: 0.066-0.116 and 0.157-0.178 ms over four runs -
 // the clocks are not locked), the filter's and the integrate's beside it (the twins' blend), and the twins requested
