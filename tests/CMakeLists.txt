@@ -1081,25 +1081,21 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # 60 s — every soak, churn and scale row, and the setup whose every consumer is one of them: labelled `measure`, run at the sprint's ship only, alone on the card, never
 # served. A guard is never lost for its price: a row rewritten to its budget leaves this list (its line in gate-times.txt
 # from its own solo run).
+# THE SANITIZER ROWS ARE GUARDS, NOT MEASURES (URGENT #59, 2026-10-25): a sanitizer row (`*_asan`) is deterministic and
+# guards named behaviour under the sanitizer - in this list no master check ever reached one, and memory bugs (and the
+# laws only the twin carries: gi.cascades exists as gi.cascades_asan alone) surfaced only at the ship. They are reached
+# and served like any guard, in their own budget class (source.row_budget: a sanitizer row 60 s). The timing measures -
+# soaks, scale, determinism - stay here.
 set(JAH_MEASURE_ROWS
     archive.responsive.timing.fresh_home
     bake.determinism.dragon
     bake.determinism.standin
     bake.determinism.throws
     bundle.writer
-    engine.particles_pfx2_asan
-    engine.planar_asan
-    gi.cascades_asan
-    gi.rt_reflect_asan
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
-    hdr.drag_stable_asan
-    hdr.meter_asan
     math.parity
-    ssr.engine_asan
     test_engine
-    test_engine_asan.part1
-    test_engine_asan.part2
 )
 set_property(GLOBAL PROPERTY JAH_MEASURE_SEEN "")
 function(jah_measure_pass _dir)

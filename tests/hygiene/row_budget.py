@@ -3,7 +3,7 @@
 
 ONE RULE: every kept guard — every registered row but a `measure` row (it runs at the sprint's ship only) — is held
 against its class's budget at its price in scripts/gate-times.txt: a fixture or a CPU row 10 s, an app row (CLASS
-app|vr|selftest, a pool) 60 s. A guard over its budget is RED: rewritten to its budget, split (a pool by its arms),
+app|vr|selftest, a pool) 60 s, a sanitizer row (`*_asan`: a guard's instrumented twin, URGENT #59) 60 s. A guard over its budget is RED: rewritten to its budget, split (a pool by its arms),
 or labelled `measure` (tests/CMakeLists.txt's JAH_MEASURE_ROWS: a guard of a named behaviour is never deleted for its
 price) — never excused, there is no "by design". An unpriced guard is source.testing_rules' R2. Fed a violation first (a lint that cannot
 fail guards nothing).
@@ -15,6 +15,7 @@ import os
 import sys
 
 BUDGET = {"app": 60.0, "vr": 60.0, "selftest": 60.0}       # every other class (engine, a CPU row): 10 s
+SANITIZER = 60.0   # a sanitizer row (`*_asan`, URGENT #59): the instrumented run of a guard, its own class
 FAILURES = []
 
 
@@ -40,6 +41,8 @@ def budget_of(name, props, cmd=()):
     session (PHOTON-7 stage 1's read F6: lab.envs_build's `--env-check` is CPU work) and keeps the 10 s."""
     if name.startswith("pool.") or any(str(c).endswith("/bin/Jahshaka") for c in cmd):
         return 60.0
+    if name.endswith("_asan") or "_asan." in name:
+        return SANITIZER
     if any(str(c).endswith("/jahlab") for c in cmd) and not unsets_display(props):
         return 60.0
     return BUDGET.get(props.get("JAH_CLASS") or "", 10.0)
@@ -80,13 +83,16 @@ def main(source, build):
              T("m.long", JAH_CLASS="engine", LABELS=["measure"]), T("pool.p", JAH_CLASS="app"), T("lint"),
              T("l.ok", lab, JAH_CLASS="engine"), T("l.slow", lab, JAH_CLASS="engine"),
              T("l.cpu", ("sh", "/t/lab/envs_build.sh", "/b/bin/jahlab"),
-               ENVIRONMENT_MODIFICATION=["DISPLAY=unset:", "WAYLAND_DISPLAY=unset:"])]
+               ENVIRONMENT_MODIFICATION=["DISPLAY=unset:", "WAYLAND_DISPLAY=unset:"]),
+             T("s.ok_asan", JAH_CLASS="engine"), T("s.slow_asan", JAH_CLASS="engine"), T("s_asan.part1", JAH_CLASS="engine")]
     got = [n for n, _, _ in over(synth, {"f.slow": 12, "a.slow": 61, "a.ok": 59, "m.long": 500, "pool.p": 59,
-                                         "lint": 11, "l.ok": 40, "l.slow": 61, "l.cpu": 11})]
+                                         "lint": 11, "l.ok": 40, "l.slow": 61, "l.cpu": 11, "s.ok_asan": 59,
+                                         "s.slow_asan": 61, "s_asan.part1": 30})]
     print("the rule catches (synthetic):")
-    check(sorted(got) == ["a.slow", "f.slow", "l.cpu", "l.slow", "lint"], "a fixture over 10 s, an app row over 60 s, a "
-          "jahlab session over 60 s, a CPU row over 10 s and a jahlab CPU row (no display) over 10 s are red; an app row "
-          "under 60 s, a jahlab session under 60 s, a pool under 60 s and a measure row are not (%s)" % got)
+    check(sorted(got) == ["a.slow", "f.slow", "l.cpu", "l.slow", "lint", "s.slow_asan"], "a fixture over 10 s, an app row "
+          "over 60 s, a jahlab session over 60 s, a CPU row over 10 s, a jahlab CPU row (no display) over 10 s and a "
+          "sanitizer row over 60 s are red; an app row under 60 s, a jahlab session under 60 s, a pool under 60 s, a "
+          "sanitizer row under 60 s (a part too) and a measure row are not (%s)" % got)
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_graph            # a listing from a copy of the CTestTestfile tree (never truncates a running gate's log)
     tests = json.loads(gate_graph.ctest_inventory(build)[0] or "{}").get("tests", [])
