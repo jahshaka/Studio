@@ -604,7 +604,7 @@ foreach(_tier high epic)
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES JAHSHAKA_TEST_FRAMES 302)
     set_tests_properties(gi.bounce_series.${_tier}_fade PROPERTIES JAHSHAKA_TEST_FRAMES 1530)
     set_tests_properties(gi.bounce_series.${_tier}_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 459)
-    set_tests_properties(gi.bounce_series.${_tier}_rays PROPERTIES JAHSHAKA_TEST_FRAMES 188)
+    set_tests_properties(gi.bounce_series.${_tier}_rays PROPERTIES JAHSHAKA_TEST_FRAMES 203)
 endforeach()
 
 # gi.scroll_slab (ENGINE-UPGRADE-U5 stage 1; RESTORED AND RE-POINTED by PHOTON-7 stage 2) — A SCROLLED CASCADE IS THE
