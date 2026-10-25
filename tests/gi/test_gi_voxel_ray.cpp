@@ -26,6 +26,12 @@
 //   (3) THE SIDE - every sweep hit reads the side of W's voxel the ray is on (its entry point against the voxel's faces
 //       along the canonical normal: the lit face; the store's own value, un-premultiplied), and the other side - W's
 //       unlit face, whose rays leave W and must never read its lit side through it - holds under 1 % of it;
+//   (5) THE DOOR'S EDGE (the lead's ruling on the plane test: a planar cell of the finest cascade takes a ray only where
+//       the ray crosses its stored plane) - D, a 0.1 m wall in CASCADE 0 (1.5 m before the camera), ENDING MID-CELL (0.3
+//       of a cascade-0 cell into its last cell along z, a door's edge): rays aimed at its face 2 cm inside the end, 0-80
+//       degrees off its normal from the wall's side and from the doorway's, every one HITS inside D's cells, before its
+//       face - D's cells along it are planar (the plane test) and its end's cell holds faces on two axes (occupancy); a
+//       ray through the doorway beside it is printed (over-occluding is allowed, leaking is not);
 //   (4) THE ORIGIN PLANE - a ray 10 degrees off P's top, started one cascade-0 cell above it with its origin plane,
 //       ESCAPES (P's own coarse cells are the hemisphere's boundary), and the same ray with no origin plane HITS in
 //       P's own cell (so it is the plane that lets it through, not an empty cell).
@@ -101,6 +107,11 @@ int main()
     const double colLo = lo[0] + col * cell;
     const double xf = colLo + 0.25 * cell;
     box(scene, Vec3(float(xf + 0.2), 0.0f, 0.0f), Vec3(0.4f, 8.0f, 1.0f), matte);                        // W
+    // D, the door's edge, in cascade 0: a 0.1 m wall 1.5 m before the camera, 4 m long, ending 0.3 of a cascade-0 cell
+    // into the z cell holding 0.5 m
+    const double lo0z = c0.centre.z - c0.halfSize, c0c = c0.cell;
+    const double dX = 1.5, dEnd = lo0z + (std::floor((0.5 - lo0z) / c0c) + 0.3) * c0c;
+    box(scene, Vec3(float(dX + 0.05), 1.5f, float(dEnd - 2.0)), Vec3(0.1f, 4.0f, 4.0f), matte);       // D
     const double bx = cP.centre.x - cP.halfSize - 8.0;
     box(scene, Vec3(float(bx), -0.2f, 0.0f), Vec3(4.8f, 0.4f, 4.8f), matte);                             // B
     box(scene, Vec3(float(bx), 3.2f, 0.0f), Vec3(4.8f, 0.4f, 4.8f), matte);
@@ -164,6 +175,22 @@ int main()
     const double el = 10.0 * M_PI / 180.0;
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 1.0, 0.0 } });
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 0.0, 0.0 } });
+    // (5) the door's edge: aimed at D's face 2 cm inside its end from 0.6 m, from the wall's side (+z travel) and the
+    // doorway's (-z), at a height off every cell plane
+    const double kDoorAim = 0.6, yD = 1.537;
+    const size_t kDoor = rays.size();
+    const int kDoorAngles[4] = { 0, 30, 60, 80 };
+    for (int sgn = -1; sgn <= 1; sgn += 2)
+        for (int d : kDoorAngles) {
+            if (d == 0 && sgn < 0) continue;
+            const double t = d * M_PI / 180.0;
+            const double dir[3] = { std::cos(t), 0.0, sgn * std::sin(t) };
+            rays.push_back({ { dX - kDoorAim * dir[0], yD, dEnd - 0.02 - kDoorAim * dir[2] }, { dir[0], dir[1], dir[2] },
+                             { 0.0, 0.0, 0.0 } });
+        }
+    const size_t kDoorEnd = rays.size();
+    // ...and one through the doorway, two cells past the end, at normal incidence (printed)
+    rays.push_back({ { dX - kDoorAim, yD, dEnd + 2.0 * c0c }, { 1.0, 0.0, 0.0 }, { 0.0, 0.0, 0.0 } });
 
     std::vector<VoxelReaderCone> cones, march;
     for (const Ray &r : rays) {
@@ -280,6 +307,33 @@ int main()
         check(a.march[3] == 2.0f, "(4) THE ORIGIN PLANE: a grazing ray off the plate ESCAPES (its own cells are no occluder)");
         check(b.march[3] == 1.0f && double(b.escape[0]) * size0 < cell,
               "(4) ...and with no origin plane it HITS in the plate's own cell (the plane is what lets it through)");
+    }
+    {
+        bool doorHits = true;
+        for (size_t i = kDoor; i < kDoorEnd; ++i) {
+            const Ray &r = rays[i];
+            const VoxelReaderAnswer &a = co[i];
+            const double tHit = double(a.escape[0]) * size0;
+            // D's cascade-0 cell-rounded box (cascade 0's lattice: its centre minus its half)
+            const double wLo[3] = { dX, -0.5, dEnd - 4.0 }, wHi[3] = { dX + 0.1, 3.5, dEnd };
+            double tCol = -1e30;
+            for (int ax = 0; ax < 3; ++ax) {
+                const double cLo = lo0[ax] + std::floor((wLo[ax] - lo0[ax]) / c0c) * c0c;
+                const double cHi = lo0[ax] + std::ceil((wHi[ax] - lo0[ax]) / c0c) * c0c;
+                if (r.dir[ax] > 0.0) tCol = std::max(tCol, (cLo - r.start[ax]) / r.dir[ax]);
+                else if (r.dir[ax] < 0.0) tCol = std::max(tCol, (cHi - r.start[ax]) / r.dir[ax]);
+            }
+            const bool ok = a.march[3] == 1.0f && int(a.escape[1]) == 0 && tHit >= tCol - 1e-3 && tHit <= kDoorAim + 1e-3;
+            std::printf("   (5) the door's edge, %+5.1f deg: %-9s cascade %.0f, t %.3f m (D's cells at %.3f, its face at "
+                        "%.3f)%s\n", std::atan2(r.dir[2], r.dir[0]) * 180.0 / M_PI, exitName(a.march[3]),
+                        double(a.escape[1]), tHit, tCol, kDoorAim, ok ? "" : "  <- LEAK");
+            doorHits = doorHits && ok;
+        }
+        const VoxelReaderAnswer &b = co[kDoorEnd];
+        std::printf("   (5) through the doorway a cell past the end: %s at t %.3f m (printed: over-occlusion is allowed)\n",
+                    exitName(b.march[3]), double(b.escape[0]) * size0);
+        check(doorHits, "(5) THE DOOR'S EDGE: every ray aimed at the wall beside its end HITS inside its cascade-0 cells (no "
+                        "leak)");
     }
     std::printf("%s\n", g_fail ? "FAIL" : "PASS");
     return g_fail ? 1 : 0;
