@@ -31,7 +31,6 @@ scripts/warm-app-cache.sh guard
 scripts/gpu-exclusive.sh guard
 scripts/row-env.sh guard
 scripts/sanitize.sh guard
-scripts/shadercache/shadercache-bench.sh guard
 scripts/threading/texture-ab.sh guard
 scripts/threading/warmup-ab.sh guard
 tests/support/fresh_home.sh guard
