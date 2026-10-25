@@ -4,19 +4,20 @@
 // THE FIXTURE: two sealed 8 x 4 x 8 m rooms of carded walls (0.2 m slabs), 24 m apart, each with nine carded pillars and a
 // lamp; their cards want ~416 pages of the atlas's 256 and the faces a ray inside one can reach ~137 (the inner faces and
 // the pillars) - so one room fits, both do not. The chain at High, the rays on, THE GATHER ON (its hits are the readers;
-// a 256 x 256 view), the field off. Run W: the camera settles in room A, WALKS to room B in 120 frames (through the walls:
-// the gap between the rooms reads their outer faces) and settles; run T: settles in A and TELEPORTS to B. Both read the
-// cache at B.
+// a 256 x 256 view), the field off. Run W: the camera settles in room A, WALKS to room B in 60 frames (through the walls:
+// the gap between the rooms reads their outer faces) and settles; run T: the TELEPORT WITH NO PAST, built and resting at
+// B (it settled in A first before the rows' split: no frame of A is the law's). Both read the cache at B.
 // THE LAWS:
 //   (1) THE READ FACES ARE RESIDENT AND NO UNREACHABLE ONE IS: at B, every pillar of room B holds cards in both runs, and
 //       no card of a wall's OUTER face (the face toward the outside of its room) was read within the window;
 //   (2) THE ATLAS MADE ROOM: the walk's demand (both rooms and the outer faces of the gap) exceeds the atlas and evicted
-//       the unread cards (the teleport's fits whole), and every FACE READ AT B AT LEAST lambda_min TIMES A FRAME
-//       (GiQualityFacts::cardDemandHitFloor) in either run (the measuring arm's per-face counts over the 30 frames after
-//       the arrival - every read of the face, its card's or the hit that marked it: Scene::readCardFaceDemand) has its
-//       card resident in the other - walk = teleport on THE
-//       RESIDENT SET (the spec's acceptance) down to the demand settle's law (GiQualityFacts::cardDemandSettleFrames:
-//       a face read less may arrive in one run and not the other - counted, printed);
+//       the unread cards (the teleport's fits whole), and every FACE READ IN THE READERS' REST-16 AT B AT LEAST
+//       lambda_min TIMES A FRAME (GiQualityFacts::cardDemandHitFloor) in either run (the measuring arm's per-face counts
+//       from the gather's first rest frame to its 17th - every read of the face, its card's or the hit that marked it:
+//       Scene::readCardFaceDemand; RESTATED WITH R3, the lead's ruling: the rest the cache's one decision reads) has its
+//       card resident in the other - walk = teleport on THE RESIDENT SET (the spec's acceptance). The settling phase's
+//       rates (the 30 frames after the arrival) are printed as information: a face read only while settling (the band
+//       face 21/1 at 1.1 hits a frame after a 60-frame walk) is not the rest's demand;
 //   (3) THE VALUES, printed: every lit texel of every card resident in both runs against the other run's, in codes
 //       (1 % of its radiance per channel over the store's floor) past one step of the RGBA16F store (PHOTON-7 stage 10,
 //       10-2d: the radiance store's quantum under the code) - A LAW since 10-2e (the lead's ruling): none over a code.
@@ -61,7 +62,12 @@
 //   (4) THE ATLAS COMPACTS: a third run teleports from a CROWDED room (a 7 x 3 x 7 grid of 0.8 m cubes: its read set
 //       fills the atlas with quarter-page cards) to room B (whole pages): the arrivals find no free page and the atlas
 //       merges its sub-cut pages (compaction moves > 0, each moved card re-captured), and B comes to rest carded.
-// gi.card_truth (THE SAME SOURCE, built with JAH_CARD_TRUTH; PHOTON-7 stage 10, (8)'s truth) - THE TWO CACHES AGAINST
+// THE ROWS (PHOTON-7 stage 10, the lead's ruling: one binary, one row a law group, each within the fixture's 10 s, every
+// run the fewest frames its law needs - AT REST is the cache's one rest decision since the stop plus 30 quiet frames):
+// gi.card_residency (argv walk: the walk and the teleport - (1) (2) (3) (7)), gi.card_residency_pinned (the walk and the
+// pinned teleport - (6)), _crowded ((4)), _late (the teleport and the late reader - (5)), _held (the band card held in
+// and out, both runs AT B - (8)); every row checks (7)'s store at rest over its own runs.
+// gi.card_truth (THE SAME BINARY, argv truth; a `measure` row: run by 10-3 and at the ship) - THE TWO CACHES AGAINST
 // THE TRUTH: six teleport runs into room B (deterministic), at B's rest the gather frozen with its ray readback as in
 // (8): the band card held in / out and every card of B's +x wall held out (cards.force card 63), each at the tier's 16
 // rays and at the TRUTH's 128 (the door gi.truthRays: the cards' indirect gather and the voxel sides' gather - the
@@ -170,6 +176,10 @@ struct Run {
     /// its card's or, none resident, the hit that marked it: the measuring arm's counts, Scene::readCardFaceDemand), by
     /// its node and bucket - the settle law's lambda
     std::map<std::pair<NodeId, unsigned>, double> rate;
+    /// ...and each face's read rate over THE READERS' REST-16 at B ((2)'s read set, restated with R3: the first 16
+    /// frames of the gather's rest - the rest the cache's one decision reads), hits a frame
+    std::map<std::pair<NodeId, unsigned>, double> restRate;
+    bool restRateOk = false;
     unsigned long long frame = 0ull, newest = 0ull, evicted = 0ull, admitted = 0ull, compaction = 0ull;
     unsigned pagesUsed = 0u;
     int restA = -1, restB = -1;
@@ -193,6 +203,16 @@ struct Run {
 /// gi.card_truth's runs: every run captures its hits (the residency row's held runs always do), and the +x wall's cards
 /// held absent (cards.force card 63) so its hits read the voxels
 static bool gCaptureHits = false, gWallHeldOut = false;
+/// gi.card_residency_held's runs start AT B (no room A, no move: (8)'s law needs the rest at B alone)
+static bool gStartAtB = false;
+/// the frames between turning the camera to the wall behind the band face and reading its hits (the truth table's 120)
+static int gCaptureWait = 8;
+/// (7)'s convex edge's Jacobi reference: the walk row's alone (64 frames the pinned row's walk does not need)
+static bool gEdgeReference = false;
+/// AT REST's quiet frames after the rest decision (settle)
+static const int kQuiet = 30;
+/// THE WALK's frames from A to B (24 m; 120 before the rows' split - the law reads B's rest, not the walk's pace)
+static const int kWalkFrames = 60;
 /// gi.card_truth's TRUTH: the estimators at this many rays (gi.truthRays)
 static const unsigned kTruthRays = 128u;
 /// the edge's world point: the walk's cascade 0 cell 67,93,84 at B (the readback's, spikes/photon-7/stage10/10-2)
@@ -236,19 +256,37 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     gi.cards = true;
     gi.bounces = true;
     gi.updateBudget = 0;
-    const auto settle = [&]() {
+    // AT REST: the cache's ONE rest decision taken since the stop (R3 (b): its drains and admissions are the rest's last
+    // residency move) and then kQuiet frames of nothing - no chain or feedback owed, no relight, no admission, an empty
+    // queue (90 quiet frames before the decision existed; the row's budget, the lead's ruling: the fewest frames the law
+    // needs)
+    // THE REST-16'S READS (B's settle): the faces' cumulative hits at the gather's FIRST rest frame and at its 17th - the
+    // reads in between are the rest sequence's first 16 frames (the harvest's lag shifts both ends alike); a rest that
+    // restarts before its 17th frame starts the window again
+    std::vector<CardFaceDemand> rest0, rest1;
+    int restPhase = 0;   // 0 none, 1 the first rest frame snapshotted, 2 the 17th
+    const auto restWatch = [&](const GiStatus &g) {
+        const unsigned rf = g.gather.restFrames;
+        unsigned long long cf = 0ull;
+        if (rf == 1u && restPhase < 2) { scene->readCardFaceDemand(rest0, cf); restPhase = 1; }
+        else if (rf == 0u && restPhase == 1) restPhase = 0;
+        else if (rf >= 17u && restPhase == 1) { scene->readCardFaceDemand(rest1, cf); restPhase = 2; }
+    };
+    const auto settle = [&](unsigned long long decisionsAtStop, bool watchRest) {
         unsigned long long relights = ~0ull, admitted = ~0ull;
         int quiet = 0, f = 0;
-        for (; f < 1500 && quiet < 90; ++f) {
+        for (; f < 1500 && quiet < kQuiet; ++f) {
             run(1);
             const GiStatus g = scene->published().gi;
+            if (watchRest) restWatch(g);
             const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
-                               g.cards.admitted == admitted && g.cards.queueLength == 0u;
+                               g.cards.admitted == admitted && g.cards.queueLength == 0u &&
+                               g.cards.restDecisions > decisionsAtStop;
             relights = g.cards.relights;
             admitted = g.cards.admitted;
             quiet = still ? quiet + 1 : 0;
         }
-        if (quiet < 90) {
+        if (quiet < kQuiet) {
             const GiStatus g = scene->published().gi;
             std::printf("   NOT AT REST: chainOwed %d feedbackOwed %d built %d relights %llu admitted %llu queue %u "
                         "relitLastFrame %u indirectLastFrame %u reported %llu byRegion %llu overflows %llu\n",
@@ -265,9 +303,9 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                             c.feedbackResumes, c.feedbackSaturated, c.feedbackCarried, c.relightCarried);
             }
         }
-        return quiet >= 90 ? f - quiet : -1;
+        return quiet >= kQuiet ? f - quiet : -1;
     };
-    look(-12.0f);
+    look(gStartAtB ? 12.0f : -12.0f);
     if (!scene->setGlobalIllumination(gi)) return false;
     // (6)'s ARM: cascades 1 and 2 pinned to the walk's final placement (built there, no scroll history), 0 and 3 free
     if (pinTo && pinTo->size() >= 4u) {
@@ -278,16 +316,18 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         scene->setGiPlacementPin(pin);
     }
     e->waitForAsyncShaders();
-    out.restA = settle();
+    out.restA = gStartAtB ? 0 : settle(0ull, false);
     if (gatherLate) e->setArm("cards.gatherLate", double(gatherLate));   // (5): the gather reads first N frames late
     if (walk) {
-        for (int f = 1; f <= 120; ++f) {
-            look(-12.0f + 24.0f * float(f) / 120.0f);
+        for (int f = 1; f <= kWalkFrames; ++f) {
+            look(-12.0f + 24.0f * float(f) / float(kWalkFrames));
             run(1);
         }
-    } else {
+    } else if (!gStartAtB) {
         look(12.0f);
     }
+    // (the stop: B's rest decision is the next one)
+    const unsigned long long decisionsAtStop = gStartAtB ? 0ull : scene->published().gi.cards.restDecisions;
     // THE READ RATES AT B (the settle law's own quantity: GiQualityFacts::cardDemandSettleFrames catches every face
     // read at least once a frame): each face's hits over the 30 frames after the arrival, while the readers run (they
     // rest once the view holds) - EVERY read of the face, resident or not (RED as an instrument before: a count per
@@ -309,7 +349,18 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             out.rate[{ k.node, k.bucket }] = double(n - base) / 30.0;
         }
     }
-    out.restB = settle();
+    out.restB = settle(decisionsAtStop, true);
+    if (restPhase == 2) {
+        std::map<std::pair<NodeId, unsigned>, unsigned long long> h0;
+        for (const CardFaceDemand &k : rest0) h0[{ k.node, k.bucket }] = k.hits[0] + k.hits[1];
+        for (const CardFaceDemand &k : rest1) {
+            const unsigned long long n = k.hits[0] + k.hits[1];
+            auto it = h0.find({ k.node, k.bucket });
+            const unsigned long long base = it != h0.end() && n >= it->second ? it->second : 0ull;
+            out.restRate[{ k.node, k.bucket }] = double(n - base) / 16.0;
+        }
+        out.restRateOk = true;
+    }
     {
         const GiStatus gb = scene->published().gi;
         out.builtAtB.clear();
@@ -518,13 +569,15 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         const bool okWall = take(false);
         enginetest::testCameraLookAt(view, Vec3(out.b.centre.x + 3.3f, 1.75f, out.b.centre.z + 0.6f),
                                      Vec3(out.b.centre.x + 4.0f, 1.75f, out.b.centre.z + 2.6f));
-        run(120);
+        // (the frozen rays' readback is a few frames late; the held row reads the two runs' answers at one moment - the
+        // truth table waits for the caches to settle on the new view's demand)
+        run(gCaptureWait);
         out.hitsOk = okWall && take(true);
         e->setArm("gather.hitsReadback", 0.0);
         e->setArm("gather.freezeFrame", 0.0);
     }
     if (holdCard || gWallHeldOut) e->setArm("cards.force", 0.0);
-    if (walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
+    if (gEdgeReference && walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
         // (7)'s REFERENCE for the convex edge: the same placement re-solved by THE JACOBI DOOR (gi.bounceJacobi: every
         // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the
         // same grid; read once it holds (64 frames: bounce_series' Jacobi-64)
@@ -559,10 +612,18 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    // THE ROW (one binary, one row a law group - each within the fixture's budget: the lead's ruling): walk = the walk
+    // and the teleport, (1) (2) (3) (7); pinned = the walk and the pinned teleport, (6); crowded = (4); late = the
+    // teleport and the late reader, (5); held = the band card held in and out at B, (8); truth = gi.card_truth's table
+    const std::string mode = argc > 1 ? argv[1] : "walk";
+    if (mode != "walk" && mode != "pinned" && mode != "crowded" && mode != "late" && mode != "held" && mode != "truth") {
+        std::printf("FAIL: unknown row '%s' (walk | pinned | crowded | late | held | truth)\n", mode.c_str());
+        return 1;
+    }
     std::string err;
-    const auto cfg = enginetest::testEngineConfig("test-gi-card-residency-ogre.log");
+    const auto cfg = enginetest::testEngineConfig("test-gi-card-residency-" + mode + "-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
@@ -573,10 +634,10 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
-#ifdef JAH_CARD_TRUTH
     // ---- gi.card_truth: THE TRUTH TABLE (the header's second half) --------------------------------------------------
-    {
+    if (mode == "truth") {
         gCaptureHits = true;
+        gCaptureWait = 120;
         Run r16in, r16out, r16wall, rTin, rTout, rTwall;
         bool ok = runOnce(e, false, r16in, frames, false, 0, nullptr, +1);
         ok = runOnce(e, false, r16out, frames, false, 0, nullptr, -1) && ok;
@@ -646,25 +707,35 @@ int main()
                     failures == 1 ? "" : "s");
         return failures ? 1 : 0;
     }
-#endif
-    Run w, t, c, l, pnd;
-    const bool okW = runOnce(e, true, w, frames);
-    const bool okT = runOnce(e, false, t, frames);
-    const bool okP = runOnce(e, false, pnd, frames, false, 0, &w.builtAtB);
-    const bool okC = runOnce(e, false, c, frames, true);
-    const bool okL = runOnce(e, false, l, frames, false, 8);
-    // (8) L1: the band face's card held resident in one pinned run and absent in another (cards.force)
-    Run hin, hout;
-    const bool okHin = runOnce(e, false, hin, frames, false, 0, &w.builtAtB, +1);
-    const bool okHout = runOnce(e, false, hout, frames, false, 0, &w.builtAtB, -1);
+    gEdgeReference = mode == "walk";
+    Run w, t, c, l, pnd, hin, hout;
+    bool okW = true, okT = true, okP = true, okC = true, okL = true, okHin = true, okHout = true;
+    // (the teleports START AT B - the teleport with no past: walk = teleport is path independence, and no frame of room
+    // A is the law's; the walk keeps A, whose cards its arrival at B must evict)
+    if (mode == "walk" || mode == "pinned") okW = runOnce(e, true, w, frames);
+    gStartAtB = true;
+    if (mode == "walk" || mode == "late") okT = runOnce(e, false, t, frames);
+    if (mode == "pinned") okP = runOnce(e, false, pnd, frames, false, 0, &w.builtAtB);
+    if (mode == "late") okL = runOnce(e, false, l, frames, false, 8);
+    gStartAtB = false;
+    if (mode == "crowded") okC = runOnce(e, false, c, frames, true);
+    if (mode == "held") {
+        // (8) L1: the band face's card held resident in one run and absent in another (cards.force), both AT B
+        gStartAtB = true;
+        okHin = runOnce(e, false, hin, frames, false, 0, nullptr, +1);
+        okHout = runOnce(e, false, hout, frames, false, 0, nullptr, -1);
+        gStartAtB = false;
+    }
+    if (mode == "walk") {
     std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
                 "compaction moves %llu\n", w.restA, w.restB, w.cards.size(), w.pagesUsed, w.admitted, w.evicted,
                 w.compaction);
     std::printf("   TELEPORT: at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
                 "compaction moves %llu\n", t.restA, t.restB, t.cards.size(), t.pagesUsed, t.admitted, t.evicted,
                 t.compaction);
-    CHECK(okW && okT && w.restA >= 0 && w.restB >= 0 && t.restA >= 0 && t.restB >= 0,
-          "both runs come to rest in A and in B and their cards read back");
+    CHECK(okW && okT && w.restA >= 0 && w.restB >= 0 && t.restB >= 0,
+          "both runs come to rest (the walk in A and in B, the teleport at B) and their cards read back");
+    }
 
     // the nodes are the scene's own: the two runs' scenes number them alike (the same build order) - matched by the
     // build's own lists, position by position
@@ -681,6 +752,7 @@ int main()
     const auto readRecently = [](const Run &r, const CardRadiance &c) { return c.lastRead + kWindow >= r.newest; };
 
     // (1) the pillars of B carded, no outer face read
+    if (mode == "walk") {
     size_t pillarsW = 0, pillarsT = 0, outerRead = 0;
     for (const Run *r : { &w, &t }) {
         size_t &pillars = r == &w ? pillarsW : pillarsT;
@@ -695,6 +767,7 @@ int main()
                 "%zu\n", pillarsW, pillarsT, outerRead);
     CHECK(pillarsW == 9u && pillarsT == 9u && outerRead == 0u,
           "(1) THE READ FACES ARE RESIDENT (every pillar of B carded) AND NO OUTER FACE WAS READ");
+    }
 
     // (2) the read set resident in both: every FACE read at B at least once a frame (the settle law's floor) in either
     //     run is resident in the other (a face's cards: the card of its bucket - every box face one card here)
@@ -702,11 +775,15 @@ int main()
     for (const CardRadiance &c : w.cards) if (idW.count(c.node)) inW[{ idW.at(c.node), c.card }] = &c;
     for (const CardRadiance &c : t.cards) if (idT.count(c.node)) inT[{ idT.at(c.node), c.card }] = &c;
     // each run's faces by the run-independent id: its read rate, and whether a card of it is resident
-    struct Face { double rate = 0.0; bool resident = false; };
+    // (2) RESTATED WITH R3 (the lead's ruling): the read set is the faces read in the readers' REST-16 at B - the rest the
+    // cache's one decision reads; the settling phase's rate (the 30 frames after the arrival) is printed as information
+    struct Face { double rate = 0.0, settling = 0.0; bool resident = false; };
     const auto faces = [](const Run &r, const std::map<NodeId, int> &id) {
         std::map<std::pair<int, unsigned>, Face> f;
-        for (const auto &kv : r.rate)
+        for (const auto &kv : r.restRate)
             if (id.count(kv.first.first)) f[{ id.at(kv.first.first), kv.first.second }].rate = kv.second;
+        for (const auto &kv : r.rate)
+            if (id.count(kv.first.first)) f[{ id.at(kv.first.first), kv.first.second }].settling = kv.second;
         for (const CardRadiance &c : r.cards)
             if (id.count(c.node)) f[{ id.at(c.node), c.bucket }].resident = true;
         return f;
@@ -725,24 +802,30 @@ int main()
             if (rt >= floor) { ++read; miss += there ? 0u : 1u; }
             if (rt >= 0.5 * floor && rt < floor) ++band;
             if (rt >= floor && !kv.second.resident)   // the settle law's own claim in this run (printed)
-                std::printf("   %s: id %d face %u read %.3f hits a frame at B and NOT resident in it\n", name,
+                std::printf("   %s: id %d face %u read %.3f hits a frame in the rest-16 at B and NOT resident in it\n", name,
                             kv.first.first, kv.first.second, rt);
+            if (kv.second.settling >= floor && !kv.second.resident)   // (information: read while settling only)
+                std::printf("   %s: id %d face %u read %.3f hits a frame while SETTLING at B (%.3f in the rest-16), not "
+                            "resident (information)\n", name, kv.first.first, kv.first.second, kv.second.settling, rt);
             if (!there && rt > 0.0 && kv.second.resident)
                 std::printf("   %s only: id %d face %u read %.3f hits a frame at B (the %s: %.3f)%s\n", name,
                             kv.first.first, kv.first.second, rt, otherName, o != theirs.end() ? o->second.rate : 0.0,
                             rt >= floor ? " - AT THE FLOOR OR MORE" : rt >= 0.5 * floor ? " (the band floor/2 .. floor)" : "");
         }
     };
+    if (mode == "walk") {
     side(fW, fT, "walk", "teleport", readW, missW, bandW);
     side(fT, fW, "teleport", "walk", readT, missT, bandT);
-    std::printf("   the read set (faces read at B at least %.2f hits a frame, the settle law's floor): walk %zu (%zu not "
-                "resident in the teleport), teleport %zu (%zu not resident in the walk) | in the band floor/2 .. floor "
-                "(the law leaves to chance): walk %zu, teleport %zu\n", floor, readW, missW, readT, missT, bandW, bandT);
-    CHECK(w.evicted > 0u && readW > 0u && readT > 0u && missW == 0u && missT == 0u,
+    std::printf("   the read set (faces read in the readers' rest-16 at B at least %.2f hits a frame, the settle law's floor): "
+                "walk %zu (%zu not resident in the teleport), teleport %zu (%zu not resident in the walk) | in the band "
+                "floor/2 .. floor (the law leaves to chance): walk %zu, teleport %zu\n", floor, readW, missW, readT, missT,
+                bandW, bandT);
+    CHECK(w.evicted > 0u && w.restRateOk && t.restRateOk && readW > 0u && readT > 0u && missW == 0u && missT == 0u,
           "(2) THE ATLAS MADE ROOM (the walk's unread cards evicted) AND THE READ SET IS RESIDENT IN BOTH");
+    }
 
     // (5) THE LATE FIRST READER: the teleport's read set resident in the late run
-    {
+    if (mode == "late") {
         const std::map<NodeId, int> idL = key(l);
         const auto fL = faces(l, idL);
         size_t readSet = 0, missL = 0;
@@ -760,6 +843,7 @@ int main()
     }
 
     // (3) the values
+    if (mode == "walk") {
     size_t common = 0, over = 0;
     double worst = 0.0;
     for (const auto &kv : inW) {
@@ -778,10 +862,11 @@ int main()
     }
     std::printf("   (3) the values, %zu cards resident in both: worst %.3f codes, %zu texels over a code\n", common, worst, over);
     CHECK(common > 0u && over == 0u, "(3) WALK = TELEPORT: every card resident in both within a code (10-2e: the hit's level by the camera)");
+    }
 
     // (6) THE HISTORY PART: the walk against the teleport pinned to its placement - the same resident set, 0 texels over
     //     a code
-    {
+    if (mode == "pinned") {
         const std::map<NodeId, int> idP = key(pnd);
         std::map<std::pair<int, unsigned>, const CardRadiance *> inP;
         for (const CardRadiance &k : pnd.cards) if (idP.count(k.node)) inP[{ idP.at(k.node), k.card }] = &k;
@@ -823,7 +908,7 @@ int main()
     //     with the voxel read along the RAY: 98 codes, the pillar's lit -z face read into its +x face; then 5.2 codes with
     //     the read along the hit's normal - against a code, the bar before it was derived. The cause, gi.card_truth: both
     //     caches' fixed 16-ray quadrature, the voxel side's single surface point -13 % red against the 128-ray truth.)
-    {
+    if (mode == "held") {
         const std::map<NodeId, int> idI = key(hin), idO = key(hout);
         std::map<std::pair<int, unsigned>, const CardRadiance *> inI, inO;
         for (const CardRadiance &k : hin.cards) if (idI.count(k.node)) inI[{ idI.at(k.node), k.card }] = &k;
@@ -889,6 +974,7 @@ int main()
     // (4) THE COMPACTION: from the crowded room (its read set in quarter pages) to room B (whole pages): the arrivals find
     //     no free page, the evictions free scattered quarter-page slots, and the atlas merges the sub-cut pages to free
     //     whole ones - every card read at B resident, every moved card re-captured (none queued at the rest)
+    if (mode == "crowded") {
     size_t readC = 0, unreadAtB = 0;
     for (const CardRadiance &k : c.cards) if (readRecently(c, k)) ++readC;
     for (NodeId p : c.b.pillars)
@@ -898,8 +984,9 @@ int main()
                 c.cards.size(), c.pagesUsed, c.admitted, c.evicted, c.compaction, readC, unreadAtB);
     CHECK(okC && c.restA >= 0 && c.restB >= 0 && c.compaction > 0u && c.evicted > 0u && unreadAtB == 0u,
           "(4) THE ATLAS COMPACTS: the crowded room's quarter pages merged to free whole ones, and room B carded at rest");
+    }
 
-    {
+    if (mode == "walk") {
         // (7)'s CONVEX EDGE against its reference: the walk's toggling cell at B's rest against the same placement's
         // Jacobi re-solve, within a code (1 % over the store's floor) plus the store's achievable quantum under the
         // iteration (0.5 / (1 - r) steps: 1.5e-7 at the floor at r 0.8)
