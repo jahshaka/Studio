@@ -44,6 +44,13 @@
 #       the third, plus the encode's 2 codes - a ray whose lift went SIDEWAYS (the depth's nearer neighbour across the
 #       crease: the side pick before the fix) keeps the drawn plane under level 0 and hits its own floor: a one-row line
 #       along the crease (measured with the old pick: 132 of 747 columns; with the fix 0).
+#       DECLARED RED FOR STAGE 11 (its C2, THE HIT'S MISSING SPECULAR; PHOTON-7 stage 10, the lead's ruling): since the
+#       cards' indirect is gathered by TLAS rays (10-2a (2), irisgl 37224f80) the block's base texels' downward rays hit
+#       the mirror floor's CARD, which holds the diffuse lobe alone (black on a metal), where the voxel path answers a
+#       metal hit with its specular share of the bounce (jahHitBounceToward) - the base comes out dark and its reflection
+#       steps: 1 of 747 columns (586: 101.07 against 104, 104). THE ARM (measured once, reverted): the card gather's
+#       downward hits reading the voxel path instead of the card - 0 columns. Not worked around here: stage 11's C2
+#       gives every TLAS hit reader the hit's specular.
 # THE BASE (photon-2 round 5, the 1/2-cell bias + tMin, Both): at 1 m the reflected foot ENTIRELY missing (SEAM 99.3
 # rows, the top edge 84.9 rows off); at 2.4 m SEAM 7.4 rows, the edge 5.7 off.
 # 11 shots x 50 = 550 frames; two jahlab sessions.
