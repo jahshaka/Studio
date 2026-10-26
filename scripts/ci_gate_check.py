@@ -116,8 +116,11 @@ def fork_rows(build, graph, inv):
 def reach_key(build, a, tip):
     """THE KEY OF ONE ANCESTOR'S REACH (URGENT FIX LIST #57, the builder's half): what Reach.of(a) reads, hashed - the
     ancestor and the tip, the build's stamp (BUILT_FROM), its ctest inventory's files (path, mtime, size: the lead's own
-    rule in spec.sh's reach cache), and the selector's scripts (gate-scope.py, gate_graph.py, this file). Any change of
-    any of them is a new key; the range's commits are fixed by their two shas."""
+    rule in spec.sh's reach cache), the selector's scripts (gate-scope.py, gate_graph.py, this file), and THE GRAPH's own
+    inputs (build.ninja and .ninja_deps: path, mtime, size - PHOTON-7 stage 10-3: a build dir whose deps log had vanished
+    answered from a blind graph, 249 rows where the rebuilt one answers 252, and that answer was served from the disk
+    after the rebuild because nothing in the key moved). Any change of any of them is a new key; the range's commits are
+    fixed by their two shas."""
     h = hashlib.sha256()
     h.update(f"{a}..{tip}\n".encode())
     for f in (os.path.join(build, "BUILT_FROM"), os.path.join(HERE, "gate-scope.py"), os.path.join(HERE, "gate_graph.py"),
@@ -127,6 +130,12 @@ def reach_key(build, a, tip):
                 h.update(fh.read())
         except OSError:
             h.update(b"-")
+    for f in (os.path.join(build, "build.ninja"), os.path.join(build, ".ninja_deps")):
+        try:
+            st = os.stat(f)
+            h.update(f"graph {f}:{st.st_mtime_ns}:{st.st_size}\n".encode())
+        except OSError:
+            h.update(f"graph {f}: absent\n".encode())
     for f in sorted([os.path.join(build, "CTestTestfile.cmake")]
                     + glob.glob(os.path.join(build, "tests", "*", "CTestTestfile.cmake"))
                     + glob.glob(os.path.join(build, "tests", "*", "*", "CTestTestfile.cmake"))):

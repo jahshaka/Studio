@@ -109,6 +109,12 @@ class NinjaGraph:
         dl = os.path.join(build, ".ninja_deps")
         if not os.path.isfile(bn):
             return None
+        # A BUILD DIR WITHOUT ITS DEPS LOG IS A BLIND GRAPH (PHOTON-7 stage 10-3): no header and no compiled source is
+        # an input of anything, every lookup answers "not in the build graph" and the selection falls back to rules -
+        # said once, loudly, never silently (the tree needs a build: ninja treats every object without deps as dirty).
+        if not os.path.exists(dl) and os.path.isfile(os.path.join(build, ".ninja_log")):
+            sys.stderr.write(f"gate_graph: {build} has a .ninja_log but NO .ninja_deps - the graph is blind (no header or "
+                             f"compiled source is anyone's input); rebuild the tree before trusting a selection\n")
         # the spelling is part of the key: nodes are joined onto it, and another spelling of the same dir
         # (a symlinked root) must not reuse a graph whose nodes answer only to the first
         key = (_CACHE_VERSION, build, os.path.getmtime(bn), os.path.getmtime(dl) if os.path.exists(dl) else 0)
