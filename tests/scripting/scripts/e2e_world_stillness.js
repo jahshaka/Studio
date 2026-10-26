@@ -53,9 +53,14 @@ if (st.gather && st.gather.running === true)
 // decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + N + 1 frames of
 // the readers' first rest, and W, the decision's work, keeps its pace (W <= workPace). The bound is derived from the
 // window's own counts; the window's length is only how long it is observed.
-// RED-CAPABLE (an arm, measured 2026-10-26, one run): with the readers' hold term OFF (the gather's in.holdOwed false) the
-// gather held at frame 76 of the walk window, before the decision's work and its last write (101): red on "the gather's
-// hold is the settle after the last write". (The view's hold still waited for the reflection: 115.)
+// RED-CAPABLE (two arms, measured 2026-10-26, one run each): (a) EARLY - the readers' hold term OFF (the gather's
+// in.holdOwed false): the gather held at frame 76 of the walk window, before the decision's work and its last write
+// (101): red on "the gather's hold is the settle after the last write" (the view's hold still waited for the reflection,
+// 115). (b) LATE - the hold DELAYED (the gather's hold owed 17 frames past the cards' last owed frame): the walk's first
+// hold 58 frames after the readers' first rest against the bound 55: red on (3) LIVENESS (a 40-frame delay pushed the
+// walk's hold past its window: red on "the hold inside its frames"). THE HOLD LANDS EXACTLY AT ITS BOUND here (55 of
+// 55 in both windows) only because W, the decision's work, is bounded by its own pace law (W 4 frames against a pace of
+// 11): the bound is the design's arithmetic with W as measured, not a number fitted to this scene.
 for (var w = 0; w < 2; ++w) {
     var win = r.windows[w];
     var lastWrite = Math.max(0, win.lastHoldKeyFrame);
