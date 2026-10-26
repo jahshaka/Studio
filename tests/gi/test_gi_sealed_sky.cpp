@@ -36,6 +36,11 @@
 //       two METAL panels on the back wall (metalness 1: every pixel of theirs is the specular term), a smooth one
 //       (roughness 0.05: the sky cube at a narrow lobe, REFLECT-1 / PCC-1) and a rough one (0.5: the rough lobe through a
 //       shell) - each one's brightest pixel under 1 % of R.
+//   (9) THE CAPTURED CUBE (PHOTON-7 stage 10-3, the lead's condition: the sky cube at a narrow lobe measured, never
+//       assumed): the same sky as a CUBEMAP of radiance 1 (the engine captures it: the environment cube the pixel's
+//       specular reads - jahGlobalEnvVisibility gates it - and the SH beside it), the camera inside at rest: (7)'s three
+//       reads again, each under 1 % of R (R the roof's, the same sky's radiance). Last in each row (the ray tier at Epic;
+//       the no-ray tier as it ships, rebuilt).
 //   (8) THE TELEPORT INTO THE BOX (stage 10's (1), 2026-10-26: a ray no cascade holds reads OUTSIDE = the sky, so before a
 //       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
 //       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
@@ -398,6 +403,30 @@ int main(int argc, char **argv)
               "(8) THE TELEPORT INTO THE BOX: no frame of the window until rest reads 1 % of the roof's");
     };
 
+    // (9) THE CAPTURED CUBE: a uniform white cubemap sky (radiance 1, the SH's sky as a cube), the camera where it stands
+    const auto cubeLaw = [&](double R, const char *tier) {
+        SkyDesc sky;
+        sky.mode = SkyMode::Cubemap;
+        std::vector<unsigned char> face(8 * 8 * 4, 255);
+        for (int f = 0; f < 6; ++f) sky.faces[f] = scene->createTexture(8, 8, face.data(), true, false);
+        const bool set = scene->setSky(sky);
+        int f = 0;
+        for (; f < 600 && scene->published().environmentPending; ++f) run(1);
+        const int rest = settle();
+        const PixRead p = readPicture();
+        std::printf("   (9) %s, the captured cube (landed in %d frames, at rest after %d): the matte middle's brightest %.6f "
+                    "(%.4f %% of R); %s %.6f (%.4f %%), %s %.6f (%.4f %%); the panels' borders %.6f (%.4f %%)\n", tier, f, rest,
+                    p.diffuse, R > 0.0 ? 100.0 * p.diffuse / R : -1.0, panels[0].name, p.spec[0],
+                    R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, panels[1].name, p.spec[1], R > 0.0 ? 100.0 * p.spec[1] / R : -1.0,
+                    p.border, R > 0.0 ? 100.0 * p.border / R : -1.0);
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.diffuse < 0.01 * R,
+              "(9) THE CAPTURED CUBE, THE DIFFUSE: no matte pixel inside the sealed room reads 1 % of the roof's");
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.spec[0] < 0.01 * R && p.spec[1] < 0.01 * R,
+              "(9) THE CAPTURED CUBE, THE SPECULAR: no pixel of either metal panel inside the sealed room reads 1 % of the roof's");
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.border < 0.01 * R,
+              "(9) THE CAPTURED CUBE, THE PANELS' BORDERS read under 1 % of the roof's");
+    };
+
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
     const char *tierName[2] = { "High", "Epic" };
     for (int t = 0; mode == "ray" && t < 2; ++t) {
@@ -502,6 +531,7 @@ int main(int argc, char **argv)
         fieldLaw(R);
         pixelLaw(R, tierName[t]);
         teleportLaw(win, R, tierName[t]);
+        if (t == 1) cubeLaw(R, "Epic");
     }
     // THE NO-RAY TIER AS IT SHIPS (rays off, the field on, no cards): the roof's control, then inside - the voxels, the
     // field, the pixel and the teleport window
@@ -565,6 +595,22 @@ int main(int argc, char **argv)
             check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < 0.01 * R,
                   "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads 1 % of the roof's");
             pixelLaw(R, "no rays, the field off");
+        }
+    }
+    if (mode == "noray") {
+        // (9) at the no-ray tier as it ships: the field back on, then the captured cube
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::On;
+        gi.cards = true;
+        gi.bounces = true;
+        gi.updateBudget = 0;
+        check(scene->setGlobalIllumination(gi), "(9) the no-ray tier's GI rebuilds");
+        e->waitForAsyncShaders();
+        settle();
+        {
+            cubeLaw(Rnoray, "no rays");
         }
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);

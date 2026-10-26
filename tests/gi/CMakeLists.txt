@@ -752,8 +752,8 @@ foreach(_row ray noray)
     set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 369)
-set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 212)
+set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 409)
+set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 335)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
