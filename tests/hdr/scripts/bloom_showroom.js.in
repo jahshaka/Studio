@@ -16,10 +16,14 @@
 // THE SECOND BAR (worstAll): that exemption is wide (Showroom 2 has ~76 hot grid points and
 // it skips ~928 of the 1080 row ends), so a band or a widened halo on an exempt row would
 // pass it. EVERY row end - bar the ones sitting on a hot point itself (within kCoreReach,
-// where the highlight's own core legitimately moves) - must also be the bloomAmount 0
-// picture within kWorstAllBar codes. The lane measured worst-anywhere 1 code; the base's
-// band measured 40 (its band rows +19..+38). The bar is 4: three codes of headroom over the
-// lane for a halo tail's driver rounding, and a band's weakest row (+19) is ~5x over it.
+// where the highlight's own core legitimately moves) - over kWorstAllBar (4) codes is judged
+// as a BAND: a band is the whole row's (the base's measured 40, its band rows +19..+38), a
+// halo is local to its highlight, so the row must come back within 2 codes of the bloomAmount
+// 0 picture somewhere along it (kAcross points a row). RESTATED (PHOTON-7 stage 11, the
+// lead's ruling): the fixed 4-code halo bar was the old picture's (worst 1); a lamp with a
+// size (the sphere-light glint) makes a bigger highlight and a wider halo (worst 9, rows
+// 251-258 right) - the halo's reach follows the actual highlight; the row ends over 4 are
+// printed.
 //
 // Frames, never time: the shots are the picture at rest (editor.screenshot settles).
 
@@ -54,6 +58,12 @@ for (var y = 0; y < H; ++y) {
     ends.push({ x: 0.5 / W, y: (y + 0.5) / H });
     ends.push({ x: (W - 0.5) / W, y: (y + 0.5) / H });
 }
+// ...AND EACH ROW ACROSS (PHOTON-7 stage 11, the second bar's law): kAcross points along every row, so a row end's excess
+// can be followed along its own row - a halo falls off away from its highlight, a band does not.
+var kAcross = 16;
+for (var y = 0; y < H; ++y)
+    for (var k = 0; k < kAcross; ++k)
+        ends.push({ x: (W * (k + 0.5) / kAcross) / W, y: (y + 0.5) / H });
 // THE PAIR IS ONE PICTURE (PHOTON-7 stage 10, the giAtRest contract): both shots settle AT REST - never at the cap - and
 // the surface cache relights nothing between them (its relights differenced across the second shot), so the pair differs
 // by the bloom alone. Before the contract a shot settled with the cards' rounds still relighting: two bloom-on shots
@@ -71,7 +81,7 @@ var relitBetween = after.relights - between.relights;
 assert(relitBetween === 0, "the cards relit nothing between the two shots (" + relitBetween + " relights, " +
        (after.visibleRelights - between.visibleRelights) + " visible)");
 var on = shotOn.probes, off = shotOff.probes;
-assert(on.length === 2 * H && off.length === 2 * H, "both shots read both ends of every row");
+assert(on.length === (2 + kAcross) * H && off.length === (2 + kAcross) * H, "both shots read both ends of every row and its across points");
 
 // The pixels bright enough to bloom.
 var grid = [];
@@ -101,7 +111,17 @@ function withinOfHot(px, py, radius) {
 function nearHot(px, py) { return withinOfHot(px, py, kHaloReach); }
 
 var checked = 0, exempt = 0, onCore = 0, bad = [], badAll = [], worstFar = 0, worstAll = 0;
-for (var j = 0; j < on.length; ++j) {
+// (a row's across points: the probes after the 2 H ends, kAcross a row)
+function acrossMin(row) {
+    var m = 1e9;
+    for (var k = 0; k < kAcross; ++k) {
+        var a = on[2 * H + row * kAcross + k], b = off[2 * H + row * kAcross + k];
+        m = Math.min(m, Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)));
+    }
+    return m;
+}
+var bandRows = [];
+for (var j = 0; j < 2 * H; ++j) {
     var a = on[j], b = off[j];
     var d = Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
     var px = a.x * W, py = a.y * H;
@@ -111,6 +131,11 @@ for (var j = 0; j < on.length; ++j) {
         worstAll = Math.max(worstAll, d);
         if (d > kWorstAllBar && badAll.length < 12)
             badAll.push("(" + (px < W / 2 ? "left" : "right") + " row " + Math.floor(py) + ": +" + d + ")");
+        // THE BAND TEST on a row end over the halo bar: its excess must be a HALO - local to the highlight that throws
+        // it, so somewhere along its own row the bloomed picture is the bloomAmount 0 one within 2 codes (a band, the
+        // old ladder's defect, is the whole row's); its reach follows the actual highlight, never a fixed width
+        if (d > kWorstAllBar && acrossMin(Math.floor(py)) > 2 && bandRows.length < 12)
+            bandRows.push("(row " + Math.floor(py) + ": end +" + d + ", the row's least +" + acrossMin(Math.floor(py)) + ")");
     }
     if (Math.floor(py) % 30 === 0)
         console.log("  row " + Math.floor(py) + (px < W / 2 ? " left" : " right") + ": +" + d +
@@ -125,7 +150,11 @@ console.log("row ends: " + checked + " checked, " + exempt + " inside a halo's r
 assert(checked >= 100, "the control: at least 100 row ends are outside every halo's reach (" + checked + ")");
 assert(worstFar <= 2, "no band: every row end outside a halo's reach is the bloomAmount 0 picture within 2 codes " +
        "(worst " + worstFar + ")" + (bad.length ? " " + bad.join(" ") : ""));
-assert(worstAll <= kWorstAllBar, "no band or widened halo anywhere: every row end not on a highlight's core is the " +
-       "bloomAmount 0 picture within " + kWorstAllBar + " codes (worst " + worstAll + ")" +
-       (badAll.length ? " " + badAll.join(" ") : ""));
+// THE SECOND BAR, RESTATED ON ITS LAW (PHOTON-7 stage 11, the lead's ruling): a row end over kWorstAllBar codes is
+// printed - a bigger lamp makes a bigger highlight and a wider halo (the sphere-light glint) - and judged as a BAND: its
+// row must return within 2 codes of the bloomAmount 0 picture somewhere along it.
+console.log("row ends over the " + kWorstAllBar + "-code halo bar (printed): " + (badAll.length ? badAll.join(" ") : "none") +
+            " (worst " + worstAll + ")");
+assert(bandRows.length === 0, "no band anywhere: every row end over the halo bar is a halo - its own row returns within 2 " +
+       "codes of the bloomAmount 0 picture" + (bandRows.length ? " " + bandRows.join(" ") : ""));
 console.log("BLOOM_SHOWROOM_DONE");
