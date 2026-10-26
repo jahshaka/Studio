@@ -42,6 +42,9 @@
 #       every surface matte), the chain depth (cards_round's deepest - a chain's, not a root's) and the readings' tail.
 #       (The bound ceil(ln(dL0/q)/ln(1/rho_max)) was withdrawn: the quantum is the READER's 1 %, the report cumulative,
 #       cards_round a chain depth.)
+#   (6) NO REPORT DROPPED (PHOTON-7 stage 10, the stranded listings): the cache's reports never read for want of a
+#       read-back slot (cards_reports_dropped) stay 0 over the window - a dropped report is a defect if seen at all (its
+#       fallback lists every card, but the ring holds one report a frame over the lag).
 # On the rig's display, at 960x540.
 # usage: stillness_control.sh <jahlab> <work dir>
 set -u
@@ -166,6 +169,9 @@ print("the series: the last visible reading at %s, the last relight at %s, then 
 check(t_vis is not None and t_rel is not None and quiet >= 9 + 16,
       "(5) THE SERIES STOPS: after the last visible reading (%s) the relights end (%s) and %d frames follow with none "
       "(at least 9 + 16)" % (t_vis, t_rel, quiet))
+# (6) NO REPORT DROPPED
+dropped = num(ctl[-1], "cards_reports_dropped")
+check(dropped == 0, "(6) NO REPORT DROPPED: %d of the cache's reports found no read-back slot" % dropped)
 held2 = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "held.tsv")), delimiter="\t"))
 check(len(held2) == 13 and all(r["held"] == "1" and int(r["all_max"]) == 0 and r["gi_rows"] == "-" for r in held2),
       "(1b) the held stop's window: 13 frames held, 0 codes, no GI row")

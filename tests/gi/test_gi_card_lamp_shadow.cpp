@@ -280,6 +280,8 @@ int main(int argc, char **argv)
                         "%llu reports dropped (every slot in flight), %llu overflows\n", g.cards.indirectReported,
                         g.cards.indirectByCards, g.cards.indirectByBound, g.cards.indirectAnswered, g.cards.reportsDropped,
                         g.cards.indirectOverflows);
+            // (a dropped report is a defect if seen at all: the ring holds one report a frame over the read-back's lag)
+            CHECK(g.cards.reportsDropped == 0ull, "NO REPORT DROPPED: every cache report found its read-back slot");
         }
         read(ro, okO);
         no = lastIndirect;
