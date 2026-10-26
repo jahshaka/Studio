@@ -138,7 +138,7 @@ lab.no_self_drain 2.96  solo, the card lock held, :72 (PHOTON-7 walk hitch, 2026
 lab.commit_reach 2.56  solo, the card lock held, :72 (PHOTON-7 walk hitch 2, 2026-10-25: photon-court at 960x540, a -z walk of 150 under monitor, each commit's slab and computed cells)
 gi.inject_fold 0.02  solo, CPU only (PHOTON-7 walk hitch 2, 2026-10-25: the injection boxes' fold, pure geometry)
 lab.script_stops 10.04  solo, the card lock held, :72 (URGENT #50, 2026-10-24: three jahlab sessions of a frame on photon-contact at 320x180)
-lab.stillness_control 6.07  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26: RESTATED - a 300-frame window from a teleport into photon-room, the first hold the last; before: solo, the card lock held, :71, warm (PHOTON-2 stage 0 fix round, 2026-10-22; jahlab on photon-room held at the stop, 960x540))
+lab.stillness_control 6.46  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26: RESTATED - a 300-frame window from a teleport into photon-room, the first hold the last, and a held stop's 12-frame window (its mask); before: solo, the card lock held, :71, warm (PHOTON-2 stage 0 fix round, 2026-10-22; jahlab on photon-room held at the stop, 960x540))
 lab.stillness_runs 7.95  solo, the card lock held, :71, warm (PHOTON-2 stage 1, 2026-10-22; jahlab on photon-glass, 960x540, the path check)
 library.model 7.20  ship 3a0422b4e (2026-10-13)
 lights.falloff 1.46  quiet n=43

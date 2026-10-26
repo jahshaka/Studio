@@ -9,7 +9,10 @@
 # a broken hold; the first hold cannot.
 # THE LAWS:
 #   (1) THE FIRST HOLD IS THE LAST: from the first held frame to the window's end (at least 12 frames) every frame held,
-#       0 codes, no GI row; the held frames' mask counted (the gather's history count);
+#       0 codes, no GI row;
+#   (1b) A HELD STOP KEEPS ITS MASK (the read's finding 1: "the stop frame's history count never came back"): a second
+#       12-frame window whose stop is a held frame reads 0 codes, holds, and counts its mask (the held frame copies its
+#       history count) - the first window's stop is the teleport, where no pixel has a history;
 #   (2) THE HOLD WAITS FOR THE DECISION (R3's ruling: the readers' hold waits on the rest decision's work): the stop's one
 #       rest decision is taken, and no held frame comes before the decision's last GI row;
 #   (3) LIVENESS, the bound R3's design writes: the first hold comes within
@@ -26,6 +29,7 @@ LAB=${1:?jahlab}; WD=${2:?work dir}
 rm -rf "$WD"; mkdir -p "$WD"
 cat > "$WD/control.lab" <<'S'
 stillness teleport:0,2,3,0,3,-4 300 out=control
+stillness teleport:0,2,3,0,3,-4/hold:1 12 out=held
 quit
 S
 "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-room --script "$WD/control.lab" > "$WD/control.log" 2>&1
@@ -60,7 +64,6 @@ if first_hold is not None:
     check(not bad, "(1) THE FIRST HOLD IS THE LAST: held, 0 codes and no GI row on every frame after it%s"
           % ("" if not bad else " - broken at frames %s (max %s, GI %s)" % (bad[:6], [ctl[i]["all_max"] for i in bad[:6]],
                                                                          [ctl[i]["gi_rows"][:40] for i in bad[:3]])))
-    check(all(int(r["all_px"]) > 0 for r in after), "(1) the held frames' mask is the gather's count (pixels counted)")
     check(t_dec is not None, "(2) the stop's one rest decision is taken")
     if t_dec is not None:
         work_end = max((i for i in range(t_dec, len(gi)) if gi[i]), default=t_dec)
@@ -72,6 +75,10 @@ if first_hold is not None:
             bound = 16 + 9 + W + 16 + 1
             check(first_hold - first_rest <= bound, "(3) LIVENESS: the first hold %d frames after the first rest, within "
                   "16 + 9 + W %d + 16 + 1 = %d" % (first_hold - first_rest, W, bound))
+held2 = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "held.tsv")), delimiter="\t"))
+check(len(held2) == 13 and all(r["held"] == "1" and int(r["all_max"]) == 0 and r["gi_rows"] == "-" for r in held2),
+      "(1b) the held stop's window: 13 frames held, 0 codes, no GI row")
+check(len(held2) > 1 and int(held2[1]["all_px"]) > 0, "(1b) A HELD STOP KEEPS ITS MASK: the gather's count (pixels counted)")
 clog = open(os.path.join(wd, "control.log")).read()
 check(" visible=gather " in clog, "the control's mask is the gather's")
 if fails:

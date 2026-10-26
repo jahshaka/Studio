@@ -67,7 +67,7 @@ set_tests_properties(lab.stillness_runs PROPERTIES TIMEOUT 60 LABELS "lab")
 # a teleport into photon-room, AFTER THE VIEW'S FIRST HOLD NOTHING CHANGES (every frame held, 0 codes, no GI row, its mask
 # the held frame's own history count), the hold waits for the stop's one rest decision, and it comes within R3's own
 # bound (stillness_control.sh says the laws). 960x540; a 300-frame window from the teleport.
-jah_gpu_row(lab.stillness_control CLASS engine FRAMES 301
+jah_gpu_row(lab.stillness_control CLASS engine FRAMES 315
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/stillness_control.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/stillness_control
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
