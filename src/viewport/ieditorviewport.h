@@ -1008,6 +1008,8 @@ public:
             /// takes, and whether the rest reached it (giAtRest's term).
             bool  temporal = false;
             int   historyAge = 0, restFrames = 0, sinceRestart = 0, settleFrames = 0;
+            /// the pixels starved of a rest sample at the hold (PHOTON-7 stage 10-3: NO SAMPLE there)
+            int   starvedDiffuse = 0, starvedRough = 0;
             bool  settled = true;
             QString error;           ///< why it is not running, when it is not
         };

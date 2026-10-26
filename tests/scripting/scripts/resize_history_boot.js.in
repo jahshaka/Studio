@@ -94,7 +94,9 @@ editor.frame(12);
 buildFixtureB();
 var s = editor.screenshot("@SHOT@", 256, 256, [], "viewport");
 if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
-console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest);
+var gs = world.giStatus().gather || {};
+console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest +
+            "; the gather's starved pixels at the hold: " + gs.starvedDiffuse + " diffuse, " + gs.starvedRough + " rough specular");
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 if (mode === "b") {
     var c = app.compareImages("@SHOT_A@", "@SHOT@", 1);

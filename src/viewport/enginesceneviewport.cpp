@@ -3198,6 +3198,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.cpuMs        = st.gather.cpuMs;
     out.gather.temporal     = st.gather.temporal;
     out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
+    out.gather.starvedDiffuse = int(std::min(st.gather.starvedDiffuse, 1u << 30));
+    out.gather.starvedRough   = int(std::min(st.gather.starvedRough, 1u << 30));
     out.gather.restFrames   = int(std::min(st.gather.restFrames, 1u << 30));
     out.gather.sinceRestart = int(std::min(st.gather.sinceRestart, 1u << 30));
     out.gather.settleFrames = int(st.gather.settleFrames);

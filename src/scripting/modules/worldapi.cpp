@@ -1679,6 +1679,9 @@ QVariantMap WorldApi::giStatusBase()
                               // term giAtRest carries.
                               { QStringLiteral("temporal"), st.gather.temporal },
                               { QStringLiteral("historyAge"), st.gather.historyAge },
+                              // THE STARVED PIXELS AT THE HOLD (PHOTON-7 stage 10-3): no rest sample by the hold, NO SAMPLE
+                              { QStringLiteral("starvedDiffuse"), st.gather.starvedDiffuse },
+                              { QStringLiteral("starvedRough"), st.gather.starvedRough },
                               { QStringLiteral("restFrames"), st.gather.restFrames },
                               { QStringLiteral("sinceRestart"), st.gather.sinceRestart },
                               { QStringLiteral("settleFrames"), st.gather.settleFrames },
