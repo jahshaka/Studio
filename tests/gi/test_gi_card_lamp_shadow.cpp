@@ -145,10 +145,12 @@ int main(int argc, char **argv)
         // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
         // chain gathers, and a Live view takes the field's answer)
         view->setOffscreenContract(OffscreenContract::StillPicture);
-        cube(scene, Vec3(0.0f, -0.05f, 0.0f), Vec3(8.0f, 0.1f, 8.0f), Colour(0.6f, 0.6f, 0.6f), false);   // the floor
-        cube(scene, Vec3(0.0f, 2.0f, -4.05f), Vec3(8.0f, 4.0f, 0.1f), Colour(0.5f, 0.5f, 0.6f), false);   // the back wall
+        const NodeId floorNode =
+            cube(scene, Vec3(0.0f, -0.05f, 0.0f), Vec3(8.0f, 0.1f, 8.0f), Colour(0.6f, 0.6f, 0.6f), false);   // the floor
+        const NodeId wallNode =
+            cube(scene, Vec3(0.0f, 2.0f, -4.05f), Vec3(8.0f, 4.0f, 0.1f), Colour(0.5f, 0.5f, 0.6f), false);   // the back wall
         Vec3 blockerAt[2] = { Vec3(-1.2f, 1.2f, 0.0f), Vec3(1.2f, 1.2f, 0.0f) };
-        cube(scene, blockerAt[0], Vec3(0.8f, 0.8f, 0.8f), Colour(0.5f, 0.4f, 0.3f), false);
+        const NodeId stillNode = cube(scene, blockerAt[0], Vec3(0.8f, 0.8f, 0.8f), Colour(0.5f, 0.4f, 0.3f), false);
         const NodeId mover = cube(scene, blockerAt[1], Vec3(0.8f, 0.8f, 0.8f), Colour(0.3f, 0.4f, 0.5f), true);
         const Vec3 lampPos(0.0f, 2.4f, 0.0f);
         {
@@ -246,6 +248,11 @@ int main(int argc, char **argv)
 
         // (2) THE MOVED MOVER, against a whole re-solve
         blockerAt[1] = Vec3(1.2f, 1.2f, 1.0f);
+        unsigned long long moveFrame = 0ull;
+        {
+            std::vector<CardRadiance> before;
+            scene->readCardRadiance(before, moveFrame);   // (the cache frame of the move)
+        }
         enginetest::setNodePosition(scene, mover, blockerAt[1]);
         const int rest1 = settle();
         const unsigned long long movedRelights = settleRelights, movedIndirect = settleIndirect;
@@ -323,6 +330,29 @@ int main(int argc, char **argv)
             for (const auto &k : b) onlyResolve += a.count(k) ? 0u : 1u;
             std::printf("   resident: the moved state %zu cards, the re-solve %zu - %zu only in the moved, %zu only in the re-solve\n",
                         a.size(), b.size(), onlyMoved, onlyResolve);
+            // (each card of the moved state: its last direct relight and its last indirect re-gather, against the move's
+            // cache frame - which inputs the floor's last gather read, and whether it came after the move)
+            std::printf("   the moved state's cards against the move (cache frame %llu): node card face size | last relit, last "
+                        "indirect (frames after the move; negative: before it)\n", moveFrame);
+            for (const CardRadiance &c : set1) {
+                const char *who = c.node == floorNode ? "floor" : c.node == wallNode ? "wall" : c.node == stillNode ? "still"
+                                : c.node == mover ? "MOVER" : "other";
+                // (and the card against the re-solve's same card: its worst texel's codes, and the mean of its ratio)
+                double worstC = 0.0, ratio = 0.0;
+                size_t nr = 0;
+                for (const CardRadiance &o : setO) {
+                    if (o.node != c.node || o.card != c.card || o.rgb.size() != c.rgb.size()) continue;
+                    for (size_t k = 0; k < c.rgb.size(); ++k) {
+                        const double ov = std::max(double(o.rgb[k]), 5.9604645e-6);
+                        if (!(c.rgb[k] > 0.0f) && !(o.rgb[k] > 0.0f)) continue;
+                        worstC = std::max(worstC, std::fabs(double(c.rgb[k]) - double(o.rgb[k])) / (0.01 * ov));
+                        if (o.rgb[k] > 1e-4f) { ratio += double(c.rgb[k]) / double(o.rgb[k]); ++nr; }
+                    }
+                }
+                std::printf("     %-5s %2u %u %3u | %+lld, %+lld | against the re-solve: worst %.2f codes, mean ratio %.4f\n",
+                            who, c.card, c.bucket, c.size, (long long)c.lastRelit - (long long)moveFrame,
+                            (long long)c.lastIndirect - (long long)moveFrame, worstC, nr ? ratio / double(nr) : 0.0);
+            }
             for (const CardRadiance &c : set1)
                 if (!b.count({ c.node, c.card }))
                     std::printf("     only in the moved: node %llu card %u face %u size %u, last read %llu\n",
