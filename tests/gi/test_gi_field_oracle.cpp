@@ -46,10 +46,17 @@
 //       ending at its box: A's rays read the plate in cascade 0 (opaque), B's in cascade 1 (part covered). B's c0 lies
 //       3.7 m off the camera - a placement the engine never makes - so this arm's store is built WITHOUT the bounce
 //       (the direct term: a world function at any placement), the cones' law alone (the lead's ruling, 10-2e).
-//   (6b) THE STORE IS A WORLD FUNCTION AT THE PLACEMENTS THE ENGINE CAN REACH (PHOTON-7 stage 10, 10-2e; L1): the same
-//       fixture, the same camera, cascade 0 built at each end of its one re-centre step, the bounce ON (the TLAS route's
-//       hits read their level by the camera): every cascade's two sides at the world cells both hold inside the field's
-//       window, and every probe, within a code. PRINTED: each level's margin M, its level radius, the range it costs.
+//   (6b) THE CACHE STORE AT THE PLACEMENTS THE ENGINE CAN REACH (PHOTON-7 stage 10, 10-2e; RESTATED at 10-3, the lead's
+//       ruling): the same fixture, the same camera, cascade 0 built at each end of its one re-centre step, the bounce ON.
+//       A CACHE's rays read their hit level by their own footprint in the finest box holding the hit (camera-independent:
+//       the teleport window, L9), so a read whose hit lies where the two placements' c0 boxes differ - the STRIPS
+//       between their faces, with c0's edge-blend band - answers differently by construction; every other read is the
+//       same. THE LAW: every cascade's two sides at the world cells both hold inside the field's window within a code
+//       where nothing differs, and within the closed form D / (1 - r) where a read crosses a strip: D the strips' own
+//       level discrepancy (the largest |c0 - c1| over the strip cells, the same world cell, at either placement), carried
+//       through the bounce by r, the store's measured contraction (the feedback bricks' series, at most the scene's
+//       largest albedo). D and r are measured in the run. L1 is the PICTURE's law: gi.cache_level_picture holds it.
+//       PRINTED: each level's margin M, its level radius, the range it costs; the probes.
 //   (7) THE STORE IS A WORLD FUNCTION FOR EVERY VALUE A READER READS (PHOTON-7 stage 7: the store holds the two SIDES,
 //       the total their mean): after (1)'s step, each cascade's FRONT, BACK and TOTAL, voxel by voxel and channel by
 //       channel, within ONE CODE of the oracle's at its own value (1 % over the store's floor, kGiBrickFloor) - two paths
@@ -766,11 +773,65 @@ int main(int argc, char **argv)
                 const float camX = 4.59f * step0;
                 const int rA = placeAt(4.0f * step0, qa, ta, gi, camX);
                 std::vector<GiVoxelVolume> va(4), vb(4);
-                for (int c = 0; c < 4; ++c) s6->giVoxelLight(c, va[size_t(c)]);
+                std::vector<GiFeedbackBricks> fa(4), fbk(4);
+                for (int c = 0; c < 4; ++c) { s6->giVoxelLight(c, va[size_t(c)]); s6->giFeedbackBricks(c, fa[size_t(c)]); }
                 const int rB = placeAt(5.0f * step0, qb, tb, gi, camX);
-                for (int c = 0; c < 4; ++c) s6->giVoxelLight(c, vb[size_t(c)]);
-                size_t cmp = 0, overS = 0;
-                double worstS = 0.0;
+                for (int c = 0; c < 4; ++c) { s6->giVoxelLight(c, vb[size_t(c)]); s6->giFeedbackBricks(c, fbk[size_t(c)]); }
+                // THE STRIPS (where the two placements' c0 boxes differ, with c0's edge-blend band - jah_rq_hit.glsl's
+                // kBlendCells): x in [lo_min, lo_max + band] and [hi_min - band, hi_max]; their level discrepancy D, the
+                // largest |c0 - c1| of a side at the same world cell, at either placement
+                const double aLo = ta.cascades.empty() ? 0.0 : double(ta.cascades[0].centre.x - ta.cascades[0].halfSize),
+                             aHi = ta.cascades.empty() ? 0.0 : double(ta.cascades[0].centre.x + ta.cascades[0].halfSize),
+                             bLo = tb.cascades.empty() ? 0.0 : double(tb.cascades[0].centre.x - tb.cascades[0].halfSize),
+                             bHi = tb.cascades.empty() ? 0.0 : double(tb.cascades[0].centre.x + tb.cascades[0].halfSize);
+                const double band = 6.0 * double(va[0].cell[0]);
+                const auto inStrip = [&](double x) {
+                    return (x >= std::min(aLo, bLo) && x <= std::max(aLo, bLo) + band) ||
+                           (x >= std::min(aHi, bHi) - band && x <= std::max(aHi, bHi));
+                };
+                double D = 0.0;
+                size_t stripCells = 0;
+                for (const std::vector<GiVoxelVolume> *vv : { &va, &vb }) {
+                    const GiVoxelVolume &z = (*vv)[0], &o = (*vv)[1];
+                    if (!z.available || !o.available) continue;
+                    for (size_t q = 0; q < size_t(z.width) * z.height * z.depth; ++q) {
+                        const size_t ix[3] = { q % size_t(z.width), (q / size_t(z.width)) % size_t(z.height),
+                                               q / (size_t(z.width) * size_t(z.height)) };
+                        float wpos[3];
+                        int jo[3];
+                        bool ok = true;
+                        for (int k = 0; k < 3 && ok; ++k) {
+                            wpos[k] = z.origin[k] + (float(ix[k]) + 0.5f) * z.cell[k];
+                            jo[k] = int(std::floor((wpos[k] - o.origin[k]) / o.cell[k]));
+                            const int n = k == 0 ? o.width : k == 1 ? o.height : o.depth;
+                            ok = jo[k] >= 0 && jo[k] < n;
+                        }
+                        if (!ok || !inStrip(double(wpos[0]))) continue;
+                        const size_t r = (size_t(jo[2]) * size_t(o.height) + size_t(jo[1])) * size_t(o.width) + size_t(jo[0]);
+                        ++stripCells;
+                        for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront,
+                                                                             &GiVoxelVolume::lightBack }) {
+                            const std::vector<float> &x = z.*side, &y = o.*side;
+                            if (x.size() < 4 * q + 3 || y.size() < 4 * r + 3) continue;
+                            for (int ch = 0; ch < 3; ++ch)
+                                D = std::max(D, std::fabs(double(x[4 * q + size_t(ch)]) - double(y[4 * r + size_t(ch)])));
+                        }
+                    }
+                }
+                // r: the store's MEASURED contraction (the feedback bricks' series, flags bit 11), the largest over every
+                // cascade and both placements - at most the scene's largest albedo (0.8, the lit wall)
+                const double kRhoMax = 0.8;
+                double rMeasured = 0.0;
+                size_t bricksMeasured = 0;
+                for (const std::vector<GiFeedbackBricks> *ff : { &fa, &fbk })
+                    for (const GiFeedbackBricks &fb : *ff) {
+                        if (!fb.available) continue;
+                        for (size_t b = 0; b < fb.flags.size() && b < fb.r.size(); ++b)
+                            if (fb.flags[b] & (1u << 11u)) { ++bricksMeasured; rMeasured = std::max(rMeasured, double(fb.r[b])); }
+                    }
+                const double bound = rMeasured < 1.0 ? D / (1.0 - rMeasured) : -1.0;
+                size_t cmp = 0, overS = 0, overBound = 0;
+                double worstS = 0.0, worstAbs = 0.0;
                 float wAt[3] = { 0.f, 0.f, 0.f }, wVals[2] = { 0.f, 0.f };
                 int wC = -1;
                 for (int c = 0; c < 4; ++c) {
@@ -815,6 +876,10 @@ int main(int argc, char **argv)
                                     wVals[1] = y[4 * r + size_t(ch)];
                                 }
                                 overS += d > 1.0 ? 1u : 0u;
+                                // THE LAW: within a code, or within D / (1 - r) where a read crosses a strip
+                                const double absd = std::fabs(double(y[4 * r + size_t(ch)]) - double(x[4 * q + size_t(ch)]));
+                                worstAbs = std::max(worstAbs, absd);
+                                overBound += (d > 1.0 && !(bound >= 0.0 && absd <= 1.5e-7 + bound)) ? 1u : 0u;
                             }
                         }
                     }
@@ -870,9 +935,15 @@ int main(int argc, char **argv)
                 }
                 // (the probes PRINTED, not asserted: the field integrates while the store converges and its marks' law
                 // decides what it re-integrates - its own path, gi.field_oracle_marks' laws; the store is this arm's)
-                CHECK(rA >= 0 && rB >= 0 && cmp > 0u && overS == 0u,
-                      "(6b) THE STORE IS A WORLD FUNCTION AT REACHABLE PLACEMENTS: the store under the probes within a code "
-                      "across cascade 0's two reachable placements");
+                std::printf("   (6b) the strips (c0's faces at x %.2f / %.2f and %.2f / %.2f, the band %.3f m): %zu cells, their "
+                            "level discrepancy D %.6g; r measured %.4f over %zu bricks (at most %.2f) - the bound D / (1 - r) "
+                            "%.6g; the store's worst difference %.6g: %zu channels over a code, %zu over the bound\n", aLo, bLo,
+                            aHi, bHi, band, stripCells, D, rMeasured, bricksMeasured, kRhoMax, bound, worstAbs, overS,
+                            overBound);
+                CHECK(rA >= 0 && rB >= 0 && cmp > 0u && stripCells > 0u && bricksMeasured > 0u && rMeasured <= kRhoMax &&
+                          bound >= 0.0 && overBound == 0u,
+                      "(6b) THE CACHE STORE AT REACHABLE PLACEMENTS: within a code, and within D / (1 - r) where a read "
+                      "crosses the strips between cascade 0's two placements (D and r measured)");
             }
             s6->setGiPlacementPin(GiPlacementPin());
             s6->setGlobalIllumination(off);
