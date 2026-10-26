@@ -182,6 +182,10 @@ struct Run {
     bool restRateOk = false;
     unsigned long long frame = 0ull, newest = 0ull, evicted = 0ull, admitted = 0ull, compaction = 0ull;
     unsigned pagesUsed = 0u;
+    /// the last rest decision's room and arrivals (CardCacheStatus::decision*)
+    unsigned long long decisionUsed = 0ull, decisionFree = 0ull, decisions = 0ull;
+    unsigned decisionAdmitted = 0u, decisionRefused = 0u;
+    std::vector<CardCacheStatus::Refused> refusedCards;
     int restA = -1, restB = -1;
     Room a, b;
     /// each cascade's placement at B (the pinned arm (6) takes the walk's)
@@ -513,6 +517,12 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     out.admitted = g.cards.admitted;
     out.compaction = g.cards.compactionMoves;
     out.pagesUsed = g.cards.pagesUsed;
+    out.decisionUsed = g.cards.decisionUsedTexels;
+    out.decisionFree = g.cards.decisionFreeTexels;
+    out.decisions = g.cards.restDecisions;
+    out.decisionAdmitted = g.cards.decisionAdmitted;
+    out.decisionRefused = g.cards.decisionRefused;
+    out.refusedCards = g.cards.decisionRefusedCards;
     const bool ok = scene->readCardRadiance(out.cards, out.frame);
     for (const CardRadiance &c : out.cards) out.newest = std::max(out.newest, c.lastRead);
     if (holdCard < 0 && out.b.pillars.size() > 8u) {
@@ -887,6 +897,21 @@ int main(int argc, char **argv)
                         (unsigned long long)c.lastRelit, rr != r.restRate.end() ? rr->second : -1.0,
                         ro != other.restRate.end() ? ro->second : -1.0);
         };
+        // (each run's last rest decision: its room, its admitted and refused arrivals, the refused by object and mark)
+        for (const Run *r : { &w, &pnd }) {
+            const std::map<NodeId, int> idR = key(*r);
+            std::string refused;
+            for (const CardCacheStatus::Refused &f : r->refusedCards) {
+                char b[96];
+                std::snprintf(b, sizeof(b), " [object %d card %u size %u mark %llu]",
+                              idR.count(f.node) ? idR.at(f.node) : -1, f.index, f.size, (unsigned long long)f.mark);
+                refused += b;
+            }
+            std::printf("     %s: %llu decision(s); the last one's room %llu texels used, %llu free; %u admitted, %u refused%s\n",
+                        r == &w ? "the walk" : "the pinned teleport", (unsigned long long)r->decisions,
+                        (unsigned long long)r->decisionUsed, (unsigned long long)r->decisionFree, r->decisionAdmitted,
+                        r->decisionRefused, refused.c_str());
+        }
         for (const auto &kv : inW)
             if (!inP.count(kv.first)) { ++onlyW; name("walk", w, pnd, *kv.second, kv.first.first); }
         for (const auto &kv : inP)
