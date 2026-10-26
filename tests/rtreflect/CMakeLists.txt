@@ -225,6 +225,16 @@ if(TARGET jahlab)
                 ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lamp_step_held PROPERTIES TIMEOUT 60 LABELS "engine")
+    # rtreflect.nee_firefly (PHOTON-7 stage 11, 11-1b) - THE REFLECTION FINDS ITS EMITTERS BY NEXT-EVENT ESTIMATION:
+    # photon-firefly (one small bright emitter over a rough metal plate), Both, the arm reflect.nee on and off: (a) the
+    # table's one emitter, NEE rays with it on and none off, the cone's hit rate printed; (b) at rest frame 300 NEE's
+    # still-converging texels at most a quarter of the BRDF-only's; (c) NEE's hold inside the window with no capped
+    # texel, the control's none (nee_firefly.sh). 480x270; two jahlab sessions - about 1,500 frames.
+    jah_gpu_row(rtreflect.nee_firefly CLASS engine FRAMES 1500
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/nee_firefly.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/nee_firefly
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.nee_firefly PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1-2) - THE CONTACT MEETS ITS
     # REFLECTION AND NO RAY HITS ITS OWN SURFACE: the post foot's reflection starts at the contact line and its top edge
     # lies where the mirror puts it (Rays: the lifted mirror; Both: the interval to the plain one), within 1 px, from

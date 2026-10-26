@@ -59,5 +59,39 @@ std::string describeRough()
 
 Env photonRough() { return Env{ "photon-rough", describeRough, buildRough, stopRough, expectRough, 500.0f, false }; }
 
+// photon-firefly - THE REFLECTION's FIREFLY FIXTURE (PHOTON-7 stage 11, 11-1b: next-event estimation toward emitters).
+// photon-room's sealed shell and lamp, a ROUGH METAL FLOOR PLATE (perceptual roughness 0.30: under the ray tiers' cutoff,
+// so the ray reflection IS its reflection) and ONE SMALL BRIGHT EMITTER above it - a 0.3 m cube of radiance 30, 1.2 m up:
+// a rough lobe finds it by chance (the BRDF-only estimator's firefly, photon-rough's tail in its purest form), where the
+// emitter table's cone finds it every sample. THE CAMERA sees the emitter's reflection in the plate (its mirror point
+// about z 0.2). No expectation of its own: the reflection's rest and its 4,096-sample reference are measured on it.
+namespace {
+Built buildFirefly(unsigned seed, bool bake)
+{
+    Builder b("photon-firefly", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    roomShell(b, unit, b.material(kRho, kRho, kRho, 1.0f));
+    using V = iris::Vec3;
+    fixedBox(b, unit, "plate", V(-1.5f, 0, -1.5f), V(1.5f, 0.02f, 1.5f), b.material(0.9f, 0.9f, 0.9f, 0.30f, 1.0f));
+    fixedBox(b, unit, "lamp-cube", V(-0.15f, 1.05f, -1.65f), V(0.15f, 1.35f, -1.35f), b.emitter(30.0f));
+    return b.finish();
+}
+void stopFirefly(double, iris::Vec3 &eye, iris::Vec3 &target)
+{
+    eye = iris::Vec3(0, 1.6f, 2.4f);
+    target = iris::Vec3(0, 0, -0.5f);
+}
+std::vector<Prediction> expectFirefly(const Built &, const Optics &) { return {}; }
+std::string describeFirefly()
+{
+    return "photon-firefly: photon-room's sealed shell and lamp, a rough metal floor plate (perceptual 0.30) and one "
+           "small bright emitter above it (a 0.3 m cube, radiance 30, 1.2 m up) - the reflection's firefly (PHOTON-7 "
+           "stage 11, 11-1b: the BRDF-only estimator finds the emitter by chance, next-event estimation every sample). "
+           "No prediction: the rest and its 4,096-sample reference are measured on it.";
+}
+}   // namespace
+
+Env photonFirefly() { return Env{ "photon-firefly", describeFirefly, buildFirefly, stopFirefly, expectFirefly, 500.0f, false }; }
+
 }   // namespace envs
 }   // namespace lab
