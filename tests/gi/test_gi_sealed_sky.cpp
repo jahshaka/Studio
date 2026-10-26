@@ -243,6 +243,13 @@ int main(int argc, char **argv)
             vOk = vOk && vr.ok && vr.cells > 0;
             vWorst = std::max(vWorst, vr.peak);
         }
+        {
+            // (the BURIED origins the caches skipped - jahRayOriginBuried: a lift crossing a front face, the origin inside
+            // a solid - the voxel sides' and the cards' gather's, over the scene's life; PHOTON-7 stage 10-3)
+            const GiStatus g = scene->published().gi;
+            std::printf("   (3) the buried origins skipped: %llu voxel sides, %llu card texels\n", g.voxelSides.buried,
+                        g.cards.gather.buried);
+        }
         check(vOk && R > 0.0 && vWorst < 0.01 * R,
               "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads 1 % of the roof's");
     };
