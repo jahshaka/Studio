@@ -127,4 +127,4 @@ set_tests_properties(hdr.bloom_showroom PROPERTIES
     FIXTURES_REQUIRED bloomShowroomHome
     TIMEOUT 60 LABELS "scripting"
     ENVIRONMENT "HOME=${_bloom_home};JAHSHAKA_DATA_ROOT=${_bloom_home}/.local/share/Jahshaka")
-set_tests_properties(hdr.bloom_showroom PROPERTIES JAHSHAKA_TEST_FRAMES 737)
+set_tests_properties(hdr.bloom_showroom PROPERTIES JAHSHAKA_TEST_FRAMES 413)

@@ -3124,6 +3124,11 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cards.invalidMaterial   = double(st.cards.invalidMaterial);
     out.cards.invalidSun        = double(st.cards.invalidSun);
     out.cards.stillTraces       = double(st.cards.stillTraces);
+    out.cards.relights          = double(st.cards.relights);
+    out.cards.indirectRelights  = double(st.cards.indirectRelights);
+    out.cards.visibleRelights   = double(st.cards.visibleRelights);
+    out.cards.subQuantumRelights = double(st.cards.subQuantumRelights);
+    out.cards.restDecisions     = double(st.cards.restDecisions);
     out.cards.captureMs         = double(st.cards.captureMs);
     out.cards.cardRecords       = int(st.cards.cardRecords);
     out.cards.instanceSlots     = int(st.cards.instanceSlots);
@@ -3720,6 +3725,8 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     req.view = shot;
     req.hdr = wantRadiance;
     req.restoreDelta = mLastFrameDelta;
+    mLastShotSettleFrames = -1;
+    mLastShotAtRest = true;
     if (mShotSettleFrames > 0) {
         req.settleCap = unsigned(mShotSettleFrames);
         mShotSettleFrames = 0;
@@ -3733,6 +3740,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     }
     QImage result;
     takePicture(mEngine.get(), req, [&](Picture &&p) {
+        // (the settle's report: its frames, and whether it ended at rest or at its cap)
+        if (req.firstFrame || req.untilRest) {
+            mLastShotSettleFrames = int(p.frames);
+            mLastShotAtRest = !req.untilRest || (req.scene && req.scene->published().gi.giAtRest);
+        }
         if (p.ok && p.rgba.width && p.rgba.height) {
             result = QImage(int(p.rgba.width), int(p.rgba.height), QImage::Format_RGBA8888);
             for (unsigned y = 0; y < p.rgba.height; ++y)

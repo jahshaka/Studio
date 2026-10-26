@@ -942,9 +942,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
           "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\", {radiance}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b,radiance?,light?}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\", {radiance}) -> {path, width, height, grade, encoding, center:{r,g,b}, settleFrames, atRest, probes:[{x,y,r,g,b,radiance?,light?}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
-          "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames OFFSCREEN - nothing is presented, the document's clock does not move - until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed - at most 2000 frames, so two shots of a still scene are the same picture. A scene with something moving every frame (an animation, a socket rider, a physics body) never comes to rest: where the screen-probe gather runs, its shot is taken once the gather's history has settled (16 frames after its last restart) and shows that settled history, which is NOT byte-stable from one shot to the next by nature. "
+          "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames OFFSCREEN - nothing is presented, the document's clock does not move - until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed, and the surface cache's rest decision and its card relights done - at most 2000 frames, so two shots of a still scene are the same picture; `settleFrames` says how many it rendered and `atRest` whether it ended at rest (false: it stopped at the cap, a picture of GI still moving). A scene with something moving every frame (an animation, a socket rider, a physics body) never comes to rest: where the screen-probe gather runs, its shot is taken once the gather's history has settled (16 frames after its last restart) and shows that settled history, which is NOT byte-stable from one shot to the next by nature. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
           "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. IT CARRIES NO SCREEN-SPACE REFLECTIONS, NO AMBIENT OCCLUSION, NO BLOOM, NO SMAA AND NO TONEMAP, BY DESIGN, and that is worth knowing before using this verb to diagnose a picture: two plain shots taken with reflections on and off are bit-identical, which says nothing about the renderer (a 2026-09-15 diagnosis read exactly that as \"screenshots have lost SSR\"). Ask for \"scene\" when the question is about what the user sees. "
           "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
@@ -3310,6 +3310,12 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     out["width"] = img.width();
     out["height"] = img.height();
     out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() }, { "b", center.blue() } };
+    // THE SETTLE'S REPORT (PHOTON-7 stage 10): the frames it rendered before the readback, and whether it ended AT REST
+    // (false: it stopped at its cap - a picture of GI still moving)
+    if (!playerHasTheScreen()) {
+        out["settleFrames"] = host.viewport->lastScreenshotSettleFrames();
+        out["atRest"] = host.viewport->lastScreenshotAtRest();
+    }
 
     // Optional probe points in normalized 0..1 image coordinates: the pixel
     // gate for the shipped samples (samples.cleanstart.*) asserts material

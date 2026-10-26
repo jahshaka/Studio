@@ -559,6 +559,10 @@ public:
     /// the on-screen views quiet, so nothing is presented - until the scene's
     /// GiStatus::giAtRest, at most `maxFrames`. Consumed by that one screenshot.
     virtual void settleGiBeforeNextScreenshot(int maxFrames) { (void)maxFrames; }
+    /// THE LAST SCREENSHOT'S SETTLE (PHOTON-7 stage 10): the frames it rendered before its readback (-1: none asked),
+    /// and whether it ended AT REST - false means it stopped at its cap, a picture of GI still moving.
+    virtual int lastScreenshotSettleFrames() const { return -1; }
+    virtual bool lastScreenshotAtRest() const { return true; }
     /// THE NEXT PLAIN SCREENSHOT ALSO READS ITS SCENE RADIANCE IN FLOAT
     /// (FOG-ATMO-1 fix round; the engine's View::readPixelsHdr, HDR-READBACK-1):
     /// the linear, scene-referred value before any 8-bit store, so a measurement
@@ -919,6 +923,11 @@ public:
             double   invalidTransform = 0.0, invalidMaterial = 0.0;
             /// The still world's sun term (traced): sun changes, cards traced.
             double   invalidSun = 0.0, stillTraces = 0.0;
+            /// THE RELIGHTS (PHOTON-7 stage 10; CardCacheStatus): cards relit (their indirect half re-gathered: the
+            /// indirect ones), the relight frames read back VISIBLE (a texel moved a display code since its last report)
+            /// and SUB-QUANTUM, and the stop's rest decisions - cumulative, so a caller differences them across an act.
+            double   relights = 0.0, indirectRelights = 0.0, visibleRelights = 0.0, subQuantumRelights = 0.0;
+            double   restDecisions = 0.0;
             double   captureMs = 0.0;
             /// Phase 4's tables, as maintained (nothing binds them yet).
             int      cardRecords = 0, instanceSlots = 0;

@@ -98,6 +98,21 @@ QString taggedPath(const QString &outPng, const QString &tag)
 /// as editor.screenshot does. Where it does not run nothing is rendered and the
 /// shot is the one it always was — which is what keeps the gather-off arm's four
 /// lines byte-identical to the pre-gather picture.
+/// THE SHOT'S SETTLE, SAID (PHOTON-7 stage 10, the giAtRest contract): how many frames the last shot rendered before
+/// its readback and whether it ended AT REST - a settle that stopped at its cap photographed GI still moving, and fails
+/// the selftest (a cap is never the way out).
+bool reportShotSettle(MainWindow &window, const char *pose)
+{
+    const int frames = window.viewport()->lastScreenshotSettleFrames();
+    if (frames < 0) return true;   // (no settle asked: the shot as it always was)
+    const bool atRest = window.viewport()->lastScreenshotAtRest();
+    std::fprintf(stderr, "engine-selftest: %s shot settled %d frames, %s\n", pose, frames,
+                atRest ? "at rest" : "AT THE CAP (GI still moving)");
+    if (!atRest)
+        std::fprintf(stderr, "engine-selftest: %s's shot settled to its cap, not to rest (%d frames)\n", pose, frames);
+    return atRest;
+}
+
 void settleShotIfGathering(MainWindow &window)
 {
     ScriptEngine *host = window.scripting();
@@ -415,6 +430,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      static_cast<long long>(clock.elapsed()));
         return 1;
     }
+    if (!reportShotSettle(window, "pose 1")) return 1;
     if (!img.save(outPng, "PNG")) {
         std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
         return 1;
@@ -498,6 +514,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      restFrames);
         return 1;
     }
+    std::fprintf(stderr, "engine-selftest: pose 2's GI at rest after %d frames\n", restFrames);
     app.processEvents();
     settleShotIfGathering(window);
     QImage img2 = window.viewport()->takeScreenshot(256, 256);
@@ -506,6 +523,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      qPrintable(pose2Png));
         return 1;
     }
+    if (!reportShotSettle(window, "pose 2")) return 1;
     const QColor centre2 = img2.pixelColor(img2.width() / 2, img2.height() / 2);
     const bool differs2 = isPicture(img2);
     const QString hash2 = fileSha256(pose2Png);
@@ -649,6 +667,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      qPrintable(b1Png));
         return 1;
     }
+    if (!reportShotSettle(window, "pose B1")) return 1;
     const QString hashB1 = fileSha256(b1Png);
     std::fprintf(stderr, "engine-selftest: pose B1 (rays) sha256 %s (%s)\n",
                  qPrintable(hashB1), qPrintable(b1Png));
@@ -665,6 +684,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      qPrintable(b2Png));
         return 1;
     }
+    if (!reportShotSettle(window, "pose B2")) return 1;
     const QString hashB2 = fileSha256(b2Png);
     std::fprintf(stderr, "engine-selftest: pose B2 (no rays) sha256 %s (%s)\n",
                  qPrintable(hashB2), qPrintable(b2Png));

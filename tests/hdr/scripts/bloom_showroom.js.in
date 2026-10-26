@@ -54,17 +54,33 @@ for (var y = 0; y < H; ++y) {
     ends.push({ x: 0.5 / W, y: (y + 0.5) / H });
     ends.push({ x: (W - 0.5) / W, y: (y + 0.5) / H });
 }
-var on = editor.screenshot("bloom_showroom_on.png", W, H, ends, "scene").probes;
+// THE PAIR IS ONE PICTURE (PHOTON-7 stage 10, the giAtRest contract): both shots settle AT REST - never at the cap - and
+// the surface cache relights nothing between them (its relights differenced across the second shot), so the pair differs
+// by the bloom alone. Before the contract a shot settled with the cards' rounds still relighting: two bloom-on shots
+// back to back read 7 codes apart.
+var shotOn = editor.screenshot("bloom_showroom_on.png", W, H, ends, "scene");
+var between = world.giStatus().cards;
 world.postFx({ bloomAmount: 0 });
-var off = editor.screenshot("bloom_showroom_off.png", W, H, ends, "scene").probes;
+var shotOff = editor.screenshot("bloom_showroom_off.png", W, H, ends, "scene");
+var after = world.giStatus().cards;
 world.postFx({ bloomAmount: 1 });
+console.log("the first settle: " + shotOn.settleFrames + " frames (at rest " + shotOn.atRest + "), the second: " +
+            shotOff.settleFrames + " (at rest " + shotOff.atRest + "); the cards' rest decisions " + after.restDecisions);
+assert(shotOn.atRest === true && shotOff.atRest === true, "both shots settled AT REST, never at the cap");
+var relitBetween = after.relights - between.relights;
+assert(relitBetween === 0, "the cards relit nothing between the two shots (" + relitBetween + " relights, " +
+       (after.visibleRelights - between.visibleRelights) + " visible)");
+var on = shotOn.probes, off = shotOff.probes;
 assert(on.length === 2 * H && off.length === 2 * H, "both shots read both ends of every row");
 
 // The pixels bright enough to bloom.
 var grid = [];
 for (var gy = kStep / 2; gy < H; gy += kStep)
     for (var gx = kStep / 2; gx < W; gx += kStep) grid.push({ x: gx / W, y: gy / H });
-var rad = editor.screenshot("bloom_showroom_radiance.png", W, H, grid, "plain", { radiance: true }).probes;
+var shotRad = editor.screenshot("bloom_showroom_radiance.png", W, H, grid, "plain", { radiance: true });
+console.log("the radiance shot's settle: " + shotRad.settleFrames + " frames (at rest " + shotRad.atRest + ")");
+assert(shotRad.atRest === true, "the radiance shot settled AT REST");
+var rad = shotRad.probes;
 var mult = fx.exposureMultiplier > 0 ? fx.exposureMultiplier : 1;
 var hot = [];
 for (var i = 0; i < rad.length; ++i) {

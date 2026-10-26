@@ -118,7 +118,7 @@ gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 gpu.cutout_soak.tornado 36.65  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 hdr.bloom_amount_asan 9.21  quiet n=42
-hdr.bloom_showroom 46.00  ship 3a0422b4e (2026-10-13)
+hdr.bloom_showroom 47.26  solo, the card lock held, :72 (PHOTON-7 stage 10, 2026-10-26: the giAtRest contract - the first shot settles until the cards owe nothing, 315 frames; before: ship 3a0422b4e (2026-10-13), 46.00)
 hdr.bloom_showroom.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 hdr.dither_asan 9.30  quiet n=39
 hdr.drag_stable_asan 18.48  quiet n=41
