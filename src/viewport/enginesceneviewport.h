@@ -234,6 +234,7 @@ public:
     void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     int lastScreenshotSettleFrames() const override { return mLastShotSettleFrames; }
     bool lastScreenshotAtRest() const override { return mLastShotAtRest; }
+    QString lastScreenshotRestReason() const override { return mLastShotRestReason; }
     void readRadianceWithNextScreenshot() override { mShotRadianceWanted = true; }
     QVector<float> takeScreenshotRadiance(int *width, int *height) override;
     /// THE VIEW AS THE LAST FRAME CLOSED IT (ENGINE-UPGRADE-U3 stage 2: Engine::published(), by the view's name) —
@@ -744,6 +745,7 @@ private:
     /// ...and the last shot's settle: its frames (-1 none) and whether it ended at rest (lastScreenshotSettleFrames).
     int mLastShotSettleFrames = -1;
     bool mLastShotAtRest = true;
+    QString mLastShotRestReason;   ///< lastScreenshotRestReason
     /// readRadianceWithNextScreenshot's request, and what the shot read.
     bool mShotRadianceWanted = false;
     QVector<float> mShotRadiance;

@@ -3738,6 +3738,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     req.restoreDelta = mLastFrameDelta;
     mLastShotSettleFrames = -1;
     mLastShotAtRest = true;
+    mLastShotRestReason.clear();
     if (mShotSettleFrames > 0) {
         req.settleCap = unsigned(mShotSettleFrames);
         mShotSettleFrames = 0;
@@ -3754,7 +3755,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // (the settle's report: its frames, and whether it ended at rest or at its cap)
         if (req.firstFrame || req.untilRest) {
             mLastShotSettleFrames = int(p.frames);
-            mLastShotAtRest = !req.untilRest || (req.scene && req.scene->published().gi.giAtRest);
+            const bool rest = !req.untilRest || (req.scene && req.scene->published().gi.giAtRest);
+            mLastShotAtRest = rest;
+            mLastShotRestReason = rest ? QString() : QStringLiteral("the settle's cap");
         }
         if (p.ok && p.rgba.width && p.rgba.height) {
             result = QImage(int(p.rgba.width), int(p.rgba.height), QImage::Format_RGBA8888);

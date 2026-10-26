@@ -563,6 +563,8 @@ public:
     /// and whether it ended AT REST - false means it stopped at its cap, a picture of GI still moving.
     virtual int lastScreenshotSettleFrames() const { return -1; }
     virtual bool lastScreenshotAtRest() const { return true; }
+    /// ...and why it was not ("the settle's cap": the GI still moving at the verb's cap); empty at rest.
+    virtual QString lastScreenshotRestReason() const { return QString(); }
     /// THE NEXT PLAIN SCREENSHOT ALSO READS ITS SCENE RADIANCE IN FLOAT
     /// (FOG-ATMO-1 fix round; the engine's View::readPixelsHdr, HDR-READBACK-1):
     /// the linear, scene-referred value before any 8-bit store, so a measurement

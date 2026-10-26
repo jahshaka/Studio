@@ -943,3 +943,18 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
     ENVIRONMENT "HOME=${_wsHome};JAHSHAKA_DATA_ROOT=${_wsHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED worldStillnessHome
     LABELS "scripting" TIMEOUT 60)
+
+# scripting.e2e.paused_shot (PHOTON-7 stage 10-3, the lead's ruling) - A SHOT OF A PAUSED ANIMATED SCENE IS AT REST: a
+# lamp's intensity animated in play-in-place; the shot freezes the document clock while it settles, so it ends at rest
+# and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the
+# two shots' settles.
+set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-paused_shot)
+jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" LABELS "scripting")
+file(MAKE_DIRECTORY ${_psHome}/run)
+jah_gpu_row(scripting.e2e.paused_shot CLASS app TIER epic NEEDS photon FRAMES 400
+    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js
+    WORKING_DIRECTORY ${_psHome}/run)
+set_tests_properties(scripting.e2e.paused_shot PROPERTIES
+    ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED pausedShotHome
+    LABELS "scripting" TIMEOUT 60)

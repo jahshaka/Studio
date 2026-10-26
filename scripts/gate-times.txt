@@ -231,6 +231,8 @@ scripting.e2e.world_stillness 37.79  solo, the card lock held, :71, a fresh home
 scripting.e2e.resize_history.a 21.74  solo, the card lock held, :72, warm (PHOTON-7 stage 10-3, 2026-10-26: boot a, fixture B at a 1280 x 800 window, its viewport-grade shot kept)
 scripting.e2e.resize_history.b 21.54  solo, the card lock held, :72, warm (PHOTON-7 stage 10-3, 2026-10-26: boot b, 700 x 520 and back first, then fixture B; the two shots compared - RED before the gather fix: 14,961 px over a code, max 43)
 scripting.e2e.world_stillness.fresh_home 0.01  solo (PHOTON-2 stage 0, 2026-10-22)
+scripting.e2e.paused_shot 43.96  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3, 2026-10-26: a lamp pulsing in play-in-place, a shot during play and one stopped at the same time, compared)
+scripting.e2e.paused_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.live 10.56  quiet n=49
 services.core 0.00  ship 3a0422b4e (2026-10-13)
 services.memory 0.10  ship 3a0422b4e (2026-10-13)
