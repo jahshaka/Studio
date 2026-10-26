@@ -8,10 +8,14 @@
 // timing and so another view's state (the main window's size history) set. A one-pixel sliver (the self-test's
 // fixture B, the blue pillar's top face seen edge-on) is the typical starved pixel: 56 codes between a fresh process and
 // one whose window went through pose 2's swapchain test (700 x 520 and back).
-// THE LAW: fixture B (the self-test's, verbatim), the main window at 1280 x 800 in both boots - boot A straight, boot B
-// after the window went to 700 x 520 for 12 frames and back BEFORE the fixture - and the two shots at the viewport grade
-// (the self-test's B1 grade) at rest: no pixel more than ONE code apart in any channel. Each shot's settle length is
-// printed (the readers' coupling across views, named at 10-3, is not this row's law).
+// THE LAW, AT ONE VIEWPORT (PHOTON-7 stage 10-3, restated): fixture B (the self-test's, verbatim) in both boots after ONE
+// window history before it (700 x 520 for 12 frames, then 1280 x 800) - boot B's window goes through that history AGAIN
+// with the scene live, after the fixture's settle - and the two shots at the viewport grade (the self-test's B1 grade) at
+// rest: the viewport (the gather's target) printed and required EQUAL first, then no pixel more than ONE code apart in
+// any channel. Each shot's settle length is printed (the readers' coupling across views is not this row's law).
+// (THE OLD FORM MEASURED THE LAYOUT: boot A straight to 1280 x 800 and boot B through 700 x 520 first left the viewport
+// 733 x 291 in one and 748 x 291 in the other - a panel shrunk at 700 x 520 does not regrow - with the resident set the
+// same, so its red named the layout and a GI input following the editor's frustum, not a resize history.)
 // (WHY TWO BOOTS: the same history inside ONE process - fixture B, the resizes, fixture B again - lost the device at the
 // second open, Xid 13 "3D WIDTH ZT Violation", 10-3's finding of its own.)
 function buildFixtureB() {
@@ -85,13 +89,24 @@ function buildFixtureB() {
 }
 
 var mode = "@MODE@";
-if (mode === "b") {
+function windowHistory() {
     app.resizeWindow(700, 520);
     editor.frame(12);
+    app.resizeWindow(1280, 800);
+    editor.frame(12);
 }
-app.resizeWindow(1280, 800);
-editor.frame(12);
+windowHistory();   // (both boots: one window history, so one layout)
 buildFixtureB();
+if (mode === "b") windowHistory();   // (boot B: the history again, the scene live - its GI's resize history)
+// THE EDITOR AT REST before the shot, in both boots: the cards' rest decision taken at the editor's frustum. (A shot taken
+// while a demand change is still open decides with the SHOT view's readers - its own frustum's set, 114 cards against the
+// editor's 147 here - and the shot then reads residency the editor never chose; that is item 3's bound, not this row's.)
+var restIn = 0;
+for (; restIn < 900 && world.giStatus().giAtRest !== true; ++restIn) editor.frame(1);
+if (world.giStatus().giAtRest !== true) throw new Error("the editor's GI did not come to rest in 900 frames");
+var gv = world.giStatus().gather || {};
+var viewport = gv.targetW + " x " + gv.targetH;
+console.log("resize_history: boot " + mode + " VIEWPORT " + viewport + " (the editor at rest in " + restIn + " frames)");
 var s = editor.screenshot("@SHOT@", 256, 256, [], "viewport");
 if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
 // (one frame first: world.giStatus() is the LAST FRAME's published status, and the shot view - destroyed after its
@@ -100,7 +115,9 @@ editor.frame(1);
 var st = world.giStatus();
 var gs = st.gather || {}, rq = st.rayQuery || {};
 console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest +
-            "; the gather's starved pixels at the hold: " + gs.starvedDiffuse + " diffuse, " + gs.starvedRough + " rough specular");
+            "; the gather's starved pixels at the hold: " + gs.starvedDiffuse + " diffuse, " + gs.starvedRough + " rough specular" +
+            "; the cards " + st.cards.cards + " resident, set " + st.cards.residentHash + ", " + st.cards.restDecisions +
+            " rest decision(s)");
 // (what the shot photographed, through the shot-view fold - PHOTON-7 stage 10-3, carrier 2: the shot's settle and the
 // reflection's rest index at the shot, one frame domain or not; the gather's starved counts at its hold)
 console.log("resize_history: boot " + mode + " the shot's own (the shot-view fold, valid " + gs.shotValid + "/" +
@@ -109,6 +126,8 @@ console.log("resize_history: boot " + mode + " the shot's own (the shot-view fol
             rq.reflectShotRests + "; the shot settled " + s.settleFrames + " frames");
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 if (mode === "b") {
+    if (viewport !== "@VIEWPORT_A@")
+        throw new Error("THE LAYOUT DIFFERS, NOT THE GI: viewport " + viewport + " against boot A's @VIEWPORT_A@");
     var c = app.compareImages("@SHOT_A@", "@SHOT@", 1);
     console.log("resize_history: the two boots' pictures: " + c.over + " pixels over one code of " + (c.width * c.height) +
                 ", max " + c.maxDelta + ", mean " + c.meanDelta);

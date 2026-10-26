@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # scripting.e2e.resize_history.a / .b (PHOTON-7 stage 10-3) - A WINDOW's RESIZE HISTORY LEAVES NO TRACE IN THE PICTURE AT
-# REST (resize_history_boot.js.in says the law and the defect). Each row boots the app ONCE on a VIRGIN data root: boot a
-# builds fixture B at a 1280 x 800 window and keeps its shot; boot b takes the window to 700 x 520 and back first, then
-# the same, and requires its shot within one code of boot a's.
+# REST, AT ONE VIEWPORT (resize_history_boot.js.in says the law and the defect). Each row boots the app ONCE on a VIRGIN
+# data root, the window through one history (700 x 520, then 1280 x 800) before fixture B: boot a keeps its shot and its
+# viewport; boot b takes the window through the history again with the scene live, and requires boot a's viewport and
+# its shot within one code of boot a's.
 # usage: resize_history_boots.sh <app> <boot.js.in> <workdir> <a|b>
 set -u
 APP="$1"; SCRIPT_IN="$2"; WORK="$3"; K="$4"
@@ -13,7 +14,9 @@ case "$K" in
 esac
 dr="$WORK/dr-$K"; shot="$WORK/shot-$K.png"; js="$WORK/boot-$K.js"
 rm -rf "$dr"; mkdir -p "$dr"
-sed -e "s#@SHOT@#$shot#g" -e "s#@SHOT_A@#$WORK/shot-a.png#g" -e "s#@MODE@#$K#g" "$SCRIPT_IN" > "$js"
+vpA=""
+[ "$K" = b ] && vpA=$(grep -m1 -o 'boot a VIEWPORT [0-9]* x [0-9]*' "$WORK/boot-a.log" | cut -c17-)
+sed -e "s#@SHOT@#$shot#g" -e "s#@SHOT_A@#$WORK/shot-a.png#g" -e "s#@MODE@#$K#g" -e "s#@VIEWPORT_A@#$vpA#g" "$SCRIPT_IN" > "$js"
 ( cd "$(dirname "$APP")" && env JAHSHAKA_NO_DITHER=1 timeout -k 10 300 "$APP" --data-root "$dr" --script "$js" \
     > "$WORK/boot-$K.log" 2>&1 )
 rc=$?

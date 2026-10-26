@@ -912,9 +912,10 @@ if(TEST scripting.e2e.editor_controls.timing)
 endif()
 
 # scripting.e2e.resize_history.a / .b (PHOTON-7 stage 10-3; L1) — A WINDOW's RESIZE HISTORY LEAVES NO TRACE IN THE PICTURE
-# AT REST: the self-test's fixture B in two boots at a 1280 x 800 window, boot b after 700 x 520 and back first, the two
-# viewport-grade shots within one code (resize_history_boot.js.in says the defect: the gather's starved pixels held their
-# pre-rest EMA). One boot a row, a fixture chain (the runner: scripts/resize_history_boots.sh).
+# AT REST, AT ONE VIEWPORT: the self-test's fixture B in two boots after one window history (700 x 520, then 1280 x 800),
+# boot b's window through it again with the scene live; the viewports required equal, the two viewport-grade shots
+# within one code (resize_history_boot.js.in says the defect: the gather's starved pixels held their pre-rest EMA; and
+# why the old form measured the layout). One boot a row, a fixture chain (the runner: scripts/resize_history_boots.sh).
 foreach(_k a b)
     # (FRAMES ESTIMATED, not counted: the mirror-room boot's measured shape - its boot and open about 500 frames - plus
     # the resizes, fixture B's 300 settle frames and its shot's settle; no frame counter reaches a script row)
