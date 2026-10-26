@@ -429,7 +429,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("cliff", 128, 128, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("cliff", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     gEngine = engine.get();
 
     freshTable(engine.get(), view);

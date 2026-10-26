@@ -92,7 +92,7 @@ struct Probe {
 
 Probe makeProbe(const std::string &name) {
     Probe p;
-    p.view = gEngine->createOffscreenView(name, 64, 64, Colour(0.0f, 0.0f, 0.0f));
+    p.view = gEngine->createOffscreenView(name, 64, 64, Colour(0.0f, 0.0f, 0.0f), jahshaka::engine::OffscreenContract::Live);
     p.scene = gEngine->createScene(name);
     if (!p.view || !p.scene) return p;
     p.scene->setAtomDrawEnabled(false);

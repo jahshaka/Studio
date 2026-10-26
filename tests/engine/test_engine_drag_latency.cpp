@@ -26,7 +26,7 @@ int main()
     if (!engine) return 1;
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("latency", 64, 64, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("latency", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("latency");
     if (!view || !scene || !view->setScene(scene)) { std::printf("FAIL: view/scene\n"); return 1; }
     const NodeId node = scene->createDocumentNode(reserveNodeId());

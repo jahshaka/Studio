@@ -460,7 +460,7 @@ int main(int argc, char **argv)
     // reading of it (metallic 1 / roughness 1), through the thumbnail path.
     {
         {
-            View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0));
+            View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
             Scene *primaryScene = engine->createScene("primary");
             primary->setScene(primaryScene);
             {

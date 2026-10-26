@@ -62,7 +62,7 @@ int main()
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
     Scene *s = e->createScene("area_contact");
-    View *v = e->createOffscreenView("area_contact", 256, 256, Colour(0, 0, 0));
+    View *v = e->createOffscreenView("area_contact", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     if (!s || !v) { std::printf("FAIL: the scene / view\n"); return 1; }
     s->setRayTracing(RayTracingMode::Off);
     {
@@ -72,7 +72,6 @@ int main()
         fx.hdrReadback = true;
         v->setPostFx(fx);
     }
-    v->setOffscreenContract(OffscreenContract::StillPicture);
     v->setScene(s);
     cube(s, Vec3(0.0f, -0.05f, 0.0f), Vec3(4.0f, 0.1f, 6.0f), Colour(0.7f, 0.25f, 0.2f));    // the floor
     cube(s, Vec3(0.05f, 1.0f, 0.0f), Vec3(0.1f, 2.0f, 6.0f), Colour(0.2f, 0.3f, 0.7f));     // the wall, x 0 .. 0.1

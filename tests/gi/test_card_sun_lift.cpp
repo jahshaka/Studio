@@ -90,7 +90,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("cardsun", 192u, 192u, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("cardsun", 192u, 192u, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *s = e->createScene("cardsun");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -132,7 +132,6 @@ int main()
         fx.allowOffscreen = true;
         fx.ssr = 1;
         view->setPostFx(fx);
-        view->setOffscreenContract(OffscreenContract::StillPicture);
         PbrParams wp;
         wp.albedo = Colour(0.5f, 0.5f, 0.5f);
         wp.roughness = 0.9f;

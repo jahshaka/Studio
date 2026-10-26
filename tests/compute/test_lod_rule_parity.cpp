@@ -508,7 +508,7 @@ int main(int argc, char **argv)
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    View *view = e->createOffscreenView("parity", 320u, 240u, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("parity", 320u, 240u, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("parity");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);

@@ -176,7 +176,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     gEngine = engine.get();
 
-    gView = engine->createOffscreenView("encode", kSide, kSide, Colour(0, 0, 0));
+    gView = engine->createOffscreenView("encode", kSide, kSide, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     gScene = engine->createScene("encode");
     if (!gView || !gScene) { std::printf("FAIL: view/scene\n"); return 1; }
     gView->setScene(gScene);

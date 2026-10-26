@@ -155,7 +155,7 @@ int main()
     int frames = 1;
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
-    View *view = e->createOffscreenView("scroll", kSize, kSize, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("scroll", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("scroll");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);

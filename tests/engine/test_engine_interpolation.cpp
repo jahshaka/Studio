@@ -54,7 +54,7 @@ static int applyMeasure()
     Engine *e = engine.get();
     const inspect::EngineEcho *echo = inspect::engine(e);
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("interp-apply", 64, 64, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("interp-apply", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("interp-apply", 8u);
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     CHECK(echo != nullptr, "the engine's probes");
     if (!echo) return 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("interp", 64, 64, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("interp", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("interp");
     CHECK(view && scene && view->setScene(scene), "a view on a scene");
     if (!view || !scene) return 1;

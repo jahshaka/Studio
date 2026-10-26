@@ -27,7 +27,7 @@ int main()
     if (!engine) return 1;
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("order", 64, 64, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("order", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("order");
     CHECK(view && scene && view->setScene(scene), "a view on a scene");
     if (!view || !scene) return 1;

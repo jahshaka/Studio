@@ -198,7 +198,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     gEngine = engine.get();
 
-    gView = engine->createOffscreenView("bloomiso", kW, kH, Colour(0, 0, 0));
+    gView = engine->createOffscreenView("bloomiso", kW, kH, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("bloomiso");
     if (!gView || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     gView->setScene(s);

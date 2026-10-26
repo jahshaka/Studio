@@ -289,7 +289,7 @@ static double fieldCornerQuadrature(const GiStatus &st, float grow)
 static OpenScene buildOpenScene(Engine *e, const char *name)
 {
     OpenScene o;
-    o.view = e->createOffscreenView(name, 128, 128, Colour(0, 0, 0));
+    o.view = e->createOffscreenView(name, 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     o.scene = e->createScene(name);
     o.view->setScene(o.scene);
     o.scene->setAmbient(kAmbientUpper, kAmbientLower);
@@ -500,7 +500,7 @@ static void fieldRayLedger(Engine *e, Scene *s, const Vec3 &pw, double &leak, do
 // 8-bit codes (negative if the frame is vacuous).
 static float sealedRoomMove(Engine *e, const GiParams &gi, const char *label, Vec3 eye = Vec3(0.0f, 2.0f, 0.0f))
 {
-    View *view = e->createOffscreenView("sealed_chain", 128, 128, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("sealed_chain", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("sealed_chain");
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -842,7 +842,7 @@ int main(int argc, char **argv)
     // =====================================================================
     std::printf("\n== case 3: the bounce survives the sky ==\n");
     {
-        View *view = e->createOffscreenView("ddgiamb_lit", 128, 128, Colour(0, 0, 0));
+        View *view = e->createOffscreenView("ddgiamb_lit", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Scene *s = e->createScene("ddgiamb_lit");
         view->setScene(s);
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -905,7 +905,7 @@ int main(int argc, char **argv)
     // =====================================================================
     std::printf("\n== case 5: sealed-room invariance ==\n");
     {
-        View *view = e->createOffscreenView("ddgiamb_room", 128, 128, Colour(0, 0, 0));
+        View *view = e->createOffscreenView("ddgiamb_room", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Scene *s = e->createScene("ddgiamb_room");
         view->setScene(s);
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));      // the sky OFF first

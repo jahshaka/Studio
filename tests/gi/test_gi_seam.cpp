@@ -52,7 +52,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("seam", 128, 128, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("seam", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("seam");
     view->setScene(scene);
     // A floor wider than the outermost cascade (High: 120 m), its top at y = 0.1, and a sun straight down.

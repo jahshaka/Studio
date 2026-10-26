@@ -99,7 +99,7 @@ void frames(Engine *e, int n, int &count) { enginetest::frames(e, n); count += n
 bool runOnce(Engine *e, bool plates, Run &out, int &count)
 {
     const char *name = plates ? "sliver" : "sliver_truth";
-    View *view = e->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
+    View *view = e->createOffscreenView(name, kW, kH, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
     view->setScene(scene);
@@ -109,7 +109,6 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
         fx.ssr = 1;
         view->setPostFx(fx);
     }
-    view->setOffscreenContract(OffscreenContract::StillPicture);
     scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     const Colour white(0.8f, 0.8f, 0.8f), black(0.0f, 0.0f, 0.0f);
     // (200 m wide: the wall's bounce flat across the view's +-7 m - at 30 m its fall toward the floor's end moved the
@@ -218,7 +217,7 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
 /// THE PRICE: the placement's two passes (the monitor's gather.place) on a 1920 x 1080 view of the plated scene
 float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned &cap, float &filterMs, float &integrateMs)
 {
-    View *view = e->createOffscreenView("sliver_price", 1920u, 1080u, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("sliver_price", 1920u, 1080u, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *scene = e->createScene("sliver_price");
     if (!view || !scene) return -1.0f;
     view->setScene(scene);
@@ -226,7 +225,6 @@ float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned 
     fx.allowOffscreen = true;
     fx.ssr = 1;
     view->setPostFx(fx);
-    view->setOffscreenContract(OffscreenContract::StillPicture);
     scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     addBox(scene, Colour(0.8f, 0.8f, 0.8f), Vec3(0.0f, -0.1f, -10.0f), Vec3(30.0f, 0.2f, 20.0f));
     addBox(scene, Colour(0.8f, 0.8f, 0.8f), Vec3(0.0f, 8.0f, -12.1f), Vec3(30.0f, 16.0f, 0.2f));

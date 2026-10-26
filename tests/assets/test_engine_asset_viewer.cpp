@@ -100,10 +100,10 @@ int main(int argc, char **argv)
     // The editor viewport exists first in the app; the assets page is another
     // view and another scene on the same engine.
     const int W = 128, H = 128;
-    View *editorView = engine->createOffscreenView("editor", 64, 64, Colour(0, 0, 0));
+    View *editorView = engine->createOffscreenView("editor", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *editorScene = engine->createScene("editor");
     editorView->setScene(editorScene);
-    View *view = engine->createOffscreenView("assets", W, H, Colour(0, 0, 1));
+    View *view = engine->createOffscreenView("assets", W, H, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
     CHECK(view != nullptr, "offscreen assets view");
     if (!view) return 1;
 

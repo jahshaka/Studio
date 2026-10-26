@@ -362,7 +362,7 @@ struct Arm {
 /// clocks locked; it prints, it does not gate (a millisecond bar is a target).
 static int costMain(Engine *e)
 {
-    View *view = e->createOffscreenView("reflectmover-cost", 1920, 1080, Colour(0.45f, 0.55f, 0.70f));
+    View *view = e->createOffscreenView("reflectmover-cost", 1920, 1080, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("reflectmover-cost");
     if (!view || !s) { std::printf("FAIL: cost view/scene\n"); return 1; }
     view->setScene(s);
@@ -437,7 +437,7 @@ static int costMain(Engine *e)
 /// clocks locked; it prints, it does not gate.
 static int costPosedMain(Engine *e)
 {
-    View *view = e->createOffscreenView("reflectmover-cost-posed", 1920, 1080, Colour(0.45f, 0.55f, 0.70f));
+    View *view = e->createOffscreenView("reflectmover-cost-posed", 1920, 1080, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("reflectmover-cost-posed");
     if (!view || !s) { std::printf("FAIL: cost view/scene\n"); return 1; }
     view->setScene(s);
@@ -539,7 +539,7 @@ int main(int argc, char **argv)
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    View *view = e->createOffscreenView("reflectmover", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f));
+    View *view = e->createOffscreenView("reflectmover", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("reflectmover");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);

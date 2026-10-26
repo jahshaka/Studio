@@ -401,7 +401,7 @@ int main()
     shut.name = "shut";
     // THE VIEWS FIRST (Ogre's startup order: a render target before any scene manager).
     for (World *w : { &on, &ref, &shut })
-        w->view = gE->createOffscreenView(std::string("hidden-cut-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f));
+        w->view = gE->createOffscreenView(std::string("hidden-cut-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f), jahshaka::engine::OffscreenContract::Live);
     for (World *w : { &on, &ref, &shut }) {
         w->scene = gE->createScene(std::string("hidden-cut-") + w->name);
         buildWorld(*w);

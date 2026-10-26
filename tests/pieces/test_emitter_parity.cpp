@@ -160,7 +160,7 @@ struct Probe
 Probe makeProbe(Engine *e, const std::string &name)
 {
     Probe p;
-    p.view = e->createOffscreenView(name, 48, 48, Colour(0.0f, 0.0f, 0.0f));
+    p.view = e->createOffscreenView(name, 48, 48, Colour(0.0f, 0.0f, 0.0f), jahshaka::engine::OffscreenContract::Live);
     p.scene = e->createScene(name);
     if (!p.view || !p.scene) return p;
     p.scene->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
@@ -414,7 +414,7 @@ void vertexNormalOracle(const QString &name, bool local)
     auto build = [&](Probe &p, const MeshData &mesh) {
         static int serial = 0;
         const std::string id = "vtx_" + std::to_string(++serial);
-        p.view = gEngine->createOffscreenView(id, 48, 48, Colour(0.0f, 0.0f, 0.0f));
+        p.view = gEngine->createOffscreenView(id, 48, 48, Colour(0.0f, 0.0f, 0.0f), jahshaka::engine::OffscreenContract::Live);
         p.scene = gEngine->createScene(id);
         p.scene->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
         enginetest::addDirectionalLight(p.scene, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);

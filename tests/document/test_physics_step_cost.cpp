@@ -329,7 +329,7 @@ int main(int argc, char **argv)
         rig.engine = je::Engine::create(cfg, err);
         if (!rig.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
         rig.engine->submitFrame(je::FrameInput::delta(kDt));
-        rig.view = rig.engine->createOffscreenView("physics", 256, 256, je::Colour(0, 0, 0, 1));
+        rig.view = rig.engine->createOffscreenView("physics", 256, 256, je::Colour(0, 0, 0, 1), jahshaka::engine::OffscreenContract::Live);
         if (!rig.view) { std::printf("FAIL: view\n"); return 1; }
         if (mirror) gCube = testmesh::load(":assets/models/cube.obj");
     }

@@ -52,7 +52,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("oddsize", kWidth, kHeight, Colour(0.05f, 0.05f, 0.06f));
+    View *view = e->createOffscreenView("oddsize", kWidth, kHeight, Colour(0.05f, 0.05f, 0.06f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("oddsize");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);

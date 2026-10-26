@@ -206,7 +206,7 @@ int main(int argc, char **argv)
     }
 
     const int W = 256, H = 256;
-    View *view = engine->createOffscreenView("matpreview", unsigned(W), unsigned(H), Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("matpreview", unsigned(W), unsigned(H), Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     CHECK(view != nullptr, "offscreen preview view");
     if (!view) return 1;
 

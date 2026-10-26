@@ -191,7 +191,7 @@ int main(int argc, char **argv)
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
-    View *view = engine->createOffscreenView("bench", 320, 240, Colour(0, 0, 0.2f));
+    View *view = engine->createOffscreenView("bench", 320, 240, Colour(0, 0, 0.2f), jahshaka::engine::OffscreenContract::Live);
     CHECK(view != nullptr, "offscreen view");
     if (!view) return 1;
     // WALL-CLOCK is what the engine charges per frame, and an offscreen frame is

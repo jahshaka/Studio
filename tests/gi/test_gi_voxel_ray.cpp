@@ -75,7 +75,7 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("voxel_ray", 256, 256, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("voxel_ray", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("voxel_ray");
     view->setScene(scene);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.5f, 0.0f), Vec3(1.0f, 1.5f, 0.0f));

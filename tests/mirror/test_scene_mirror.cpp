@@ -93,7 +93,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("mirror", 96, 96, Colour(0, 0, 1));
+    View *view = engine->createOffscreenView("mirror", 96, 96, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
     Scene *target = engine->createScene("mirror");
     CHECK(view && target, "offscreen view + engine scene");
     if (!view || !target) return 1;
@@ -2301,7 +2301,7 @@ int main(int argc, char **argv)
         // Render it in a CLEAN ROOM: its own engine scene and view, so none of
         // the geometry the blocks above left in `target` can reach the probe.
         Scene *sunScene = engine->createScene("sun-coupling");
-        View *sunView = engine->createOffscreenView("sun-coupling", 96, 96, Colour(0, 0, 1));
+        View *sunView = engine->createOffscreenView("sun-coupling", 96, 96, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
         CHECK(sunScene && sunView, "sun coupling: clean-room scene + view");
         sunView->setScene(sunScene);
         sunScene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -2448,7 +2448,7 @@ int main(int argc, char **argv)
         // so nothing the blocks above left in `target` lights or exposes it.
         auto sdoc3 = iris::Scene::create();
         Scene *cs3 = engine->createScene("nomat-room");
-        View *cv3 = engine->createOffscreenView("nomat-room", 96, 96, Colour(0, 0, 1));
+        View *cv3 = engine->createOffscreenView("nomat-room", 96, 96, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
         CHECK(cs3 && cv3, "no-material: a clean-room scene + view");
         cv3->setScene(cs3);
         cs3->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
@@ -2521,7 +2521,7 @@ int main(int argc, char **argv)
     {
         auto sdoc4 = iris::Scene::create();
         Scene *cs4 = engine->createScene("cull-room");
-        View *cv4 = engine->createOffscreenView("cull-room", 96, 96, Colour(0, 0, 1));
+        View *cv4 = engine->createOffscreenView("cull-room", 96, 96, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
         CHECK(cs4 && cv4, "cull: a clean-room scene + view");
         cv4->setScene(cs4);
         cs4->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));

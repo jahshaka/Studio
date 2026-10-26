@@ -96,7 +96,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("farrecord", kWidth, kHeight, Colour(0.30f, 0.40f, 0.55f));
+    View *view = e->createOffscreenView("farrecord", kWidth, kHeight, Colour(0.30f, 0.40f, 0.55f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("farrecord");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);

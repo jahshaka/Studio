@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("preview", 96, 96, Colour(0.1f, 0.1f, 0.1f));
+    View *view = engine->createOffscreenView("preview", 96, 96, Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
     CHECK(view != nullptr, "offscreen view");
     if (!view) return 1;
 

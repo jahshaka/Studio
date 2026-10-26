@@ -92,7 +92,7 @@ static bool runOnce(int iteration) {
     CHECK(e != nullptr, msg);
     if (!e) { std::printf("    error: %s\n", error.c_str()); return false; }
 
-    View *v = e->createOffscreenView("view", 96, 96, Colour(0.0f, 0.0f, 1.0f));
+    View *v = e->createOffscreenView("view", 96, 96, Colour(0.0f, 0.0f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("scene");
     std::snprintf(msg, sizeof msg, "iteration %d: view + scene created", iteration);
     CHECK(v && s, msg);

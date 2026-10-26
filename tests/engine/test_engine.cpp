@@ -80,9 +80,9 @@ struct Fixture {
         for (Scene *s : scenes) e->destroyScene(s);
     }
     View *view(const std::string &name, unsigned w, unsigned h, const Colour &bg) {
-        View *v = e->createOffscreenView(name, w, h, bg);
+        View *v = e->createOffscreenView(name, w, h, bg, jahshaka::engine::OffscreenContract::Live);
         if (v) views.push_back(v);
-        else   std::printf("    createOffscreenView('%s'): %s\n", name.c_str(), e->lastError().c_str());
+        else   std::printf("    createOffscreenView('%s', jahshaka::engine::OffscreenContract::Live): %s\n", name.c_str(), e->lastError().c_str());
         return v;
     }
     Scene *scene(const std::string &name) {
@@ -1276,8 +1276,8 @@ void pip_and_letterbox_over_the_post_chain() {
 void teardown_is_clean() {
     // Last test: destroys the process's Engine with everything still registered.
     Engine *e = gEngine.get();
-    View *v1 = e->createOffscreenView("v1", 32, 32, kBlue);
-    View *v2 = e->createOffscreenView("v2", 32, 32, kGreen);
+    View *v1 = e->createOffscreenView("v1", 32, 32, kBlue, jahshaka::engine::OffscreenContract::Live);
+    View *v2 = e->createOffscreenView("v2", 32, 32, kGreen, jahshaka::engine::OffscreenContract::Live);
     Scene *s1 = e->createScene("s1");
     Scene *s2 = e->createScene("s2");
     REQUIRE(v1 && v2 && s1 && s2);

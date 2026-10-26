@@ -76,7 +76,7 @@ int child(const char *out)
     if (!engine) { std::printf("CHILD-FAIL: engine create: %s\n", err.c_str()); return 2; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("record_determinism", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    View *view = e->createOffscreenView("record_determinism", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = view ? e->createScene("record_determinism") : nullptr;
     if (!view || !scene) { std::printf("CHILD-FAIL: view/scene: %s\n", e->lastError().c_str()); return 2; }
     view->setScene(scene);

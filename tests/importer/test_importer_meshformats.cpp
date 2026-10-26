@@ -376,7 +376,7 @@ int main(int argc, char **argv)
         if (!engine) { std::printf("    %s\n", err.c_str()); }
         else {
             // The app's viewport exists before any thumbnail is asked for.
-            View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0));
+            View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
             Scene *primaryScene = engine->createScene("primary");
             primary->setScene(primaryScene);
             {

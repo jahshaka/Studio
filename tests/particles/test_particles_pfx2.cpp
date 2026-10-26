@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("pfx2", 128, 128, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("pfx2", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = engine->createScene("pfx2");
     CHECK(view && scene, "offscreen view + scene");
     if (!view || !scene) return 1;

@@ -125,7 +125,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("planar", 256, 256, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("planar", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("planar");
     view->setScene(s);
     // A little ambient so the mirror is not pitch black without the reflection;

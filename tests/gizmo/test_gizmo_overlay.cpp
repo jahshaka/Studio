@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         std::printf("    wrote %s: %d\n", qPrintable(path), int(out.save(path)));
     };
 
-    View *view = engine->createOffscreenView("gizmo", 128, 128, Colour(0.1f, 0.1f, 0.1f));
+    View *view = engine->createOffscreenView("gizmo", 128, 128, Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
     Scene *target = engine->createScene("gizmo");
     view->setScene(target);
     target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
         // rings — so at 128x128, where the whole gizmo covers 28 pixels, the
         // frame lands under half a pixel and blends away. 512 is the same
         // picture with enough pixels in it to name a colour.
-        View *big = engine->createOffscreenView("gizmo-planes", 512, 512, Colour(0.1f, 0.1f, 0.1f));
+        View *big = engine->createOffscreenView("gizmo-planes", 512, 512, Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         big->setScene(target);
         mirror.sync(mirrorframe::camera(big, cam));
         gizmo.setPickView(cam, 512.0f, 512.0f);
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
         // 1024 px tall: the gizmo is screen-CONSTANT, so the only thing that
         // sets the ball's size in pixels is the height of the view.
         View *ballView = engine->createOffscreenView("gizmo-ball", 1024, 1024,
-                                                     Colour(0.1f, 0.1f, 0.1f));
+                                                     Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         ballView->setScene(target);
         const iris::Vec3 savedPos = cam->getLocalPos();
         cam->setLocalPos(iris::Vec3(5, 4, 5));
@@ -327,7 +327,7 @@ int main(int argc, char **argv)
     // draw order, whichever it is, gets one of the two wrong.
     {
         View *depthView = engine->createOffscreenView("gizmo-depth", 256, 256,
-                                                      Colour(0.1f, 0.1f, 0.1f));
+                                                      Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         depthView->setScene(target);
         const iris::Vec3 savedPos = cam->getLocalPos();
         GizmoOverlay depthOverlay(target);
@@ -480,7 +480,7 @@ int main(int argc, char **argv)
     // highlighted yellow.
 
     {
-        View *big = engine->createOffscreenView("gizmo-drag", 512, 512, Colour(0.1f, 0.1f, 0.1f));
+        View *big = engine->createOffscreenView("gizmo-drag", 512, 512, Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         big->setScene(target);
         mirror.sync(mirrorframe::camera(big, cam));
         GizmoOverlay dragOverlay(target);
@@ -603,7 +603,7 @@ int main(int argc, char **argv)
     // byte-identical across the round trip.
     {
         View *blend = engine->createOffscreenView("gizmo-alpha", 256, 256,
-                                                  Colour(0.1f, 0.1f, 0.1f));
+                                                  Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         blend->setScene(target);
         mirror.sync(mirrorframe::camera(blend, cam));
         GizmoOverlay alphaOverlay(target);

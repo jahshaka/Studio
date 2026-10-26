@@ -211,7 +211,7 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
     const int W = 96, H = 96;
-    View *view = engine->createOffscreenView("clips", W, H, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("clips", W, H, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("clips");
     view->setScene(s);
     // Flat ambient + an emissive material: the pixel gate compares two frames

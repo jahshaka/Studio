@@ -86,9 +86,8 @@ struct Rig {
         engine = Engine::create(cfg, err);
         if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return false; }
         engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
-        view = engine->createOffscreenView("clouds", kSize, kSize, Colour(0, 0, 0));
+        view = engine->createOffscreenView("clouds", kSize, kSize, Colour(0, 0, 0), OffscreenContract::StillPicture);
         if (!view) { std::printf("FAIL: no offscreen view\n"); return false; }
-        view->setOffscreenContract(OffscreenContract::StillPicture);
         escene = engine->createScene("clouds");
         view->setScene(escene);
 

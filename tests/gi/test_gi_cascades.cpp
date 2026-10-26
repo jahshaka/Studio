@@ -114,7 +114,7 @@ int main()
 
     // A 4 km ground so a 1 km jump still lands on something, a wall to bounce
     // from, and an ambient that is the ONLY light in case 4.
-    View *view = e->createOffscreenView("cascades", kSize, kSize, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("cascades", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("cascades");
     view->setScene(scene);
     scene->setAmbient(Colour(0.35f, 0.35f, 0.35f), Colour(0.35f, 0.35f, 0.35f));

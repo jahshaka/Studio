@@ -45,7 +45,7 @@ struct Arm {
 
 static bool makeArm(Engine *e, const char *name, Arm &a)
 {
-    a.view = e->createOffscreenView(name, 160, 90, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    a.view = e->createOffscreenView(name, 160, 90, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     a.scene = e->createScene(name, 0u);
     if (!a.view || !a.scene) return false;
     a.view->setScene(a.scene);

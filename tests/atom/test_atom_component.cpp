@@ -111,8 +111,8 @@ int main()
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    View *va = e->createOffscreenView("atomcompA", kSize, kSize, Colour(0, 0, 0));
-    View *vb = e->createOffscreenView("atomcompB", kSize, kSize, Colour(0, 0, 0));
+    View *va = e->createOffscreenView("atomcompA", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+    View *vb = e->createOffscreenView("atomcompB", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *a = buildScene(e, "atomcompA", 6);
     Scene *b = buildScene(e, "atomcompB", 2);
     va->setScene(a);

@@ -275,7 +275,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("ssr", 256, 256, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("ssr", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("ssr");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -439,7 +439,7 @@ int main()
                                 ? unsigned(std::atoi(std::getenv("JAH_SSR_BENCH_W"))) : 1920u;
         const unsigned bh = std::getenv("JAH_SSR_BENCH_H")
                                 ? unsigned(std::atoi(std::getenv("JAH_SSR_BENCH_H"))) : 1080u;
-        View *big = engine->createOffscreenView("ssr-bench", bw, bh, Colour(0, 0, 0));
+        View *big = engine->createOffscreenView("ssr-bench", bw, bh, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (big) {
             big->setScene(s);
             enginetest::testCameraLookAt(big, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
@@ -618,7 +618,7 @@ int main()
     // ONLY thing that can move a pixel is the shadow term.
     {
         Scene *sh = engine->createScene("ssr-shadow");
-        View *shv = engine->createOffscreenView("ssr-shadow", 192, 192, Colour(0, 0, 0));
+        View *shv = engine->createOffscreenView("ssr-shadow", 192, 192, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (sh && shv) {
             shv->setScene(sh);
             shv->setShadows(true);
@@ -720,7 +720,7 @@ int main()
     //     this assertion is what says so.
     {
         Scene *ff = engine->createScene("ssr-firefly");
-        View *ffv = engine->createOffscreenView("ssr-firefly", 256, 256, Colour(0, 0, 0));
+        View *ffv = engine->createOffscreenView("ssr-firefly", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (ff && ffv) {
             ffv->setScene(ff);
             ff->setAmbient(Colour(0.10f, 0.10f, 0.12f), Colour(0.08f, 0.08f, 0.10f));
@@ -955,7 +955,7 @@ int main()
     // smear that MOVES with the camera instead of with the scene.
     {
         Scene *os = engine->createScene("ssr-ortho");
-        View  *ov = engine->createOffscreenView("ssr-ortho", 256, 256, Colour(0, 0, 0));
+        View  *ov = engine->createOffscreenView("ssr-ortho", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (!os || !ov) {
             CHECK_MSG(false, "could not build the orthographic fixture");
         } else {
@@ -1414,7 +1414,7 @@ int main()
         // is legitimately black, so "a black pixel" means "a NaN reached the
         // tonemapper" with no heuristic in between.
         Scene *hs = engine->createScene("ssr-history");
-        View  *hv = engine->createOffscreenView("ssr-history", 256, 256, Colour(0.25f, 0.25f, 0.30f));
+        View  *hv = engine->createOffscreenView("ssr-history", 256, 256, Colour(0.25f, 0.25f, 0.30f), jahshaka::engine::OffscreenContract::Live);
         CHECK(hs && hv, "the history fixture's scene and view exist");
         if (hs && hv) {
         hv->setScene(hs);
@@ -1610,7 +1610,7 @@ int main()
     // 0.50 % after, with the gold torus going 1.61 % -> 0.001 %.
     {
         Scene *cs = engine->createScene("ssr-curved");
-        View  *cv = engine->createOffscreenView("ssr-curved", 256, 256, Colour(0.05f, 0.05f, 0.08f));
+        View  *cv = engine->createOffscreenView("ssr-curved", 256, 256, Colour(0.05f, 0.05f, 0.08f), jahshaka::engine::OffscreenContract::Live);
         CHECK(cs && cv, "the curved-mirror fixture's scene and view exist");
         if (cs && cv) {
         cv->setScene(cs);
@@ -1764,7 +1764,7 @@ int main()
     // 1.0 by construction.
     {
         Scene *vs = engine->createScene("ssr-energy");
-        View  *vv = engine->createOffscreenView("ssr-energy", 256, 256, Colour(0.0f, 0.0f, 0.0f));
+        View  *vv = engine->createOffscreenView("ssr-energy", 256, 256, Colour(0.0f, 0.0f, 0.0f), jahshaka::engine::OffscreenContract::Live);
         CHECK(vs && vv, "the energy fixture's scene and view exist");
         if (vs && vv) {
         vv->setScene(vs);
@@ -1938,7 +1938,7 @@ int main()
     {
         Scene *ms = engine->createScene("ssr-mirror-rule");
         View  *mv = engine->createOffscreenView("ssr-mirror-rule", 256, 256,
-                                                Colour(0.0f, 0.0f, 0.0f));
+                                                Colour(0.0f, 0.0f, 0.0f), jahshaka::engine::OffscreenContract::Live);
         CHECK(ms && mv, "the mirror-rule fixture's scene and view exist");
         if (ms && mv) {
         mv->setScene(ms);
@@ -2090,7 +2090,7 @@ int main()
     // cancels.
     {
         Scene *rs = engine->createScene("ssr-roughness-gate");
-        View  *rv = engine->createOffscreenView("ssr-roughness-gate", 256, 256, Colour(0, 0, 0));
+        View  *rv = engine->createOffscreenView("ssr-roughness-gate", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (rs && rv) {
             rv->setScene(rs);
             rs->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.20f, 0.20f, 0.24f));
@@ -2265,7 +2265,7 @@ int main()
     // compositor graph, and this is that assertion with a real drag in it.
     {
         Scene *cs = engine->createScene("ssr-cutoff");
-        View  *cv = engine->createOffscreenView("ssr-cutoff", 256, 256, Colour(0, 0, 0));
+        View  *cv = engine->createOffscreenView("ssr-cutoff", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (cs && cv) {
             cv->setScene(cs);
             cs->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));

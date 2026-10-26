@@ -89,9 +89,9 @@ struct Fixture {
         for (Scene *s : scenes) e->destroyScene(s);
     }
     View *view(const std::string &name, unsigned w, unsigned h, const Colour &bg) {
-        View *v = e->createOffscreenView(name, w, h, bg);
+        View *v = e->createOffscreenView(name, w, h, bg, jahshaka::engine::OffscreenContract::Live);
         if (v) views.push_back(v);
-        else std::printf("    createOffscreenView('%s'): %s\n", name.c_str(), e->lastError().c_str());
+        else std::printf("    createOffscreenView('%s', jahshaka::engine::OffscreenContract::Live): %s\n", name.c_str(), e->lastError().c_str());
         return v;
     }
     Scene *scene(const std::string &name) {

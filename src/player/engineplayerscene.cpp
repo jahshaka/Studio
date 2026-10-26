@@ -379,9 +379,8 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     static unsigned serial = 0;
     View *shot = engine->createOffscreenView("player-screenshot-" + std::to_string(++serial),
                                              unsigned(width), unsigned(height),
-                                             Colour(0.10f, 0.11f, 0.14f));
+                                             Colour(0.10f, 0.11f, 0.14f), jahshaka::engine::OffscreenContract::StillPicture);
     if (!shot) return QImage();
-    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // A PICTURE OF THE PLAYER, so it hides what the player hides: the grid, the
     // wires and icons, the gizmo, the selection shell (ChainDesc::helpers).
     // Before setScene, so the workspace is built once in its final shape.

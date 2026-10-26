@@ -101,14 +101,13 @@ Scene *buildScene(Engine *e, const char *name) {
     return s->setGlobalIllumination(gi) ? s : nullptr;
 }
 View *stillView(Engine *e, const char *name, unsigned w, unsigned h, Scene *s) {
-    View *v = e->createOffscreenView(name, w, h, Colour(0, 0, 0));
+    View *v = e->createOffscreenView(name, w, h, Colour(0, 0, 0), OffscreenContract::StillPicture);
     if (!v) return nullptr;
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 1;
     fx.hdrReadback = true;
     v->setPostFx(fx);
-    v->setOffscreenContract(OffscreenContract::StillPicture);
     v->setScene(s);
     return v;
 }
@@ -403,13 +402,12 @@ int main()
         Scene *s3 = buildScene(e, "screen_bind_rays");
         if (!s3) { std::printf("FAIL: the ray scene\n"); return 1; }
         s3->setRayTracing(RayTracingMode::On);
-        View *lv = e->createOffscreenView("screen_bind_live_rays", 256, 256, Colour(0, 0, 0));
+        View *lv = e->createOffscreenView("screen_bind_live_rays", 256, 256, Colour(0, 0, 0), OffscreenContract::Live);
         if (!lv) { std::printf("FAIL: the live view\n"); return 1; }
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.ssr = 1;
         lv->setPostFx(fx);
-        lv->setOffscreenContract(OffscreenContract::Live);
         lv->setScene(s3);
         enginetest::testCameraLookAt(lv, eye, at);
         e->waitForAsyncShaders();

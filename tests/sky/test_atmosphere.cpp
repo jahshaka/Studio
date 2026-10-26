@@ -167,7 +167,7 @@ int main()
 
     Rig r;
     r.e = engine.get();
-    r.v = r.e->createOffscreenView("atmo", kSize, kSize, Colour(0, 0, 0));
+    r.v = r.e->createOffscreenView("atmo", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     r.s = r.e->createScene("atmo");
     if (!r.v || !r.s) { std::printf("FAIL: view/scene\n"); return 1; }
     r.v->setScene(r.s);
@@ -567,7 +567,7 @@ int main()
     // the atmosphere against a one-texel image sky (both a full-screen quad at
     // queue 0), the frame's GPU time differenced.
     if (std::getenv("JAH_ATMO_COST")) {
-        View *big = r.e->createOffscreenView("atmo-1080", 1920u, 1080u, Colour(0, 0, 0));
+        View *big = r.e->createOffscreenView("atmo-1080", 1920u, 1080u, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Scene *cs = r.e->createScene("atmo-cost");
         big->setScene(cs);
         CameraDesc c = enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 8.0f), Vec3(0.0f, 1.0f, 0.0f));

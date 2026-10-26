@@ -62,7 +62,7 @@ static int freeRunningArm()
     const inspect::EngineEcho *echo = inspect::engine(e);
     if (!echo) { std::printf("FAIL: the engine's probes\n"); return 1; }
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("parity-free", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    View *view = e->createOffscreenView("parity-free", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("parity-free");
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(scene);
@@ -166,7 +166,7 @@ static int composeIdentityArm()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("identity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    View *view = e->createOffscreenView("identity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("identity", 8u);
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(scene);
@@ -395,7 +395,7 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
-    View *view = e->createOffscreenView("parity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f));
+    View *view = e->createOffscreenView("parity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("parity");
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(scene);
@@ -579,7 +579,7 @@ int main(int argc, char **argv)
     // C is removed — the list must hold no dead record.
     {
         Scene *u = e->createScene("parity-undrawn");
-        View *uv = u ? e->createOffscreenView("parity-undrawn", 64, 64, Colour(0, 0, 0, 1)) : nullptr;
+        View *uv = u ? e->createOffscreenView("parity-undrawn", 64, 64, Colour(0, 0, 0, 1), jahshaka::engine::OffscreenContract::Live) : nullptr;
         if (uv) {
             uv->setScene(u);
             enginetest::testCameraLookAt(uv, Vec3(0.0f, 3.0f, 8.0f), Vec3(0.0f, 0.0f, 0.0f));

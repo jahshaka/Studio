@@ -134,7 +134,7 @@ int main()
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
 
-    View *view = e->createOffscreenView("leak", 128, 128, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("leak", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     // Offscreen views ship with shadows OFF; without them the outside lamp
     // lights the inside straight through the wall and there is no GI
     // measurement left to make (the spike established this the hard way).
@@ -401,7 +401,7 @@ int main()
     std::printf("\n== the cards: the leak on a carded wall, card against the store ==\n");
     {
         e->setRayTracing(true);
-        View *cv = e->createOffscreenView("leak_cards", 256, 256, Colour(0, 0, 0));
+        View *cv = e->createOffscreenView("leak_cards", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
         Scene *s = e->createScene("leak_cards");
         cv->setScene(s);
         cv->setShadows(true);
@@ -413,7 +413,6 @@ int main()
         }
         // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
         // chain gathers, and a Live view takes the field's answer)
-        cv->setOffscreenContract(OffscreenContract::StillPicture);
         const float T = 0.2f;
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, cv, T, 0.0f, true);
         // THE GLOSSY PANEL before the +Z wall (its card's lobe is the lobe arm's subject)

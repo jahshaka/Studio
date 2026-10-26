@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("particles", 96, 96, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("particles", 96, 96, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *target = engine->createScene("particles");
     CHECK(view && target, "offscreen view + engine scene");
     if (!view || !target) return 1;

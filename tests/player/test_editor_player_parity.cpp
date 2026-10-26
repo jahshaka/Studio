@@ -161,8 +161,8 @@ int main(int argc, char **argv)
     // long as it has existed. The `spread()` assertion below is the guard that
     // would have caught it.
     // ---- ONE SCENE, two views (lane PLAYER-1) -------------------------------
-    View *editorView = engine->createOffscreenView("parity-editor", W, H, kBackground);
-    View *playerView = engine->createOffscreenView("parity-player", W, H, kBackground);
+    View *editorView = engine->createOffscreenView("parity-editor", W, H, kBackground, jahshaka::engine::OffscreenContract::Live);
+    View *playerView = engine->createOffscreenView("parity-player", W, H, kBackground, jahshaka::engine::OffscreenContract::Live);
     CHECK(editorView && playerView, "two offscreen views of the same size and background");
     if (!editorView || !playerView) return 1;
     Scene *editorScene = engine->createScene("parity-editor");
@@ -470,8 +470,8 @@ int main(int argc, char **argv)
             std::printf("    editor converged exposure = %.4f\n", double(editorScale));
             CHECK(editorScale > 0.0f, "the editor view has a converged exposure to hand over");
 
-            View *seeded  = engine->createOffscreenView("parity-seeded",  W, H, kBackground);
-            View *control = engine->createOffscreenView("parity-control", W, H, kBackground);
+            View *seeded  = engine->createOffscreenView("parity-seeded",  W, H, kBackground, jahshaka::engine::OffscreenContract::Live);
+            View *control = engine->createOffscreenView("parity-control", W, H, kBackground, jahshaka::engine::OffscreenContract::Live);
             CHECK(seeded && control, "two fresh views for the hand-over case");
             if (seeded && control) {
                 seeded->setScene(editorScene);
@@ -536,7 +536,7 @@ int main(int argc, char **argv)
         // --script run does not have). Here the scene can simply be destroyed
         // under the host, in the order EngineSceneViewport::clearScene uses.
         {
-            View *orphanView = engine->createOffscreenView("parity-orphan", W, H, kBackground);
+            View *orphanView = engine->createOffscreenView("parity-orphan", W, H, kBackground, jahshaka::engine::OffscreenContract::Live);
             Scene *temp = engine->createScene("parity-temp");
             CHECK(orphanView && temp, "a throwaway view and host scene");
             // Its OWN document: binding this suite's `doc` to a second mirror

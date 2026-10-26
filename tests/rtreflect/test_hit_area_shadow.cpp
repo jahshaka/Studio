@@ -63,7 +63,7 @@ int main()
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     Scene *s = e->createScene("hit_area_shadow");
-    View *v = e->createOffscreenView("hit_area_shadow", kWidth, kHeight, Colour(0, 0, 0));
+    View *v = e->createOffscreenView("hit_area_shadow", kWidth, kHeight, Colour(0, 0, 0), OffscreenContract::StillPicture);
     if (!s || !v) { std::printf("FAIL: the scene / view\n"); return 1; }
     v->setScene(s);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
@@ -78,7 +78,6 @@ int main()
         fx.hdrReadback = true;
         v->setPostFx(fx);
     }
-    v->setOffscreenContract(OffscreenContract::StillPicture);
     PbrParams matte;
     matte.albedo = Colour(0.8f, 0.8f, 0.8f);
     matte.roughness = 0.9f;

@@ -218,7 +218,7 @@ int main()
 
     Fixture fx;
     fx.e = engine.get();
-    fx.v = engine->createOffscreenView("looks", 128, 128, Colour(0.02f, 0.02f, 0.06f));
+    fx.v = engine->createOffscreenView("looks", 128, 128, Colour(0.02f, 0.02f, 0.06f), jahshaka::engine::OffscreenContract::Live);
     fx.s = engine->createScene("looks");
     REQUIRE(fx.v && fx.s);
     fx.v->setScene(fx.s);

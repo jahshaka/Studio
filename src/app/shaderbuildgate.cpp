@@ -442,10 +442,9 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // and is no worse off than the old code.
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
-                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f));
+                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live);
     // LIVE (View::setOffscreenContract): its frames are never read as a picture
     // (its scene's GI below is there to compile the compute set, not to be seen).
-    if (warmView) warmView->setOffscreenContract(OffscreenContract::Live);
     // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
     // (SPECS/THREADING_ADOPTION_SPEC.md §3.4a, interaction I-2).
     //

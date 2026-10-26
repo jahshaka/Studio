@@ -3535,11 +3535,10 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     if (!mEngine || !mEngineScene || width <= 0 || height <= 0) return QImage();
     View *shot = mEngine->createOffscreenView("screenshot-" + std::to_string(++mViewSerial),
                                              unsigned(width), unsigned(height),
-                                             Colour(0.10f, 0.11f, 0.14f));
+                                             Colour(0.10f, 0.11f, 0.14f), jahshaka::engine::OffscreenContract::StillPicture);
     if (!shot) return QImage();
     // A STILL PICTURE (View::setOffscreenContract): it gathers, and the settle
     // below waits for giAtRest before the readback.
-    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
     //
     // `pushEditorHelpers(false)` below takes away the furniture the MIRROR

@@ -146,7 +146,7 @@ int main()
     // THE DIM BASE: the view's background, which the HDR chain clears rt0 to, so
     // it is EXACTLY this radiance with no shading in it at all.
     const Colour kDim(0.02f, 0.02f, 0.02f);
-    gView = engine->createOffscreenView("meter", kSide, kSide, kDim);
+    gView = engine->createOffscreenView("meter", kSide, kSide, kDim, jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("meter");
     if (!gView || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     gView->setScene(s);

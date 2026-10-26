@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 
     Scene *drawn = engine->createScene("drawn");
     Scene *hidden = engine->createScene("hidden");
-    View *view = engine->createOffscreenView("drawn-view", 96, 96, Colour(0, 0, 0.5f));
+    View *view = engine->createOffscreenView("drawn-view", 96, 96, Colour(0, 0, 0.5f), jahshaka::engine::OffscreenContract::Live);
     CHECK(drawn && hidden && view, "two scenes + one offscreen view");
     if (!drawn || !hidden || !view) return 1;
     view->setScene(drawn);
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
     CHECK(counts.updatedScenes == 1,
           "the frame updated ONLY the scene an enabled view draws");
 
-    View *second = engine->createOffscreenView("hidden-view", 64, 64, Colour(0, 0, 0));
+    View *second = engine->createOffscreenView("hidden-view", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     CHECK(second != nullptr, "second offscreen view");
     if (second) {
         second->setScene(hidden);

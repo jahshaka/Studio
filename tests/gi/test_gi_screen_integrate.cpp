@@ -91,7 +91,7 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("screen_integrate", 256, 256, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("screen_integrate", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     {
         PostFxDesc fx;
@@ -100,7 +100,6 @@ int main()
         fx.hdrReadback = true;
         view->setPostFx(fx);
     }
-    view->setOffscreenContract(OffscreenContract::StillPicture);
 
     // the regions of each arrangement's 256 x 256 picture: the boxes stand left, centre and right
     const Region alignedRegions[] = { { "floor", 80, 220, 176, 250 },        { "wall left", 10, 20, 40, 40 },

@@ -184,7 +184,7 @@ int main()
 
     Rig r;
     r.e = engine.get();
-    r.v = r.e->createOffscreenView("aerial", 128, 128, Colour(0, 0, 0));
+    r.v = r.e->createOffscreenView("aerial", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     r.s = r.e->createScene("aerial");
     if (!r.v || !r.s) { std::printf("FAIL: view/scene\n"); return 1; }
     r.v->setScene(r.s);

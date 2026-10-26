@@ -82,7 +82,7 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-env-layout-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    View *view = engine->createOffscreenView("env", 128, 128, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("env", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     // THE LAYER IS REALLY THERE (H4): the row's "Validation Error" grep reads nothing from a run
     // whose layer never loaded. Read once a view exists: Ogre makes the Vulkan device with it.
     if (!enginetest::validationProof(*engine)) {

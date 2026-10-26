@@ -899,7 +899,7 @@ int main(int argc, char **argv)
     CHECK(engine != nullptr, "engine created");
     if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("bench", 320, 240, Colour(0, 0, 1));
+    View *view = engine->createOffscreenView("bench", 320, 240, Colour(0, 0, 1), jahshaka::engine::OffscreenContract::Live);
     CHECK(view != nullptr, "offscreen view");
     if (!view) return 1;
     // A fixed frame delta: the engine charges WALL-CLOCK time per frame and

@@ -101,7 +101,7 @@ int main()
             q[3] = 255;
         }
 
-    View *v = e->createOffscreenView("rough_lobe_room", 256, 256, Colour(0, 0, 0));
+    View *v = e->createOffscreenView("rough_lobe_room", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     if (!v) { std::printf("FAIL: the view\n"); return 1; }
     {
         PostFxDesc fx;
@@ -110,7 +110,6 @@ int main()
         fx.hdrReadback = true;
         v->setPostFx(fx);
     }
-    v->setOffscreenContract(OffscreenContract::StillPicture);
 
     // ONE ROOM A RUN: mapped (the law) and bare (printed)
     double rise[2] = { -1.0, -1.0 }, base[2] = { -1.0, -1.0 };

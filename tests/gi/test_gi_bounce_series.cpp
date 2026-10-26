@@ -179,7 +179,7 @@ int main(int argc, char **argv)
     // (the store's door downloads every volume of a cascade: an arm reads only the cascades its law needs)
     const auto arm = [&](GiQuality tier, float E, float S, bool everyCascade) {
         Arm a;
-        a.view = e->createOffscreenView("bounce_series", 64, 64, Colour(0, 0, 0));
+        a.view = e->createOffscreenView("bounce_series", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         a.scene = e->createScene("bounce_series");
         if (!a.view || !a.scene) return a;
         Scene *s = a.scene;

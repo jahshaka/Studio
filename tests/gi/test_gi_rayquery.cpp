@@ -186,7 +186,7 @@ int main(int argc, char **argv)
     // render window a prerequisite for registerHlms and createSceneManager), so
     // rayQueryAvailable() is only meaningful once a View has been made — asking
     // before that reports false on hardware that has rays.
-    View *view = e->createOffscreenView("rayquery", kSize, kSize, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rayquery", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("rayquery");
     view->setScene(scene);
     scene->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.2f, 0.2f, 0.25f));
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
         // A preview-sized offscreen view and its own scene, exactly like the
         // material preview and the thumbnail renderer: both are drawn every
         // frame the editor is, and both reach the tier through the same call.
-        View *pv = e->createOffscreenView("rayquery-preview", 64, 64, Colour(0, 0, 0));
+        View *pv = e->createOffscreenView("rayquery-preview", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Scene *ps = e->createScene("rayquery-preview");
         CHECK(pv && ps, "a second view and scene exist");
         if (pv && ps) {
@@ -579,7 +579,7 @@ int main(int argc, char **argv)
         // A scene that draws once — queueing compaction size queries for its
         // meshes — and is then parked before those answers are read. Its slots
         // are owed and must not be handed to anyone else.
-        View *pv = e->createOffscreenView("rayquery-parked", 64, 64, Colour(0, 0, 0));
+        View *pv = e->createOffscreenView("rayquery-parked", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Scene *ps = e->createScene("rayquery-parked");
         CHECK(pv && ps, "a parked view and scene exist");
         if (pv && ps) {

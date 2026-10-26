@@ -96,7 +96,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("sky", 256, 256, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("sky", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("sky");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);

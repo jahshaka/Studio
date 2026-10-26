@@ -77,7 +77,8 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("opaque_bindings", 256, 256, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("opaque_bindings", 256, 256, Colour(0, 0, 0),
+                                        OffscreenContract::StillPicture);   // (each chain below sets its own)
     Scene *scene = e->createScene("opaque_bindings");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
@@ -123,7 +124,7 @@ int main()
                              { "live", true, OffscreenContract::Live } };
     for (const Chain &ch : chains) {
         scene->setRayTracing(ch.rays ? RayTracingMode::On : RayTracingMode::Off);
-        view->setOffscreenContract(ch.contract);
+        view->setOffscreenContract(ch.contract);   // (the setter's own use: one view switching purpose)
         for (const Tier &t : tiers) {
             PostFxDesc fx;
             fx.allowOffscreen = true;

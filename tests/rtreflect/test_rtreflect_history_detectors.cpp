@@ -308,7 +308,7 @@ int main()
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     // THE DEVICE ONLY EXISTS ONCE A VIEW DOES (the startup-order law).
-    View *view = e->createOffscreenView("historydetectors", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f));
+    View *view = e->createOffscreenView("historydetectors", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     if (!(e->rayQueryAvailable() && e->rayTracing())) {
         std::printf("ok: no ray queries on this machine - the row is about the ray tier\n");
         return 0;

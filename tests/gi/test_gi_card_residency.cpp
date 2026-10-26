@@ -233,7 +233,7 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                                                      : holdCard < 0 ? "residency_held_out"
                                                      : pinTo ? "residency_pinned"
                                                              : "residency_teleport";
-    View *view = e->createOffscreenView(name, 256, 256, Colour(0, 0, 0));
+    View *view = e->createOffscreenView(name, 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
     view->setScene(scene);
@@ -245,7 +245,6 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     }
     // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
     // chain gathers, and a Live view takes the field's answer)
-    view->setOffscreenContract(OffscreenContract::StillPicture);
     out.a = buildRoom(scene, Vec3(-12.0f, 0.0f, 0.0f), crowded);
     out.b = buildRoom(scene, Vec3(12.0f, 0.0f, 0.0f));
     // (8)'s ARMS: room B's pillar 8's +x face (its card 1, the band face the measurements found) HELD resident or absent

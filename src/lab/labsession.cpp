@@ -177,9 +177,8 @@ bool Session::boot(std::string &error)
     if (!mEngine) { error = "engine: " + err; return false; }
     // THE ORDER (Engine.h:1971): a View before any Scene.
     if (mOpt.headless) {
-        mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, Colour(0, 0, 0));
+        mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, Colour(0, 0, 0), OffscreenContract::StillPicture);
         // A STILL PICTURE: it gathers where the scene gathers (the editor screenshot's contract).
-        if (mView) mView->setOffscreenContract(OffscreenContract::StillPicture);
     } else {
         mView = mEngine->createView("jahlab", static_cast<NativeWindowHandle>(mWindow.windowHandle()), mOpt.width,
                                     mOpt.height, Colour(0, 0, 0));

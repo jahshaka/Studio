@@ -137,7 +137,7 @@ Objects settledObjects(View *v, const char *label)
 
 void part1_the_plane()
 {
-    View *v = gEngine->createOffscreenView("exposure-plane", kW, kH, Colour(0.117f, 0.117f, 0.117f));
+    View *v = gEngine->createOffscreenView("exposure-plane", kW, kH, Colour(0.117f, 0.117f, 0.117f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = gEngine->createScene("exposure-plane-scene");
     if (!v || !s) { std::printf("FAIL: fixture\n"); ++failures; return; }
     v->setScene(s);
@@ -270,7 +270,7 @@ Resolved resolveThroughMirror(const iris::ScenePtr &doc, View *view, SceneMirror
 
 void part2_the_resolution()
 {
-    View *v = gEngine->createOffscreenView("exposure-resolve", 64, 64, Colour(0, 0, 0));
+    View *v = gEngine->createOffscreenView("exposure-resolve", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *target = gEngine->createScene("exposure-resolve-scene");
     if (!v || !target) { std::printf("FAIL: fixture\n"); ++failures; return; }
     v->setScene(target);

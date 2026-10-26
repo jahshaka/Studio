@@ -15,11 +15,10 @@ jahshaka::engine::View *create(jahshaka::engine::Engine &engine, jahshaka::engin
         if (made) engine.destroyView(made);
         return nullptr;
     };
-    View *rv = engine.createOffscreenView(name, width, height, jahshaka::engine::Colour(0.10f, 0.11f, 0.14f));
+    View *rv = engine.createOffscreenView(name, width, height, jahshaka::engine::Colour(0.10f, 0.11f, 0.14f), jahshaka::engine::OffscreenContract::StillPicture);
     if (!rv) return refuse(nullptr);
     // A StillPicture view: it gathers where the scene gathers, exactly like the
     // photo, rather than taking the Live contract's field-only answer.
-    rv->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // THE SWITCH (owner §10.5): the helper channel of the view's passes — graph
     // shape, set once here. The engine ANDs the mask with its reserved flags
     // (ENGINE trap 6 lives inside setHelpersVisible). The wearer's VR channel

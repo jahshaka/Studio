@@ -234,8 +234,8 @@ PostFxDesc clampedAuto(float chainExposure)
 
 void a1_two_views_two_exposures()
 {
-    View *a = gEngine->createOffscreenView("expA", 96, 96, Colour(0.10f, 0.10f, 0.12f));
-    View *b = gEngine->createOffscreenView("expB", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *a = gEngine->createOffscreenView("expA", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
+    View *b = gEngine->createOffscreenView("expB", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = gEngine->createScene("exp-scene");
     if (!a || !b || !s) { std::printf("FAIL: fixture\n"); ++failures; return; }
     a->setScene(s); b->setScene(s);
@@ -291,7 +291,7 @@ void a1_two_views_two_exposures()
 void a2_ssao_projection_is_per_view()
 {
     Scene *s = gEngine->createScene("ao-scene");
-    View *b = gEngine->createOffscreenView("aoB", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *b = gEngine->createOffscreenView("aoB", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     if (!s || !b) { std::printf("FAIL: fixture\n"); ++failures; return; }
     b->setScene(s);
     populate(s);
@@ -311,7 +311,7 @@ void a2_ssao_projection_is_per_view()
     // Now put a view with a COMPLETELY different frustum in front of it — a
     // long lens from far away, which is the projection the old global path
     // would have pushed for both. B must not move.
-    View *a = gEngine->createOffscreenView("aoA", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *a = gEngine->createOffscreenView("aoA", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     if (!a) { std::printf("FAIL: second view\n"); ++failures; return; }
     a->setScene(s);
     // Far away down a long lens, with near and far planes nothing like B's:
@@ -340,7 +340,7 @@ void a2_ssao_projection_is_per_view()
 
 void a3_cut_reseeds_the_exposure_history()
 {
-    View *v = gEngine->createOffscreenView("cut", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *v = gEngine->createOffscreenView("cut", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = gEngine->createScene("cut-scene");
     if (!v || !s) { std::printf("FAIL: fixture\n"); ++failures; return; }
     v->setScene(s);
@@ -515,7 +515,7 @@ void partB()
     // in the process are being destroyed and recreated lands on a staging scene
     // that is about to go stale, and iris::Scene says so, loudly, at bind time.
     Scene *target = gEngine->createScene("doc-scene");
-    View *view = gEngine->createOffscreenView("docView", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *view = gEngine->createOffscreenView("docView", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     if (!target || !view) { std::printf("FAIL: fixture\n"); ++failures; return; }
     view->setScene(target);
     Doc doc;
@@ -702,7 +702,7 @@ void partB()
     // ---- B4: THE DETERMINISM NEGATIVE -------------------------------------
     // The shape every thumbnail, preview and pixel suite has: an offscreen view
     // that never opted in. It must be byte-identical whatever the camera says.
-    View *plain = gEngine->createOffscreenView("plainView", 96, 96, Colour(0.10f, 0.10f, 0.12f));
+    View *plain = gEngine->createOffscreenView("plainView", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     if (!plain) { std::printf("FAIL: plain view\n"); ++failures; return; }
     plain->setScene(target);
     unsigned long long neutral = 0;
@@ -843,7 +843,7 @@ void partD()
     Doc doc;
     Scene *target = gEngine->createScene("meterDoc");
     View *view = gEngine->createOffscreenView("meterDocView", 192, 108,
-                                              Colour(0.10f, 0.10f, 0.12f));
+                                              Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
     if (!target || !view) { std::printf("FAIL: part D scene/view\n"); ++failures; return; }
     SceneMirror mirror(target);
     mirror.setSource(doc.scene);

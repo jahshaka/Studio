@@ -173,7 +173,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
 
-    View *view = engine->createOffscreenView("decals", kSize, kSize, Colour(0, 0, 0));
+    View *view = engine->createOffscreenView("decals", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("decals");
     view->setScene(s);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));

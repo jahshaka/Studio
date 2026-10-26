@@ -84,7 +84,7 @@ static int failures = 0;
 static View *buildScene(Engine *e, const char *name, unsigned w, unsigned h, Scene *&sceneOut,
                         bool farthest = true)
 {
-    View *view = e->createOffscreenView(name, w, h, Colour(0, 0, 0));
+    View *view = e->createOffscreenView(name, w, h, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene(name);
     view->setScene(scene);
     sceneOut = scene;

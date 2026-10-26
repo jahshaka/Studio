@@ -239,7 +239,7 @@ int main(int argc, char **argv)
     if (wantFormat) return formatCheckMain(e, cfg.logFile);
     if (wantEnvMatch) return envRayMatchMain(e);
 
-    View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("rtreflect");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -503,7 +503,7 @@ int main(int argc, char **argv)
         // history at all) and then reached by panning the live view.
         const float rad = 10.0f * 3.14159265f / 180.0f;
         const Vec3 target(11.0f * std::sin(rad), 2.0f, -6.0f + 11.0f * std::cos(rad));
-        View *fresh = e->createOffscreenView("rtpan", kSize, kSize, Colour(0, 0, 0));
+        View *fresh = e->createOffscreenView("rtpan", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         Image pannedLive, pannedFresh;
         if (!fresh) { std::printf("FAIL: pan view\n"); ++failures; }
         else {
@@ -926,7 +926,7 @@ static int costMain(Engine *e, const char *, const char *)
     // 1080p, because that is the resolution the bar is stated at and the trace
     // is one ray per pixel of it: a number measured at 192x192 and multiplied
     // would be arithmetic, not a measurement.
-    View *view = e->createOffscreenView("rtcost", 1920u, 1080u, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rtcost", 1920u, 1080u, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("rtcost");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -1256,7 +1256,7 @@ static int lampMain(Engine *e, bool target)
                 "(L = %.2f%s)\n", target ? "_clip" : "", kL,
                 target ? ", ABOVE the emissive voxel store's old 1.0 ceiling" : "");
 
-    View *view = e->createOffscreenView("rtlamp", kSize, kSize, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rtlamp", kSize, kSize, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("rtlamp");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -1500,7 +1500,7 @@ static int hitresMain(Engine *e)
 {
     std::printf("== gi.rt_reflect_hitres: F1-HITRES -- a mirror's hit reads the card\n");
     const unsigned kPx = 512u;
-    View *view = e->createOffscreenView("rthitres", kPx, kPx, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rthitres", kPx, kPx, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("rthitres");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -1823,7 +1823,7 @@ static int formatCheckMain(Engine *e, const std::string &logFile)
     const char *deny = getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT");
     std::printf("== gi.rt_reflect_format: the ray tier asks the device for its storage formats "
                 "(%s)\n", deny ? deny : "no format denied");
-    View *view = e->createOffscreenView("rtformat", 64u, 64u, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("rtformat", 64u, 64u, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("rtformat");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);
@@ -1901,7 +1901,7 @@ static int envRayMatchMain(Engine *e)
 {
     std::printf("== gi.env_ray_match: the environment answer vs the ray tier's sky answer\n");
     const unsigned kW = 384u, kH = 216u;
-    View *view = e->createOffscreenView("envraymatch", kW, kH, Colour(0, 0, 0));
+    View *view = e->createOffscreenView("envraymatch", kW, kH, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("envraymatch");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);

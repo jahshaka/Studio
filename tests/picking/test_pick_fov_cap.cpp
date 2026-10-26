@@ -200,7 +200,7 @@ int main(int argc, char **argv)
     for (const Case &c : kCases) {
         std::printf("\n-- %s --\n", c.name);
         View *view = engine->createOffscreenView(std::string("pickfov-") + std::to_string(c.w),
-                                                 unsigned(c.w), unsigned(c.h), Colour(0, 0, 0));
+                                                 unsigned(c.w), unsigned(c.h), Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         if (!view) { std::printf("FAIL: offscreen view %dx%d\n", c.w, c.h); ++failures; continue; }
         view->setScene(s);
 

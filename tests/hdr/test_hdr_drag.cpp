@@ -93,7 +93,7 @@ int main()
     // would sample EVERY pixel and the sparse-sampling half of the defect could
     // not arise at all. A real viewport's shape is the subject.
     const unsigned kW = 1280, kH = 720;
-    View *view = engine->createOffscreenView("hdr", kW, kH, Colour(1.6f, 1.75f, 2.2f));
+    View *view = engine->createOffscreenView("hdr", kW, kH, Colour(1.6f, 1.75f, 2.2f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = engine->createScene("hdr");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
