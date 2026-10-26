@@ -19,8 +19,15 @@
 #           16 (the readers' rest demand, N) + 9 (the read-back's due: the period 4 + the ring 3 + 1 + 1)
 #         + W (the decision's own work: its captures and card-to-card rounds, from the decision to its last GI row)
 #         + 16 (the re-rest after that work) + 1 (the hold's own frame)
-#       of the readers' FIRST REST frame - W is the cache's measured work (its pace is the L7 count, the optimisation
-#       list's item: photon-room's 72 frames of rounds at 8 pages a frame), never a margin; a view that never holds is red.
+#       of the readers' FIRST REST frame; a view that never holds is red - and W'S PACE LAW (the lead's correction: W is
+#       the cache's measured work, so its own bound is derived from the same session's counts):
+#           W <= ceil(sum over the decision's rounds of pages_r / P) + 9 (one read-back due)
+#       with pages_r the indirect texels the round's frames relit over a page (cards_indirect_relit, cards_page_size)
+#       and P the tier's pages a frame (cards_indirect_texels over a page: 8 at High) - the work runs at its pace with
+#       no idle frame. THE ROUNDS ARE PIPELINED, not sequential (measured: a frame's batch mixes rounds 9-17, the next
+#       round's listings landing while the last one's pages relight), so one due covers the chain, and the per-round
+#       form, sum ceil(pages_r / P) + rounds x 9, is printed beside it (it allows a due's stall at every round: 261
+#       frames against the work's 72). How MANY rounds a stop takes is not this row's law (the card-to-card rest row's).
 # On the rig's display, at 960x540.
 # usage: stillness_control.sh <jahlab> <work dir>
 set -u
@@ -75,6 +82,29 @@ if first_hold is not None:
             bound = 16 + 9 + W + 16 + 1
             check(first_hold - first_rest <= bound, "(3) LIVENESS: the first hold %d frames after the first rest, within "
                   "16 + 9 + W %d + 16 + 1 = %d" % (first_hold - first_rest, W, bound))
+            # W'S PACE: the rounds' pages from the frames' own counts (a frame's round: its deepest)
+            page = int(ctl[t_dec].get("cards_page_size") or 0) ** 2
+            P = int(ctl[t_dec].get("cards_indirect_texels") or 0) // max(page, 1)
+            rounds, cur, texels = [], None, 0
+            for i in range(t_dec, work_end + 1):
+                r = ctl[i].get("cards_round") or "-"
+                t = int(ctl[i].get("cards_indirect_relit") or 0)
+                if r == "-" or not gi[i]:
+                    continue
+                if r != cur:
+                    if cur is not None: rounds.append((cur, texels))
+                    cur, texels = r, 0
+                texels += t
+            if cur is not None: rounds.append((cur, texels))
+            import math
+            pages = sum(tx for _, tx in rounds) / max(page, 1)
+            pace = math.ceil(pages / max(P, 1)) + 9
+            perRound = sum(math.ceil(tx / max(page, 1) / max(P, 1)) for _, tx in rounds) + 9 * len(rounds)
+            print("the decision's work: %d frames, %.1f pages over %d round run(s) %s (pages each), P %d pages a frame -> "
+                  "its pace %d frames (the per-round form %d)" % (W, pages, len(rounds),
+                  [(r, round(tx / max(page, 1), 1)) for r, tx in rounds], P, pace, perRound))
+            check(page > 0 and P > 0 and len(rounds) > 0 and W <= pace,
+                  "(3) W'S PACE: the decision's work (%d frames) within ceil(%.1f pages / %d) + 9 = %d" % (W, pages, P, pace))
 held2 = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "held.tsv")), delimiter="\t"))
 check(len(held2) == 13 and all(r["held"] == "1" and int(r["all_max"]) == 0 and r["gi_rows"] == "-" for r in held2),
       "(1b) the held stop's window: 13 frames held, 0 codes, no GI row")
