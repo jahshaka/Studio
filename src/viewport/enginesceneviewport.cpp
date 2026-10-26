@@ -3112,6 +3112,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cards.emissiveFormat    = QString::fromStdString(st.cards.emissiveFormat);
     out.cards.instances         = int(st.cards.instancesResident);
     out.cards.cards             = int(st.cards.cardsResident);
+    out.cards.decisionReaders   = int(st.cards.decisionReaders);
     out.cards.residentHash      = st.cards.residentHash
                                       ? QStringLiteral("%1").arg(qulonglong(st.cards.residentHash), 16, 16, QLatin1Char('0'))
                                       : QString();

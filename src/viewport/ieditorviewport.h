@@ -920,6 +920,8 @@ public:
             int      instances = 0, cards = 0;
             /// WHICH cards (CardCacheStatus::residentHash): the resident set's fingerprint, 16 hex digits ("" with none).
             QString  residentHash;
+            /// The readers the last rest decision armed with (CardCacheStatus::decisionReaders): 1 the reflection, 2 the gather.
+            int      decisionReaders = 0;
             /// Residency by the readers' demand (PHOTON-7 stage 5, 5-2): admitted, evicted, compaction moves.
             double   admitted = 0.0, evicted = 0.0, compactionMoves = 0.0;
             int      queue = 0, budgetTexels = 0, capturesLastFrame = 0, texelsLastFrame = 0;

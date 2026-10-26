@@ -1,0 +1,57 @@
+// scripting.e2e.resize_rest.a / .b (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE DOES NOT TAKE THE SURFACE CACHE AWAY.
+// The Mirror Room in two boots. Boot a, the control: the window at 1280 x 800 BEFORE the open, rest, its shot. Boot b: the
+// open at the window's own size, then AT ONCE (inside the open's settle: its cards' demand window closes while the rest
+// decision is not yet armed) 700 x 520 for 12 frames and 1280 x 800, rest, and it requires: the rest decision armed with
+// BOTH readers (world.giStatus().cards.decisionReaders 3), cards resident, its shot within one code of boot a's.
+// THE DEFECT (F1): the resize to 1280 x 800 runs engine frames that draw no view of the scene; the readers were timed
+// stale on Ogre's frame count, so the cache armed its one rest decision on an EMPTY demand - every card drained, none
+// admitted, closed for the session: 0 resident and 386,026 px over a code (max 108) at the first measurement, readers 0
+// in this row. Staleness is now timed on the scene's draws (OgreScene::drawSerial).
+var mode = "@MODE@";
+function cards() { return world.giStatus().cards; }
+// AT REST: the editor's GI at rest - its cards' rest decision taken and that decision's work done - counted in frames.
+function rest(what, cap) {
+    for (var i = 0; i < cap; ++i) {
+        editor.frame(1);
+        if (world.giStatus().giAtRest === true) return i + 1;
+    }
+    throw new Error(what + ": the editor's GI did not come to rest in " + cap + " frames");
+}
+
+var w0 = app.window();
+if (w0.width === 1280 && w0.height === 800) throw new Error("the window opened at 1280 x 800: boot b's resize moves nothing");
+if (mode === "a") {
+    app.resizeWindow(1280, 800);
+    editor.frame(12);
+}
+project.openSample("Mirror Room");
+for (var i = 0; i < 4000 && project.archiveState() !== "idle"; ++i) editor.frame(1);
+for (var i = 0; i < 4000 && project.openState() !== "idle"; ++i) editor.frame(1);
+// (THE RESIZE INSIDE THE OPEN's SETTLE, at once - before the textures' wait, which runs frames: the measured defect's
+// timing, the cards' demand window closed and their rest decision not yet armed when the resize stalls the scene)
+if (mode === "b") {
+    app.resizeWindow(700, 520);
+    editor.frame(12);
+    app.resizeWindow(1280, 800);
+}
+app.waitForTextures();
+if (!cards().built) throw new Error("the Mirror Room has no surface cache (its world is Photon High with rays)");
+var n = rest(mode === "b" ? "700 x 520, then 1280 x 800" : "the open", 900);
+var c = cards();
+console.log("resize_rest: boot " + mode + " at rest in " + n + " frames (opened at " + (mode === "a" ? "1280 x 800" : w0.width + " x " + w0.height) + "): " +
+            c.cards + " cards resident (" + c.admitted + " admitted, " + c.evicted + " evicted), " + c.restDecisions +
+            " rest decision(s) armed with readers " + c.decisionReaders + "; set " + c.residentHash);
+var s = editor.screenshot("@WORK@/shot-" + mode + ".png", 960, 540, [], "scene");
+if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
+if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
+if (c.decisionReaders !== 3)
+    throw new Error("THE REST DECISION ARMED WITHOUT BOTH READERS (" + c.decisionReaders + "): a reader counted as stale");
+if (c.cards < 1) throw new Error("NO CARD RESIDENT AT REST: the surface cache was taken away");
+if (mode === "b") {
+    var d = app.compareImages("@WORK@/shot-a.png", "@WORK@/shot-b.png", 1);
+    console.log("resize_rest: the two boots' pictures: " + d.over + " pixels over one code of " + (d.width * d.height) +
+                ", max " + d.maxDelta + ", mean " + d.meanDelta);
+    if (d.over !== 0)
+        throw new Error("A RESIZE LEFT A TRACE: " + d.over + " pixels over one code (max " + d.maxDelta + ")");
+}
+"ok";

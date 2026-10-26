@@ -928,6 +928,23 @@ set_tests_properties(scripting.e2e.resize_history.a PROPERTIES LABELS "scripting
 set_tests_properties(scripting.e2e.resize_history.b PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_REQUIRED scripting_resize_history_a DEPENDS scripting.e2e.resize_history.a)
 
+# scripting.e2e.resize_rest.a / .b (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE DOES NOT TAKE THE SURFACE CACHE AWAY:
+# the Mirror Room in two boots, boot b at 700 x 520 then 1280 x 800 inside the open's settle; its rest decision armed with both
+# readers, cards resident, its shot within one code of boot a's (resize_rest_boot.js.in says the defect: the readers timed
+# stale on Ogre's frame count, the decision on an empty demand). One boot a row, a fixture chain (scripts/resize_rest_boots.sh).
+foreach(_k a b)
+    # (FRAMES ESTIMATED, not counted: the mirror-room boot's measured shape - its boot and open about 500 frames - plus the
+    # rest, about 440 frames, and the shot's settle; no frame counter reaches a script row)
+    jah_gpu_row(scripting.e2e.resize_rest.${_k} CLASS app TIER epic NEEDS photon FRAMES 1000
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_rest_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_rest_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/resize-rest ${_k}
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set_tests_properties(scripting.e2e.resize_rest.a PROPERTIES LABELS "scripting" TIMEOUT 60
+    FIXTURES_SETUP scripting_resize_rest_a)
+set_tests_properties(scripting.e2e.resize_rest.b PROPERTIES LABELS "scripting" TIMEOUT 60
+    FIXTURES_REQUIRED scripting_resize_rest_a DEPENDS scripting.e2e.resize_rest.a)
+
 # scripting.e2e.world_stillness (PHOTON-2 stage 0) — THE STILLNESS DOOR THROUGH THE SCRIPTING HOST (API-first: the verb a
 # Bistro measurement drives): world.stillness on a new Basic project, a 0.5 m walk, the stop, a 120-frame window and the
 # path check — the door's shape and its invariants (e2e_world_stillness.js says which) and THE HOLD (PHOTON-2 K6: each
