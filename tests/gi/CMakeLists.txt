@@ -734,11 +734,21 @@ target_compile_definitions(test_gi_sealed_sky PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_sealed_sky PRIVATE JahshakaEngine)
 add_dependencies(test_gi_sealed_sky JahshakaEngineMedia)
-jah_gpu_row(gi.sealed_sky CLASS engine COMMAND test_gi_sealed_sky
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sealed_sky PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 581)
+# ONE ROW A TIER (10-3, the lead's ruling: each within the fixture's 10 s with margin): gi.sealed_sky the ray tier
+# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off.
+foreach(_row ray noray)
+    if(_row STREQUAL "ray")
+        set(_name gi.sealed_sky)
+    else()
+        set(_name gi.sealed_sky_${_row})
+    endif()
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_sealed_sky ${_row}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
+endforeach()
+set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 369)
+set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 212)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm

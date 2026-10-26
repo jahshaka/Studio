@@ -40,7 +40,8 @@
 //       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
 //       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
 //       picture's middle (the matte and the panels alike), its brightest pixel at most 1 % of R in every frame.
-// THE TIERS: the ray tier at High and at Epic (laws 1-4, 6-8); the NO-RAY tier as it ships (rays off, the field on, no
+// THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High and at Epic (laws 1-4, 6-8); gi.sealed_sky_noray
+// the NO-RAY tier as it ships (rays off, the field on, no
 // cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
 // integrate's cones answer every pixel).
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
@@ -82,8 +83,13 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size, const PbrParams &p)
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    // ONE ROW A TIER (PHOTON-7 stage 10-3, the lead's ruling: each within the fixture's 10 s with margin): "ray" the ray
+    // tier at High and Epic (gi.sealed_sky), "noray" the no-ray tier as it ships and with the field off
+    // (gi.sealed_sky_noray)
+    const std::string mode = argc > 1 ? argv[1] : "ray";
+    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-sealed-sky-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -394,7 +400,7 @@ int main()
 
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
     const char *tierName[2] = { "High", "Epic" };
-    for (int t = 0; t < 2; ++t) {
+    for (int t = 0; mode == "ray" && t < 2; ++t) {
         std::printf("== %s\n", tierName[t]);
         GiParams gi;
         gi.mode = GiMode::Vct;
@@ -500,7 +506,7 @@ int main()
     // THE NO-RAY TIER AS IT SHIPS (rays off, the field on, no cards): the roof's control, then inside - the voxels, the
     // field, the pixel and the teleport window
     double Rnoray = 0.0;
-    {
+    if (mode == "noray") {
         std::printf("== High, no rays (the field on)\n");
         scene->setRayTracing(RayTracingMode::Off);
         cardsOn = false;
@@ -532,7 +538,7 @@ int main()
     }
     // (5) printed: the no-ray route (rays off, the field off), High, the picture's middle inside against R - rebuilt
     // where the camera stands, inside (the teleport is the shipped no-ray tier's, above; R is that tier's roof)
-    {
+    if (mode == "noray") {
         std::printf("== High, no rays, the field off\n");
         GiParams gi;
         gi.mode = GiMode::Vct;
