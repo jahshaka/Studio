@@ -86,6 +86,27 @@ set_tests_properties(rtreflect.emitters PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(rtreflect.emitters PROPERTIES JAHSHAKA_TEST_FRAMES 57)
 
+# rtreflect.sphere_glint — A LAMP HAS A SIZE (PHOTON-7 stage 11, the sphere-light glint): a polished metal floor under one
+# point lamp, the pixel's direct specular alone; the glint's half-maximum disc at R 0.1 m within 0.8-2.0 x the lamp's
+# angular radius through the mirror, R 0.1 against R 0.05 1.5-2.5 x, a point (R 0.001) under half R 0.05's.
+add_executable(test_sphere_glint test_sphere_glint.cpp)
+set_target_properties(test_sphere_glint PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_sphere_glint PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_sphere_glint PRIVATE JahshakaEngine)
+add_dependencies(test_sphere_glint JahshakaEngineMedia)
+jah_gpu_row(rtreflect.sphere_glint CLASS engine COMMAND test_sphere_glint
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.sphere_glint PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(rtreflect.sphere_glint PROPERTIES JAHSHAKA_TEST_FRAMES 37)
+
 # rtreflect.far_record (PHOTON-7 stage 6, READ_B finding 1) — A FAR HIT IS RECORDED AS A FAR HIT: a mirror's reflection of a
 # two-level sphere 93 m behind the camera (past the 50 m near length: the far copies, a record) against the sphere seen
 # directly from the mirrored camera - its lit and dark halves where they are, not the shuffled level-0 triangles a

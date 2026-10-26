@@ -18,6 +18,7 @@ Env photonShells();
 Env photonRoof();
 Env photonRough();
 Env photonFirefly();
+Env photonGlint();
 Env photonArea();
 Env photonContact();
 
@@ -26,7 +27,7 @@ const std::vector<Env> &catalogue()
     static const std::vector<Env> c = { atomStreet(), atomArcade(), atomForest(), atomOcclusion(),
                                         atomSmall(),  atomFlat(),   photonRoom(), photonCourt(),
                                         photonGlass(), photonRamp(), photonShells(), photonRoof(), photonRough(),
-                                        photonFirefly(),
+                                        photonFirefly(), photonGlint(),
                                         photonArea(), photonContact() };
     return c;
 }
