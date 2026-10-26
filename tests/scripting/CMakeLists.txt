@@ -928,13 +928,15 @@ set_tests_properties(scripting.e2e.resize_history.a PROPERTIES LABELS "scripting
 set_tests_properties(scripting.e2e.resize_history.b PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_REQUIRED scripting_resize_history_a DEPENDS scripting.e2e.resize_history.a)
 
-# scripting.e2e.resize_rest.a / .b (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE DOES NOT TAKE THE SURFACE CACHE AWAY:
-# the Mirror Room in two boots, boot b at 700 x 520 then 1280 x 800 inside the open's settle; its rest decision armed with both
-# readers, cards resident, its shot within one code of boot a's (resize_rest_boot.js.in says the defect: the readers timed
-# stale on Ogre's frame count, the decision on an empty demand). One boot a row, a fixture chain (scripts/resize_rest_boots.sh).
-foreach(_k a b)
+# scripting.e2e.resize_rest.a / .b / .c (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE LEAVES THE SURFACE CACHE THE REST
+# SET OF THE FRUSTUM IT ENDS AT: the Mirror Room in three boots at one viewport size, boot a opened at 1280 x 800 (the
+# control), boot b at 700 x 520 then 1280 x 800 inside the open's settle (F1: the readers timed stale on Ogre's frame
+# count, the decision on an empty demand), boot c rested and then 1280 x 800 (F2: a resize was no demand change); b and c
+# require boot a's viewport, a decision armed with both readers, boot a's resident set and a shot within one code
+# (resize_rest_boot.js.in). One boot a row, a fixture chain (scripts/resize_rest_boots.sh).
+foreach(_k a b c)
     # (FRAMES ESTIMATED, not counted: the mirror-room boot's measured shape - its boot and open about 500 frames - plus the
-    # rest, about 440 frames, and the shot's settle; no frame counter reaches a script row)
+    # rests, about 440 frames each, and the shot's settle; no frame counter reaches a script row)
     jah_gpu_row(scripting.e2e.resize_rest.${_k} CLASS app TIER epic NEEDS photon FRAMES 1000
              COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_rest_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_rest_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/resize-rest ${_k}
@@ -942,7 +944,7 @@ foreach(_k a b)
 endforeach()
 set_tests_properties(scripting.e2e.resize_rest.a PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_SETUP scripting_resize_rest_a)
-set_tests_properties(scripting.e2e.resize_rest.b PROPERTIES LABELS "scripting" TIMEOUT 60
+set_tests_properties(scripting.e2e.resize_rest.b scripting.e2e.resize_rest.c PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_REQUIRED scripting_resize_rest_a DEPENDS scripting.e2e.resize_rest.a)
 
 # scripting.e2e.world_stillness (PHOTON-2 stage 0) — THE STILLNESS DOOR THROUGH THE SCRIPTING HOST (API-first: the verb a

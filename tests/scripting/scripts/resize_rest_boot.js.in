@@ -1,12 +1,22 @@
-// scripting.e2e.resize_rest.a / .b (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE DOES NOT TAKE THE SURFACE CACHE AWAY.
-// The Mirror Room in two boots. Boot a, the control: the window at 1280 x 800 BEFORE the open, rest, its shot. Boot b: the
-// open at the window's own size, then AT ONCE (inside the open's settle: its cards' demand window closes while the rest
-// decision is not yet armed) 700 x 520 for 12 frames and 1280 x 800, rest, and it requires: the rest decision armed with
-// BOTH readers (world.giStatus().cards.decisionReaders 3), cards resident, its shot within one code of boot a's.
-// THE DEFECT (F1): the resize to 1280 x 800 runs engine frames that draw no view of the scene; the readers were timed
-// stale on Ogre's frame count, so the cache armed its one rest decision on an EMPTY demand - every card drained, none
-// admitted, closed for the session: 0 resident and 386,026 px over a code (max 108) at the first measurement, readers 0
-// in this row. Staleness is now timed on the scene's draws (OgreScene::drawSerial).
+// scripting.e2e.resize_rest.a / .b / .c (PHOTON-7 stage 10-3; L1) - A WINDOW's RESIZE LEAVES THE SURFACE CACHE THE REST
+// SET OF THE FRUSTUM IT ENDS AT. The Mirror Room in three boots, its resident cards named by
+// world.giStatus().cards.residentHash, each compared at ONE VIEWPORT SIZE (the gather's target, printed and required equal
+// first: a window's layout can leave the viewport another size after a shrink and a regrow - a panel keeps its shrunken
+// width - and a layout difference must never pose as a residency one).
+//   boot a, the control: the window at 700 x 520 and then 1280 x 800 BEFORE the open (the same window history as boots b
+//     and c, so the same layout: the direct shrink to 1280 x 800 left the viewport 733 or 748 wide from run to run), rest,
+//     its shot and its set.
+//   boot b (F1's law): the open at the window's own size, then AT ONCE (inside the open's settle: its cards' demand window
+//     closes while the rest decision is not yet armed) 700 x 520 for 12 frames and 1280 x 800, rest; it requires the rest
+//     decision armed with BOTH readers (cards.decisionReaders 3), cards resident, its set boot a's and its shot within one
+//     code of boot a's. THE DEFECT (F1): the resize to 1280 x 800 runs engine frames that draw no view of the scene; the
+//     readers were timed stale on Ogre's frame count, so the cache armed its one rest decision on an EMPTY demand - every
+//     card drained, none admitted, closed for the session (0 resident, 386,026 px over a code at the first measurement;
+//     readers 0 here). Staleness is now timed on the scene's draws (OgreScene::drawSerial).
+//   boot c (F2's law): the open at the window's own size, REST (the cards' decision taken), then 700 x 520 for 12 frames
+//     and 1280 x 800 (boot a's window history), rest; its set
+//     boot a's and its shot within one code of boot a's. THE DEFECT (F2): a resize was no demand change - the eye test read
+//     the pose and not the frustum - so a decided cache kept the old frustum's set at the new one.
 var mode = "@MODE@";
 function cards() { return world.giStatus().cards; }
 // AT REST: the editor's GI at rest - its cards' rest decision taken and that decision's work done - counted in frames.
@@ -17,40 +27,59 @@ function rest(what, cap) {
     }
     throw new Error(what + ": the editor's GI did not come to rest in " + cap + " frames");
 }
+function viewport() { var g = world.giStatus().gather || {}; return g.targetW + " x " + g.targetH; }
 
 var w0 = app.window();
-if (w0.width === 1280 && w0.height === 800) throw new Error("the window opened at 1280 x 800: boot b's resize moves nothing");
-if (mode === "a") {
+if (w0.width === 1280 && w0.height === 800) throw new Error("the window opened at 1280 x 800: the resizes move nothing");
+// THE WINDOW's HISTORY, one in every boot: 700 x 520 for 12 frames, then 1280 x 800 - before the open (a), inside the
+// open's settle (b), after the open's rest (c)
+function resizes() {
+    app.resizeWindow(700, 520);
+    editor.frame(12);
     app.resizeWindow(1280, 800);
+}
+if (mode === "a") {
+    resizes();
     editor.frame(12);
 }
 project.openSample("Mirror Room");
 for (var i = 0; i < 4000 && project.archiveState() !== "idle"; ++i) editor.frame(1);
 for (var i = 0; i < 4000 && project.openState() !== "idle"; ++i) editor.frame(1);
-// (THE RESIZE INSIDE THE OPEN's SETTLE, at once - before the textures' wait, which runs frames: the measured defect's
+// (boot b's resize INSIDE THE OPEN's SETTLE, at once - before the textures' wait, which runs frames: the measured defect's
 // timing, the cards' demand window closed and their rest decision not yet armed when the resize stalls the scene)
-if (mode === "b") {
-    app.resizeWindow(700, 520);
-    editor.frame(12);
-    app.resizeWindow(1280, 800);
-}
+if (mode === "b") resizes();
 app.waitForTextures();
 if (!cards().built) throw new Error("the Mirror Room has no surface cache (its world is Photon High with rays)");
-var n = rest(mode === "b" ? "700 x 520, then 1280 x 800" : "the open", 900);
+if (mode === "c") {
+    var n0 = rest("the open", 900);
+    var c0 = cards();
+    console.log("resize_rest: boot c at rest in " + n0 + " frames at the open's " + w0.width + " x " + w0.height +
+                " (viewport " + viewport() + "): " + c0.cards + " cards resident, " + c0.restDecisions +
+                " rest decision(s); set " + c0.residentHash);
+    resizes();
+}
+var n = rest(mode === "a" ? "the open" : "1280 x 800", 900);
 var c = cards();
-console.log("resize_rest: boot " + mode + " at rest in " + n + " frames (opened at " + (mode === "a" ? "1280 x 800" : w0.width + " x " + w0.height) + "): " +
-            c.cards + " cards resident (" + c.admitted + " admitted, " + c.evicted + " evicted), " + c.restDecisions +
-            " rest decision(s) armed with readers " + c.decisionReaders + "; set " + c.residentHash);
+var vp = viewport();
+console.log("resize_rest: boot " + mode + " at rest in " + n + " frames at 1280 x 800 (viewport " + vp + "): " + c.cards +
+            " cards resident (" + c.admitted + " admitted, " + c.evicted + " evicted), " + c.restDecisions +
+            " rest decision(s), the last armed with readers " + c.decisionReaders + "; set " + c.residentHash);
 var s = editor.screenshot("@WORK@/shot-" + mode + ".png", 960, 540, [], "scene");
 if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
-if (c.decisionReaders !== 3)
-    throw new Error("THE REST DECISION ARMED WITHOUT BOTH READERS (" + c.decisionReaders + "): a reader counted as stale");
-if (c.cards < 1) throw new Error("NO CARD RESIDENT AT REST: the surface cache was taken away");
-if (mode === "b") {
-    var d = app.compareImages("@WORK@/shot-a.png", "@WORK@/shot-b.png", 1);
-    console.log("resize_rest: the two boots' pictures: " + d.over + " pixels over one code of " + (d.width * d.height) +
-                ", max " + d.maxDelta + ", mean " + d.meanDelta);
+if (mode === "a") {
+    console.log("resize_rest: SET-A " + c.residentHash + " VIEWPORT-A " + vp);
+} else {
+    if (vp !== "@VIEWPORT_A@")
+        throw new Error("THE LAYOUT DIFFERS, NOT THE RESIDENCY: viewport " + vp + " against boot a's @VIEWPORT_A@");
+    if (c.decisionReaders !== 3)
+        throw new Error("THE REST DECISION ARMED WITHOUT BOTH READERS (" + c.decisionReaders + "): a reader counted as stale");
+    if (c.cards < 1) throw new Error("NO CARD RESIDENT AT REST: the surface cache was taken away");
+    var d = app.compareImages("@WORK@/shot-a.png", "@WORK@/shot-" + mode + ".png", 1);
+    console.log("resize_rest: boot " + mode + " against boot a: " + d.over + " pixels over one code of " + (d.width * d.height) +
+                ", max " + d.maxDelta + "; sets " + c.residentHash + " / @SET_A@");
+    if (c.residentHash !== "@SET_A@")
+        throw new Error("THE RESIDENT SET IS NOT THE FRUSTUM's: " + c.residentHash + " against boot a's @SET_A@ at one viewport");
     if (d.over !== 0)
         throw new Error("A RESIZE LEFT A TRACE: " + d.over + " pixels over one code (max " + d.maxDelta + ")");
 }
