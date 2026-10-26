@@ -162,6 +162,7 @@ int main()
         l.colour = Colour(1.0f, 0.97f, 0.92f);
         l.intensity = 900.0f;
         l.range = 40.0f;
+        l.sourceRadius = 0.001f;   // MEASURING ARM
         if (!lamp || !s->setLight(lamp, l)) { std::printf("FAIL: lamp\n"); return 1; }
     }
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.8f, 7.0f), Vec3(0.0f, 0.9f, 0.0f));
