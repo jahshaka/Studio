@@ -602,6 +602,26 @@ jah_gpu_row(gi.rough_lobe_room CLASS engine FRAMES 400 COMMAND test_gi_rough_lob
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rough_lobe_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.emitter_energy (PHOTON-7 stage 10-3, R2; energy is conserved) - AN EMITTER OVER THE OLD MERGE CAP KEEPS ITS LIGHT:
+# bounce_series' sealed room with every slab emitting E = 100 and 1000 (High); the emissive stores hold E and the
+# room's radiance over E is the same in both (test_gi_emitter_energy.cpp says the laws). RED before: every emitter over 16
+# entered the voxels at 16. A fixture.
+add_executable(test_gi_emitter_energy test_gi_emitter_energy.cpp)
+set_target_properties(test_gi_emitter_energy PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_emitter_energy PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_emitter_energy PRIVATE JahshakaEngine)
+add_dependencies(test_gi_emitter_energy JahshakaEngineMedia)
+jah_gpu_row(gi.emitter_energy CLASS engine FRAMES 110 COMMAND test_gi_emitter_energy
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.emitter_energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
