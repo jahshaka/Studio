@@ -94,6 +94,9 @@ editor.frame(12);
 buildFixtureB();
 var s = editor.screenshot("@SHOT@", 256, 256, [], "viewport");
 if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
+// (one frame first: world.giStatus() is the LAST FRAME's published status, and the shot view - destroyed after its
+// readback - is folded into the next one's)
+editor.frame(1);
 var st = world.giStatus();
 var gs = st.gather || {}, rq = st.rayQuery || {};
 console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest +
