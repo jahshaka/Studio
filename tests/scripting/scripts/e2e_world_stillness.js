@@ -16,7 +16,9 @@ editor.selectNone();
 
 var r = world.stillness({
     script: "teleport:0,2,8,0,1,0/hold:20/walk:0.5,2,8,0.5,1,0:10",
-    frames: 120,
+    // (the walk's window 120 frames; the TELEPORT's long enough to OBSERVE its hold: its law is the derived bound below,
+    // never the window's length - the 120 frames it had held at its very edge until F3's decision moved the hold to 141)
+    frames: { walk: 120, teleport: 240 },
     path: true,
     classes: [ { name: "upper", x: 0, y: 0, w: 1, h: 0.5 }, { name: "lower", x: 0, y: 0.5, w: 1, h: 0.5 } ],
     out: "e2e-world-stillness"
@@ -32,7 +34,7 @@ assert(lines.walk === 1 && lines.teleport === 1 && lines.path === 1,
        "a STILLNESS line per window and the path line: " + JSON.stringify(lines));
 assert(r.windows.length === 2 && r.windows[0].name === "walk" && r.windows[1].name === "teleport",
        "two windows, walk then teleport");
-assert(r.windows[0].frames === 120 && r.windows[1].frames === 120, "each window is the 120 frames asked for");
+assert(r.windows[0].frames === 120 && r.windows[1].frames === 240, "each window is the frames asked for (120, 240)");
 var px = r.windows[1].pixels;
 assert(px.all > 0 && px.upper > 0 && px.lower > 0 && px.upper + px.lower === px.all,
        "the teleport window counts every pixel, split by the two rectangles: " + JSON.stringify(px));
@@ -45,7 +47,15 @@ if (st.gather && st.gather.running === true)
 // none came after it) + the settle N + 1, and never before it nor before the last GI row - its OWN hold
 // (gatherHoldFrame). THE VIEW HOLDS WHEN EVERY READER HOLDS (PHOTON-7 stage 10, the contract): its hold (holdFrame) is
 // at or after the gather's and, where the reflection traces, the reflection's own (reflHoldFrame; its length is the
-// reflection's rest rule, stage 11's to bound). A window long enough to hold (120 frames) that never holds FAILS.
+// reflection's rest rule, stage 11's to bound). A window that never holds FAILS.
+// THE HOLD's DERIVED BOUND (PHOTON-7 stage 10-3, the lead's ruling; the door's one formula, stillnessDeriveLiveness -
+// lab.stillness_control's): where the stop's one rest decision falls in the window, (2) the view holds AFTER the
+// decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + N + 1 frames of
+// the readers' first rest, and W, the decision's work, keeps its pace (W <= workPace). The bound is derived from the
+// window's own counts; the window's length is only how long it is observed.
+// RED-CAPABLE (an arm, measured 2026-10-26, one run): with the readers' hold term OFF (the gather's in.holdOwed false) the
+// gather held at frame 76 of the walk window, before the decision's work and its last write (101): red on "the gather's
+// hold is the settle after the last write". (The view's hold still waited for the reflection: 115.)
 for (var w = 0; w < 2; ++w) {
     var win = r.windows[w];
     var lastWrite = Math.max(0, win.lastHoldKeyFrame);
@@ -57,6 +67,17 @@ for (var w = 0; w < 2; ++w) {
     assert(win.holdFrame >= win.gatherHoldFrame && (win.reflHoldFrame < 0 || win.holdFrame >= win.reflHoldFrame),
            win.name + ": THE VIEW HOLDS WHEN EVERY READER HOLDS (the view " + win.holdFrame + ", the gather " +
            win.gatherHoldFrame + ", the reflection " + win.reflHoldFrame + ")");
+    if (win.decisionFrame >= 0) {
+        assert(win.holdFrame > win.decisionWorkEnd && win.holdFrame >= win.decisionFrame,
+               win.name + ": (2) THE HOLD WAITS FOR THE DECISION: the hold " + win.holdFrame + " after the decision " +
+               win.decisionFrame + " and its last GI row " + win.decisionWorkEnd);
+        assert(win.firstRestFrame >= 0 && win.holdFrame - win.firstRestFrame <= win.holdBound,
+               win.name + ": (3) LIVENESS: the first hold " + (win.holdFrame - win.firstRestFrame) +
+               " frames after the readers' first rest (" + win.firstRestFrame + "), within the derived bound " + win.holdBound);
+        assert(win.workPace >= 0 && win.decisionWorkEnd - win.decisionFrame <= win.workPace,
+               win.name + ": (3) W'S PACE: the decision's work " + (win.decisionWorkEnd - win.decisionFrame) +
+               " frames within ceil(" + win.workPages.toFixed(1) + " pages / the tier's pages a frame) + due = " + win.workPace);
+    }
     assert(win.gatherHoldFrame > win.lastGiRowFrame && win.gatherHoldFrame > win.lastHoldKeyFrame &&
            win.gatherHoldFrame <= lastWrite + win.settleFrames + 1,
            win.name + ": the gather's hold is the settle after the last write (" + win.gatherHoldFrame + ", last hold key " +

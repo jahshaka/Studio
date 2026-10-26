@@ -15,7 +15,8 @@
 #       history count) - the first window's stop is the teleport, where no pixel has a history;
 #   (2) THE HOLD WAITS FOR THE DECISION (R3's ruling: the readers' hold waits on the rest decision's work): the stop's one
 #       rest decision is taken, and no held frame comes before the decision's last GI row;
-#   (3) LIVENESS, the bound R3's design writes: the first hold comes within
+#   (3) LIVENESS, the bound R3's design writes (since PHOTON-7 stage 10-3 computed ONCE, in the door -
+#       jahshaka::engine::stillnessDeriveLiveness - and read here from the LAB STILLNESS line): the first hold comes within
 #           16 + 9 (the readers' DEMAND SPAN L = N + the due: each reader's rest indices [1, L], PHOTON-7 stage 10's
 #           per-reader snapshot) + 9 (the read-back's due after it: the period 4 + the ring 3 + 1 + 1)
 #         + W (the decision's own work: its captures and card-to-card rounds, from the decision to its last GI row)
@@ -94,34 +95,28 @@ if first_hold is not None:
         check(first_hold > work_end and first_hold >= t_dec,
               "(2) THE HOLD WAITS FOR THE DECISION: the first hold (%d) after the decision (%d) and its last GI row (%d)"
               % (first_hold, t_dec, work_end))
-        if first_rest is not None:
-            W = work_end - t_dec
-            bound = (16 + 9) + 9 + W + 16 + 1
-            check(first_hold - first_rest <= bound, "(3) LIVENESS: the first hold %d frames after the first rest, within "
-                  "(16 + 9) + 9 + W %d + 16 + 1 = %d" % (first_hold - first_rest, W, bound))
-            # W'S PACE: the rounds' pages from the frames' own counts (a frame's round: its deepest)
-            page = int(ctl[t_dec].get("cards_page_size") or 0) ** 2
-            P = int(ctl[t_dec].get("cards_indirect_texels") or 0) // max(page, 1)
-            rounds, cur, texels = [], None, 0
-            for i in range(t_dec, work_end + 1):
-                r = ctl[i].get("cards_round") or "-"
-                t = int(ctl[i].get("cards_indirect_relit") or 0)
-                if r == "-" or not gi[i]:
-                    continue
-                if r != cur:
-                    if cur is not None: rounds.append((cur, texels))
-                    cur, texels = r, 0
-                texels += t
-            if cur is not None: rounds.append((cur, texels))
-            import math
-            pages = sum(tx for _, tx in rounds) / max(page, 1)
-            pace = math.ceil(pages / max(P, 1)) + 9
-            perRound = sum(math.ceil(tx / max(page, 1) / max(P, 1)) for _, tx in rounds) + 9 * len(rounds)
-            print("the decision's work: %d frames, %.1f pages over %d round run(s) %s (pages each), P %d pages a frame -> "
-                  "its pace %d frames (the per-round form %d)" % (W, pages, len(rounds),
-                  [(r, round(tx / max(page, 1), 1)) for r, tx in rounds], P, pace, perRound))
-            check(page > 0 and P > 0 and len(rounds) > 0 and W <= pace,
-                  "(3) W'S PACE: the decision's work (%d frames) within ceil(%.1f pages / %d) + 9 = %d" % (W, pages, P, pace))
+        # (3) THE DERIVED BOUND IS THE DOOR's (jahshaka::engine::stillnessDeriveLiveness, ONE formula - the LAB STILLNESS
+        # line's firstRest / decision / workEnd / holdBound / pace / pages; scripting.e2e.world_stillness reads the same):
+        # the first hold within (N + due) + due + W + N + 1 of the readers' first rest, W the decision's work at its pace
+        import re as _re
+        door = {}
+        for line in open(os.path.join(wd, "control.log"), errors="replace"):
+            # (the control run's window line: the first walk window of len(ctl) - 1 frames; the held run's comes after)
+            if not door and line.startswith("LAB STILLNESS walk") and (" frames=%d " % (len(ctl) - 1)) in line:
+                for k in ("firstRest", "decision", "workEnd", "holdBound", "pace", "pages"):
+                    m = _re.search(r"\b%s=(-?[0-9.]+)" % k, line)
+                    if m: door[k] = float(m.group(1))
+        check(len(door) == 6, "(3) the door's derived bound is printed (%s)" % door)
+        if len(door) == 6 and first_rest is not None:
+            W = int(door["workEnd"]) - int(door["decision"])
+            check(int(door["decision"]) == t_dec and int(door["workEnd"]) == work_end and int(door["firstRest"]) == first_rest,
+                  "(3) the door's frames are the record's (decision %d / %d, work end %d / %d, first rest %d / %d)"
+                  % (int(door["decision"]), t_dec, int(door["workEnd"]), work_end, int(door["firstRest"]), first_rest))
+            check(first_hold - first_rest <= int(door["holdBound"]), "(3) LIVENESS: the first hold %d frames after the "
+                  "first rest, within the door's derived bound (N + due) + due + W %d + N + 1 = %d"
+                  % (first_hold - first_rest, W, int(door["holdBound"])))
+            check(int(door["pace"]) >= 0 and W <= int(door["pace"]), "(3) W'S PACE: the decision's work (%d frames) within "
+                  "ceil(%.1f pages / the tier's pages a frame) + due = %d" % (W, door["pages"], int(door["pace"])))
 # (4) EVERY REST RESTART HAS A CAUSE
 num = lambda r, k: int(float(r.get(k) or 0))
 vis = [num(r, "cards_visible") for r in ctl]

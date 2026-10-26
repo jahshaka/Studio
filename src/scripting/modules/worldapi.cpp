@@ -439,7 +439,8 @@ QVector<VerbInfo> WorldApi::verbs() const
           "one 8-bit code. It drives the EDITOR CAMERA through a move script — segments 'teleport:x,y,z,tx,ty,tz' (one frame "
           "at that pose, looking at tx,ty,tz), 'walk:x,y,z,tx,ty,tz:N' (N frames from the current pose, linearly) and "
           "'hold:N', separated by '/' — one lockstep frame per pose, and its last frame is THE STOP; then 'frames' more "
-          "frames (default 120) are measured: per frame the largest and the mean change from the previous frame in codes "
+          "frames (default 120; or {walk, teleport}: the path's teleport window takes its own count, as many frames as its "
+          "law needs to be observed) are measured: per frame the largest and the mean change from the previous frame in codes "
           "(max of R, G, B) on the pixels VISIBLE AT THE STOP (the gather's own pixel-history count >= 'visibleAge', default "
           "10 — every pixel when no gather runs), split by 'classes': [{name, x, y, w, h}] rectangles in fractions of the "
           "view (a later rectangle wins; pixels in none count only in 'all'); which GI cache rows fired that frame "
@@ -450,7 +451,14 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(a name, default 'stillness'). It renders frames and reads the frame monitor through its own tee: beside a "
           "running perf.capture the capture goes on recording (the monitor left at the level it found); with none it "
           "switches the monitor on for its run and off after it. 'summary' holds the STILLNESS lines (per window: the frames to under one code per class "
-          "counted from the stop and from the last GI row, the gather's hold frame, the GI rows of the move before the stop).",
+          "counted from the stop and from the last GI row, the gather's hold frame, the GI rows of the move before the stop, "
+          "and the hold's derived bound). Each of 'windows' carries its holds (holdFrame, gatherHoldFrame, reflHoldFrame; -1 "
+          "never), lastGiRowFrame, lastHoldKeyFrame, settleFrames, and THE HOLD's DERIVED BOUND (PHOTON-7 stage 10, one "
+          "formula in the door: lab.stillness_control's): firstRestFrame (the readers' first rest), decisionFrame and "
+          "decisionWorkEnd (the stop's one rest decision and its last GI row), holdBound - the first hold comes within "
+          "(N + due) + due + W + N + 1 frames of the first rest, N the gather's settle, the due the cards' demand due, W the "
+          "decision's work - and workPace with workPages (W <= ceil(the work's pages / the tier's indirect pages a frame) "
+          "+ due); -1 where the window has no decision.",
           Needs::Engine },
         { "gatherIrradiance", "world.gatherIrradiance({x, y, w, h}) -> {ready, frame, width, height, pixels, answered, irradiance}",
           "THE SCREEN-PROBE GATHER'S ANSWER, AS NUMBERS — the diffuse irradiance E/pi the gather hands the pixels of a "
@@ -2316,7 +2324,18 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
     jahshaka::engine::StillnessSpec spec;
     spec.script = params.value(QStringLiteral("script")).toString().toStdString();
     if (spec.script.empty()) { fail(QStringLiteral("world.stillness: 'script' is required (teleport:..., walk:...:N, hold:N)")); return QVariantMap(); }
-    spec.frames = unsigned(std::max(0, params.value(QStringLiteral("frames"), 120).toInt()));
+    // THE WINDOWS' FRAMES (PHOTON-7 stage 10-3): a count for both, or {walk, teleport} - the teleport window takes as
+    // many frames as its law needs to be observed
+    {
+        const QVariant fv = scriptmod::normalizeJs(params.value(QStringLiteral("frames"), 120));
+        if (fv.typeId() == QMetaType::QVariantMap) {
+            const QVariantMap fm = fv.toMap();
+            spec.frames = unsigned(std::max(0, fm.value(QStringLiteral("walk"), 120).toInt()));
+            spec.teleportFrames = unsigned(std::max(0, fm.value(QStringLiteral("teleport"), int(spec.frames)).toInt()));
+        } else {
+            spec.frames = unsigned(std::max(0, fv.toInt()));
+        }
+    }
     spec.path = params.value(QStringLiteral("path"), false).toBool();
     spec.visibleAge = unsigned(std::max(0, params.value(QStringLiteral("visibleAge"), 10).toInt()));
     // THE SCREEN CLASSES: rectangles in fractions of the view, rasterised onto a fixed grid the door resamples
@@ -2401,6 +2420,15 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
                                     // the last frame the hold waited on: the rest key moved or the inputs owed work
                                     // (PHOTON-2 L7: a write with no GI row included)
                                     { QStringLiteral("lastHoldKeyFrame"), w.lastHoldKeyFrame },
+                                    // THE HOLD's DERIVED BOUND (jahshaka::engine::stillnessDeriveLiveness, one formula):
+                                    // the readers' first rest, the stop's rest decision and its work's end, the first
+                                    // hold's bound from the first rest, W's pace and the work's pages (-1: no decision)
+                                    { QStringLiteral("firstRestFrame"), w.firstRestFrame },
+                                    { QStringLiteral("decisionFrame"), w.decisionFrame },
+                                    { QStringLiteral("decisionWorkEnd"), w.decisionWorkEnd },
+                                    { QStringLiteral("holdBound"), w.holdBound },
+                                    { QStringLiteral("workPace"), w.workPace },
+                                    { QStringLiteral("workPages"), w.workPages },
                                     // the gather's settle N (PHOTON-2 K6: the hold's bar is the last write + N + 1)
                                     { QStringLiteral("settleFrames"),
                                       int(w.frames.empty() ? 0u
