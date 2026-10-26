@@ -308,7 +308,7 @@ vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.probe_court 4.27  solo, the card lock held (PHOTON-5 stage 1, 2026-10-21; the lead's promotion at the merge)
 rtreflect.history_detectors 6.63  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 6, 2026-10-23; was 3.93, PHOTON-5 stage 4)
-rtreflect.emitters 13.69  solo, the card lock held, :81, COLD (151 compiles: the tree's engine rebuilt; PHOTON-7 stage 11, 11-1a, 2026-10-26 - re-priced warm at the master check)
+rtreflect.emitters 1.24  solo, the card lock held, :81, warm (PHOTON-7 stage 11, 11-1a, 2026-10-26; the cold first run 13.69 s, 151 compiles)
 rtreflect.nee_firefly 15.42  solo, the card lock held, :81 (PHOTON-7 stage 11, 11-1b, 2026-10-26: jahlab on photon-firefly, 480x270, two sessions of 750 frames)
 rtreflect.sphere_glint 2.02  solo, the card lock held, :81 (PHOTON-7 stage 11, the sphere-light glint, 2026-10-26: three scenes of 12 frames, 960x540)
 rtreflect.far_record 1.37  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_B finding 1, 2026-10-23: a mirror, a two-level sphere past the near length, its direct reference; 66 frames at 256x144)
