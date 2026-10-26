@@ -4,7 +4,8 @@
 // through createOffscreenView + readPixels; nothing here opens a window.
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
-#include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
+#include "jahshaka/engine/EngineInspect.h"
+#include "jahshaka/engine/GpuSubstrate.h"   // (the frames in flight: the sky's deferred read is due one past them)   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/proceduralshell.h"
 
@@ -1862,16 +1863,32 @@ void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
 
     // THE SECOND, on the very next frame: a gesture, so the read is DEFERRED —
     // and the cube it is reading is destroyed before this frame is submitted.
+    // THE READ IS TAKEN AT ITS DUE FRAME (PHOTON-7 stage 10-3, item 0: OgreScene::skyReadDue - the first sky frame past
+    // its issue by more than the dynamic buffer multiplier, never one polled for landing), so the answer lands EXACTLY
+    // `framesInFlight + 1` frames after the capture frame, and every frame before it still reads the first sky. (This
+    // case rendered "three more" from the polled read's days, when a read landed 1 to 4 frames after its issue by the
+    // device's pace: with 3 frames in flight the due read is the fourth.)
+    unsigned inFlight = 0;
+    fx.e->request([&](Engine &) { inFlight = gpuSubstrateStatus(*s).framesInFlight; });
+    REQUIRE(inFlight >= 1);
     CHECK_MSG(s->setSky(cubemapSkyDesc(bright)), "%s", fx.e->lastError().c_str());
     render(fx.e, 1);
     const float duringDrag = band0();
-    render(fx.e, 3);
+    bool heldBeforeDue = true;
+    for (unsigned k = 1; k <= inFlight; ++k) {
+        render(fx.e, 1);
+        heldBeforeDue = heldBeforeDue && std::fabs(band0() - first) < 1e-6f;
+    }
+    render(fx.e, 1);
     const float landed = band0();
-    std::printf("    cubemap sky 2 (sRGB 200, linear %.4f): band0 %.4f in the capture frame, "
-                "%.4f after three more\n",
-                double(linearOf(200)), double(duringDrag), double(landed));
+    std::printf("    cubemap sky 2 (sRGB 200, linear %.4f): band0 %.4f in the capture frame, the first sky's %s for "
+                "%u more, %.4f at the due frame\n",
+                double(linearOf(200)), double(duringDrag), heldBeforeDue ? "held" : "NOT held", inFlight,
+                double(landed));
     CHECK_MSG(std::fabs(duringDrag - first) < 1e-6f,
               "the capture frame still reads the first sky (the deferred read, as designed)");
+    CHECK_MSG(heldBeforeDue, "every frame before the read's due still reads the first sky (a read is taken at its due "
+                             "frame, never polled for landing)");
     CHECK_MSG(std::fabs(landed - linearOf(200)) < 0.02f,
               "THE DEFERRED READ OF A CUBE THAT DIED IN ITS CAPTURE FRAME RETURNS THE RIGHT "
               "BYTES (band0 %.4f, expected %.4f — the first sky was %.4f and a recycled "
