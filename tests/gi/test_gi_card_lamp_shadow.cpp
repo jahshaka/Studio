@@ -274,6 +274,13 @@ int main(int argc, char **argv)
         std::printf("   the series after the move: %llu relights (%llu indirect), the deepest round %u; the re-solve's: %llu "
                     "relights (%llu indirect), the deepest round %u\n", movedRelights, movedIndirect, movedRound,
                     settleRelights, settleIndirect, settleRound);
+        {
+            const GiStatus g = scene->published().gi;
+            std::printf("   the listings so far: %llu reported (%llu card to card, %llu by the bound), %llu skipped as answered, "
+                        "%llu reports dropped (every slot in flight), %llu overflows\n", g.cards.indirectReported,
+                        g.cards.indirectByCards, g.cards.indirectByBound, g.cards.indirectAnswered, g.cards.reportsDropped,
+                        g.cards.indirectOverflows);
+        }
         read(ro, okO);
         no = lastIndirect;
         scene->readCardRadiance(setO, setFrame);
